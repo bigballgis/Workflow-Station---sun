@@ -137,4 +137,80 @@ describe('useFormData Owner __display companions', () => {
     expect(api.formData.value.owner).toBe('user:user-e2e-lina')
     expect(api.formData.value.owner__display).toBe('李娜')
   })
+
+  it('adds required rules when linkage engine marks a field required', () => {
+    const engineFieldStates = ref(new Map<string, { required?: boolean }>())
+    const allFields = computed(() => [
+      { key: 'start_date', label: 'Start date', type: 'date' } as FormField,
+    ])
+    const api = useFormData({
+      formRef: ref(undefined),
+      allFields,
+      modelValue: () => ({}),
+      readonly: () => false,
+      config: () => undefined,
+      getInternalUpdate: () => false,
+      setInternalUpdate: () => {},
+      emitChange: () => {},
+      emitModelValue: () => {},
+      emitSubTableData: () => {},
+      runComponentEventsOnFieldChange: () => {},
+      formOptionsOnChange: () => undefined,
+      fieldComponentEventsHas: () => false,
+      runFormOptionsOnChange: () => {},
+      engineOnFieldChange: () => ({}),
+      applyEngineResult: () => {},
+      engineOnSubTableChange: () => ({ summaryValues: new Map() }),
+      engineCalculatedValues: ref(new Map()),
+      engineFieldStates,
+      requestIdConfig: () => undefined,
+    })
+    expect(api.formRules.value.start_date).toBeUndefined()
+    engineFieldStates.value = new Map([['start_date', { required: true }]])
+    expect(api.formRules.value.start_date).toEqual(
+      expect.arrayContaining([expect.objectContaining({ required: true })]),
+    )
+    engineFieldStates.value = new Map([['start_date', { required: false }]])
+    expect(api.formRules.value.start_date).toBeUndefined()
+  })
+
+  it('api.required overlay forces required and can clear designer required', () => {
+    const eventRequiredFlags = ref(new Map<string, boolean>())
+    const allFields = computed(() => [
+      { key: 'start_date', label: 'Start date', type: 'date', required: true } as FormField,
+      { key: 'end_date', label: 'Need-by date', type: 'date' } as FormField,
+    ])
+    const api = useFormData({
+      formRef: ref(undefined),
+      allFields,
+      modelValue: () => ({}),
+      readonly: () => false,
+      config: () => undefined,
+      getInternalUpdate: () => false,
+      setInternalUpdate: () => {},
+      emitChange: () => {},
+      emitModelValue: () => {},
+      emitSubTableData: () => {},
+      runComponentEventsOnFieldChange: () => {},
+      formOptionsOnChange: () => undefined,
+      fieldComponentEventsHas: () => false,
+      runFormOptionsOnChange: () => {},
+      engineOnFieldChange: () => ({}),
+      applyEngineResult: () => {},
+      engineOnSubTableChange: () => ({ summaryValues: new Map() }),
+      engineCalculatedValues: ref(new Map()),
+      eventRequiredFlags,
+      requestIdConfig: () => undefined,
+    })
+    expect(api.formRules.value.start_date).toEqual(
+      expect.arrayContaining([expect.objectContaining({ required: true })]),
+    )
+    expect(api.formRules.value.end_date).toBeUndefined()
+
+    eventRequiredFlags.value = new Map([['start_date', false], ['end_date', true]])
+    expect(api.formRules.value.start_date).toBeUndefined()
+    expect(api.formRules.value.end_date).toEqual(
+      expect.arrayContaining([expect.objectContaining({ required: true })]),
+    )
+  })
 })

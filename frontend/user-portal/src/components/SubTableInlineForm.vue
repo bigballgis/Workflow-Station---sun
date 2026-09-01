@@ -8,6 +8,7 @@ import {
   useSubTableDialogComponentEvents,
   type DialogColumnWithEvents,
 } from '@/composables/subTableAddDialog/useSubTableDialogComponentEvents'
+import { isEffectivelyRequired } from '@/utils/formCreateEventRuntime'
 
 /**
  * Sub-table form rendered inline: the bound sub-table's designed form, laid out
@@ -170,6 +171,8 @@ const {
   onDialogFieldChange,
   onDialogFieldBlur,
   isDialogFieldVisible,
+  eventRequiredState,
+  eventRequiredTick,
   resetDialogEventVisibility,
   bootstrapDialogFormLifecycle,
   runFormOnReload,
@@ -237,6 +240,11 @@ function handleFieldBlur(key: string) {
   emit('update:row', { ...rowModel.value })
 }
 
+function isInlineFieldRequired(field: FormField): boolean {
+  void eventRequiredTick.value
+  return isEffectivelyRequired(field.key, field.required === true, eventRequiredState.flags)
+}
+
 /** Flush row model into bindings before persist so Save allocates PK on the latest inline edits. */
 function handleSaveClick() {
   if (!runFormBeforeSubmit()) return
@@ -301,6 +309,7 @@ const cardTitle = computed(() =>
           :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
           :field-permissions="fieldPermissions"
           :is-field-visible="isDialogFieldVisible"
+          :is-field-required="isInlineFieldRequired"
           @update:field="handleFieldUpdate"
           @field-blur="handleFieldBlur"
         />

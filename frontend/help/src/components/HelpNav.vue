@@ -61,6 +61,6 @@ function isOn(to: string): boolean {
   const hash = hashIndex >= 0 ? to.slice(hashIndex) : ''
   if (route.path !== path) return false
   if (hash) return route.hash === hash
-  return !route.hash
+  return true
 }
 </script>

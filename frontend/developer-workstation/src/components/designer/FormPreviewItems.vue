@@ -1,4 +1,14 @@
 <template>
+  <el-alert
+    v-for="note in (showFormEventBanners ? formNotifications : [])"
+    :key="note.uniqueId"
+    class="form-event-banner"
+    :title="note.message"
+    :type="note.level === 'ERROR' ? 'error' : note.level === 'WARNING' ? 'warning' : 'info'"
+    show-icon
+    closable
+    @close="formNotifications.splice(formNotifications.indexOf(note), 1)"
+  />
   <template
     v-for="(item, idx) in items"
     :key="idx"
@@ -163,7 +173,7 @@
     >
       <LookupPreview
         :model-value="previewModel[item.field]"
-        :label="item.label"
+        :label="scriptLabelOverlay(item.field) ?? item.label"
         :placeholder="item.placeholder"
         :search-fields="item.searchFields"
         :display-fields="item.displayFields"
@@ -222,6 +232,7 @@ import type { FormPreviewItem, PreviewSubTableBinding } from './formPreviewTypes
 import {
   hasSubTablePreviewSurface,
 } from './formPreviewTypes'
+import { mergeScriptLookupFilters } from '@/utils/formCreateEventOverlays'
 import {
   dispatchPreviewFieldValueChange,
 } from '@/utils/formCreatePreviewEvents'
@@ -296,6 +307,10 @@ const {
   isPreviewSubTableVisible,
   previewVisibilityBridge,
   effectivePreviewOption,
+  formNotifications,
+  scriptLookupFiltersFor,
+  scriptLabelOverlay,
+  showFormEventBanners,
 } = useFormPreviewEventVisibility({
   items: () => props.items,
   previewOption: () => props.previewOption,
@@ -368,7 +383,8 @@ function effectivePreviewLookupFilterConditions(
   item: Extract<FormPreviewItem, { kind: 'lookup' }>,
 ): import('@/utils/lookupFilterConditions').LookupFilterCondition[] {
   const base = item.filterConditions || []
-  return (parentCascade?.filterFor ?? filterFor)(base, item.derivedFrom)
+  const cascaded = (parentCascade?.filterFor ?? filterFor)(base, item.derivedFrom)
+  return mergeScriptLookupFilters(cascaded, scriptLookupFiltersFor(item.field))
 }
 
 /** Join columns that must exist on mock rows for cascade filter/autofill to demonstrate. */
@@ -466,6 +482,10 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
 
 <style scoped lang="scss">
 @import '@/styles/form-readonly.scss';
+
+.form-event-banner {
+  margin-bottom: 12px;
+}
 
 /*
  * Inline Form preview: labelled boundary around the embedded sub-table's fields, so they are

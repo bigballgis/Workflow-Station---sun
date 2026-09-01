@@ -185,4 +185,42 @@ describe('formCreateComponentEvents', () => {
     })
     expect(formData.flag).toBe(2)
   })
+
+  it('main-form Scenario change marks sibling dates required via api.required', () => {
+    const rules = [
+      {
+        type: 'select',
+        field: 'scenario',
+        on: {
+          change:
+            '$FNX:\nvar on = $inject.value === \'A\'\n$inject.api.required(on, [\'start_date\', \'end_date\'])',
+        },
+      },
+      { type: 'datePicker', field: 'start_date' },
+      { type: 'datePicker', field: 'end_date' },
+    ]
+    const flags = new Map<string, boolean>()
+    const map = collectFieldComponentEventsFromRules(rules)
+    const api = createPortalFormApi(
+      () => ({ scenario: 'A' }),
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      {
+        state: { flags },
+        notify: () => {},
+        getAllFieldKeys: () => ['scenario', 'start_date', 'end_date'],
+      },
+    )
+    runComponentFieldEventsOnValueChange(map.get('scenario'), {
+      field: 'scenario',
+      value: 'A',
+      api,
+      onEvent: 'change',
+      fieldType: 'select',
+    })
+    expect(flags.get('start_date')).toBe(true)
+    expect(flags.get('end_date')).toBe(true)
+  })
 })

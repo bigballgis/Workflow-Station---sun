@@ -5,6 +5,7 @@ import {
   createPortalFormApi,
   createFieldKeyResolver,
   runFormOnChangeHandler,
+  type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from '../../utils/formCreateEventRuntime'
 import {
@@ -15,6 +16,7 @@ import {
 } from '../../utils/formCreateComponentEvents'
 import { seedDesignerHiddenFieldVisibility } from '../../components/formRendererHelpers'
 import type { FormTab } from '../../components/formRendererHelpers'
+import { useFormEventOverlayBags } from './useFormEventOverlayBags'
 
 // ---------------------------------------------------------------------------
 // form-create Form/Component events + designer-driven visibility
@@ -38,6 +40,39 @@ interface FormCreateEventsDeps {
   emitModelValue: (value: Record<string, any>) => void
 }
 
+function collectKeysIncludingLayout(
+  fields?: FormField[],
+  tabs?: FormTab[],
+  after?: FormField[],
+): string[] {
+  const keys: string[] = []
+  const walk = (arr?: FormField[]) => {
+    if (!arr) return
+    for (const field of arr) {
+      if (field.key) keys.push(String(field.key))
+      if (field.type === 'tabs' && field.tabs) {
+        for (const tab of field.tabs) walk(tab.fields)
+      }
+      if (field.type === 'collapse' && field.collapsePanels) {
+        for (const panel of field.collapsePanels) walk(panel.fields)
+      }
+      if (field.children?.length) walk(field.children)
+    }
+  }
+  walk(fields)
+  for (const tab of tabs || []) walk(tab.fields)
+  walk(after)
+  return keys
+}
+
+function focusFormField(formRef: Ref<FormInstance | undefined>, fieldKey: string): void {
+  const root = formRef.value?.$el as HTMLElement | undefined
+  if (!root) return
+  const item = root.querySelector(`.el-form-item[data-field-key="${CSS.escape(fieldKey)}"]`) as HTMLElement | null
+  const target = item?.querySelector('input, textarea, select, button, [tabindex]') as HTMLElement | null
+  target?.focus()
+}
+
 export function useFormCreateEvents(deps: FormCreateEventsDeps) {
   const engineVisibility = deps.engineVisibility
   const eventVisibilityState = shallowReactive<PortalFormVisibilityState>({
@@ -45,11 +80,38 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
     display: new Map<string, boolean>(),
   })
   const eventVisibilityTick = ref(0)
+  const eventRequiredState = shallowReactive<PortalFormRequiredState>({
+    flags: new Map<string, boolean>(),
+  })
+  const eventRequiredTick = ref(0)
+
+  function getAllEventFieldKeys(): string[] {
+    const fromTree = collectKeysIncludingLayout(deps.fields(), deps.tabs(), deps.fieldsAfterTabs())
+    if (fromTree.length) return fromTree
+    return deps.allFields.value.map((f) => f.key)
+  }
+
+  const overlaysApi = useFormEventOverlayBags({
+    getAllFieldKeys: getAllEventFieldKeys,
+    getDesignerOptions: (fieldKey) =>
+      deps.allFields.value.find((f) => f.key === fieldKey)?.options ?? [],
+    getDesignerLabel: (fieldKey) => {
+      const fromLeaf = deps.allFields.value.find((f) => f.key === fieldKey)?.label
+      if (fromLeaf != null) return fromLeaf
+      return fieldKey
+    },
+    focusField: (fieldKey) => focusFormField(deps.formRef, fieldKey),
+  })
 
   function notifyEventVisibilityChange() {
     eventVisibilityState.hidden = new Map(eventVisibilityState.hidden)
     eventVisibilityState.display = new Map(eventVisibilityState.display)
     eventVisibilityTick.value++
+  }
+
+  function notifyEventRequiredChange() {
+    eventRequiredState.flags = new Map(eventRequiredState.flags)
+    eventRequiredTick.value++
   }
 
   function isFieldVisible(fieldKey: string): boolean {
@@ -73,6 +135,22 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
     scriptFieldErrors.value = next
   }
 
+  function visibilityBag() {
+    return {
+      state: eventVisibilityState,
+      notify: notifyEventVisibilityChange,
+      getAllFieldKeys: getAllEventFieldKeys,
+    }
+  }
+
+  function requiredBag() {
+    return {
+      state: eventRequiredState,
+      notify: notifyEventRequiredChange,
+      getAllFieldKeys: getAllEventFieldKeys,
+    }
+  }
+
   function createFormEventApi() {
     const resolveFieldKey = createFieldKeyResolver(() => deps.allFields.value)
     return createPortalFormApi(
@@ -81,11 +159,7 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
         deps.formData.value = { ...deps.formData.value, ...patch }
       },
       resolveFieldKey,
-      {
-        state: eventVisibilityState,
-        notify: notifyEventVisibilityChange,
-        getAllFieldKeys: () => deps.allFields.value.map(f => f.key),
-      },
+      visibilityBag(),
       {
         setFieldError: (fieldKey, message) => {
           setScriptFieldError(fieldKey, message)
@@ -94,6 +168,8 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
           clearScriptFieldError(fieldKey)
         },
       },
+      requiredBag(),
+      overlaysApi.buildOverlays(),
     )
   }
 
@@ -156,17 +232,16 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
 
   function bootstrapComponentHookEvents() {
     if (!deps.formCreateRulesResolved.value.length) return
+    const overlays = overlaysApi.buildOverlays()
     runAllComponentHookEvents(
       deps.formCreateRulesResolved.value,
       'load',
       () => deps.formData.value,
       (patch) => { deps.formData.value = { ...deps.formData.value, ...patch } },
       createFieldKeyResolver(() => deps.allFields.value),
-      {
-        state: eventVisibilityState,
-        notify: notifyEventVisibilityChange,
-        getAllFieldKeys: () => deps.allFields.value.map(f => f.key),
-      },
+      visibilityBag(),
+      requiredBag(),
+      overlays,
     )
     runAllComponentHookEvents(
       deps.formCreateRulesResolved.value,
@@ -174,11 +249,9 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
       () => deps.formData.value,
       (patch) => { deps.formData.value = { ...deps.formData.value, ...patch } },
       createFieldKeyResolver(() => deps.allFields.value),
-      {
-        state: eventVisibilityState,
-        notify: notifyEventVisibilityChange,
-        getAllFieldKeys: () => deps.allFields.value.map(f => f.key),
-      },
+      visibilityBag(),
+      requiredBag(),
+      overlays,
     )
   }
 
@@ -186,6 +259,8 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
     eventVisibilityState,
     eventVisibilityTick,
     notifyEventVisibilityChange,
+    eventRequiredState,
+    eventRequiredTick,
     isFieldVisible,
     scriptFieldErrors,
     setScriptFieldError,
@@ -197,5 +272,13 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
     syncDesignerHiddenFieldVisibility,
     bootstrapFormOptionsOnChange,
     bootstrapComponentHookEvents,
+    eventDisabledState: overlaysApi.eventDisabledState,
+    overlayTick: overlaysApi.overlayTick,
+    formNotifications: overlaysApi.formNotifications,
+    lookupRefreshNonce: overlaysApi.lookupRefreshNonce,
+    scriptOptionsFor: overlaysApi.scriptOptionsFor,
+    scriptLabelFor: overlaysApi.scriptLabelFor,
+    scriptLookupFiltersFor: overlaysApi.scriptLookupFiltersFor,
+    hasScriptLookupFilter: overlaysApi.hasScriptLookupFilter,
   }
 }

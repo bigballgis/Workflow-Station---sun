@@ -1,5 +1,15 @@
 <template>
   <div class="form-renderer">
+    <el-alert
+      v-for="item in formNotifications"
+      :key="item.uniqueId"
+      class="form-event-banner"
+      :title="item.message"
+      :type="formNotificationAlertType(item.level)"
+      show-icon
+      closable
+      @close="clearFormNotification(item.uniqueId)"
+    />
     <el-form
       ref="formRef"
       class="form-readonly-surface"
@@ -74,6 +84,7 @@ import type {
 import {
   flattenAllFormFieldSegments,
   isFormFieldReadonly,
+  resolveFormBusinessLogicConfig,
 } from './formRendererHelpers'
 import {
   collectFieldComponentEventsFromRules,
@@ -86,6 +97,9 @@ import { getSavedSubTableRows } from '@/composables/tasks/shared'
 import { useBusinessLogicEngine } from '@/composables/formRenderer/useBusinessLogicEngine'
 import { useFormCreateEvents } from '@/composables/formRenderer/useFormCreateEvents'
 import { useFormData } from '@/composables/formRenderer/useFormData'
+import { isEffectivelyDisabled, isEffectivelyRequired } from '@/utils/formCreateEventRuntime'
+import { mergeScriptLookupFilters } from '@/utils/formCreateEventOverlays'
+import type { FormEventNotificationLevel } from '@/utils/formCreateEventOverlays'
 import { useComputedFields } from '@/composables/formRenderer/useComputedFields'
 import { useFormValidation } from '@/composables/formRenderer/useFormValidation'
 import { useFormAutoSave } from '@/composables/formRenderer/useFormAutoSave'
@@ -116,7 +130,10 @@ interface Props {
   /** MI / diagram preview: row-picking heuristics only; does not override table binding editability. */
   previewSubTables?: boolean
   uploadUrl?: string
-  // Task 7.2: BusinessLogicEngine config
+  /**
+   * Business-logic JSON (formulas / linkages). Portal pages pass the same object as
+   * `formConfig`; if this prop is omitted the engine uses `formConfig`.
+   */
   config?: FormBusinessLogicConfig
   // Task 7.5: Auto-save props
   functionUnitId?: string
@@ -221,6 +238,9 @@ const { t } = useI18n()
 
 const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
 const effectiveReadonly = computed(() => props.readonly || props.primaryReadOnly)
+const businessLogicConfig = computed(() =>
+  resolveFormBusinessLogicConfig(props.config, props.formConfig),
+)
 
 function isFieldReadonly(field: FormField): boolean {
   return isFormFieldReadonly(field, effectiveReadonly.value)
@@ -332,7 +352,7 @@ const {
 // Composable — BusinessLogicEngine (Task 7.2)
 // ---------------------------------------------------------------------------
 const engineApi = useBusinessLogicEngine({
-  config: () => props.config,
+  config: () => businessLogicConfig.value,
   // wrapper closure breaks ordering dependency with useFormData (formData created later)
   formData: { get value() { return formData.value }, set value(v: Record<string, any>) { formData.value = v } } as { value: Record<string, any> },
 })
@@ -372,7 +392,57 @@ const {
   syncDesignerHiddenFieldVisibility,
   bootstrapFormOptionsOnChange,
   bootstrapComponentHookEvents,
+  eventRequiredState,
+  eventRequiredTick,
+  eventDisabledState,
+  overlayTick,
+  formNotifications,
+  lookupRefreshNonce,
+  scriptOptionsFor,
+  scriptLabelFor,
+  scriptLookupFiltersFor,
+  hasScriptLookupFilter,
+  clearScriptFieldError,
 } = eventsApi
+
+function isFieldRequired(field: FormField): boolean {
+  void eventRequiredTick.value
+  const fallback = field.required === true
+    || engineFieldStates.value.get(field.key)?.required === true
+  return isEffectivelyRequired(field.key, fallback, eventRequiredState.flags)
+}
+
+function isFieldDisabled(field: FormField): boolean {
+  void overlayTick.value
+  if (isFieldReadonly(field)) return true
+  const engineDisabled = engineFieldStates.value.get(field.key)?.disabled === true
+  return isEffectivelyDisabled(field.key, engineDisabled, eventDisabledState.flags)
+}
+
+function fieldLabel(field: FormField): string {
+  return scriptLabelFor(field.key, field.label)
+}
+
+function fieldOptions(field: FormField): unknown {
+  const overlay = scriptOptionsFor(field.key)
+  if (overlay) return overlay
+  return engineOptions.value.get(field.key)
+}
+
+function formNotificationAlertType(level: FormEventNotificationLevel): 'error' | 'warning' | 'info' {
+  if (level === 'ERROR') return 'error'
+  if (level === 'WARNING') return 'warning'
+  return 'info'
+}
+
+function clearFormNotification(uniqueId: string) {
+  formNotifications.value = formNotifications.value.filter((n) => n.uniqueId !== uniqueId)
+}
+
+const eventRequiredFlags = computed(() => {
+  void eventRequiredTick.value
+  return eventRequiredState.flags
+})
 
 // ---------------------------------------------------------------------------
 // User search — listen to FieldRenderer search:users event (Req 11.2)
@@ -423,7 +493,7 @@ const formDataApi = useFormData({
   allFields,
   modelValue: () => props.modelValue,
   readonly: () => props.readonly,
-  config: () => props.config,
+  config: () => businessLogicConfig.value,
   getInternalUpdate: () => isInternalUpdate,
   setInternalUpdate,
   emitChange: (key, value) => emit('change', key, value),
@@ -437,6 +507,8 @@ const formDataApi = useFormData({
   applyEngineResult,
   engineOnSubTableChange: (bindingId, rows, fd) => engine.onSubTableChange(bindingId, rows, fd),
   engineCalculatedValues,
+  engineFieldStates,
+  eventRequiredFlags,
   requestIdConfig: () => props.requestIdConfig,
   recomputeComputedFields,
 })
@@ -445,7 +517,7 @@ const {
   lookupSelectedData,
   lookupLoadedViewFields,
   lookupShowBackfillView,
-  lookupFilterConditionsFor,
+  lookupFilterConditionsFor: lookupFilterConditionsForBase,
   handleLookupSelect,
   handleLookupModelUpdate,
   handleLookupClear,
@@ -464,6 +536,18 @@ const {
   getFormData,
   setFieldValue,
 } = formDataApi
+
+function lookupFilterConditionsFor(field: FormField) {
+  return mergeScriptLookupFilters(
+    lookupFilterConditionsForBase(field),
+    scriptLookupFiltersFor(field.key),
+  )
+}
+
+function handleLookupClearAndScriptError(key: string) {
+  handleLookupClear(key)
+  clearScriptFieldError(key)
+}
 
 // ---------------------------------------------------------------------------
 // Composable — Inline Form widget (`inlineSubForm`): sub-table form rendered in place
@@ -511,7 +595,7 @@ const fieldErrors = computed<Record<string, string>>(() => {
 const { validate } = useFormValidation({
   formRef,
   formData,
-  config: () => props.config,
+  config: () => businessLogicConfig.value,
   engine,
   scriptFieldErrors: fieldErrors,
 })
@@ -528,7 +612,7 @@ const { clearAutoSave, startAutoSave, stopAutoSave, checkAutoSaveRestore } = use
   emitModelValue: (value) => emit('update:modelValue', value),
   onRestored: (data) => {
     // Trigger engine re-evaluation for all restored fields (Req 12.1, 12.2)
-    if (props.config) {
+    if (businessLogicConfig.value) {
       for (const [key, value] of Object.entries(data)) {
         if (value != null && value !== '') {
           const result = engine.onFieldChange(key, value, formData.value)
@@ -575,7 +659,7 @@ watch(allFields, (newFields, oldFields) => {
 })
 
 watch(
-  () => props.config,
+  businessLogicConfig,
   () => {
     initEngine()
   },
@@ -628,6 +712,10 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   lookupLoadedViewFields,
   engineVisibility,
   isFieldVisible,
+  isFieldRequired,
+  isFieldDisabled,
+  fieldLabel,
+  fieldOptions,
   engineFieldStates,
   engineOptions,
   userSearchResults,
@@ -651,14 +739,17 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   handleInlineSubFormUpdate,
   lookupShowBackfillView,
   lookupFilterConditionsFor,
+  lookupRefreshNonce,
+  hasScriptLookupFilter,
   handleSubTableUpdate,
   handlePrimaryFormDataPatch,
   handleLookupSelect,
   handleLookupModelUpdate,
-  handleLookupClear,
+  handleLookupClear: handleLookupClearAndScriptError,
   handleFieldChange,
   handleFieldBlur,
   scriptFieldErrors: fieldErrors,
+  clearScriptFieldError,
   handleUploadSuccess,
   handleUploadRemove,
   handleUserSearch,
@@ -717,6 +808,10 @@ defineExpose({
 
 .form-renderer {
   width: 100%;
+
+  .form-event-banner {
+    margin-bottom: 12px;
+  }
 
   :deep(.el-form-item__label) {
     font-weight: 500;

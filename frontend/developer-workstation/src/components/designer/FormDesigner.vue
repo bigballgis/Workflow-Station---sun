@@ -1312,7 +1312,17 @@ let scheduleAutoRepairStaleBindingsFn: () => void = () => {}
 function installDesignerPreviewCaptureHooks() {
   installPreviewValidationDomProbe()
   const root = document.querySelector('.form-editor-view')
-  const getSavedRules = () => selectedForm.value?.configJson?.rule ?? []
+  const getSavedRules = () => {
+    const cfg = selectedForm.value?.configJson as Record<string, unknown> | undefined
+    if (!cfg) return []
+    if (activeDesignerTab.value === 'main') {
+      return Array.isArray(cfg.rule) ? cfg.rule : []
+    }
+    const subForms = cfg.subForms
+    if (!subForms || typeof subForms !== 'object') return []
+    const bag = (subForms as Record<string, { rule?: unknown[] }>)[String(activeDesignerTab.value)]
+    return Array.isArray(bag?.rule) ? bag.rule : []
+  }
   const validateText = t('common.validate')
   installFcDesignerPreviewCapture(
     root,

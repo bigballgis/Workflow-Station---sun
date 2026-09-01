@@ -52,6 +52,32 @@ describe('useSubTableDialogComponentEvents', () => {
     expect(isDialogFieldVisible('lookup')).toBe(false)
   })
 
+  it('forces sibling dates required via api.required on select change', () => {
+    const formData = ref<Record<string, unknown>>({ scenario: 'A', start_date: '', end_date: '' })
+    const columns = [
+      {
+        field: 'scenario',
+        label: 'Scenario',
+        type: 'select',
+        sourceRule: {
+          type: 'select',
+          field: 'scenario',
+          _on: {
+            change: '$FNX:\nvar on = $inject.value === \'A\'\n$inject.api.required(on, [\'start_date\', \'end_date\'])',
+          },
+        },
+      },
+      { field: 'start_date', label: 'Start date', type: 'date' },
+      { field: 'end_date', label: 'Need-by date', type: 'date' },
+    ]
+    const { onDialogFieldChange, eventRequiredState, eventRequiredTick } =
+      useSubTableDialogComponentEvents(formData, () => columns)
+    onDialogFieldChange('scenario', 'A')
+    expect(eventRequiredTick.value).toBeGreaterThan(0)
+    expect(eventRequiredState.flags.get('start_date')).toBe(true)
+    expect(eventRequiredState.flags.get('end_date')).toBe(true)
+  })
+
   it('resetDialogEventVisibility restores fields after close/reopen', () => {
     const formData = ref<Record<string, unknown>>({ select: '', lookup: null })
     const columns = [
@@ -118,6 +144,21 @@ describe('useSubTableDialogComponentEvents', () => {
     onDialogFieldChange('flag', 'Y')
     expect(isDialogFieldVisible('date_a')).toBe(false)
     expect(isDialogFieldVisible('date_b')).toBe(true)
+  })
+
+  it('setFieldError fills scriptFieldErrors used to block save', () => {
+    const formData = ref<Record<string, unknown>>({ request_title: '' })
+    const columns = [{ field: 'request_title', type: 'text' }]
+    const { onDialogFieldChange, scriptFieldErrors } = useSubTableDialogComponentEvents(
+      formData,
+      () => columns,
+      () => ({
+        onChange:
+          '$FNX:\nif ($inject.field === "request_title" && !$inject.value) { $inject.api.setFieldError("request_title", "Title is required") }',
+      }),
+    )
+    onDialogFieldChange('request_title', '')
+    expect(scriptFieldErrors.value.request_title).toBe('Title is required')
   })
 
   it('runFormBeforeSubmit false aborts; onSubmit and onReset run handlers', () => {

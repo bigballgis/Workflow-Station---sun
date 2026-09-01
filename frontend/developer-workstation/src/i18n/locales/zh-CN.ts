@@ -626,6 +626,7 @@ export default {
   },
   form: {
     title: '表单设计器',
+    eventGuideLinkAria: '打开表单事件指南',
     formName: '表单名称',
     formType: '表单类型',
     requestId: 'Request ID',
@@ -2081,8 +2082,10 @@ export default {
     bodyModeVisual: '可视化',
     bodyModeHtml: 'HTML',
     emailPreview: '邮件预览',
-    htmlPlaceholder: '粘贴或编写邮件 HTML。变量占位符会原样出现在预览中。',
-    switchToVisualConfirm: '切回可视化编辑器可能简化 HTML 中的表格和内联样式。是否继续？',
+    htmlPlaceholder:
+      '粘贴或编写邮件 HTML。<style> 与 class 选择器会保留在预览中。变量占位符会原样出现。',
+    switchToVisualConfirm:
+      '切回可视化编辑器可能简化 HTML 中的表格、<style> 和内联样式。是否继续？',
     loadFailed: '加载模板失败',
     deleteConfirm: '确定删除模板「{name}」吗？'
   },

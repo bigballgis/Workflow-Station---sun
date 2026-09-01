@@ -107,7 +107,9 @@
           <EmailBodySplitEditor
             :model-value="form.bodyHtml || ''"
             :function-unit-id="functionUnitId"
+            :mode="bodyEditorMode"
             @update:model-value="form.bodyHtml = $event"
+            @update:mode="bodyEditorMode = $event"
           />
         </el-form-item>
         <el-form-item :label="t('emailTemplate.enabled')">
@@ -140,6 +142,11 @@ import {
   useEmailTemplateVariables,
   type EmailVariableGroup,
 } from '@/composables/email/useEmailTemplateVariables'
+import {
+  readSavedEmailBodyEditorMode,
+  writeSavedEmailBodyEditorMode,
+  type EmailBodyEditorMode,
+} from '@/components/designer/email/emailPreviewShell'
 
 const EmailBodySplitEditor = defineAsyncComponent(
   () => import('@/components/designer/email/EmailBodySplitEditor.vue')
@@ -153,6 +160,7 @@ const loading = ref(false)
 const saving = ref(false)
 const showFormDialog = ref(false)
 const editingId = ref<number | null>(null)
+const bodyEditorMode = ref<EmailBodyEditorMode>('visual')
 const subjectInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 const variableGroups = ref<EmailVariableGroup[]>([])
 const { groups, loading: variablesLoading, load: loadTemplateVariables } =
@@ -214,8 +222,14 @@ function insertSubjectVariable(token: string) {
   subjectInputRef.value?.focus()
 }
 
+function persistSavedBodyEditorMode(templateId: number | undefined): void {
+  if (templateId == null) return
+  writeSavedEmailBodyEditorMode(props.functionUnitId, templateId, bodyEditorMode.value)
+}
+
 function openCreateDialog() {
   editingId.value = null
+  bodyEditorMode.value = 'visual'
   Object.assign(form, defaultForm())
   showFormDialog.value = true
   void loadTemplateVariables().then(() => {
@@ -225,6 +239,7 @@ function openCreateDialog() {
 
 async function openEditDialog(row: EmailTemplate) {
   editingId.value = row.id
+  bodyEditorMode.value = readSavedEmailBodyEditorMode(props.functionUnitId, row.id)
   try {
     const res = await emailTemplateApi.get(props.functionUnitId, row.id)
     const tpl = res.data
@@ -265,8 +280,10 @@ async function handleSave() {
     }
     if (editingId.value) {
       await emailTemplateApi.update(props.functionUnitId, editingId.value, payload)
+      persistSavedBodyEditorMode(editingId.value)
     } else {
-      await emailTemplateApi.create(props.functionUnitId, payload)
+      const created = await emailTemplateApi.create(props.functionUnitId, payload)
+      persistSavedBodyEditorMode(created.data?.id)
     }
     ElMessage.success(t('common.saveSuccess'))
     showFormDialog.value = false

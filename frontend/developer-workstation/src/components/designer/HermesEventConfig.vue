@@ -3,10 +3,20 @@
         <el-badge :value="eventNum" type="warning" :hidden="eventNum < 1">
             <el-button size="small" @click="visible=true">{{ t('event.title') }}</el-button>
         </el-badge>
-        <el-dialog class="_fd-event-dialog" :title="t('event.title')" v-model="visible" destroy-on-close
+        <el-dialog class="_fd-event-dialog" v-model="visible" destroy-on-close
                    :close-on-click-modal="false"
                    append-to-body
                    width="1080px">
+            <template #header>
+                <div class="_fd-event-dialog-head">
+                    <span class="el-dialog__title">{{ t('event.title') }}</span>
+                    <DesignerHelpLink
+                        path="/form-events#params"
+                        :aria-label="eventGuideAria"
+                        test-id="form-events-guide-link"
+                    />
+                </div>
+            </template>
             <el-container class="_fd-event-con" style="height: 600px">
                 <el-aside style="width:300px;">
                     <el-container class="_fd-event-l">
@@ -140,6 +150,8 @@ import FnEditor from '@form-create/designer/src/components/FnEditor.vue';
 import {getInjectArg} from '@form-create/designer/src/utils';
 import {normalizeEventEditorBody} from '@/utils/formCreateDefaultEvents';
 import {loadEventData, parseEventData} from '@/composables/hermesEventConfig/eventSerialization';
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue';
+import i18n from '@/i18n';
 
 export default defineComponent({
     name: 'HermesEventConfig',
@@ -155,6 +167,7 @@ export default defineComponent({
     inject: ['designer'],
     components: {
         FnEditor,
+        DesignerHelpLink,
     },
     data() {
         return {
@@ -174,6 +187,9 @@ export default defineComponent({
     computed: {
         t() {
             return this.designer.setupState.t;
+        },
+        eventGuideAria() {
+            return i18n.global.t('form.eventGuideLinkAria');
         },
         activeRule() {
             return this.designer.setupState.activeRule;
@@ -223,6 +239,7 @@ export default defineComponent({
             if (v) {
                 this.discardOnClose = false;
                 this.event = this.loadFN();
+                this.openFirstEvent();
                 return;
             }
             if (!this.discardOnClose) {
@@ -251,6 +268,17 @@ export default defineComponent({
         },
         loadFN() {
             return loadEventData(this.modelValue, this.activeRule);
+        },
+        openFirstEvent() {
+            const names = Object.keys(this.event);
+            if (!names.length) return;
+            const name = names.includes('change') ? 'change' : names[0];
+            const item = this.event[name];
+            if (Array.isArray(item)) {
+                this.edit({ name, item, index: 0 });
+                return;
+            }
+            this.edit({ name });
         },
         parseFN(e) {
             return parseEventData(e);
@@ -483,6 +511,12 @@ export default defineComponent({
 ._fd-event-l .el-menu-item.is-active {
     background: #e4e7ed;
     color: #303133;
+}
+
+._fd-event-dialog-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 ._fd-event-l .el-menu-item {

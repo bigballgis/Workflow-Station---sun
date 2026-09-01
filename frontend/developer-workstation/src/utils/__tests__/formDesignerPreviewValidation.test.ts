@@ -177,6 +177,68 @@ describe('formDesignerPreviewValidation', () => {
     expect(setRule).toHaveBeenCalled()
   })
 
+  it('preview toolbar click bubble recompiles preview.rule after native openPreview', () => {
+    const root = document.createElement('div')
+    const btn = document.createElement('button')
+    const icon = document.createElement('i')
+    icon.className = 'fc-icon icon-preview'
+    btn.appendChild(icon)
+    root.appendChild(btn)
+
+    const form: Record<string, unknown> = { scenario: '', start_date: '' }
+    const effects: Array<[string, string, unknown]> = []
+    const api = {
+      setValue: (field: string, value: unknown) => { form[field] = value },
+      getValue: (field: string) => form[field],
+      form,
+      hidden: () => {},
+      display: () => {},
+      hiddenStatus: () => false,
+      displayStatus: () => true,
+      setFieldError: () => {},
+      clearFieldError: () => {},
+      mergeRule: () => {},
+      setEffect: (id: string, attr: string, value: unknown) => { effects.push([id, attr, value]) },
+      sync: () => {},
+    }
+    const src =
+      "$FNX:\nvar on = $inject.value === 'A'\n$inject.api.required(on, ['start_date'])"
+    const nativeChange = Object.assign(
+      function ($inject: { api: typeof api; value?: unknown }) {
+        if ($inject.value === 'A') $inject.api.setValue('start_date', 'broken')
+      },
+      { __json: src, __inject: true },
+    )
+    const preview = {
+      state: false,
+      rule: [] as Array<Record<string, unknown>>,
+      option: {} as Record<string, unknown>,
+    }
+    const ref = {
+      preview,
+      getRule: () => [{ type: 'select', field: 'scenario', _on: { change: src } }],
+      setRule: vi.fn(),
+      getOption: () => ({}),
+      setOption: vi.fn(),
+    }
+    // fc-designer @click="openPreview" runs on the button before the event bubbles to .form-editor-view
+    btn.addEventListener('click', () => {
+      preview.state = true
+      preview.rule = [
+        { type: 'select', field: 'scenario', on: { change: nativeChange }, inject: true },
+        { type: 'input', field: 'start_date' },
+      ]
+    })
+    installFcDesignerPreviewCapture(root, () => ref, 'Validate')
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    const change = preview.rule[0].on?.change as (inject: unknown) => void
+    expect(typeof change).toBe('function')
+    change({ api, args: ['A'] })
+    expect(form.start_date).not.toBe('broken')
+    expect(effects).toContainEqual(['start_date', 'required', true])
+  })
+
   it('wrapFcDesignerOpenPreview recompiles preview.rule so $inject.value works after getJson', () => {
     const form: Record<string, unknown> = { case_type: 'CNP', card_number: '' }
     const api = {

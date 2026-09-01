@@ -3,10 +3,15 @@ import {
   createPortalFormApi,
   isEmptyFormCreateHandler,
   runFormOnChangeHandler,
+  type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
 import type { PreviewVisibilityBridge } from '@/utils/formCreatePreviewEvents'
 import { getRuleChildren } from '@/utils/formDesigner'
+import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
+import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
+import { isTableAuditField } from '@/utils/tableAuditFields'
+import type { PortalFormApiOverlays, PortalFormDisabledState, FormEventChoiceOption, FormEventLookupFilter, FormEventNotification } from '@/utils/formCreateEventOverlays'
 
 export {
   registerPreviewVisibilityBridge,
@@ -30,11 +35,21 @@ export function withPreviewVisibilityFormOnChange(
   return {
     ...option,
     onChange: (field: string, value: unknown) => {
+      const vis = deps.getVisibility()
       const api = createPortalFormApi(
         deps.getFormData,
         deps.applyPatch,
         undefined,
-        deps.getVisibility(),
+        vis,
+        undefined,
+        vis.requiredState
+          ? {
+              state: vis.requiredState,
+              notify: vis.notifyRequired ?? vis.notify,
+              getAllFieldKeys: vis.getAllFieldKeys,
+            }
+          : undefined,
+        vis.overlays,
       )
       const tagged = typeof raw === 'function'
         ? (raw as { __hermesFormEventSource?: unknown }).__hermesFormEventSource
@@ -50,6 +65,17 @@ export interface PreviewEventVisibilityCtx extends PreviewVisibilityBridge {
   state: PortalFormVisibilityState
   tick: { value: number }
   isFieldVisible: (fieldKey: string) => boolean
+  requiredState: PortalFormRequiredState
+  requiredTick: { value: number }
+  notifyRequired: () => void
+  overlays: PortalFormApiOverlays
+  overlayTick: { value: number }
+  formNotifications: { value: FormEventNotification[] }
+  eventDisabledState: PortalFormDisabledState
+  scriptOptionsFor: (fieldKey: string) => FormEventChoiceOption[] | undefined
+  scriptLabelOverlay: (fieldKey: string) => string | undefined
+  scriptLookupFiltersFor: (fieldKey: string) => FormEventLookupFilter[]
+  hasScriptLookupFilter: (fieldKey: string) => boolean
 }
 
 export const PREVIEW_EVENT_VISIBILITY_KEY: InjectionKey<PreviewEventVisibilityCtx> =
@@ -138,6 +164,52 @@ export function applyPreviewVisibilityToRules(
   return apply(rules)
 }
 
+function applyRequiredFlagToPreviewRule(
+  rule: Record<string, unknown>,
+  need: boolean,
+): void {
+  rule.$required = need
+  const validate = Array.isArray(rule.validate) ? [...rule.validate] : []
+  const withoutRequired = validate.filter((entry) => {
+    if (!entry || typeof entry !== 'object') return true
+    const item = entry as Record<string, unknown>
+    return item.required !== true && item.mode !== 'required'
+  })
+  if (need) {
+    const hasRequired = validate.some((entry) => {
+      if (!entry || typeof entry !== 'object') return false
+      const item = entry as Record<string, unknown>
+      return item.required === true || item.mode === 'required'
+    })
+    rule.validate = hasRequired ? validate : [{ required: true }, ...withoutRequired]
+  } else {
+    rule.validate = withoutRequired.length > 0 ? withoutRequired : undefined
+  }
+}
+
+/** Apply script `api.required` onto form-create rules (`$required` + validate). */
+export function applyPreviewRequiredToRules(
+  rules: unknown[],
+  isFieldRequired: (fieldKey: string, designerRequired: boolean) => boolean,
+): unknown[] {
+  if (!Array.isArray(rules) || rules.length === 0) return []
+  const apply = (nodes: unknown[]): unknown[] =>
+    nodes.map((node) => {
+      if (!node || typeof node !== 'object') return node
+      const rule = { ...(node as Record<string, unknown>) }
+      withMappedChildren(rule, apply)
+      if (rule.field != null) {
+        const designerRequired = isFormCreateRuleRequired(rule)
+        applyRequiredFlagToPreviewRule(
+          rule,
+          isFieldRequired(String(rule.field), designerRequired),
+        )
+      }
+      return rule
+    })
+  return apply(rules)
+}
+
 /** Collect field keys from a form-create rule tree (getRuleChildren + `rule`). */
 export function collectFieldKeysFromRules(rules: unknown[]): string[] {
   const keys: string[] = []
@@ -157,3 +229,42 @@ export function collectFieldKeysFromRules(rules: unknown[]): string[] {
   walk(rules)
   return keys
 }
+
+export interface PreviewOverlayApply {
+  isDisabled: (fieldKey: string, designerDisabled: boolean) => boolean
+  optionsFor: (fieldKey: string) => FormEventChoiceOption[] | undefined
+  labelFor: (fieldKey: string) => string | undefined
+}
+
+/** Apply script disabled / options / label overlays onto form-create preview rules. */
+export function applyPreviewOverlayToRules(
+  rules: unknown[],
+  overlay: PreviewOverlayApply,
+): unknown[] {
+  if (!Array.isArray(rules) || rules.length === 0) return []
+  const apply = (nodes: unknown[]): unknown[] =>
+    nodes.map((node) => {
+      if (!node || typeof node !== 'object') return node
+      const rule = { ...(node as Record<string, unknown>) }
+      withMappedChildren(rule, apply)
+      if (rule.field == null) return rule
+      const fieldKey = String(rule.field)
+      const props = {
+        ...((rule.props && typeof rule.props === 'object'
+          ? rule.props
+          : {}) as Record<string, unknown>),
+      }
+      const designerDisabled = isFormCreateRuleReadonly(rule)
+      if (!isTableAuditField(fieldKey)) {
+        props.disabled = overlay.isDisabled(fieldKey, designerDisabled)
+        rule.props = props
+      }
+      const options = overlay.optionsFor(fieldKey)
+      if (options) rule.options = options
+      const label = overlay.labelFor(fieldKey)
+      if (label != null) rule.title = label
+      return rule
+    })
+  return apply(rules)
+}
+

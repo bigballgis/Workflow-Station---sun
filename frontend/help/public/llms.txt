@@ -11,6 +11,10 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task)
 - /help/email-monitor — Email Monitor (inbound connection, monitor template, Start Event binding)
 - /help/task-delegate — Delegate a task (User Portal To Do; specified user or BU+Role; does not change Current Assignee)
+- /help/form-events — How to write events (control Edit + Form event: parameters, values, required, lock, show/hide, options, errors, banners, lookup filter, focus, labels, hooks, user)
+- /help/form-events-basic — Basic palette control events (Input, Select, Date, Upload, …)
+- /help/form-events-extend — Extend and MI control events (Sub-Table, Lookup, Assignment Mode, …)
+- /help/form-events-layout — Layout and Auxiliary control events (click, Tabs extras)
 
 ## Figures
 
@@ -26,6 +30,12 @@ Emails in figures are redacted to user@example.com.
 - /help/guides/dw-email-monitors.png
 - /help/guides/dw-send-task.png
 - /help/guides/dw-start-event.png
+- /help/guides/dw-form-events.png
+- /help/guides/dw-form-events-canvas.png
+- /help/guides/dw-form-events-form-tab.png
+- /help/guides/dw-form-events-preview-notify.png
+- /help/guides/dw-form-events-preview-errors.png
+- /help/guides/dw-form-events-preview-disabled.png
 
 ## Full bundle
 

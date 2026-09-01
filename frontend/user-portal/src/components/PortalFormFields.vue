@@ -97,6 +97,10 @@ const props = withDefaults(
      * Unset → render every leaf (Link Form dialog unchanged).
      */
     isFieldVisible?: (fieldKey: string) => boolean
+    /**
+     * Event-runtime required overlay. Unset → designer `field.required` only.
+     */
+    isFieldRequired?: (field: FormField) => boolean
   }>(),
   {
     readonly: false,
@@ -199,6 +203,11 @@ function shouldRenderLeafField(field: FormField): boolean {
   if (LAYOUT_CONTAINER_TYPES.has(field.type)) return true
   if (!props.isFieldVisible) return true
   return props.isFieldVisible(field.key)
+}
+
+function fieldShowsRequired(field: FormField): boolean {
+  if (props.isFieldRequired) return props.isFieldRequired(field)
+  return field.required === true
 }
 
 const inlineLookupCascade = createLookupCascadeHandlers({
@@ -371,6 +380,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
+            :is-field-required="isFieldRequired"
             @update:field="(k, v) => onFieldUpdate(k, v)"
             @field-blur="onFieldBlur"
           />
@@ -407,6 +417,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
           :field-permissions="fieldPermissions"
           :is-field-visible="isFieldVisible"
+          :is-field-required="isFieldRequired"
           row-columns
           @update:field="(k, v) => onFieldUpdate(k, v)"
           @field-blur="onFieldBlur"
@@ -430,6 +441,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
         :field-permissions="fieldPermissions"
         :is-field-visible="isFieldVisible"
+        :is-field-required="isFieldRequired"
         in-column
         @update:field="(k, v) => onFieldUpdate(k, v)"
         @field-blur="onFieldBlur"
@@ -459,6 +471,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
+            :is-field-required="isFieldRequired"
             @update:field="(k, v) => onFieldUpdate(k, v)"
             @field-blur="onFieldBlur"
           />
@@ -493,6 +506,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
+            :is-field-required="isFieldRequired"
             @update:field="(k, v) => onFieldUpdate(k, v)"
             @field-blur="onFieldBlur"
           />
@@ -506,7 +520,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
       <el-form-item
         :label="field.label"
         :prop="field.key"
-        :required="field.required"
+        :required="fieldShowsRequired(field)"
       >
         <FieldRenderer
           :field="field"
@@ -525,7 +539,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
       <el-form-item
         :label="field.label"
         :prop="field.key"
-        :required="field.required"
+        :required="fieldShowsRequired(field)"
       >
         <FieldRenderer
           :field="field"

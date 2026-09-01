@@ -4,6 +4,8 @@
  *
  * Prints HELP_GUIDE_FU_ID. Then capture (PowerShell):
  *   $env:HELP_GUIDE_FU_ID='<id>'; node scripts/capture-help-guide-images.mjs
+ *
+ * Deploys to Admin/Portal afterwards (set HELP_GUIDE_DEPLOY=0 to skip).
  */
 const ORIGIN = (process.env.HELP_GUIDE_ORIGIN ?? 'http://localhost:3000').replace(/\/$/, '')
 const FU_NAME = 'Purchase Request'
@@ -122,38 +124,256 @@ function col(sortOrder, fieldName, displayName, dataType, extra = {}) {
   }
 }
 
-function bpmnXml({ connectionUid, templateId, monitorRuleId }) {
+const AUDIT_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by'])
+
+function asRows(payload) {
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.records)) return payload.records
+  if (payload && Array.isArray(payload.content)) return payload.content
+  return []
+}
+
+/** Same include rules as DW `shouldIncludeFieldOnFormCanvas`. */
+function onCanvas(field) {
+  if (!field?.fieldName?.trim()) return false
+  if (AUDIT_FIELDS.has(String(field.fieldName).toLowerCase())) return false
+  if (field.isForeignKey && field.fkDisplayMode === 'hidden') return false
+  return true
+}
+
+/** Same mapping as DW `fieldToFormRule` + `applyTableFieldMetaToFormRule`. */
+function fieldToRule(field) {
+  const title = field.displayName || field.fieldName
+  const validate = []
+  if (field.nullable === false) {
+    validate.push({
+      required: true,
+      message: `${title} is required`,
+      trigger: 'blur',
+    })
+  }
+  if (field.fieldName === 'scenario') {
+    return {
+      field: 'scenario',
+      title,
+      type: 'select',
+      options: [
+        { label: 'A', value: 'A' },
+        { label: 'B', value: 'B' },
+        { label: 'C', value: 'C' },
+      ],
+      props: {
+        placeholder: `Please select ${title}`,
+        clearable: true,
+        filterable: true,
+      },
+      validate,
+    }
+  }
+  const base = { field: field.fieldName, title, props: {}, validate }
+  let rule
+  switch (field.dataType) {
+    case 'TEXT':
+      rule = {
+        ...base,
+        type: 'input',
+        props: { type: 'textarea', placeholder: `Please input ${title}`, rows: 3 },
+      }
+      break
+    case 'INTEGER':
+    case 'BIGINT':
+      rule = {
+        ...base,
+        type: 'inputNumber',
+        props: { placeholder: `Please input ${title}`, precision: 0 },
+      }
+      break
+    case 'DECIMAL':
+      rule = {
+        ...base,
+        type: 'inputNumber',
+        props: { placeholder: `Please input ${title}`, precision: field.scale || 2 },
+      }
+      break
+    case 'DATE':
+      rule = {
+        ...base,
+        type: 'datePicker',
+        props: { type: 'date', placeholder: `Please input ${title}`, valueFormat: 'YYYY-MM-DD' },
+      }
+      break
+    default:
+      rule = {
+        ...base,
+        type: 'input',
+        props: {
+          placeholder: `Please input ${title}`,
+          maxlength: field.length || 255,
+          showWordLimit: true,
+        },
+      }
+  }
+  const autoPk = field.isPrimaryKey && field.pkGeneration && field.pkGeneration.strategy !== 'manual'
+  const readonlyFk = field.isForeignKey && field.fkDisplayMode !== 'hidden'
+  if (autoPk || field.isComputed || readonlyFk) {
+    rule = { ...rule, readonly: true, props: { ...rule.props, readonly: true } }
+  }
+  return rule
+}
+
+function listColumns(fields) {
+  return fields
+    .filter(onCanvas)
+    .filter((f) => !f.isForeignKey)
+    .map((f) => ({
+      fieldName: f.fieldName,
+      dataType: f.dataType,
+      nullable: f.nullable !== false,
+      isPrimaryKey: !!f.isPrimaryKey,
+      displayName: f.displayName || f.fieldName,
+      columnType: 'field',
+    }))
+}
+
+/** Scenario change: A → Start date / Need-by date required (main form + line Add/Edit). */
+const SCENARIO_REQUIRED_EVENT =
+  "$FNX:\nvar on = $inject.value === 'A'\n$inject.api.required(on, ['start_date', 'end_date'])"
+
+function withScenarioRequiredEvent(rule) {
+  if (rule.field !== 'scenario') return rule
+  return {
+    ...rule,
+    on: { change: SCENARIO_REQUIRED_EVENT },
+  }
+}
+
+function buildFormConfigJson(mainFields, lineFields, subBindingId) {
+  const mainRules = mainFields.filter(onCanvas).map(fieldToRule).map(withScenarioRequiredEvent)
+  const lineRules = lineFields.filter(onCanvas).map(fieldToRule).map(withScenarioRequiredEvent)
+  const key = String(subBindingId)
+  return {
+    rule: [
+      ...mainRules,
+      {
+        type: 'subTable',
+        _bindingId: subBindingId,
+        title: 'Line items',
+        props: {},
+      },
+    ],
+    options: { form: { labelPosition: 'left' } },
+    subForms: {
+      [key]: {
+        rule: lineRules,
+        options: { form: { labelPosition: 'left' } },
+      },
+    },
+    subListViews: {
+      [key]: { columns: listColumns(lineFields) },
+    },
+  }
+}
+
+async function ensureBinding(dw, fuId, formId, payload) {
+  const bindings = asRows(await dw('GET', `/api/v1/function-units/${fuId}/forms/${formId}/bindings`))
+  const hit = bindings.find(
+    (b) => b.bindingType === payload.bindingType && Number(b.tableId) === Number(payload.tableId),
+  )
+  if (hit) return hit
+  return dw('POST', `/api/v1/function-units/${fuId}/forms/${formId}/bindings`, payload)
+}
+
+async function configureProcessForm(dw, fuId, form, mainTable, subTable, mainFieldList, lineFieldList) {
+  const formId = form.id
+  await ensureBinding(dw, fuId, formId, {
+    tableId: mainTable.id,
+    bindingType: 'PRIMARY',
+    bindingMode: 'EDITABLE',
+    sortOrder: 0,
+  })
+  const subBinding = await ensureBinding(dw, fuId, formId, {
+    tableId: subTable.id,
+    bindingType: 'SUB',
+    bindingMode: 'EDITABLE',
+    foreignKeyField: 'main_id',
+    bindingLinkMode: 'structuralFk',
+    subMode: 'FULL',
+    sortOrder: 1,
+  })
+  const configJson = buildFormConfigJson(mainFieldList, lineFieldList, subBinding.id)
+  await dw('PUT', `/api/v1/function-units/${fuId}/forms/${formId}`, {
+    formName: form.formName,
+    formType: form.formType || 'PROCESS',
+    scene: form.scene || 'TASK',
+    boundTableId: mainTable.id,
+    description: form.description || form.displayName || 'Start a purchase request',
+    configJson,
+  })
+}
+
+function xmlAttr(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+}
+
+function bpmnXml({
+  connectionUid,
+  templateId,
+  monitorRuleId,
+  taskFormId,
+  taskFormName,
+  requestFormId,
+  requestFormName,
+  actionIds,
+  actionNames,
+}) {
   const monitorProps =
     monitorRuleId == null
       ? ''
       : `
-            <custom:property name="emailMonitorRuleId" value="${monitorRuleId}"/>
+            <custom:property name="emailMonitorRuleId" value="${xmlAttr(monitorRuleId)}"/>
             <custom:property name="emailMonitorEnabled" value="true"/>`
+  const actionIdsXml = xmlAttr(JSON.stringify(actionIds ?? []))
+  const actionNamesXml = xmlAttr(JSON.stringify(actionNames ?? []))
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom="http://workflow.platform/schema/bpmn" id="Definitions_HelpPR" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom="http://workflow.platform/schema/custom" xmlns:custom_1="http://custom.bpmn.io/schema" id="Definitions_HelpPR" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_HelpPurchaseRequest" name="Purchase Request" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_Form" name="Form Start">
-      <bpmn:outgoing>Flow_FormToManager</bpmn:outgoing>
-    </bpmn:startEvent>
     <bpmn:startEvent id="StartEvent_Email" name="Start">
       <bpmn:extensionElements>
         <custom:properties>${monitorProps}
         </custom:properties>
       </bpmn:extensionElements>
-      <bpmn:outgoing>Flow_EmailToManager</bpmn:outgoing>
+      <bpmn:outgoing>Flow_StartToManager</bpmn:outgoing>
     </bpmn:startEvent>
     <bpmn:userTask id="Task_ManagerReview" name="Manager Review">
-      <bpmn:incoming>Flow_FormToManager</bpmn:incoming>
-      <bpmn:incoming>Flow_EmailToManager</bpmn:incoming>
+      <bpmn:extensionElements>
+        <custom:properties>
+          <custom:property name="assigneeType" value="INITIATOR"/>
+          <custom:property name="formId" value="${xmlAttr(taskFormId)}"/>
+          <custom:property name="formName" value="${xmlAttr(taskFormName)}"/>
+          <custom:property name="formReadOnly" value="false"/>
+          <custom:property name="requestFormId" value="${xmlAttr(requestFormId)}"/>
+          <custom:property name="requestFormName" value="${xmlAttr(requestFormName)}"/>
+          <custom:property name="actionIds" value="${actionIdsXml}"/>
+          <custom:property name="actionNames" value="${actionNamesXml}"/>
+        </custom:properties>
+        <custom_1:properties>
+          <custom_1:values name="formId" value="${xmlAttr(taskFormId)}"/>
+          <custom_1:values name="formName" value="${xmlAttr(taskFormName)}"/>
+        </custom_1:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_StartToManager</bpmn:incoming>
       <bpmn:outgoing>Flow_ManagerToSend</bpmn:outgoing>
     </bpmn:userTask>
     <bpmn:sendTask id="Activity_SendNotice" name="Send approval notice">
       <bpmn:extensionElements>
         <custom:properties>
           <custom:property name="sendMode" value="email"/>
-          <custom:property name="connectionId" value="${connectionUid}"/>
+          <custom:property name="connectionId" value="${xmlAttr(connectionUid)}"/>
           <custom:property name="emailTo" value="\${assigneeEmail}"/>
-          <custom:property name="emailTemplateId" value="${templateId}"/>
+          <custom:property name="emailTemplateId" value="${xmlAttr(templateId)}"/>
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ManagerToSend</bpmn:incoming>
@@ -162,20 +382,15 @@ function bpmnXml({ connectionUid, templateId, monitorRuleId }) {
     <bpmn:endEvent id="EndEvent_1" name="Done">
       <bpmn:incoming>Flow_SendToEnd</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_FormToManager" sourceRef="StartEvent_Form" targetRef="Task_ManagerReview"/>
-    <bpmn:sequenceFlow id="Flow_EmailToManager" sourceRef="StartEvent_Email" targetRef="Task_ManagerReview"/>
+    <bpmn:sequenceFlow id="Flow_StartToManager" sourceRef="StartEvent_Email" targetRef="Task_ManagerReview"/>
     <bpmn:sequenceFlow id="Flow_ManagerToSend" sourceRef="Task_ManagerReview" targetRef="Activity_SendNotice"/>
     <bpmn:sequenceFlow id="Flow_SendToEnd" sourceRef="Activity_SendNotice" targetRef="EndEvent_1"/>
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_HelpPurchaseRequest">
-      <bpmndi:BPMNShape id="StartEvent_Form_di" bpmnElement="StartEvent_Form">
-        <dc:Bounds x="152" y="242" width="36" height="36"/>
-        <bpmndi:BPMNLabel><dc:Bounds x="136" y="285" width="69" height="14"/></bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="StartEvent_Email_di" bpmnElement="StartEvent_Email">
-        <dc:Bounds x="152" y="102" width="36" height="36"/>
-        <bpmndi:BPMNLabel><dc:Bounds x="157" y="145" width="25" height="14"/></bpmndi:BPMNLabel>
+        <dc:Bounds x="152" y="182" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="157" y="225" width="25" height="14"/></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_ManagerReview_di" bpmnElement="Task_ManagerReview">
         <dc:Bounds x="280" y="160" width="100" height="80"/>
@@ -187,11 +402,8 @@ function bpmnXml({ connectionUid, templateId, monitorRuleId }) {
         <dc:Bounds x="642" y="182" width="36" height="36"/>
         <bpmndi:BPMNLabel><dc:Bounds x="646" y="225" width="28" height="14"/></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Flow_FormToManager_di" bpmnElement="Flow_FormToManager">
-        <di:waypoint x="188" y="260"/><di:waypoint x="230" y="260"/><di:waypoint x="230" y="200"/><di:waypoint x="280" y="200"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_EmailToManager_di" bpmnElement="Flow_EmailToManager">
-        <di:waypoint x="188" y="120"/><di:waypoint x="230" y="120"/><di:waypoint x="230" y="200"/><di:waypoint x="280" y="200"/>
+      <bpmndi:BPMNEdge id="Flow_StartToManager_di" bpmnElement="Flow_StartToManager">
+        <di:waypoint x="188" y="200"/><di:waypoint x="280" y="200"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_ManagerToSend_di" bpmnElement="Flow_ManagerToSend">
         <di:waypoint x="380" y="200"/><di:waypoint x="460" y="200"/>
@@ -298,29 +510,56 @@ try {
     col(1, 'request_title', 'Title', 'VARCHAR', { length: 200, nullable: false }),
     col(2, 'requester', 'Requester', 'VARCHAR', { length: 120 }),
     col(3, 'cost_center', 'Cost center', 'VARCHAR', { length: 64 }),
-    col(4, 'start_date', 'Start date', 'DATE'),
-    col(5, 'end_date', 'Need-by date', 'DATE'),
-    col(6, 'window_days', 'Window (days)', 'INTEGER', {
+    col(4, 'scenario', 'Scenario', 'VARCHAR', { length: 8 }),
+    col(5, 'start_date', 'Start date', 'DATE'),
+    col(6, 'end_date', 'Need-by date', 'DATE'),
+    col(7, 'window_days', 'Window (days)', 'INTEGER', {
       isComputed: true,
       computedField: WINDOW_DAYS,
     }),
   ]
   const mainRollupFields = [
-    col(7, 'line_count', 'Line count', 'INTEGER', {
+    col(8, 'line_count', 'Line count', 'INTEGER', {
       isComputed: true,
       computedField: LINE_COUNT,
     }),
-    col(8, 'grand_total', 'Grand total', 'DECIMAL', {
+    col(9, 'grand_total', 'Grand total', 'DECIMAL', {
       precision: 18,
       scale: 2,
       isComputed: true,
       computedField: GRAND_TOTAL,
     }),
-    col(9, 'over_budget', 'Over 5000', 'VARCHAR', {
+    col(10, 'over_budget', 'Over 5000', 'VARCHAR', {
       length: 1,
       isComputed: true,
       computedField: OVER_BUDGET,
     }),
+  ]
+  const mainFields = [...mainHeaderFields, ...mainRollupFields]
+  const lineFields = [
+    linePk(0),
+    col(1, 'main_id', 'Request ID', 'VARCHAR', {
+      length: 64,
+      nullable: false,
+      isForeignKey: true,
+      refTableId: main.id,
+      refPrimaryKeyFields: ['id'],
+      fkDisplayMode: 'readonly',
+      relationCardinality: 'oneToMany',
+    }),
+    col(2, 'item_name', 'Item', 'VARCHAR', { length: 200, nullable: false }),
+    col(3, 'quantity', 'Quantity', 'INTEGER', { nullable: false }),
+    col(4, 'unit_price', 'Unit price', 'DECIMAL', { precision: 18, scale: 2, nullable: false }),
+    col(5, 'line_total', 'Line total', 'DECIMAL', {
+      precision: 18,
+      scale: 2,
+      isComputed: true,
+      computedField: LINE_TOTAL,
+    }),
+    col(6, 'notes', 'Notes', 'VARCHAR', { length: 500 }),
+    col(7, 'scenario', 'Scenario', 'VARCHAR', { length: 8 }),
+    col(8, 'start_date', 'Start date', 'DATE'),
+    col(9, 'end_date', 'Need-by date', 'DATE'),
   ]
 
   await dw('PUT', `/api/v1/function-units/${fuId}/tables/${main.id}`, {
@@ -334,40 +573,18 @@ try {
     tableName: 'help_pr_line',
     tableDisplayName: 'Line items',
     tableType: 'SUB',
-    fields: [
-      linePk(0),
-      col(1, 'main_id', 'Request ID', 'VARCHAR', {
-        length: 64,
-        nullable: false,
-        isForeignKey: true,
-        refTableId: main.id,
-        refPrimaryKeyFields: ['id'],
-        fkDisplayMode: 'readonly',
-        relationCardinality: 'oneToMany',
-      }),
-      col(2, 'item_name', 'Item', 'VARCHAR', { length: 200, nullable: false }),
-      col(3, 'quantity', 'Quantity', 'INTEGER', { nullable: false }),
-      col(4, 'unit_price', 'Unit price', 'DECIMAL', { precision: 18, scale: 2, nullable: false }),
-      col(5, 'line_total', 'Line total', 'DECIMAL', {
-        precision: 18,
-        scale: 2,
-        isComputed: true,
-        computedField: LINE_TOTAL,
-      }),
-      col(6, 'notes', 'Notes', 'VARCHAR', { length: 500 }),
-    ],
+    fields: lineFields,
   })
 
   await dw('PUT', `/api/v1/function-units/${fuId}/tables/${main.id}`, {
     tableName: 'help_pr',
     tableDisplayName: 'Purchase Request',
     tableType: 'MAIN',
-    fields: [...mainHeaderFields, ...mainRollupFields],
+    fields: mainFields,
   })
 
   async function findOrCreate(listPath, createPath, match, payload) {
-    const listed = (await dw('GET', listPath)) ?? []
-    const rows = Array.isArray(listed) ? listed : []
+    const rows = asRows(await dw('GET', listPath))
     const hit = rows.find(match)
     if (hit) return hit
     return dw('POST', createPath, payload)
@@ -447,39 +664,76 @@ try {
     },
   )
 
-  await dw('POST', `/api/v1/function-units/${fuId}/forms`, {
-    formName: 'Request Form',
-    formType: 'PROCESS',
-    scene: 'TASK',
-    createBothScenes: true,
-    boundTableId: main.id,
-    configJson: { rule: [] },
-    description: 'Start a purchase request',
-  })
-  await dw('POST', `/api/v1/function-units/${fuId}/actions`, {
-    actionName: 'Approve',
-    actionType: 'APPROVE',
-    configJson: {},
-    description: 'Manager approves the request',
-  })
-  await dw('POST', `/api/v1/function-units/${fuId}/actions`, {
-    actionName: 'Reject',
-    actionType: 'REJECT',
-    configJson: {},
-    description: 'Manager rejects the request',
-  })
-  await dw('POST', `/api/v1/function-units/${fuId}/actions`, {
-    actionName: 'Withdraw',
-    actionType: 'WITHDRAW',
-    configJson: {},
-    description: 'Requester withdraws',
-  })
+  const forms = asRows(await dw('GET', `/api/v1/function-units/${fuId}/forms`))
+  let processForms = forms.filter((f) => f.formType === 'PROCESS')
+  if (processForms.length === 0) {
+    await dw('POST', `/api/v1/function-units/${fuId}/forms`, {
+      formName: 'Request Form',
+      formType: 'PROCESS',
+      scene: 'TASK',
+      createBothScenes: true,
+      boundTableId: main.id,
+      configJson: { rule: [] },
+      description: 'Start a purchase request',
+    })
+    processForms = asRows(await dw('GET', `/api/v1/function-units/${fuId}/forms`)).filter(
+      (f) => f.formType === 'PROCESS',
+    )
+  }
+  for (const form of processForms) {
+    await configureProcessForm(dw, fuId, form, main, sub, mainFields, lineFields)
+    console.log(`Configured form id=${form.id} scene=${form.scene ?? 'TASK'} name=${form.formName}`)
+  }
+
+  const approve = await findOrCreate(
+    `/api/v1/function-units/${fuId}/actions`,
+    `/api/v1/function-units/${fuId}/actions`,
+    (a) => a.actionName === 'Approve',
+    {
+      actionName: 'Approve',
+      actionType: 'APPROVE',
+      configJson: {},
+      description: 'Manager approves the request',
+    },
+  )
+  const reject = await findOrCreate(
+    `/api/v1/function-units/${fuId}/actions`,
+    `/api/v1/function-units/${fuId}/actions`,
+    (a) => a.actionName === 'Reject',
+    {
+      actionName: 'Reject',
+      actionType: 'REJECT',
+      configJson: {},
+      description: 'Manager rejects the request',
+    },
+  )
+  const withdraw = await findOrCreate(
+    `/api/v1/function-units/${fuId}/actions`,
+    `/api/v1/function-units/${fuId}/actions`,
+    (a) => a.actionName === 'Withdraw',
+    {
+      actionName: 'Withdraw',
+      actionType: 'WITHDRAW',
+      configJson: {},
+      description: 'Requester withdraws',
+    },
+  )
+
+  const taskForm = processForms.find((f) => (f.scene || 'TASK') !== 'REQUEST') ?? processForms[0]
+  const requestForm = processForms.find((f) => f.scene === 'REQUEST') ?? taskForm
+  const boundActions = [approve, reject, withdraw].filter((a) => a?.id != null)
 
   await dw('POST', `/api/v1/function-units/${fuId}/process`, {
     bpmnXml: bpmnXml({
       connectionUid: outbound.connectionUid,
       templateId: template.id,
       monitorRuleId: monitor.id,
+      taskFormId: taskForm.id,
+      taskFormName: taskForm.formName,
+      requestFormId: requestForm.id,
+      requestFormName: requestForm.formName,
+      actionIds: boundActions.map((a) => a.id),
+      actionNames: boundActions.map((a) => a.actionName),
     }),
   })
 
@@ -494,7 +748,36 @@ try {
   console.log(`HELP_GUIDE_FU_ID=${fuId}`)
   console.log(`Open: ${ORIGIN}/dev/function-units/${fuId}`)
   console.log(`Tables: help_pr (MAIN) / help_pr_line (SUB)`)
+  console.log(`Request Form + Line Add/Edit: Scenario A → start_date + end_date required (api.required event)`)
+  console.log(`Forms: Request Form (TASK) + Request Form (My Request) bound to both tables`)
   console.log(`Connections: ${outbound.connectionUid} outbound, ${inbound.connectionUid} inbound`)
+
+  if (process.env.HELP_GUIDE_DEPLOY === '0') {
+    console.log('Skipped deploy (HELP_GUIDE_DEPLOY=0)')
+  } else {
+    const deploy = await dw('POST', `/api/v1/function-units/${fuId}/deploy`, {
+      autoEnable: true,
+      changeLog: 'Help demo: designer custom xmlns + single start; form bound for testing',
+    })
+    let status = deploy
+    const deploymentId = deploy?.deploymentId
+    if (deploymentId && (deploy.status === 'DEPLOYING' || deploy.status === 'PENDING')) {
+      for (let i = 0; i < 60; i += 1) {
+        await new Promise((r) => setTimeout(r, 2000))
+        status = await dw('GET', `/api/v1/function-units/deployments/${deploymentId}/status`)
+        console.log(`Deploy ${status.status} ${status.progress ?? ''}% ${status.message ?? ''}`)
+        if (status.status === 'SUCCESS' || status.status === 'FAILED' || status.status === 'ROLLED_BACK') {
+          break
+        }
+      }
+    } else {
+      console.log(`Deploy ${status?.status} ${status?.message ?? ''}`)
+    }
+    if (status?.status !== 'SUCCESS') {
+      throw new Error(`Deploy did not succeed: ${status?.status} ${status?.message ?? ''}`)
+    }
+    console.log(`Deployed version ${status.versionNumber ?? ''} — ready to test in Portal`)
+  }
 } catch (err) {
   console.error(err)
   process.exit(1)

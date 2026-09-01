@@ -142,6 +142,133 @@ describe('formCreatePreviewEvents', () => {
     }
   })
 
+  it('materialized select change + deferred bridge sets api.required', () => {
+    const previewData = ref<Record<string, unknown>>({ scenario: 'A', start_date: '' })
+    const flags = new Map<string, boolean>()
+    let tick = 0
+    const bridge = {
+      state: { hidden: new Map<string, boolean>(), display: new Map<string, boolean>() },
+      notify: () => {},
+      getAllFieldKeys: () => ['scenario', 'start_date'],
+      requiredState: { flags },
+      notifyRequired: () => { tick++ },
+    }
+    const src =
+      '$FNX:\n$inject.api.required($inject.value === \'A\', \'start_date\')'
+    const rules = [
+      {
+        type: 'select',
+        field: 'scenario',
+        _on: { change: src },
+      },
+      { type: 'date', field: 'start_date' },
+    ]
+    materializePreviewComponentEvents(rules, previewData)
+    registerPreviewVisibilityBridge(bridge)
+    try {
+      const on = rules[0].on as Record<string, (...args: unknown[]) => void>
+      on.change()
+      expect(flags.get('start_date')).toBe(true)
+      expect(tick).toBeGreaterThan(0)
+
+      flags.delete('start_date')
+      tick = 0
+      dispatchPreviewFieldValueChange(rules, 'scenario', 'A', previewData, { visibility: bridge })
+      expect(flags.get('start_date')).toBe(true)
+    } finally {
+      unregisterPreviewVisibilityBridge(bridge)
+    }
+  })
+
+  it('materialized select change uses the event value when getValue is still stale', () => {
+    const previewData = ref<Record<string, unknown>>({ scenario: '', start_date: '' })
+    const flags = new Map<string, boolean>()
+    const bridge = {
+      state: { hidden: new Map<string, boolean>(), display: new Map<string, boolean>() },
+      notify: () => {},
+      getAllFieldKeys: () => ['scenario', 'start_date', 'end_date'],
+      requiredState: { flags },
+      notifyRequired: () => {},
+    }
+    const rules = [
+      {
+        type: 'select',
+        field: 'scenario',
+        _on: {
+          change:
+            '$FNX:\nvar on = $inject.value === \'A\'\n$inject.api.required(on, [\'start_date\', \'end_date\'])',
+        },
+      },
+      { type: 'date', field: 'start_date' },
+      { type: 'date', field: 'end_date' },
+    ]
+    materializePreviewComponentEvents(rules, previewData)
+    registerPreviewVisibilityBridge(bridge)
+    try {
+      const on = rules[0].on as Record<string, (...args: unknown[]) => void>
+      on.change('A')
+      expect(flags.get('start_date')).toBe(true)
+      expect(flags.get('end_date')).toBe(true)
+      on.change('B')
+      expect(flags.get('start_date')).toBe(false)
+      expect(flags.get('end_date')).toBe(false)
+    } finally {
+      unregisterPreviewVisibilityBridge(bridge)
+    }
+  })
+
+  it('native fc Preview bridge api.required sets $required and syncs each field', () => {
+    const rules: Record<string, Record<string, unknown>> = {
+      start_date: { field: 'start_date' },
+      end_date: { field: 'end_date' },
+    }
+    const synced: string[] = []
+    const effects: Array<[string, string, unknown]> = []
+    const fcApi = {
+      setValue: () => {},
+      getValue: () => undefined,
+      form: {},
+      hidden: () => {},
+      display: () => {},
+      hiddenStatus: () => false,
+      displayStatus: () => true,
+      setFieldError: () => {},
+      clearFieldError: () => {},
+      mergeRule: (field: string, patch: Record<string, unknown>) => {
+        Object.assign(rules[field], patch)
+      },
+      setEffect: (field: string, attr: string, value: unknown) => {
+        effects.push([field, attr, value])
+      },
+      sync: (field: string) => {
+        synced.push(field)
+      },
+    }
+    const src =
+      '$FNX:\nvar on = $inject.value === \'A\'\n$inject.api.required(on, [\'start_date\', \'end_date\'])'
+    const previewRules = [
+      {
+        type: 'select',
+        field: 'scenario',
+        _on: { change: src },
+      },
+    ]
+    syncDesignerComponentEventsForFcPreview(previewRules)
+    const on = previewRules[0].on as Record<string, (inject: unknown) => void>
+    on.change({
+      api: fcApi,
+      value: 'A',
+      args: ['A'],
+    })
+    expect(rules.start_date.$required).toBe(true)
+    expect(rules.end_date.$required).toBe(true)
+    expect(synced).toEqual(['start_date', 'end_date'])
+    expect(effects).toEqual([
+      ['start_date', 'required', true],
+      ['end_date', 'required', true],
+    ])
+  })
+
   it('parseFormCreateEventHandler re-runs __hermesFormEventSource with ctx.api', () => {
     const calls: unknown[] = []
     const api = {

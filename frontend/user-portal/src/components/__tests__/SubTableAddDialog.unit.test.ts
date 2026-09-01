@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import {
   applyAuditFieldDefaults,
@@ -252,5 +255,13 @@ describe('buildRules', () => {
     }
     const rules = buildRules([col])
     expect(rules.card_number).toEqual([{ len: 1, trigger: 'blur' }])
+  })
+})
+
+describe('SubTableAddDialog el-form', () => {
+  it('does not re-validate when api.required updates formRules', () => {
+    const vuePath = join(dirname(fileURLToPath(import.meta.url)), '../SubTableAddDialog.vue')
+    const source = readFileSync(vuePath, 'utf8')
+    expect(source).toContain(':validate-on-rule-change="false"')
   })
 })

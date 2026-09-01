@@ -3,7 +3,24 @@
  * contract, visibility/field-key types, and the runtime bridges that back them.
  */
 
-export interface PortalFormApi {
+import {
+  buildOverlayMethods,
+  forwardOverlayMethods,
+  type PortalFormApiOverlayMethods,
+  type PortalFormApiOverlays,
+} from './formCreateEventOverlays'
+
+export type {
+  FormEventChoiceOption,
+  FormEventLookupFilter,
+  FormEventNotification,
+  FormEventNotificationLevel,
+  PortalFormApiOverlays,
+  PortalFormDisabledState,
+} from './formCreateEventOverlays'
+export { isEffectivelyDisabled } from './formCreateEventOverlays'
+
+export interface PortalFormApi extends PortalFormApiOverlayMethods {
   setValue: (fieldOrData: string | Record<string, unknown>, value?: unknown) => void
   getValue: (field: string) => unknown
   /** form-create: `hidden(true, field)` hides (no DOM); `hidden(false, field)` shows. */
@@ -12,10 +29,14 @@ export interface PortalFormApi {
   display: (status: boolean, field?: string | string[]) => void
   hiddenStatus: (field: string) => boolean
   displayStatus: (field: string) => boolean
-  /** Show inline error under a field (Element Plus form-item). */
+  /** Show inline error under a field (Element Plus form-item). Blocks save until cleared. */
   setFieldError: (field: string, message: string) => void
   /** Clear script-injected error for one field. */
   clearFieldError: (field: string) => void
+  /** form-create: `required(true, field)` forces required; `required(false, field)` forces optional. */
+  required: (status: boolean, field?: string | string[]) => void
+  /** True when a script last called `required(true, field)`. */
+  requiredStatus: (field: string) => boolean
   readonly form: Record<string, unknown>
 }
 
@@ -24,6 +45,61 @@ export interface PortalFormVisibilityState {
   hidden: Map<string, boolean>
   /** false = field rendered but not visible (form-create `display`). */
   display: Map<string, boolean>
+}
+
+/** Script overlay: true = force required, false = force optional (overrides designer / linkage). */
+export interface PortalFormRequiredState {
+  flags: Map<string, boolean>
+}
+
+export type PortalFormRequiredBag = {
+  state: PortalFormRequiredState
+  notify: () => void
+  getAllFieldKeys: () => string[]
+}
+
+/** Missing flag → designer/linkage fallback; explicit true/false wins. */
+export function isEffectivelyRequired(
+  fieldKey: string,
+  fallback: boolean,
+  flags?: Map<string, boolean> | null,
+): boolean {
+  if (flags?.has(fieldKey)) return flags.get(fieldKey) === true
+  return fallback
+}
+
+function isRequiredRuleEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false
+  const item = entry as Record<string, unknown>
+  return item.required === true || item.mode === 'required'
+}
+
+/** Overlay `api.required` flags onto Element Plus form rules (add or strip required). */
+export function overlayEventRequiredOnFormRules<T extends Record<string, unknown>>(
+  base: T,
+  fieldKeys: string[],
+  flags: Map<string, boolean> | undefined,
+  makeRequiredRule: (fieldKey: string) => unknown[],
+): T {
+  if (!flags || flags.size === 0) return base
+  const out = { ...base } as T
+  for (const key of fieldKeys) {
+    const flag = flags.get(key)
+    if (flag === undefined) continue
+    const existing = Array.isArray(out[key as keyof T])
+      ? [...(out[key as keyof T] as unknown[])]
+      : []
+    if (flag === true) {
+      if (!existing.some(isRequiredRuleEntry)) {
+        (out as Record<string, unknown>)[key] = [...makeRequiredRule(key), ...existing]
+      }
+    } else {
+      const stripped = existing.filter((entry) => !isRequiredRuleEntry(entry))
+      if (stripped.length > 0) (out as Record<string, unknown>)[key] = stripped
+      else delete (out as Record<string, unknown>)[key]
+    }
+  }
+  return out
 }
 
 /** Map designer script field names to bound keys (e.g. label "test2" → key "tes2"). */
@@ -89,6 +165,37 @@ export function createFormEventOptionsBridge(
     displayStatus: (field: string) => api.displayStatus(field),
     setFieldError: (field: string, message: string) => api.setFieldError(field, message),
     clearFieldError: (field: string) => api.clearFieldError(field),
+    required: (status: boolean, field?: string | string[]) => {
+      if (typeof api.required === 'function') {
+        api.required(status, field)
+        return
+      }
+      applyNativeFcRequiredFallback(api, status, field)
+    },
+    requiredStatus: (field: string) => {
+      if (typeof api.requiredStatus === 'function') return api.requiredStatus(field)
+      return false
+    },
+    ...forwardOverlayMethods(api),
+  }
+}
+
+function applyNativeFcRequiredFallback(
+  api: PortalFormApi,
+  status: boolean,
+  field?: string | string[],
+): void {
+  const fc = api as PortalFormApi & {
+    mergeRule?: (f: string, rule: Record<string, unknown>) => void
+    setEffect?: (f: string, attr: string, value: unknown) => void
+    sync?: (f: string) => void
+  }
+  if (field === undefined) return
+  const keys = Array.isArray(field) ? field : [field]
+  for (const key of keys) {
+    if (typeof fc.setEffect === 'function') fc.setEffect.call(api, key, 'required', status)
+    if (typeof fc.mergeRule === 'function') fc.mergeRule.call(api, key, { $required: status })
+    if (typeof fc.sync === 'function') fc.sync.call(api, key)
   }
 }
 
@@ -105,6 +212,8 @@ export function createPortalFormApi(
     setFieldError: (fieldKey: string, message: string) => void
     clearFieldError: (fieldKey: string) => void
   },
+  required?: PortalFormRequiredBag,
+  overlays?: PortalFormApiOverlays,
 ): PortalFormApi {
   const resolve = (key: string) => resolveFieldKey?.(key) ?? key
   // Lazy read — keep in sync with developer-workstation formCreateEventRuntime
@@ -165,5 +274,17 @@ export function createPortalFormApi(
     clearFieldError(field: string) {
       fieldErrors?.clearFieldError(resolve(field))
     },
+    required(status: boolean, field?: string | string[]) {
+      const bag = required
+      if (!bag?.state) return
+      for (const key of resolveFieldTargets(field, resolve, bag.getAllFieldKeys)) {
+        bag.state.flags.set(key, status)
+      }
+      bag.notify()
+    },
+    requiredStatus(field: string) {
+      return required?.state?.flags.get(resolve(field)) === true
+    },
+    ...buildOverlayMethods(resolve, (field, getAll) => resolveFieldTargets(field, resolve, getAll), overlays),
   }
 }
