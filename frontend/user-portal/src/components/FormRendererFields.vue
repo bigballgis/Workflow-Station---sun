@@ -417,6 +417,8 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
           :visited-inline-sub-form-binding-ids="new Set([Number(field._bindingId)])"
           :field-permissions="ctx.fieldPermissions"
+          :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
+          :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
         />
       </el-col>
@@ -445,6 +447,8 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
           :visited-inline-sub-form-binding-ids="new Set([Number(field._bindingId)])"
           :field-permissions="ctx.fieldPermissions"
+          :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
+          :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
         />
       </div>

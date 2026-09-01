@@ -20,3 +20,24 @@ describe('FormRendererFields subTable visibility gate', () => {
     )
   })
 })
+
+/**
+ * HSWORKFLOW-928: Inline Form widget must pass the bound sub-form's Event config.
+ * SubTableInlineForm already runs JS; FormRendererFields used to omit formOptions.
+ */
+describe('FormRendererFields inlineSubForm Event wiring', () => {
+  it('passes formOptions and dialogColumns on both in-column and top-level arms', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../FormRendererFields.vue'),
+      'utf8',
+    )
+    const inlineBlock = src.split("field.type === 'inlineSubForm'")[1]
+    expect(inlineBlock).toBeTruthy()
+    expect(
+      inlineBlock.match(/:form-options="ctx\.resolveBinding\(field\._bindingId\)\?\.formOptions"/g)?.length,
+    ).toBe(2)
+    expect(
+      inlineBlock.match(/:dialog-columns="\(ctx\.resolveBinding\(field\._bindingId\)\?\.dialogColumns as any\[\]\) \|\| undefined"/g)?.length,
+    ).toBe(2)
+  })
+})
