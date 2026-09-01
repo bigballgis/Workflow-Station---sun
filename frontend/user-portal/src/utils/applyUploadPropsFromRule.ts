@@ -44,8 +44,16 @@ export function stampCannotDownloadProp(
   sourceProps: Record<string, unknown> | undefined,
   fieldKey?: string,
   blockedFieldKeys?: Set<string>,
+  sourceRule?: { type?: string; cannotDownload?: unknown; canNotDownload?: unknown } | null,
 ): void {
-  if (uploadPropsBlockDownload(sourceProps) || (fieldKey != null && blockedFieldKeys?.has(fieldKey))) {
+  if (
+    uploadPropsBlockDownload(sourceProps)
+    || (sourceRule != null && (
+      isCannotDownload(sourceRule.cannotDownload)
+      || isCannotDownload(sourceRule.canNotDownload)
+    ))
+    || (fieldKey != null && blockedFieldKeys?.has(fieldKey))
+  ) {
     target.cannotDownload = true
   }
 }
@@ -91,17 +99,22 @@ function collectFromConfig(keys: Set<string>, raw: unknown): void {
   }
 }
 
+function nestedRuleChildren(rule: Record<string, unknown>): unknown[] {
+  const props = rule.props && typeof rule.props === 'object'
+    ? rule.props as Record<string, unknown>
+    : undefined
+  const sources = [rule.children, props?.children, props?.list, props?.items, props?.fields]
+  return (sources.find(Array.isArray) as unknown[] | undefined) ?? []
+}
+
 function walkUploadRules(keys: Set<string>, rules: unknown): void {
   if (!Array.isArray(rules)) return
   const stack = [...rules] as Array<Record<string, unknown>>
   while (stack.length) {
     const rule = stack.pop()
     if (!rule || typeof rule !== 'object') continue
-    const children = rule.children
-    if (Array.isArray(children)) {
-      for (const child of children) {
-        if (child && typeof child === 'object') stack.push(child as Record<string, unknown>)
-      }
+    for (const child of nestedRuleChildren(rule)) {
+      if (child && typeof child === 'object') stack.push(child as Record<string, unknown>)
     }
     if (typeof rule.field !== 'string') continue
     if (uploadRuleBlocksDownload(rule as { type?: string; props?: Record<string, unknown> })) {

@@ -28,20 +28,23 @@ export function isAssigneeLikeLabel(label?: string): boolean {
 export function createSubTableColumnDeriver(deps: {
   lookupDbConfigs: Ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>
   relationViewConfigs: Ref<Record<string, { viewFields: any[]; allFields: any[] }>>
+  cannotDownloadFieldKeys?: () => Set<string>
 }) {
-  const { lookupDbConfigs, relationViewConfigs } = deps
+  const { lookupDbConfigs, relationViewConfigs, cannotDownloadFieldKeys } = deps
 
   const lookupCtx = () => ({
     lookupDbConfigs: lookupDbConfigs.value,
     relationViewConfigs: relationViewConfigs.value,
   })
 
+  const blockedKeys = () => cannotDownloadFieldKeys?.()
+
   /** Form-design canvas columns for Add/Edit dialog (DW Form Preview parity). */
   const deriveDialogColumnsFromBinding = (
     binding: any,
     subForms?: Record<string, any>,
   ): DialogColumn[] =>
-    resolveSubFormDialogColumnsForBinding(binding, subForms, lookupCtx())
+    resolveSubFormDialogColumnsForBinding(binding, subForms, lookupCtx(), blockedKeys())
 
   // Derive display columns for a sub-table binding based on table type
   const deriveColumnsFromBinding = (
@@ -57,7 +60,7 @@ export function createSubTableColumnDeriver(deps: {
 
     const subFormColumns: DialogColumn[] =
       subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
-        ? mapSubFormRuleToDialogColumns(subFormRule, lookupCtx())
+        ? mapSubFormRuleToDialogColumns(subFormRule, lookupCtx(), blockedKeys())
         : []
 
     const config = formConfig || {}
@@ -136,7 +139,7 @@ export function createSubTableColumnDeriver(deps: {
           }
         }
 
-        return mergeListViewFieldColumn(column, baseColumn, fieldRule)
+        return mergeListViewFieldColumn(column, baseColumn, fieldRule, blockedKeys())
       }),
         subFormRule,
       )

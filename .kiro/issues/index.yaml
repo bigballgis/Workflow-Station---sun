@@ -2958,3 +2958,22 @@
     验证：ClaimBatch/UnclaimBatch/TodoTaskColumnSpec + portal vitest；compose
     user-portal / user-portal-frontend healthy。
 
+- id: "1578"
+  status: fixed
+  fixed_at: "2026-08-31"
+  severity: major
+  category: bug
+  summary: "New Request still allowed file download when designer cannotDownload was on (2_Meeting-000004)"
+  file: "frontend/user-portal/src/composables/processStart/useProcessStartRuleConverter.ts"
+  note: |
+    Sibling of #1553: My Request / TASK already inherited cannotDownload from
+    PROCESS Main; process start did not. Main TASK has props.cannotDownload=true
+    on fileupload + file; REQUEST copy "Main (My Request)" omits the switch.
+    Start form now uses cannotDownloadFieldKeysFromForms; sub-table columns
+    stamp rule-level + blocked keys; collector walks card props.children.
+    验证：cannotDownloadOnStartForm + applyUploadPropsFromRule vitest; pnpm build;
+    compose user-portal-frontend. Playwright start-form upload preview and
+    2_Meeting-000004 preview: Download hidden.
+    screenshots cannot-download-new-request-02-start-preview.png,
+    cannot-download-new-request-04-application-preview.png.
+

@@ -175,6 +175,15 @@ describe('subListViews FILE column typing', () => {
     )
     expect(col.props?.cannotDownload).toBe(true)
   })
+
+  it('copies cannotDownload from the rule-level designer switch', () => {
+    const col = mergeListViewFieldColumn(
+      { fieldName: 'file', comment: 'file', dataType: 'FILE' },
+      null,
+      { type: 'upload', cannotDownload: true, props: {} },
+    )
+    expect(col.props?.cannotDownload).toBe(true)
+  })
 })
 
 /** Mirrors SubTableField parentChildTaskStatusesMatch (#1441). */

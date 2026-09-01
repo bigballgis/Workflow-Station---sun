@@ -17,6 +17,8 @@ export function createProcessStartFormParsing(deps: {
   // 读：lookup / relation view 配置
   lookupDbConfigs: Ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>
   relationViewConfigs: Ref<Record<string, { viewFields: any[]; allFields: any[] }>>
+  /** Same inheritance set task / My Request already use (REQUEST scene copies omit the switch). */
+  cannotDownloadFieldKeys?: () => Set<string>
   // 写：表单布局输出
   formConfigJson: Ref<Record<string, unknown> | null>
   formLabelPosition: Ref<'left' | 'right' | 'top'>
@@ -28,6 +30,7 @@ export function createProcessStartFormParsing(deps: {
   const {
     lookupDbConfigs,
     relationViewConfigs,
+    cannotDownloadFieldKeys,
     formConfigJson,
     formLabelPosition,
     formFormOptions,
@@ -36,8 +39,16 @@ export function createProcessStartFormParsing(deps: {
     formFieldsAfterTabs,
   } = deps
 
-  const { extractFieldsRecursive } = createFieldExtractor({ lookupDbConfigs, relationViewConfigs })
-  const { deriveColumnsFromBinding, deriveDialogColumnsFromBinding } = createSubTableColumnDeriver({ lookupDbConfigs, relationViewConfigs })
+  const { extractFieldsRecursive } = createFieldExtractor({
+    lookupDbConfigs,
+    relationViewConfigs,
+    cannotDownloadFieldKeys,
+  })
+  const { deriveColumnsFromBinding, deriveDialogColumnsFromBinding } = createSubTableColumnDeriver({
+    lookupDbConfigs,
+    relationViewConfigs,
+    cannotDownloadFieldKeys,
+  })
 
   // 解析表单配置 - 将 form-create 规则转换为 FormRenderer 字段
   const parseFormConfig = (configStr: string) => {

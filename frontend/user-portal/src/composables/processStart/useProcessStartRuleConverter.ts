@@ -9,7 +9,7 @@ import { applyUploadPropsFromRule } from '@/utils/applyUploadPropsFromRule'
  * 将单条 form-create 规则转换为 FormRenderer 字段。
  * 逻辑与原 useProcessStartFormParsing 内联实现逐行一致；无响应式依赖。
  */
-export function convertFormCreateRule(rule: any): FormField | null {
+export function convertFormCreateRule(rule: any, blockedFieldKeys?: Set<string>): FormField | null {
   if (!rule || !rule.field) return null
 
   // 确定日期类型
@@ -107,7 +107,7 @@ export function convertFormCreateRule(rule: any): FormField | null {
   if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
 
   applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
-  applyUploadPropsFromRule(field, rule)
+  applyUploadPropsFromRule(field, rule, blockedFieldKeys)
 
   if (rule.type === 'userSelect' || rule.type === 'user') {
     field.type = 'user'

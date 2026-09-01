@@ -159,6 +159,7 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
           rProps,
           typeof r.field === 'string' ? r.field : undefined,
           cannotDownloadFieldKeysFromForms(ctx.cachedContentForms),
+          r,
         )
         assignSensitiveMaskColumnProps(passProps, type, rProps)
         // 'tree' and 'elTreeSelect' store tree data in props.data — map to treeData

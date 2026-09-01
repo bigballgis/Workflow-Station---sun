@@ -17,9 +17,9 @@ describe('applyUploadPropsFromRule', () => {
     expect(f.cannotDownload).toBeUndefined()
   })
 
-  it('sets cannotDownload when the designer switch is true', () => {
+  it('sets cannotDownload from rule-level designer switch (itemConfig.rule field)', () => {
     const f = field()
-    applyUploadPropsFromRule(f, { type: 'upload', props: { cannotDownload: true } })
+    applyUploadPropsFromRule(f, { type: 'upload', cannotDownload: true, props: {} })
     expect(f.cannotDownload).toBe(true)
   })
 
@@ -58,5 +58,39 @@ describe('collectCannotDownloadFieldKeysFromForms', () => {
       },
     ])
     expect(keys.has('fileupload')).toBe(true)
+  })
+
+  it('finds cannotDownload on an upload nested in a card (New Request layout)', () => {
+    const keys = collectCannotDownloadFieldKeysFromForms([
+      {
+        data: {
+          rule: [{
+            type: 'el-card',
+            props: {
+              children: [
+                { type: 'upload', field: 'meeting_doc', props: { cannotDownload: true } },
+              ],
+            },
+          }],
+        },
+      },
+    ])
+    expect(keys.has('meeting_doc')).toBe(true)
+  })
+
+  it('finds rule-level cannotDownload on a sub-form upload', () => {
+    const keys = collectCannotDownloadFieldKeysFromForms([
+      {
+        data: {
+          rule: [],
+          subForms: {
+            '12': {
+              rule: [{ type: 'upload', field: 'line_file', cannotDownload: true, props: {} }],
+            },
+          },
+        },
+      },
+    ])
+    expect(keys.has('line_file')).toBe(true)
   })
 })

@@ -93,6 +93,7 @@ export function isDialogMappableSubFormRule(rawRule: unknown): boolean {
 export function mapSubFormRuleToDialogColumns(
   subFormRule: unknown[],
   ctx: SubFormColumnLookupContext,
+  blockedFieldKeys?: Set<string>,
 ): DialogColumn[] {
   return flattenSubFormRuleLayoutContainers(subFormRule).filter(isDialogMappableSubFormRule).map((rawRule): DialogColumn => {
     const r = rawRule as Record<string, unknown>
@@ -165,7 +166,7 @@ export function mapSubFormRuleToDialogColumns(
     for (const key of propKeys) {
       if (rProps[key] !== undefined) passProps[key] = rProps[key]
     }
-    stampCannotDownloadProp(passProps, rProps, String(r.field ?? ''))
+    stampCannotDownloadProp(passProps, rProps, String(r.field ?? ''), blockedFieldKeys, r)
     assignSensitiveMaskColumnProps(passProps, type, rProps)
     if (rProps.data !== undefined) passProps.treeData = rProps.data
     if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
@@ -225,11 +226,12 @@ export function resolveSubFormDialogColumnsForBinding(
   binding: { bindingId?: number | string; subFormConfig?: { rule?: unknown[] } },
   subForms: Record<string, { rule?: unknown[] }> | undefined,
   ctx: SubFormColumnLookupContext,
+  blockedFieldKeys?: Set<string>,
 ): DialogColumn[] {
   const subFormRule = flattenSubFormRuleLayoutContainers(resolveSubFormRuleForBinding(binding, subForms))
   if (!subFormRule.length) return []
   return enrichLookupColumnPropsFromSubFormRule(
-    mapSubFormRuleToDialogColumns(subFormRule, ctx),
+    mapSubFormRuleToDialogColumns(subFormRule, ctx, blockedFieldKeys),
     subFormRule,
   )
 }
