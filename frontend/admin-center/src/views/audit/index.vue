@@ -1,5 +1,5 @@
 <template>
-  <div class="page-container">
+  <div class="page-container audit-list-page">
     <PageHeader :title="t('menu.auditAdminCenter')" />
 
     <!-- Filter Area -->
@@ -170,6 +170,7 @@
     </div>
 
     <div
+      ref="tableCardRef"
       v-loading="loading"
       class="table-card"
     >
@@ -193,7 +194,7 @@
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
           scrollbar-always-on
-          :height="gridTableHeight || '100%'"
+          :height="tableHeight"
           @selection-change="handleSelectionChange"
         >
           <template #empty>
@@ -336,6 +337,7 @@
     <AuditDetailDialog
       v-model="detailDialogVisible"
       :log="currentLog"
+      :loading="detailLoading"
       :action-type="actionType"
       :action-text="actionText"
       :resource-type-text="resourceTypeText"
@@ -358,7 +360,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated } from 'vue'
+import { onActivated, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Search, InfoFilled, RefreshRight, VideoPause } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -369,12 +371,13 @@ import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 import { useAudit } from '@/composables/modules/useAudit'
+import { useListTableFitHeight } from '@/composables/list/useListTableFitHeight'
 
 const { t } = useI18n()
 
 const {
   loading, exporting,
-  detailDialogVisible, currentLog, dateRange,
+  detailDialogVisible, detailLoading, currentLog, dateRange,
   tableRef, selectedRows,
   query, filterResourceTypes,
   refreshCountdown, autoRefreshPaused, toggleAutoRefresh,
@@ -401,9 +404,6 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
- 
-  gridTableHeight,
- 
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -415,6 +415,9 @@ const {
   applySort,
   clearSort,
 } = useAudit()
+
+const tableCardRef = ref<HTMLElement | null>(null)
+const { tableHeight } = useListTableFitHeight(tableCardRef, gridScrollRef, () => displayRows.value.length)
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {
   applySort(field, direction)

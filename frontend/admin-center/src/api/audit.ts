@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import request, { post } from './request'
 import type { PageResult, AdminListPage } from '@/types/common'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
@@ -94,6 +95,18 @@ export interface AuditQueryRequest {
   sortOrder?: 'asc' | 'desc'
 }
 
+export interface AuditListRow {
+  id: string
+  action: string
+  resourceType: string
+  resourceId: string
+  username: string
+  ipAddress: string
+  result: 'SUCCESS' | 'FAILED' | 'PENDING'
+  duration: number | null
+  createdAt: string
+}
+
 export interface AdminAuditListQuery extends AuditQueryRequest {
   page: number
   size: number
@@ -173,13 +186,30 @@ export const queryAuditLogs = async (
 
 export const queryAuditLogList = async (
   body: AdminAuditListQuery,
-): Promise<AdminListPage<AuditLog>> => {
-  const page = await post<AdminListPage<AuditLog>>('/security/audit-logs/list-query', body)
+  config?: AxiosRequestConfig,
+): Promise<AdminListPage<AuditListRow>> => {
+  const page = await post<AdminListPage<AuditListRow>>('/security/audit-logs/list-query', body, config)
   page.content = page.content.map((row) => {
-    const r = row as AuditLog & { userName?: string }
+    const r = row as AuditListRow & { userName?: string }
     return { ...row, username: r.username ?? r.userName ?? row.username }
   })
   return page
+}
+
+const normalizeAuditLog = (row: AuditLog): AuditLog => {
+  const r = row as AuditLog & { userName?: string }
+  return { ...row, username: r.username ?? r.userName ?? row.username }
+}
+
+export const getAuditLog = async (
+  id: string,
+  config?: AxiosRequestConfig,
+): Promise<AuditLog> => {
+  const row = await request.get(
+    `/security/audit-logs/${encodeURIComponent(id)}`,
+    config,
+  ) as AuditLog
+  return normalizeAuditLog(row)
 }
 
 export const getAuditLogsByUser = (

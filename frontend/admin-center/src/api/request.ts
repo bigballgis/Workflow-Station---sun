@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import { isAbortError } from './isAbortError'
 import { notifyError } from '@/utils/notify'
 import { ApiError, httpCodeToErrorCode } from '@/types/errors'
 import { refreshToken as refreshAuthToken, USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
@@ -45,6 +46,10 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse) => response.data,
   async (error) => {
+    if (isAbortError(error)) {
+      return Promise.reject(error)
+    }
+
     const originalRequest = error.config
     
     // Handle 401 errors with token refresh (cookie-based)

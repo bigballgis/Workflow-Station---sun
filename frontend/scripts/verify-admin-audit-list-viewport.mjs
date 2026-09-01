@@ -1,6 +1,6 @@
 /**
- * Admin Audit list viewport: pagination + table pane sit at the window bottom
- * (not under the last row). Run after rebuilding admin-center-frontend.
+ * Admin Audit list viewport: pagination sits under the last row (not a blank
+ * gap mid-card). Run after rebuilding admin-center-frontend.
  *
  * Usage (from frontend/):
  *   node scripts/verify-admin-audit-list-viewport.mjs
@@ -17,8 +17,8 @@ const ORIGIN = process.env.ORIGIN ?? 'http://localhost:3000'
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '../admin-center/verification-screenshots')
 const DATE = new Date().toISOString().slice(0, 10)
 const VIEWPORT = { width: 1400, height: 900 }
-/** Pagination bottom must land in the last 80px of the window (page + main padding). */
-const BOTTOM_SLACK_PX = 80
+/** Last data row (or table bottom when empty) to ListPagination. */
+const MAX_ROW_PAGER_GAP_PX = 48
 const MIN_GRID_HEIGHT_PX = 220
 
 mkdirSync(OUT, { recursive: true })
@@ -35,7 +35,7 @@ async function waitUntilLayoutPinned(page, grid, pager) {
     throw new Error('grid or pagination handle missing')
   }
   await page.waitForFunction(
-    ([gridNode, pagerNode, vh, slack, minGrid]) => {
+    ([gridNode, pagerNode, maxGap, minGrid]) => {
       const loading = document.querySelector('.page-container .el-loading-mask')
       if (loading) {
         const style = window.getComputedStyle(loading)
@@ -43,14 +43,13 @@ async function waitUntilLayoutPinned(page, grid, pager) {
       }
       const gr = gridNode.getBoundingClientRect()
       const pr = pagerNode.getBoundingClientRect()
-      const pagerBottom = pr.top + pr.height
-      return (
-        gr.height > minGrid &&
-        pagerBottom > vh - slack &&
-        pagerBottom <= vh + 1
-      )
+      const lastRow = gridNode.querySelector('.el-table__body-wrapper tr.el-table__row:last-child')
+      const anchor = lastRow ?? gridNode.querySelector('.el-table')
+      if (!anchor) return false
+      const gap = pr.top - anchor.getBoundingClientRect().bottom
+      return gr.height > minGrid && gap >= -20 && gap <= maxGap && pr.bottom <= window.innerHeight + 1
     },
-    [gridEl, pagerEl, VIEWPORT.height, BOTTOM_SLACK_PX, MIN_GRID_HEIGHT_PX],
+    [gridEl, pagerEl, MAX_ROW_PAGER_GAP_PX, MIN_GRID_HEIGHT_PX],
     { timeout: 20000 },
   )
 }
@@ -81,17 +80,21 @@ try {
     await page.screenshot({ path: shot })
     console.log(`[SHOT] ${shot}`)
 
-    const gridBox = await grid.boundingBox()
-    const pagerBox = await pager.boundingBox()
-    const headerVisible = await grid.locator('.el-table__header').isVisible()
-    const cardCount = await page.locator('.page-container .table-card .list-data-grid-scroll').count()
-    const metrics = {
-      vh: VIEWPORT.height,
-      gridHeight: gridBox?.height ?? 0,
-      pagerBottom: (pagerBox?.y ?? 0) + (pagerBox?.height ?? 0),
-      hasTableCard: cardCount > 0,
-      headerVisible,
-    }
+    const metrics = await page.evaluate(() => {
+      const gridNode = document.querySelector('.page-container .list-data-grid-scroll')
+      const pagerNode = document.querySelector('.page-container .list-pagination')
+      const lastRow = gridNode?.querySelector('.el-table__body-wrapper tr.el-table__row:last-child')
+      const anchor = lastRow ?? gridNode?.querySelector('.el-table')
+      const gr = gridNode?.getBoundingClientRect()
+      const pr = pagerNode?.getBoundingClientRect()
+      const ar = anchor?.getBoundingClientRect()
+      return {
+        gridHeight: gr?.height ?? 0,
+        gap: pr && ar ? pr.top - ar.bottom : null,
+        hasTableCard: document.querySelectorAll('.page-container .table-card .list-data-grid-scroll').length > 0,
+        headerVisible: !!gridNode?.querySelector('.el-table__header'),
+      }
+    })
 
     check(`${item.slug} uses table-card host`, metrics.hasTableCard)
     check(`${item.slug} table header visible`, metrics.headerVisible)
@@ -101,13 +104,13 @@ try {
       `gridHeight=${metrics.gridHeight.toFixed(1)}`,
     )
     check(
-      `${item.slug} pagination near viewport bottom`,
-      metrics.pagerBottom > metrics.vh - BOTTOM_SLACK_PX && metrics.pagerBottom <= metrics.vh + 1,
-      `pagerBottom=${metrics.pagerBottom.toFixed(1)} vh=${metrics.vh}`,
+      `${item.slug} pagination under last row`,
+      metrics.gap != null && metrics.gap >= -20 && metrics.gap <= MAX_ROW_PAGER_GAP_PX,
+      `gap=${metrics.gap?.toFixed(1)}`,
     )
   }
 } finally {
   await browser.close()
 }
 
-console.log('[OK] both Admin Audit menus pin pagination to the viewport bottom')
+console.log('[OK] both Admin Audit menus keep pagination under the last log row')

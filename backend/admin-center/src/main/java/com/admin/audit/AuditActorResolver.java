@@ -5,6 +5,7 @@ import com.admin.repository.UserRepository;
 import com.platform.security.entity.User;
 import com.platform.security.util.SecurityContextUtils;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -97,6 +98,27 @@ public final class AuditActorResolver {
     }
 
     /**
+     * Login usernames keyed by {@code sys_users.id}. Missing users are omitted.
+     */
+    public static Map<String, String> usernamesByUserId(Set<String> userIds, UserRepository userRepository) {
+        if (userIds == null || userIds.isEmpty() || userRepository == null) {
+            return Map.of();
+        }
+        Set<String> known = userIds.stream().filter(id -> !isUnknown(id)).collect(Collectors.toSet());
+        if (known.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> result = new HashMap<>();
+        for (User user : userRepository.findAllById(known)) {
+            String username = usernameForUser(user);
+            if (username != null) {
+                result.put(user.getId(), username);
+            }
+        }
+        return result;
+    }
+
+    /**
      * Resolve operator display for list/detail: always prefer {@code sys_users.username} by userId.
      */
     public static void enrichOperatorUsernames(List<AuditLog> logs, UserRepository userRepository) {
@@ -107,21 +129,14 @@ public final class AuditActorResolver {
                 .map(AuditLog::getUserId)
                 .filter(id -> !isUnknown(id))
                 .collect(Collectors.toSet());
-        if (userIds.isEmpty()) {
-            return;
-        }
-        Map<String, User> users = userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
+        Map<String, String> usernames = usernamesByUserId(userIds, userRepository);
         for (AuditLog log : logs) {
             if (isUnknown(log.getUserId())) {
                 continue;
             }
-            User user = users.get(log.getUserId());
-            if (user != null) {
-                String username = usernameForUser(user);
-                if (username != null) {
-                    log.setUserName(username);
-                }
+            String username = usernames.get(log.getUserId());
+            if (username != null) {
+                log.setUserName(username);
             } else if (isUnknown(log.getUserName())) {
                 log.setUserName(log.getUserId());
             }

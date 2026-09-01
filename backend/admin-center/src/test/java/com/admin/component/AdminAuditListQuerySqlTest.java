@@ -39,6 +39,11 @@ class AdminAuditListQuerySqlTest {
     private AdminAuditListQueryComponent component;
     private final List<String> preparedSql = new ArrayList<>();
 
+    /** Duplicate of production list columns so SELECT * cannot satisfy this test. */
+    private static final String EXPECTED_PAGE_SELECT =
+            "SELECT al.id, al.action, al.resource_type, al.resource_id,"
+                    + " al.user_id, al.user_name, al.ip_address, al.success, al.duration_ms, al.timestamp";
+
     @BeforeEach
     void setUp() throws Exception {
         component = new AdminAuditListQueryComponent(jdbcTemplate, auditLogRepository, userRepository);
@@ -62,7 +67,10 @@ class AdminAuditListQuerySqlTest {
         component.query(request(null, List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM admin_audit_logs al");
+        assertThat(pageSql()).startsWith(EXPECTED_PAGE_SELECT);
         assertThat(pageSql()).contains("LIMIT ?").contains("OFFSET ?");
+        assertThat(pageSql()).doesNotContain("*");
+        assertThat(pageSql()).doesNotContain("old_value", "new_value", "change_details", "user_agent");
     }
 
     @Test
