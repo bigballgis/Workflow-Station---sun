@@ -137,6 +137,16 @@
             scrollbar-always-on
             :height="tableHeight"
           >
+            <template #empty>
+              <el-empty :description="t('upAudit.emptyText')">
+                <el-button
+                  type="primary"
+                  @click="handleReset"
+                >
+                  {{ t('audit.resetFilter') }}
+                </el-button>
+              </el-empty>
+            </template>
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
               :key="col.field"
@@ -225,20 +235,6 @@
         </div>
       </div>
 
-      <div
-        v-if="!loading && logs.length === 0"
-        class="empty-state"
-      >
-        <el-empty :description="t('upAudit.emptyText')">
-          <el-button
-            type="primary"
-            @click="handleReset"
-          >
-            {{ t('audit.resetFilter') }}
-          </el-button>
-        </el-empty>
-      </div>
-
       <ListPagination
         v-model:page="pagination.page"
         v-model:size="pagination.size"
@@ -292,7 +288,7 @@ const { t } = useI18n()
 
 const {
   loading, exporting,
-  logs, total,
+  total,
   detailDialogVisible, currentRecord,
   dateRange,
   query, functionUnitCodes,
@@ -359,7 +355,4 @@ function onFilterClear() {
   margin-bottom: 12px;
 }
 
-.empty-state {
-  padding: 20px 0;
-}
 </style>

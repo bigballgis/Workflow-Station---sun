@@ -197,6 +197,16 @@
           :height="tableHeight"
           @selection-change="handleSelectionChange"
         >
+          <template #empty>
+            <el-empty :description="t('audit.emptyText')">
+              <el-button
+                type="primary"
+                @click="handleReset"
+              >
+                {{ t('audit.resetFilter') }}
+              </el-button>
+            </el-empty>
+          </template>
           <el-table-column
             type="selection"
             :width="SELECTION_COL_WIDTH"
@@ -302,20 +312,6 @@
       </div>
     </div>
 
-    <div
-      v-if="!loading && logs.length === 0"
-      class="empty-state"
-    >
-      <el-empty :description="t('audit.emptyText')">
-        <el-button
-          type="primary"
-          @click="handleReset"
-        >
-          {{ t('audit.resetFilter') }}
-        </el-button>
-      </el-empty>
-    </div>
-
     <ListPagination
       v-model:page="pagination.page"
       v-model:size="pagination.size"
@@ -380,7 +376,7 @@ import { useListTableFitHeight } from '@/composables/list/useListTableFitHeight'
 const { t } = useI18n()
 
 const {
-  loading, exporting, logs,
+  loading, exporting,
   detailDialogVisible, detailLoading, currentLog, dateRange,
   tableRef, selectedRows,
   query, filterResourceTypes,
@@ -472,10 +468,6 @@ onActivated(() => {
   font-size: 13px;
   color: #409eff;
   font-weight: 500;
-}
-
-.empty-state {
-  padding: 20px 0;
 }
 
 /* Action Type tag: keep default Element Plus color scheme from type prop */

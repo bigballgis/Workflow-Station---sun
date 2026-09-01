@@ -1,6 +1,5 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, type MaybeRefOrGetter, type Ref, toValue } from 'vue'
 
-const EMPTY_TABLE_PX = 120
 const PAGINATION_FALLBACK_PX = 48
 const H_SCROLLBAR_PX = 12
 
@@ -25,7 +24,7 @@ export function useListTableFitHeight(
     const available = leftoverForTable(card)
     if (available <= 0) return
     if (toValue(rowCount) <= 0) {
-      tableHeight.value = Math.min(EMPTY_TABLE_PX, available)
+      tableHeight.value = available
       return
     }
     const natural = contentHeight(scroll)
