@@ -65,6 +65,11 @@ public class UserPreference {
     @Builder.Default
     private Boolean autoClaimOnOpen = Boolean.FALSE;
 
+    /** Open the first previewable form file when opening a workflow form. Default off. */
+    @Column(name = "auto_preview_on_open", nullable = false)
+    @Builder.Default
+    private Boolean autoPreviewOnOpen = Boolean.FALSE;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

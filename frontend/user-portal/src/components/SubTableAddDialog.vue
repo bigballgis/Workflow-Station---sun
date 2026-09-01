@@ -658,7 +658,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, ref, toRef, watch } from 'vue'
+import { computed, defineAsyncComponent, inject, nextTick, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
@@ -666,7 +666,7 @@ import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import { getFilenameFromUrl } from '@/composables/subTableField/useSubTableFileDownload'
-import { openFilePreview } from '@/composables/filePreview/useFilePreview'
+import { FILE_PREVIEW_PLAYLIST_KEY, openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
 import { uploadPropsBlockDownload } from '@/utils/filePreview'
 import {
   buildDialogLayoutGroups,
@@ -943,14 +943,19 @@ const {
   clearUpload,
 } = useSubTableDialogUpload(formData, () => props.columns, t)
 
+const previewPlaylist = inject(FILE_PREVIEW_PLAYLIST_KEY, null)
+
 function previewDialogFile(col: DialogColumn) {
   const url = String(formData.value[col.field] || '')
   if (!url) return
-  openFilePreview({
-    url,
-    name: getFilenameFromUrl(url, uploadNames.value[col.field]),
-    cannotDownload: uploadPropsBlockDownload(col.props),
-  })
+  openFilePreviewFromList(
+    {
+      url,
+      name: getFilenameFromUrl(url, uploadNames.value[col.field]),
+      cannotDownload: uploadPropsBlockDownload(col.props),
+    },
+    previewPlaylist?.collect() ?? [],
+  )
 }
 
 // ─── BU→Role 级联（MI 子任务「按角色分派」）+ 与 assignee 行级互斥 ──────────────

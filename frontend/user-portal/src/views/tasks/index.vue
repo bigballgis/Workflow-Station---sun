@@ -2,11 +2,13 @@
   <div class="tasks-page">
     <TodoPageHeader
       :auto-claim-on-open="preferenceStore.autoClaimOnOpen"
+      :auto-preview-on-open="preferenceStore.autoPreviewOnOpen"
       :saving="preferenceStore.saving"
       :busy="claimAllBusy"
       @claim-all="handleClaimAll"
       @unclaim-all="handleUnclaimAll"
       @auto-claim-change="onAutoClaimChange"
+      @auto-preview-change="onAutoPreviewChange"
     />
 
     <div
@@ -320,6 +322,7 @@ const {
   handleClaimSelected,
   handleUnclaimSelected,
   onAutoClaimChange,
+  onAutoPreviewChange,
   handleBatchUrge,
   submitAction,
   getPriorityLabel,

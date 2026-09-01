@@ -59,7 +59,7 @@ onBeforeUnmount(() => { cancelled = true })
 <style scoped>
 .file-preview-pdf {
   width: 100%;
-  height: 72vh;
+  height: var(--file-preview-pane-height, 72vh);
   overflow: auto;
   background: #fff;
   display: flex;

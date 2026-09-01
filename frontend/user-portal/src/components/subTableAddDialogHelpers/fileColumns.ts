@@ -70,7 +70,8 @@ export function mergeListViewFieldColumn(
     fieldType?: string
   },
   baseColumn?: Partial<DialogColumn> | null,
-  fieldRule?: { type?: string; title?: string; props?: Record<string, unknown> } | null,
+  fieldRule?: { type?: string; title?: string; props?: Record<string, unknown>; cannotDownload?: unknown; canNotDownload?: unknown } | null,
+  blockedFieldKeys?: Set<string>,
 ): DialogColumn {
   const type = resolveListColumnFieldType(column, fieldRule, baseColumn)
   const label = column.displayName || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName
@@ -83,7 +84,7 @@ export function mergeListViewFieldColumn(
     if (fieldRule?.props?.fileNameTargetField != null) {
       props.fileNameTargetField = fieldRule.props.fileNameTargetField
     }
-    stampCannotDownloadProp(props, fieldRule?.props, column.fieldName)
+    stampCannotDownloadProp(props, fieldRule?.props, column.fieldName, blockedFieldKeys, fieldRule)
   }
   return {
     ...(baseColumn || {}),

@@ -145,7 +145,7 @@
             >
               <el-link
                 type="primary"
-                @click="download(note.id, note.fileName || '')"
+                @click="previewNoteFile(note, note.id, note.fileName || '')"
               >
                 <el-icon><Paperclip /></el-icon>
                 {{ note.fileName }}
@@ -161,7 +161,7 @@
                 :key="att.id"
                 size="small"
                 class="rn-chip"
-                @click="download(att.id, att.fileName)"
+                @click="previewNoteFile(note, att.id, att.fileName)"
               >
                 <el-icon><Paperclip /></el-icon>
                 {{ att.fileName }} <span class="rn-file-size">{{ formatSize(att.fileSize) }}</span>
@@ -200,7 +200,6 @@ i18nChangeLanguage('en')
 import {
   canAddRecordNote,
   createRecordNote,
-  downloadRecordNoteAttachment,
   fetchRecordNoteBlobUrl,
   listRecordNotes,
   recordNoteContentUrl,
@@ -209,6 +208,8 @@ import {
   type RecordNoteTargetParams,
 } from '@/api/recordNote'
 import { notifyRecordNoteChanged } from './formRendererHelpers/recordNoteFields'
+import { openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
+import { isPreviewableFileName } from '@/utils/collectFormPreviewFiles'
 
 export interface RecordNoteConfig {
   scope?: string
@@ -487,8 +488,30 @@ async function submit() {
   }
 }
 
-function download(noteId: string, fileName: string) {
-  void downloadRecordNoteAttachment(noteId, fileName, props.processInstanceId ?? null)
+function noteFileUrl(id: string): string {
+  const base = recordNoteContentUrl(id)
+  const pid = props.processInstanceId
+  if (!pid) return base
+  return `${base}?processInstanceId=${encodeURIComponent(pid)}`
+}
+
+function notePreviewItems(note: RecordNoteItem) {
+  const items: Array<{ url: string; name: string }> = []
+  if (note.noteType === 'ATTACHMENT' && note.fileName && isPreviewableFileName(note.fileName)) {
+    items.push({ url: noteFileUrl(note.id), name: note.fileName })
+  }
+  for (const att of note.attachments ?? []) {
+    if (att.isInlineImage || !isPreviewableFileName(att.fileName)) continue
+    items.push({ url: noteFileUrl(att.id), name: att.fileName })
+  }
+  return items
+}
+
+function previewNoteFile(note: RecordNoteItem, id: string, fileName: string) {
+  const url = noteFileUrl(id)
+  const items = notePreviewItems(note)
+  const current = items.find((item) => item.url === url) ?? { url, name: fileName }
+  openFilePreviewFromList(current, items)
 }
 
 // Hibernate @UpdateTimestamp fills updated_at on INSERT too (microseconds after

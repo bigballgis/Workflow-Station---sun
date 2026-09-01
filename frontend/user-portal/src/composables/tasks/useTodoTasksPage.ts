@@ -185,6 +185,10 @@ export function useTodoTasksPage() {
     return preferenceStore.setAutoClaimOnOpen(value === true)
   }
 
+  function onAutoPreviewChange(value: string | number | boolean) {
+    return preferenceStore.setAutoPreviewOnOpen(value === true)
+  }
+
   const handleBatchUrge = () => {
     currentAction.value = 'batchUrge'
     actionDialogTitle.value = t('task.batchUrge')
@@ -263,6 +267,7 @@ export function useTodoTasksPage() {
     handleClaimSelected,
     handleUnclaimSelected,
     onAutoClaimChange,
+    onAutoPreviewChange,
     handleBatchUrge,
     submitAction,
     getPriorityLabel,

@@ -12,6 +12,7 @@ export interface UserPreference {
   dateFormat: string
   pageSize: number
   autoClaimOnOpen?: boolean
+  autoPreviewOnOpen?: boolean
 }
 
 export interface DashboardLayout {

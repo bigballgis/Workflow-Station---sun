@@ -10,6 +10,7 @@ import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
  */
 export const useUserPreferenceStore = defineStore('userPreference', () => {
   const autoClaimOnOpen = ref(false)
+  const autoPreviewOnOpen = ref(false)
   const loaded = ref(false)
   const saving = ref(false)
   const snapshot = ref<UserPreference | null>(null)
@@ -28,10 +29,12 @@ export const useUserPreferenceStore = defineStore('userPreference', () => {
         const data = res?.data
         snapshot.value = data ?? null
         autoClaimOnOpen.value = Boolean(data?.autoClaimOnOpen)
+        autoPreviewOnOpen.value = Boolean(data?.autoPreviewOnOpen)
         loaded.value = data != null
       } catch {
         // FALLBACK(ux): preference GET failed; keep default off and retry on next open
         autoClaimOnOpen.value = false
+        autoPreviewOnOpen.value = false
         snapshot.value = null
       } finally {
         inFlight = null
@@ -40,32 +43,55 @@ export const useUserPreferenceStore = defineStore('userPreference', () => {
     return inFlight
   }
 
-  async function setAutoClaimOnOpen(value: boolean): Promise<void> {
+  async function patchBooleans(patch: {
+    autoClaimOnOpen?: boolean
+    autoPreviewOnOpen?: boolean
+  }): Promise<void> {
     await load()
-    const previous = autoClaimOnOpen.value
+    const previousClaim = autoClaimOnOpen.value
+    const previousPreview = autoPreviewOnOpen.value
     if (snapshot.value == null) {
       ElMessage.error(i18n.global.t('api.requestFailed'))
       return
     }
-    autoClaimOnOpen.value = value
+    if (patch.autoClaimOnOpen != null) autoClaimOnOpen.value = patch.autoClaimOnOpen
+    if (patch.autoPreviewOnOpen != null) autoPreviewOnOpen.value = patch.autoPreviewOnOpen
     saving.value = true
     try {
-      await updateUserPreference(fullPreferencePut(snapshot.value, value))
-      snapshot.value = { ...snapshot.value, autoClaimOnOpen: value }
+      const next = { ...snapshot.value, ...patch }
+      await updateUserPreference(fullPreferencePut(next))
+      snapshot.value = next
       loaded.value = true
     } catch (error) {
-      autoClaimOnOpen.value = previous
+      autoClaimOnOpen.value = previousClaim
+      autoPreviewOnOpen.value = previousPreview
       ElMessage.error(resolveUserFacingHttpMessage(error, (key) => i18n.global.t(key)))
     } finally {
       saving.value = false
     }
   }
 
-  return { autoClaimOnOpen, loaded, saving, load, setAutoClaimOnOpen }
+  function setAutoClaimOnOpen(value: boolean): Promise<void> {
+    return patchBooleans({ autoClaimOnOpen: value })
+  }
+
+  function setAutoPreviewOnOpen(value: boolean): Promise<void> {
+    return patchBooleans({ autoPreviewOnOpen: value })
+  }
+
+  return {
+    autoClaimOnOpen,
+    autoPreviewOnOpen,
+    loaded,
+    saving,
+    load,
+    setAutoClaimOnOpen,
+    setAutoPreviewOnOpen,
+  }
 })
 
 /** PUT the full row so Java field defaults on omitted JSON keys cannot wipe other settings. */
-function fullPreferencePut(current: UserPreference, autoClaim: boolean): Partial<UserPreference> {
+function fullPreferencePut(current: UserPreference): Partial<UserPreference> {
   return {
     theme: current.theme,
     themeColor: current.themeColor,
@@ -75,6 +101,7 @@ function fullPreferencePut(current: UserPreference, autoClaim: boolean): Partial
     timezone: current.timezone,
     dateFormat: current.dateFormat,
     pageSize: current.pageSize,
-    autoClaimOnOpen: autoClaim,
+    autoClaimOnOpen: Boolean(current.autoClaimOnOpen),
+    autoPreviewOnOpen: Boolean(current.autoPreviewOnOpen),
   }
 }

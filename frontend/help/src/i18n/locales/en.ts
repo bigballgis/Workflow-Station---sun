@@ -257,6 +257,14 @@ export default {
     autoClaimBody:
       'The Auto-claim on open switch sits on the To Do top bar and on User Profile. It is stored with your account and defaults to off. When it is on, clicking a Request ID on To Do claims that row first if it is still free, then opens the form. There is no success toast. If the claim fails (for example someone else just took it), you still open the form and see an error. Home, notifications, email links, bookmarks, and Completed Tasks do not auto-claim.',
     autoClaimSample: 'switch on To Do and User Profile; default off',
+    autoPreviewTitle: 'Auto-preview on open',
+    autoPreviewBody:
+      'The Auto-preview on open switch sits next to Auto-claim on To Do and on User Profile. It is stored with your account and defaults to off. When it is on, opening a task or My Request form opens the first previewable file after the form loads. Zip and similar types are skipped. Record Note attachments are not in this first-file list — click a note file to preview it. Process-form copies and Start Request drafts do not auto-preview.',
+    autoPreviewSample: 'switch on To Do and User Profile; default off',
+    filePreviewTitle: 'File preview',
+    filePreviewBody:
+      'Click a file name on the form, a sub-table cell, or a note attachment to open preview in a new browser tab, so the form stays visible. If the browser blocks the tab, preview stays in a dialog. Images and TIFF have Zoom in, Zoom out, 100%, and Fit. Fit is the default. Hold Ctrl (⌘ on Mac) and scroll the mouse wheel to zoom around the cursor. 100% shows the original pixels and uses scroll bars. TIFF ignores thumbnail IFDs so a scanned page is not shown as a tiny preview. When the request has several previewable files, Previous file and Next file stay in the same tab and walk main-table uploads, then each sub-table row, then nested sub-tables. Note attachments walk only that note’s files.',
+    filePreviewSample: 'new tab; Ctrl + scroll zoom; Fit / 100%; Previous file / Next file',
     detailTitle: 'On the task page',
     detailBody:
       'If nobody holds the role request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the list also show Force Unclaim.',

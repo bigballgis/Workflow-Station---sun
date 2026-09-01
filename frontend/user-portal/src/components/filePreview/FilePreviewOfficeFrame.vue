@@ -93,7 +93,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .file-preview-office-frame {
   width: 100%;
-  height: 72vh;
+  height: var(--file-preview-pane-height, 72vh);
   border: 0;
   background: #eef0f3;
   align-self: stretch;

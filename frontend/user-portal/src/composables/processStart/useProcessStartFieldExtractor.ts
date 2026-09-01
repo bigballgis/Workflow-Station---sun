@@ -31,8 +31,9 @@ const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 export function createFieldExtractor(deps: {
   lookupDbConfigs: Ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>
   relationViewConfigs: Ref<Record<string, { viewFields: any[]; allFields: any[] }>>
+  cannotDownloadFieldKeys?: () => Set<string>
 }) {
-  const { lookupDbConfigs, relationViewConfigs } = deps
+  const { lookupDbConfigs, relationViewConfigs, cannotDownloadFieldKeys } = deps
 
   const extractFieldsRecursive = (items: any[]): FormField[] => {
     const fields: FormField[] = []
@@ -232,7 +233,7 @@ export function createFieldExtractor(deps: {
       } else if (FC_SKIP_TYPES.has(item.type)) {
         // Traverse children only; `continue` would drop nested sub-table row fields.
       } else if (item.field) {
-        const field = convertFormCreateRule(item)
+        const field = convertFormCreateRule(item, cannotDownloadFieldKeys?.())
         if (field) fields.push(field)
       }
       const childItems = getRuleChildren(item)

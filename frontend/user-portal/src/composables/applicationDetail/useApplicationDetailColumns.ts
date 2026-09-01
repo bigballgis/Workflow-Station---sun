@@ -155,6 +155,7 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
           rProps,
           typeof r.field === 'string' ? r.field : undefined,
           cannotDownloadFieldKeysFromForms(ctx.cachedContentForms),
+          r,
         )
         assignSensitiveMaskColumnProps(passProps, type, rProps)
         if (rProps.data !== undefined) passProps.treeData = rProps.data

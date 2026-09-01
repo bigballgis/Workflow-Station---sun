@@ -173,6 +173,12 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/file-preview',
+    name: 'FilePreview',
+    component: () => import('@/views/file-preview/index.vue'),
+    meta: { titleKey: 'filePreview.pageTitle', requiresAuth: true }
+  },
+  {
     path: '/403',
     name: 'Forbidden',
     component: () => import('@/views/error/403.vue'),

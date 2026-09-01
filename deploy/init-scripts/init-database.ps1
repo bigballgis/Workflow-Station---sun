@@ -141,7 +141,8 @@ $migrations = @(
     "00-schema/74-ubr-membership-type.sql",
     "00-schema/74-widen-chk-content-type-decision-relation.sql",
     "00-schema/74-wf-extended-task-delegate-target.sql",
-    "00-schema/75-up-user-preference-auto-claim.sql"
+    "00-schema/75-up-user-preference-auto-claim.sql",
+    "00-schema/76-up-user-preference-auto-preview.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

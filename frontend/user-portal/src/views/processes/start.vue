@@ -305,6 +305,7 @@ import {
 } from '@/utils/miAssignmentConfig'
 import { createProcessStartState } from '@/composables/processStart/useProcessStartState'
 import { pickSubFormOptionsFromDesign } from '@/composables/processStart/pickSubFormOptionsFromDesign'
+import { cannotDownloadFieldKeysFromForms } from '@/utils/applyUploadPropsFromRule'
 import { createProcessStartFormParsing } from '@/composables/processStart/useProcessStartFormParsing'
 import { createProcessStartSubTables } from '@/composables/processStart/useProcessStartSubTables'
 import {
@@ -389,6 +390,9 @@ const {
 const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBinding, extractFieldsRecursive } = createProcessStartFormParsing({
   lookupDbConfigs,
   relationViewConfigs,
+  cannotDownloadFieldKeys: () => cannotDownloadFieldKeysFromForms(
+    caches.cachedContentForms as Array<{ data?: unknown; configJson?: unknown }>,
+  ),
   formConfigJson,
   formLabelPosition,
   formFormOptions,

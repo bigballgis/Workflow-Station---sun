@@ -20,6 +20,16 @@
             @change="onChange"
           />
         </label>
+        <label class="auto-claim-toggle">
+          <span>{{ t('task.autoPreviewOnOpen') }}</span>
+          <el-switch
+            data-test="todo-auto-preview-switch"
+            :model-value="autoPreviewOnOpen"
+            :loading="saving"
+            :disabled="saving"
+            @change="onPreviewChange"
+          />
+        </label>
         <el-button
           data-test="todo-unclaim-all-btn"
           :loading="busy"
@@ -47,6 +57,7 @@ import PortalHelpLink from '@/components/PortalHelpLink.vue'
 
 defineProps<{
   autoClaimOnOpen: boolean
+  autoPreviewOnOpen: boolean
   saving: boolean
   busy: boolean
 }>()
@@ -55,12 +66,17 @@ const emit = defineEmits<{
   'claim-all': []
   'unclaim-all': []
   'auto-claim-change': [value: boolean]
+  'auto-preview-change': [value: boolean]
 }>()
 
 const { t } = useI18n()
 
 function onChange(value: string | number | boolean) {
   emit('auto-claim-change', value === true)
+}
+
+function onPreviewChange(value: string | number | boolean) {
+  emit('auto-preview-change', value === true)
 }
 </script>
 
