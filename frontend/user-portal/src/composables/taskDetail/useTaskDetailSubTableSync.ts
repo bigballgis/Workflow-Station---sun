@@ -15,10 +15,14 @@ import {
 } from '@/components/subTableAddDialogHelpers'
 import type { MiParticipantRowId } from '@/composables/tasks/miSubProcessScope'
 import {
+  hasConfiguredPrimaryKeyFields,
+  bindingMatchesMiSubTableName,
+} from '@/composables/tasks/miParticipantRowKey'
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
+import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
   subTableBindingMatches,
-  normalizeSubTableName,
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 
@@ -70,30 +74,105 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
    */
   function rebuildIsolatedSubTablesPayload(myRowId?: MiParticipantRowId | null): Record<string, any> {
     const subTables: Record<string, any> = {}
+    /**
+     * This participant's own row, exactly as the CURRENT form holds it. It is authoritative: the
+     * user just edited it here, so for this row the current form wins over every previous-form
+     * snapshot — including on fields the user cleared, which `mergeSubTableRowsByRowId`'s
+     * prefer-filled rule would otherwise refuse to blank out.
+     *
+     * Previously this was handled by DELETING the row from previous-form snapshots and relying on
+     * the current form to re-add it. That coupling was unsound: the delete was unconditional but
+     * the re-add was not, so whenever the current form's slice did not carry the row it vanished
+     * from the payload entirely and the backend rejected the save. Replacing the row after the
+     * merge keeps the same "current form wins" outcome with no window in which the row is absent.
+     */
+    const myRowFromCurrentForm: Record<string, unknown> | null = (() => {
+      if (myRowId == null) return null
+      for (const b of subTableBindings.value) {
+        for (const row of (Array.isArray(b.data) ? b.data : [])) {
+          if (row && typeof row === 'object' && ctx.rowBelongsToCurrentMiScope(row, myRowId, b)) {
+            return row as Record<string, unknown>
+          }
+        }
+      }
+      return null
+    })()
+
     const ingest = (bindings: typeof subTableBindings.value, dropCurrentMiRow: boolean) => {
       const collision = bindingIdsPreferStrictSubTableLookup(bindings)
       for (const binding of bindings) {
-        let rows = Array.isArray(binding.data) ? binding.data : []
-        if (dropCurrentMiRow && myRowId != null && isMiDashboardSubTableBinding(binding)) {
-          rows = rows.filter((row: any) => !ctx.rowBelongsToCurrentMiScope(row, myRowId, binding))
+        let rawRows = Array.isArray(binding.data) ? binding.data : []
+        // Previous-form snapshots are read-only history: their copy of THIS participant's row is
+        // stale by definition, and (because slices share table-name alias keys) letting it through
+        // is what made the form re-render another sub-task's data mid-edit. Drop it here — the
+        // authoritative copy is re-applied from `myRowFromCurrentForm` after the merge below, so
+        // unlike the original delete-and-hope this cannot leave the row missing.
+        if (dropCurrentMiRow && myRowId != null && myRowFromCurrentForm
+            && isMiDashboardSubTableBinding(binding)) {
+          rawRows = rawRows.filter((row: any) => !ctx.rowBelongsToCurrentMiScope(row, myRowId, binding))
         }
-        rows = cloneSubTableRows(rows)
-        const canonical = String(binding.bindingId)
+        const rows = cloneSubTableRows(rawRows)
         const prev = ctx.getSavedSubTableRows(subTables, binding, collision.has(binding.bindingId))
-        const merged = mergeSubTableRowsByRowId(prev, rows, binding.primaryKeyFields)
-        const out = cloneSubTableRows(merged)
-        subTables[binding.bindingId] = out
-        subTables[canonical] = out
-        if (binding.tableName) {
-          subTables[binding.tableName] = out
-          subTables[normalizeSubTableName(binding.tableName)] = out
+        // An MI participant row can only be identified by the designer primary key. `row_id` is a
+        // per-snapshot frontend value — the same physical row carries different ones in the engine
+        // variables copy and the portal subTableData copy — so merging on it silently fused two
+        // participants' rows and submitted the wrong one. Refuse to build a payload we cannot key
+        // correctly rather than guessing: fail loud here, exactly as the backend does on save.
+        //
+        // "The MI sub-table" is exactly the one named by the BPMN Sub-Task Config's Sub-table ID
+        // (`miSubProcessScope.subTableName`) — never inferred from column names or a table called
+        // "participants", which would both mis-fire on unrelated tables and miss a correctly
+        // configured one under any other name.
+        const miScopeTable = ctx.miSubProcessScope.value?.subTableName
+        if (miScopeTable
+            && bindingMatchesMiSubTableName(binding, miScopeTable)
+            && !hasConfiguredPrimaryKeyFields(binding.primaryKeyFields)) {
+          ctx.warnMiMissingPrimaryKey(binding)
+          throw new Error(
+            `MI sub-table "${binding.tableName || binding.bindingId}" has no primary key configured`,
+          )
         }
+        // Status / current-node mirror columns come from Sub-Task Config too
+        // (miTaskStatusField / miTaskCurrentNodeField), never from a fixed column name.
+        let merged = mergeSubTableRowsByRowId(prev, rows, binding.primaryKeyFields, {
+          statusField: ctx.miSubProcessScope.value?.miTaskStatusField,
+          currentNodeField: ctx.miSubProcessScope.value?.miTaskCurrentNodeField,
+        })
+        // Current form wins outright for this participant's own row (see myRowFromCurrentForm) —
+        // but ONLY where that row already exists in this slice. Appending it into a slice that
+        // legitimately holds just another participant's row would inject this participant into a
+        // foreign binding, which the sub-form then renders as "the other sub-task's data".
+        // A slice that never had our row simply keeps what it had; the collection slices that do
+        // carry it are the ones the backend row-merges against.
+        if (myRowFromCurrentForm && myRowId != null && isMiDashboardSubTableBinding(binding)) {
+          const idx = merged.findIndex(
+            (row: any) => ctx.rowBelongsToCurrentMiScope(row, myRowId, binding),
+          )
+          if (idx >= 0) {
+            merged[idx] = cloneSubTableRows([myRowFromCurrentForm])[0]
+          } else if (dropCurrentMiRow) {
+            // Only re-add where we just dropped it (previous-form slices that DID hold this row).
+            // Never append into a slice that never had it — that injected this participant into a
+            // binding scoped to another sub-task, which the form then rendered as their data.
+            const held = (Array.isArray(binding.data) ? binding.data : []).some(
+              (row: any) => ctx.rowBelongsToCurrentMiScope(row, myRowId, binding),
+            )
+            if (held) merged = [...merged, cloneSubTableRows([myRowFromCurrentForm])[0]]
+          }
+        }
+        const out = cloneSubTableRows(merged)
+        writeSubTableRows(subTables, binding, out)
       }
     }
     for (const pf of previousForms.value) {
       ingest(pf.subTableBindings, true)
     }
     ingest(subTableBindings.value, false)
+
+    // No cross-key reconciliation needed: every binding of one designer table now writes the
+    // SAME canonical key (`dw:<name>` / `rt:<name>`), so a row physically cannot exist in two
+    // versions. The sweep that used to hunt for "the authoritative copy" among divergent slices
+    // is gone with the divergence it compensated for.
     return subTables
   }
 
@@ -106,8 +185,24 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
     const subTables = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
     const strictSlices = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
     const existing = ctx.getSavedSubTableRows(subTables, source, strictSlices.has(source.bindingId))
+    // `existing` comes from formData.__subTables__, which carries EVERY participant's row (the save
+    // payload must submit them all). What this function feeds back into `binding.data` is what the
+    // sub-form RENDERS, so merging the whole slice in would put other participants' rows on this
+    // sub-task's form — typing one character then re-rendered someone else's data. Keep only this
+    // participant's row from the persisted slice; `nextRows` is what the user is editing right now.
+    const myRowId = isMiSubTaskMode.value ? ctx.currentMiRowId.value : null
+    const existingForMe =
+      myRowId != null && Array.isArray(existing)
+        ? existing.filter((row: any) => ctx.rowBelongsToCurrentMiScope(row, myRowId, source))
+        : existing
+    // `nextRows` is what the grid/form currently holds for this participant — the user's live edit,
+    // including fields they just cleared. Merging the persisted copy in would re-fill those blanks
+    // (prefer-filled), which is exactly why edits appeared to save and then revert. Only fall back
+    // to the persisted rows when the editor supplied none at all.
     const merged = isMiSubTaskMode.value
-      ? mergeSubTableRowsByRowId(existing, nextRows, source.primaryKeyFields)
+      ? (nextRows.length > 0
+          ? nextRows
+          : mergeSubTableRowsByRowId(existingForMe, nextRows, source.primaryKeyFields))
       : nextRows
     const out = cloneSubTableRows(merged)
 
@@ -120,12 +215,22 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
     // Never push current-task sub-table edits into previousForms — those are read-only snapshots
     // (MI isolation + matching bindingIds would wipe other sub-tasks' rows).
 
-    subTables[source.bindingId] = out
-    subTables[String(source.bindingId)] = out
-    if (source.tableName) {
-      subTables[source.tableName] = out
-      subTables[normalizeSubTableName(source.tableName)] = out
-    }
+    // `out` is deliberately scoped to this participant (it drives the form). The SAVE payload must
+    // still carry every participant, so fold this edit back into the full slice rather than
+    // replacing it — otherwise the other participants' rows would be dropped from formData and the
+    // submission would look like they were deleted.
+    // NOT a merge: `mergeSubTableRowsByRowId` is prefer-filled, so the persisted row's old value
+    // would beat the value the user just typed (edits appeared to save and then revert). Take the
+    // other participants' rows verbatim from the persisted slice and this participant's row
+    // verbatim from `out` — the form is the only authority for the row being edited.
+    const outForPayload =
+      myRowId != null && Array.isArray(existing) && existing.length > 0
+        ? [
+            ...existing.filter((row: any) => !ctx.rowBelongsToCurrentMiScope(row, myRowId, source)),
+            ...out,
+          ]
+        : out
+    writeSubTableRows(subTables, source, outForPayload)
 
     if (isMiSubTaskMode.value) {
       ctx.syncMiLinkChildRowsIntoParentNested(
@@ -138,12 +243,7 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
         const parentRows = cloneSubTableRows(
           Array.isArray(parentBinding.data) ? parentBinding.data : []
         )
-        subTables[parentBinding.bindingId] = parentRows
-        subTables[String(parentBinding.bindingId)] = parentRows
-        if (parentBinding.tableName) {
-          subTables[parentBinding.tableName] = parentRows
-          subTables[normalizeSubTableName(parentBinding.tableName)] = parentRows
-        }
+        writeSubTableRows(subTables, parentBinding, parentRows)
       }
     }
 
@@ -197,17 +297,7 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
           )
         }
       }
-      tbl[binding.bindingId] = rows
-      tbl[String(binding.bindingId)] = rows
-      if (binding.tableName) {
-        tbl[binding.tableName] = rows
-        tbl[normalizeSubTableName(binding.tableName)] = rows
-      }
-      const phys = binding.physicalTableName
-      if (phys) {
-        tbl[phys] = rows
-        tbl[normalizeSubTableName(phys)] = rows
-      }
+      writeSubTableRows(tbl, binding, rows)
     }
     // Defer triggerRef to next macrotask — avoids synchronous watcher cascade during MI isolate.
     setTimeout(() => triggerRef(formData), 0)

@@ -1,4 +1,5 @@
 import { ElMessage } from 'element-plus'
+import { writeSubTableRows, subTableStoreKey } from '@/composables/tasks/subTableStore'
 import {
   submitTaskForm as apiSubmitTaskForm,
 } from '@/api/processForm'
@@ -16,7 +17,6 @@ import {
   cloneSubTableRows,
   cloneSubTableBindings,
   bindingIdsPreferStrictSubTableLookup,
-  normalizeSubTableName,
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 
@@ -185,12 +185,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     const existing = ctx.getSavedSubTableRows(subTables, target, ambiguousMiDialog.has(target.bindingId))
     const merged = mergeSubTableRowsByRowId(existing, nextRows, target.primaryKeyFields)
     const out = cloneSubTableRows(merged)
-    subTables[target.bindingId] = out
-    subTables[String(target.bindingId)] = out
-    if (target.tableName) {
-      subTables[target.tableName] = out
-      subTables[normalizeSubTableName(target.tableName)] = out
-    }
+    writeSubTableRows(subTables, target, out)
     miFillDialogData.value = { ...miFillDialogData.value, __subTables__: subTables }
   }
 
@@ -222,13 +217,10 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
       const existing = ctx.getSavedSubTableRows(subTables, binding, ambiguousMiDialogSave.has(binding.bindingId))
       const merged = mergeSubTableRowsByRowId(existing, rows, binding.primaryKeyFields)
       const out = cloneSubTableRows(merged)
-      subTables[binding.bindingId] = out
-      subTables[String(binding.bindingId)] = out
-      subTableData[String(binding.bindingId)] = out
-      if (binding.tableName) {
-        subTables[binding.tableName] = out
-        subTables[normalizeSubTableName(binding.tableName)] = out
-        subTableData[binding.tableName] = out
+      const key = subTableStoreKey(binding)
+      if (key) {
+        subTables[key] = out
+        subTableData[key] = out
       }
     }
 

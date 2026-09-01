@@ -4,6 +4,7 @@
  * My Request standalone-suppression filter (MI/FK-PK hot path).
  */
 
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
 import type {
   FormField,
   FormLayoutBuckets,
@@ -119,9 +120,8 @@ export function mergeNestedSubTableRowsIntoSto(
       Object.assign(sto, raw as Record<string, unknown>)
     }
   }
-  sto[String(binding.bindingId)] = rows
-  const name = typeof binding.tableName === 'string' ? binding.tableName.trim() : ''
-  if (name) sto[name] = rows
+  // 规范 key：一张表一个 key，避免再产生 bindingId / 表名两份副本。
+  writeSubTableRows(sto, binding, rows)
   return sto
 }
 

@@ -1,4 +1,5 @@
 import { processApi } from '@/api/process'
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
   ensureAutoPrimaryKeysForRows,
   repairMisassignedPrimaryKeyFromParentId,
@@ -27,7 +28,6 @@ import {
 } from '@/composables/tasks/miSubProcessScope'
 import {
   cloneSubTableRows,
-  normalizeSubTableName,
   subTableBindingMatches,
   collectSubTableBindingMatchKeys,
   subTableRowsLackSavedFieldPayload,
@@ -83,12 +83,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
           : {})
       }
       const slice = cloneSubTableRows(scopedSlice)
-      nest[childBinding.bindingId] = slice
-      nest[String(childBinding.bindingId)] = slice
-      if (childBinding.tableName) {
-        nest[childBinding.tableName] = slice
-        nest[normalizeSubTableName(childBinding.tableName)] = slice
-      }
+      writeSubTableRows(nest, childBinding, slice)
       return { ...rec, __subTables__: nest }
     })
   }

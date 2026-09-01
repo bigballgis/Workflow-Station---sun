@@ -8,6 +8,7 @@ import {
   normalizeSubTableName,
   stripLinkFormDesignerTableLabel,
 } from './subTableCore'
+import { subTableStoreKey, type SubTableStoreBindingLike } from './subTableStore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 
 function compactLinkFormTableKey(name: string): string {
@@ -27,7 +28,11 @@ function findNestedChildRowsInSto(
   const nameRaw = String(child.tableName || '').trim()
   const nameStripped = stripLinkFormDesignerTableLabel(nameRaw)
 
+  // 规范 key 优先（`dw:<name>` / `rt:<name>`）：一张表一个 key，写入侧已统一。
+  // 其余候选保留，用于读取尚未经写入侧改写的历史嵌套结构。
+  const canonicalKey = subTableStoreKey(child as SubTableStoreBindingLike)
   const candidates: unknown[] = [
+    canonicalKey ? sto[canonicalKey] : undefined,
     sto[child.bindingId],
     sto[String(child.bindingId)],
     sto[nameRaw],

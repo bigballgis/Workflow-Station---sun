@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.subtable.SubTableStoreKeys;
 import com.platform.common.jdbc.SqlIdentifiers;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
@@ -209,7 +210,12 @@ public class SubTableEnrichmentComponent {
         try {
             for (Map.Entry<String, Object> subTableEntry : subTables.entrySet()) {
                 String sliceKey = subTableEntry.getKey();
-                String tableName = bindingTableNames.get(sliceKey);
+                // Canonical keys (`dw:<name>` / `rt:<name>`) carry the designer table name directly —
+                // no bindingId → name lookup needed, and no ambiguity from display-name aliases.
+                String tableName = SubTableStoreKeys.tableNameOf(sliceKey);
+                if (tableName == null) {
+                    tableName = bindingTableNames.get(sliceKey);
+                }
                 if (tableName == null || tableName.isBlank()) {
                     tableName = bindingTableNames.get(MiOverlaySupport.normalizeMiTableKey(sliceKey));
                 }

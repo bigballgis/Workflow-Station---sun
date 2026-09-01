@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
-  normalizeSubTableName,
   flattenNestedSubTableRowsIntoPayload,
   normalizeSubTableRowsForBinding,
 } from '@/composables/tasks/shared'
@@ -74,13 +74,7 @@ export function createProcessStartSubTables(deps: {
     const subTables: Record<string, unknown> = {}
     for (const b of subTableBindings.value) {
       const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
-      subTables[b.bindingId] = rows
-      subTables[String(b.bindingId)] = rows
-      const tn = String(b.tableName || '').trim()
-      if (tn) {
-        subTables[tn] = rows
-        subTables[normalizeSubTableName(tn)] = rows
-      }
+      writeSubTableRows(subTables, b, rows)
     }
     flattenNestedSubTableRowsIntoPayload(subTables)
     return subTables

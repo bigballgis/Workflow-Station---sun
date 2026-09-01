@@ -267,6 +267,45 @@ public class TaskFormComponent {
     }
 
     /**
+     * Overlays THIS task's own MI loop variable ({@code _currentItem}) from the engine.
+     *
+     * <p>Flowable scopes {@code currentItem} to the MI sub-process execution, so each participant's
+     * sub-task has a different one; {@code TaskInfoAssembler} reads it per task and returns it on the
+     * task payload. The portal's {@code up_process_instance.variables}, by contrast, is one blob for
+     * the whole process and cannot represent per-participant identity — reading it left every MI
+     * sub-task believing it owned whichever row happened to be stored last.
+     *
+     * <p>Absent/unavailable engine data leaves {@code target} without the key, which is correct: the
+     * caller then treats the submission as non-MI rather than acting on a foreign participant's row.
+     */
+    private void applyTaskScopedMiCurrentItem(String taskId, Map<String, Object> target) {
+        if (workflowEngineClient == null || taskId == null) {
+            return;
+        }
+        try {
+            workflowEngineClient.getTaskById(taskId).ifPresent(body -> {
+                Object dataRaw = body.containsKey("data") ? body.get("data") : body;
+                if (!(dataRaw instanceof Map<?, ?> data)) {
+                    return;
+                }
+                Object varsRaw = data.get("variables");
+                if (!(varsRaw instanceof Map<?, ?> vars)) {
+                    return;
+                }
+                Object currentItem = vars.get("_currentItem");
+                if (currentItem == null) {
+                    currentItem = vars.get("currentItem");
+                }
+                if (currentItem instanceof Map) {
+                    target.put("_currentItem", currentItem);
+                }
+            });
+        } catch (RuntimeException e) {
+            log.debug("applyTaskScopedMiCurrentItem skipped for {}: {}", taskId, e.getMessage());
+        }
+    }
+
+    /**
      * Fills {@code target} with process variables that live only in the Flowable
      * engine (e.g. a service
      * task's {@code __subTables__} output) and are absent from the portal's own
@@ -326,6 +365,12 @@ public class TaskFormComponent {
                 ? processInstance.getVariables()
                 : Collections.emptyMap();
         Map<String, Object> hydratedVariables = new HashMap<>(allVariables);
+        // The MI loop variable is EXECUTION-scoped: this process-wide store must never be the source
+        // of "which participant row is mine". A stale copy left here by an older build (or any other
+        // writer) would hand THIS task another participant's row identity, so drop it before the
+        // per-task value is resolved from the engine below.
+        hydratedVariables.remove("_currentItem");
+        hydratedVariables.remove("currentItem");
         // Service-task outputs (e.g. an Activepieces task that sets __subTables__) live
         // in the Flowable
         // engine but never reach the portal's up_process_instance store, which is only
@@ -333,6 +378,9 @@ public class TaskFormComponent {
         // form submissions. Gap-fill from the live engine variables so task forms
         // render those results.
         mergeEngineOnlyVariables(taskInfo.processInstanceId, hydratedVariables);
+        // Per-task MI identity, straight from the engine's execution scope (Flowable resolves the
+        // MI sub-process parent). Overwrites whatever process-wide merge may have reintroduced.
+        applyTaskScopedMiCurrentItem(taskId, hydratedVariables);
         if (ownerFieldComponent != null) {
             ownerFieldComponent.projectForRead(
                     processInstance.getFunctionUnitCode(),
@@ -535,6 +583,14 @@ public class TaskFormComponent {
             Map<String, Object> inbound = new HashMap<>(editableData);
             // Defense in depth: strip even if filterEditableFields missed a case variant.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
+            // The MI loop variable is EXECUTION-scoped in Flowable: each participant's sub-task has
+            // its own. up_process_instance.variables is a single process-wide blob, so persisting it
+            // here stamps one participant's row identity onto the whole process — every other MI
+            // sub-task then loads that stale value as "my row", edits the wrong participant's row,
+            // and its save is rejected for submitting a row it does not own. Read it from the
+            // engine's execution scope only; never store it process-wide.
+            inbound.remove("_currentItem");
+            inbound.remove("currentItem");
 
             if (miCurrentRowKey != null) {
                 // Row-level isolation: merge only this MI sub-task's own row into whatever is

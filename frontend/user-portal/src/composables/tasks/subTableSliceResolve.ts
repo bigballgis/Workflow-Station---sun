@@ -8,6 +8,7 @@ import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isMiDashboardSubTableBinding } from './subTableBindingKinds'
 import { mergeAllSlicesForSharedProcessSubTableBinding } from './subTableSliceMerge'
 import { rowIsSelfOwnedByStructuralFk } from './miLinkChildIdentity'
+import { subTableStoreKey, type SubTableStoreBindingLike } from './subTableStore'
 
 /**
  * Resolve saved rows for a binding — tolerates sibling binding-id keys and display/physical table names.
@@ -114,6 +115,15 @@ export function resolveSubTableRowsForBinding(
   opts?: ResolveSubTableRowsOpts,
 ): any[] | undefined {
   if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
+
+  // Canonical key first: one key per designer table (`dw:<name>` / `rt:<name>`). When present it is
+  // the single source of truth — no sibling-slice overlay, no name fallback, both of which exist
+  // only to paper over the legacy "one key per binding + name aliases" fan-out.
+  const canonicalKey = subTableStoreKey(binding as SubTableStoreBindingLike)
+  if (canonicalKey) {
+    const canonical = savedSubTables[canonicalKey]
+    if (Array.isArray(canonical)) return canonical as any[]
+  }
 
   const tryKey = (key: string | number): any[] | undefined => {
     const v = savedSubTables[key] ?? savedSubTables[String(key)]
