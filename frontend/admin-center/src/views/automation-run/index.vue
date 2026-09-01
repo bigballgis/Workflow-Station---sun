@@ -167,9 +167,6 @@
           <el-descriptions-item :label="t('automationRun.duration')">
             {{ formatDuration(detailRun.durationMs) }}
           </el-descriptions-item>
-          <el-descriptions-item :label="t('automationRun.triggeredBy')">
-            {{ detailRun.triggeredByName || '—' }}
-          </el-descriptions-item>
           <el-descriptions-item
             v-if="detailRun.failedStepName"
             :label="t('automationRun.failedStep')"

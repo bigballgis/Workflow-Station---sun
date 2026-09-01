@@ -226,7 +226,6 @@ export default {
     status: '结果',
     started: '开始时间',
     duration: '耗时',
-    triggeredBy: '触发人',
     failedStep: '失败步骤',
     project: '项目',
     statusSucceeded: '成功',

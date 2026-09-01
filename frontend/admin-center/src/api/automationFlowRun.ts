@@ -36,7 +36,6 @@ export interface AutomationFlowRunSummary {
   finishTime: string | null
   /** 执行耗时(毫秒);未结束的运行为 null */
   durationMs: number | null
-  triggeredByName: string | null
   failedStepName: string | null
   failedStepMessage: string | null
 }

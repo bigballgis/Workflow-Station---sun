@@ -38,8 +38,6 @@ public class AutomationFlowRunListQueryComponent {
              JOIN flow f ON f.id = r."flowId"
              JOIN flow_version fv ON fv.id = r."flowVersionId"
              JOIN project p ON p.id = r."projectId"
-             LEFT JOIN "user" u ON u.id = r."triggeredBy"
-             LEFT JOIN user_identity ui ON ui.id = u."identityId"
              WHERE r.environment = 'PRODUCTION' AND r."archivedAt" IS NULL
             """;
 

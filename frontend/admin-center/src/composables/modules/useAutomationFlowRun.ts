@@ -82,7 +82,7 @@ export function useAutomationFlowRun() {
   }
 
   const compactMeta = (row: AutomationFlowRunSummary) =>
-    [row.startTime ? formatDate(row.startTime) : null, formatDuration(row.durationMs), row.triggeredByName]
+    [row.startTime ? formatDate(row.startTime) : null, formatDuration(row.durationMs), row.failedStepName]
       .filter(Boolean)
       .join(' · ')
 

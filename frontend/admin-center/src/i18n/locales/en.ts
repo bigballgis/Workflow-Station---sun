@@ -226,7 +226,6 @@ export default {
     status: 'Status',
     started: 'Started',
     duration: 'Duration',
-    triggeredBy: 'Triggered by',
     failedStep: 'Failed step',
     project: 'Project',
     statusSucceeded: 'Succeeded',

@@ -40,7 +40,9 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
 
     /**
      * flow 名取<b>执行时那个版本</b>的 displayName——flow 改名后历史记录仍应显示当时的名字。
-     * 触发人 join 到 AP 影子用户（externalUserId = 平台 userId），显示名由握手时同步。
+     *
+     * <p>不取 {@code triggeredBy}：Service Task 是引擎打 AP 的 webhook，AP 不给这类 run 记
+     * 触发人，整列对本页可见的运行恒为空——列宽白占，还让人以为"查不到是谁触发的"。</p>
      */
     private static final String ROW_SQL = """
             SELECT r.id, r."flowId", r.status, r."startTime", r."finishTime",
@@ -48,15 +50,11 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
                    f.metadata->>'hermesFlowKey' AS "flowKey",
                    fv."displayName" AS "flowDisplayName",
                    r."failedStep"->>'displayName' AS "failedStepName",
-                   r."failedStep"->>'message' AS "failedStepMessage",
-                   ui."firstName" AS "triggeredByFirstName",
-                   ui."lastName" AS "triggeredByLastName"
+                   r."failedStep"->>'message' AS "failedStepMessage"
             FROM flow_run r
             JOIN flow f ON f.id = r."flowId"
             JOIN flow_version fv ON fv.id = r."flowVersionId"
             JOIN project p ON p.id = r."projectId"
-            LEFT JOIN "user" u ON u.id = r."triggeredBy"
-            LEFT JOIN user_identity ui ON ui.id = u."identityId"
             WHERE r.id IN (%s)
             """;
 
@@ -125,9 +123,6 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
     }
 
     private AutomationFlowRunSummary mapRow(ResultSet rs) throws SQLException {
-        String first = rs.getString("triggeredByFirstName");
-        String last = rs.getString("triggeredByLastName");
-        String triggeredBy = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
         OffsetDateTime start = rs.getObject("startTime", OffsetDateTime.class);
         OffsetDateTime finish = rs.getObject("finishTime", OffsetDateTime.class);
         return AutomationFlowRunSummary.builder()
@@ -143,7 +138,6 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
                 .durationMs(start != null && finish != null
                         ? finish.toInstant().toEpochMilli() - start.toInstant().toEpochMilli()
                         : null)
-                .triggeredByName(triggeredBy.isEmpty() ? null : triggeredBy)
                 .failedStepName(rs.getString("failedStepName"))
                 .failedStepMessage(rs.getString("failedStepMessage"))
                 .build();

@@ -40,9 +40,6 @@ public class AutomationFlowRunSummary {
     /** 执行耗时（毫秒）；未结束的运行为 null */
     private Long durationMs;
 
-    /** 触发人（AP 影子用户 = 发起的平台用户）；系统触发时为 null */
-    private String triggeredByName;
-
     /** 失败步骤显示名（flow_run.failedStep）；成功的运行为 null */
     private String failedStepName;
 

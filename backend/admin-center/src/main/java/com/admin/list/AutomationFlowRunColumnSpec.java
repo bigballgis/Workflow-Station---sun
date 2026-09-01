@@ -29,9 +29,6 @@ public final class AutomationFlowRunColumnSpec {
             CASE WHEN r."finishTime" IS NULL OR r."startTime" IS NULL THEN NULL \
             ELSE ((EXTRACT(EPOCH FROM (r."finishTime" - r."startTime")) * 1000)::bigint)::text END""";
 
-    static final String TRIGGERED_BY_SQL =
-            "nullif(trim(both from concat_ws(' ', ui.\"firstName\", ui.\"lastName\")), '')";
-
     static final String FAILED_STEP_SQL = "r.\"failedStep\"->>'displayName'";
 
     public static List<ListColumnMeta> columns() {
@@ -40,7 +37,6 @@ public final class AutomationFlowRunColumnSpec {
                 ListColumnMeta.withOptions("status", "automationRun.status", Kind.ENUM, statusOptions()),
                 ListColumnMeta.of("startTime", "automationRun.started", Kind.DATETIME),
                 ListColumnMeta.of("durationMs", "automationRun.duration", Kind.NUMBER),
-                ListColumnMeta.of("triggeredByName", "automationRun.triggeredBy", Kind.TEXT),
                 ListColumnMeta.of("failedStepName", "automationRun.failedStep", Kind.TEXT),
                 ListColumnMeta.of("projectName", "automationRun.project", Kind.TEXT)
         );
@@ -63,7 +59,6 @@ public final class AutomationFlowRunColumnSpec {
             case "status" -> "r.status";
             case "startTime" -> "r.\"startTime\"::text";
             case "durationMs" -> DURATION_SQL;
-            case "triggeredByName" -> TRIGGERED_BY_SQL;
             case "failedStepName" -> FAILED_STEP_SQL;
             case "projectName" -> "p.\"displayName\"";
             default -> throw new IllegalArgumentException("Unknown automation-run column: " + field);

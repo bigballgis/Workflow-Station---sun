@@ -12,6 +12,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AutomationFlowRunColumnSpecTest {
 
+    /**
+     * 列集合就是这页的契约。{@code triggeredBy} 不在其中是<b>刻意</b>的：Service Task 由引擎打
+     * AP 的 webhook，AP 不给这类 run 记触发人，整列对本页可见的运行恒为空。
+     */
+    @Test
+    void declaredColumnsAndTheirOrder() {
+        assertThat(AutomationFlowRunColumnSpec.columns().stream().map(ListColumnMeta::field))
+                .containsExactly("flowDisplayName", "status", "startTime", "durationMs",
+                        "failedStepName", "projectName");
+    }
+
     @Test
     void columnKinds() {
         assertThat(column("flowDisplayName").kind()).isEqualTo(Kind.TEXT);
