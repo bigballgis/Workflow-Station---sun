@@ -3,7 +3,7 @@
 import { chromium } from 'playwright'
 import { mkdirSync } from 'fs'
 import { join } from 'path'
-import { loginViaUnifiedSso } from './playwright-login.mjs'
+import { loginViaPortalPassword } from './playwright-login.mjs'
 
 const APP_ID = process.argv[2] || '3777ff51-63b4-11f1-9868-16c6d8eaa207'
 const OUT_DIR = join(process.cwd(), 'user-portal', 'verification-screenshots')
@@ -62,7 +62,7 @@ function fieldVal(fields, labelRe) {
 
 const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
-await loginViaUnifiedSso(page, 'portal')
+await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 await page.goto(`http://localhost:3000/portal/applications/${APP_ID}`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(12000)
 

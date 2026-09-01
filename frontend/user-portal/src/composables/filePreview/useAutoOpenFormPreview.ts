@@ -1,6 +1,5 @@
 import { onBeforeUnmount, watch } from 'vue'
 import { debounce } from 'lodash-es'
-import type { Ref } from 'vue'
 import { useUserPreferenceStore } from '@/stores/userPreference'
 import {
   openFilePreview,
@@ -11,6 +10,15 @@ import {
 const SETTLE_MS = 400
 const GIVE_UP_MS = 3000
 
+/** Primitive watch key so in-place upload URL writes retrigger without deep-watching formData. */
+export function autoOpenPreviewWatchKey(
+  enabled: boolean,
+  processInstanceId: string | undefined,
+  files: FilePreviewItem[],
+): string {
+  return `${enabled ? '1' : '0'}\0${processInstanceId ?? ''}\0${files.map((file) => file.url).join('\0')}`
+}
+
 /**
  * When the account switch is on, open the first previewable form file once per
  * process instance after form data settles. Default off — callers must opt in.
@@ -18,7 +26,6 @@ const GIVE_UP_MS = 3000
 export function useAutoOpenFormPreview(deps: {
   enabled: () => boolean
   processInstanceId: () => string | undefined
-  formData: Ref<Record<string, unknown>>
   collect: () => FilePreviewItem[]
 }) {
   const preferenceStore = useUserPreferenceStore()
@@ -59,7 +66,7 @@ export function useAutoOpenFormPreview(deps: {
   )
 
   watch(
-    () => [deps.enabled(), deps.processInstanceId(), deps.formData.value] as const,
+    () => autoOpenPreviewWatchKey(deps.enabled(), deps.processInstanceId(), deps.collect()),
     () => {
       void tryOpen()
     },

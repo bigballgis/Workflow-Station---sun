@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /** #1438 — Attachment table keeps all rows; Sub Task must not show id+file-only leaks. */
 import { chromium } from 'playwright'
-import { loginViaUnifiedSso } from './playwright-login.mjs'
+import { loginViaPortalPassword } from './playwright-login.mjs'
 import { countSubTableRows, screenshotPath } from './mi-regression-helpers.mjs'
 
 const TASK_ID = process.argv[2] || '093962c4-6308-11f1-a95b-92e64e1a5cf1'
 
 const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
-await loginViaUnifiedSso(page, 'portal')
+await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 await page.goto(`http://localhost:3000/portal/tasks/${TASK_ID}`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(12000)
 

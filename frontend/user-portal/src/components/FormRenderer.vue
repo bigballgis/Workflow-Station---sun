@@ -628,7 +628,6 @@ provide(FILE_PREVIEW_PLAYLIST_KEY, { collect: collectPreviewFiles })
 useAutoOpenFormPreview({
   enabled: () => props.autoOpenFilePreview === true,
   processInstanceId: () => props.processInstanceId,
-  formData,
   collect: collectPreviewFiles,
 })
 

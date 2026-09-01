@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** #1435 — People inline id shows allocated UUID after save/hydrate. */
 import { chromium } from 'playwright'
-import { loginViaUnifiedSso } from './playwright-login.mjs'
+import { loginViaPortalPassword } from './playwright-login.mjs'
 import { fieldByLabel, readPeopleInlineFields, screenshotPath, UUID_RE } from './mi-regression-helpers.mjs'
 
 const TASK_ID = process.argv[2] || '09367c90-6308-11f1-a95b-92e64e1a5cf1'
@@ -9,7 +9,7 @@ const PARTICIPANT = process.argv[3] || 'Test-000058'
 
 const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
-await loginViaUnifiedSso(page, 'portal')
+await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 await page.goto(`http://localhost:3000/portal/tasks/${TASK_ID}`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(12000)
 
