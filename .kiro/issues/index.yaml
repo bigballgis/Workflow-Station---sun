@@ -2993,3 +2993,19 @@
     useAuditAutoRefresh, useAuditDetailLoad.
     screenshots 2026-09-01_admin-audit-list.png, 2026-09-01_admin-audit-detail.png.
 
+- id: "1580"
+  status: fixed
+  fixed_at: "2026-09-01"
+  severity: major
+  category: bug
+  summary: "Admin audit pages used a non-table-card grid shell so pagination sat mid-pane and only ~2 rows were visible"
+  file: "frontend/admin-center/src/views/audit/index.vue"
+  note: |
+    Both Admin Center and User Portal audit lists wrap the grid in table-card.
+    Fill-to-viewport left a blank gap above pagination when 20 rows were shorter
+    than leftover height; table-card is now flex 0 1 auto and useListTableFitHeight
+    sizes el-table to row sum, capped at page leftover. Tests:
+    auditListViewport.test.ts, useListTableFitHeight.test.ts.
+    screenshots 2026-09-01_audit-admin-center-snug-pagination.png,
+    2026-09-01_audit-user-portal-snug-pagination.png.
+
