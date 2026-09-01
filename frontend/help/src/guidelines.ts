@@ -1,4 +1,4 @@
-import type { Component } from 'vue'
+﻿import type { Component } from 'vue'
 
 export interface Guideline {
   id: string
@@ -14,6 +14,8 @@ export interface NavLeaf {
   titleKey: string
   /** Article path, optional hash, e.g. /email-send#connection */
   to?: string
+  /** Sidebar only — skip the home card grid (per-control leaves). */
+  omitFromHome?: boolean
 }
 
 /** Leaf that already has a guideline `to` (home cards, not grey menus). */
@@ -66,8 +68,133 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.taskDelegate.summary',
     load: () => import('@/views/TaskDelegateGuide.vue'),
   },
+  {
+    id: 'form-events',
+    path: '/form-events',
+    titleKey: 'guides.formEvents.title',
+    summaryKey: 'guides.formEvents.summary',
+    load: () => import('@/views/FormEventsGuide.vue'),
+  },
+  {
+    id: 'form-events-basic',
+    path: '/form-events-basic',
+    titleKey: 'guides.formEventsBasic.title',
+    summaryKey: 'guides.formEventsBasic.summary',
+    load: () => import('@/views/FormEventsBasicGuide.vue'),
+  },
+  {
+    id: 'form-events-extend',
+    path: '/form-events-extend',
+    titleKey: 'guides.formEventsExtend.title',
+    summaryKey: 'guides.formEventsExtend.summary',
+    load: () => import('@/views/FormEventsExtendGuide.vue'),
+  },
+  {
+    id: 'form-events-layout',
+    path: '/form-events-layout',
+    titleKey: 'guides.formEventsLayout.title',
+    summaryKey: 'guides.formEventsLayout.summary',
+    load: () => import('@/views/FormEventsLayoutGuide.vue'),
+  },
 ]
 
+function formControlLeaf(id: string, titleKey: string, to: string): NavLeaf {
+  return { kind: 'leaf', id, titleKey, to, omitFromHome: true }
+}
+
+const FORM_DESIGN_NAV: NavGroup = {
+  kind: 'group',
+  id: 'dw-form-design',
+  titleKey: 'nav.formDesign',
+  children: [
+    {
+      kind: 'group',
+      id: 'dw-form-controls',
+      titleKey: 'nav.formControls',
+      children: [
+        { kind: 'leaf', id: 'dw-forms', titleKey: 'nav.formEventsHub', to: '/form-events' },
+        {
+          kind: 'group',
+          id: 'dw-form-basic',
+          titleKey: 'nav.formMenuBasic',
+          children: [
+            formControlLeaf('dw-form-ctl-input', 'nav.formCtlInput', '/form-events-basic#input'),
+            formControlLeaf('dw-form-ctl-textarea', 'nav.formCtlTextarea', '/form-events-basic#textarea'),
+            formControlLeaf('dw-form-ctl-password', 'nav.formCtlPassword', '/form-events-basic#password'),
+            formControlLeaf('dw-form-ctl-inputNumber', 'nav.formCtlInputNumber', '/form-events-basic#inputNumber'),
+            formControlLeaf('dw-form-ctl-radio', 'nav.formCtlRadio', '/form-events-basic#radio'),
+            formControlLeaf('dw-form-ctl-checkbox', 'nav.formCtlCheckbox', '/form-events-basic#checkbox'),
+            formControlLeaf('dw-form-ctl-select', 'nav.formCtlSelect', '/form-events-basic#select'),
+            formControlLeaf('dw-form-ctl-switch', 'nav.formCtlSwitch', '/form-events-basic#switch'),
+            formControlLeaf('dw-form-ctl-slider', 'nav.formCtlSlider', '/form-events-basic#slider'),
+            formControlLeaf('dw-form-ctl-rate', 'nav.formCtlRate', '/form-events-basic#rate'),
+            formControlLeaf('dw-form-ctl-date', 'nav.formCtlDate', '/form-events-basic#datePicker'),
+            formControlLeaf('dw-form-ctl-dateRange', 'nav.formCtlDateRange', '/form-events-basic#dateRange'),
+            formControlLeaf('dw-form-ctl-time', 'nav.formCtlTime', '/form-events-basic#timePicker'),
+            formControlLeaf('dw-form-ctl-timeRange', 'nav.formCtlTimeRange', '/form-events-basic#timeRange'),
+            formControlLeaf('dw-form-ctl-cascader', 'nav.formCtlCascader', '/form-events-basic#cascader'),
+            formControlLeaf('dw-form-ctl-color', 'nav.formCtlColorPicker', '/form-events-basic#colorPicker'),
+            formControlLeaf('dw-form-ctl-upload', 'nav.formCtlUpload', '/form-events-basic#upload'),
+            formControlLeaf('dw-form-ctl-tree', 'nav.formCtlTree', '/form-events-basic#tree'),
+            formControlLeaf('dw-form-ctl-treeSelect', 'nav.formCtlTreeSelect', '/form-events-basic#elTreeSelect'),
+            formControlLeaf('dw-form-ctl-transfer', 'nav.formCtlTransfer', '/form-events-basic#transfer'),
+            formControlLeaf('dw-form-ctl-editor', 'nav.formCtlEditor', '/form-events-basic#editor'),
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'dw-form-extend',
+          titleKey: 'nav.formMenuExtend',
+          children: [
+            formControlLeaf('dw-form-ctl-subTable', 'nav.formCtlSubTable', '/form-events-extend#subTable'),
+            formControlLeaf('dw-form-ctl-inline', 'nav.formCtlInlineForm', '/form-events-extend#inlineSubForm'),
+            formControlLeaf('dw-form-ctl-linkForm', 'nav.formCtlLinkForm', '/form-events-extend#linkForm'),
+            formControlLeaf('dw-form-ctl-lookup', 'nav.formCtlLookup', '/form-events-extend#lookup'),
+            formControlLeaf('dw-form-ctl-owner', 'nav.formCtlOwner', '/form-events-extend#owner'),
+            formControlLeaf('dw-form-ctl-recordNote', 'nav.formCtlRecordNote', '/form-events-extend#recordNote'),
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'dw-form-mi',
+          titleKey: 'nav.formMenuMi',
+          children: [
+            formControlLeaf('dw-form-ctl-mi', 'nav.formCtlMiAssignment', '/form-events-extend#miAssignment'),
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'dw-form-layout',
+          titleKey: 'nav.formMenuLayout',
+          children: [
+            formControlLeaf('dw-form-ctl-row', 'nav.formCtlRow', '/form-events-layout#fcRow'),
+            formControlLeaf('dw-form-ctl-col', 'nav.formCtlCol', '/form-events-layout#col'),
+            formControlLeaf('dw-form-ctl-card', 'nav.formCtlCard', '/form-events-layout#elCard'),
+            formControlLeaf('dw-form-ctl-tabs', 'nav.formCtlTabs', '/form-events-layout#elTabs'),
+            formControlLeaf('dw-form-ctl-tabPane', 'nav.formCtlTabPane', '/form-events-layout#elTabPane'),
+            formControlLeaf('dw-form-ctl-collapse', 'nav.formCtlCollapse', '/form-events-layout#elCollapse'),
+            formControlLeaf('dw-form-ctl-collapseItem', 'nav.formCtlCollapseItem', '/form-events-layout#elCollapseItem'),
+            formControlLeaf('dw-form-ctl-title', 'nav.formCtlTitle', '/form-events-layout#fcTitle'),
+            formControlLeaf('dw-form-ctl-html', 'nav.formCtlHtml', '/form-events-layout#html'),
+            formControlLeaf('dw-form-ctl-divider', 'nav.formCtlDivider', '/form-events-layout#elDivider'),
+            formControlLeaf('dw-form-ctl-alert', 'nav.formCtlAlert', '/form-events-layout#elAlert'),
+            formControlLeaf('dw-form-ctl-space', 'nav.formCtlSpace', '/form-events-layout#space'),
+          ],
+        },
+        {
+          kind: 'group',
+          id: 'dw-form-aide',
+          titleKey: 'nav.formMenuAide',
+          children: [
+            formControlLeaf('dw-form-ctl-button', 'nav.formCtlButton', '/form-events-layout#elButton'),
+            formControlLeaf('dw-form-ctl-tag', 'nav.formCtlTag', '/form-events-layout#elTag'),
+            formControlLeaf('dw-form-ctl-image', 'nav.formCtlImage', '/form-events-layout#elImage'),
+          ],
+        },
+      ],
+    },
+  ],
+}
 /**
  * Mirrors the three product sidebars (and Function Unit designer tabs).
  * Leaves without `to` are menus that exist in the product but have no article yet.
@@ -92,7 +219,7 @@ export const NAV_TREE: NavNode[] = [
             titleKey: 'nav.tableDesign',
             to: '/computed-fields',
           },
-          { kind: 'leaf', id: 'dw-forms', titleKey: 'nav.formDesign' },
+          FORM_DESIGN_NAV,
           { kind: 'leaf', id: 'dw-view', titleKey: 'nav.viewDesign' },
           { kind: 'leaf', id: 'dw-action', titleKey: 'nav.actionDesign' },
           { kind: 'leaf', id: 'dw-fu-automation', titleKey: 'nav.fuAutomation' },
@@ -244,4 +371,33 @@ export function navLeavesWithArticles(nodes: NavNode[] = NAV_TREE): NavLeafWithA
     }
   }
   return out
+}
+
+/** Group ids that contain a leaf for this article. Prefers the hash target. */
+export function navGroupIdsForArticle(
+  path: string,
+  hash = '',
+  nodes: NavNode[] = NAV_TREE,
+): string[] {
+  const exact: string[] = []
+  const fallback: string[] = []
+  function walk(list: NavNode[], trail: string[]): void {
+    for (const node of list) {
+      if (node.kind === 'group') {
+        walk(node.children, [...trail, node.id])
+        continue
+      }
+      if (!node.to) continue
+      const hashIndex = node.to.indexOf('#')
+      const leafPath = hashIndex >= 0 ? node.to.slice(0, hashIndex) : node.to
+      const leafHash = hashIndex >= 0 ? node.to.slice(hashIndex) : ''
+      if (leafPath !== path) continue
+      if (fallback.length === 0) fallback.push(...trail)
+      if (hash ? leafHash === hash : !leafHash) {
+        exact.push(...trail)
+      }
+    }
+  }
+  walk(nodes, [])
+  return [...new Set(exact.length ? exact : fallback)]
 }

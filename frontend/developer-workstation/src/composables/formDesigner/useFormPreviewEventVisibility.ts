@@ -14,6 +14,8 @@ import {
 } from 'vue'
 import {
   PREVIEW_EVENT_VISIBILITY_KEY,
+  applyPreviewOverlayToRules,
+  applyPreviewRequiredToRules,
   applyPreviewVisibilityToRules,
   collectFieldKeysFromRules,
   registerPreviewVisibilityBridge,
@@ -22,8 +24,10 @@ import {
   type PreviewEventVisibilityCtx,
 } from '@/components/designer/previewEventVisibility'
 import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
-import type { PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
+import type { PortalFormRequiredState, PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
+import { isEffectivelyDisabled, isEffectivelyRequired } from '@/utils/formCreateEventRuntime'
 import { subTableComponentEventFieldKey } from '@/utils/formCreateComponentEvents'
+import { useFormEventOverlayBags } from '@/composables/formDesigner/useFormEventOverlayBags'
 
 export function useFormPreviewEventVisibility(deps: {
   items: () => FormPreviewItem[]
@@ -43,16 +47,35 @@ export function useFormPreviewEventVisibility(deps: {
   }
   effectivePreviewOption: ComputedRef<Record<string, unknown>>
   eventVisibilityTick: Ref<number>
+  formNotifications: Ref<import('@/utils/formCreateEventOverlays').FormEventNotification[]>
+  scriptLookupFiltersFor: (fieldKey: string) => import('@/utils/formCreateEventOverlays').FormEventLookupFilter[]
+  scriptLabelOverlay: (fieldKey: string) => string | undefined
+  showFormEventBanners: boolean
 } {
+  const overlaysApi = useFormEventOverlayBags({
+    getAllFieldKeys: () => collectPreviewVisibilityKeys(deps.items()),
+    getDesignerOptions: () => [],
+    getDesignerLabel: (fieldKey) => fieldKey,
+  })
+
   const parentEventVisibility = inject(PREVIEW_EVENT_VISIBILITY_KEY, null)
   const eventVisibilityTick = ref(0)
+  const eventRequiredTick = ref(0)
   const eventVisibilityState = parentEventVisibility?.state
     ?? shallowReactive<PortalFormVisibilityState>({
       hidden: new Map<string, boolean>(),
       display: new Map<string, boolean>(),
     })
+  const eventRequiredState = parentEventVisibility?.requiredState
+    ?? shallowReactive<PortalFormRequiredState>({
+      flags: new Map<string, boolean>(),
+    })
   const previewVisibilityRenderTick = computed(() =>
-    parentEventVisibility ? parentEventVisibility.tick.value : eventVisibilityTick.value,
+    (parentEventVisibility ? parentEventVisibility.tick.value : eventVisibilityTick.value)
+    + eventRequiredTick.value
+    + (parentEventVisibility?.requiredTick?.value ?? 0)
+    + overlaysApi.overlayTick.value
+    + (parentEventVisibility?.overlayTick.value ?? 0),
   )
 
   function notifyPreviewEventVisibility(): void {
@@ -63,6 +86,21 @@ export function useFormPreviewEventVisibility(deps: {
     eventVisibilityState.hidden = new Map(eventVisibilityState.hidden)
     eventVisibilityState.display = new Map(eventVisibilityState.display)
     eventVisibilityTick.value++
+  }
+
+  function notifyPreviewEventRequired(): void {
+    if (parentEventVisibility) {
+      parentEventVisibility.notifyRequired()
+      return
+    }
+    eventRequiredState.flags = new Map(eventRequiredState.flags)
+    eventRequiredTick.value++
+  }
+
+  function isPreviewFieldRequired(fieldKey: string, designerRequired: boolean): boolean {
+    void eventRequiredTick.value
+    void parentEventVisibility?.requiredTick.value
+    return isEffectivelyRequired(fieldKey, designerRequired, eventRequiredState.flags)
   }
 
   function isPreviewFieldVisible(fieldKey: string): boolean {
@@ -94,6 +132,17 @@ export function useFormPreviewEventVisibility(deps: {
     notify: notifyPreviewEventVisibility,
     getAllFieldKeys: () => collectPreviewVisibilityKeys(deps.items()),
     isFieldVisible: isPreviewFieldVisible,
+    requiredState: eventRequiredState,
+    requiredTick: eventRequiredTick,
+    notifyRequired: notifyPreviewEventRequired,
+    overlays: overlaysApi.buildOverlays(),
+    overlayTick: overlaysApi.overlayTick,
+    formNotifications: overlaysApi.formNotifications,
+    eventDisabledState: overlaysApi.eventDisabledState,
+    scriptOptionsFor: overlaysApi.scriptOptionsFor,
+    scriptLabelOverlay: overlaysApi.scriptLabelOverlay,
+    scriptLookupFiltersFor: overlaysApi.scriptLookupFiltersFor,
+    hasScriptLookupFilter: overlaysApi.hasScriptLookupFilter,
   }
   if (!parentEventVisibility) {
     provide(PREVIEW_EVENT_VISIBILITY_KEY, previewEventVisibility)
@@ -103,7 +152,19 @@ export function useFormPreviewEventVisibility(deps: {
 
   function visiblePreviewRules(rules: unknown[]): unknown[] {
     void previewVisibilityRenderTick.value
-    return applyPreviewVisibilityToRules(rules, isPreviewFieldVisible)
+    const bags = parentEventVisibility ?? previewEventVisibility
+    return applyPreviewOverlayToRules(
+      applyPreviewRequiredToRules(
+        applyPreviewVisibilityToRules(rules, isPreviewFieldVisible),
+        isPreviewFieldRequired,
+      ),
+      {
+        isDisabled: (fieldKey, designerDisabled) =>
+          isEffectivelyDisabled(fieldKey, designerDisabled, bags.eventDisabledState.flags),
+        optionsFor: bags.scriptOptionsFor,
+        labelFor: bags.scriptLabelOverlay,
+      },
+    )
   }
 
   function isPreviewSubTableVisible(
@@ -119,6 +180,9 @@ export function useFormPreviewEventVisibility(deps: {
       state: eventVisibilityState,
       notify: notifyPreviewEventVisibility,
       getAllFieldKeys: () => collectPreviewVisibilityKeys(deps.items()),
+      requiredState: eventRequiredState,
+      notifyRequired: notifyPreviewEventRequired,
+      overlays: previewEventVisibility.overlays,
     }
   }
 
@@ -150,5 +214,9 @@ export function useFormPreviewEventVisibility(deps: {
     previewVisibilityBridge,
     effectivePreviewOption,
     eventVisibilityTick,
+    formNotifications: previewEventVisibility.formNotifications,
+    scriptLookupFiltersFor: previewEventVisibility.scriptLookupFiltersFor,
+    scriptLabelOverlay: previewEventVisibility.scriptLabelOverlay,
+    showFormEventBanners: !parentEventVisibility,
   }
 }

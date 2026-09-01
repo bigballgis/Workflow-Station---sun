@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyPreviewOverlayToRules,
   applyPreviewVisibilityToRules,
   collectFieldKeysFromRules,
 } from '../previewEventVisibility'
@@ -72,5 +73,21 @@ describe('collectFieldKeysFromRules', () => {
       { field: 'top', type: 'input' },
     ])
     expect(keys).toEqual(expect.arrayContaining(['rowField', 'groupField', 'top']))
+  })
+})
+
+describe('applyPreviewOverlayToRules', () => {
+  it('sets props.disabled, options, and title from script overlay', () => {
+    const out = applyPreviewOverlayToRules(
+      [{ field: 'scenario', type: 'select', title: 'Scenario', options: [{ label: 'A', value: 'A' }] }],
+      {
+        isDisabled: () => true,
+        optionsFor: () => [{ label: 'A only', value: 'A' }],
+        labelFor: () => 'Case type',
+      },
+    ) as Array<{ title: string; options: unknown; props: { disabled: boolean } }>
+    expect(out[0].props.disabled).toBe(true)
+    expect(out[0].options).toEqual([{ label: 'A only', value: 'A' }])
+    expect(out[0].title).toBe('Case type')
   })
 })

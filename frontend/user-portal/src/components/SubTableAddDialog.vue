@@ -28,6 +28,7 @@
       :rules="formRules"
       :label-width="stableLabelWidth"
       label-position="left"
+      :validate-on-rule-change="false"
     >
       <template
         v-for="group in dialogLayoutGroups"
@@ -806,12 +807,16 @@ const {
   onDialogFieldChange,
   onDialogFieldBlur,
   isDialogFieldVisible,
+  eventRequiredState,
+  eventRequiredTick,
   resetDialogEventVisibility,
   bootstrapDialogFormLifecycle,
   runFormOnReload,
   runFormBeforeSubmit,
   runFormOnSubmit,
   runFormOnReset,
+  scriptFieldErrors,
+  isDialogFieldDisabled,
 } = useSubTableDialogComponentEvents(
   formData,
   () => props.columns,
@@ -1165,6 +1170,12 @@ const {
   runFormBeforeSubmit: () => runFormBeforeSubmit(props.formOptions),
   runFormOnSubmit: () => runFormOnSubmit(props.formOptions),
   runFormOnReset: () => runFormOnReset(props.formOptions),
+  eventRequiredFlags: computed(() => {
+    void eventRequiredTick.value
+    return eventRequiredState.flags
+  }),
+  scriptFieldErrors,
+  isDialogFieldDisabled,
 })
 
 const {
@@ -1186,6 +1197,9 @@ const columnErrorMessages = computed<Record<string, string>>(() => {
   }
   for (const [field, code] of Object.entries(computedFieldErrors.value)) {
     messages[field] = t('computedField.evaluationFailed', { code })
+  }
+  for (const [field, message] of Object.entries(scriptFieldErrors.value)) {
+    messages[field] = message
   }
   return messages
 })

@@ -16,6 +16,7 @@ import {
   type RequestIdConfig,
 } from '../../utils/formFieldMeta'
 import { subTableComponentEventFieldKey } from '../../utils/formCreateComponentEvents'
+import { overlayEventRequiredOnFormRules } from '../../utils/formCreateEventRuntime'
 import { isAuditField } from '../../components/subTableAddDialogHelpers/rowInit'
 
 /** Copy Owner/Lookup `"<field>__display"` companions that leaf-field init would otherwise drop. */
@@ -29,6 +30,31 @@ export function copyFieldDisplayCompanion(
   if (typeof display === 'string' && display.length > 0) {
     target[displayKey] = display
   }
+}
+
+function pushRequiredRule(
+  fieldRules: Array<Record<string, unknown>>,
+  field: FormField,
+  t: (key: string, params?: Record<string, unknown>) => string,
+): void {
+  if (fieldRules.some((rule) => rule.required === true)) return
+  const trigger = field.type === 'select' || field.type === 'checkbox' || field.type === 'switch'
+    ? 'change'
+    : 'blur'
+  if (field.type === 'switch') {
+    fieldRules.push({
+      type: 'boolean',
+      required: true,
+      message: t('common.pleaseInput', { label: field.label }),
+      trigger,
+    })
+    return
+  }
+  fieldRules.push({
+    required: true,
+    message: t('common.pleaseInput', { label: field.label }),
+    trigger,
+  })
 }
 
 interface FormDataDeps {
@@ -55,6 +81,10 @@ interface FormDataDeps {
   requestIdConfig?: () => RequestIdConfig | null | undefined
   /** Re-previews the main table's computed columns; no-op when the table has none. */
   recomputeComputedFields?: (changedSubTable?: { bindingId: number; rows: unknown[] }) => void
+  /** Linkage `field-state-change` required/disabled flags from BusinessLogicEngine. */
+  engineFieldStates?: Ref<Map<string, { disabled?: boolean; required?: boolean }>>
+  /** Script `api.required` overlay (true/false); missing key → designer + linkage. */
+  eventRequiredFlags?: Ref<Map<string, boolean>>
 }
 
 export function useFormData(deps: FormDataDeps) {
@@ -211,30 +241,27 @@ export function useFormData(deps: FormDataDeps) {
             () => deps.allFields.value,
           ),
         )
-      } else if (field.required) {
-        const trigger = field.type === 'select' || field.type === 'checkbox' || field.type === 'switch'
-          ? 'change'
-          : 'blur'
-        if (field.type === 'switch') {
-          fieldRules.push({
-            type: 'boolean',
-            required: true,
-            message: t('common.pleaseInput', { label: field.label }),
-            trigger,
-          })
-        } else {
-          fieldRules.push({
-            required: true,
-            message: t('common.pleaseInput', { label: field.label }),
-            trigger,
-          })
-        }
+      }
+      const linkageRequired = deps.engineFieldStates?.value.get(field.key)?.required === true
+      if (field.required || linkageRequired) {
+        pushRequiredRule(fieldRules, field, t)
       }
       if (fieldRules.length > 0) {
         rules[field.key] = fieldRules
       }
     })
-    return rules
+    return overlayEventRequiredOnFormRules(
+      rules as Record<string, unknown>,
+      deps.allFields.value.filter((field) => !isAuditField(field.key)).map((field) => field.key),
+      deps.eventRequiredFlags?.value,
+      (key) => {
+        const field = deps.allFields.value.find((item) => item.key === key)
+        if (!field) return []
+        const acc: Array<Record<string, unknown>> = []
+        pushRequiredRule(acc, field, t)
+        return acc
+      },
+    ) as FormRules
   })
 
   // ---------------------------------------------------------------------------
@@ -270,6 +297,14 @@ export function useFormData(deps: FormDataDeps) {
     if (deps.config()) {
       const result = deps.engineOnFieldChange(key, value, formData.value)
       deps.applyEngineResult(result)
+      const stateChanges = result?.stateChanges as Map<string, { required?: boolean }> | undefined
+      if (stateChanges && deps.formRef.value) {
+        for (const [fieldKey, state] of stateChanges) {
+          if (state.required !== true) {
+            deps.formRef.value.clearValidate(fieldKey)
+          }
+        }
+      }
     }
   }
 

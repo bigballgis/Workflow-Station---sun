@@ -22,6 +22,7 @@ const flowKeys = [
 ]
 
 const related: GuideRelated[] = [
+  { to: '/form-events', titleKey: 'guides.formEvents.title' },
   { to: '/email-send#template', titleKey: 'guides.emailSend.title' },
   { to: '/email-monitor', titleKey: 'guides.emailMonitor.title' },
 ]

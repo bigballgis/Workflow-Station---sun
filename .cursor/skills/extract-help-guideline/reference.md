@@ -12,7 +12,7 @@ sync. Canonical human site remains `/help/`. Do not add a second docs tree.
 |------|------|
 | `frontend/help/src/guidelines.ts` | Catalog + `NAV_TREE` (mirrors DW / Admin / Portal menus) |
 | `frontend/help/src/views/*Guide.vue` | Article (use `GuideArticle.vue`) |
-| `frontend/help/src/components/GuideArticle.vue` | Layout: intro, flow, sections, figures, samples, related |
+| `frontend/help/src/components/GuideArticle.vue` | Layout: intro, flow, jump nav, how-to blocks (`intentKey`…), figures, block samples, fail list, related |
 | `frontend/help/public/guides/` | UI screenshots referenced by `figure.src` |
 | `frontend/help/public/llms.txt` | LLM index of this portal (keep in sync with `GUIDELINES`) |
 | `frontend/help/public/llms-full.txt` | Compact English bundle of help articles (not the whole repo) |
@@ -34,7 +34,11 @@ Each article should let a reader answer without opening source:
 
 1. **Overview** — what this job is, what it is not
 2. **Order of work** — `flow-keys` (visible steps)
-3. **How-to** — real screenshots from the demo Function Unit
+3. **How-to** — real screenshots from the demo Function Unit. Script **effect**
+   methods use `intentKey` / `beforeKey` / `afterKey` / `noteKey` on
+   `GuideArticle` (see SKILL.md Readability gates): one card with user labels
+   **Default / After you run the sample / Note**, not writer taxonomy. Visual
+   effects use Form Preview figures.
 4. **Exact samples** — field/table names that appear on those screenshots
 5. **Failures** — save blockers the designer can see
 6. **Related** — other `/help/` ids, not a paste of their full text
@@ -54,6 +58,7 @@ quote to PR.
 | Email send | `EmailTemplateDesigner.vue`, `EmailBodySplitEditor.vue`, `SendTaskProperties.vue`, `emailTemplate` / `connection` i18n |
 | Email monitor | `EmailMonitorDesigner.vue`, `StartEventEmailMonitorSection.vue`, `emailMonitor` i18n |
 | Form / sub-table | Form designer i18n — extract **how to bind**, not MI invariant I1–I7 |
+| Form events | Existing `/help/form-events` (+ basic/extend/layout); `HermesEventConfig.vue` / `HermesFnConfig.vue`; designer event i18n. Effect methods = how-to skeleton; `$inject` / Create lists = reference |
 | Relation tables | Admin relation computed-field i18n (no MAIN/SUB) |
 
 When scanning: grep designer `*Guide*`, `dialogHint`, `placeholder`, and

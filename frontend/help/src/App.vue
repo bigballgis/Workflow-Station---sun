@@ -41,11 +41,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import HelpNav from '@/components/HelpNav.vue'
-import { GUIDELINES, NAV_TREE } from '@/guidelines'
+import { GUIDELINES, NAV_TREE, navGroupIdsForArticle } from '@/guidelines'
 import { persistLocale, type HelpLocale } from '@/i18n'
 
 const { t, locale } = useI18n()
@@ -53,6 +53,16 @@ const route = useRoute()
 const markUrl = `${import.meta.env.BASE_URL}hermes-mark.svg`
 
 const openIds = reactive(new Set(['dw', 'dw-fu']))
+
+watch(
+  () => [route.path, route.hash] as const,
+  ([path, hash]) => {
+    for (const id of navGroupIdsForArticle(path, hash)) {
+      openIds.add(id)
+    }
+  },
+  { immediate: true },
+)
 
 const locales: { id: HelpLocale; labelKey: string }[] = [
   { id: 'en', labelKey: 'app.langEn' },

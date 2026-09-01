@@ -617,6 +617,7 @@ export default {
   },
   form: {
     title: '表單設計器',
+    eventGuideLinkAria: '開啟表單事件指南',
     formName: '表單名稱',
     formType: '表單類型',
     requestId: 'Request ID',
@@ -2073,8 +2074,10 @@ export default {
     bodyModeVisual: '視覺化',
     bodyModeHtml: 'HTML',
     emailPreview: '郵件預覽',
-    htmlPlaceholder: '貼上或撰寫郵件 HTML。變數占位符會原樣出現在預覽中。',
-    switchToVisualConfirm: '切回視覺化編輯器可能簡化 HTML 中的表格與內聯樣式。是否繼續？',
+    htmlPlaceholder:
+      '貼上或撰寫郵件 HTML。<style> 與 class 選擇器會保留在預覽中。變數占位符會原樣出現。',
+    switchToVisualConfirm:
+      '切回視覺化編輯器可能簡化 HTML 中的表格、<style> 與內聯樣式。是否繼續？',
     loadFailed: '載入範本失敗',
     deleteConfirm: '確定刪除範本「{name}」嗎？'
   },

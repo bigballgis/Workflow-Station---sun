@@ -429,6 +429,15 @@ export function installFcDesignerPreviewCapture(
   }
   root.addEventListener('mousedown', onPreviewToolbarEvent('mousedown'), true)
   root.addEventListener('click', onPreviewToolbarEvent('click'), true)
+  // fc-designer @click="openPreview" runs on the button (target). Capture is too early
+  // (preview.rule not assigned yet); wrapping instance.openPreview does not replace the
+  // template handler. Bubble on the designer root runs after openPreview, before Vue flush.
+  root.addEventListener('click', (ev: Event) => {
+    if (!isFcDesignerPreviewToolbarButton(ev.target)) return
+    const ref = getDesignerRef()
+    wrapFcDesignerOpenPreview(ref, validateButtonText, getSavedRules)
+    patchFcDesignerPreviewEventHandlers(ref, validateButtonText)
+  }, false)
   ;(root as DesignerPreviewRef).__hermesPreviewCapture = true
 }
 

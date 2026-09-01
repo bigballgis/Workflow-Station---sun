@@ -297,6 +297,120 @@ a {
   max-width: 880px;
 }
 
+.help-guide--wide {
+  max-width: 1080px;
+}
+
+.help-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.help-jump a {
+  font-size: 13px;
+  padding: 5px 11px;
+  border: 1px solid var(--help-line);
+  border-radius: 999px;
+  color: var(--help-accent-dark);
+  text-decoration: none;
+  background: var(--help-panel);
+}
+
+.help-jump a:hover {
+  border-color: var(--help-accent);
+}
+
+.help-section-body--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 40%);
+  gap: 16px;
+  align-items: start;
+}
+
+.help-section-body--split .help-figure {
+  margin-top: 0;
+}
+
+.help-body-more {
+  margin-top: 8px;
+}
+
+.help-howto-card {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  background: var(--help-panel);
+  border: 1px solid var(--help-line);
+  border-left: 3px solid var(--help-accent);
+}
+
+.help-howto-purpose {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.help-howto-facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-howto-facts li {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.help-howto-facts li:last-child {
+  margin-bottom: 0;
+}
+
+.help-howto-facts strong {
+  font-weight: 650;
+  color: var(--help-accent-dark);
+  margin-right: 4px;
+}
+
+.help-fail {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.help-samples {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.help-samples--block {
+  list-style: none;
+  padding-left: 0;
+}
+
+.help-samples--block li {
+  margin: 0 0 12px;
+}
+
+.help-samples--block pre {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  background: #eef2f6;
+  border-radius: 3px;
+}
+
+.help-samples--block code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: none;
+}
+
+.help-sample-hint {
+  display: inline;
+}
+
 .help-guide section {
   margin-top: 26px;
   scroll-margin-top: 80px;
@@ -407,6 +521,12 @@ a {
 }
 
 @media (max-width: 840px) {
+  .help-section-body--split {
+    grid-template-columns: 1fr;
+  }
+  .help-howto-facts li {
+    margin-bottom: 8px;
+  }
   .help-shell {
     flex-direction: column;
     height: auto;

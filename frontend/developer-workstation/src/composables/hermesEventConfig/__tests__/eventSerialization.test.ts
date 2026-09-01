@@ -10,7 +10,7 @@ import {
 } from '@/utils/formCreateDefaultEvents'
 
 describe('hermesEventConfig eventSerialization', () => {
-  it('loadEventData keeps change body and skips empty $FNX stubs', () => {
+  it('loadEventData keeps change body and lists empty $FNX stubs so Event Edit is not blank', () => {
     const loaded = loadEventData(
       {
         change: '$FNX:\napi.hidden(true, "__subTable_1")',
@@ -19,7 +19,7 @@ describe('hermesEventConfig eventSerialization', () => {
       null,
     )
     expect(loaded.change).toEqual(['api.hidden(true, "__subTable_1")'])
-    expect(loaded.blur).toBeUndefined()
+    expect(loaded.blur).toEqual([''])
   })
 
   it('loadEventData falls back to rule.on when _on/modelValue is empty', () => {

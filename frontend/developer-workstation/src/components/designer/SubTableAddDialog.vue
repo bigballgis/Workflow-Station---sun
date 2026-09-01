@@ -13,6 +13,7 @@
       :rules="formRules"
       label-width="auto"
       label-position="left"
+      :validate-on-rule-change="false"
     >
       <template
         v-for="col in columns"
@@ -367,8 +368,10 @@ import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { buildInitialRow, buildRules, isColReadonly, mergeFormRowWithSeed } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, isColReadonly as designerColReadonly, mergeFormRowWithSeed } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
+import { overlayEventRequiredOnFormRules } from '@/utils/formCreateEventRuntime'
+import { isTableAuditField } from '@/utils/tableAuditFields'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
 import { useSubTableDialogComponentEvents } from '@/composables/designerSubTableField/useSubTableDialogComponentEvents'
@@ -399,11 +402,19 @@ const {
   onDialogFieldChange,
   onDialogFieldBlur,
   isDialogFieldVisible,
+  eventRequiredState,
+  eventRequiredTick,
   resetDialogEventVisibility,
+  scriptFieldErrors,
+  isDialogFieldDisabled,
 } = useSubTableDialogComponentEvents(
   formData,
   () => props.columns,
 )
+
+function isColReadonly(col: DialogColumn): boolean {
+  return isDialogFieldDisabled(col.field, designerColReadonly(col) || isTableAuditField(col.field))
+}
 const uploadNames = ref<Record<string, string>>({})
 
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
@@ -455,7 +466,19 @@ function clearSignature(field: string) {
 // 却没有绑到 <el-form :rules>，而 handleConfirm 又调 formRef.validate() —— 没有规则的校验
 // 恒真，于是子表新增/编辑行对必填与校验规则完全不设防。属接线遗漏：buildRules 是导出的、
 // 有专门属性测试，用途只有这一个表单。
-const formRules = computed(() => buildRules(props.columns))
+const formRules = computed(() => {
+  void eventRequiredTick.value
+  return overlayEventRequiredOnFormRules(
+    buildRules(props.columns) as Record<string, unknown>,
+    props.columns.filter((c) => !c.readonly && !isTableAuditField(c.field)).map((c) => c.field),
+    eventRequiredState.flags,
+    (key) => {
+      const col = props.columns.find((c) => c.field === key)
+      if (!col) return []
+      return [{ required: true, message: `${col.label} is required`, trigger: 'blur' }]
+    },
+  )
+})
 
 watch(
   () => props.visible,
@@ -492,6 +515,7 @@ async function handleSave() {
   if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
+  if (Object.keys(scriptFieldErrors.value).length > 0) return
   const row = mergeFormRowWithSeed(props.initialData, formData.value)
   normalizeUploadFieldsInRow(row, props.columns)
   emit('save', row)

@@ -3,7 +3,7 @@
  * designer-hide visibility seeding consumed by FormRenderer init/rules.
  */
 
-import type { FormField, FormTab } from './formRendererTypes'
+import type { FormBusinessLogicConfig, FormField, FormTab } from './formRendererTypes'
 import { isAuditField } from '../subTableAddDialogHelpers/rowInit'
 
 /** Coerce designer native binding id lists (number[]) into Set for `.has()` lookups. */
@@ -174,4 +174,18 @@ export function flattenAllFormFieldSegments(
   }
   merged.push(...flattenLeafFormFields(fieldsAfterTabs))
   return merged
+}
+
+/**
+ * Portal pages pass designer configJson as `formConfig`. The engine historically
+ * read a separate `config` prop that nothing in production set, so linkages never ran.
+ * Prefer explicit `config` (tests) then fall back to `formConfig`.
+ */
+export function resolveFormBusinessLogicConfig(
+  config?: FormBusinessLogicConfig | null,
+  formConfig?: Record<string, unknown> | null,
+): FormBusinessLogicConfig | undefined {
+  const pick = config ?? formConfig
+  if (pick == null || typeof pick !== 'object' || Array.isArray(pick)) return undefined
+  return pick as FormBusinessLogicConfig
 }

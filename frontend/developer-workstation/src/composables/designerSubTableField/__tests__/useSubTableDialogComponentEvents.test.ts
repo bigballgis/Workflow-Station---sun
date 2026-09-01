@@ -49,4 +49,29 @@ describe('useSubTableDialogComponentEvents (DW)', () => {
     onDialogFieldChange('select', 'Option02')
     expect(isDialogFieldVisible('lookup')).toBe(false)
   })
+
+  it('forces sibling dates required via api.required on select change', () => {
+    const formData = ref<Record<string, unknown>>({ scenario: 'A', start_date: '', end_date: '' })
+    const columns = [
+      {
+        field: 'scenario',
+        label: 'Scenario',
+        type: 'select',
+        sourceRule: {
+          type: 'select',
+          field: 'scenario',
+          _on: {
+            change: '$FNX:\nvar on = $inject.value === \'A\'\n$inject.api.required(on, [\'start_date\', \'end_date\'])',
+          },
+        },
+      },
+      { field: 'start_date', label: 'Start date', type: 'date' },
+      { field: 'end_date', label: 'Need-by date', type: 'date' },
+    ]
+    const { onDialogFieldChange, eventRequiredState } =
+      useSubTableDialogComponentEvents(formData, () => columns)
+    onDialogFieldChange('scenario', 'A')
+    expect(eventRequiredState.flags.get('start_date')).toBe(true)
+    expect(eventRequiredState.flags.get('end_date')).toBe(true)
+  })
 })

@@ -154,6 +154,10 @@ const props = defineProps<{
   prefetchLimit?: number
   /** When true, keyword hits the server instead of filtering already-loaded rows. */
   remoteFilter?: boolean
+  /** After fetch, clear the selection when the current PK is not in the filtered rows. */
+  autoClearIfMissing?: boolean
+  /** Bump to force a reload (script `api.refresh`). */
+  reloadNonce?: number
 }>()
 
 const emit = defineEmits<{
@@ -234,6 +238,7 @@ async function loadAllData() {
     loadedViewFields.value = vfRes.data as LookupViewField[]
     emit('viewFieldsLoaded', loadedViewFields.value)
   }
+  maybeClearMissingSelection(allRows.value)
 }
 
 const { nextZIndex } = useZIndex()
@@ -350,9 +355,36 @@ function removeSelectedAt(i: number) {
 function handleClear() {
   searchKeyword.value = ''
   selectedRow.value = null
+  selectedRows.value = []
   if (props.remoteFilter) resetRows()
-  emit('update:modelValue', null)
+  emit('update:modelValue', props.multiple ? [] : null)
   emit('clear')
+}
+
+function currentSelectionPks(): string[] {
+  if (props.multiple) {
+    const arr = Array.isArray(props.modelValue) ? props.modelValue : selectedRows.value
+    return arr.map((item: unknown) => {
+      if (item && typeof item === 'object') return String(rowPk(item as Record<string, unknown>) ?? '')
+      return item == null || item === '' ? '' : String(item)
+    }).filter(Boolean)
+  }
+  const val = props.modelValue
+  if (val == null || val === '') return []
+  if (typeof val === 'object') {
+    const pk = rowPk(val as Record<string, unknown>)
+    return pk == null || pk === '' ? [] : [String(pk)]
+  }
+  return [String(val)]
+}
+
+function maybeClearMissingSelection(rows: Record<string, unknown>[]) {
+  if (!props.autoClearIfMissing) return
+  const pks = currentSelectionPks()
+  if (!pks.length) return
+  const present = new Set(rows.map((row) => String(rowPk(row))))
+  if (pks.every((pk) => present.has(pk))) return
+  handleClear()
 }
 
 // Sync empty parent modelValue into local UI only — never emit('clear').
@@ -531,9 +563,10 @@ watch(
 )
 
 watch(
-  () => [props.tableId, props.searchFields, props.displayField, props.filterConditions],
+  () => [props.tableId, props.searchFields, props.displayField, props.filterConditions, props.reloadNonce],
   () => {
     resetRows()
+    if (props.autoClearIfMissing && props.tableId) void loadAllData()
   },
   { deep: true }
 )

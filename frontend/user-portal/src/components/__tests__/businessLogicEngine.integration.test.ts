@@ -292,6 +292,76 @@ describe('BusinessLogicEngine Integration: configJson → init → onFieldChange
       expect(result.calculatedValues.has('currency')).toBe(true)
     })
 
+    it('field-state-change marks date fields required when scenario is A', () => {
+      const engine = new BusinessLogicEngine()
+      engine.init({
+        rule: [
+          { type: 'select', field: 'scenario', title: 'Scenario' },
+          { type: 'datePicker', field: 'start_date', title: 'Start date' },
+          { type: 'datePicker', field: 'end_date', title: 'Need-by date' },
+        ],
+        options: {},
+        subForms: {},
+        linkages: [
+          {
+            sourceField: 'scenario',
+            targetField: 'start_date',
+            linkageType: 'field-state-change',
+            stateConfig: {
+              condition: { field: 'scenario', operator: 'equals', value: 'A' },
+              required: true,
+            },
+          },
+          {
+            sourceField: 'scenario',
+            targetField: 'end_date',
+            linkageType: 'field-state-change',
+            stateConfig: {
+              condition: { field: 'scenario', operator: 'equals', value: 'A' },
+              required: true,
+            },
+          },
+        ],
+      })
+
+      const whenA = engine.onFieldChange('scenario', 'A', {
+        scenario: 'A',
+        start_date: '',
+        end_date: '',
+      })
+      expect(whenA.stateChanges.get('start_date')?.required).toBe(true)
+      expect(whenA.stateChanges.get('end_date')?.required).toBe(true)
+    })
+
+    it('field-state-change does not require date fields when scenario is B', () => {
+      const engine = new BusinessLogicEngine()
+      engine.init({
+        rule: [
+          { type: 'select', field: 'scenario', title: 'Scenario' },
+          { type: 'datePicker', field: 'start_date', title: 'Start date' },
+        ],
+        options: {},
+        subForms: {},
+        linkages: [
+          {
+            sourceField: 'scenario',
+            targetField: 'start_date',
+            linkageType: 'field-state-change',
+            stateConfig: {
+              condition: { field: 'scenario', operator: 'equals', value: 'A' },
+              required: true,
+            },
+          },
+        ],
+      })
+
+      const whenB = engine.onFieldChange('scenario', 'B', {
+        scenario: 'B',
+        start_date: '',
+      })
+      expect(whenB.stateChanges.get('start_date')?.required).toBeUndefined()
+    })
+
     it('validateAll should pass (no validation rules configured)', () => {
       const engine = new BusinessLogicEngine()
       engine.init(mixedConfigJson)

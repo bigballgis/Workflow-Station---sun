@@ -50,7 +50,7 @@ const portals = NAV_TREE.filter((n): n is NavGroup => n.kind === 'group').map((g
   id: group.id,
   titleKey: group.titleKey,
   hintKey: `home.hint.${group.id}`,
-  leaves: navLeavesWithArticles(group.children),
+  leaves: navLeavesWithArticles(group.children).filter((leaf) => !leaf.omitFromHome),
 }))
 
 function summaryTitleKey(to: string): string {

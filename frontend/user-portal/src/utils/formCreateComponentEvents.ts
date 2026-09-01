@@ -9,6 +9,8 @@ import {
   parseFormCreateEventHandler,
   type FieldKeyResolver,
   type PortalFormApi,
+  type PortalFormApiOverlays,
+  type PortalFormRequiredBag,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
 
@@ -222,9 +224,19 @@ export function runAllComponentHookEvents(
     notify: () => void
     getAllFieldKeys: () => string[]
   },
+  required?: PortalFormRequiredBag,
+  overlays?: PortalFormApiOverlays,
 ): void {
   const map = collectFieldComponentEventsFromRules(rules)
-  const api = createPortalFormApi(getFormData, applyPatch, resolveFieldKey, visibility)
+  const api = createPortalFormApi(
+    getFormData,
+    applyPatch,
+    resolveFieldKey,
+    visibility,
+    undefined,
+    required,
+    overlays,
+  )
   for (const [field, ev] of map) {
     runComponentFieldEvents(ev, {
       field,
