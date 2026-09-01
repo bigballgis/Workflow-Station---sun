@@ -19,12 +19,12 @@ cd frontend && pnpm run regression:mi:screenshots
 
 | 场景 ID | Issue | Playwright 脚本 | 覆盖单测 | 截图 slug |
 |---------|-------|-----------------|----------|-----------|
-| 1441-myrequest-details | #1441 | `verify-myrequest-details-modal.mjs` | mcyInitiator, mergeMi, mergeMiCollection, dropSubsumed | `app-*-details-060-unprocessed.png`, `…-061-filled.png` |
-| 1440-sex-toggle | #1440 | `verify-sex-toggle-isolation.mjs` | linkFormMiIsolation, inlineFormBelowTable | `task-6c6c-sex-before/after.png` |
-| 1438-attachment | #1438 | `verify-mi-attachment-rows.mjs` | subTableRowMetaFields | `task-093962-attachment-table.png`, `…-subtask-grid.png` |
-| 1439-subform2 | #1439 | `verify-subform2-people-carry-forward.mjs` | subForm2CarryForward | `task-75d662-subform2-people.png` |
-| 1435-inline-uuid | #1435 | `verify-mi-people-inline-uuid.mjs` | subTableRowRuntime, linkFormMiIsolation | `task-09367-people-inline-uuid.png` |
-| assignee-slice | miSubProcessScope | `verify-mi-assignee-subtask-slice.mjs` | miSubProcessScope | `task-6c6c-assignee-subtask-slice.png` |
+| 1441-myrequest-details | #1441 | `verify-myrequest-details-modal.mjs` | mcyInitiator, **miDetailsFieldMapping**, mergeMi, mergeMiCollection, dropSubsumed | `app-*-details-unprocessed.png`, `…-details-completed.png` |
+| 1440-sex-toggle | #1440 | `verify-sex-toggle-isolation.mjs` | linkFormMiIsolation, inlineFormBelowTable | `task-*-sex-before/after.png` |
+| 1438-attachment | #1438 | `verify-mi-attachment-rows.mjs` | subTableRowMetaFields | `task-*-attachment-table.png`, `…-subtask-grid.png` |
+| 1439-subform2 | #1439 | `verify-subform2-people-carry-forward.mjs` | subForm2CarryForward | `task-*-subform2-people.png` |
+| 1435-inline-uuid | #1435 | `verify-mi-people-inline-uuid.mjs` | subTableRowRuntime, linkFormMiIsolation | `task-*-people-inline-uuid.png` |
+| assignee-slice | miSubProcessScope | `verify-mi-assignee-subtask-slice.mjs` | miSubProcessScope | `task-*-assignee-subtask-slice.png` |
 
 映射源码：`frontend/scripts/mi-regression-scenarios.mjs`  
 截图目录：`verification-screenshots/`（**验证后保留，禁止删除**）

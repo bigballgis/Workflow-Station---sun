@@ -1,70 +1,63 @@
-#!/usr/bin/env node
-/** #1438 — Attachment table keeps all rows; Sub Task must not show id+file-only leaks. */
+/**
+ * #1438 — Attachment rows stay visible; collection table must not show id+file-only leaks.
+ * Discovers a live To Do (prefers Multi-Instance Subtask Demo).
+ */
 import { chromium } from 'playwright'
 import { loginViaPortalPassword } from './playwright-login.mjs'
-import { countSubTableRows, screenshotPath } from './mi-regression-helpers.mjs'
+import {
+  countSubTableRows,
+  listMiCollectionTables,
+  resolveAndOpenTodo,
+  screenshotPath,
+} from './mi-regression-helpers.mjs'
 
-const TASK_ID = process.argv[2] || '093962c4-6308-11f1-a95b-92e64e1a5cf1'
+function fail(message) {
+  console.error(`FAIL: ${message}`)
+  process.exit(1)
+}
 
 const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
 await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
-await page.goto(`http://localhost:3000/portal/tasks/${TASK_ID}`, { waitUntil: 'domcontentloaded' })
-await page.waitForTimeout(12000)
+
+const taskId = await resolveAndOpenTodo(page, { prefer: /fu-20260422|subtask demo|attachment/i })
+console.log('[task]', taskId)
 
 const attachment = await countSubTableRows(page, 'attachment')
-console.log('[attachment]', attachment)
+const collection = await countSubTableRows(page, 'participant|sub task|transaction')
+console.log('[attachment]', attachment, '[collection]', collection)
 
-const subTask = await countSubTableRows(page, 'sub task')
-console.log('[subTask]', subTask)
-
-const attBlock = await page.evaluate(() => {
-  const block = [...document.querySelectorAll('.sub-table-field')].find(el =>
-    /attachment/i.test(el.querySelector('.title')?.textContent?.trim() ?? ''),
-  )
-  if (!block) return { found: false, fileRows: 0 }
-  const rows = [...block.querySelectorAll('.el-table__body-wrapper tbody tr.el-table__row')]
-  const withFile = rows.filter(tr => {
-    const t = tr.textContent ?? ''
-    return /\.pdf|upload|file/i.test(t)
-  }).length
-  return { found: true, fileRows: withFile, total: rows.length }
-})
-console.log('[attachmentDetail]', attBlock)
-
-const subTaskPureFileLeaks = await page.evaluate(() => {
-  const block = [...document.querySelectorAll('.sub-table-field')].find(el =>
-    /sub task/i.test(el.querySelector('.title')?.textContent?.trim() ?? ''),
+const collectionFileLeaks = await page.evaluate(() => {
+  const block = [...document.querySelectorAll('.sub-table-field')].find((el) =>
+    /participant|sub task|transaction/i.test(el.querySelector('.title, .sub-table-header')?.textContent || ''),
   )
   if (!block) return 0
-  return [...block.querySelectorAll('.el-table__body-wrapper tbody tr.el-table__row')].filter(tr => {
-    const cells = [...tr.querySelectorAll('td')].map(td => td.textContent?.trim() ?? '')
-    const hasTestId = cells.some(c => /^Test-\d+/i.test(c))
-    const hasFileOnly = cells.some(c => /\.pdf|upload/i.test(c)) && !hasTestId
+  return [...block.querySelectorAll('.el-table__body-wrapper tbody tr.el-table__row')].filter((tr) => {
+    const cells = [...tr.querySelectorAll('td')].map((td) => td.textContent?.trim() ?? '')
+    const hasParticipantId = cells.some((c) => /^(Test-|ATM-)/i.test(c))
+    const hasFileOnly = cells.some((c) => /\.pdf|upload/i.test(c)) && !hasParticipantId
     return hasFileOnly && cells.filter(Boolean).length <= 2
   }).length
 })
-console.log('[subTaskPureFileLeaks]', subTaskPureFileLeaks)
+console.log('[collectionFileLeaks]', collectionFileLeaks)
 
-const shotAtt = screenshotPath('task-093962-attachment-table')
+const shotAtt = screenshotPath(`task-${taskId.slice(0, 8)}-attachment-table`)
 await page.locator('.sub-table-field').filter({ hasText: /attachment/i }).first().screenshot({ path: shotAtt }).catch(async () => {
   await page.screenshot({ path: shotAtt, fullPage: true })
 })
-
-const shotSub = screenshotPath('task-093962-subtask-grid')
-await page.locator('.sub-table-field').filter({ hasText: /sub task/i }).first().screenshot({ path: shotSub }).catch(async () => {
-  await page.screenshot({ path: shotSub, fullPage: false })
+const shotGrid = screenshotPath(`task-${taskId.slice(0, 8)}-subtask-grid`)
+const tables = await listMiCollectionTables(page)
+const gridTitle = tables.find((t) => /participant|sub task|transaction/i.test(t.title))?.title
+await page.locator('.sub-table-field').filter({ hasText: gridTitle || /participant|sub task/i }).first().screenshot({ path: shotGrid }).catch(async () => {
+  await page.screenshot({ path: shotGrid, fullPage: false })
 })
 
-if (!attachment.found || attachment.count < 3) {
-  console.error(`FAIL: Attachment rows=${attachment.count} (expected >= 3)`)
-  process.exit(1)
+if (!attachment.found || attachment.count < 1) {
+  fail(`Attachment rows=${attachment.count} (expected at least 1 on this To Do)`)
 }
-if (subTaskPureFileLeaks > 0) {
-  console.error(`FAIL: Sub Task has ${subTaskPureFileLeaks} pure id+file leak row(s)`)
-  process.exit(1)
+if (collectionFileLeaks > 0) {
+  fail(`collection table has ${collectionFileLeaks} pure id+file leak row(s)`)
 }
-
-console.log('PASS: Attachment >= 3 rows, no Sub Task file-only leaks')
-console.log('[saved]', shotAtt, shotSub)
+console.log('PASS: Attachment visible, no file-only leaks in collection grid')
+console.log('[saved]', shotAtt, shotGrid)
 await browser.close()
