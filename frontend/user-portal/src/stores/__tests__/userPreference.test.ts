@@ -28,10 +28,11 @@ describe('userPreference store', () => {
   })
 
   it('loads autoClaimOnOpen from GET /preferences', async () => {
-    getUserPreference.mockResolvedValue({ data: { autoClaimOnOpen: true } })
+    getUserPreference.mockResolvedValue({ data: { autoClaimOnOpen: true, autoPreviewOnOpen: true } })
     const store = useUserPreferenceStore()
     await store.load()
     expect(store.autoClaimOnOpen).toBe(true)
+    expect(store.autoPreviewOnOpen).toBe(true)
     expect(store.loaded).toBe(true)
   })
 
@@ -55,7 +56,12 @@ describe('userPreference store', () => {
     await store.setAutoClaimOnOpen(true)
     expect(store.autoClaimOnOpen).toBe(false)
     expect(updateUserPreference).toHaveBeenCalledWith(
-      expect.objectContaining({ autoClaimOnOpen: true, theme: 'light', language: 'en' }),
+      expect.objectContaining({
+        autoClaimOnOpen: true,
+        autoPreviewOnOpen: false,
+        theme: 'light',
+        language: 'en',
+      }),
     )
   })
 })

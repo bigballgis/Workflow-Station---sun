@@ -22,9 +22,11 @@ vi.mock('@/stores/pendingTask', () => ({
 
 const preferenceMocks = vi.hoisted(() => ({
   autoClaimOnOpen: false,
+  autoPreviewOnOpen: false,
   saving: false,
   load: vi.fn().mockResolvedValue(undefined),
   setAutoClaimOnOpen: vi.fn().mockResolvedValue(undefined),
+  setAutoPreviewOnOpen: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/stores/userPreference', () => ({
@@ -79,6 +81,7 @@ function mountPage() {
           claimSelectedEmpty: 'None claimable',
           unclaimSelectedEmpty: 'None held',
           autoClaimOnOpen: 'Auto-claim on open',
+          autoPreviewOnOpen: 'Auto-preview on open',
           todoGuideLinkAria: 'Open To Do guideline',
           action: 'Action',
           requestId: 'Request ID',
@@ -183,6 +186,7 @@ describe('To Do shared list', () => {
     // 在它返回值上再断言 exists 恒为 true（vue-test-utils 正是因此把该方法从
     // get() 的返回类型里 Omit 掉）。find() 才是「可能不存在」的那个查询。
     expect(w.find('[data-test="todo-auto-claim-switch"]').exists()).toBe(true)
+    expect(w.find('[data-test="todo-auto-preview-switch"]').exists()).toBe(true)
     expect(preferenceMocks.load).toHaveBeenCalled()
   })
 

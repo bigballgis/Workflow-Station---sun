@@ -64,6 +64,9 @@ import { debounce } from 'lodash-es'
 import type { FormInstance } from 'element-plus'
 import FormRendererFields from './FormRendererFields.vue'
 import { FORM_RENDERER_FIELDS_CTX, type FormRendererFieldsContext } from './formRendererFieldsContext'
+import { FILE_PREVIEW_PLAYLIST_KEY } from '@/composables/filePreview/useFilePreview'
+import { collectFormPreviewFiles } from '@/utils/collectFormPreviewFiles'
+import { useAutoOpenFormPreview } from '@/composables/filePreview/useAutoOpenFormPreview'
 import { userApi } from '@/api/user'
 import type {
   FormField,
@@ -172,6 +175,12 @@ interface Props {
    * entries default to editable — this only narrows fields explicitly marked READONLY.
    */
   fieldPermissions?: Record<string, string> | null
+  /**
+   * When true, FormRenderer may auto-open the first previewable upload after data
+   * settles, if the account preference is on. Default off. Enable only on the
+   * main task / request form — not process-form copies or start drafts.
+   */
+  autoOpenFilePreview?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -192,6 +201,7 @@ const props = withDefaults(defineProps<Props>(), {
   viewContext: 'assigneeTodo',
   initiatorSnapshotMode: false,
   currentMiRowId: null,
+  autoOpenFilePreview: false,
 })
 
 const emit = defineEmits<{
@@ -601,6 +611,26 @@ const {
   showLinkFormDialogFooter: propShowLinkFormDialogFooter,
   fieldPermissions: propFieldPermissions,
 } = toRefs(props)
+
+function collectPreviewFiles() {
+  return collectFormPreviewFiles({
+    fields: props.fields,
+    tabs: props.tabs,
+    fieldsAfterTabs: props.fieldsAfterTabs,
+    formData: formData.value,
+    bindings: [
+      ...(props.subTableBindings ?? []),
+      ...(linkableSubTableBindings.value ?? []),
+    ],
+  })
+}
+provide(FILE_PREVIEW_PLAYLIST_KEY, { collect: collectPreviewFiles })
+useAutoOpenFormPreview({
+  enabled: () => props.autoOpenFilePreview === true,
+  processInstanceId: () => props.processInstanceId,
+  formData,
+  collect: collectPreviewFiles,
+})
 
 provide(FORM_RENDERER_FIELDS_CTX, reactive({
   formData,

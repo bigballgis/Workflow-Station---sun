@@ -3,15 +3,16 @@
 // Behaviour copied verbatim from FieldRenderer.vue. Registers the modelValue
 // watch that backfills the file list from a URL string.
 // ---------------------------------------------------------------------------
-import { ref, computed, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import type { FieldRendererProps, FieldRendererEmit } from './types'
-import { openFilePreview } from '@/composables/filePreview/useFilePreview'
+import { FILE_PREVIEW_PLAYLIST_KEY, openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
 import { isCannotDownload } from '@/utils/filePreview'
 
 // Priority: props.uploadUrl → field.uploadUrl → default '/api/v1/upload'
 const DEFAULT_UPLOAD_URL = '/api/v1/upload'
 
 export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmit) {
+  const playlist = inject(FILE_PREVIEW_PLAYLIST_KEY, null)
   const resolvedUploadUrl = computed(() => {
     if (props.uploadUrl) return props.uploadUrl
     if (props.field.uploadUrl && props.field.uploadUrl !== '/') return props.field.uploadUrl
@@ -72,11 +73,10 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
     const url = file?.url || (typeof props.modelValue === 'string' ? props.modelValue : '')
     if (!url) return
     const name = file?.name || extractFileNameFromUrl(url)
-    openFilePreview({
-      url,
-      name,
-      cannotDownload: isCannotDownload(props.field.cannotDownload),
-    })
+    openFilePreviewFromList(
+      { url, name, cannotDownload: isCannotDownload(props.field.cannotDownload) },
+      playlist?.collect() ?? [],
+    )
   }
 
   return {

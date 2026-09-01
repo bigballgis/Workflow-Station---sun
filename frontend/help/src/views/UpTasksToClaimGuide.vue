@@ -49,6 +49,22 @@ const sections: GuideSection[] = [
     ],
   },
   {
+    anchor: 'auto-preview',
+    titleKey: 'upTasksToClaimGuide.autoPreviewTitle',
+    bodyKey: 'upTasksToClaimGuide.autoPreviewBody',
+    samples: [
+      { code: 'Auto-preview on open', hintKey: 'upTasksToClaimGuide.autoPreviewSample' },
+    ],
+  },
+  {
+    anchor: 'file-preview',
+    titleKey: 'upTasksToClaimGuide.filePreviewTitle',
+    bodyKey: 'upTasksToClaimGuide.filePreviewBody',
+    samples: [
+      { code: 'Fit', hintKey: 'upTasksToClaimGuide.filePreviewSample' },
+    ],
+  },
+  {
     anchor: 'detail',
     titleKey: 'upTasksToClaimGuide.detailTitle',
     bodyKey: 'upTasksToClaimGuide.detailBody',

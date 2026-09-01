@@ -50,4 +50,20 @@ class UserPreferenceComponentAutoClaimTest {
         verify(userPreferenceRepository).save(captor.capture());
         assertThat(captor.getValue().getAutoClaimOnOpen()).isTrue();
     }
+
+    @Test
+    void updateCopiesAutoPreviewOnOpen() {
+        UserPreference existing = UserPreference.builder()
+                .userId("u1")
+                .autoPreviewOnOpen(Boolean.FALSE)
+                .build();
+        when(userPreferenceRepository.findByUserId("u1")).thenReturn(Optional.of(existing));
+        when(userPreferenceRepository.save(existing)).thenReturn(existing);
+
+        component.updateUserPreference("u1", UserPreference.builder().autoPreviewOnOpen(Boolean.TRUE).build());
+
+        ArgumentCaptor<UserPreference> captor = ArgumentCaptor.forClass(UserPreference.class);
+        verify(userPreferenceRepository).save(captor.capture());
+        assertThat(captor.getValue().getAutoPreviewOnOpen()).isTrue();
+    }
 }

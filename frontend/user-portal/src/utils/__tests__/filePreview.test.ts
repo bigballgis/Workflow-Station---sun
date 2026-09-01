@@ -19,6 +19,11 @@ describe('resolveFilePreviewKind', () => {
     expect(resolveFilePreviewKind('photo.PNG')).toBe('image')
   })
 
+  it('classifies tiff from mime before generic image/*', () => {
+    expect(resolveFilePreviewKind('scan.tiff')).toBe('tiff')
+    expect(resolveFilePreviewKind('scan', 'image/tiff')).toBe('tiff')
+  })
+
   it('shows svg and other text-like types as text, not as HTML/image', () => {
     expect(resolveFilePreviewKind('x.svg', 'image/svg+xml')).toBe('text')
     expect(resolveFilePreviewKind('notes.md')).toBe('text')

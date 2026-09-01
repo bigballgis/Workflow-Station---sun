@@ -79,7 +79,7 @@ watch(() => props.blob, () => { void loadTable() }, { immediate: true })
 <style scoped>
 .file-preview-table {
   width: 100%;
-  height: 72vh;
+  height: var(--file-preview-pane-height, 72vh);
   display: flex;
   flex-direction: column;
   background: #fff;

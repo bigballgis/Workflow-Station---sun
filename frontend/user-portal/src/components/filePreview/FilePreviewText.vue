@@ -40,7 +40,7 @@ watch(() => [props.blob, props.mode] as const, () => { void loadText() }, { imme
 <style scoped>
 .file-preview-text-wrap {
   width: 100%;
-  height: 72vh;
+  height: var(--file-preview-pane-height, 72vh);
   display: flex;
   flex-direction: column;
   background: #fff;

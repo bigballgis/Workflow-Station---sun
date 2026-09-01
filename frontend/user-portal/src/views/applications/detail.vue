@@ -202,6 +202,7 @@
                 (selectedNodeForm.isCurrentStep ? primaryTableBinding : selectedNodeForm.primaryTableBinding) ?? undefined
               "
               view-context="initiatorRequest"
+              :auto-open-file-preview="selectedNodeForm.isCurrentStep"
               :initiator-snapshot-mode="!!snapshotTaskName"
               @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
             />
@@ -297,6 +298,7 @@
               :native-sub-table-binding-ids="mainFormNativeSubTableBindingIds"
               :form-config="mainFormConfig"
               view-context="initiatorRequest"
+              :auto-open-file-preview="true"
               :initiator-snapshot-mode="!!snapshotTaskName"
               :function-unit-id="functionUnitIdRef"
               :primary-table-binding="primaryTableBinding ?? undefined"

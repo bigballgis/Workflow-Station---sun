@@ -49,8 +49,8 @@ export function kindFromMime(mime: string): FilePreviewKind | null {
   const type = mime.split(';')[0].trim().toLowerCase()
   if (!type) return null
   if (type === 'image/svg+xml' || type.startsWith('text/')) return 'text'
+  if (type === 'image/tiff' || type === 'image/tif') return 'tiff'
   if (type.startsWith('image/')) return 'image'
   if (type === 'application/pdf') return 'pdf'
-  if (type === 'image/tiff') return 'tiff'
   return null
 }

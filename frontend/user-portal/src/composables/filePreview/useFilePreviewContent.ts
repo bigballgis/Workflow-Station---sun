@@ -7,7 +7,7 @@ import {
   triggerBlobDownload,
   type FilePreviewKind,
 } from '@/utils/filePreview'
-import { closeFilePreview, useFilePreviewState } from './useFilePreview'
+import { closeFilePreview, showFilePreviewAt, useFilePreviewState } from './useFilePreview'
 
 export function useFilePreviewContent() {
   const { t } = useI18n()
@@ -56,6 +56,14 @@ export function useFilePreviewContent() {
     triggerBlobDownload(current, state.name)
   }
 
+  function showPrev() {
+    showFilePreviewAt(state.index - 1)
+  }
+
+  function showNext() {
+    showFilePreviewAt(state.index + 1)
+  }
+
   function close() {
     closeFilePreview()
     resetContent()
@@ -66,11 +74,23 @@ export function useFilePreviewContent() {
     () => {
       void loadPreview()
     },
+    { immediate: true },
   )
 
   onBeforeUnmount(() => {
     resetContent()
   })
 
-  return { state, loading, error, kind, previewBlob, downloading, downloadCurrent, close }
+  return {
+    state,
+    loading,
+    error,
+    kind,
+    previewBlob,
+    downloading,
+    downloadCurrent,
+    showPrev,
+    showNext,
+    close,
+  }
 }

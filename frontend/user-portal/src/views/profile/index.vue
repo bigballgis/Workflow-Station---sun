@@ -66,6 +66,17 @@
           />
         </div>
         <p class="desc-hint">{{ t('task.autoClaimOnOpenHint') }}</p>
+        <div class="todo-pref-row">
+          <span class="todo-pref-label">{{ t('task.autoPreviewOnOpen') }}</span>
+          <el-switch
+            data-test="profile-auto-preview-switch"
+            :model-value="preferenceStore.autoPreviewOnOpen"
+            :loading="preferenceStore.saving"
+            :disabled="preferenceStore.saving"
+            @change="onAutoPreviewChange"
+          />
+        </div>
+        <p class="desc-hint">{{ t('task.autoPreviewOnOpenHint') }}</p>
 
         <el-divider />
         <el-alert
@@ -171,6 +182,10 @@ const workspaceLine = computed(() => workspaceContextText.value || t('profile.no
 
 function onAutoClaimChange(value: string | number | boolean) {
   return preferenceStore.setAutoClaimOnOpen(value === true)
+}
+
+function onAutoPreviewChange(value: string | number | boolean) {
+  return preferenceStore.setAutoPreviewOnOpen(value === true)
 }
 
 const loadUserInfo = async () => {

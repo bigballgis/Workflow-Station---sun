@@ -69,6 +69,9 @@ public class UserPreferenceComponent {
         if (preference.getAutoClaimOnOpen() != null) {
             existing.setAutoClaimOnOpen(preference.getAutoClaimOnOpen());
         }
+        if (preference.getAutoPreviewOnOpen() != null) {
+            existing.setAutoPreviewOnOpen(preference.getAutoPreviewOnOpen());
+        }
 
         return userPreferenceRepository.save(existing);
     }
@@ -147,6 +150,7 @@ public class UserPreferenceComponent {
                 .dateFormat("YYYY-MM-DD")
                 .pageSize(20)
                 .autoClaimOnOpen(Boolean.FALSE)
+                .autoPreviewOnOpen(Boolean.FALSE)
                 .build();
         return userPreferenceRepository.save(preference);
     }
