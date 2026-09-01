@@ -1,3 +1,11 @@
+import { extractFileLinks } from '@platform-shared/list/fileNames'
+import {
+  extractStoredUploadUrl,
+  persistUploadValue,
+  resolveUploadMaxFiles,
+} from '@platform-shared/upload/uploadFieldValue'
+
+export { extractStoredUploadUrl as extractUploadUrlFromResponse }
 
 export function isStoredFileUrl(value: unknown): value is string {
   if (typeof value !== 'string' || !value.trim()) return false
@@ -16,27 +24,6 @@ export function buildMockPreviewFileUrl(originalName = 'sample-document.pdf'): s
   const safe = String(originalName || 'sample-document.pdf').replace(/[^\w.\-()+ ]/g, '_')
   const stored = `preview-${encodeURIComponent(safe).replace(/%/g, '')}`
   return `/api/v1/upload/files/${stored}?originalName=${encodeURIComponent(safe)}`
-}
-
-/** Parse upload API response (ApiResponse wrapper or inner payload) to a stored file URL. */
-export function extractUploadUrlFromResponse(res: unknown): string {
-  if (res == null) return ''
-  if (typeof res === 'string') return res.trim()
-  if (typeof res !== 'object') return ''
-  const o = res as Record<string, unknown>
-  const direct = o.url ?? o.fileUrl ?? o.file_url ?? o.filePath ?? o.file_path
-  if (typeof direct === 'string' && direct.trim()) return direct.trim()
-  const data = o.data
-  if (data != null && data !== o) {
-    const nested = extractUploadUrlFromResponse(data)
-    if (nested) return nested
-  }
-  const response = o.response
-  if (response != null && response !== o) {
-    const nested = extractUploadUrlFromResponse(response)
-    if (nested) return nested
-  }
-  return ''
 }
 
 /** Normalize upload cell values (string URL, el-upload file list, or response object) to a fetchable URL. */
@@ -109,6 +96,18 @@ export function buildFormCreateUploadValue(url: string, displayName?: string): F
   return [{ name, url: resolvedUrl, status: 'success', value: payload }]
 }
 
+export function buildFormCreateUploadValues(
+  value: unknown,
+  fallbackName?: string,
+): FormCreateUploadFile[] {
+  const links = extractFileLinks(value)
+  if (links.length === 0) return []
+  return links.map((link, index) => {
+    const name = index === 0 && fallbackName ? fallbackName : link.name
+    return { name, url: link.url, status: 'success' as const, value: { url: link.url, name } }
+  })
+}
+
 /** Re-apply upload field value after form-create fcUpload strips names to URL strings. */
 export function syncFormCreateUploadFieldValue(
   formData: { value: Record<string, unknown> },
@@ -147,8 +146,8 @@ export function hydrateUploadFieldsForFormCreate(
   for (const rule of uploadRules) {
     const field = rule.field
     const raw = formData[field]
-    const url = resolveUploadCellUrl(raw)
-    if (!url) {
+    const links = extractFileLinks(raw)
+    if (links.length === 0) {
       if (raw === '' || raw == null) formData[field] = []
       continue
     }
@@ -157,10 +156,7 @@ export function hydrateUploadFieldsForFormCreate(
       nameTarget && formData[nameTarget] != null && String(formData[nameTarget]).trim()
         ? String(formData[nameTarget]).trim()
         : undefined
-    const existingName = Array.isArray(raw) && raw[0] && typeof raw[0] === 'object'
-      ? String((raw[0] as { name?: string }).name || '').trim() || undefined
-      : undefined
-    formData[field] = buildFormCreateUploadValue(url, savedName || existingName)
+    formData[field] = buildFormCreateUploadValues(raw, links.length === 1 ? savedName : undefined)
   }
 }
 
@@ -176,12 +172,12 @@ export function alignUploadFieldsToColumns(
     if (resolveUploadCellUrl(row[col.field])) continue
 
     for (const ruleField of uploadRuleFields) {
-      const url = resolveUploadCellUrl(row[ruleField])
-      if (!url) continue
+      const links = extractFileLinks(row[ruleField])
+      if (links.length === 0) continue
       const colKey = col.field.toLowerCase()
       const ruleKey = ruleField.toLowerCase()
       if (colKey === ruleKey || colKey.includes(ruleKey) || ruleKey.includes(colKey)) {
-        row[col.field] = url
+        row[col.field] = persistUploadValue(links, resolveUploadMaxFiles(col.props))
         break
       }
     }
@@ -195,8 +191,8 @@ export function normalizeUploadFieldsInRow(
   for (const col of columns) {
     if (!col.field) continue
     if (col.type !== 'upload' && !isLikelyFileStorageFieldName(col.field)) continue
-    const url = resolveUploadCellUrl(row[col.field])
-    row[col.field] = url ?? ''
+    const links = extractFileLinks(row[col.field])
+    row[col.field] = persistUploadValue(links, resolveUploadMaxFiles(col.props))
   }
 }
 
@@ -207,6 +203,7 @@ export function isUploadColumn(
   cellValue?: unknown,
 ): boolean {
   if (col.type === 'upload') return true
+  if (extractFileLinks(cellValue).length > 0) return true
   if (isStoredFileUrl(cellValue)) return true
   return isLikelyFileStorageFieldName(col.field)
 }

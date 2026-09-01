@@ -39,6 +39,19 @@ describe('collectFormPreviewFiles', () => {
     expect(files.map((f) => f.name)).toEqual(['cover.pdf', 'a.pdf', 'nested.pdf'])
   })
 
+  it('walks an array of files on one upload field', () => {
+    const files = collectFormPreviewFiles({
+      fields: [{ key: 'docs', label: 'Docs', type: 'upload' }],
+      formData: {
+        docs: [
+          { url: '/upload/files/a.pdf?originalName=a.pdf', name: 'a.pdf' },
+          { url: '/upload/files/b.pdf?originalName=b.pdf', name: 'b.pdf' },
+        ],
+      },
+    })
+    expect(files.map((f) => f.name)).toEqual(['a.pdf', 'b.pdf'])
+  })
+
   it('skips zip and empty urls', () => {
     const files = collectFormPreviewFiles({
       fields: [{ key: 'pack', label: 'Pack', type: 'upload' }],

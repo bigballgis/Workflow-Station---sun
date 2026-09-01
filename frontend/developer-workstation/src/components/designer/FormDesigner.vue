@@ -1982,6 +1982,12 @@ const designerConfig = computed(() => ({
       rule() {
         return [
           {
+            type: 'UploadMaxFilesEditor',
+            field: 'maxFiles',
+            title: t('form.uploadMaxFiles'),
+            value: 10,
+          },
+          {
             type: 'switch',
             field: 'cannotDownload',
             title: t('form.uploadCannotDownload'),
@@ -2035,6 +2041,7 @@ const designerConfig = computed(() => ({
     transfer: ['disabled', 'hidden'],
     cascader: ['disabled', 'hidden'],
     slider: ['disabled', 'hidden'],
+    upload: ['disabled', 'hidden', 'multiple', 'limit', 'uploadLimit'],
   },
 }))
 

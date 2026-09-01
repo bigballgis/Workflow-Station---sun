@@ -66,6 +66,13 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.taskDelegate.summary',
     load: () => import('@/views/TaskDelegateGuide.vue'),
   },
+  {
+    id: 'form-upload',
+    path: '/form-upload',
+    titleKey: 'guides.formUpload.title',
+    summaryKey: 'guides.formUpload.summary',
+    load: () => import('@/views/FormUploadGuide.vue'),
+  },
 ]
 
 /**
@@ -92,7 +99,7 @@ export const NAV_TREE: NavNode[] = [
             titleKey: 'nav.tableDesign',
             to: '/computed-fields',
           },
-          { kind: 'leaf', id: 'dw-forms', titleKey: 'nav.formDesign' },
+          { kind: 'leaf', id: 'dw-forms', titleKey: 'nav.formDesign', to: '/form-upload' },
           { kind: 'leaf', id: 'dw-view', titleKey: 'nav.viewDesign' },
           { kind: 'leaf', id: 'dw-action', titleKey: 'nav.actionDesign' },
           { kind: 'leaf', id: 'dw-fu-automation', titleKey: 'nav.fuAutomation' },

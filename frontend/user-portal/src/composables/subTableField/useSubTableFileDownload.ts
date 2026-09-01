@@ -3,6 +3,8 @@ import { ElMessage } from 'element-plus'
 import type { SubTableFieldT } from './subTableFieldTypes'
 import { FILE_PREVIEW_PLAYLIST_KEY, openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
 import { uploadPropsBlockDownload } from '@/utils/filePreview'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
+import { formatUploadCellText } from '@platform-shared/upload/uploadFieldValue'
 
 /** Extract filename from URL, preferring the original filename recorded in this session */
 export function getFilenameFromUrl(url: string, savedName?: string): string {
@@ -24,15 +26,18 @@ export function getFilenameFromUrl(url: string, savedName?: string): string {
   }
 }
 
+export function uploadCellLabel(value: unknown, savedName?: string): string {
+  const formatted = formatUploadCellText(value)
+  if (formatted.count === 1 && savedName) return savedName
+  return formatted.text
+}
+
 /** Upload-cell filename display + blob download state for sub-table rows. */
 export function useSubTableFileDownload(t: SubTableFieldT) {
   const playlist = inject(FILE_PREVIEW_PLAYLIST_KEY, null)
-  // key = "{rowIndex}_{field}" -> original filename (recorded during current session upload)
   const uploadNames = ref<Record<string, string>>({})
-  // Set of keys currently being downloaded
   const downloadingKeys = ref<Record<string, boolean>>({})
 
-  /** Click filename to trigger download, using fetch+Blob to avoid new tab navigation */
   async function downloadFile(url: string, savedName: string | undefined, rowIndex: number, field: string) {
     if (!url) return
     const key = `${rowIndex}_${field}`
@@ -70,20 +75,23 @@ export function useSubTableFileDownload(t: SubTableFieldT) {
   }
 
   function previewStoredFile(
-    url: string,
+    value: unknown,
     savedName: string | undefined,
     col: { props?: Record<string, unknown> },
   ) {
-    if (!url) return
+    const links = extractFileLinks(value)
+    const first = links[0]
+    if (!first) return
+    const name = links.length === 1 && savedName ? savedName : first.name
     openFilePreviewFromList(
       {
-        url,
-        name: getFilenameFromUrl(url, savedName),
+        url: first.url,
+        name,
         cannotDownload: uploadPropsBlockDownload(col.props),
       },
       playlist?.collect() ?? [],
     )
   }
 
-  return { uploadNames, downloadingKeys, downloadFile, previewStoredFile }
+  return { uploadNames, downloadingKeys, downloadFile, previewStoredFile, uploadCellLabel }
 }

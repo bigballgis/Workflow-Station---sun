@@ -436,12 +436,14 @@
         v-if="!readonly"
         :action="resolvedUploadUrl"
         :accept="field.uploadAccept || ''"
-        :limit="field.uploadLimit || 1"
-        :multiple="false"
+        :limit="uploadLimit"
+        :multiple="uploadMultiple"
         :disabled="isDisabled"
         :file-list="fileList"
+        :http-request="httpRequest"
         :on-success="onUploadSuccess"
         :on-remove="onUploadRemove"
+        :on-exceed="onUploadExceed"
         :on-preview="previewCurrentFile"
         list-type="text"
       >
@@ -458,15 +460,19 @@
           </div>
         </template>
       </el-upload>
-      <div v-else>
+      <div
+        v-else
+        class="upload-readonly-list"
+      >
         <span
-          v-if="modelValue"
+          v-for="item in fileList"
+          :key="item.url"
           class="file-preview-link"
-          @click="previewCurrentFile()"
+          @click="previewCurrentFile(item)"
         >
-          {{ fileList[0]?.name || modelValue }}
+          {{ item.name }}
         </span>
-        <span v-else>-</span>
+        <span v-if="!fileList.length">-</span>
       </div>
     </template>
 
@@ -787,9 +793,13 @@ function handleLookupClear() {
 // Upload URL + file list — registers the modelValue watch second.
 const {
   resolvedUploadUrl,
+  uploadLimit,
+  uploadMultiple,
   fileList,
+  httpRequest,
   onUploadSuccess,
   onUploadRemove,
+  onUploadExceed,
   previewCurrentFile,
 } = useFieldUpload(props, emit)
 
@@ -910,6 +920,12 @@ onMounted(() => {
   color: #165DFF;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.upload-readonly-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .file-preview-link:hover {

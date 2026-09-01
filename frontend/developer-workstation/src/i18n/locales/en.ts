@@ -704,7 +704,7 @@ export default {
     datePicker: 'Date Picker',
     dateTimePicker: 'Date Time Picker',
     fileUpload: 'File Upload',
-    fileUploadTip: 'Supported formats: jpg/png/pdf/docx/xlsx, max 10MB',
+    fileUploadTip: 'Supported formats: jpg/png/pdf/docx/xlsx. Up to 10 files, 10MB each.',
     /** form-create fcUpload button (overrides library default Chinese fallback) */
     clickToUpload: 'Upload',
     yes: 'Yes',
@@ -790,6 +790,10 @@ export default {
     componentDefaultValuePlaceholder: 'Select a default from Options',
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
     uploadCannotDownload: 'Can not download',
+    uploadMaxFiles: 'Max files',
+    uploadMaxFilesHint: 'Default 10. Set 1 for a single file. Each file can be up to 10MB. At most 3 uploads run at once.',
+    uploadGuideLinkAria: 'Open upload field guidelines',
+    uploadLimitExceed: 'Maximum {limit} files allowed',
     subTablePermission: {
       allowAdd: 'Allow Add',
       allowEdit: 'Allow Edit',

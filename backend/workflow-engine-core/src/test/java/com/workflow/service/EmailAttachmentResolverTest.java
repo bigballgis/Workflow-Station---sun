@@ -71,6 +71,30 @@ class EmailAttachmentResolverTest {
     }
 
     @Test
+    void resolve_mainFileField_arrayOfFiles_downloadsEach() {
+        String url1 = "/api/v1/upload/files/a.pdf?originalName=a.pdf";
+        String url2 = "/api/v1/upload/files/b.pdf?originalName=b.pdf";
+        when(fileClient.downloadByStoredUrl(url1)).thenReturn(Optional.of(
+                new DeveloperWorkstationFileClient.DownloadedFile(
+                        "a.pdf", "aa".getBytes(StandardCharsets.UTF_8))));
+        when(fileClient.downloadByStoredUrl(url2)).thenReturn(Optional.of(
+                new DeveloperWorkstationFileClient.DownloadedFile(
+                        "b.pdf", "bb".getBytes(StandardCharsets.UTF_8))));
+
+        List<Map<String, Object>> files = List.of(
+                Map.of("url", url1, "name", "a.pdf"),
+                Map.of("url", url2, "name", "b.pdf"));
+
+        List<EmailSendOptions.EmailAttachmentPart> parts = resolver.resolve(
+                "[{\"source\":\"main\",\"fieldName\":\"invoice_file\"}]",
+                Map.of("invoice_file", files));
+
+        assertThat(parts).hasSize(2);
+        assertThat(parts.get(0).name()).isEqualTo("a.pdf");
+        assertThat(parts.get(1).name()).isEqualTo("b.pdf");
+    }
+
+    @Test
     void resolve_ignoresLegacyNameContent() {
         List<EmailSendOptions.EmailAttachmentPart> parts = resolver.resolve(
                 "[{\"name\":\"old.pdf\",\"content\":\"AAAA\"}]",

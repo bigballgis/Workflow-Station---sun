@@ -330,11 +330,12 @@
                     class="ro-value"
                   >
                     <span
-                      v-if="formData[col.field]"
+                      v-for="item in (uploadFileLists[col.field] || [])"
+                      :key="item.url"
                       class="upload-download-link"
-                      @click="previewDialogFile(col)"
-                    >{{ getFilenameFromUrl(formData[col.field], uploadNames[col.field]) }}</span>
-                    <span v-else>-</span>
+                      @click="previewDialogFile(col, item.url)"
+                    >{{ item.name }}</span>
+                    <span v-if="!(uploadFileLists[col.field] || []).length">-</span>
                   </div>
                   <!-- upload -->
                   <div
@@ -344,9 +345,15 @@
                     <el-upload
                       :action="col.props?.action && col.props.action !== '/' ? col.props.action : (uploadUrl || '/api/v1/upload')"
                       :accept="col.props?.accept || ''"
-                      :show-file-list="false"
-                      :on-success="(res: any, file: any) => handleUploadSuccess(res, file, col)"
+                      :limit="maxFilesOf(col)"
+                      :multiple="isMultiple(col)"
+                      :file-list="uploadFileLists[col.field] || []"
+                      :http-request="httpRequest"
+                      :on-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
+                      :on-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
+                      :on-exceed="() => handleUploadExceed(col)"
                       :on-error="() => handleUploadError(col)"
+                      :on-preview="(file: { url?: string }) => previewDialogFile(col, file.url)"
                     >
                       <el-button
                         size="small"
@@ -355,17 +362,6 @@
                         <el-icon><Upload /></el-icon> {{ t('subTable.upload') }}
                       </el-button>
                     </el-upload>
-                    <el-tag
-                      v-if="uploadNames[col.field]"
-                      size="small"
-                      type="success"
-                      class="upload-filename-tag"
-                      closable
-                      @click="previewDialogFile(col)"
-                      @close="clearUpload(col)"
-                    >
-                      {{ uploadNames[col.field] }}
-                    </el-tag>
                   </div>
 
                   <!-- colorPicker -->
@@ -665,7 +661,7 @@ import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
-import { getFilenameFromUrl } from '@/composables/subTableField/useSubTableFileDownload'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
 import { FILE_PREVIEW_PLAYLIST_KEY, openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
 import { uploadPropsBlockDownload } from '@/utils/filePreview'
 import {
@@ -935,23 +931,28 @@ const {
 
 // ─── Upload helpers ───────────────────────────────────────────────────────────
 const {
-  uploadNames,
+  uploadFileLists,
+  httpRequest,
+  maxFilesOf,
+  isMultiple,
   resetUploadNames,
   backfillUploadNames,
   handleUploadSuccess,
+  handleUploadRemove,
   handleUploadError,
-  clearUpload,
+  handleUploadExceed,
 } = useSubTableDialogUpload(formData, () => props.columns, t)
 
 const previewPlaylist = inject(FILE_PREVIEW_PLAYLIST_KEY, null)
 
-function previewDialogFile(col: DialogColumn) {
-  const url = String(formData.value[col.field] || '')
-  if (!url) return
+function previewDialogFile(col: DialogColumn, url?: string) {
+  const links = extractFileLinks(formData.value[col.field])
+  const hit = url ? links.find((l) => l.url === url) : links[0]
+  if (!hit) return
   openFilePreviewFromList(
     {
-      url,
-      name: getFilenameFromUrl(url, uploadNames.value[col.field]),
+      url: hit.url,
+      name: hit.name,
       cannotDownload: uploadPropsBlockDownload(col.props),
     },
     previewPlaylist?.collect() ?? [],

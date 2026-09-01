@@ -55,7 +55,6 @@ export function resolveListColumnFieldType(
 const DEFAULT_UPLOAD_PROPS = {
   action: '/api/v1/upload',
   accept: '',
-  multiple: false,
 } as const
 
 /** Merge a subListViews field column with optional subForm rule/base column metadata. */
@@ -80,7 +79,9 @@ export function mergeListViewFieldColumn(
   if (type === 'upload') {
     if (props.action == null) props.action = fieldRule?.props?.action ?? DEFAULT_UPLOAD_PROPS.action
     if (props.accept == null) props.accept = fieldRule?.props?.accept ?? DEFAULT_UPLOAD_PROPS.accept
-    if (props.multiple == null) props.multiple = fieldRule?.props?.multiple ?? DEFAULT_UPLOAD_PROPS.multiple
+    if (fieldRule?.props?.multiple != null && props.multiple == null) props.multiple = fieldRule.props.multiple
+    if (fieldRule?.props?.maxFiles != null && props.maxFiles == null) props.maxFiles = fieldRule.props.maxFiles
+    if (fieldRule?.props?.limit != null && props.limit == null) props.limit = fieldRule.props.limit
     if (fieldRule?.props?.fileNameTargetField != null) {
       props.fileNameTargetField = fieldRule.props.fileNameTargetField
     }

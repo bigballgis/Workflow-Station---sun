@@ -33,6 +33,7 @@ import OwnerConfigEditor from './components/designer/OwnerConfigEditor.vue'
 import FormControlTypeSelect from './components/designer/FormControlTypeSelect.vue'
 import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.vue'
 import SensitiveMaskPropsEditor from './components/designer/SensitiveMaskPropsEditor.vue'
+import UploadMaxFilesEditor from './components/designer/UploadMaxFilesEditor.vue'
 import SensitiveMaskedInput from './components/designer/SensitiveMaskedInput.vue'
 import MiAssignmentPlaceholderWidget from './components/designer/MiAssignmentPlaceholderWidget.vue'
 import HermesValidate from './components/designer/HermesValidate.vue'
@@ -126,6 +127,7 @@ FcDesigner.addMenu({
 
 // Sensitive mask: props panel editor + Input display wrapper (Preview / canvas).
 FcDesigner.component('SensitiveMaskPropsEditor', SensitiveMaskPropsEditor)
+FcDesigner.component('UploadMaxFilesEditor', UploadMaxFilesEditor)
 FcDesigner.component('input', SensitiveMaskedInput)
 
 // Register the subTable drag rule so it appears in the designer left menu

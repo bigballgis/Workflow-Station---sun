@@ -1,17 +1,26 @@
 // ---------------------------------------------------------------------------
 // FieldRenderer — upload URL resolution + file list (Task 6.8, Req 24)
-// Behaviour copied verbatim from FieldRenderer.vue. Registers the modelValue
-// watch that backfills the file list from a URL string.
 // ---------------------------------------------------------------------------
 import { computed, inject, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import type { FieldRendererProps, FieldRendererEmit } from './types'
 import { FILE_PREVIEW_PLAYLIST_KEY, openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
 import { isCannotDownload } from '@/utils/filePreview'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
+import {
+  DEFAULT_UPLOAD_MAX_FILES,
+  joinTargetFileNames,
+  persistFromUploadFileList,
+  toElUploadFileList,
+  uploadValueFingerprint,
+} from '@platform-shared/upload/uploadFieldValue'
+import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
 
-// Priority: props.uploadUrl → field.uploadUrl → default '/api/v1/upload'
 const DEFAULT_UPLOAD_URL = '/api/v1/upload'
 
 export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmit) {
+  const { t } = useI18n()
   const playlist = inject(FILE_PREVIEW_PLAYLIST_KEY, null)
   const resolvedUploadUrl = computed(() => {
     if (props.uploadUrl) return props.uploadUrl
@@ -19,60 +28,62 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
     return DEFAULT_UPLOAD_URL
   })
 
-  // Upload file list (local state for display)
-  const fileList = ref<Array<{ name: string; url: string; uid?: number }>>([])
+  const uploadLimit = computed(() => props.field.uploadLimit ?? DEFAULT_UPLOAD_MAX_FILES)
+  const uploadMultiple = computed(() => uploadLimit.value > 1)
+  const fileList = ref<Array<{ name: string; url: string; status?: string }>>([])
 
-  function extractFileNameFromUrl(url: string): string {
-    if (!url) return ''
-    try {
-      const parsed = new URL(url, window.location.origin)
-      const fromQuery = parsed.searchParams.get('originalName')
-        || parsed.searchParams.get('fileName')
-        || parsed.searchParams.get('filename')
-        || parsed.searchParams.get('name')
-      if (fromQuery) return decodeURIComponent(fromQuery)
-      const pathPart = parsed.pathname.split('/').pop() || url
-      return decodeURIComponent(pathPart)
-    } catch {
-      const [pathPart] = String(url).split('?')
-      return decodeURIComponent(pathPart.split('/').pop() || url)
-    }
-  }
-
-  // Initialise file list from modelValue when it's a URL string
   watch(
     () => props.modelValue,
     (val) => {
-      if (props.field.type === 'upload' && val && fileList.value.length === 0) {
-        const url = String(val)
-        const targetField = (props.field as any).fileNameTargetField
-        const targetName = targetField ? props.formData?.[targetField] : undefined
-        const fileName = (typeof targetName === 'string' && targetName.trim().length > 0)
-          ? targetName
-          : extractFileNameFromUrl(url)
-        fileList.value = [{ name: fileName, url }]
-      }
+      if (props.field.type !== 'upload') return
+      const next = toElUploadFileList(val)
+      if (uploadValueFingerprint(fileList.value) === uploadValueFingerprint(next)) return
+      fileList.value = next
     },
     { immediate: true },
   )
 
-  function onUploadSuccess(response: any, file: any) {
-    const url = response?.data?.url || ''
-    fileList.value = [{ name: file.name, url, uid: file.uid }]
-    emit('update:modelValue', url)
+  function persistFromList(list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) {
+    const stored = persistFromUploadFileList(list, uploadLimit.value)
+    fileList.value = toElUploadFileList(stored)
+    emit('update:modelValue', stored)
+    const target = props.field.fileNameTargetField
+    if (target && props.formData) {
+      props.formData[target] = joinTargetFileNames(extractFileLinks(stored))
+    }
+  }
+
+  function onUploadSuccess(
+    response: unknown,
+    file: { name?: string; url?: string; uid?: number },
+    uploadFiles?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+  ) {
+    persistFromList(uploadFiles ?? [...fileList.value, {
+      url: String(file.url || ''),
+      name: String(file.name || ''),
+      status: 'success',
+      response,
+    }])
     emit('upload:success', response, file, props.field.key)
   }
 
-  function onUploadRemove(file: any) {
-    fileList.value = []
-    emit('update:modelValue', '')
+  function onUploadRemove(
+    file: unknown,
+    uploadFiles?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+  ) {
+    persistFromList(uploadFiles ?? [])
     emit('upload:remove', file, props.field.key)
   }
 
+  function onUploadExceed() {
+    ElMessage.warning(t('upload.limitExceed', { limit: uploadLimit.value }))
+  }
+
   function previewCurrentFile(file?: { name?: string; url?: string }) {
-    const url = file?.url || (typeof props.modelValue === 'string' ? props.modelValue : '')
+    const links = extractFileLinks(props.modelValue)
+    const url = file?.url || links[0]?.url || ''
     if (!url) return
-    const name = file?.name || extractFileNameFromUrl(url)
+    const name = file?.name || links.find((l) => l.url === url)?.name || links[0]?.name || url
     openFilePreviewFromList(
       { url, name, cannotDownload: isCannotDownload(props.field.cannotDownload) },
       playlist?.collect() ?? [],
@@ -81,9 +92,13 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
 
   return {
     resolvedUploadUrl,
+    uploadLimit,
+    uploadMultiple,
     fileList,
+    httpRequest: queuedUploadRequest,
     onUploadSuccess,
     onUploadRemove,
+    onUploadExceed,
     previewCurrentFile,
   }
 }

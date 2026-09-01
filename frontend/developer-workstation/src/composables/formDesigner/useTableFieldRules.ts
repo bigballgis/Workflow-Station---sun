@@ -287,8 +287,9 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
           props: {
             action: '/api/v1/upload',
             accept: '',
-            limit: 1,
-            multiple: false,
+            maxFiles: 10,
+            limit: 10,
+            multiple: true,
             listType: 'text',
             uploadText: t('form.clickToUpload'),
             tip: t('form.fileUploadTip')
