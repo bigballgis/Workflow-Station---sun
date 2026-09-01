@@ -107,6 +107,8 @@
 
 .page-container:has(.list-data-grid-scroll) > .page-header,
 .page-container:has(.list-data-grid-scroll) > .search-card,
+.page-container:has(.list-data-grid-scroll) > .filter-card,
+.page-container:has(.list-data-grid-scroll) > .batch-bar,
 .portal-content > *:has(.list-data-grid-scroll):not(.page-stack) > .page-header {
   flex-shrink: 0;
 }
