@@ -44,6 +44,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/function-unit': [PERMISSIONS.SYSTEM_ADMIN],
   '/automation-pieces': [PERMISSIONS.SYSTEM_ADMIN],
   '/automation-flows': [PERMISSIONS.SYSTEM_ADMIN],
+  '/automation-runs': [PERMISSIONS.SYSTEM_ADMIN],
   '/monitor': [PERMISSIONS.SYSTEM_ADMIN],
   '/audit': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
   '/audit/admin-center': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],

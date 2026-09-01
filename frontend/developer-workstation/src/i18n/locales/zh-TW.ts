@@ -125,8 +125,6 @@ export default {
   },
   automation: {
     title: '自動化',
-    tabFlows: '流程',
-    tabRuns: '執行歷史',
     sessionErrorTitle: '自動化功能不可用',
     sessionBridgeDisabled: '本環境未開啟自動化橋接服務，請聯絡平台管理員。',
     sessionUnauthorized: '工作階段已過期，請重新登入後重試。',
@@ -173,15 +171,7 @@ export default {
     loadFailed: '流程列表載入失敗',
     backToList: '返回自動化',
     flowMissing: '該流程（{id}）已不存在或不可存取。',
-    runsAllFlows: '全部流程',
-    runsFlow: '流程',
-    runsStatus: '狀態',
-    runsStarted: '開始時間',
-    runsDuration: '耗時',
-    runsEmpty: '暫無執行記錄',
-    runsLoadFailed: '執行歷史載入失敗',
-    runsDetailTitle: '執行詳情',
-    runsDetailFailed: '執行詳情載入失敗'
+    runsMovedHint: '執行記錄已移至 Admin Center → 自動化執行記錄。'
   },
   functionUnit: {
     automation: '自動化',

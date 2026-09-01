@@ -131,6 +131,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "automation-runs",
+        name: "AutomationRuns",
+        component: () => import("@/views/automation-run/index.vue"),
+        meta: {
+          titleKey: "menu.automationRuns",
+          icon: "Tickets",
+          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+        },
+      },
+      {
         path: "audit",
         name: "Audit",
         redirect: "/audit/admin-center",

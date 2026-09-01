@@ -839,6 +839,7 @@ Action 列可继续 `fixed="right"`（§6.6），不代替共享表头。
 | `/relation-tables/data`、`/relation-tables/data/:fu` | `RelationTableDataGrid.vue` |
 | `/automation-pieces` | `automation-piece/index.vue` |
 | `/automation-flows` | `automation-flow/index.vue` |
+| `/automation-runs` | `automation-run/index.vue` |
 
 **Admin — exempt**
 

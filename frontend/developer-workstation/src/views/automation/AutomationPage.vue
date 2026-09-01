@@ -2,15 +2,13 @@
   Automation — DW first-level page (FR-B2).
 
   Flows are designed here (standalone, no longer inside a Function Unit tab); BPMN
-  service tasks reference them by business key only. Two tabs:
-    - Flows: list / create / rename / publish / enable / delete, click-through to
-      the embedded builder (/automation/:flowId).
-    - Runs: execution history from the AP runs API.
+  service tasks reference them by business key only: list / create / rename /
+  publish / enable / delete, click-through to the embedded builder (/automation/:flowId).
 
-  Cross-environment flow migration and the piece catalog are NOT here: they are
-  production operations, and the Developer Workstation is dev-only (it is absent
-  from deploy/k8s/kustomization.yaml). Both live in the Admin Center instead
-  (/automation-flows, /automation-pieces).
+  Run history, cross-environment flow migration and the piece catalog are NOT here:
+  they are production operations, and the Developer Workstation is dev-only (it is
+  absent from deploy/k8s/kustomization.yaml). All three live in the Admin Center
+  instead (/automation-runs, /automation-flows, /automation-pieces).
 
   Session chain: admin-center bridge mints {token, projectId}; all AP calls go
   through the Kong /api/ap prefix with that Bearer token.
@@ -36,31 +34,22 @@
       </template>
     </el-result>
 
-    <el-tabs
+    <div
       v-else-if="session"
-      v-model="activeTab"
-      class="automation-page__tabs"
+      class="automation-page__panel"
     >
-      <el-tab-pane
-        :label="t('automation.tabFlows')"
-        name="flows"
-      >
-        <FlowsPanel
-          v-if="activeTab === 'flows'"
-          :session="session"
-          @session-expired="loadSession"
-        />
-      </el-tab-pane>
-      <el-tab-pane
-        :label="t('automation.tabRuns')"
-        name="runs"
-      >
-        <RunsPanel
-          v-if="activeTab === 'runs'"
-          :session="session"
-        />
-      </el-tab-pane>
-    </el-tabs>
+      <el-alert
+        class="automation-page__moved"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="t('automation.runsMovedHint')"
+      />
+      <FlowsPanel
+        :session="session"
+        @session-expired="loadSession"
+      />
+    </div>
   </div>
 </template>
 
@@ -69,14 +58,12 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchServiceTaskSession, type ServiceTaskSession } from '@/api/automation'
 import FlowsPanel from './components/FlowsPanel.vue'
-import RunsPanel from './components/RunsPanel.vue'
 
 const { t } = useI18n()
 
 const session = ref<ServiceTaskSession | null>(null)
 const loadingSession = ref(false)
 const sessionError = ref('')
-const activeTab = ref('flows')
 
 async function loadSession() {
   loadingSession.value = true
@@ -105,14 +92,18 @@ onMounted(loadSession)
 
 <style scoped lang="scss">
 .automation-page {
-  // .page-container 撑满内容区；tabs 卡片吃掉剩余高度并自行滚动
-  .automation-page__tabs {
+  // .page-container 撑满内容区；卡片吃掉剩余高度并自行滚动
+  .automation-page__panel {
     flex: 1;
     min-height: 320px;
     background: #fff;
     border-radius: 4px;
-    padding: 8px 20px 20px;
+    padding: 16px 20px 20px;
     overflow-y: auto;
+  }
+
+  .automation-page__moved {
+    margin-bottom: 14px;
   }
 }
 </style>

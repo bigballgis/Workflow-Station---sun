@@ -156,7 +156,8 @@
 | ID | 需求 | 优先级 |
 |---|---|---|
 | FR-B05 | DW 左侧新增 **Automation** 一级入口（当前 DW 无一级功能导航，需要同时引入侧边导航容器） | 必须 |
-| FR-B06 | 该入口下可完成 flow 的**列表、创建、编辑、发布/启停、删除、查看运行历史** | 必须 |
+| FR-B06 | 该入口下可完成 flow 的**列表、创建、编辑、发布/启停、删除** | 必须 |
+| FR-B06a | **修订（2026-08-31）**：「查看运行历史」不再在 DW。运行记录是生产运维视角，而 DW 只在 dev 存在（不进 `deploy/k8s/kustomization.yaml`），故与 piece 目录、flow 迁移一样迁到 Admin Center 的 `/automation-runs`；DW Automation 页只留设计期能力 | 必须 |
 | FR-B07 | 入口沿用 FU 的四角色（`SYS_ADMIN` / `TECH_LEAD` / `TEAM_LEAD` / `DEVELOPER`，[D-7](#d-7)），与 `FunctionUnits` 路由的 `requiredRoles` 保持一致 | 必须 |
 | FR-B15 | **DW 路由守卫的 `resolveWorkspaceAccess()` 兜底不适用于 Automation**：该兜底是给"无 DW 能力角色、但所属团队拥有 FU"的成员开的只读通道，其判定依据是 team→FU 归属；flow 已是平台级资源（FR-B02）、与 FU 解耦（[D-4](#d-4)），该依据不再成立。无四角色之一者一律 403，不得因团队拥有某个 FU 就看到全平台 flow | 必须 |
 | FR-B16 | flow **不做 BU/Role 级行数据可见性管控**（[D-7](#d-7)）：四角色是页面级准入，进入后可见全部 flow。若日后需要行级隔离，另立需求 | 必须 |

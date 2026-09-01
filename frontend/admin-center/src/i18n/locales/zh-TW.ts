@@ -132,7 +132,8 @@ export default {
     biRbacMapping: 'RBAC 對應',
     // 下两键既是左侧菜单项，也被审计页当作资源类型标签使用（auditMappings.ts）。
     automationPieces: '自動化組件',
-    automationFlows: '自動化流程遷移'
+    automationFlows: '自動化流程遷移',
+    automationRuns: '自動化執行記錄'
   },
   automationPiece: {
     title: '自動化組件',
@@ -216,6 +217,32 @@ export default {
     stepKindLoop: '迴圈',
     stepKindCode: '程式碼',
     stepKindUnknown: '未知類型'
+  },
+  automationRun: {
+    title: '自動化執行記錄',
+    searchPlaceholder: '搜尋流程名 / 執行 ID / flowId / 遷移鍵',
+    total: '共 {count} 次執行',
+    flow: '流程',
+    status: '結果',
+    started: '開始時間',
+    duration: '耗時',
+    triggeredBy: '觸發人',
+    failedStep: '失敗步驟',
+    project: '專案',
+    statusSucceeded: '成功',
+    statusRunning: '執行中',
+    statusQueued: '排隊中',
+    statusPaused: '已暫停',
+    statusFailed: '失敗',
+    statusTimeout: '逾時',
+    statusCanceled: '已取消',
+    statusInternalError: '內部錯誤',
+    statusQuotaExceeded: '超出配額',
+    statusMemoryExceeded: '超出記憶體上限',
+    statusLogSizeExceeded: '日誌超出上限',
+    loadFailed: '執行記錄載入失敗',
+    detailTitle: '執行詳情',
+    detailUnavailable: '取不到該次執行的逐步驟資料(不在目前可見的專案內,或執行資料已過保留期)'
   },
   dashboard: {
     totalUsers: '使用者總數',

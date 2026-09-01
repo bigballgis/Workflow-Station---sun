@@ -125,8 +125,6 @@ export default {
   },
   automation: {
     title: 'Automation',
-    tabFlows: 'Flows',
-    tabRuns: 'Run History',
     sessionErrorTitle: 'Automation is unavailable',
     sessionBridgeDisabled: 'The automation bridge is disabled in this environment. Contact your platform administrator.',
     sessionUnauthorized: 'Your session has expired. Sign in again and retry.',
@@ -173,15 +171,7 @@ export default {
     loadFailed: 'Failed to load flows',
     backToList: 'Back to Automation',
     flowMissing: 'This flow ({id}) no longer exists or is not accessible.',
-    runsAllFlows: 'All flows',
-    runsFlow: 'Flow',
-    runsStatus: 'Status',
-    runsStarted: 'Started',
-    runsDuration: 'Duration',
-    runsEmpty: 'No runs yet',
-    runsLoadFailed: 'Failed to load run history',
-    runsDetailTitle: 'Run Detail',
-    runsDetailFailed: 'Failed to load the run detail'
+    runsMovedHint: 'Run history moved to Admin Center → Automation Runs.'
   },
   functionUnit: {
     automation: 'Automation',

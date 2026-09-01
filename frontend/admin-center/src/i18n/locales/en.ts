@@ -132,7 +132,8 @@ export default {
     biRbacMapping: 'RBAC Mapping',
     // 下两键既是左侧菜单项，也被审计页当作资源类型标签使用（auditMappings.ts）。
     automationPieces: 'Automation Pieces',
-    automationFlows: 'Automation Flow Migration'
+    automationFlows: 'Automation Flow Migration',
+    automationRuns: 'Automation Runs'
   },
   automationPiece: {
     title: 'Automation Pieces',
@@ -216,6 +217,32 @@ export default {
     stepKindLoop: 'Loop',
     stepKindCode: 'Code',
     stepKindUnknown: 'Unknown type'
+  },
+  automationRun: {
+    title: 'Automation Runs',
+    searchPlaceholder: 'Search flow name / run id / flow id / migration key',
+    total: '{count} runs',
+    flow: 'Flow',
+    status: 'Status',
+    started: 'Started',
+    duration: 'Duration',
+    triggeredBy: 'Triggered by',
+    failedStep: 'Failed step',
+    project: 'Project',
+    statusSucceeded: 'Succeeded',
+    statusRunning: 'Running',
+    statusQueued: 'Queued',
+    statusPaused: 'Paused',
+    statusFailed: 'Failed',
+    statusTimeout: 'Timed out',
+    statusCanceled: 'Canceled',
+    statusInternalError: 'Internal error',
+    statusQuotaExceeded: 'Quota exceeded',
+    statusMemoryExceeded: 'Memory limit exceeded',
+    statusLogSizeExceeded: 'Log size exceeded',
+    loadFailed: 'Failed to load run history',
+    detailTitle: 'Run Detail',
+    detailUnavailable: 'The step-by-step data for this run is not available (it belongs to another project, or its execution data is past the retention period)'
   },
   dashboard: {
     totalUsers: 'Total Users',

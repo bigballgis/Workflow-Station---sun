@@ -125,8 +125,6 @@ export default {
   },
   automation: {
     title: '自动化',
-    tabFlows: '流程',
-    tabRuns: '执行历史',
     sessionErrorTitle: '自动化功能不可用',
     sessionBridgeDisabled: '本环境未开启自动化桥接服务，请联系平台管理员。',
     sessionUnauthorized: '会话已过期，请重新登录后重试。',
@@ -173,15 +171,7 @@ export default {
     loadFailed: '流程列表加载失败',
     backToList: '返回自动化',
     flowMissing: '该流程（{id}）已不存在或不可访问。',
-    runsAllFlows: '全部流程',
-    runsFlow: '流程',
-    runsStatus: '状态',
-    runsStarted: '开始时间',
-    runsDuration: '耗时',
-    runsEmpty: '暂无执行记录',
-    runsLoadFailed: '执行历史加载失败',
-    runsDetailTitle: '执行详情',
-    runsDetailFailed: '执行详情加载失败'
+    runsMovedHint: '执行记录已移至 Admin Center → 自动化运行记录。'
   },
   functionUnit: {
     automation: '自动化',

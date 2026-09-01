@@ -170,6 +170,18 @@
               {{ t('menu.automationFlows') }}
             </template>
           </el-menu-item>
+
+          <!-- Automation Runs - flow execution history, moved here from the Developer Workstation
+               (dev-only) because triaging a failed automation is a production operation. Read-only. -->
+          <el-menu-item
+            v-if="isSystemAdmin"
+            index="/automation-runs"
+          >
+            <el-icon class="nav-anim nav-anim--pop"><Tickets /></el-icon>
+            <template #title>
+              {{ t('menu.automationRuns') }}
+            </template>
+          </el-menu-item>
         </el-menu>
       </el-scrollbar>
 
@@ -230,7 +242,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Fold, Expand,
-  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Cpu, Share
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Cpu, Share, Tickets
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'

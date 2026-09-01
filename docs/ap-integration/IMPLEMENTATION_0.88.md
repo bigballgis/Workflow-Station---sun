@@ -188,7 +188,9 @@ UI 回到 AC 后前后端同应用，**不再需要** FR-E06 设想的 DW→AC �
 **审计（FR-E07）**：`AdminAuditAspect` 的逐控制器白名单本就覆盖 `AutomationFlowController` /
 `AutomationPieceController`，本次未新增控制器、未改路由 ⇒ 白名单无需变更；9 个切面测试全绿。
 
-**DW 保留的是设计期能力**：Automation 页的 Flows / Runs 两个 tab + 嵌入式 builder。
+**DW 保留的是设计期能力**：Automation 页的 flow 列表 + 嵌入式 builder。
+
+> **2026-08-31 修订**：Runs tab 已从 DW 移除，运行记录迁到 Admin Center `/automation-runs`（后端 `AutomationFlowRunController`，读 AP `flow_run` 共库、详情经 AP API）。理由与 piece 目录 /flow 迁移一致：排障是生产运维动作，而 DW 只在 dev 存在。上表 FR-B2 行记录的是 0.88 当时的实现，保留原样。
 
 ---
 
