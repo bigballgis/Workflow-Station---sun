@@ -12,7 +12,8 @@ import { errorTranslator } from '@/utils/errorTranslator'
 import { storeToRefs } from 'pinia'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import type { TableInstance } from 'element-plus'
-import { queryAuditLogList, type AuditLog } from '@/api/audit'
+import { queryAuditLogList, type AuditListRow, type AuditLog } from '@/api/audit'
+import { isAbortError } from '@/api/isAbortError'
 import { useAuditStore } from '@/stores/audit'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 import * as XLSX from 'xlsx'
@@ -28,6 +29,8 @@ import {
   getAfterData,
   formatJsonHighlight,
 } from './audit/auditJsonDiff'
+import { useAuditAutoRefresh } from './audit/useAuditAutoRefresh'
+import { useAuditDetailLoad } from './audit/useAuditDetailLoad'
 
 export function useAudit() {
   const { t } = useI18n()
@@ -41,7 +44,7 @@ export function useAudit() {
   const loading = storeLoading // alias for template compatibility
   const SELECTION_COL_WIDTH = 40
   const ACTIONS_COL_WIDTH = 80
-  const grid = useAdminListGrid<AuditLog>({
+  const grid = useAdminListGrid<AuditListRow>({
     storageKey: 'admin-list-layout:audit',
     extraWidth: SELECTION_COL_WIDTH + ACTIONS_COL_WIDTH,
   })
@@ -58,26 +61,22 @@ export function useAudit() {
   // ==================== Local UI State ====================
 
   const exporting = ref(false)
-  const detailDialogVisible = ref(false)
-  const currentLog = ref<AuditLog | null>(null)
+  const { detailDialogVisible, detailLoading, currentLog, showDetailById } = useAuditDetailLoad()
   const tableRef = ref<TableInstance>()
-  const selectedRows = ref<AuditLog[]>([])
+  const selectedRows = ref<AuditListRow[]>([])
+  let searchAbort: AbortController | null = null
 
-  // ==================== Auto-refresh ====================
+  const { refreshCountdown, autoRefreshPaused, toggleAutoRefresh, startAutoRefresh } =
+    useAuditAutoRefresh({
+      intervalSeconds: 60,
+      shouldSkip: () => detailDialogVisible.value,
+      run: () => { void handleSearch() },
+    })
 
-  const AUTO_REFRESH_SECONDS = 30
-  const refreshCountdown = ref(AUTO_REFRESH_SECONDS)
-  const autoRefreshPaused = ref(false)
-  let refreshTimer: ReturnType<typeof setInterval> | null = null
-
-  const stopAutoRefresh = () => {
-    if (refreshTimer !== null) {
-      clearInterval(refreshTimer)
-      refreshTimer = null
-    }
-  }
-
-  const handleSearch = async () => {
+  async function handleSearch() {
+    searchAbort?.abort()
+    const controller = new AbortController()
+    searchAbort = controller
     const seq = grid.beginQuery()
     loading.value = true
     startAutoRefresh()
@@ -85,7 +84,7 @@ export function useAudit() {
       const pageResult = await queryAuditLogList({
         ...store.buildQueryRequest(),
         ...grid.buildQuery(),
-      })
+      }, { signal: controller.signal })
       if (!grid.isCurrentQuery(seq)) return
       grid.applyPage(pageResult, 'audit-logs/list-query response is missing its column declaration')
       logs.value = pageResult.content
@@ -93,37 +92,12 @@ export function useAudit() {
       store.sort.field = grid.sort.field || 'createdAt'
       store.sort.order = grid.sort.direction === 'ASC' ? 'ascending' : 'descending'
     } catch (error: unknown) {
-      if (!grid.isCurrentQuery(seq)) return
+      if (isAbortError(error) || !grid.isCurrentQuery(seq)) return
       if (!(error as { response?: unknown })?.response) {
         notifyError(error instanceof Error ? error.message : t('audit.emptyText'))
       }
     } finally {
       if (grid.isCurrentQuery(seq)) loading.value = false
-    }
-  }
-
-  const startAutoRefresh = () => {
-    stopAutoRefresh()
-    refreshCountdown.value = AUTO_REFRESH_SECONDS
-    if (autoRefreshPaused.value) return
-    refreshTimer = setInterval(() => {
-      refreshCountdown.value -= 1
-      if (refreshCountdown.value <= 0) {
-        if (!detailDialogVisible.value) {
-          handleSearch()
-        } else {
-          refreshCountdown.value = AUTO_REFRESH_SECONDS
-        }
-      }
-    }, 1000)
-  }
-
-  const toggleAutoRefresh = () => {
-    autoRefreshPaused.value = !autoRefreshPaused.value
-    if (autoRefreshPaused.value) {
-      stopAutoRefresh()
-    } else {
-      startAutoRefresh()
     }
   }
 
@@ -216,7 +190,7 @@ export function useAudit() {
     handleSearch()
   }
 
-  const handleSelectionChange = (rows: AuditLog[]) => {
+  const handleSelectionChange = (rows: AuditListRow[]) => {
     selectedRows.value = rows
   }
 
@@ -227,7 +201,7 @@ export function useAudit() {
 
   // ==================== Export ====================
 
-  const exportAsCsv = (data: AuditLog[], filename: string) => {
+  const exportAsCsv = (data: Array<AuditListRow | AuditLog>, filename: string) => {
     const fieldLabels = ALL_EXPORT_FIELDS.value
     const { headers, rows } = buildExportRows(store.sortLogs(data), fieldLabels)
     downloadBlob(buildCsvBlob(headers, rows), filename)
@@ -237,14 +211,14 @@ export function useAudit() {
     exportDialogVisible.value = true
   }
 
-  const resolveOperatorUsername = (row: AuditLog): string => {
+  const resolveOperatorUsername = (row: AuditListRow | AuditLog): string => {
     const raw = row.username ?? (row as AuditLog & { userName?: string }).userName
     const name = typeof raw === 'string' ? raw.trim() : ''
     if (name && name.toLowerCase() !== 'unknown') return name
     return '-'
   }
 
-  const getRowValue = (row: AuditLog, key: string): string => {
+  const getRowValue = (row: AuditListRow | AuditLog, key: string): string => {
     switch (key) {
       case 'action':       return actionText(row.action)
       case 'resourceType': return resourceTypeText(row.resourceType) || ''
@@ -270,7 +244,7 @@ export function useAudit() {
     URL.revokeObjectURL(url)
   }
 
-  const buildExportRows = (data: AuditLog[], fieldKeys: { key: string; label: string }[]) => {
+  const buildExportRows = (data: Array<AuditListRow | AuditLog>, fieldKeys: { key: string; label: string }[]) => {
     const headers = fieldKeys.map(f => f.label)
     const rows = data.map(row => fieldKeys.map(f => getRowValue(row, f.key)))
     return { headers, rows }
@@ -324,9 +298,9 @@ export function useAudit() {
 
     exporting.value = true
     try {
-      let dataToExport: AuditLog[]
+      let dataToExport: Array<AuditListRow | AuditLog>
       if (selectedRows.value.length > 0) {
-        dataToExport = store.sortLogs([...selectedRows.value])
+        dataToExport = store.sortLogs([...selectedRows.value] as AuditLog[])
       } else {
         dataToExport = await store.fetchAllLogsForExport()
       }
@@ -352,7 +326,7 @@ export function useAudit() {
     openExportDialog()
   }
 
-  const getPreviewContent = (row: AuditLog): string => {
+  const getPreviewContent = (row: AuditListRow): string => {
     return [
       `${t('audit.actionType')}: ${actionText(row.action)}`,
       `${t('audit.operator')}: ${row.username || '-'}`,
@@ -377,9 +351,8 @@ export function useAudit() {
 
   // ==================== Detail Dialog ====================
 
-  const showDetail = (log: AuditLog) => {
-    currentLog.value = log
-    detailDialogVisible.value = true
+  const showDetail = (log: AuditListRow): void => {
+    void showDetailById(log.id)
   }
 
   // ==================== Lifecycle ====================
@@ -400,7 +373,7 @@ export function useAudit() {
   })
 
   onUnmounted(() => {
-    stopAutoRefresh()
+    searchAbort?.abort()
   })
 
   // ==================== Return ====================
@@ -408,7 +381,7 @@ export function useAudit() {
   return {
     // State
     loading, exporting, logs, total, page, size,
-    detailDialogVisible, currentLog, dateRange,
+    detailDialogVisible, detailLoading, currentLog, dateRange,
     tableRef, selectedRows,
     query, resourceTypes, filterResourceTypes,
     SELECTION_COL_WIDTH, ACTIONS_COL_WIDTH,

@@ -5,6 +5,10 @@
     width="800px"
   >
     <div
+      v-loading="loading"
+      class="log-detail-body"
+    >
+    <div
       v-if="log"
       class="log-detail"
     >
@@ -137,6 +141,7 @@
         </div>
       </div>
     </div>
+    </div>
   </el-dialog>
 </template>
 
@@ -150,6 +155,7 @@ const { t } = useI18n()
 const props = defineProps<{
   modelValue: boolean
   log: AuditLog | null
+  loading?: boolean
   /** Pre-computed display helpers (passed from parent to keep logic centralized) */
   actionType: (action: string) => 'success' | 'warning' | 'info' | 'primary' | 'danger'
   actionText: (action: string) => string
@@ -191,6 +197,10 @@ watch(() => props.log, () => {
 </script>
 
 <style scoped>
+.log-detail-body {
+  min-height: 120px;
+}
+
 .log-detail {
   display: flex;
   flex-direction: column;

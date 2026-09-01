@@ -340,6 +340,7 @@
     <AuditDetailDialog
       v-model="detailDialogVisible"
       :log="currentLog"
+      :loading="detailLoading"
       :action-type="actionType"
       :action-text="actionText"
       :resource-type-text="resourceTypeText"
@@ -378,7 +379,7 @@ const { t } = useI18n()
 
 const {
   loading, exporting, logs,
-  detailDialogVisible, currentLog, dateRange,
+  detailDialogVisible, detailLoading, currentLog, dateRange,
   tableRef, selectedRows,
   query, filterResourceTypes,
   refreshCountdown, autoRefreshPaused, toggleAutoRefresh,

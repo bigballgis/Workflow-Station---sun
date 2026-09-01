@@ -6,6 +6,7 @@ import com.admin.component.SecurityAuditComponent;
 import com.admin.component.SecurityAuditComponent.*;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AdminAuditListQueryRequest;
+import com.admin.dto.response.AdminAuditListRow;
 import com.admin.entity.AuditLog;
 import com.admin.entity.SecurityPolicy;
 import com.admin.enums.AuditAction;
@@ -124,15 +125,23 @@ public class SecurityAuditController {
 
     @PostMapping("/audit-logs/list-query")
     @Operation(summary = "Query audit logs (true paging; column filters and sort)")
-    public ResponseEntity<AdminListPage<AuditLog>> queryAuditLogList(
+    public ResponseEntity<AdminListPage<AdminAuditListRow>> queryAuditLogList(
             @RequestBody @Valid AdminAuditListQueryRequest request) {
         return ResponseEntity.ok(adminAuditListQueryComponent.query(request));
     }
-    
+
     @GetMapping("/audit-logs/resource-types")
     @Operation(summary = "Get all resource type enum values (for frontend dropdown filter)")
     public ResponseEntity<List<String>> getResourceTypes() {
         return ResponseEntity.ok(ALL_RESOURCE_TYPES);
+    }
+
+    @GetMapping("/audit-logs/{id}")
+    @Operation(summary = "Get one audit log including before/after snapshots")
+    public ResponseEntity<AuditLog> getAuditLog(@PathVariable String id) {
+        return adminAuditListQueryComponent.findById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     private AuditQueryRequest toInternalRequest(AuditQueryRequestDto dto) {

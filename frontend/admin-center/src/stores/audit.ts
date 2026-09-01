@@ -6,7 +6,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
-import { queryAuditLogs, getAuditResourceTypes, type AuditLog, type AuditQueryRequest } from '@/api/audit'
+import { queryAuditLogs, getAuditResourceTypes, type AuditLog, type AuditListRow, type AuditQueryRequest } from '@/api/audit'
 
 interface SortState {
   field: string
@@ -15,7 +15,7 @@ interface SortState {
 
 export const useAuditStore = defineStore('audit', () => {
   // ==================== Data ====================
-  const logs = ref<AuditLog[]>([])
+  const logs = ref<AuditListRow[]>([])
   const total = ref(0)
   const loading = ref(false)
 

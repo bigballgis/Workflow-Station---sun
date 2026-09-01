@@ -2977,3 +2977,19 @@
     screenshots cannot-download-new-request-02-start-preview.png,
     cannot-download-new-request-04-application-preview.png.
 
+- id: "1579"
+  status: fixed
+  fixed_at: "2026-09-01"
+  severity: major
+  category: performance
+  summary: "Admin Center audit list-query returned TEXT snapshots and 30s auto-refresh stacked on slow networks"
+  file: "backend/admin-center/src/main/java/com/admin/component/AdminAuditListQueryComponent.java"
+  note: |
+    list-query now returns AdminAuditListRow (display columns only). TEXT
+    old/new/changeDetails load via GET /security/audit-logs/{id} on View.
+    Auto-refresh 60s, pauses when the tab is hidden, aborts in-flight list
+    and detail GETs (seq + AbortController so a slow first View cannot overwrite
+    a later row). Tests: AdminAuditListQuerySqlTest, FindByIdTest,
+    useAuditAutoRefresh, useAuditDetailLoad.
+    screenshots 2026-09-01_admin-audit-list.png, 2026-09-01_admin-audit-detail.png.
+
