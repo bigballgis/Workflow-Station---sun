@@ -25,9 +25,20 @@ import { applyUploadPropsFromRule, cannotDownloadFieldKeysFromForms } from '@/ut
 import { resolveSubTableSchemaByTableId } from '@/components/subTableAddDialogHelpers'
 import type { ApplicationDetailCtx } from './context'
 
+export type ExtractFieldsCtx = {
+  skipSubTable?: boolean
+  /**
+   * Sub-form canvas (Link Form Details / row dialog). Nested {@code subTable}
+   * widgets belong on this form and must survive {@code subForm} wrappers —
+   * skipSubTable is only for the MAIN canvas so those widgets are not promoted
+   * as duplicate standalone tables.
+   */
+  preserveNestedSubTables?: boolean
+}
+
 export interface ApplicationDetailFormSchemaFns {
   parseFormConfig: (configStr: string) => void
-  extractFieldsRecursive: (items: any[], ctx?: { skipSubTable?: boolean }) => FormField[]
+  extractFieldsRecursive: (items: any[], ctx?: ExtractFieldsCtx) => FormField[]
   resolveSubFormDesign: (binding: any, subForms?: Record<string, any>) => { formFields: FormField[]; formOptions?: Record<string, any> }
   convertFormCreateRule: (rule: any) => FormField | null
 }
@@ -69,7 +80,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
   // nested subTable widgets (e.g. link-form target subtable2) to the page-level field list.
   const extractFieldsRecursive = (
     items: any[],
-    ctx: { skipSubTable?: boolean } = {},
+    ctx: ExtractFieldsCtx = {},
   ): FormField[] => {
     const fields: FormField[] = []
     for (const item of items) {
@@ -275,7 +286,9 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
       }
       const childItems = getRuleChildren(item)
       if (childItems.length > 0) {
-        const childCtx = FC_SKIP_TYPES.has(item.type) ? { skipSubTable: true } : ctx
+        const childCtx = FC_SKIP_TYPES.has(item.type) && !ctx.preserveNestedSubTables
+          ? { ...ctx, skipSubTable: true }
+          : ctx
         if (FC_SKIP_TYPES.has(item.type) || (!isCardRule(item) && !isRowRule(item) && !isColRule(item) && !isTabsRule(item) && !isCollapseRule(item))) {
           fields.push(...extractFieldsRecursive(childItems, childCtx))
         }
@@ -304,7 +317,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
       }
     }
     return {
-      formFields: rule.length > 0 ? extractFieldsRecursive(rule) : [],
+      formFields: rule.length > 0 ? extractFieldsRecursive(rule, { preserveNestedSubTables: true }) : [],
       formOptions: options
     }
   }

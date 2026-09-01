@@ -39,6 +39,8 @@
         :model-value="rowValues"
         :readonly="true"
         :primary-read-only="true"
+        :sub-table-bindings="subTableBindings"
+        :linked-sub-table-bindings="subTableBindings"
       />
     </div>
   </div>
@@ -51,11 +53,8 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Loading } from '@element-plus/icons-vue'
 import FormRenderer from '@/components/FormRenderer.vue'
 import type { FormField } from '@/components/formRendererHelpers/formRendererTypes'
-import {
-  extractFieldsRecursive,
-  extractRowColumnFields,
-  isRowRule,
-} from '@/components/formRendererHelpers/formRendererRuleParsing'
+import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
+import { buildViewDetailSubTableBindings, toViewDetailFields } from '@/composables/mainTableView/viewDetailForm'
 import { mainTableViewApi } from '@/api/mainTableView'
 import { processApi } from '@/api/process'
 import { relationTableApi } from '@/api/relationTable'
@@ -69,63 +68,9 @@ const rowFound = ref(false)
 const viewName = ref('')
 const detailFormId = ref<number | null>(null)
 const formFields = ref<FormField[]>([])
+const subTableBindings = ref<SubTableBinding[]>([])
 const rowValues = ref<Record<string, any>>({})
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
-
-/**
- * Flattens the designed rules into display fields.
- *
- * <p>Sub-tables are skipped: they are driven by a live binding and process
- * context that a standalone record page has none of, and rendering them without
- * that context would show empty tables rather than data.
- */
-function toDisplayFields(items: Record<string, unknown>[]): FormField[] {
-  return extractFieldsRecursive(items, (item) => {
-    if (item.type === 'subTable') return null
-    if (isRowRule(item)) {
-      return {
-        key: String(item.field ?? item.type ?? 'row'),
-        label: '',
-        type: 'row',
-        span: 24,
-        children: extractRowColumnFields(item, (children) => toDisplayFields(children)),
-      } as FormField
-    }
-    const field = item.field as string | undefined
-    if (!field) return null
-    const props = (item.props || {}) as Record<string, unknown>
-    if (item.type === 'lookup') {
-      let lookupCfg: any = {}
-      try {
-        const raw = props.lookupConfig
-        lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
-      } catch { lookupCfg = {} }
-      const dbCfg = lookupDbConfigs.value[field]
-      return {
-        key: field,
-        label: String(item.title ?? field),
-        type: 'lookup',
-        span: 12,
-        _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
-        _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
-        _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
-        _lookupDisplayFields: lookupCfg.displayFields || [],
-        _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
-        _lookupMultiple: lookupCfg.multiple === true,
-        _lookupConfig: typeof props.lookupConfig === 'string' ? props.lookupConfig : JSON.stringify(lookupCfg || {}),
-        _lookupViewFields: lookupCfg.showBackfillView === false ? [] : (dbCfg?.viewFields || []),
-        _lookupShowBackfillView: lookupCfg.showBackfillView !== false,
-      } as unknown as FormField
-    }
-    return {
-      key: field,
-      label: String(item.title ?? field),
-      type: String(item.type ?? 'input'),
-      span: 12,
-      options: (props.options as unknown[]) ?? undefined,
-    } as FormField
-  })
-}
 
 const functionUnitCode = computed(() => String(route.params.functionUnitCode || ''))
 const viewId = computed(() => Number(route.query.viewId) || null)
@@ -138,6 +83,8 @@ function goBack() {
 async function load() {
   loading.value = true
   rowFound.value = false
+  formFields.value = []
+  subTableBindings.value = []
   try {
     if (!viewId.value || !functionUnitCode.value) return
 
@@ -176,7 +123,12 @@ async function load() {
     if (form?.data) {
       const config = typeof form.data === 'string' ? JSON.parse(form.data) : form.data
       const rules = Array.isArray(config?.rule) ? config.rule : []
-      formFields.value = toDisplayFields(rules)
+      formFields.value = toViewDetailFields(rules, lookupDbConfigs.value)
+      subTableBindings.value = buildViewDetailSubTableBindings(
+        form.tableBindings,
+        config && typeof config === 'object' ? config : {},
+        rowValues.value,
+      )
       rowFound.value = true
     }
   } catch {

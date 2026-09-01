@@ -88,6 +88,25 @@ describe('link-only sub-table placement', () => {
     expect(shouldSuppressLinkOnlyStandaloneSubTable(99, [formOnly])).toBe(true)
   })
 
+  it('keeps a FORM_ONLY nested subTable that is placed on the current form canvas', () => {
+    const correspondence = { bindingId: 200, subMode: 'FORM_ONLY', columns: [{ field: 'id', label: 'id' }] }
+    expect(shouldSuppressLinkOnlyStandaloneSubTable(200, [correspondence])).toBe(true)
+
+    const fields = [
+      { key: 'dispute_amount', label: 'Dispute Amount', type: 'text' },
+      { key: '__subTable_200', label: '', type: 'subTable', _bindingId: 200 },
+    ]
+    const filtered = filterLinkOnlyStandaloneSubTableFields(
+      fields,
+      [correspondence],
+      [{ type: 'subTable', _bindingId: 200 }],
+      undefined,
+      undefined,
+      new Set([200]),
+    )
+    expect(filtered.map(f => f.key)).toEqual(['dispute_amount', '__subTable_200'])
+  })
+
   it('keeps native canvas sub-tables when binding is also a link-form target', () => {
     const selfRefBinding = {
       bindingId: 281,

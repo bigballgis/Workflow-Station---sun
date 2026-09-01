@@ -401,14 +401,22 @@ export function isLinkOnlyStandaloneSubTableBinding(
 /**
  * Remove {@code subTable} FormFields that must not render as standalone tables on My Request.
  * Recurses into card children.
+ *
+ * {@code keepBindingIds}: widgets placed on the form currently being filtered (a Link Form
+ * target's own canvas). Those nested tables must stay even when FORM_ONLY / link-only
+ * would hide them on the parent page.
  */
 export function filterLinkOnlyStandaloneSubTableFields(
   fields: FormField[],
   bindings: SubTableBindingLinkRef[],
   _formRule: unknown[],
   nativeBindingIds?: ReadonlySet<number> | null,
-  formConfig?: Record<string, unknown> | null
+  formConfig?: Record<string, unknown> | null,
+  keepBindingIds?: ReadonlySet<number> | null,
 ): FormField[] {
+  const recurse = (next: FormField[]) => filterLinkOnlyStandaloneSubTableFields(
+    next, bindings, _formRule, nativeBindingIds, formConfig, keepBindingIds,
+  )
   return fields
     .map(field => {
       if (field.type === 'tabs' && Array.isArray(field.tabs)) {
@@ -416,13 +424,7 @@ export function filterLinkOnlyStandaloneSubTableFields(
           ...field,
           tabs: field.tabs.map(tab => ({
             ...tab,
-            fields: filterLinkOnlyStandaloneSubTableFields(
-              tab.fields,
-              bindings,
-              _formRule,
-              nativeBindingIds,
-              formConfig
-            ),
+            fields: recurse(tab.fields),
           })),
         }
       }
@@ -431,32 +433,21 @@ export function filterLinkOnlyStandaloneSubTableFields(
           ...field,
           collapsePanels: field.collapsePanels.map(panel => ({
             ...panel,
-            fields: filterLinkOnlyStandaloneSubTableFields(
-              panel.fields,
-              bindings,
-              _formRule,
-              nativeBindingIds,
-              formConfig
-            ),
+            fields: recurse(panel.fields),
           })),
         }
       }
       if ((field.type === 'card' || field.type === 'row' || field.type === 'col') && Array.isArray(field.children)) {
         return {
           ...field,
-          children: filterLinkOnlyStandaloneSubTableFields(
-            field.children,
-            bindings,
-            _formRule,
-            nativeBindingIds,
-            formConfig
-          )
+          children: recurse(field.children),
         }
       }
       return field
     })
     .filter(field => {
       if (field.type !== 'subTable' || field._bindingId == null) return true
+      if (keepBindingIds && keepBindingIds.has(Number(field._bindingId))) return true
       return !shouldSuppressLinkOnlyStandaloneSubTable(
         field._bindingId,
         bindings,
