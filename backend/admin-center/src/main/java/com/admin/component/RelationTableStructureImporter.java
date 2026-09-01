@@ -31,8 +31,13 @@ import java.util.UUID;
  * <p>Per requirement: a relation table whose name does not exist is created as {@code INIT}
  * (current_version bumped to 1); an existing one has its structure replaced, and only if the
  * incoming structure actually differs from what's stored is it set to {@code UPDATED} with
- * current_version incremented (a no-op re-import leaves status/version untouched). Returns
- * {@code source rt id → new rt id} so the caller can remap RELATED form-binding references.
+ * current_version incremented (a no-op re-import leaves status/version untouched).
+ *
+ * <p>When the table already exists and is linked to other Function Units, an import from a new
+ * FU with <em>identical</em> structure is allowed: the existing row is reused and the importer
+ * FU is appended in {@code rt_table_function_units} (shared reuse). A conflicting structure
+ * still fails closed with {@code FU_IMPORT_RT_BOUND_OTHER_FU}. Returns {@code source rt id → new rt id}
+ * so the caller can remap RELATED form-binding references.
  */
 @Slf4j
 @Component
@@ -130,8 +135,6 @@ public class RelationTableStructureImporter {
             return relationTableDefinitionRepository.save(def);
         }
 
-        rejectForeignBinding(existing.getId(), functionUnitId);
-
         // Present → compare against current structure before touching anything; only a real change
         // should flip status to UPDATED and bump current_version (re-importing identical content
         // must be a no-op for status/version, otherwise every re-deploy round-trip looks like a change).
@@ -140,6 +143,15 @@ public class RelationTableStructureImporter {
         boolean unchanged = RelationTableStructureDiff.unchanged(
                 existing.getDisplayName(), existing.getDescription(), currentFieldMaps,
                 displayName, description, incomingFieldMaps);
+
+        if (!isImportAuthorized(existing.getId(), functionUnitId)) {
+            if (unchanged) {
+                // Another FU already linked this table; identical payload → link-only reuse, no upsert.
+                return existing;
+            }
+            throw new AdminBusinessException("FU_IMPORT_RT_BOUND_OTHER_FU",
+                    "Relation table is already bound to another Function Unit");
+        }
 
         existing.setDisplayName(displayName);
         existing.setDescription(description);
@@ -362,34 +374,36 @@ public class RelationTableStructureImporter {
         return definition;
     }
 
-    private void rejectForeignBinding(Long relationTableId, String functionUnitId) {
+    /**
+     * Common (no links), the importing FU already linked, or a sibling version (same FU code).
+     */
+    private boolean isImportAuthorized(Long relationTableId, String functionUnitId) {
         if (relationTableFunctionUnitRepository == null || functionUnitId == null || functionUnitId.isBlank()) {
-            return;
+            return true;
         }
         List<RelationTableFunctionUnit> links =
                 relationTableFunctionUnitRepository.findByRelationTableId(relationTableId);
         if (links.isEmpty()) {
-            return;
+            return true;
         }
         for (RelationTableFunctionUnit link : links) {
             if (functionUnitId.equals(link.getFunctionUnitId())) {
-                return;
+                return true;
             }
         }
         String importCode = functionUnitRepository == null ? null
                 : functionUnitRepository.findById(functionUnitId).map(FunctionUnit::getCode).orElse(null);
+        if (importCode == null || importCode.isBlank()) {
+            return false;
+        }
         for (RelationTableFunctionUnit link : links) {
-            if (importCode == null || importCode.isBlank()) {
-                continue;
-            }
             String otherCode = functionUnitRepository.findById(link.getFunctionUnitId())
                     .map(FunctionUnit::getCode).orElse(null);
             if (importCode.equals(otherCode)) {
-                return;
+                return true;
             }
         }
-        throw new AdminBusinessException("FU_IMPORT_RT_BOUND_OTHER_FU",
-                "Relation table is already bound to another Function Unit");
+        return false;
     }
 
     private void bindFunctionUnit(Long relationTableId, String functionUnitId) {

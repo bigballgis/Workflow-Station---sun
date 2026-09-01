@@ -3076,3 +3076,17 @@
     修复：onCreated nextTick 后 emit getHtml()；iframe :key=previewDoc 强制刷新。
     0731 上原 event 提交 #1564 改记为本条。
 
+- id: "1586"
+  status: fixed
+  fixed_at: "2026-09-01"
+  severity: major
+  category: bug
+  summary: "FU import: second FU blocked when sharing identical Relation Table (FU_IMPORT_RT_BOUND_OTHER_FU)"
+  file: "backend/admin-center/src/main/java/com/admin/component/RelationTableStructureImporter.java"
+  note: |
+    根因：rejectForeignBinding 在表已绑其他 FU 时一律拒绝，即使导入包结构与线上一致。
+    修复：isImportAuthorized + RelationTableStructureDiff — 结构一致时 link-only 重用并
+    bindFunctionUnit 追加关联；结构冲突仍 FU_IMPORT_RT_BOUND_OTHER_FU。
+    验证：RelationTableStructureImporter* 8 tests pass；mvn -pl backend/admin-center -am package -DskipTests；E2E 双 FU 导入手测通过。
+
+
