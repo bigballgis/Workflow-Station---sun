@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { resolveSubTableRowsForBinding } from '../subTableSliceResolve'
 
 /**
@@ -69,5 +69,32 @@ describe('resolveSubTableRowsForBinding — 规范 key 优先', () => {
   it('没有规范 key 时不报错（交回既有解析链）', () => {
     expect(resolveSubTableRowsForBinding({}, participantsBinding)).toBeUndefined()
     expect(resolveSubTableRowsForBinding(null, participantsBinding)).toBeUndefined()
+  })
+})
+
+describe('legacy key fallback 观测', () => {
+  const binding = { bindingId: 50627, tableName: 'subtable', primaryKeyFields: ['id_idwvvbz'] } as any
+
+  it('规范 key 命中时不告警', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resolveSubTableRowsForBinding({ 'dw:subtable': [{ id_idwvvbz: 'T1' }] }, binding)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('回退到旧 key 且确实取到数据时告警（暴露未收敛的写入路径）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rows = resolveSubTableRowsForBinding({ 50627: [{ id_idwvvbz: 'T1' }] }, binding)
+    expect(rows).toBeDefined()
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0]?.[0])).toContain('canonical key missed')
+    warn.mockRestore()
+  })
+
+  it('切片为空时不告警 —— 表本来就没数据，不是 miss', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resolveSubTableRowsForBinding({}, binding)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
