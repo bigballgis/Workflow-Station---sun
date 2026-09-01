@@ -2977,3 +2977,22 @@
     screenshots cannot-download-new-request-02-start-preview.png,
     cannot-download-new-request-04-application-preview.png.
 
+- id: "1579"
+  status: fixed
+  fixed_at: "2026-09-01"
+  severity: major
+  category: bug
+  summary: "Admin Audit Logs pagination and h-bar sat mid-page when few rows"
+  file: "frontend/admin-center/src/views/audit/index.vue"
+  note: |
+    根因：两条 Audit 用 .audit-grid-shell / .up-audit-grid-shell，共享 listDataGrid
+    只给 .table-card / .portal-card flex:1；page-container 已撑满，表按行高长，
+    分页贴在内容底下。筛选条 .filter-card 也没进 flex-shrink:0。空态 el-empty
+    与格子并列，0 行时把表挤成一条，表头看不见。
+    修复：外壳改 table-card；filter-card / batch-bar 加入 shrink-0；空态改
+    el-table #empty。verify 改为 waitForFunction 等布局钉住，去掉固定 sleep。
+    验证：auditListViewport 4 pass；admin-center build；compose 重建
+    admin-center-frontend；verify-admin-audit-list-viewport.mjs
+    pagerBottom=855/900，空态 gridHeight=477、表头可见。
+    截图 2026-09-01_admin-audit-*-viewport.png。
+
