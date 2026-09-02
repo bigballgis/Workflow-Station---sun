@@ -32,6 +32,8 @@ const MI_REGRESSION_FILES = [
   'src/composables/tasks/__tests__/miChildFkFromConfig.test.ts',
   // 子表链接表单的 FK 列同样按配置解析
   'src/composables/subTableField/__tests__/linkFormFkFromConfig.test.ts',
+  // 共享附件泄漏过滤：结构外键 / 主键都按配置识别
+  'src/composables/tasks/__tests__/sharedAttachmentLeakFkConfig.test.ts',
 ]
 
 export default defineConfig({

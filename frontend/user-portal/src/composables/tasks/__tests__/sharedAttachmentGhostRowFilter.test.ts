@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { finalizeSharedProcessSubTableBindingRows } from '../sharedProcessSubTableFilters'
-import { collectForeignSubTableRowIdsFromVariables } from '../sharedAttachmentSubTable'
 
 /**
  * My Request → application detail, FU 50005 "Multi-Instance Subtask Demo": the Attachment grid
@@ -10,7 +9,7 @@ import { collectForeignSubTableRowIdsFromVariables } from '../sharedAttachmentSu
  * participant Test-000002.
  *
  * Two independent gaps let it through, both covered here:
- *  1. `collectForeignSubTableRowIdsFromVariables` only walks slices whose KEY looks participant-ish
+ *  1. 「外来行 id 注册表」只遍历键名像参与者表的切片（该注册表已删除）
  *     (`subtable`/`subtable2`/`participants`, or relation table id 20/21). FU 50005's participant
  *     table is 50331 and its slice key is the numeric binding id 50544, so the registry came back
  *     EMPTY and the id-based leak check had nothing to match against.
@@ -61,16 +60,11 @@ describe('shared attachment grid — ghost rows carrying no attachment data are 
       50548: [],
       50553: [],
     }
-    const map = new Map<number, number | null>([
-      [50539, 50331], [50544, 50331], [50547, 50333], [50548, 50330], [50553, 50330],
-    ])
-    const foreignSubTableRowIds = collectForeignSubTableRowIdsFromVariables(flat, map)
-    // Documents gap (1): the registry genuinely comes back empty for this Function Unit.
-    expect(foreignSubTableRowIds.size).toBe(0)
+    // 注册表已删除：它只走「键名看着像参与者表」的切片，而键早已是规范键 `dw:<name>`，
+    // 因此对任何 FU 都返回空集（本用例原先就断言 size === 0）。防线由下面两条承担：
+    // 结构外键指向参与者 / 本表列上无数据。
     expect(
-      finalizeSharedProcessSubTableBindingRows([{ ...PEOPLE_ROW }], ATTACHMENT_BINDING, {
-        foreignSubTableRowIds,
-      }),
+      finalizeSharedProcessSubTableBindingRows([{ ...PEOPLE_ROW }], ATTACHMENT_BINDING),
     ).toEqual([])
   })
 

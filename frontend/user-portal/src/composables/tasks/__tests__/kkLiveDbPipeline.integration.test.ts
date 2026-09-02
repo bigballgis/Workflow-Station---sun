@@ -6,7 +6,6 @@ import liveSubTables from './fixtures/kk-live-db-subTables.json'
 import {
   applySharedAttachmentFinalizeAndMaterialize,
   buildBindingIdToRelationTableIdMap,
-  collectForeignSubTableRowIdsFromVariables,
   enrichChildBindingRowsFromParentsNestedSubTables,
   finalizeSharedProcessSubTableBindingRows,
   flattenNestedSubTableRowsIntoPayload,
@@ -64,13 +63,6 @@ function simulateApplicationsDetailLoad(flat: Record<string, unknown>) {
 }
 
 describe('kk live DB pipeline (4f31baaf)', () => {
-  it('foreign ids exclude attachment row ids 343/633/77777', () => {
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(liveSubTables as Record<string, unknown>, rtMap)
-    expect(foreignIds.has('343')).toBe(false)
-    expect(foreignIds.has('633')).toBe(false)
-    expect(foreignIds.has('77777')).toBe(false)
-    expect(foreignIds.has('666')).toBe(true)
-  })
 
   it('isSharedAttachmentFileBinding true for binding 104 with default columns', () => {
     expect(
@@ -95,7 +87,6 @@ describe('kk live DB pipeline (4f31baaf)', () => {
   it('drops attachment row 666 when id matches foreign subtable id even with file', () => {
     const flat = structuredClone(liveSubTables) as Record<string, unknown>
     flattenNestedSubTableRowsIntoPayload(flat)
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(flat, rtMap)
     const binding = {
       bindingId: 104,
       tableId: 74,
@@ -105,16 +96,14 @@ describe('kk live DB pipeline (4f31baaf)', () => {
       primaryKeyFields: ['id'],
     }
     const rows = Array.isArray(flat['104']) ? [...(flat['104'] as any[])] : []
-    const out = finalizeSharedProcessSubTableBindingRows(rows, binding, {
-      foreignSubTableRowIds: foreignIds,
-    })
+    // 注册表已删除：666 由「有 name 但 name 不在附件列里」这条防线挡下（已实测）
+    const out = finalizeSharedProcessSubTableBindingRows(rows, binding)
     expect(out.some((r: { id: unknown }) => String(r.id) === '666')).toBe(false)
   })
 
   it('finalize alone does not wipe merged attachment rows', () => {
     const flat = structuredClone(liveSubTables) as Record<string, unknown>
     flattenNestedSubTableRowsIntoPayload(flat)
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(flat, rtMap)
     const binding = {
       bindingId: 104,
       tableId: 74,
@@ -126,7 +115,6 @@ describe('kk live DB pipeline (4f31baaf)', () => {
     }
     const rows = Array.isArray(flat['104']) ? [...(flat['104'] as any[])] : []
     const out = finalizeSharedProcessSubTableBindingRows(rows, binding, {
-      foreignSubTableRowIds: foreignIds,
     })
     expect(out.map((r: { id: unknown }) => String(r.id)).sort()).toEqual(['343', '633', '77777'])
   })

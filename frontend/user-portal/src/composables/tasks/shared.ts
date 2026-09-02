@@ -56,12 +56,10 @@ export {
   filterRowsForMiParticipantSubTableBinding,
   filterRowsForSharedProcessSubTableBinding,
   finalizeSharedProcessSubTableBindingRows,
-  type SharedProcessSubTableFilterContext,
 } from './sharedProcessSubTableFilters'
 
 export {
   applySharedAttachmentFinalizeAndMaterialize,
-  collectForeignSubTableRowIdsFromVariables,
   type SharedAttachmentBindingLike,
 } from './sharedAttachmentSubTable'
 

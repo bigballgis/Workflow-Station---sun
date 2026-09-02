@@ -12,17 +12,35 @@ import {
   isSubTableRowMetaField,
   stripSubTableRowMetaFields,
 } from './subTableBindingKinds'
-import { resolveMiChildStructuralParentFk } from './miLinkChildIdentity'
+import {
+  miChildFkConfigOfBinding,
+  resolveMiChildStructuralParentFk,
+  type MiChildFkConfig,
+} from './miLinkChildIdentity'
 import { dropSubsumedSubTableRows } from './subTableRowNormalize'
 
+/**
+ * 这一行在**本表自己的列**上有没有真实数据（主键列不算数据）。
+ *
+ * <p>主键列名从设计器配置来（`primaryKeyFields`，其次是 `fieldDefinitions` 里 isPrimaryKey 的字段），
+ * 字面量 `id` 只作为最后的保底。曾经这里写死 `f !== 'id'`：主键改名成 `idfa` 之后，主键值被当成
+ * 「本表有数据」，于是只有一个 UUID 的幽灵行重新漏进附件表格 —— 正是 #ghost-row 当初修掉的那个 bug。
+ */
 function sharedBindingRowHasNonIdColumnData(
   rec: Record<string, unknown>,
   colFields: Set<string>,
+  pkFields?: readonly string[] | null,
 ): boolean {
+  const pkSet = new Set(
+    [...(pkFields ?? []), 'id']
+      .map(f => String(f ?? '').trim().toLowerCase())
+      .filter(Boolean),
+  )
+  const isPk = (f: string) => pkSet.has(String(f).trim().toLowerCase())
   const fields =
     colFields.size > 0
-      ? [...colFields].filter(f => f !== 'id')
-      : Object.keys(rec).filter(k => k !== 'id' && !isSubTableRowMetaField(k))
+      ? [...colFields].filter(f => !isPk(f))
+      : Object.keys(rec).filter(k => !isPk(k) && !isSubTableRowMetaField(k))
   if (fields.length === 0) return false
   return fields.some(f => {
     const v = rec[f]
@@ -30,15 +48,11 @@ function sharedBindingRowHasNonIdColumnData(
   })
 }
 
-/** Row ids from MI / subtable slices — must not appear as attachment.id (separate tables, unrelated PKs). */
-export type SharedProcessSubTableFilterContext = {
-  foreignSubTableRowIds?: Set<string>
-}
-
 function isLeakedForeignRowOnSharedAttachment(
   rec: Record<string, unknown>,
   colFields: Set<string>,
-  foreignSubTableRowIds?: Set<string>,
+  fkConfig?: MiChildFkConfig | null,
+  pkFields?: readonly string[] | null,
 ): boolean {
   if (isSubTableMiDashboardRow(rec)) return true
 
@@ -51,33 +65,22 @@ function isLeakedForeignRowOnSharedAttachment(
     return false
   }
 
-  const rowId = rec.id != null ? String(rec.id).trim() : ''
-  if (rowId && foreignSubTableRowIds) {
-    const foreign =
-      foreignSubTableRowIds instanceof Set
-        ? foreignSubTableRowIds
-        : new Set(
-            [...(foreignSubTableRowIds as Iterable<unknown>)].map(v => String(v).trim()).filter(Boolean),
-          )
-    if (foreign.has(rowId)) return true
-  }
-
   /**
    * A structural FK to an MI participant ({@code sub_task_id} etc.) marks the row as a link-child of
    * some other table — an attachment row is keyed to the main record, never to a participant. This
-   * catches leaks the {@code foreignSubTableRowIds} registry misses: that registry only walks slices
-   * whose KEY looks participant-ish ({@code subtable}/{@code participants}, or table id 20/21), so a
-   * Function Unit whose participant table has different ids (FU 50005 uses 50331, keyed numerically
-   * as {@code 50544}) contributes no ids at all and every id-only ghost slipped through.
+   * 结构外键列名来自设计器配置，改名后依然有效。
+   *
+   * <p>（历史：这里曾配合一张「外来行 id 注册表」使用。那张表只遍历「键名看着像参与者表」的切片，
+   * 而切片键早已规范化成 {@code dw:<name>}，因此它对任何 FU 都返回空集 —— 已随两个死函数一并删除。）
    */
-  if (resolveMiChildStructuralParentFk(rec)) return true
+  if (resolveMiChildStructuralParentFk(rec, fkConfig)) return true
 
   /**
    * An "attachment" row with no file AND no value in any of its own non-id columns carries nothing
    * this table can display — the grid renders it as a row of "-". Whatever produced it (a foreign
    * row projected down to its id, a stale placeholder), it is not an attachment.
    */
-  if (!sharedBindingRowHasNonIdColumnData(rec, colFields)) return true
+  if (!sharedBindingRowHasNonIdColumnData(rec, colFields, pkFields)) return true
 
   // 后端 MI overlay 的 id 信封归一化（MiOverlaySupport.normalizeVariableRowPkEnvelope）会在
   // 持久化的附件行上补写 id_idw —— 这是**后端确定写入的键名**，不是这里在猜某张表的主键，
@@ -135,11 +138,13 @@ export function filterRowsForSharedProcessSubTableBinding(
   binding: {
     columns?: Array<{ field?: string }> | null
     foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    primaryKeyFields?: string[] | null
+    fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     tableName?: string
     physicalTableName?: string
     tableId?: number | null
   },
-  filterContext?: SharedProcessSubTableFilterContext,
 ): any[] {
   if (!Array.isArray(rows) || rows.length === 0) return []
   if (isMiParticipantScopedSubTableBinding(binding)) {
@@ -152,13 +157,21 @@ export function filterRowsForSharedProcessSubTableBinding(
       .filter(Boolean),
   )
   const attachmentBinding = isSharedAttachmentFileBinding(binding)
-  const foreignIds = filterContext?.foreignSubTableRowIds
+  // 结构外键列名来自设计器配置——改名后（sub_task_id → sub_task_idqc）仍能认出 link-child 行。
+  const fkConfig = miChildFkConfigOfBinding(binding as never)
+  const pkFields =
+    binding.primaryKeyFields
+    ?? (binding.fieldDefinitions ?? [])
+      .filter(f => (f as { isPrimaryKey?: boolean })?.isPrimaryKey)
+      .map(f => String(f?.fieldName ?? '').trim())
+      .filter(Boolean)
 
   return rows.filter(row => {
     if (!row || typeof row !== 'object') return false
     const rec = row as Record<string, unknown>
 
-    if (attachmentBinding && isLeakedForeignRowOnSharedAttachment(rec, colFields, foreignIds)) {
+    if (attachmentBinding
+        && isLeakedForeignRowOnSharedAttachment(rec, colFields, fkConfig, pkFields)) {
       return false
     }
 
@@ -191,14 +204,16 @@ export function finalizeSharedProcessSubTableBindingRows(
   binding: {
     columns?: Array<{ field?: string }> | null
     foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    primaryKeyFields?: string[] | null
+    fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     tableName?: string
     physicalTableName?: string
     tableId?: number | null
   },
-  filterContext?: SharedProcessSubTableFilterContext,
 ): any[] {
   const preserveMiFields = isMiDashboardSubTableBinding(binding)
-  const cleaned = filterRowsForSharedProcessSubTableBinding(rows, binding, filterContext).map(row => {
+  const cleaned = filterRowsForSharedProcessSubTableBinding(rows, binding).map(row => {
     if (!row || typeof row !== 'object') return row
     return preserveMiFields
       ? row

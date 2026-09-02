@@ -12,7 +12,6 @@ import {
   buildBindingIdToRelationTableIdMap,
   stripSubTableRowMetaFields,
   applySharedAttachmentFinalizeAndMaterialize,
-  collectForeignSubTableRowIdsFromVariables,
   isSharedAttachmentFileBinding,
 } from '../shared'
 
@@ -32,12 +31,8 @@ describe('subTableRowMetaFields predicates', () => {
         ],
       },
     ])
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(kkLiveSubTables, rtMap)
-    expect(foreignIds.has('343')).toBe(false)
-    expect(foreignIds.has('633')).toBe(false)
-    expect(foreignIds.has('77777')).toBe(false)
-    expect(foreignIds.has('44')).toBe(true)
-    expect(foreignIds.has('666')).toBe(true)
+    // 外来 id 注册表已删除（它只对历史数字键有效，而键早已规范化为 dw:/rt:）。
+    // 现在由「结构外键指向参与者」「本表列上无数据」两条防线兜住，断言直接看最终过滤结果。
 
     const bindings = [
       {
@@ -272,86 +267,7 @@ describe('subTableRowMetaFields predicates', () => {
     expect(finalizeSharedProcessSubTableBindingRows(polluted, attachmentBinding)).toEqual([])
   })
 
-  it('collectForeignSubTableRowIdsFromVariables ignores nested attachment rows under MI parent', () => {
-    const rtMap = buildBindingIdToRelationTableIdMap([
-      {
-        tableBindings: [
-          { bindingId: 66, tableId: 20 },
-          { bindingId: 103, tableId: 74 },
-          { bindingId: 104, tableId: 74 },
-        ],
-      },
-    ])
-    const subTables = {
-      66: [
-        {
-          id: 44,
-          name: '44',
-          task_status: 'IN_PROGRESS',
-          assignee_user_id: 'u1',
-          __subTables__: {
-            104: [
-              { id: 343, file: '/a.pdf', main_id: '' },
-              { id: 633, file: '/b.pdf', main_id: '' },
-            ],
-            attachment: [{ id: '77777', file: '/c.pdf', main_id: '' }],
-          },
-        },
-      ],
-      103: [
-        { id: '77777', file: '/c.pdf', main_id: '' },
-        { id: 633, file: '/b.pdf', main_id: '' },
-        { id: 343, file: '/a.pdf', main_id: '' },
-      ],
-    }
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(subTables, rtMap)
-    expect(foreignIds.has('44')).toBe(true)
-    expect(foreignIds.has('343')).toBe(false)
-    expect(foreignIds.has('633')).toBe(false)
-    expect(foreignIds.has('77777')).toBe(false)
 
-    const bindings = [
-      {
-        bindingId: 104,
-        tableId: 74,
-        tableName: 'attachment',
-        physicalTableName: 'attachment',
-        foreignKeyField: 'main_id',
-        columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
-        primaryKeyFields: ['id'],
-        data: [],
-      },
-    ]
-    applySharedAttachmentFinalizeAndMaterialize(bindings, { id: 343 }, {
-      flattened: subTables,
-      bindingTableById: rtMap,
-    })
-    expect(bindings[0]!.data.length).toBe(3)
-    expect(bindings[0]!.data.map((r: { id: unknown }) => String(r.id)).sort()).toEqual([
-      '343',
-      '633',
-      '77777',
-    ])
-  })
-
-  it('collectForeignSubTableRowIdsFromVariables gathers subtable slice ids only, not attachment slice ids', () => {
-    const rtMap = buildBindingIdToRelationTableIdMap([
-      { tableBindings: [{ bindingId: 66, tableId: 20 }, { bindingId: 104, tableId: 74 }] },
-    ])
-    const subTables = {
-      66: [{ id: 666, name: '66', task_status: 'COMPLETED' }],
-      subtable: [{ id: 44, name: '44', task_status: 'IN_PROGRESS' }],
-      103: [
-        { id: '77777', file: '/api/v1/upload/files/a.pdf' },
-        { id: 633, file: '/api/v1/upload/files/c.pdf' },
-      ],
-    }
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(subTables, rtMap)
-    expect(foreignIds.has('666')).toBe(true)
-    expect(foreignIds.has('44')).toBe(true)
-    expect(foreignIds.has('77777')).toBe(false)
-    expect(foreignIds.has('633')).toBe(false)
-  })
 
   it('filterRowsForMiParticipantSubTableBinding drops attachment-only rows leaked into subtable grid', () => {
     const subtableBinding = {
@@ -401,34 +317,6 @@ describe('subTableRowMetaFields predicates', () => {
     expect(out[0]).toMatchObject({ id: 'Test-000059', name: '33' })
   })
 
-  it('finalizeSharedProcessSubTableBindingRows keeps attachment rows when ids appear in foreign subtable set', () => {
-    const rtMap = buildBindingIdToRelationTableIdMap([
-      { tableBindings: [{ bindingId: 69, tableId: 20 }, { bindingId: 104, tableId: 74 }] },
-    ])
-    const subTables = {
-      69: [
-        { id: '7135ba28-378a-4e24-92f7-f10e7445deea', file: '/api/v1/upload/files/a.pdf' },
-        { id: 'Test-000059', id_idw: 'Test-000059', name: '33', task_status: 'IN_PROGRESS' },
-      ],
-      104: [
-        { id: '7135ba28-378a-4e24-92f7-f10e7445deea', file: '/api/v1/upload/files/a.pdf' },
-        { id: 'ba552499-cf91-4e2d-a5bb-4d479dec51c9', file: '/api/v1/upload/files/b.jpg' },
-        { id: '20fb0bc5-63ef-437c-ae7d-7101bd628918', file: '/api/v1/upload/files/c.pdf' },
-      ],
-    }
-    const foreignIds = collectForeignSubTableRowIdsFromVariables(subTables, rtMap)
-    expect(foreignIds.has('7135ba28-378a-4e24-92f7-f10e7445deea')).toBe(false)
-    const attachmentBinding = {
-      tableName: 'attachment',
-      tableId: 74,
-      foreignKeyField: 'main_id',
-      columns: [{ field: 'file' }],
-    }
-    const out = finalizeSharedProcessSubTableBindingRows(subTables['104'], attachmentBinding, {
-      foreignSubTableRowIds: foreignIds,
-    })
-    expect(out).toHaveLength(3)
-  })
 
   it('filterRowsForMiParticipantSubTableBinding preserves assignee on MI rows', () => {
     const subtableBinding = {

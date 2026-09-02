@@ -14,7 +14,6 @@ import {
 import { mergeAllSlicesForSharedProcessSubTableBinding } from './subTableSliceMerge'
 import {
   finalizeSharedProcessSubTableBindingRows,
-  type SharedProcessSubTableFilterContext,
 } from './sharedProcessSubTableFilters'
 
 export type SharedAttachmentBindingLike = {
@@ -45,12 +44,6 @@ export function applySharedAttachmentFinalizeAndMaterialize<
 ): void {
   const rtMap = options?.bindingTableById ?? new Map<number, number | null>()
   const flat = options?.flattened ?? null
-  const foreignSubTableRowIds =
-    flat != null ? collectForeignSubTableRowIdsFromVariables(flat, rtMap) : undefined
-  const filterContext: SharedProcessSubTableFilterContext | undefined =
-    foreignSubTableRowIds && foreignSubTableRowIds.size > 0
-      ? { foreignSubTableRowIds }
-      : undefined
   for (const binding of bindings) {
     if (isMiParticipantScopedSubTableBinding(binding)) continue
     if (!isSharedAttachmentFileBinding(binding)) continue
@@ -99,96 +92,8 @@ export function applySharedAttachmentFinalizeAndMaterialize<
         binding.data = mergeSubTableRowsByRowId([], canonical, binding.primaryKeyFields ?? null)
       }
     }
-    binding.data = finalizeSharedProcessSubTableBindingRows(binding.data, binding, filterContext)
+    binding.data = finalizeSharedProcessSubTableBindingRows(binding.data, binding)
   }
-}
-
-function isAttachmentBindingSliceKey(
-  key: string,
-  bindingTableById: Map<number, number | null>,
-): boolean {
-  const n = normalizeSubTableName(key)
-  if (n === 'attachment') return true
-  const kid = Number(key)
-  if (Number.isFinite(kid) && (kid === 103 || kid === 104)) return true
-  if (!Number.isFinite(kid)) return false
-  const tid = bindingTableById.get(kid)
-  return tid === 74
-}
-
-/** MI participant / subtable slices — row ids here must not appear on attachment.id. */
-function isMiSubTableParticipantSliceKey(
-  key: string,
-  bindingTableById: Map<number, number | null>,
-): boolean {
-  const n = normalizeSubTableName(key)
-  if (n === 'subtable' || n === 'subtable2' || n === 'participants') return true
-  const kid = Number(key)
-  if (!Number.isFinite(kid)) return false
-  const tid = bindingTableById.get(kid)
-  return tid === 20 || tid === 21
-}
-
-function addRowIdToForeignSet(row: unknown, ids: Set<string>): void {
-  if (!row || typeof row !== 'object') return
-  const id = (row as Record<string, unknown>).id
-  if (id != null && String(id).trim() !== '') ids.add(String(id).trim())
-}
-
-function collectForeignSubTableRowIdsFromRowWalk(
-  rows: unknown[],
-  ids: Set<string>,
-  bindingTableById: Map<number, number | null>,
-): void {
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue
-    const rec = row as Record<string, unknown>
-    if (!isPureSharedAttachmentFileRow(rec)) {
-      addRowIdToForeignSet(row, ids)
-    }
-    const nest = rec.__subTables__
-    if (!nest || typeof nest !== 'object') continue
-    for (const [childKey, childVal] of Object.entries(nest as Record<string, unknown>)) {
-      if (!Array.isArray(childVal)) continue
-      if (isAttachmentBindingSliceKey(childKey, bindingTableById)) continue
-      collectForeignSubTableRowIdsFromRowWalk(childVal, ids, bindingTableById)
-    }
-  }
-}
-
-/**
- * Collect row ids from MI / subtable participant slices only (not every non-attachment key).
- * Used to drop attachment rows that reused a subtable participant id (e.g. 666 + name).
- */
-export function collectForeignSubTableRowIdsFromVariables(
-  savedSubTables: Record<string, unknown> | null | undefined,
-  bindingTableById: Map<number, number | null>,
-): Set<string> {
-  const ids = new Set<string>()
-  if (!savedSubTables || typeof savedSubTables !== 'object') return ids
-
-  for (const [key, val] of Object.entries(savedSubTables)) {
-    if (!Array.isArray(val)) continue
-    if (isAttachmentBindingSliceKey(key, bindingTableById)) continue
-    if (isMiSubTableParticipantSliceKey(key, bindingTableById)) {
-      collectForeignSubTableRowIdsFromRowWalk(val, ids, bindingTableById)
-      continue
-    }
-    for (const row of val) {
-      if (!row || typeof row !== 'object') continue
-      const rec = row as Record<string, unknown>
-      if (isSubTableMiDashboardRow(rec)) addRowIdToForeignSet(row, ids)
-      const nest = rec.__subTables__
-      if (!nest || typeof nest !== 'object') continue
-      for (const [childKey, childVal] of Object.entries(nest as Record<string, unknown>)) {
-        if (!Array.isArray(childVal)) continue
-        if (isMiSubTableParticipantSliceKey(childKey, bindingTableById)) {
-          collectForeignSubTableRowIdsFromRowWalk(childVal, ids, bindingTableById)
-        }
-      }
-    }
-  }
-  return ids
 }
 
 function isPureSharedAttachmentFileRow(rec: Record<string, unknown>): boolean {
