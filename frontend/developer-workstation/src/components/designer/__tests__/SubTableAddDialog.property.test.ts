@@ -1,5 +1,8 @@
 // Feature: sub-table-add-dialog, Property 2: Dialog form mirrors column configuration
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it } from 'vitest'
 import * as fc from 'fast-check'
 import { expect } from 'vitest'
@@ -339,5 +342,13 @@ describe('Property 5: Invalid save does not modify table', () => {
       ),
       { numRuns: 100 },
     )
+  })
+})
+
+describe('SubTableAddDialog el-form', () => {
+  it('does not re-validate when api.required updates formRules', () => {
+    const vuePath = join(dirname(fileURLToPath(import.meta.url)), '../SubTableAddDialog.vue')
+    const source = readFileSync(vuePath, 'utf8')
+    expect(source).toContain(':validate-on-rule-change="false"')
   })
 })

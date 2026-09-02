@@ -2,6 +2,7 @@ import {
   collapseSubTableRowsPreferFilled,
   stripLinkFormDesignerTableLabel
 } from '@/composables/tasks/shared'
+import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import type { SubTableBinding } from './subTableFieldTypes'
 
 export function normalizeSubTableName(name?: string): string {
@@ -229,10 +230,15 @@ export function isTerminalMiParticipantRow(r: Record<string, any> | undefined | 
 export function linkFormChildRowHasBusinessPayload(row: unknown): boolean {
   if (!row || typeof row !== 'object') return false
   const rec = row as Record<string, unknown>
+  // MI 状态/节点列名来自当前 FU 的 Sub-Task Config；下面的字面量是跨 FU 的已知名字兜底。
+  // 漏判会把运行时元数据当成业务数据，空行被误判为「已填写」。
+  const { statusField, currentNodeField } = getActiveMiFieldNames()
   for (const [k, v] of Object.entries(rec)) {
     if (k.startsWith('__')) continue
     if (
-      k === 'task_status'
+      k === statusField
+      || k === currentNodeField
+      || k === 'task_status'
       || k === 'task_current_node'
       || k === 'task_id'
       || k === 'task_definition_key'

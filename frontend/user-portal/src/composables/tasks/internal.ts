@@ -124,7 +124,11 @@ export function mergeMiCurrentNodePreferPrevious(prevNode: unknown, nextNode: un
 }
 
 /** Heuristic richness: which snapshot likely came from fuller portal/backend MI hydration vs a thin duplicate binding. */
-export function miDashboardSliceRichness(rec: Record<string, unknown>): number {
+export function miDashboardSliceRichness(
+  rec: Record<string, unknown>,
+  statusField = 'task_status',
+  currentNodeField = 'task_current_node',
+): number {
   let s = 0
   const au = rec['assignee_user_id']
   if (au !== undefined && au !== null && String(au).trim() !== '') s += 4
@@ -134,9 +138,9 @@ export function miDashboardSliceRichness(rec: Record<string, unknown>): number {
   if (tk !== undefined && tk !== null && String(tk).trim() !== '') s += 2
   const ti = rec['task_id'] ?? rec['taskId']
   if (ti !== undefined && ti !== null && String(ti).trim() !== '') s += 2
-  const st = rec['task_status']
+  const st = rec[statusField]
   if (st !== undefined && st !== null && String(st).trim() !== '') s += 1
-  const node = rec['task_current_node']
+  const node = rec[currentNodeField]
   if (node !== undefined && node !== null && String(node).trim() !== '') s += 1
   return s
 }
@@ -158,9 +162,11 @@ export function roughNonEmptyFieldCount(rec: Record<string, unknown>): number {
 export function incomingIsStrictNonMiKeySubset(
   prior: Record<string, unknown>,
   incoming: Record<string, unknown>,
+  statusField = 'task_status',
+  currentNodeField = 'task_current_node',
 ): boolean {
   const meta = (k: string) =>
-    k.startsWith('__') || k === 'task_status' || k === 'task_current_node'
+    k.startsWith('__') || k === statusField || k === currentNodeField
   const prevKeys = [...Object.keys(prior)].filter(k => !meta(k))
   const incKeys = [...Object.keys(incoming)].filter(k => !meta(k))
   if (incKeys.length === 0 || incKeys.length >= prevKeys.length) {

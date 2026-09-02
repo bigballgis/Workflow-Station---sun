@@ -23,8 +23,11 @@ import {
   isEmptyFormCreateHandler,
   parseFormCreateEventHandler,
   runFormOnChangeHandler,
+  type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
+import { useFormEventOverlayBags } from '@/composables/formRenderer/useFormEventOverlayBags'
+import { isEffectivelyDisabled } from '@/utils/formCreateEventOverlays'
 
 export type DialogColumnWithEvents = {
   field: string
@@ -46,11 +49,30 @@ export function useSubTableDialogComponentEvents(
     display: new Map<string, boolean>(),
   })
   const eventVisibilityTick = ref(0)
+  const eventRequiredState = shallowReactive<PortalFormRequiredState>({
+    flags: new Map<string, boolean>(),
+  })
+  const eventRequiredTick = ref(0)
+  const scriptFieldErrors = ref<Record<string, string>>({})
+  const overlaysApi = useFormEventOverlayBags({
+    getAllFieldKeys: () => getColumns().map((c) => c.field),
+    getDesignerOptions: (fieldKey) => {
+      const rule = getColumns().find((c) => c.field === fieldKey)?.sourceRule
+      const opts = rule?.options
+      return Array.isArray(opts) ? opts as { label: string; value: string | number }[] : []
+    },
+    getDesignerLabel: (fieldKey) => getColumns().find((c) => c.field === fieldKey)?.label ?? fieldKey,
+  })
 
   function notifyEventVisibilityChange() {
     eventVisibilityState.hidden = new Map(eventVisibilityState.hidden)
     eventVisibilityState.display = new Map(eventVisibilityState.display)
     eventVisibilityTick.value++
+  }
+
+  function notifyEventRequiredChange() {
+    eventRequiredState.flags = new Map(eventRequiredState.flags)
+    eventRequiredTick.value++
   }
 
   function isDialogFieldVisible(fieldKey: string): boolean {
@@ -64,6 +86,10 @@ export function useSubTableDialogComponentEvents(
     eventVisibilityState.hidden = new Map()
     eventVisibilityState.display = new Map()
     eventVisibilityTick.value++
+    eventRequiredState.flags = new Map()
+    eventRequiredTick.value++
+    scriptFieldErrors.value = {}
+    overlaysApi.resetOverlays()
   }
 
   function createApi() {
@@ -80,6 +106,23 @@ export function useSubTableDialogComponentEvents(
         notify: notifyEventVisibilityChange,
         getAllFieldKeys: () => getColumns().map((c) => c.field),
       },
+      {
+        setFieldError: (fieldKey, message) => {
+          scriptFieldErrors.value = { ...scriptFieldErrors.value, [fieldKey]: message }
+        },
+        clearFieldError: (fieldKey) => {
+          if (!(fieldKey in scriptFieldErrors.value)) return
+          const next = { ...scriptFieldErrors.value }
+          delete next[fieldKey]
+          scriptFieldErrors.value = next
+        },
+      },
+      {
+        state: eventRequiredState,
+        notify: notifyEventRequiredChange,
+        getAllFieldKeys: () => getColumns().map((c) => c.field),
+      },
+      overlaysApi.buildOverlays(),
     )
   }
 
@@ -179,6 +222,12 @@ export function useSubTableDialogComponentEvents(
         notify: notifyEventVisibilityChange,
         getAllFieldKeys: () => getColumns().map((c) => c.field),
       },
+      {
+        state: eventRequiredState,
+        notify: notifyEventRequiredChange,
+        getAllFieldKeys: () => getColumns().map((c) => c.field),
+      },
+      overlaysApi.buildOverlays(),
     )
   }
 
@@ -252,11 +301,20 @@ export function useSubTableDialogComponentEvents(
     onDialogFieldChange,
     onDialogFieldBlur,
     isDialogFieldVisible,
+    eventRequiredState,
+    eventRequiredTick,
     resetDialogEventVisibility,
     bootstrapDialogFormLifecycle,
     runFormOnReload,
     runFormBeforeSubmit,
     runFormOnSubmit,
     runFormOnReset,
+    scriptFieldErrors,
+    overlayTick: overlaysApi.overlayTick,
+    eventDisabledState: overlaysApi.eventDisabledState,
+    isDialogFieldDisabled: (fieldKey: string, fallback: boolean) => {
+      void overlaysApi.overlayTick.value
+      return isEffectivelyDisabled(fieldKey, fallback, overlaysApi.eventDisabledState.flags)
+    },
   }
 }

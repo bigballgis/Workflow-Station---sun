@@ -617,6 +617,7 @@ export default {
   },
   form: {
     title: '表單設計器',
+    eventGuideLinkAria: '開啟表單事件指南',
     formName: '表單名稱',
     formType: '表單類型',
     requestId: 'Request ID',
@@ -810,6 +811,12 @@ export default {
     recordNoteScopeRecord: '單條記錄',
     recordNoteAdd: '新增',
     recordNotePlaceholderHint: '評論與附件面板——部署後在用戶門戶生效',
+    recordNoteAttach: '新增附件',
+    recordNotePost: '發佈',
+    recordNoteLoadMore: '載入更多',
+    recordNotePreviewPlaceholder: '寫下評論…',
+    recordNoteMaxSize: '單個檔案最大 {size}MB',
+    recordNoteReadonlyHint: 'To Do 表單上唯讀',
     recordNoteDuplicateScope: '同一表單同一作用域只能放置一個 Record Note 元件',
     recordNoteScopeMainHint: 'Single record 僅在子表表單可用；主表單僅支援整表',
     recordNoteRecordScopeMainForm: '主表單的 Record Note 僅支援整表作用域，Single record 請放在子表表單中',
@@ -2080,8 +2087,10 @@ export default {
     bodyModeVisual: '視覺化',
     bodyModeHtml: 'HTML',
     emailPreview: '郵件預覽',
-    htmlPlaceholder: '貼上或撰寫郵件 HTML。變數占位符會原樣出現在預覽中。',
-    switchToVisualConfirm: '切回視覺化編輯器可能簡化 HTML 中的表格與內聯樣式。是否繼續？',
+    htmlPlaceholder:
+      '貼上或撰寫郵件 HTML。<style> 與 class 選擇器會保留在預覽中。變數占位符會原樣出現。',
+    switchToVisualConfirm:
+      '切回視覺化編輯器可能簡化 HTML 中的表格、<style> 與內聯樣式。是否繼續？',
     loadFailed: '載入範本失敗',
     deleteConfirm: '確定刪除範本「{name}」嗎？'
   },

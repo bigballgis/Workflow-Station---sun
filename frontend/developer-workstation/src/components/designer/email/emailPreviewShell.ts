@@ -5,8 +5,58 @@ export const EMAIL_BODY_FONT =
 
 export type EmailBodyEditorMode = 'visual' | 'html'
 
+const EMAIL_BODY_EDITOR_MODE_KEY_PREFIX = 'dw-email-body-editor-mode'
+
+export function parseEmailBodyEditorMode(value: unknown): EmailBodyEditorMode {
+  return value === 'html' ? 'html' : 'visual'
+}
+
+export function emailBodyEditorModeStorageKey(
+  functionUnitId: number,
+  templateId: number,
+): string {
+  return `${EMAIL_BODY_EDITOR_MODE_KEY_PREFIX}:${functionUnitId}:${templateId}`
+}
+
+function isPersistedTemplateId(templateId: number): boolean {
+  return Number.isInteger(templateId) && templateId > 0
+}
+
+/** Last mode written on successful Save. Missing or unreadable storage → Visual. */
+export function readSavedEmailBodyEditorMode(
+  functionUnitId: number,
+  templateId: number,
+): EmailBodyEditorMode {
+  if (!isPersistedTemplateId(templateId)) return 'visual'
+  try {
+    return parseEmailBodyEditorMode(
+      localStorage.getItem(emailBodyEditorModeStorageKey(functionUnitId, templateId)),
+    )
+  } catch {
+    // FALLBACK(ux): storage unavailable — open Visual until the next Save
+    return 'visual'
+  }
+}
+
+/** Persist only after template Save succeeds. */
+export function writeSavedEmailBodyEditorMode(
+  functionUnitId: number,
+  templateId: number,
+  mode: EmailBodyEditorMode,
+): void {
+  if (!isPersistedTemplateId(templateId)) return
+  try {
+    localStorage.setItem(
+      emailBodyEditorModeStorageKey(functionUnitId, templateId),
+      parseEmailBodyEditorMode(mode),
+    )
+  } catch {
+    // FALLBACK(ux): storage unavailable — next open defaults to Visual
+  }
+}
+
 const EMAIL_BODY_PURIFY = {
-  ADD_TAGS: ['thead', 'tbody', 'tfoot', 'col', 'colgroup'],
+  ADD_TAGS: ['thead', 'tbody', 'tfoot', 'col', 'colgroup', 'style'],
   ADD_ATTR: [
     'style',
     'align',
@@ -20,7 +70,21 @@ const EMAIL_BODY_PURIFY = {
     'bgcolor',
   ],
   ALLOW_DATA_ATTR: false,
+  /** Keep leading <style> in the body fragment; otherwise the parser moves it to <head> and it is dropped. */
+  FORCE_BODY: true,
 } as const
+
+/**
+ * wangEditor does not fire onChange when HTML is first parsed into Visual.
+ * Preview reads the same model as the HTML pane, so the parent must replace
+ * that model with getHtml() after the Visual editor is created.
+ */
+export function htmlFromVisualEditor(
+  editor: { getHtml: () => string } | null | undefined,
+): string | null {
+  if (editor == null || typeof editor.getHtml !== 'function') return null
+  return editor.getHtml()
+}
 
 /** True when leaving HTML source for wangEditor (may simplify markup). */
 export function isSwitchToVisual(

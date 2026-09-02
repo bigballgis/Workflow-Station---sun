@@ -1,4 +1,14 @@
 <template>
+  <el-alert
+    v-for="note in (showFormEventBanners ? formNotifications : [])"
+    :key="note.uniqueId"
+    class="form-event-banner"
+    :title="note.message"
+    :type="note.level === 'ERROR' ? 'error' : note.level === 'WARNING' ? 'warning' : 'info'"
+    show-icon
+    closable
+    @close="formNotifications.splice(formNotifications.indexOf(note), 1)"
+  />
   <template
     v-for="(item, idx) in items"
     :key="idx"
@@ -35,25 +45,35 @@
         <el-icon class="inline-sub-form-preview__icon"><Document /></el-icon>
         <span class="inline-sub-form-preview__title">{{ item.binding.tableName }}</span>
       </div>
-      <!-- The sub-form rule may hold the MI assignment container; bind it to THIS
-           sub-table rather than whichever designer tab happens to be open. -->
-      <MiAssignmentConfigScope :assignment-config="item.binding.assignmentConfig">
-        <template v-if="visiblePreviewRules(item.binding.rule || []).length">
+      <!--
+        The sub-form rule may hold the MI assignment container; bind it to THIS sub-table
+        rather than whichever designer tab happens to be open. The scope also makes this a
+        runtime surface — one mode selected, only its pickers shown, cards switchable —
+        exactly like the Add/Edit dialog, so both Preview paths read the same.
+      -->
+      <MiAssignmentPreviewScope
+        :rule="inlineSubFormRule(item.binding.rule || [])"
+        :assignment-config="item.binding.assignmentConfig"
+        :row="inlineSubFormModel(item.binding.bindingId)"
+        @clear-fields="(fields: string[]) => clearInlineSubFormFields(item.binding.bindingId, fields)"
+      >
+        <template #default="{ rule: inlineRule }">
           <form-create
-            :key="'preview-inline-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-v' + previewVisibilityRenderTick"
+            v-if="inlineRule.length"
+            :key="'preview-inline-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-v' + previewVisibilityRenderTick + '-m' + inlineAssignModeKey(inlineRule)"
             :model-value="inlineSubFormModel(item.binding.bindingId)"
             locale="en"
-            :rule="visiblePreviewRules(item.binding.rule || [])"
+            :rule="inlineRule"
             :option="inlineSubFormPreviewOption(item.binding.option)"
             @update:model-value="(v: Record<string, any>) => setInlineSubFormModel(item.binding.bindingId, v)"
           />
+          <el-empty
+            v-else
+            :description="t('form.noFormContent')"
+            :image-size="60"
+          />
         </template>
-        <el-empty
-          v-else
-          :description="t('form.noFormContent')"
-          :image-size="60"
-        />
-      </MiAssignmentConfigScope>
+      </MiAssignmentPreviewScope>
     </div>
 
     <div
@@ -163,7 +183,7 @@
     >
       <LookupPreview
         :model-value="previewModel[item.field]"
-        :label="item.label"
+        :label="scriptLabelOverlay(item.field) ?? item.label"
         :placeholder="item.placeholder"
         :search-fields="item.searchFields"
         :display-fields="item.displayFields"
@@ -180,6 +200,16 @@
         @clear="() => onLookupPreviewClear(item)"
       />
     </div>
+
+    <!--
+      Record Note: display-only panel, shown here the way the portal renders it
+      (RecordNoteField). Preview has no instance/row to load notes from, so the panel is
+      sample-driven — see RecordNotePreview.
+    -->
+    <RecordNotePreview
+      v-else-if="item.kind === 'recordNote'"
+      :config="item.config"
+    />
 
     <el-card
       v-else-if="item.kind === 'card'"
@@ -216,12 +246,15 @@ import {
 } from './previewSubTableDialog'
 import { PREVIEW_LOOKUP_CASCADE_KEY } from './previewLookupCascade'
 import SubTableField from './SubTableField.vue'
-import MiAssignmentConfigScope from './MiAssignmentConfigScope.vue'
+import MiAssignmentPreviewScope from './MiAssignmentPreviewScope.vue'
 import LookupPreview from './LookupPreview.vue'
-import type { FormPreviewItem, PreviewSubTableBinding } from './formPreviewTypes'
+import RecordNotePreview from './RecordNotePreview.vue'
+import { retypeRecordNoteRulesForPreview } from './recordNotePreviewRules'
+import type { FormPreviewItem } from './formPreviewTypes'
 import {
   hasSubTablePreviewSurface,
 } from './formPreviewTypes'
+import { mergeScriptLookupFilters } from '@/utils/formCreateEventOverlays'
 import {
   dispatchPreviewFieldValueChange,
 } from '@/utils/formCreatePreviewEvents'
@@ -266,6 +299,17 @@ const previewModel = computed({
 })
 
 /**
+ * Inline Form renders its sub-form rule through one form-create instance, so a Record Note
+ * inside it cannot be lifted into its own preview item — retype it instead so form-create
+ * reaches RecordNotePreview rather than the designer canvas placeholder.
+ */
+function inlineSubFormRule(rule: any[]): any[] {
+  const visible = visiblePreviewRules(rule)
+  retypeRecordNoteRulesForPreview(visible)
+  return visible
+}
+
+/**
  * Inline Form preview model: the widget is 1:1 with row[0] of its binding, so preview backs it
  * with that same row rather than the main-form model — otherwise sub-form field names would
  * collide with same-named main-table fields.
@@ -283,6 +327,41 @@ function setInlineSubFormModel(bindingId: number, value: Record<string, any>) {
   rows[0] = { ...(rows[0] ?? {}), ...(value ?? {}) }
   next[id] = rows
   emit('update:previewTableRows', next)
+}
+
+/**
+ * Switching assignment mode drops the other mode's fields from the rule; blank their
+ * stored values too, so a row cannot carry both an assignee and a BU/role. Mirrors
+ * SubTableFormDialog.onAssignmentModeChange.
+ */
+function clearInlineSubFormFields(bindingId: number, fields: string[]) {
+  if (fields.length === 0) return
+  const id = Number(bindingId)
+  const next = { ...props.previewTableRows }
+  const rows = Array.isArray(next[id]) ? [...next[id]] : []
+  const row = { ...(rows[0] ?? {}) }
+  for (const field of fields) row[field] = ''
+  rows[0] = row
+  next[id] = rows
+  emit('update:previewTableRows', next)
+}
+
+/**
+ * form-create caches compiled rules per instance, so swapping the assignment branch
+ * (one Assignee picker ⇄ Business Unit + Role) must remount it or the stale branch
+ * lingers. Deriving the key from the field names actually present keeps the remount
+ * scoped to that swap — an ordinary keystroke does not change it.
+ */
+function inlineAssignModeKey(rule: any[]): string {
+  const fields: string[] = []
+  const walk = (list: any[]) => {
+    for (const r of list || []) {
+      if (r?.field) fields.push(String(r.field))
+      if (Array.isArray(r?.children)) walk(r.children)
+    }
+  }
+  walk(rule)
+  return fields.join('|')
 }
 
 /**
@@ -308,6 +387,10 @@ const {
   isPreviewSubTableVisible,
   previewVisibilityBridge,
   effectivePreviewOption,
+  formNotifications,
+  scriptLookupFiltersFor,
+  scriptLabelOverlay,
+  showFormEventBanners,
 } = useFormPreviewEventVisibility({
   items: () => props.items,
   previewOption: () => props.previewOption,
@@ -380,7 +463,8 @@ function effectivePreviewLookupFilterConditions(
   item: Extract<FormPreviewItem, { kind: 'lookup' }>,
 ): import('@/utils/lookupFilterConditions').LookupFilterCondition[] {
   const base = item.filterConditions || []
-  return (parentCascade?.filterFor ?? filterFor)(base, item.derivedFrom)
+  const cascaded = (parentCascade?.filterFor ?? filterFor)(base, item.derivedFrom)
+  return mergeScriptLookupFilters(cascaded, scriptLookupFiltersFor(item.field))
 }
 
 /** Join columns that must exist on mock rows for cascade filter/autofill to demonstrate. */
@@ -478,6 +562,10 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
 
 <style scoped lang="scss">
 @import '@/styles/form-readonly.scss';
+
+.form-event-banner {
+  margin-bottom: 12px;
+}
 
 /*
  * Inline Form preview: labelled boundary around the embedded sub-table's fields, so they are

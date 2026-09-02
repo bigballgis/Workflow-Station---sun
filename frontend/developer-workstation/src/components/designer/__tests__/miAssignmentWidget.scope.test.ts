@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import MiAssignmentPlaceholderWidget from '../MiAssignmentPlaceholderWidget.vue'
 import MiAssignmentConfigScope from '../MiAssignmentConfigScope.vue'
+import MiAssignmentPreviewScope from '../MiAssignmentPreviewScope.vue'
 import { MI_ASSIGNMENT_CONFIG_KEY, type AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 vi.mock('vue-i18n', async (importOriginal) => {
@@ -102,6 +103,9 @@ describe('preview blocks scope the assignment contract to their binding', () => 
   /**
    * The Inline Form block renders a sub-table's whole designed form — the marker's
    * most common home — as a bare form-create, so it needs the wrapper explicitly.
+   *
+   * It uses MiAssignmentPreviewScope rather than the plain config scope: the block is a
+   * runtime surface, so it must also provide the active mode (see the suite below).
    */
   it('the Inline Form preview block is wrapped in the scope', () => {
     const preview = read('FormPreviewItems.vue')
@@ -109,7 +113,75 @@ describe('preview blocks scope the assignment contract to their binding', () => 
       preview.indexOf("item.kind === 'inlineSubForm'"),
       preview.indexOf("item.kind === 'relationTable'"),
     )
-    expect(inlineBlock).toContain('<MiAssignmentConfigScope')
+    expect(inlineBlock).toContain('<MiAssignmentPreviewScope')
     expect(inlineBlock).toContain(':assignment-config="item.binding.assignmentConfig"')
+  })
+})
+
+/**
+ * Parity with the Add/Edit dialog: the Inline Form block is a RUNTIME surface, not the
+ * designer canvas. Providing MI_ASSIGNMENT_MODE_KEY is what makes the widget select a
+ * card, show only that mode's pickers, and accept a click on the other card — without it
+ * the block rendered two dead cards with all three pickers stacked underneath.
+ */
+describe('MiAssignmentPreviewScope — runtime shaping for the Inline Form block', () => {
+  const RULE = [
+    { type: 'miAssignment', props: {}, children: [
+      { type: 'input', field: 'assignee', title: 'Assignee' },
+      { type: 'select', field: 'bu_code', title: 'Business Unit' },
+      { type: 'select', field: 'role_code', title: 'Role' },
+    ] },
+  ]
+
+  const mountScope = (config: AssignmentConfig | undefined, row: Record<string, unknown> = {}) =>
+    mount(MiAssignmentPreviewScope, {
+      props: { rule: RULE, assignmentConfig: config, row },
+      slots: { default: () => h(MiAssignmentPlaceholderWidget) },
+      global: { stubs: { 'el-alert': true } },
+    })
+
+  it('renders the widget as a runtime surface, with the active mode selected', () => {
+    const wrapper = mountScope(PARTICIPANTS_CONFIG)
+    // is-static marks the designer canvas; a selected card marks the runtime surface.
+    expect(wrapper.find('.mi-assignment-widget__modes').classes()).not.toContain('is-static')
+    expect(wrapper.findAll('.mi-assignment-mode-card.is-selected')).toHaveLength(1)
+  })
+
+  it('exposes only the active mode\'s fields through the slot', () => {
+    const fieldsOf = (rule: any[]): string[] => rule.flatMap(r =>
+      [...(r?.field ? [String(r.field)] : []), ...fieldsOf(r?.children ?? [])])
+
+    let slotRule: any[] = []
+    mount(MiAssignmentPreviewScope, {
+      props: { rule: RULE, assignmentConfig: PARTICIPANTS_CONFIG, row: {} },
+      slots: { default: (p: any) => { slotRule = p.rule; return h('div') } },
+    })
+
+    // Opens on 'person' for an empty row: the assignee picker, not BU + Role.
+    expect(fieldsOf(slotRule)).toEqual(['assignee'])
+  })
+
+  it('opens on role when the row already carries a role, like the dialog', () => {
+    const fieldsOf = (rule: any[]): string[] => rule.flatMap(r =>
+      [...(r?.field ? [String(r.field)] : []), ...fieldsOf(r?.children ?? [])])
+
+    let slotRule: any[] = []
+    mount(MiAssignmentPreviewScope, {
+      props: { rule: RULE, assignmentConfig: PARTICIPANTS_CONFIG, row: { role_code: 'MANAGER' } },
+      slots: { default: (p: any) => { slotRule = p.rule; return h('div') } },
+    })
+
+    expect(fieldsOf(slotRule)).toEqual(['bu_code', 'role_code'])
+  })
+
+  it('passes the rule through untouched when the sub-table has no contract', () => {
+    let slotRule: any[] = []
+    mount(MiAssignmentPreviewScope, {
+      props: { rule: RULE, assignmentConfig: undefined, row: {} },
+      slots: { default: (p: any) => { slotRule = p.rule; return h('div') } },
+    })
+
+    // Deep equality, not identity: Vue hands the slot a reactive proxy of the prop.
+    expect(slotRule).toStrictEqual(RULE)
   })
 })

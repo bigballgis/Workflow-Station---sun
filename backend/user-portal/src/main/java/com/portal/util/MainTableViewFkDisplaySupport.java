@@ -42,12 +42,12 @@ public final class MainTableViewFkDisplaySupport {
                 }
             }
         }
-        // FALLBACK(migration): missing / unmatched ref_primary_key_fields — try common id keys
-        for (String candidate : List.of("id", "id_idw")) {
-            if (fkEquals(mainVars.get(candidate), fkScalar)) {
-                return mainVars.get(displayField);
-            }
-        }
+        // Match ONLY on the referenced table's configured primary key (ref_primary_key_fields).
+        // A previous fallback tried the literals "id" / "id_idw" when PK metadata was missing: tables
+        // whose PK happens to use those names looked fine, while a table with a differently named PK
+        // that also carries an "id" column matched the WRONG row and displayed a wrong related
+        // attribute. Guessing a column name is worse than not resolving: return null so the caller
+        // shows the raw FK value.
         return null;
     }
 

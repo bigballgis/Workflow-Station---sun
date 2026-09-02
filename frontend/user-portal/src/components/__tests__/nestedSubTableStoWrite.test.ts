@@ -12,16 +12,16 @@ describe('mergeNestedSubTableRowsIntoSto', () => {
   const binding = { bindingId: 66, tableName: 'grandchild_table' }
   const rows = [{ id: 1, name: 'row-a' }, { id: 2, name: 'row-b' }]
 
-  it('writes rows under both binding id and table name keys', () => {
+  it('writes rows under exactly one canonical key', () => {
+    // 一张表一个 key：不再同时写 bindingId 与表名两份副本。
     const sto = mergeNestedSubTableRowsIntoSto([], binding, rows)
-    expect(sto['66']).toBe(rows)
-    expect(sto['grandchild_table']).toBe(rows)
+    expect(sto['dw:grandchild_table']).toBe(rows)
+    expect(Object.keys(sto)).toEqual(['dw:grandchild_table'])
   })
 
-  it('skips the table-name key when tableName is blank', () => {
+  it('writes nothing when the table name is blank (key unresolvable — never guesses)', () => {
     const sto = mergeNestedSubTableRowsIntoSto([], { bindingId: 66, tableName: '  ' }, rows)
-    expect(sto['66']).toBe(rows)
-    expect(Object.keys(sto)).toEqual(['66'])
+    expect(Object.keys(sto)).toEqual([])
   })
 
   it('preserves sibling slices from existing sources', () => {
@@ -29,7 +29,7 @@ describe('mergeNestedSubTableRowsIntoSto', () => {
     const sto = mergeNestedSubTableRowsIntoSto([parentRow], binding, rows)
     expect(sto['70']).toEqual([{ id: 9 }])
     expect(sto['other_table']).toEqual([{ id: 9 }])
-    expect(sto['66']).toBe(rows)
+    expect(sto['dw:grandchild_table']).toBe(rows)
   })
 
   it('later sources win over earlier ones (model over stale parentRow)', () => {
@@ -46,8 +46,8 @@ describe('mergeNestedSubTableRowsIntoSto', () => {
       binding,
       rows,
     )
-    expect(sto['66']).toBe(rows)
-    expect(Object.keys(sto).sort()).toEqual(['66', 'grandchild_table'])
+    expect(sto['dw:grandchild_table']).toBe(rows)
+    expect(Object.keys(sto).sort()).toEqual(['dw:grandchild_table'])
   })
 
   it('round-trips through pullNestedRowsForBindingFromParentRows (the runtime reader)', () => {

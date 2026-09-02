@@ -29,7 +29,7 @@ Order: Outbound connection → template (enabled) → Send Task → To + Connect
 
 SMTP host/port/TLS come from Admin Center → System Config. Same email cannot have two connections in the same direction.
 
-Template example: PR Approved Notice. Insert Variable for main fields, lookup attributes, or a sub-table (rendered as a table). Visual and HTML panes; preview is design-time only.
+Template example: PR Approved Notice. Insert Variable for main fields, lookup attributes, or a sub-table (rendered as a table). Visual and HTML panes; HTML mode keeps <style> tags in the design-time preview. Switching back to Visual may simplify tables and styles.
 
 Send Task required: To, Connection, Template. From override optional. Failures: missing connection, empty To, missing/disabled template, empty subject after variables, attachment not a FILE field, no global SMTP.
 
@@ -87,3 +87,53 @@ Failures: Maximum {limit} files allowed; zip is skipped from the in-form preview
 
 Related: /help/email-send#send-task
 
+## Form events (/help/form-events)
+
+Two places to write scripts: Edit on a selected control, and Form event on the Form tab (button still Edit). Not Table Design Formula.
+
+Sidebar: Form Design → Controls → How to write events. Click a control name under Basic / Extend / MI / Layout / Auxiliary — there is no Event item under each control.
+
+Order: open Form Design → select a control (or open Form tab → Form event) → Edit → Create / pick a name → Save → Ok → save the form.
+
+The Edit dialog has Create on the left and the script editor on the right. Save writes the function you are editing. Ok keeps the list. Footer Cancel discards dialog edits.
+
+Shared names in every control event: $inject, api (same as options), value, field, formData (same snapshot as data), user, option (often empty), rule/self (rarely needed), args (original payload). Always write user && before a property.
+
+Each method on the human page is written as: if you want X, use this; before (designer default); after (what you see). This index keeps method names for lookup.
+
+api (same methods on Form event via api / options):
+- getValue(field) / setValue(field, value) / setValue({ field: value, … }) / api.form (read snapshot; do not assign)
+- required(true|false, field) / requiredStatus(field)
+- disabled(true|false, field) / disabledStatus(field) — whole-form readonly and audit fields stay locked
+- hidden(true) removes from page (not submitted); hidden(false) puts back; hiddenStatus — also Card/Tabs/Collapse/Row
+- display(true) hides with CSS; display(false) shows; displayStatus is true when shown
+- setOptions / addOption / removeOption / clearOptions / resetOptions — Select/Radio/Checkbox only; clearOptions does not clear the field value
+- setFieldError / clearFieldError — blocks Save until cleared; beforeSubmit return false also blocks Save
+- setFormNotification(message, ERROR|WARNING|INFO, uniqueId) / clearFormNotification — ERROR banner does not block Save
+- setLookupFilter / clearLookupFilter / refresh — Lookup only (field is that control’s Field name); AND with designer/cascade; invalid selection auto-clears. No Sub-Table refresh
+- setFocus / setLabel / getLabel / resetLabel — labels are plain text
+Omit field on hidden/display/required/disabled only to affect every field.
+
+Samples use help_pr / help_pr_line (request_title, requester, scenario, start_date, end_date, cost_center, notes, quantity).
+
+Hooks on every control: hook_load, hook_mounted, hook_deleted, hook_watch, hook_value, hook_hidden, hook_titleClick.
+
+Form event names: onSubmit, onReset, onCreated, onMounted, onReload, onChange, beforeSubmit, beforeFetch. onChange has field, value, options. beforeSubmit can return false to stop Save.
+
+Form Preview has no Portal workspace: activeBusinessUnitName and activeRoleName stay empty until User Portal.
+
+Per-control events: /help/form-events-basic (Basic), /help/form-events-extend (Extend + MI), /help/form-events-layout (Layout + Auxiliary).
+
+Related: /help/computed-fields
+
+## Basic control events (/help/form-events-basic)
+
+Palette Basic. Field controls list their Create events plus blur and focus. Example: Select scenario change → api.required(value === 'A', ['start_date', 'end_date']) on help_pr / help_pr_line. Upload lists remove, preview, error, progress, exceed (not change). Hooks stay on /help/form-events#hooks.
+
+## Extend and MI events (/help/form-events-extend)
+
+Extend: Sub-Table and Link Form keep change/blur/focus. Inline Form, Record Note have click only (no Field). Lookup and Owner have change/blur/focus. MI Assignment Mode: click on the container; put value scripts on child fields.
+
+## Layout and Auxiliary events (/help/form-events-layout)
+
+Usually click plus hooks. Tabs may also list tabClick, tabChange, tabAdd, tabRemove when Create shows those names. Button click can fill requester from user.

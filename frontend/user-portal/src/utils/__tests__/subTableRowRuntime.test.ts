@@ -237,6 +237,7 @@ describe('seedLinkChildForeignKeysFromParentRow', () => {
       { id_idw: 'Test-000044', name: 'dev', assignee: { id: 'u1' } },
       [{ fieldName: 'id_idw', isPrimaryKey: true }],
       'Test-000044',
+      ['id_idw'],   // 父表设计器主键，必须显式传入
     )
     expect(row.id_idw).toBe('Test-000044')
   })
@@ -246,9 +247,33 @@ describe('seedLinkChildForeignKeysFromParentRow', () => {
       { id: 'Test-000044', sub_task_id: 'Test-000044', sex: true },
       [{ fieldName: 'id', isPrimaryKey: true }],
       'Test-000044',
+      ['id_idw'],
     )
     expect(row.id).toBeUndefined()
     expect(row.sub_task_id).toBe('Test-000044')
+  })
+
+  it('父表主键叫 row_id 时同样受保护（不再写死 id_idw）', () => {
+    // 回归：守卫此前只认字面量 'id_idw'，主键叫 row_id 的表（ATM_Transaction）
+    // 会把 collection 自己的主键当成「误copy」删掉。
+    const row = repairMisassignedPrimaryKeyFromParentId(
+      { row_id: 'R-7', name: 'dev' },
+      [{ fieldName: 'row_id', isPrimaryKey: true }],
+      'R-7',
+      ['row_id'],
+    )
+    expect(row.row_id).toBe('R-7')
+  })
+
+  it('未传父表主键时什么都不删（不猜列名，也不抛错）', () => {
+    // 这个函数是**删值**的：无从判断该保护哪个主键时，保持原样才是安全的一侧。
+    // 抛错会中断整个 Save（共享附件等 binding 本就没有设计器 PK）。
+    const row = repairMisassignedPrimaryKeyFromParentId(
+      { id_idw: 'Test-000044' },
+      [{ fieldName: 'id_idw', isPrimaryKey: true }],
+      'Test-000044',
+    )
+    expect(row.id_idw).toBe('Test-000044')
   })
 })
 

@@ -3,10 +3,20 @@
         <el-badge :value="eventNum" type="warning" :hidden="eventNum < 1">
             <el-button @click="visible=true" size="small">{{ t('event.title') }}</el-button>
         </el-badge>
-        <el-dialog class="_fd-fn-list-dialog" :title="t('event.title')" v-model="visible" destroy-on-close
+        <el-dialog class="_fd-fn-list-dialog" v-model="visible" destroy-on-close
                    :close-on-click-modal="false"
                    append-to-body
                    width="1080px">
+            <template #header>
+                <div class="_fd-fn-list-dialog-head">
+                    <span class="el-dialog__title">{{ t('event.title') }}</span>
+                    <DesignerHelpLink
+                        path="/form-events#form-level"
+                        :aria-label="eventGuideAria"
+                        test-id="form-event-guide-link"
+                    />
+                </div>
+            </template>
             <el-container class="_fd-fn-list-con" style="height: 600px">
                 <el-aside style="width:300px;">
                     <el-container class="_fd-fn-list-l">
@@ -69,6 +79,8 @@ import unique from '@form-create/utils/lib/unique';
 import deepExtend from '@form-create/utils/lib/deepextend';
 import {defineComponent} from 'vue';
 import FnEditor from '@form-create/designer/src/components/FnEditor.vue';
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue';
+import i18n from '@/i18n';
 
 const PREFIX = '[[FORM-CREATE-PREFIX-';
 const SUFFIX = '-FORM-CREATE-SUFFIX]]';
@@ -86,6 +98,7 @@ export default defineComponent({
     inject: ['designer'],
     components: {
         FnEditor,
+        DesignerHelpLink,
     },
     data() {
         return {
@@ -107,6 +120,9 @@ export default defineComponent({
         },
         t() {
             return this.designer.setupState.t;
+        },
+        eventGuideAria() {
+            return i18n.global.t('form.eventGuideLinkAria');
         },
         eventNum() {
             let num = 0;
@@ -265,6 +281,12 @@ export default defineComponent({
     border-radius: 5px;
     padding: 0;
     margin-top: 5px;
+}
+
+._fd-fn-list-dialog-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 ._fd-fn-list-method {

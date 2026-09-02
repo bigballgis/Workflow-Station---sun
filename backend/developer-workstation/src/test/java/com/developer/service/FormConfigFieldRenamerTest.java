@@ -382,6 +382,95 @@ class FormConfigFieldRenamerTest {
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     /** 只关心 field/title 的旧测试场景便利构造（其余属性视为未变）。 */
+    @Test
+    @DisplayName("SUB 绑定：subListViews[bindingId].columns 字段名同步（回归：改名后列表列显示 -）")
+    void appliesToSubListViewColumns() {
+        // Regression: renaming a sub-table field used to update rule/subForms but NOT the sub-table
+        // list columns, leaving the column bound to a field name the row data no longer carries —
+        // the Portal then rendered "-" for that column while every other column kept working.
+        TableDefinition table = table(TABLE_ID);
+        FormDefinition form = formWithSub(TABLE_ID, SUB_BINDING_ID);
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", new ArrayList<>());
+        config.put("subListViews", new LinkedHashMap<>(Map.of(
+                String.valueOf(SUB_BINDING_ID), new LinkedHashMap<>(Map.of(
+                        "columns", new ArrayList<>(List.of(
+                                column("id_idw", "Id"),
+                                column("name", "Name"))))))));
+        form.setConfigJson(config);
+
+        var dirty = FormConfigFieldRenamer.apply(table, List.of(form), List.of(
+                rename("id_idw", "id_idwvv", "Id", "Id")
+        ));
+
+        assertThat(dirty).containsExactly(form);
+        assertThat(subListViewColumns(form, SUB_BINDING_ID).get(0))
+                .containsEntry("fieldName", "id_idwvv")
+                .containsEntry("displayName", "Id");
+        assertThat(subListViewColumns(form, SUB_BINDING_ID).get(1))
+                .as("unrelated column untouched")
+                .containsEntry("fieldName", "name");
+    }
+
+    @Test
+    @DisplayName("subListViews：开发者自定义的列标题在改名后保留")
+    void keepsCustomSubListViewColumnLabel() {
+        TableDefinition table = table(TABLE_ID);
+        FormDefinition form = formWithSub(TABLE_ID, SUB_BINDING_ID);
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", new ArrayList<>());
+        config.put("subListViews", new LinkedHashMap<>(Map.of(
+                String.valueOf(SUB_BINDING_ID), new LinkedHashMap<>(Map.of(
+                        "columns", new ArrayList<>(List.of(
+                                column("qty", "My Custom Label"))))))));
+        form.setConfigJson(config);
+
+        FormConfigFieldRenamer.apply(table, List.of(form), List.of(
+                rename("qty", "quantity", "Qty", "Quantity")
+        ));
+
+        assertThat(subListViewColumns(form, SUB_BINDING_ID).get(0))
+                .containsEntry("fieldName", "quantity")
+                .as("a hand-typed label must survive the rename")
+                .containsEntry("displayName", "My Custom Label");
+    }
+
+    @Test
+    @DisplayName("subListViews：只改指向本表的绑定，其它表的同名列不动")
+    void doesNotTouchSubListViewsOfOtherTables() {
+        TableDefinition table = table(TABLE_ID);
+        FormDefinition form = formWithSub(OTHER_TABLE_ID, SUB_BINDING_ID);
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", new ArrayList<>());
+        config.put("subListViews", new LinkedHashMap<>(Map.of(
+                String.valueOf(SUB_BINDING_ID), new LinkedHashMap<>(Map.of(
+                        "columns", new ArrayList<>(List.of(column("id_idw", "Id"))))))));
+        form.setConfigJson(config);
+
+        var dirty = FormConfigFieldRenamer.apply(table, List.of(form), List.of(
+                rename("id_idw", "id_idwvv", "Id", "Id")
+        ));
+
+        assertThat(dirty).isEmpty();
+        assertThat(subListViewColumns(form, SUB_BINDING_ID).get(0))
+                .containsEntry("fieldName", "id_idw");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> subListViewColumns(FormDefinition form, Long bindingId) {
+        Map<String, Object> view = (Map<String, Object>) ((Map<?, ?>) form.getConfigJson().get("subListViews"))
+                .get(String.valueOf(bindingId));
+        return (List<Map<String, Object>>) view.get("columns");
+    }
+
+    private static Map<String, Object> column(String fieldName, String displayName) {
+        Map<String, Object> c = new LinkedHashMap<>();
+        c.put("fieldName", fieldName);
+        c.put("columnType", "field");
+        c.put("displayName", displayName);
+        return c;
+    }
+
     private static FormConfigFieldRenamer.FieldChange rename(String oldField,
                                                              String newField,
                                                              String oldDesc,

@@ -28,6 +28,7 @@ import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designe
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 import RecordNotePlaceholderWidget from './components/designer/RecordNotePlaceholderWidget.vue'
+import RecordNotePreview from './components/designer/RecordNotePreview.vue'
 import OwnerPlaceholderWidget from './components/designer/OwnerPlaceholderWidget.vue'
 import OwnerConfigEditor from './components/designer/OwnerConfigEditor.vue'
 import FormControlTypeSelect from './components/designer/FormControlTypeSelect.vue'
@@ -95,6 +96,12 @@ FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 
 // Register RecordNotePlaceholderWidget as the canvas renderer for 'recordNote' type
 FcDesigner.component('RecordNote', RecordNotePlaceholderWidget)
+
+// Preview-only renderer: form-create surfaces that render a whole rule in one instance
+// (sub-table Add/Edit dialog, Link Form modal) retype `recordNote` to this so Preview shows
+// the portal-shaped Notes panel instead of the canvas placeholder. Not a drag rule — it has
+// no palette entry and is never persisted. See recordNotePreviewRules.ts.
+FcDesigner.component('RecordNotePreview', RecordNotePreview)
 
 // Owner field: canvas placeholder + props-panel editor for ownerConfig
 FcDesigner.component('Owner', OwnerPlaceholderWidget)
@@ -590,6 +597,7 @@ FcDesigner.addDragRule({
     // Notes are permanently immutable once written (nobody, not even the author or
     // SYS_ADMIN, may edit/delete them) — these switches no longer control anything
     // at runtime. Drop them from existing configJson so the panel doesn't show dead controls.
+    // `readonly` is unrelated: it governs whether notes may be ADDED, not edited.
     delete rule.props.allowEditOwn
     delete rule.props.allowDelete
   },
@@ -604,7 +612,11 @@ FcDesigner.addDragRule({
         panelTitle: 'Notes',
         allowAttachment: true,
         maxFileSizeMb: 10,
-        pageSize: 5
+        pageSize: 5,
+        // On a To Do form the task's handler may comment by default; switch this on to make
+        // the panel read-only there. Request-form notes are audit opinions and stay governed
+        // by the function unit's audit roles regardless of this flag.
+        readonly: false
       }
     }
   },
@@ -618,7 +630,8 @@ FcDesigner.addDragRule({
       { type: 'input', field: 'panelTitle', title: 'Panel Title' },
       { type: 'switch', field: 'allowAttachment', title: 'Allow Attachments' },
       { type: 'inputNumber', field: 'maxFileSizeMb', title: 'Max File Size (MB)', props: { min: 1, max: 10 } },
-      { type: 'inputNumber', field: 'pageSize', title: 'Visible Notes', props: { min: 1, max: 20 } }
+      { type: 'inputNumber', field: 'pageSize', title: 'Visible Notes', props: { min: 1, max: 20 } },
+      { type: 'switch', field: 'readonly', title: 'Readonly' }
     ]
   }
 })

@@ -28,6 +28,7 @@
       :rules="formRules"
       :label-width="stableLabelWidth"
       label-position="left"
+      :validate-on-rule-change="false"
     >
       <template
         v-for="group in dialogLayoutGroups"
@@ -632,6 +633,8 @@
         :record-id="editingRowStableId"
         :process-instance-id="recordNoteInstanceId ?? null"
         :function-unit-id="recordNoteFunctionUnitId ?? null"
+        :task-id="hostTaskId ?? null"
+        :readonly="hostTaskId != null && rn._recordNote?.readonly === true"
       />
     </div>
 
@@ -799,12 +802,16 @@ const {
   onDialogFieldChange,
   onDialogFieldBlur,
   isDialogFieldVisible,
+  eventRequiredState,
+  eventRequiredTick,
   resetDialogEventVisibility,
   bootstrapDialogFormLifecycle,
   runFormOnReload,
   runFormBeforeSubmit,
   runFormOnSubmit,
   runFormOnReset,
+  scriptFieldErrors,
+  isDialogFieldDisabled,
 } = useSubTableDialogComponentEvents(
   formData,
   () => props.columns,
@@ -1008,6 +1015,8 @@ const lockedMode = computed(() =>
   lockedAssignMode(effectiveAssignmentConfig.value))
 /** BPMN configured only one mode — the other card renders but is not selectable. */
 function isModeCardDisabled(value: AssignmentMode): boolean {
+  // Readonly block → neither card is selectable (see assignmentBlockReadonly).
+  if (assignmentBlockReadonly.value) return true
   return !assignModeSwitchable.value && lockedMode.value !== value
 }
 /**
@@ -1140,6 +1149,20 @@ const dialogLayoutGroups = computed(() => {
   return groups
 })
 
+/**
+ * The designer set Readonly on the Assignment Mode block: its pickers already render
+ * disabled (dialogFormLayout stamps them), so the mode cards must stop switching too —
+ * otherwise the user could still move the row between an assignee and a role pool.
+ * Read back off the stamped columns so there is one source of truth for the flag.
+ */
+const assignmentBlockReadonly = computed(() => {
+  const owned = dialogLayoutGroups.value
+    .flatMap(group => group.items)
+    .filter(item => item.type === 'column' && !!item.assignmentSlot)
+  return owned.length > 0
+    && owned.every(item => item.type === 'column' && item.column.readonly === true)
+})
+
 // ─── Form core (state / rules / formulas / validation / open / save) ───────────
 const {
   formRef,
@@ -1164,6 +1187,12 @@ const {
   runFormBeforeSubmit: () => runFormBeforeSubmit(props.formOptions),
   runFormOnSubmit: () => runFormOnSubmit(props.formOptions),
   runFormOnReset: () => runFormOnReset(props.formOptions),
+  eventRequiredFlags: computed(() => {
+    void eventRequiredTick.value
+    return eventRequiredState.flags
+  }),
+  scriptFieldErrors,
+  isDialogFieldDisabled,
 })
 
 const {
@@ -1185,6 +1214,9 @@ const columnErrorMessages = computed<Record<string, string>>(() => {
   }
   for (const [field, code] of Object.entries(computedFieldErrors.value)) {
     messages[field] = t('computedField.evaluationFailed', { code })
+  }
+  for (const [field, message] of Object.entries(scriptFieldErrors.value)) {
+    messages[field] = message
   }
   return messages
 })

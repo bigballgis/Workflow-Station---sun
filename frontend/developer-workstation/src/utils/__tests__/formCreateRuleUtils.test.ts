@@ -111,3 +111,45 @@ describe('formCreateRuleUtils', () => {
     expect((stripped.props as Record<string, unknown>).readonly).toBe(false)
   })
 })
+
+/**
+ * The Assignment Mode block declares `input: false`, so form-create forwards nothing to
+ * it and marking only the container `disabled` left its pickers editable. The block owns
+ * those fields, so its Readonly toggle must reach them.
+ */
+describe('Assignment Mode readonly cascades to the fields the block owns', () => {
+  const build = (containerProps: Record<string, unknown>) => ([{
+    type: 'miAssignment',
+    props: containerProps,
+    children: [
+      { type: 'input', field: 'assignee', title: 'Assignee', props: {} },
+      { type: 'select', field: 'bu_code', title: 'Business Unit', props: {} },
+    ],
+  }])
+  const disabledOf = (out: unknown[]) =>
+    ((out[0] as { children: Array<{ props?: { disabled?: unknown } }> }).children)
+      .map(child => child.props?.disabled === true)
+
+  it('disables the pickers when the container is readonly', () => {
+    expect(disabledOf(mapFormCreateRulesReadonlyDeep(build({ readonly: true })))).toEqual([true, true])
+  })
+
+  it('leaves them editable when the container is not', () => {
+    expect(disabledOf(mapFormCreateRulesReadonlyDeep(build({})))).toEqual([false, false])
+  })
+
+  it('lets a child that explicitly turned Readonly off win', () => {
+    const rules = build({ readonly: true })
+    rules[0].children[0].props = { readonly: false }
+    expect(disabledOf(mapFormCreateRulesReadonlyDeep(rules))).toEqual([false, true])
+  })
+
+  it('does NOT cascade for ordinary containers — a readonly card keeps its children as they were', () => {
+    const out = mapFormCreateRulesReadonlyDeep([{
+      type: 'card',
+      props: { readonly: true },
+      children: [{ type: 'input', field: 'x', props: {} }],
+    }]) as Array<{ children: Array<{ props?: { disabled?: unknown } }> }>
+    expect(out[0].children[0].props?.disabled).not.toBe(true)
+  })
+})

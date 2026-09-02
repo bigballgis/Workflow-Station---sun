@@ -8,6 +8,8 @@ import {
   isSharedAttachmentFileBinding,
   rowIsSelfOwnedByStructuralFk,
 } from '@/composables/tasks/shared'
+import { readSubTableRows, type SubTableStoreBindingLike } from '@/composables/tasks/subTableStore'
+import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
 /** Consistent with request interceptor; used to determine if the initiator is viewing their own application */
@@ -33,22 +35,28 @@ export function normalizeSubTableName(name?: string): string {
 }
 
 /**
- * Exact-bindingId lookup ONLY — no table-name-string-key fallback. `__subTables__` also carries a
- * shared display-name key (e.g. "Participants") for a table read by several MI form bindings
- * (Assign Task / Sub task / Main); each binding's own save overwrites that SAME shared key, so it
- * holds whichever binding saved LAST, with no way to tell whether it belongs to the binding being
- * resolved here. Guessing via that key silently served a sibling binding's stale row as this
- * binding's own data. A binding with no data under its own bindingId key genuinely has none here —
- * callers needing the shared logical table's data must resolve it by table_id against other
- * bindings (see resolveSameTableIdSliceForBinding), which identifies the actual owning binding
- * instead of guessing by a shared string key.
+ * 规范 key（`dw:<name>` / `rt:<name>`）优先 —— 一张表一份数据，binding 不是数据身份。
+ *
+ * <p>规范 key 命中即返回：同一张表被多个 MI binding 读取（Assign Task / Sub task / Main）时，
+ * 它们解析到同一个 key，不存在「取到兄弟 binding 的陈旧行」的歧义。**空数组也算命中**——
+ * 表确实没有行，回退到旧 key 会把刚清空的表填回陈旧副本。
+ *
+ * <p>回退路径只认 binding id、不做表名兜底：旧结构里 `__subTables__` 还带一个共享展示名 key
+ * （如 `Participants`），多个 binding 各自保存时互相覆盖，无从判断落在里面的行属于谁，
+ * 按名字猜会把兄弟 binding 的陈旧行当成本 binding 的数据。旧数据下某 binding 在自己
+ * id key 下没有行，就是真的没有。
  */
 export function getSavedSubTableRowsFromVariables(
   savedSubTables: Record<string, any> | null | undefined,
-  rawBinding: { bindingId: number },
+  rawBinding: { bindingId: number } & SubTableStoreBindingLike,
   _primaryKeyFields?: string[] | null
 ): any[] | undefined {
   if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
+
+  const canonical = readSubTableRows(savedSubTables, rawBinding)
+  if (canonical) return dropSubsumedSubTableRows(canonical as any[])
+
+  // 过渡期：规范 key 落地前保存的实例仍是 binding id key。
   const v = savedSubTables[rawBinding.bindingId] ?? savedSubTables[String(rawBinding.bindingId)]
   if (!Array.isArray(v) || v.length === 0) return undefined
   return dropSubsumedSubTableRows(v)
@@ -267,6 +275,18 @@ export const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
   'task_definition_key',
 ])
 
+/**
+ * 「这个列是 MI 运行时元数据，而不是用户填的业务数据」。
+ *
+ * <p>上面的集合是**跨 FU 的已知名字并集**（历史上出现过的各种拼法），但它无法覆盖某个 FU
+ * 在 Sub-Task Config 里自定义的列名 —— 那样的列会被误判成业务数据。故先问当前 FU 的配置。
+ */
+export function isMiPlaceholderKey(lowerKey: string): boolean {
+  if (SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lowerKey)) return true
+  const { statusField, currentNodeField } = getActiveMiFieldNames()
+  return lowerKey === statusField.toLowerCase() || lowerKey === currentNodeField.toLowerCase()
+}
+
 /** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */
 export const SUB_TABLE_STRUCTURAL_FK_KEYS = new Set([
   'sub_task_id',
@@ -295,7 +315,7 @@ export function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, f
   if (!Array.isArray(rows) || rows.length === 0) return true
   const checkKeys = [...fieldKeys].filter(k => {
     const lk = k.toLowerCase()
-    return !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
+    return !isMiPlaceholderKey(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
   })
   if (checkKeys.length === 0) return true
   for (const row of rows) {

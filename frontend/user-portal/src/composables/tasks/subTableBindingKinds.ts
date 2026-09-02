@@ -6,11 +6,16 @@
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import { SUB_TABLE_ROW_META_KEYS } from './internal'
 import { normalizeSubTableName } from './subTableCore'
+import { getActiveMiFieldNames } from './useMiConfig'
 
 /** Runtime / MI dashboard keys that must not become inferred sub-table columns or leak into non-MI bindings. */
 export function isSubTableRowMetaField(key: string): boolean {
   if (!key || key.startsWith('__')) return true
-  return SUB_TABLE_ROW_META_KEYS.has(key)
+  if (SUB_TABLE_ROW_META_KEYS.has(key)) return true
+  // 上面的集合是跨 FU 的已知名字并集；当前 FU 在 Sub-Task Config 里自定义的状态/节点列
+  // 同样是运行时元数据，漏判会让它被当成用户业务数据处理。
+  const { statusField, currentNodeField } = getActiveMiFieldNames()
+  return key === statusField || key === currentNodeField
 }
 
 /** True for a non-empty nested `__subTables__` payload (grandchild rows of a sub-table-in-sub-table). */
@@ -49,6 +54,37 @@ const MI_DASHBOARD_STATUS_FIELDS = new Set([
 ])
 
 /**
+ * The sub-table columns a multi-instance sub-process mirrors its per-participant progress into,
+ * as configured in Process Design → Sub-Task Config ("Sub-task status column" /
+ * "Current node column"). They reach the portal as the BPMN sub-process extension properties
+ * {@code miTaskStatusField} / {@code miTaskCurrentNodeField}
+ * (see {@code MiSubProcessScopeConfig}).
+ */
+export interface MiDashboardFieldNames {
+  statusField?: string | null
+  currentNodeField?: string | null
+}
+
+/**
+ * Column names the designer configured, falling back to the platform defaults ONLY when the BPMN
+ * carries no configuration (older process definitions saved before Sub-Task Config exposed these,
+ * and non-MI contexts that still merge these mirror columns). A configured name always wins, so a
+ * Function Unit whose status column is called anything else is handled by config, not by adding
+ * another literal here.
+ */
+export function resolveMiDashboardFieldNames(
+  fields?: MiDashboardFieldNames | null,
+): { statusField: string; currentNodeField: string } {
+  // 显式传入 > 当前 FU 的 Sub-Task Config（useMiConfig 注册表）> 平台默认字面量。
+  // 实测此前无任何调用点传过 fields，导致 100% 落在默认值上、状态列改名的 FU 静默失效。
+  const { statusField, currentNodeField } = getActiveMiFieldNames({
+    statusField: fields?.statusField,
+    currentNodeField: fields?.currentNodeField,
+  })
+  return { statusField, currentNodeField }
+}
+
+/**
  * True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table).
  *
  * <p>Everything below is a <b>guess from column names</b>, so it misfires on tables that merely look
@@ -65,9 +101,16 @@ export function isMiDashboardSubTableBinding(binding: {
   columns?: Array<{ field?: string }> | null
   tableName?: string
   miCollection?: boolean | null
-}): boolean {
+}, miFields?: MiDashboardFieldNames | null): boolean {
   if (binding.miCollection === false) return false
   const cols = binding.columns ?? []
+  // Configured Sub-Task Config columns win over the name guesses below.
+  const configured = [miFields?.statusField, miFields?.currentNodeField]
+    .map(f => String(f ?? '').trim())
+    .filter(Boolean)
+  if (configured.length > 0 && cols.some(c => c?.field != null && configured.includes(String(c.field)))) {
+    return true
+  }
   if (cols.some(c => c?.field != null && MI_DASHBOARD_STATUS_FIELDS.has(String(c.field)))) return true
   const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)
   if (assigneeField && cols.some(c => c?.field === assigneeField)) return true
@@ -150,9 +193,20 @@ function rowHasMiAssigneeField(row: Record<string, unknown>): boolean {
   return false
 }
 
-/** True when a row carries MI dashboard columns (assignee / per-row task status). */
-export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | undefined): boolean {
+/**
+ * True when a row carries MI dashboard columns (assignee / per-row task status).
+ *
+ * <p>{@code miFields} carries the Sub-Task Config column names when the caller knows them; the
+ * literals below are only the platform defaults for callers with no BPMN in hand.
+ */
+export function isSubTableMiDashboardRow(
+  row: Record<string, unknown> | null | undefined,
+  miFields?: MiDashboardFieldNames | null,
+): boolean {
   if (!row) return false
+  const { statusField, currentNodeField } = resolveMiDashboardFieldNames(miFields)
+  if (row[statusField] !== undefined && row[statusField] !== null) return true
+  if (row[currentNodeField] !== undefined && row[currentNodeField] !== null) return true
   if (row.task_status !== undefined && row.task_status !== null) return true
   if (row.sub_task_status !== undefined && row.sub_task_status !== null) return true
   if (row.task_id != null && String(row.task_id).trim() !== '') return true

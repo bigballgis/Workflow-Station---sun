@@ -103,19 +103,19 @@ describe('useInlineSubFormComponent — MI row targeting (regression: editing on
   ]
 
   it('reads the current MI sub-task\'s own row, not row[0], when currentMiRowId identifies a different row', () => {
-    const { api } = setup(makeBinding({ data: participants }), {
+    const { api } = setup(makeBinding({ data: participants, primaryKeyFields: ['id_idw'] }), {
       currentMiRowId: () => 'Test-000010',
     })
     expect(api.resolveInlineSubFormRow(FIELD)).toEqual({ id_idw: 'Test-000010', name: '555' })
   })
 
   it('falls back to row[0] when currentMiRowId is absent (plain non-MI single-row case unchanged)', () => {
-    const { api } = setup(makeBinding({ data: participants }))
+    const { api } = setup(makeBinding({ data: participants, primaryKeyFields: ['id_idw'] }))
     expect(api.resolveInlineSubFormRow(FIELD)).toEqual({ id_idw: 'Test-000009', name: '444' })
   })
 
   it('writes an edit back into the matched MI row, not row[0], leaving sibling participants untouched', () => {
-    const { api, handleSubTableUpdate } = setup(makeBinding({ data: participants }), {
+    const { api, handleSubTableUpdate } = setup(makeBinding({ data: participants, primaryKeyFields: ['id_idw'] }), {
       currentMiRowId: () => 'Test-000010',
     })
     api.handleInlineSubFormUpdate(FIELD, { name: 'edited' })
@@ -128,7 +128,7 @@ describe('useInlineSubFormComponent — MI row targeting (regression: editing on
   })
 
   it('reproduces the exact regression: editing "Name" on participant Test-000010 must not surface or overwrite Test-000009/Test-000011 data', () => {
-    const { api, handleSubTableUpdate } = setup(makeBinding({ data: participants }), {
+    const { api, handleSubTableUpdate } = setup(makeBinding({ data: participants, primaryKeyFields: ['id_idw'] }), {
       currentMiRowId: () => 'Test-000010',
     })
     // Before the fix, resolveInlineSubFormRow always returned row[0] (Test-000009's data) —
@@ -155,6 +155,8 @@ describe('useInlineSubFormComponent — link-child binding has no index-0 fallba
       tableId: 50333,
       tableName: 'people',
       foreignKeyField: 'id',
+      // 生产 binding 都带设计器主键；缺失会抛 MI_CONFIG_MISSING（不猜列名）
+      primaryKeyFields: ['id'],
       data,
     } as Partial<SubTableBinding>)
 

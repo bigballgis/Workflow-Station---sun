@@ -3012,3 +3012,81 @@
     screenshots 2026-09-01_audit-admin-center-snug-pagination.png,
     2026-09-01_audit-user-portal-snug-pagination.png.
 
+- id: "1581"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Purchase Request Request Form：Scenario=A 后 Start date / Need-by date 在 Portal 与 Form Preview 不变必填"
+  file: "frontend/user-portal/src/utils/formCreateEventApi.ts"
+  note: |
+    根因：(1) help-demo 只把 api.required 写在 Line Add/Edit 的 Scenario 上，主表 Request Form 没有 on.change；
+    (2) 原生 form-create Preview 没有 api.required；toolbar @click="openPreview" 不走实例方法包装，preview.rule 上的 $FNX 从未编成 Hermes bridge；
+    (3) Hermes Form Preview bindDomOnEvent 用过期 api.getValue，选 A 时 $inject.value 仍是旧值。
+    修复：主表+子表 Scenario 挂 $FNX api.required；click 冒泡后 patchFcDesignerPreviewEventHandlers；native fallback setEffect+mergeRule+$required+sync；Preview 优先用 change 实参。
+    验证：DW formDesignerPreviewValidation 10 + formCreatePreviewEvents 17 pass；portal formCreateEventRuntime 12 pass。
+    0731 上 1560–1564 已被占用，本条从 event 提交改记为 #1581。
+
+- id: "1582"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "子表 Add Record 选 Scenario=A 后立刻弹出整表 is required，未等 Save/blur"
+  file: "frontend/user-portal/src/components/SubTableAddDialog.vue"
+  note: |
+    根因：api.required 更新 formRules 后 Element Plus 默认 validateOnRuleChange=true，整表立即校验；
+    主表 FormRenderer 已关，子表 Add/Edit 未关。
+    修复：Portal + DW SubTableAddDialog el-form 加 :validate-on-rule-change="false"。
+    0731 上原 event 提交 #1561 改记为本条。
+
+- id: "1583"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: minor
+  category: bug
+  summary: "Email Template 预览 DOMPurify 丢掉 <style>，HTML 模式 class 表格看不到样式"
+  file: "frontend/developer-workstation/src/components/designer/email/emailPreviewShell.ts"
+  note: |
+    根因：EMAIL_BODY_PURIFY 未允许 style；浏览器还会把开头的 <style> 挪到 head，净化输出只有 body 因而丢失。
+    修复：ADD_TAGS 含 style，FORCE_BODY=true；仍剥离 script / link / onclick。
+    0731 上原 event 提交 #1562 改记为本条。
+
+- id: "1584"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: minor
+  category: bug
+  summary: "Email Template 选 HTML 并 Save 后再次打开仍回到 Visual"
+  file: "frontend/developer-workstation/src/components/designer/email/EmailBodySplitEditor.vue"
+  note: |
+    根因：mode 本地默认 visual，弹窗 destroy-on-close，Save 不记 tab。
+    修复：仅在 Save 成功后按 functionUnitId+templateId 写入 localStorage；编辑打开时恢复；未 Save 不写。
+    0731 上原 event 提交 #1563 改记为本条。
+
+- id: "1585"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Email Template 从 HTML 切回 Visual 后右侧 Preview 仍显示旧的带样式 HTML"
+  file: "frontend/developer-workstation/src/components/designer/email/EmailRichBodyEditor.vue"
+  note: |
+    根因：wangEditor 初次把 HTML 解析进 Visual 时不触发 onChange，model 仍是 HTML 源码，Preview 读同一 model。
+    修复：onCreated nextTick 后 emit getHtml()；iframe :key=previewDoc 强制刷新。
+    0731 上原 event 提交 #1564 改记为本条。
+
+- id: "1586"
+  status: fixed
+  fixed_at: "2026-09-01"
+  severity: major
+  category: bug
+  summary: "FU import: second FU blocked when sharing identical Relation Table (FU_IMPORT_RT_BOUND_OTHER_FU)"
+  file: "backend/admin-center/src/main/java/com/admin/component/RelationTableStructureImporter.java"
+  note: |
+    根因：rejectForeignBinding 在表已绑其他 FU 时一律拒绝，即使导入包结构与线上一致。
+    修复：isImportAuthorized + RelationTableStructureDiff — 结构一致时 link-only 重用并
+    bindFunctionUnit 追加关联；结构冲突仍 FU_IMPORT_RT_BOUND_OTHER_FU。
+    验证：RelationTableStructureImporter* 8 tests pass；mvn -pl backend/admin-center -am package -DskipTests；E2E 双 FU 导入手测通过。
+
+

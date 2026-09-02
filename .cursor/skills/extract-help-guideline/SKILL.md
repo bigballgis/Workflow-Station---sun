@@ -43,6 +43,8 @@ User names a topic (View 访问、计算字段、邮件模板) or says 提取 gu
 
 - Ground every sentence in the real UI: i18n labels, dialogs, save blockers, `#ERR`.
 - Write operational copy: what to tick / type / save, and what fails. No marketing.
+- Script **effect** methods: Intent → Before → Code → After (see Voice). Parameter
+  lists stay reference. Do not write a JavaScript tutorial.
 - Layer each article: **overview → order of work → how-to with figures → exact
   fields/samples → failures → related articles**.
 - Cross-link related guidelines with `router-link` (Send email ↔ Email Monitor ↔
@@ -113,7 +115,9 @@ agent skill, say so and rewrite; do not paste the skill.
 
 Copy the pattern in:
 
-- `frontend/help/src/views/ComputedFieldGuide.vue` / `EmailSendGuide.vue`
+- `frontend/help/src/views/FormEventsGuide.vue` — script how-to hub (intent blocks,
+  jump nav, block code, fail list)
+- `frontend/help/src/views/ComputedFieldGuide.vue` / `EmailSendGuide.vue` — click-the-UI
 - `frontend/help/src/components/GuideArticle.vue`
 - `frontend/help/src/guidelines.ts` (`GUIDELINES` + `NAV_TREE`)
 - `frontend/help/src/i18n/locales/{en,zh-CN,zh-TW}.ts`
@@ -125,15 +129,16 @@ Checklist:
 - [ ] Register in `GUIDELINES` (titleKey + summaryKey + lazy view)
 - [ ] `NAV_TREE` leaf under the **same menu** as the product. Empty menus stay grey.
 - [ ] `DesignerHelpLink` on the source screen → `/help/<id>` (rule `help-guideline-link`)
-- [ ] `GuideArticle`: sections may set `anchor`, `figure`, `samples`; page may set
-      `flow-keys` and `related`
+- [ ] `GuideArticle`: sections may set `anchor`, `figure`, `samples`, `intentKey` /
+      `beforeKey` / `afterKey` / `noteKey`, `failKeys`, `jumpLinks`, `figureBeside`,
+      `sampleLayout: 'block'`; page may set `flow-keys` and `related`
 - [ ] Figures: capture real UI (`frontend/scripts/capture-help-guide-images.mjs`),
       store under `public/guides/`, redact email/name/process id, bump
       `GUIDE_FIGURE_REV` in `GuideArticle.vue` so browsers drop the old PNG
 - [ ] Samples use the **same table/field names as the figures**
 - [ ] `data-testid="…-guide-page"`
 - [ ] i18n **three locales in the same change**; no raw `${token}` in locale strings
-- [ ] Voice: ticks / types / saves; short sentences
+- [ ] Voice: ticks / types / saves; **script methods** use Intent → Before → Code → After (see Voice)
 - [ ] Update `public/llms.txt` (and `llms-full.txt` if present)
 - [ ] Do not add Element Plus; styles already in `help.css`
 
@@ -146,11 +151,66 @@ Checklist:
 
 ## Voice
 
+Three genres. Do not mix them in one paragraph (Diátaxis: how-to vs reference).
+This portal is **not a tutorial** — the reader already uses Form Design / Table Design.
+
+| Genre | Use for | Do | Don't |
+|---|---|---|---|
+| Click-the-UI | Computed, email, View access, opening Edit | “Tick Computed, open Formula, then save the table.” | “`ComputedFieldEvaluator` then persists…” |
+| Script how-to | Form event **effect** methods (`setValue`, `disabled`, `setOptions`, …) | Intent → Before → Code → After (including does-not) | “`disabled(true, field)` locks the control…” as the first sentence |
+| Reference | Parameter names, Create event lists, signatures, who-wins | Short facts; method name as a tool in the sentence | Teaching JavaScript; overlay/implementation |
+
 | Do | Don't |
 |---|---|
-| “Tick Computed, open Formula, then save the table.” | “`ComputedFieldEvaluator` then persists…” |
 | “If BU and Role are both empty, only System Administrator sees the view.” | Copy mermaid of Portal services |
 | Formula samples: `quantity * unit_price` on `help_pr_line` | Leftover names that contradict the screenshot (`leave_request`) |
+| Task heading: “Lock a field” / “Block Save” | Heading that is only the method name (`disabled()`) |
+| Playwright asserts **code** (method + `help_pr` field names) | Asserting “If you want” prose (it changes per locale) |
+
+### Script / API methods (how-to skeleton)
+
+One **job** per sample. Same field names in the sentence, the code, and the After
+(Stripe request/response: they must match). Demo FU: `help_pr` / `help_pr_line`.
+
+1. **Intent** — If you want …, use `api.method` on this event (change / Form event).
+2. **Before** — designer default / no script.
+3. **Code** — shortest paste-into-Edit snippet; introduce it with one sentence.
+4. **After (Result)** — what the person **sees or can click** (grey, gone, banner, Save blocked).
+5. **Does-not / side effect** — what stays the same or changes as a side effect
+   (Microsoft `setDisabled` note pattern). Examples: `clearOptions` does not clear
+   the stored value; an ERROR banner does not block Save; `hidden` does not submit.
+
+Pair get/set or set/clear as Related one-liners, not a second tutorial.
+Control-type pages (Basic / Extend / Layout): one task sample with After, then
+link to `/form-events#…`. Do not repeat the hub signatures.
+
+Failures = how the designer **sees** that it did not work (script error, missing
+Save then Ok, Preview has no Portal `user`, method on the wrong control type).
+No class names, Docker, or overlay internals.
+
+`llms-full.txt` may keep method names for retrieval. Human article stays intent-first.
+
+## Readability gates (human articles)
+
+Apply before shipping. Script how-to pages **must** use visible structure — do not
+flatten Intent / Before / After into one `bodyKey` paragraph.
+
+| Gate | Rule |
+|---|---|
+| Intro | ≤ 3 sentences; no “how to read this page” tutorial |
+| Script how-to | One compact card: `intentKey` lead sentence + `beforeKey` / `afterKey` / optional `noteKey`. Labels are **Purpose** (in lead), **Default**, **After you run the sample**, **Note** — never writer taxonomy (“If you want”, “Before the script”, “What does not change”) |
+| After | `afterKey` states the **visible** result once; sample `hintKey` must not repeat it |
+| Demo fields | In prose, name the **control type + label** (e.g. “Scenario dropdown”, not bare “Scenario is A”). Define demo fields once in `whatBody` (Purchase Request / help_pr). Code samples may keep field names (`scenario`) |
+| Visual tasks | Banner, field error, lock, hide/show → pair with **Form Preview** effect figure (`figureBeside`), not designer canvas alone |
+| Code | Primary sample ≤ 2 lines when possible; secondary samples one-line **Related:**; use `sampleLayout: 'block'` |
+| Failures | `failKeys[]` list, not one `failBody` wall |
+| Task nav | Hub pages with > 8 task sections add `jumpLinks` before the first how-to |
+| Figures | One figure per distinct surface (Edit dialog, canvas, Form tab, Preview effect). Do **not** reuse the same PNG nine times with different captions |
+| Control-type pages | One primary sample per control; link to `/form-events#…` for api methods |
+| Params / hooks | Reference only — short body + samples; not a second how-to tutorial |
+
+Diátaxis genre names (how-to vs reference) stay in [reference.md](reference.md); do
+not paste them into `/help/` copy.
 
 ## Invoke
 

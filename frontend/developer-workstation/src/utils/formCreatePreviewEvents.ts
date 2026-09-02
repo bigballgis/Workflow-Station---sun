@@ -18,8 +18,10 @@ import {
   isEmptyFormCreateHandler,
   parseFormCreateEventHandler,
   type PortalFormApi,
+  type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
+import type { PortalFormApiOverlays } from '@/utils/formCreateEventOverlays'
 import { REQUEST_ID_FIELD } from '@/utils/formFieldMeta'
 import {
   mergeRuleHookHandlers,
@@ -241,25 +243,12 @@ function compileFcPreviewInjectHandler(
     }
 
     const api = createFormEventOptionsBridge(fcApi, rule)
-    const injectArgs = Array.isArray(inject?.args) ? inject.args as unknown[] : args
-    let value: unknown = inject?.value
-    if (value === undefined) {
-      value = injectArgs[0]
-    }
-    // Native blur passes FocusEvent as args[0] — use current field value instead.
-    if (value && typeof value === 'object' && 'target' in (value as object)) {
-      value = api.getValue(field)
-    }
-    if (value === undefined && typeof api.getValue === 'function') {
-      value = api.getValue(field)
-    }
-
     fn({
       field,
-      value,
+      value: resolveFcPreviewHandlerValue(args, api, field),
       api,
       rule,
-      args: injectArgs,
+      args: Array.isArray(inject?.args) ? inject.args as unknown[] : args,
     })
   }
   return tagFcPreviewHandlerForJsonRoundtrip(wrapped, stored)
@@ -268,6 +257,26 @@ function compileFcPreviewInjectHandler(
 function normalizeHandler(raw: unknown): unknown {
   if (Array.isArray(raw)) return raw[0]
   return raw
+}
+
+/** Prefer the live change/blur argument; getValue is often still the previous model. */
+function resolveFcPreviewHandlerValue(
+  args: unknown[],
+  api: PortalFormApi,
+  field: string,
+): unknown {
+  const first = args[0]
+  const inject = first && typeof first === 'object' ? first as Record<string, unknown> : null
+  const injectArgs = Array.isArray(inject?.args) ? inject.args as unknown[] : args
+  let value: unknown = inject?.value
+  if (value === undefined) value = injectArgs[0]
+  if (value && typeof value === 'object' && 'target' in (value as object)) {
+    value = api.getValue(field)
+  }
+  if (value === undefined && typeof api.getValue === 'function') {
+    value = api.getValue(field)
+  }
+  return value
 }
 
 function bindDomOnEvent(
@@ -296,7 +305,7 @@ function bindDomOnEvent(
     }
     fn({
       field,
-      value: api.getValue(field),
+      value: resolveFcPreviewHandlerValue(args, api, field),
       api,
       rule,
     })
@@ -312,6 +321,9 @@ export interface PreviewVisibilityBridge {
   state: PortalFormVisibilityState
   notify: () => void
   getAllFieldKeys: () => string[]
+  requiredState?: PortalFormRequiredState
+  notifyRequired?: () => void
+  overlays?: PortalFormApiOverlays
 }
 
 /**
@@ -338,6 +350,69 @@ export function createDeferredPreviewVisibilityBridge(): PreviewVisibilityBridge
       activePreviewVisibilityBridge?.notify()
     },
     getAllFieldKeys: () => activePreviewVisibilityBridge?.getAllFieldKeys() ?? [],
+    get requiredState() {
+      return activePreviewVisibilityBridge?.requiredState
+    },
+    notifyRequired: () => {
+      activePreviewVisibilityBridge?.notifyRequired?.()
+    },
+    get overlays() {
+      return activePreviewVisibilityBridge?.overlays
+    },
+  }
+}
+
+function deferredOverlayBags(): PortalFormApiOverlays {
+  return {
+    get disabled() {
+      return activePreviewVisibilityBridge?.overlays?.disabled
+    },
+    get options() {
+      return activePreviewVisibilityBridge?.overlays?.options
+    },
+    get labels() {
+      return activePreviewVisibilityBridge?.overlays?.labels
+    },
+    get notifications() {
+      return activePreviewVisibilityBridge?.overlays?.notifications
+    },
+    get lookupFilter() {
+      return activePreviewVisibilityBridge?.overlays?.lookupFilter
+    },
+    get focus() {
+      return activePreviewVisibilityBridge?.overlays?.focus
+    },
+  }
+}
+
+function deferredRequiredBag(): {
+  state: PortalFormRequiredState
+  notify: () => void
+  getAllFieldKeys: () => string[]
+} {
+  return {
+    get state() {
+      return activePreviewVisibilityBridge?.requiredState as PortalFormRequiredState
+    },
+    notify: () => {
+      activePreviewVisibilityBridge?.notifyRequired?.()
+    },
+    getAllFieldKeys: () => activePreviewVisibilityBridge?.getAllFieldKeys() ?? [],
+  }
+}
+
+function requiredBagFromVisibility(
+  visibility?: PreviewVisibilityBridge,
+): { state: PortalFormRequiredState; notify: () => void; getAllFieldKeys: () => string[] } | undefined {
+  if (!visibility) return undefined
+  return {
+    get state() {
+      return visibility.requiredState as PortalFormRequiredState
+    },
+    notify: () => {
+      visibility.notifyRequired?.()
+    },
+    getAllFieldKeys: visibility.getAllFieldKeys,
   }
 }
 
@@ -370,6 +445,9 @@ export function dispatchPreviewFieldValueChange(
     },
     undefined,
     options?.visibility,
+    undefined,
+    requiredBagFromVisibility(options?.visibility),
+    options?.visibility?.overlays,
   )
   const ev = collectFieldComponentEventsFromRules(segmentRules).get(field)
   runComponentFieldEventsOnValueChange(ev, {
@@ -396,6 +474,9 @@ export function materializePreviewComponentEvents(
     },
     undefined,
     createDeferredPreviewVisibilityBridge(),
+    undefined,
+    deferredRequiredBag(),
+    deferredOverlayBags(),
   )
 
   function walk(items: unknown[]) {

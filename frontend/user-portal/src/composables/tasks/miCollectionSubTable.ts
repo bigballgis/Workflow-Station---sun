@@ -17,19 +17,28 @@ import { collectSubTableSliceArraysDeep } from './subTableSliceResolve'
 
 export type MiCollectionBindingPk = {
   primaryKeyFields?: string[] | null
+  /** 仅用于报错信息定位是哪张表缺主键。 */
+  tableName?: string | null
   columns?: Array<{ field?: string }> | null
 }
 
 /**
- * Designer PK columns for an MI collection binding.
- * FALLBACK(migration): legacy collections without API PK metadata used {@code id_idw}.
+ * Designer PK columns for an MI collection binding，**不猜列名**。
+ *
+ * <p>返回 `null` 表示"这个 binding 没有设计器主键"，调用方必须显式决定怎么办 ——
+ * 而不是拿 `id_idw` 顶上。此前兜底 `['id_idw']` 的后果是**静默丢数据**：主键叫
+ * `row_id` / `id_idwvvbz` 的表按 `id_idw` 判定时，整张表的行都会被当成 ghost row 丢掉。
+ *
+ * <p>为什么这里返回 `null` 而不是抛错：本函数的消费方
+ * {@link filterRowsForMiCollectionSubTableBinding} 会跑在**只是长得像** MI collection 的
+ * binding 上（列名启发式误判的 FU 副本、AP 服务任务写回的行），这些 binding 合法地没有
+ * `primaryKeyFields`。在那里抛错会把一个显示层过滤器变成整页崩溃。
+ * 真正会因猜错而**损坏数据**的路径（行匹配 / PK 保护）用
+ * {@link requireSubTablePrimaryKeyFields} 硬失败。
  */
-export function resolveMiCollectionPrimaryKeyFields(binding: MiCollectionBindingPk): string[] {
-  const fromBinding = (binding.primaryKeyFields ?? [])
-    .map(f => String(f).trim())
-    .filter(Boolean)
-  if (fromBinding.length > 0) return fromBinding
-  return ['id_idw']
+export function resolveMiCollectionPrimaryKeyFields(binding: MiCollectionBindingPk): string[] | null {
+  const pk = (binding.primaryKeyFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
+  return pk.length > 0 ? pk : null
 }
 
 /** Drop attachment/file-only leak rows and rows missing a complete designer PK. */
@@ -39,6 +48,9 @@ export function filterRowsForMiCollectionSubTableBinding(
 ): any[] {
   if (!Array.isArray(rows) || rows.length === 0) return []
   const pkCols = resolveMiCollectionPrimaryKeyFields(binding)
+  // 没有设计器主键 = 这个 binding 不是真的 MI collection（列名启发式误判的 FU 副本、
+  // AP 服务任务写回的行）。此时**不做**幽灵行过滤 —— 拿 id_idw 顶上会把整张表清空。
+  if (!pkCols) return rows.filter(row => !!row && typeof row === 'object' && !pickNonEmptyAttachmentFile(row as Record<string, unknown>))
   return rows.filter(row => {
     if (!row || typeof row !== 'object') return false
     const rec = row as Record<string, unknown>
@@ -146,7 +158,8 @@ export function shouldSyncStaleSiblingSubTableSlice(
   sourceRows?: unknown[],
 ): boolean {
   if (isFileOnlySubTableBinding(sourceBinding)) return false
-  const pkCol = resolveMiCollectionPrimaryKeyFields(sourceBinding)[0] ?? 'id_idw'
+  // 没有设计器主键就不做这条 PK 相关判定（不猜列名）。
+  const pkCol = resolveMiCollectionPrimaryKeyFields(sourceBinding)?.[0] ?? null
   const bid = Number(sliceKey)
   const srcTid = sourceRelationTableId(sourceBinding, bindingTableById)
   const peer = allBindings.find(b => Number(b.bindingId) === bid)
@@ -187,6 +200,8 @@ export function shouldSyncStaleSiblingSubTableSlice(
     return true
   }
   if (!isMiDashboardSubTableBinding(sourceBinding)) return false
+  // 无设计器主键时这条 PK 判定无从做起 —— 不猜列名，直接判定为「不同步」。
+  if (!pkCol) return false
   const hasPk = target.some(
     r => r && typeof r === 'object' && rowResolvesDesignerPrimaryKey(r, [pkCol]),
   )

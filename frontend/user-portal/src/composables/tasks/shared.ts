@@ -26,6 +26,8 @@ export {
   isFileOnlySubTableBinding,
   isSharedAttachmentFileBinding,
   isSubTableMiDashboardRow,
+  resolveMiDashboardFieldNames,
+  type MiDashboardFieldNames,
 } from './subTableBindingKinds'
 
 export {

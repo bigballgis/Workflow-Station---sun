@@ -208,6 +208,10 @@ export function extractFieldsRecursive(
         label: '',
         type: 'miAssignment',
         span: 24,
+        // The designer's Readonly toggle on the block fixes this row's assignment: the
+        // mode cards stop switching and the pickers it owns render disabled. The block
+        // renders no control itself, so without carrying the flag here it had no effect.
+        readonly: props?.readonly === true || props?.disabled === true,
       }
       applyDesignerHideFlagToFormField(marker, item)
       // The container owns the assignee / BU / role rules — keep them NESTED here.
@@ -238,6 +242,7 @@ export function extractFieldsRecursive(
           allowEditOwn: props?.allowEditOwn !== false,
           // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
           allowDelete: props?.allowDelete === true,
+          readonly: props?.readonly === true,
           pageSize: Number(props?.pageSize) || 5,
         },
       }

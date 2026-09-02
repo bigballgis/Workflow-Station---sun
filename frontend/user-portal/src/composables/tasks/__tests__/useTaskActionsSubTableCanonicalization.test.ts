@@ -46,7 +46,7 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
       formData: ref({
         fieldA: 'x',
         __subTables__: {
-          '69': [{ id: 1 }],
+          'dw:participants': [{ id: 1 }],
           participants: [{ id: 1 }],
           subtable2: [{ id: 2 }],
         },
@@ -68,10 +68,10 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     expect(completeTaskMock).toHaveBeenCalledTimes(1)
     const payload = completeTaskMock.mock.calls[0]?.[1]
     const subTables = payload?.formData?.__subTables__ ?? {}
-    expect(Object.keys(subTables).sort()).toEqual(['30', '69'])
+    expect(Object.keys(subTables).sort()).toEqual(['dw:participants', 'dw:subtable2'])
     expect(subTables.participants).toBeUndefined()
     expect(subTables.subtable2).toBeUndefined()
-    expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort()).toEqual(['30', '69'])
+    expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort()).toEqual(['dw:participants', 'dw:subtable2'])
   })
   it('stamps row_id on anonymous canonical rows and leaves alias copies out', async () => {
     const anonymous = { channel: 'Email' }
@@ -83,7 +83,7 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
       ]),
       formData: ref({
         __subTables__: {
-          '1301': [anonymous],
+          'dw:acq correspondence': [anonymous],
           'ACQ Correspondence': [{ channel: 'Email' }],
         },
       }),
@@ -103,15 +103,15 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     await taskActions.submitApprove()
     const payload = completeTaskMock.mock.calls[0]?.[1]
     const subTables = payload?.variables?.__subTables__ ?? {}
-    expect(Object.keys(subTables)).toEqual(['1301'])
-    expect(String(subTables['1301'][0].row_id)).not.toBe('')
+    expect(Object.keys(subTables)).toEqual(['dw:acq correspondence'])
+    expect(String(subTables['dw:acq correspondence'][0].row_id)).not.toBe('')
     expect(subTables['ACQ Correspondence']).toBeUndefined()
   })
   it('uses buildFormPayloadForComplete when provided (Save parity path)', async () => {
     const buildFormPayloadForComplete = vi.fn(() => ({
       fieldA: 'x',
       __subTables__: {
-        '69': [{ id: 1 }],
+        'dw:participants': [{ id: 1 }],
         participants: [{ id: 1 }],
       },
     }))
@@ -141,15 +141,15 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     expect(buildFormPayloadForComplete).toHaveBeenCalledTimes(1)
     const payload = completeTaskMock.mock.calls[0]?.[1]
     expect(payload?.formData?.__subTables__).toBeUndefined()
-    expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort()).toEqual(['69'])
+    expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort()).toEqual(['dw:participants'])
   })
   it('submits only current editable bindings while preserving engine-only slices', async () => {
     const taskActions = useTaskActions({
       taskId: 'task-1',
       taskInfo: ref({}),
       subTableBindings: ref([
-        { bindingId: 69, bindingMode: 'EDITABLE', data: [] },
-        { bindingId: 70, bindingMode: 'READONLY', data: [{ id: 2 }] },
+        { bindingId: 69, tableName: 'participants', bindingMode: 'EDITABLE', data: [] },
+        { bindingId: 70, tableName: 'other_a', bindingMode: 'READONLY', data: [{ id: 2 }] },
       ]),
       formData: ref({}),
       submitting: ref(false),
@@ -166,16 +166,17 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
       loadTaskDetail: vi.fn(async () => {}),
       buildFormPayloadForComplete: () => ({
         __subTables__: {
-          '69': [],
-          '70': [{ id: 2 }],
-          '99': [{ id: 3 }],
+          'dw:participants': [],
+          'dw:other_a': [{ id: 2 }],
+          'dw:other_b': [{ id: 3 }],
         },
       }),
     })
     await taskActions.submitApprove()
     const payload = completeTaskMock.mock.calls[0]?.[1]
-    expect(payload?.formData?.__subTables__).toEqual({ '69': [] })
-    expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort()).toEqual(['69', '70', '99'])
+    expect(payload?.formData?.__subTables__).toEqual({ 'dw:participants': [] })
+    expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort())
+      .toEqual(['dw:other_a', 'dw:other_b', 'dw:participants'])
   })
   it('does not submit sub-table audit intent for a read-only form', async () => {
     const taskActions = useTaskActions({
@@ -196,11 +197,11 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
       userOptions: ref([]),
       userSearchLoading: ref(false),
       loadTaskDetail: vi.fn(async () => {}),
-      buildFormPayloadForComplete: () => ({ __subTables__: { '69': [{ id: 1 }] } }),
+      buildFormPayloadForComplete: () => ({ __subTables__: { 'dw:participants': [{ id: 1 }] } }),
     })
     await taskActions.submitApprove()
     const payload = completeTaskMock.mock.calls[0]?.[1]
     expect(payload?.formData?.__subTables__).toBeUndefined()
-    expect(payload?.variables?.__subTables__).toEqual({ '69': [{ id: 1 }] })
+    expect(payload?.variables?.__subTables__).toEqual({ 'dw:participants': [{ id: 1 }] })
   })
 })

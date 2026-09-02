@@ -17,6 +17,7 @@ import {
   miParticipantRowIdsEqual,
   type MiParticipantRowId,
 } from '@/composables/tasks/miSubProcessScope'
+import { setActiveMiConfig } from '@/composables/tasks/useMiConfig'
 import type { TaskDetailState } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
 
@@ -84,6 +85,8 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
     const xml = bpmnXml.value
     if (!xml) {
       miSubProcessScope.value = null
+      // 清掉上一个 FU 的配置，否则会泄漏到下一个（跨 FU 串配置和写死一样糟）
+      setActiveMiConfig(null)
       return
     }
     const ti = taskInfo.value as { taskDefinitionKey?: string; taskName?: string }
@@ -91,6 +94,8 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
       userTaskId: ti?.taskDefinitionKey ?? null,
       userTaskName: ti?.taskName ?? null,
     })
+    // MI 列名的唯一真源：注册给深层纯函数隐式读取，避免 113 个调用点逐个传参
+    setActiveMiConfig(miSubProcessScope.value)
   }
 
   function miCollectionPrimaryKeyFields(): string[] | undefined {

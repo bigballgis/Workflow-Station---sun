@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapSubFormRuleToDialogColumns } from '../subFormCanvasColumns'
+import { flattenSubFormRuleLayoutContainers, mapSubFormRuleToDialogColumns } from '../subFormCanvasColumns'
 import type { SubFormColumnLookupContext } from '../subFormCanvasColumns'
 
 const ctx: SubFormColumnLookupContext = { lookupDbConfigs: {}, relationViewConfigs: {} }
@@ -50,5 +50,44 @@ describe('mapSubFormRuleToDialogColumns — designer Hide flag', () => {
     )
     expect(cols.find(c => c.field === 'merchant_credit')?.hidden).toBe(true)
     expect(cols.find(c => c.field === 'amount')?.hidden).toBeUndefined()
+  })
+})
+
+/**
+ * Flattening DROPS the container rule, which silently discarded the Readonly the designer
+ * set on an Assignment Mode block — the block renders no control of its own, so the flag
+ * only means anything once it reaches the pickers it owns.
+ */
+describe('flattenSubFormRuleLayoutContainers — Assignment Mode readonly cascade', () => {
+  const block = (props: Record<string, unknown>, childProps: Record<string, unknown> = {}) => ([{
+    type: 'miAssignment',
+    props,
+    children: [
+      { type: 'lookup', field: 'assignee', props: childProps },
+      { type: 'select', field: 'role_code', props: {} },
+    ],
+  }])
+  const readonlyOf = (out: unknown[]) =>
+    out.map(r => (r as { props?: { readonly?: unknown } }).props?.readonly === true)
+
+  it('marks the owned pickers readonly when the block is', () => {
+    expect(readonlyOf(flattenSubFormRuleLayoutContainers(block({ readonly: true })))).toEqual([true, true])
+  })
+
+  it('leaves them editable when the block is not', () => {
+    expect(readonlyOf(flattenSubFormRuleLayoutContainers(block({})))).toEqual([false, false])
+  })
+
+  it('lets a child that explicitly opted out stay editable', () => {
+    const out = flattenSubFormRuleLayoutContainers(block({ readonly: true }, { readonly: false }))
+    expect(readonlyOf(out)).toEqual([false, true])
+  })
+
+  it('does NOT cascade for ordinary layout containers', () => {
+    const out = flattenSubFormRuleLayoutContainers([{
+      type: 'card', props: { readonly: true },
+      children: [{ type: 'input', field: 'x', props: {} }],
+    }])
+    expect(readonlyOf(out)).toEqual([false])
   })
 })

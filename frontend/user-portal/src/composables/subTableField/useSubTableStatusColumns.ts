@@ -1,4 +1,5 @@
 import { computed, type Ref } from 'vue'
+import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import type { Column, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
 
 export function normalizeColumnHeaderLabel(s: string): string {
@@ -11,6 +12,9 @@ export function normalizeColumnHeaderLabel(s: string): string {
  */
 function columnRepresentsMiOrTaskStatusList(col: Column): boolean {
   const f = String(col.field || '').toLowerCase()
+  // 首选：当前 FU 的 Sub-Task Config 配置的状态列名（miTaskStatusField）。
+  // 下面的字面量/标签匹配是配置缺失时的兜底启发式（老流程定义、非 MI 上下文）。
+  if (f === getActiveMiFieldNames().statusField.toLowerCase()) return true
   if (f === 'task_status' || f.endsWith('_task_status')) return true
   if (/\btask[_-]?status\b/i.test(f) || f.includes('taskstatus')) return true
   const lab = normalizeColumnHeaderLabel(String(col.label || ''))
@@ -37,13 +41,16 @@ export function useSubTableStatusColumns(props: SubTableFieldProps, rows: Ref<an
   }
 
   /**
-   * Row carries Flowable MI task_status; list already has a column whose header reads like a task/MI status
+   * Row carries the MI status column; list already has a column whose header reads like a task/MI status
    * (even when {@link columnRepresentsMiOrTaskStatusList} missed due to unusual wording).
+   *
+   * <p>状态列名取自 Sub-Task Config（`miTaskStatusField`），不写死 `task_status` ——
+   * 列名不同的 FU 此前恒判为"行上没有状态"，于是重复渲染一列 Status。
    */
   function listViewLikelyAlreadyShowsTaskStatus(rowsSample: unknown[]): boolean {
     const r0 = rowsSample?.[0]
     if (!r0 || typeof r0 !== 'object') return false
-    if ((r0 as Record<string, unknown>).task_status === undefined) return false
+    if ((r0 as Record<string, unknown>)[getActiveMiFieldNames().statusField] === undefined) return false
     if ((props.columns || []).some(columnHeaderIsGenericStatusLabel)) return true
     return (props.columns || []).some(c => {
       const lab = normalizeColumnHeaderLabel(String(c.label || ''))

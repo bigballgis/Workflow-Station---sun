@@ -67,6 +67,7 @@ import {
   resolveUploadCellUrl,
 } from './uploadFieldUtils'
 import { mergeFormRowWithSeed } from './subTableAddDialogHelpers'
+import { retypeRecordNoteRulesForPreview } from './recordNotePreviewRules'
 import {
   DEMO_BU_OPTIONS,
   DEMO_ROLE_OPTIONS,
@@ -385,6 +386,8 @@ function rebuildFormRule() {
     mapFormCreateRulesReadonlyDeep(cloneFormRules(rawRule.value || [])) as any[]
   )
   injectDemoBuRoleOptions(filtered)
+  // Row-scope Notes live on sub-table forms; keep the canvas placeholder off this preview.
+  retypeRecordNoteRulesForPreview(filtered)
   formRule.value = filtered
   // Parent Preview may have sanitized $FNX strings off `on`/`hook` (crash guard).
   // Recompile from `_on`/`_hook` so sub-form component events run like Form-mode Preview.

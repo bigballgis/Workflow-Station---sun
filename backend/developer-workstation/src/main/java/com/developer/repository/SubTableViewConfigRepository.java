@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,6 +25,18 @@ public interface SubTableViewConfigRepository extends JpaRepository<SubTableView
      * Check if view config exists for binding
      */
     boolean existsByBindingId(Long bindingId);
+
+    /**
+     * Every sub-table list view whose binding targets {@code tableId}, with its columns fetched.
+     *
+     * <p>Used by Table Design field-rename propagation: a renamed field must be rewritten in the
+     * sub-table list view columns too, otherwise the column keeps pointing at a field name that no
+     * longer exists and the Portal renders "-" for it (the row data carries the NEW name).
+     */
+    @Query("SELECT DISTINCT c FROM SubTableViewConfig c "
+            + "LEFT JOIN FETCH c.viewFields "
+            + "WHERE c.binding.table.id = :tableId")
+    List<SubTableViewConfig> findByBindingTableIdWithFields(@Param("tableId") Long tableId);
 
     /**
      * Delete the view fields of all configs belonging to a function unit's form-table bindings.

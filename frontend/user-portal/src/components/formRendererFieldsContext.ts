@@ -19,7 +19,15 @@ export interface FormRendererFieldsContext {
   lookupLoadedViewFields: Ref<Record<string, unknown[]>>
   engineVisibility: Ref<Map<string, boolean>>
   isFieldVisible: (fieldKey: string) => boolean
-  engineFieldStates: Ref<Map<string, { disabled?: boolean }>>
+  /** Script `api.required` overlay + designer/linkage fallback. */
+  isFieldRequired: (field: FormField) => boolean
+  /** Script `api.disabled` overlay + engine + whole-form/audit readonly. */
+  isFieldDisabled: (field: FormField) => boolean
+  /** Script `api.setLabel` overlay, else designer label. */
+  fieldLabel: (field: FormField) => string
+  /** Script `api.setOptions` overlay, else engine filtered options. */
+  fieldOptions: (field: FormField) => unknown
+  engineFieldStates: Ref<Map<string, { disabled?: boolean; required?: boolean }>>
   engineOptions: Ref<Map<string, unknown>>
   userSearchResults: Ref<Map<string, unknown>>
   isFieldReadonly: (field: FormField) => boolean
@@ -67,6 +75,8 @@ export interface FormRendererFieldsContext {
   handleLookupModelUpdate?: (key: string, value: unknown) => void
   handleLookupClear: (key: string) => void
   lookupFilterConditionsFor: (field: FormField) => unknown[]
+  lookupRefreshNonce: Ref<Record<string, number>>
+  hasScriptLookupFilter: (fieldKey: string) => boolean
   handleFieldChange: (key: string, val: unknown) => void
   handleFieldBlur: (key: string) => void
   /**
@@ -75,6 +85,7 @@ export interface FormRendererFieldsContext {
    * are derived — write through the composable that owns them.
    */
   scriptFieldErrors: Readonly<Ref<Record<string, string>>>
+  clearScriptFieldError?: (fieldKey: string) => void
   handleUploadSuccess: (res: unknown, file: unknown, key: string) => void
   handleUploadRemove: (file: unknown, key: string) => void
   handleUserSearch: (query: string, key: string) => void

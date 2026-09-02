@@ -53,6 +53,12 @@ export interface FormField {
     allowEditOwn?: boolean
     /** Opt-in delete switch; absent/false hides the note Delete button. */
     allowDelete?: boolean
+    /**
+     * Designer Readonly switch. Opt-in: absent/false lets the task handler comment on a
+     * To Do form. Has no bearing on request-form notes, which the function unit's audit
+     * roles govern server-side.
+     */
+    readonly?: boolean
     pageSize?: number
   }
   /** Designer-driven portal display strategy; only present when type === 'subTable'. */

@@ -205,6 +205,41 @@ export function resolveLinkFormFieldValueForModal(
   return raw
 }
 
+/**
+ * Seed the Link Form modal's model with every LEAF field of the designed form,
+ * descending through layout containers.
+ *
+ * Only `card` used to be descended into, so any other container's children were skipped
+ * and the container's own key was seeded instead. That is why an Assignment Mode block
+ * (`miAssignment`, which owns the assignee / BU / role rules as its children) opened with
+ * its pickers blank; rows / columns / tabs / collapse panels had the same hole.
+ */
+export function seedLinkedFormDataFromFields(
+  formFields: FormField[],
+  raw: Record<string, unknown>,
+  opts?: { readonly?: boolean },
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {}
+  const seed = (field: FormField) => {
+    const children = [
+      ...(field.children ?? []),
+      ...(field.tabs?.flatMap(tab => tab.fields || []) ?? []),
+      ...(field.collapsePanels?.flatMap(panel => panel.fields || []) ?? []),
+    ]
+    if (children.length > 0) {
+      children.forEach(seed)
+      return
+    }
+    next[field.key] = resolveLinkFormFieldValueForModal(
+      field,
+      rowValueForLinkedFormField(raw, field.key),
+      opts,
+    )
+  }
+  formFields.forEach(seed)
+  return next
+}
+
 /** Link-child {@code id} is an allocated row PK (UUID / numeric). Parent MI {@code id_idw} belongs in {@code sub_task_id} only. */
 export function isAllocatedLinkChildBusinessId(
   childId: unknown,

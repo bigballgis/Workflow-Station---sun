@@ -570,6 +570,7 @@ export default {
   },
   form: {
     title: 'Form Designer',
+    eventGuideLinkAria: 'Open form event guidelines',
     formName: 'Form Name',
     formType: 'Form Type',
     requestId: 'Request ID',
@@ -766,6 +767,12 @@ export default {
     recordNoteScopeRecord: 'Single record',
     recordNoteAdd: 'Add',
     recordNotePlaceholderHint: 'Comments & attachments panel — active in User Portal after deploy',
+    recordNoteAttach: 'Attach files',
+    recordNotePost: 'Post',
+    recordNoteLoadMore: 'Load more',
+    recordNotePreviewPlaceholder: 'Write a comment…',
+    recordNoteMaxSize: 'Up to {size}MB per file',
+    recordNoteReadonlyHint: 'Read-only on To Do forms',
     recordNoteDuplicateScope: 'Only one Record Note per scope is allowed on a form',
     recordNoteScopeMainHint: 'Single record is available on sub-table forms only; the main form is whole-table',
     recordNoteRecordScopeMainForm: 'Record Note on the main form supports whole-table scope only; use Single record inside a sub-table form',
@@ -2086,9 +2093,10 @@ export default {
     bodyModeVisual: 'Visual',
     bodyModeHtml: 'HTML',
     emailPreview: 'Email preview',
-    htmlPlaceholder: 'Paste or write email HTML. Variable tokens stay visible in the preview.',
+    htmlPlaceholder:
+      'Paste or write email HTML. <style> tags and class selectors are kept in the preview. Variable tokens stay visible.',
     switchToVisualConfirm:
-      'The rich editor may simplify tables and inline styles from HTML source. Continue?',
+      'The rich editor may simplify tables, <style> tags, and inline styles from HTML source. Continue?',
     loadFailed: 'Failed to load templates',
     deleteConfirm: 'Delete template "{name}"?'
   },

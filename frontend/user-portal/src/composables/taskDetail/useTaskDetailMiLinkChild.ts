@@ -1,4 +1,5 @@
 import { processApi } from '@/api/process'
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
   ensureAutoPrimaryKeysForRows,
   repairMisassignedPrimaryKeyFromParentId,
@@ -27,11 +28,11 @@ import {
 } from '@/composables/tasks/miSubProcessScope'
 import {
   cloneSubTableRows,
-  normalizeSubTableName,
   subTableBindingMatches,
   collectSubTableBindingMatchKeys,
   subTableRowsLackSavedFieldPayload,
 } from './subTableRowUtils'
+import { resolveSubTablePrimaryKeyFields } from '@/composables/tasks/useMiConfig'
 import type { TaskDetailCtx } from './context'
 
 export interface TaskDetailMiLinkChildFns {
@@ -83,12 +84,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
           : {})
       }
       const slice = cloneSubTableRows(scopedSlice)
-      nest[childBinding.bindingId] = slice
-      nest[String(childBinding.bindingId)] = slice
-      if (childBinding.tableName) {
-        nest[childBinding.tableName] = slice
-        nest[normalizeSubTableName(childBinding.tableName)] = slice
-      }
+      writeSubTableRows(nest, childBinding, slice)
       return { ...rec, __subTables__: nest }
     })
   }
@@ -99,9 +95,12 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     for (const b of subTableBindings.value) {
       if (!bindingMatchesMiSubTableName(b, scopeName)) continue
       const rows = Array.isArray(b.data) ? b.data : []
+      // 按表的种类解析主键：**子任务表缺主键 = 配置错误（抛错）**；其它表没有主键是允许的
+      // （关联表 / sys_users / 共享附件），返回 null 后只是跳过与主键相关的匹配。
+      const pk = resolveSubTablePrimaryKeyFields(b)
       const row =
-        findSubTableRowByMiExpansionId(rows, myRowId)
-        ?? findMiIsolatedParentRow(rows, myRowId)
+        findSubTableRowByMiExpansionId(rows, myRowId, pk)
+        ?? findMiIsolatedParentRow(rows, myRowId, pk)
       if (row && row.id_idw != null && row.id_idw !== '') {
         return row.id_idw as MiParticipantRowId
       }
@@ -117,6 +116,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     const parentRow = findMiIsolatedParentRow(
       Array.isArray(parentBinding.data) ? parentBinding.data : [],
       myRowId,
+      resolveSubTablePrimaryKeyFields(parentBinding),
     )
     if (!parentRow) return
     const peerMap = new Map<number, number | null>()
@@ -166,9 +166,11 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     const scopeName = miSubProcessScope.value?.subTableName ?? ''
     const parentBinding = subTableBindings.value.find(b => bindingMatchesMiSubTableName(b, scopeName))
     const parentRows = parentBinding && Array.isArray(parentBinding.data) ? parentBinding.data : []
+    // parentBinding 就是 MI 子任务表（按 subTableName 找到的）—— 它缺主键就是配置错误，抛错。
+    const parentPk = parentBinding ? resolveSubTablePrimaryKeyFields(parentBinding) : null
     const parentRow =
-      findSubTableRowByMiExpansionId(parentRows, myRowId)
-      ?? findMiIsolatedParentRow(parentRows, myRowId)
+      findSubTableRowByMiExpansionId(parentRows, myRowId, parentPk)
+      ?? findMiIsolatedParentRow(parentRows, myRowId, parentPk)
     const parentParticipantRow: Record<string, unknown> =
       parentRow ?? ({ id_idw: fkSeed } as Record<string, unknown>)
     const parentTableId =
@@ -227,7 +229,15 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
             legacyFkSeed: fkSeed,
           },
         )
-        next = repairMisassignedPrimaryKeyFromParentId(next, b.fieldDefinitions, fkSeed)
+        // 第 4 个参数是**父（MI collection）**表的设计器主键：它自己的主键不能当成误copy删掉。
+        // 用 ctx.miCollectionPrimaryKeyFields()（跨任务表单解析 collection binding），
+        // 比就近的 parentBinding 更可靠：后者在某些节点上解析不到。
+        next = repairMisassignedPrimaryKeyFromParentId(
+          next,
+          b.fieldDefinitions,
+          fkSeed,
+          parentBinding?.primaryKeyFields ?? ctx.miCollectionPrimaryKeyFields(),
+        )
         next = repairMisassignedLinkChildStructuralFk(next, fkSeed)
         next = stripForeignParticipantIdIdwFromLinkChildRow(next, myRowId)
         seedableRows.push(next)

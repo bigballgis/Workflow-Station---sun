@@ -227,7 +227,10 @@ describe('mergeSubTableRowsByRowId MI dashboard columns', () => {
     expect(afterResync[0].task_current_node).toBe('sub form2')
   })
 
-  it('merges stale N and saved Y for the same row_id when id/id_idw are absent', () => {
+  it('merges stale N and saved Y for the same row when row_id IS the designer PK', () => {
+    // ATM_Transaction's configured primary key is literally `row_id` (dw_field_definitions), so
+    // these rows key on it through `pkFieldNames` like any other PK — not through a hardcoded
+    // `row_id` branch, which no longer exists.
     const merged = mergeSubTableRowsByRowId(
       [{
         row_id: 'TRANS-1',
@@ -241,18 +244,57 @@ describe('mergeSubTableRowsByRowId MI dashboard columns', () => {
         merchant_credit: 'Y',
         temporary_refund: 'N',
       }],
-      ['id_idw'],
+      ['row_id'],
     )
     expect(merged).toHaveLength(1)
     expect(merged[0].merchant_credit).toBe('Y')
     expect(merged[0].temporary_refund).toBe('N')
   })
 
-  it('does not merge different row_id values when id/id_idw are absent', () => {
+  it('keys by designer PK and ignores row_id when the same row carries different row_ids per snapshot', () => {
+    // Production shape: the SAME participants table is served twice — the engine-variables copy and
+    // the portal subTableData copy — and each assigns its own `row_id` to the same physical row.
+    // Keying on `row_id` split each participant into two rows, so the MI isolation filter kept the
+    // wrong one and the sub-task submitted another participant's row (backend then refused to save).
+    const merged = mergeSubTableRowsByRowId(
+      [
+        { row_id: '637e8dd4', id_idwvvbz: 'Test-000003', name: 'ff' },
+        { row_id: '77f82d83', id_idwvvbz: 'Test-000004', name: 'uu' },
+      ],
+      [
+        { row_id: 'e8c44b9d', id_idwvvbz: 'Test-000003', name: 'ff-newer' },
+        { row_id: '6db91dc0', id_idwvvbz: 'Test-000004', name: 'uu-newer' },
+      ],
+      ['id_idwvvbz'],
+    )
+
+    expect(merged).toHaveLength(2)
+    const byPk = (pk: string) => merged.find((r: any) => r.id_idwvvbz === pk)
+    expect(byPk('Test-000003')?.name).toBe('ff-newer')
+    expect(byPk('Test-000004')?.name).toBe('uu-newer')
+  })
+
+  it('honours Sub-Task Config status / current-node column names instead of fixed ones', () => {
+    // Process Design → Sub-Task Config lets the designer name these mirror columns anything
+    // (BPMN miTaskStatusField / miTaskCurrentNodeField). Terminal-wins must follow THAT config:
+    // a stale IN_PROGRESS slice must not overwrite COMPLETED just because the column is not
+    // literally called `task_status`.
+    const merged = mergeSubTableRowsByRowId(
+      [{ id_idw: 'R-1', my_status: 'COMPLETED', my_node: 'sub form2' }],
+      [{ id_idw: 'R-1', my_status: 'IN_PROGRESS', my_node: 'sub form1' }],
+      ['id_idw'],
+      { statusField: 'my_status', currentNodeField: 'my_node' },
+    )
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].my_status).toBe('COMPLETED')
+  })
+
+  it('does not merge distinct rows when row_id IS the designer PK', () => {
     const merged = mergeSubTableRowsByRowId(
       [{ row_id: 'TRANS-1', merchant_credit: 'N' }],
       [{ row_id: 'TRANS-2', merchant_credit: 'Y' }],
-      ['id_idw'],
+      ['row_id'],
     )
     expect(merged).toHaveLength(2)
   })

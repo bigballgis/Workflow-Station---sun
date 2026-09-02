@@ -136,6 +136,10 @@ export function createFieldExtractor(deps: {
           label: '',
           type: 'miAssignment',
           span: 24,
+          // Designer Readonly on the block fixes this row's assignment — the block
+          // renders no control itself, so the flag only bites once carried here.
+          // Mirrors formRendererRuleParsing's marker — keep the extractors in sync.
+          readonly: item.props?.readonly === true || item.props?.disabled === true,
         } as any
         applyDesignerHideFlagToFormField(marker, item)
         // Keep the assignee / BU / role rules NESTED under the marker rather than
@@ -168,6 +172,9 @@ export function createFieldExtractor(deps: {
             allowEditOwn: rnProps.allowEditOwn !== false,
             // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
             allowDelete: rnProps.allowDelete === true,
+            // Carried through even though New Request is not a To Do surface: the same rule
+            // tree feeds task forms, and dropping the flag here would silently unset it.
+            readonly: rnProps.readonly === true,
             pageSize: Number(rnProps.pageSize) || 5,
           },
         } as any)

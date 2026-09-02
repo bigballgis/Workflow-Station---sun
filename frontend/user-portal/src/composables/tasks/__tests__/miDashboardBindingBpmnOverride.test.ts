@@ -15,6 +15,8 @@ describe('isMiDashboardSubTableBinding — miCollection 覆盖', () => {
   const lookalike = {
     tableName: 'participants_copy',
     columns: [{ field: 'name' }, { field: 'email' }, { field: 'assignee_user_id' }],
+    // 设计器主键。幽灵行过滤按它判定；缺失时过滤器不再拿 id_idw 顶上（不猜列名）。
+    primaryKeyFields: ['id_idw'],
   }
 
   it('不带 miCollection 时维持原启发式(判为 MI)——没有 BPMN 的场景行为不变', () => {

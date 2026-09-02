@@ -56,12 +56,14 @@
         >
           <template #default="scope">
             <!-- Read-only display -->
-            <template v-if="col.field === 'task_status'">
+            <!-- 状态列名来自 Sub-Task Config（miTaskStatusField），不写死 task_status：
+                 列名不叫 task_status 的 FU 此前会退化成纯文本、拿不到状态标签 -->
+            <template v-if="isMiStatusColumnField(col.field)">
               <el-tag
-                :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
+                :type="scope.row[col.field] === 'COMPLETED' ? 'success' : 'warning'"
                 size="small"
               >
-                {{ formatTaskStatus(scope.row.task_status) }}
+                {{ formatTaskStatus(scope.row[col.field]) }}
               </el-tag>
             </template>
             <template v-else-if="isUploadColumn(col, scope.row[col.field])">
@@ -252,10 +254,10 @@
         >
           <template #default="scope">
             <el-tag
-              :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
+              :type="scope.row[miStatusField] === 'COMPLETED' ? 'success' : 'warning'"
               size="small"
             >
-              {{ formatTaskStatus(scope.row.task_status) }}
+              {{ formatTaskStatus(scope.row[miStatusField]) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -303,7 +305,7 @@
               link
               type="primary"
               size="small"
-              :disabled="scope.row.task_status !== 'COMPLETED'"
+              :disabled="scope.row[miStatusField] !== 'COMPLETED'"
               @click="emit('viewDetail', scope.row, scope.$index)"
             >
               {{ t('subTable.viewDetail') }}
@@ -463,6 +465,7 @@
                   :parent-row="linkedFormData"
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
                   :field-permissions="fieldPermissions"
+                  :assignment-config="(selectedLinkBinding as any)?.assignmentConfig"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
                 />
               </el-row>
@@ -499,6 +502,8 @@
                 :record-id="linkFormRowStableId"
                 :process-instance-id="recordNoteInstanceId"
                 :function-unit-id="functionUnitId ?? null"
+                :task-id="taskId ?? null"
+                :readonly="taskId != null && rn._recordNote?.readonly === true"
               />
             </div>
           </div>
@@ -536,6 +541,7 @@
 import { ref, watch, computed, withDefaults, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Search, Close, Download, Upload } from '@element-plus/icons-vue'
+import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import {
   resolveDisplayValue,
@@ -906,6 +912,14 @@ const { effectiveLookupRowForCell, shouldShowLookupBackfill, lookupTagDisplayTex
 
 const { formatTaskStatus, effectiveShowTaskStatus, effectiveShowViewDetail } =
   useSubTableStatusColumns(props, rows, t)
+
+/**
+ * MI 状态列名来自当前 FU 的 Sub-Task Config（miTaskStatusField），不写死 `task_status`。
+ * 用 computed 而非常量：切换 task / application 详情时活动配置会变。
+ */
+const miStatusField = computed(() => getActiveMiFieldNames().statusField)
+const isMiStatusColumnField = (field: unknown): boolean =>
+  String(field ?? '') === miStatusField.value
 
 const rowKeys = useSubTableRowKeys(props)
 

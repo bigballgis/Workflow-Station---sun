@@ -7,7 +7,7 @@ import { loginViaPortalPassword } from './playwright-login.mjs'
 import {
   countSubTableRows,
   listMiCollectionTables,
-  resolveAndOpenTodo,
+  openFirstTodoMatching,
   screenshotPath,
 } from './mi-regression-helpers.mjs'
 
@@ -20,7 +20,13 @@ const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
 await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 
-const taskId = await resolveAndOpenTodo(page, { prefer: /fu-20260422|subtask demo|attachment/i })
+// 取「确实带附件行」的那个 To Do：To Do 列表随时会多出新建的空任务，
+// 只取第一条会随机落到没有附件的任务上，把数据前置条件问题伪装成产品缺陷。
+const taskId = await openFirstTodoMatching(
+  page,
+  async (p) => (await countSubTableRows(p, 'attachment')).count > 0,
+  { prefer: /fu-20260422|subtask demo|attachment/i, limit: 6 },
+)
 console.log('[task]', taskId)
 
 const attachment = await countSubTableRows(page, 'attachment')

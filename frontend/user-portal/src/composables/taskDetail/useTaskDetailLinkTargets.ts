@@ -161,6 +161,8 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
             foreignKeyField: raw.foreignKeyField,
             tableName: raw.tableDisplayName || raw.tableName,
             physicalTableName: raw.tableName,
+            relationTableId: (raw as any).relationTableId ?? null,
+            relationTableName: (raw as any).relationTableName ?? null,
             tableType: raw.tableType,
             tableDescription: raw.tableDescription,
             columns,

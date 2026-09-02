@@ -1,4 +1,5 @@
 import { unref, type MaybeRef, type Ref } from 'vue'
+import { writeSubTableRows, subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -29,10 +30,13 @@ function isDigitsKey(key: string): boolean {
 function canonicalizeSubTablesForSubmit(input: Record<string, any>): Record<string, any> {
   const keys = Object.keys(input)
   if (keys.length === 0) return {}
+  // 规范 key 优先：dw:/rt: 不是数字，若沿用「有数字就只留数字」会把真实数据丢掉。
+  const hasCanonical = keys.some(isCanonicalStoreKey)
   const hasNumeric = keys.some(isDigitsKey)
   const out: Record<string, any> = {}
   for (const k of keys) {
-    if (!hasNumeric || isDigitsKey(k)) out[k] = input[k]
+    const keep = hasCanonical ? isCanonicalStoreKey(k) : (!hasNumeric || isDigitsKey(k))
+    if (keep) out[k] = input[k]
   }
   ensureSubTableMapIdentities(out)
   return out
@@ -159,18 +163,17 @@ export function useTaskActions(options: {
     const mergedSub: Record<string, any> = canonicalizeSubTablesForSubmit({
       ...(options.formData.value.__subTables__ || {})
     })
+    // One canonical key per designer table (`dw:<name>` / `rt:<name>`). Writing per-binding keys
+    // here would reintroduce the divergence this structure exists to prevent: Approve/Complete goes
+    // through the same `__subTables__` the backend row-merges, so a second copy of a row under a
+    // binding key could win over the edited one.
+    //
+    // The former special case for a "participants" binding is gone with it — it existed only to
+    // re-stamp that binding's own key after the loop, and it identified the table by the literal
+    // name `participants`, which is not how the MI collection table is configured (Sub-Task Config
+    // names it) and misses any table called something else.
     for (const b of options.subTableBindings.value) {
-      const bindingId = b?.bindingId
-      if (bindingId === null || bindingId === undefined || bindingId === '') continue
-      mergedSub[String(bindingId)] = b.data
-    }
-    const participantsBinding = options.subTableBindings.value.find(
-      b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
-    )
-    if (participantsBinding?.bindingId !== null
-      && participantsBinding?.bindingId !== undefined
-      && participantsBinding?.bindingId !== '') {
-      mergedSub[String(participantsBinding.bindingId)] = participantsBinding.data
+      writeSubTableRows(mergedSub, b, Array.isArray(b.data) ? b.data : [])
     }
     currentFormData.__subTables__ = mergedSub
     return currentFormData
@@ -183,10 +186,8 @@ export function useTaskActions(options: {
     const submittedSubTables: Record<string, any> = {}
     for (const binding of options.subTableBindings.value) {
       if (binding?.bindingMode === 'READONLY') continue
-      const bindingId = binding?.bindingId
-      if (bindingId === null || bindingId === undefined || bindingId === '') continue
-      const key = String(bindingId)
-      if (Object.prototype.hasOwnProperty.call(engineSubTables, key)) {
+      const key = subTableStoreKey(binding)
+      if (key && Object.prototype.hasOwnProperty.call(engineSubTables, key)) {
         // Keep []: an empty current editable grid is an explicit delete-all submission.
         submittedSubTables[key] = engineSubTables[key]
       }

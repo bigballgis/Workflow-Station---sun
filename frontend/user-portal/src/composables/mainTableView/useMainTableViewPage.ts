@@ -463,16 +463,18 @@ function openRow(row: GridDisplayRow) {
 }
 
 /**
- * Stable identifier for a row. Prefers the declared primary key, then the common
- * synthetic id columns, so sub-table views (which carry no process instance) are
- * addressable too.
+ * 行的稳定标识 —— 直接用后端下发的 `rowKey`。
+ *
+ * <p>后端（`PortalMainTableViewServiceImpl`）才知道这张 view 的主键：MAIN view 用流程实例 id，
+ * SUB view 用「实例 id + 子表行 identity」（一个实例贡献多行，单靠实例 id 会重复）。
+ *
+ * <p>此前这里按 `['id', 'id_idw', 'row_id']` 逐个猜列名，等于在前端重新推导一份后端已经算好的
+ * 值：主键不叫这三个名字的表会退化到 `processInstanceId`，SUB view 上因此多行共用一个 key。
+ * 猜列名是硬编码的变体，一律以配置/后端下发为准。
  */
 function resolveRowKey(row: GridDisplayRow): string | null {
-  const values = row.values || {}
-  for (const candidate of ['id', 'id_idw', 'row_id']) {
-    const v = values[candidate]
-    if (v != null && String(v).trim() !== '') return String(v)
-  }
+  const rk = row.rowKey
+  if (rk != null && String(rk).trim() !== '') return String(rk)
   return row.processInstanceId ? String(row.processInstanceId) : null
 }
 

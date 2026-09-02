@@ -24,13 +24,13 @@
         type="button"
         role="radio"
         :aria-checked="mode === option.value"
-        :aria-disabled="isCardLocked(option.value)"
+        :aria-disabled="isCardLocked(option.value) || isReadonly"
         class="mi-assignment-mode-card"
         :class="{
           'is-selected': !isDesignCanvas && mode === option.value,
-          'is-disabled': !isDesignCanvas && isCardLocked(option.value),
+          'is-disabled': !isDesignCanvas && (isCardLocked(option.value) || isReadonly),
         }"
-        :tabindex="isDesignCanvas || isCardLocked(option.value) ? -1 : 0"
+        :tabindex="isDesignCanvas || isCardLocked(option.value) || isReadonly ? -1 : 0"
         @click="changeMode(option.value)"
       >
         <span class="mi-assignment-mode-card__dot" />
@@ -119,6 +119,23 @@ const isEmpty = computed(() => {
   return Array.isArray(children) ? children.length === 0 : false
 })
 
+/**
+ * Readonly is set on the CONTAINER, but `input: false` means form-create forwards no
+ * props here — so the flag is read back off the children the container owns, which
+ * mapFormCreateRulesReadonlyDeep has already stamped `disabled` by cascade.
+ *
+ * A readonly block still shows which mode is active (that is information about the row);
+ * it just refuses to switch, matching the disabled pickers underneath.
+ */
+const isReadonly = computed(() => {
+  const children = props.formCreateInject?.children
+  if (!Array.isArray(children) || children.length === 0) return false
+  return children.every((child) => {
+    const rule = child as { disabled?: unknown; props?: { disabled?: unknown } } | null
+    return rule?.disabled === true || rule?.props?.disabled === true
+  })
+})
+
 const modeOptions = [
   { value: 'person' as const, label: 'subTable.assignByPerson', hint: 'subTable.assignByPersonHint' },
   { value: 'role' as const, label: 'subTable.assignByRole', hint: 'subTable.assignByRoleHint' },
@@ -130,7 +147,7 @@ function isCardLocked(value: AssignmentMode): boolean {
 }
 
 function changeMode(value: AssignmentMode): void {
-  if (isCardLocked(value)) return
+  if (isReadonly.value || isCardLocked(value)) return
   if (value === mode.value) return
   injectedMode?.setMode(value)
 }

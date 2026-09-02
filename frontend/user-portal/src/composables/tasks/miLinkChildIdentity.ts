@@ -244,13 +244,38 @@ export function miLinkChildRowBelongsToParticipant(
   return false
 }
 
-/** Match a sub-table row to Flowable MI expansion id ({@code _currentItem.rowId} / designer {@code id_idw}). */
+/**
+ * Match a sub-table row to the Flowable MI expansion id ({@code _currentItem.rowId}).
+ *
+ * <p>`primaryKeyFields` 是设计器为这张表配置的主键（来自 `dw_field_definitions`），**优先**按它匹配 ——
+ * 主键叫 `row_id`（ATM_Transaction）或 `id_idwvvbz`（subtable）的表此前只能靠下面的名字列表撞运气。
+ *
+ * <p>下面的名字列表保留为兜底：`_currentItem.rowId` 可能是设计器 PK，而 hydrate 出来的行只有 SQL
+ * `id`（见 findSubTableRowByMiExpansionId 的注释），此时仍需跨字段匹配。
+ */
 export function rowMatchesMiExpansionId(
   rec: Record<string, unknown>,
   miRowId: string | number,
+  primaryKeyFields?: string[] | null,
 ): boolean {
   const pid = String(miRowId).trim()
   if (!pid) return false
+  // 按设计器主键匹配。**没有主键的 binding 不是"配置缺失"**：共享附件（main_id）、非 MI 的
+  // 单行子表本来就没有设计器 PK，而本函数会被逐个 peer binding 调用（useSubTableBindings 等）。
+  // 在这里抛错会让 Save 整个中断（实测：用户点 Save 报 MI_CONFIG_MISSING）。
+  // 没有主键 ⇒ 它不可能是 MI 参与者行 ⇒ 跳过主键匹配，交给下面的跨字段兜底。
+  for (const pk of primaryKeyFields ?? []) {
+    const name = String(pk ?? '').trim()
+    if (!name) continue
+    const v = rec[name]
+    if (v != null && v !== '' && String(v) === pid) return true
+  }
+  // 主键未命中时的**跨字段**匹配：`_currentItem.rowId` 可能是设计器 PK，而 hydrate 出来的行
+  // 只暴露 SQL `id`（如 6532）。这不是「猜主键叫什么」，而是同一行在两种表示间的已知映射，
+  // 且只在按主键匹配失败后才走。
+  // `id_idw` 留在兜底名单里：它是历史 MI collection 的展开键，`_currentItem.rowId` 常是它，
+  // 而 hydrate 出来的行可能只暴露 SQL `id`。这是同一行在两种表示间的已知映射，
+  // 不是"猜某张表的主键叫什么"——设计器主键在上面已经先匹配过了。
   for (const k of ['id_idw', 'rowId', 'id', 'ID', 'RowId'] as const) {
     const v = rec[k]
     if (v != null && v !== '' && String(v) === pid) return true

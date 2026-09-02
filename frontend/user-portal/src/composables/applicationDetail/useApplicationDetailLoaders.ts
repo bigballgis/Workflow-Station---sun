@@ -315,7 +315,10 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
               {
                 bindingId: binding.bindingId,
                 tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
-                tableDisplayName: raw?.tableDisplayName ?? binding.tableName
+                tableDisplayName: raw?.tableDisplayName ?? binding.tableName,
+                // 规范 key 的命名空间由「绑的是 DW 还是 RT 表」决定，缺了就会去 dw: 里找 rt: 的数据
+                relationTableId: raw?.relationTableId ?? (binding as { relationTableId?: number | null }).relationTableId,
+                relationTableName: raw?.relationTableName ?? (binding as { relationTableName?: string | null }).relationTableName
               },
               binding.primaryKeyFields
             )

@@ -23,8 +23,12 @@ export function useBusinessLogicEngine(deps: EngineDeps) {
 
   function initEngine() {
     const config = deps.config()
-    if (config) {
-      engine.init(config)
+    if (!config) return
+    engine.init(config)
+    const data = deps.formData.value
+    for (const [key, value] of Object.entries(data)) {
+      if (value == null || value === '') continue
+      applyEngineResult(engine.onFieldChange(key, value, data))
     }
   }
 

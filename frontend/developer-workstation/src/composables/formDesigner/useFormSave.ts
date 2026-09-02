@@ -444,7 +444,15 @@ export function useFormSave(options: UseFormSaveOptions) {
         return
       }
 
-      let nextConfig: Record<string, unknown> = { rule, options, subForms, relationViews, subListViews }
+      const prevConfig = (selectedForm.value.configJson || {}) as Record<string, unknown>
+      let nextConfig: Record<string, unknown> = {
+        ...prevConfig,
+        rule,
+        options,
+        subForms,
+        relationViews,
+        subListViews,
+      }
 
       // Manual Save: full-screen lock when provisioning tables (slow); always mark savingForm.
       let blockingOpened = false

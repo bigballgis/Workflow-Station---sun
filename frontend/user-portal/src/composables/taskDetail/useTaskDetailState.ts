@@ -52,6 +52,9 @@ export interface PreviousFormEntry {
     foreignKeyField: string | null
     tableName: string
     physicalTableName?: string
+    /** 关联表标识：决定 __subTables__ 走 rt: 还是 dw: 命名空间 */
+    relationTableId?: number | null
+    relationTableName?: string | null
     tableType: string
     tableDescription: string
     columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
@@ -114,6 +117,9 @@ export function createTaskDetailState(options: { taskId: string }) {
     foreignKeyField: string | null
     tableName: string
     physicalTableName?: string
+    /** 关联表标识：决定 __subTables__ 走 rt: 还是 dw: 命名空间 */
+    relationTableId?: number | null
+    relationTableName?: string | null
     tableType: string
     tableDescription: string
     columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>

@@ -617,6 +617,7 @@ export default {
   },
   form: {
     title: '表单设计器',
+    eventGuideLinkAria: '打开表单事件指南',
     formName: '表单名称',
     formType: '表单类型',
     requestId: 'Request ID',
@@ -810,6 +811,12 @@ export default {
     recordNoteScopeRecord: '单条记录',
     recordNoteAdd: '添加',
     recordNotePlaceholderHint: '评论与附件面板——部署后在用户门户生效',
+    recordNoteAttach: '添加附件',
+    recordNotePost: '发布',
+    recordNoteLoadMore: '加载更多',
+    recordNotePreviewPlaceholder: '写下评论…',
+    recordNoteMaxSize: '单个文件最大 {size}MB',
+    recordNoteReadonlyHint: 'To Do 表单上只读',
     recordNoteDuplicateScope: '同一表单同一作用域只能放置一个 Record Note 组件',
     recordNoteScopeMainHint: 'Single record 仅在子表表单可用；主表单仅支持整表',
     recordNoteRecordScopeMainForm: '主表单的 Record Note 仅支持整表作用域，Single record 请放在子表表单中',
@@ -2079,8 +2086,10 @@ export default {
     bodyModeVisual: '可视化',
     bodyModeHtml: 'HTML',
     emailPreview: '邮件预览',
-    htmlPlaceholder: '粘贴或编写邮件 HTML。变量占位符会原样出现在预览中。',
-    switchToVisualConfirm: '切回可视化编辑器可能简化 HTML 中的表格和内联样式。是否继续？',
+    htmlPlaceholder:
+      '粘贴或编写邮件 HTML。<style> 与 class 选择器会保留在预览中。变量占位符会原样出现。',
+    switchToVisualConfirm:
+      '切回可视化编辑器可能简化 HTML 中的表格、<style> 和内联样式。是否继续？',
     loadFailed: '加载模板失败',
     deleteConfirm: '确定删除模板「{name}」吗？'
   },

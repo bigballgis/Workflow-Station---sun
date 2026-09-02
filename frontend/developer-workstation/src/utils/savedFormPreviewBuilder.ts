@@ -9,7 +9,7 @@
  */
 
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
-import type { FormPreviewItem, PreviewSubTableBinding } from '@/components/designer/formPreviewTypes'
+import type { FormPreviewItem, PreviewSubTableBinding, RecordNotePreviewConfig } from '@/components/designer/formPreviewTypes'
 import { flattenRuleLayoutContainers, getRuleChildren, isCardRule, getLayoutLabel, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
@@ -390,6 +390,15 @@ function buildPreviewItems(
     } else if (ruleItem.type === 'lookup') {
       flushSegment()
       items.push(makeLookupPreviewItem(ruleItem, config, tables, tableBindings))
+    } else if (ruleItem.type === 'recordNote') {
+      // Same reason as the designer preview path: inside a form-create segment this type
+      // resolves to the designer canvas placeholder, not the portal-shaped Notes panel.
+      flushSegment()
+      items.push({
+        kind: 'recordNote',
+        config: (ruleItem.props ?? {}) as RecordNotePreviewConfig,
+        modelKey: `${keyPrefix}_note_${segmentIndex++}`,
+      })
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       if (containsSubTableRule(ruleItem)) {
         flushSegment()

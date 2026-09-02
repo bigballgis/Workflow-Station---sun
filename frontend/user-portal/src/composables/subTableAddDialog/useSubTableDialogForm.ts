@@ -12,6 +12,7 @@ import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from '@/components/formRendererHelpers'
 import { evaluateFormula, validateField } from '@/components/businessLogicEngine'
 import { materializeFormCreateValidationRules } from '@/utils/formCreateValidateRules'
+import { overlayEventRequiredOnFormRules } from '@/utils/formCreateEventRuntime'
 import { collectComputedColumns, previewComputedRow } from '@/utils/computedFieldRuntime'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 
@@ -65,6 +66,12 @@ interface FormDeps {
   runFormOnSubmit?: () => void
   /** Form onReset when dialog closes. */
   runFormOnReset?: () => void
+  /** Script `api.required` overlay for dialog validation + asterisk. */
+  eventRequiredFlags?: Ref<Map<string, boolean>>
+  /** Script `api.setFieldError` bag — nonempty blocks save. */
+  scriptFieldErrors?: Ref<Record<string, string>>
+  /** Script `api.disabled` overlay. */
+  isDialogFieldDisabled?: (fieldKey: string, fallback: boolean) => boolean
 }
 
 /**
@@ -86,6 +93,9 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     runFormBeforeSubmit,
     runFormOnSubmit,
     runFormOnReset,
+    eventRequiredFlags,
+    scriptFieldErrors,
+    isDialogFieldDisabled,
   } = deps
 
   const formRef = ref<FormInstance>()
@@ -107,7 +117,16 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
         () => props.columns.map((c) => ({ key: c.field, label: c.label })),
       ) as FormRules[string]
     }
-    return out
+    return overlayEventRequiredOnFormRules(
+      out as Record<string, unknown>,
+      props.columns.filter((c) => !c.readonly && !isAuditField(c.field)).map((c) => c.field),
+      eventRequiredFlags?.value,
+      (key) => {
+        const col = props.columns.find((c) => c.field === key)
+        if (!col) return []
+        return [{ required: true, message: `${col.label} is required`, trigger: 'blur' }]
+      },
+    ) as FormRules
   })
 
 
@@ -129,10 +148,11 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
   }
 
   function isColDisabled(col: DialogColumn): boolean {
-    return col.readonly === true
+    const fallback = col.readonly === true
       || calculatedColumns.value.has(col.field)
       || isAuditField(col.field)
       || isFieldPermissionReadonly(col)
+    return isDialogFieldDisabled?.(col.field, fallback) ?? fallback
   }
 
   // Watch dependent column values and recompute target columns.
@@ -325,6 +345,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     // A formula the server refuses to evaluate would make the whole write fail; the inline error
     // is already on the offending field, so stop here instead of round-tripping to a rejection.
     if (Object.keys(computedFieldErrors.value).length > 0) return
+    if (scriptFieldErrors && Object.keys(scriptFieldErrors.value).length > 0) return
     if (runFormBeforeSubmit && runFormBeforeSubmit() === false) return
     const seed = props.mode === 'add' ? props.initialData : undefined
     const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)

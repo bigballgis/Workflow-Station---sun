@@ -59,6 +59,7 @@
         <iframe
           class="ebs-preview-frame"
           data-testid="email-body-preview-iframe"
+          :key="previewDoc"
           :title="t('emailTemplate.emailPreview')"
           sandbox=""
           referrerpolicy="no-referrer"
@@ -70,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, withDefaults } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import EmailRichBodyEditor from './EmailRichBodyEditor.vue'
@@ -82,21 +83,27 @@ import {
 import {
   insertAtCursor,
   isSwitchToVisual,
+  parseEmailBodyEditorMode,
   wrapEmailPreviewDocument,
   type EmailBodyEditorMode,
 } from './emailPreviewShell'
 
-const props = defineProps<{
-  modelValue: string
-  functionUnitId: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    functionUnitId: number
+    mode?: EmailBodyEditorMode
+  }>(),
+  { mode: 'visual' },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'update:mode', value: EmailBodyEditorMode): void
 }>()
 
 const { t } = useI18n()
-const mode = ref<EmailBodyEditorMode>('visual')
+const mode = computed(() => parseEmailBodyEditorMode(props.mode))
 const htmlInputRef = ref<{ textarea?: HTMLTextAreaElement } | null>(null)
 const variableGroups = ref<EmailVariableGroup[]>([])
 const { groups, load } = useEmailTemplateVariables(props.functionUnitId)
@@ -108,7 +115,7 @@ function groupLabel(label: string): string {
 }
 
 async function onModeChange(next: string) {
-  const to: EmailBodyEditorMode = next === 'html' ? 'html' : 'visual'
+  const to = parseEmailBodyEditorMode(next)
   if (to === mode.value) return
   if (isSwitchToVisual(mode.value, to)) {
     try {
@@ -121,7 +128,7 @@ async function onModeChange(next: string) {
       return
     }
   }
-  mode.value = to
+  emit('update:mode', to)
 }
 
 function insertHtmlToken(token: string) {

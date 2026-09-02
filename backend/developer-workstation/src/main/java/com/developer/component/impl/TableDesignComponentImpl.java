@@ -8,6 +8,7 @@ import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DataType;
@@ -236,11 +237,14 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
         if (!changes.isEmpty()) {
             propagateFieldChangesToForms(functionUnitId, saved, changes);
-            // Also refresh View Design column field names + labels for this table's views.
+            // Also refresh View Design column field names + labels for this table's views
+            // (MAIN table views AND SUB table list views).
             mainTableViewService.propagateFieldChangesToViews(saved.getId(), changes.stream()
                     .map(c -> new MainTableViewService.FieldLabelChange(
                             c.oldFieldName(), c.newFieldName(), c.oldDisplayName(), c.newDisplayName()))
                     .toList());
+            propagateFieldRenamesToBindingForeignKeys(saved.getId(), changes);
+            propagateFieldRenamesToReferencingForeignKeys(functionUnitId, saved.getId(), changes);
         }
 
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
@@ -254,6 +258,104 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         // Reload with fields to ensure consistent state for serialization
         return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
+    }
+
+    /**
+     * Within the transaction: rewrite {@code dw_form_table_bindings.foreign_key_field} on every binding
+     * to this table whose FK names a field that was just renamed.
+     *
+     * <p>The FK field name is stored as free text on the binding, not as a reference to
+     * {@code dw_field_definitions}, so a rename leaves it dangling. That silently breaks both the
+     * Portal's FK drill-down (which resolves the column by this name) and MI sub-table scoping.
+     */
+    private void propagateFieldRenamesToBindingForeignKeys(
+            Long tableId, List<FormConfigFieldRenamer.FieldChange> changes) {
+        Map<String, String> renamedByOldName = new java.util.LinkedHashMap<>();
+        for (FormConfigFieldRenamer.FieldChange c : changes) {
+            if (c.fieldNameChanged() && c.oldFieldName() != null && !c.oldFieldName().isBlank()
+                    && c.newFieldName() != null && !c.newFieldName().isBlank()) {
+                renamedByOldName.put(c.oldFieldName(), c.newFieldName());
+            }
+        }
+        if (renamedByOldName.isEmpty()) {
+            return;
+        }
+        List<FormTableBinding> dirty = new ArrayList<>();
+        for (FormTableBinding binding : formTableBindingRepository.findByTableId(tableId)) {
+            String newName = renamedByOldName.get(binding.getForeignKeyField());
+            if (newName != null) {
+                binding.setForeignKeyField(newName);
+                dirty.add(binding);
+            }
+        }
+        if (!dirty.isEmpty()) {
+            formTableBindingRepository.saveAll(dirty);
+            log.info("Propagated field rename(s) on table {} to {} binding foreign_key_field(s)",
+                    tableId, dirty.size());
+        }
+    }
+
+    /**
+     * Within the transaction: rewrite {@code dw_field_definitions.ref_primary_key_fields} on every
+     * OTHER table's FK column that references a primary key of this table which was just renamed.
+     *
+     * <p>The referencing side stores the parent's PK column name as free text, so renaming that PK
+     * leaves every child FK pointing at a column that no longer exists. Nothing fails loudly when
+     * that happens — {@code FieldFkPkSyncService.resolveFirstRefPkField} simply returns null and the
+     * FK row is skipped — so the break stays invisible until runtime, where the Portal's FK guard
+     * refuses every child row Add with "create a &lt;parent&gt; record first" (the parent row is
+     * right there, but the guard looks for a PK column the row does not have).
+     *
+     * <p>Only renames of columns that are actually a PK of this table matter here; a non-PK rename
+     * cannot be the target of someone else's {@code refPrimaryKeyFields}.
+     */
+    private void propagateFieldRenamesToReferencingForeignKeys(
+            Long functionUnitId, Long tableId, List<FormConfigFieldRenamer.FieldChange> changes) {
+        Set<String> primaryKeyNames = fieldDefinitionRepository.findByTableDefinitionIdOrderBySortOrderAsc(tableId).stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
+                .map(FieldDefinition::getFieldName)
+                .collect(Collectors.toSet());
+        Map<String, String> renamedPkByOldName = new LinkedHashMap<>();
+        for (FormConfigFieldRenamer.FieldChange c : changes) {
+            if (!c.fieldNameChanged() || c.oldFieldName() == null || c.oldFieldName().isBlank()
+                    || c.newFieldName() == null || c.newFieldName().isBlank()) {
+                continue;
+            }
+            // The rename already landed, so the PK set carries the NEW name.
+            if (primaryKeyNames.contains(c.newFieldName())) {
+                renamedPkByOldName.put(c.oldFieldName(), c.newFieldName());
+            }
+        }
+        if (renamedPkByOldName.isEmpty()) {
+            return;
+        }
+
+        List<FieldDefinition> dirty = new ArrayList<>();
+        for (TableDefinition other : tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId)) {
+            if (Objects.equals(other.getId(), tableId)) {
+                continue;
+            }
+            for (FieldDefinition f : other.getFieldDefinitions()) {
+                if (!Boolean.TRUE.equals(f.getIsForeignKey()) || !Objects.equals(f.getRefTableId(), tableId)) {
+                    continue;
+                }
+                List<String> refPk = f.getRefPrimaryKeyFields();
+                if (refPk == null || refPk.isEmpty()) {
+                    continue;
+                }
+                List<String> rewritten = refPk.stream()
+                        .map(name -> renamedPkByOldName.getOrDefault(name, name))
+                        .toList();
+                if (!rewritten.equals(refPk)) {
+                    f.setRefPrimaryKeyFields(rewritten);
+                    dirty.add(f);
+                }
+            }
+        }
+        if (!dirty.isEmpty()) {
+            fieldDefinitionRepository.saveAll(dirty);
+            log.info("Propagated PK rename(s) on table {} to {} referencing FK ref_primary_key_fields", tableId, dirty.size());
+        }
     }
 
     /** Within the transaction: scan every form in the FunctionUnit and propagate field deltas into rule.field/title/props/validate + fieldPermissions. */

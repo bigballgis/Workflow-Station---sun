@@ -178,11 +178,16 @@ export function pickMiLinkChildRowsForParent(
 export function findSubTableRowByMiExpansionId(
   rows: unknown[],
   miRowId: string | number | null | undefined,
+  primaryKeyFields?: string[] | null,
 ): Record<string, unknown> | null {
   if (miRowId == null || String(miRowId).trim() === '') return null
-  if (!Array.isArray(rows)) return null
+  if (!Array.isArray(rows) || rows.length === 0) return null
   for (const row of rows) {
-    if (row && typeof row === 'object' && rowMatchesMiExpansionId(row as Record<string, unknown>, miRowId)) {
+    if (
+      row && typeof row === 'object'
+      // 设计器主键优先；名字列表只是兜底（见 rowMatchesMiExpansionId）
+      && rowMatchesMiExpansionId(row as Record<string, unknown>, miRowId, primaryKeyFields)
+    ) {
       return row as Record<string, unknown>
     }
   }
@@ -197,17 +202,32 @@ export function findSubTableRowByMiExpansionId(
 export function findMiIsolatedParentRow(
   rows: unknown[],
   miRowId: string | number | null | undefined,
+  primaryKeyFields?: string[] | null,
 ): Record<string, unknown> | null {
-  const matched = findSubTableRowByMiExpansionId(rows, miRowId)
+  const matched = findSubTableRowByMiExpansionId(rows, miRowId, primaryKeyFields)
   if (matched) return matched
   if (!Array.isArray(rows) || rows.length !== 1) return null
   const only = rows[0]
   if (!only || typeof only !== 'object') return null
   const rec = only as Record<string, unknown>
   if (miRowId != null && String(miRowId).trim() !== '') {
-    const rowIdw = normalizeMiLinkMatchId(rec.id_idw)
+    // 「唯一那行是不是别的参与者」的排他判定：按设计器主键取值，**不猜列名**。
+    //
+    // 没有设计器主键时**不能**退化成"放行"：这个分支的语义是「就一行，姑且当成我的」，
+    // 猜错就是把别人的行交给当前用户编辑。既然无从判定归属，就**拒绝**这一行（返回 null），
+    // 调用方会退回"这个参与者还没有自己的行"，是安全的一侧。
+    //
+    // 也**不能**抛错：本函数会被逐个 peer binding 调用（useSubTableBindings 等），
+    // 共享附件（main_id）、非 MI 单行子表本来就没有设计器 PK —— 在这里抛会中断整个 Save。
+    const pkNames = (primaryKeyFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
+    // 无主键：无从判定这唯一一行归谁 —— 拒绝（放行 = 把别人的行交给当前用户编辑）。
+    // 是不是"子任务表缺主键"这种配置错误，由 binding 入口 resolveSubTablePrimaryKeyFields 负责判定。
+    if (pkNames.length === 0) return null
     const mid = normalizeMiLinkMatchId(miRowId)
-    if (rowIdw && mid && rowIdw !== mid) return null
+    for (const name of pkNames) {
+      const rowPk = normalizeMiLinkMatchId(rec[name])
+      if (rowPk && mid && rowPk !== mid) return null
+    }
   }
   return rec
 }

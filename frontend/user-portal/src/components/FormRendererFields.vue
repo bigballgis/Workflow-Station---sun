@@ -37,6 +37,10 @@ if (!ctx) {
 
 const collapseActiveByKey = ref<Record<string, string[]>>({})
 
+function fieldShowsRequired(field: FormField): boolean {
+  return ctx.isFieldRequired(field)
+}
+
 function collapseActiveNames(field: FormField): string[] {
   const key = field.key
   const existing = collapseActiveByKey.value[key]
@@ -62,7 +66,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
   >
     <!-- fcCol inside fcRow -->
     <el-col
-      v-if="rowColumns && field.type === 'col'"
+      v-if="rowColumns && field.type === 'col' && ctx.isFieldVisible(field.key)"
       :span="field.span || 12"
     >
       <FormRendererFields
@@ -72,7 +76,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
     </el-col>
 
     <!-- fcRow layout -->
-    <template v-else-if="field.type === 'row'">
+    <template v-else-if="field.type === 'row' && ctx.isFieldVisible(field.key)">
       <el-col
         v-if="!inColumn"
         :span="24"
@@ -97,7 +101,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
     </template>
 
     <!-- Card layout -->
-    <template v-else-if="field.type === 'card'">
+    <template v-else-if="field.type === 'card' && ctx.isFieldVisible(field.key)">
       <el-col
         v-if="!inColumn"
         :span="field.span || 24"
@@ -107,10 +111,10 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           class="form-layout-card"
         >
           <template
-            v-if="field.label"
+            v-if="ctx.fieldLabel(field)"
             #header
           >
-            <span class="form-layout-card-title">{{ field.label }}</span>
+            <span class="form-layout-card-title">{{ ctx.fieldLabel(field) }}</span>
           </template>
           <el-row :gutter="20">
             <FormRendererFields :fields="field.children || []" />
@@ -123,10 +127,10 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         class="form-layout-card form-layout-card--stacked"
       >
         <template
-          v-if="field.label"
+          v-if="ctx.fieldLabel(field)"
           #header
         >
-          <span class="form-layout-card-title">{{ field.label }}</span>
+          <span class="form-layout-card-title">{{ ctx.fieldLabel(field) }}</span>
         </template>
         <FormRendererFields
           :fields="field.children || []"
@@ -136,7 +140,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
     </template>
 
     <!-- Nested el-tabs (inside tab pane / card) -->
-    <template v-else-if="field.type === 'tabs' && field.tabs?.length">
+    <template v-else-if="field.type === 'tabs' && field.tabs?.length && ctx.isFieldVisible(field.key)">
       <el-col
         v-if="!inColumn"
         :span="24"
@@ -171,7 +175,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
     </template>
 
     <!-- Nested el-collapse -->
-    <template v-else-if="field.type === 'collapse' && field.collapsePanels?.length">
+    <template v-else-if="field.type === 'collapse' && field.collapsePanels?.length && ctx.isFieldVisible(field.key)">
       <el-col
         v-if="!inColumn"
         :span="24"
@@ -461,13 +465,14 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         :span="field.span || 24"
       >
         <el-form-item
+          :data-field-key="field.key"
           :prop="field.key"
           class="lookup-form-item"
         >
           <template #label>
             <span class="lookup-label-text">
               <el-icon class="lookup-label-icon"><Search /></el-icon>
-              {{ field.label }}
+              {{ ctx.fieldLabel(field) }}
             </span>
           </template>
           <div class="lookup-field-wrapper">
@@ -479,10 +484,12 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
               :display-fields="(field as any)._lookupDisplayFields || []"
               :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
               :filter-conditions="ctx.lookupFilterConditionsFor(field)"
+              :auto-clear-if-missing="ctx.hasScriptLookupFilter(field.key)"
+              :reload-nonce="ctx.lookupRefreshNonce[field.key] ?? 0"
               :lookup-config="(field as any)._lookupConfig"
               :view-fields="(field as any)._lookupViewFields || []"
               :placeholder="field.placeholder"
-              :readonly="ctx.isFieldReadonly(field)"
+              :readonly="ctx.isFieldDisabled(field)"
               :multiple="(field as any)._lookupMultiple === true"
               @update:model-value="(val: unknown) => ctx.handleLookupModelUpdate?.(field.key, val)"
               @select="(row: any) => ctx.handleLookupSelect(field.key, row)"
@@ -502,13 +509,14 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         class="form-col-field"
       >
         <el-form-item
+          :data-field-key="field.key"
           :prop="field.key"
           class="lookup-form-item"
         >
           <template #label>
             <span class="lookup-label-text">
               <el-icon class="lookup-label-icon"><Search /></el-icon>
-              {{ field.label }}
+              {{ ctx.fieldLabel(field) }}
             </span>
           </template>
           <div class="lookup-field-wrapper">
@@ -520,10 +528,12 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
               :display-fields="(field as any)._lookupDisplayFields || []"
               :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
               :filter-conditions="ctx.lookupFilterConditionsFor(field)"
+              :auto-clear-if-missing="ctx.hasScriptLookupFilter(field.key)"
+              :reload-nonce="ctx.lookupRefreshNonce[field.key] ?? 0"
               :lookup-config="(field as any)._lookupConfig"
               :view-fields="(field as any)._lookupViewFields || []"
               :placeholder="field.placeholder"
-              :readonly="ctx.isFieldReadonly(field)"
+              :readonly="ctx.isFieldDisabled(field)"
               :multiple="(field as any)._lookupMultiple === true"
               @update:model-value="(val: unknown) => ctx.handleLookupModelUpdate?.(field.key, val)"
               @select="(row: any) => ctx.handleLookupSelect(field.key, row)"
@@ -548,9 +558,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
       >
         <el-form-item
           :data-field-key="field.key"
-          :label="field.label"
+          :label="ctx.fieldLabel(field)"
           :prop="field.key"
-          :required="field.required"
+          :required="fieldShowsRequired(field)"
           :class="{ 'is-error': !!ctx.scriptFieldErrors[field.key] }"
         >
           <FieldRenderer
@@ -558,9 +568,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
             :model-value="ctx.formData[field.key]"
             :form-data="ctx.formData"
             :readonly="ctx.isFieldReadonly(field)"
-            :disabled="ctx.engineFieldStates.get(field.key)?.disabled || false"
+            :disabled="ctx.isFieldDisabled(field)"
             :visible="ctx.isFieldVisible(field.key)"
-            :options="ctx.engineOptions.get(field.key)"
+            :options="ctx.fieldOptions(field)"
             :upload-url="ctx.uploadUrl"
             :user-search-results="ctx.userSearchResults.get(field.key)"
             @update:model-value="(val: any) => ctx.handleFieldChange(field.key, val)"
@@ -583,9 +593,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
       >
         <el-form-item
           :data-field-key="field.key"
-          :label="field.label"
+          :label="ctx.fieldLabel(field)"
           :prop="field.key"
-          :required="field.required"
+          :required="fieldShowsRequired(field)"
           :class="{ 'is-error': !!ctx.scriptFieldErrors[field.key] }"
         >
           <FieldRenderer
@@ -593,9 +603,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
             :model-value="ctx.formData[field.key]"
             :form-data="ctx.formData"
             :readonly="ctx.isFieldReadonly(field)"
-            :disabled="ctx.engineFieldStates.get(field.key)?.disabled || false"
+            :disabled="ctx.isFieldDisabled(field)"
             :visible="ctx.isFieldVisible(field.key)"
-            :options="ctx.engineOptions.get(field.key)"
+            :options="ctx.fieldOptions(field)"
             :upload-url="ctx.uploadUrl"
             :user-search-results="ctx.userSearchResults.get(field.key)"
             @update:model-value="(val: any) => ctx.handleFieldChange(field.key, val)"

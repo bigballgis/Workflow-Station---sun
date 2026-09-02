@@ -1,13 +1,14 @@
 package com.portal.component;
 
 import com.platform.common.jdbc.SubTableRowKeySupport;
+import com.platform.common.subtable.SubTableStoreKeys;
 import com.portal.exception.PortalException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,13 @@ import java.util.Set;
  * variable, already present in every MI sub-task's submitted form data) into the row that already
  * exists in the database, leaving every other row exactly as persisted.
  *
+ * <p><b>No PK guessing.</b> The row key comes verbatim from {@code _currentItem.rowKey}, whose key
+ * set is the designer-configured primary key of the MI collection table (see
+ * {@link #resolveCurrentItemRowKey}) — any column name, single or composite. This class never
+ * assumes a PK column name. Once the key cannot be resolved, or the submitted rows do not contain
+ * the row it identifies, the save fails loud rather than degrading to a whole-array replace or a
+ * no-op write.
+ *
  * <p><b>Technical debt</b>: MI detection relies on {@code _currentItem}/{@code currentItem} being
  * present in the submitted {@code formData} — an implicit consequence of the frontend's
  * {@code buildCurrentTaskFormSubmitPayload} spreading the whole in-memory form state, not an
@@ -33,14 +41,12 @@ import java.util.Set;
  * loud — same behavior as any other non-MI task, so not a data-loss regression by itself, but the
  * row-isolation guarantee this class exists to provide would quietly stop applying.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class MiSubTaskSubTableRowMerger {
 
     private final JdbcTemplate jdbcTemplate;
-
-    /** Canonical MI collection row PK column, tried before the legacy {@code id} alias (id/id_idw aliasing is handled inside {@link SubTableRowKeySupport}). */
-    private static final List<String> DEFAULT_PK_COLUMNS = List.of("id_idw");
 
     /**
      * Foreign-key column names that mark a sub-table as scoped to the WHOLE process/request rather
@@ -51,6 +57,17 @@ class MiSubTaskSubTableRowMerger {
      */
     private static final Set<String> SHARED_PROCESS_SUB_TABLE_FK = Set.of(
             "main_id", "mainid", "process_id", "processid", "main_record_id");
+
+    /**
+     * Columns through which a link-child row points at its MI participant row.
+     *
+     * <p>Mirrors the frontend's {@code MI_STRUCTURAL_PARENT_FK_FIELDS}
+     * ({@code composables/tasks/internal.ts}) — both sides must agree on what "belongs to this
+     * participant" means, or one will merge a row the other refuses.
+     */
+    private static final List<String> MI_STRUCTURAL_PARENT_FK_FIELDS = List.of(
+            "sub_task_id", "participant_id", "participantId", "parent_id", "parentId",
+            "meeting_participant_id");
 
     /**
      * Whether {@code formData} identifies this submission as an MI sub-task (carries a
@@ -67,10 +84,28 @@ class MiSubTaskSubTableRowMerger {
     }
 
     /**
-     * @return the current MI sub-task's own row key columns/values, or {@code null} when the row
-     *         key cannot be resolved from {@code _currentItem}/{@code currentItem} (missing PK
-     *         value, unexpected shape, …). Only call when {@link #isMiSubTaskSubmission} is true —
-     *         a {@code null} result here means "MI, but broken", not "not MI".
+     * The current MI sub-task's own row key, taken verbatim from the BPMN loop variable's
+     * {@code rowKey} map.
+     *
+     * <p><b>{@code rowKey} is its own authority on which columns form the PK.</b> Both producers
+     * build it from the designer's configured primary key for the MI collection table — see
+     * {@code MiCollectionVariableBuilder} (PK from {@code resolveMiSubTablePkById}, which throws
+     * rather than guess) and {@code SubTableDataInjector} (PK from the physical table). So the
+     * key set of that map IS the real PK column list, whatever the designer configured: a single
+     * {@code id_idw}, a single string/UUID column under any other name, or a composite key. This
+     * method therefore never assumes a column name and never consults the database.
+     *
+     * <p>Nothing here falls back. Previously this passed a hardcoded {@code ["id_idw"]} into
+     * {@link SubTableRowKeySupport#rowKeyFromCurrentItem}, which made every sub-table whose PK was
+     * not named {@code id}/{@code id_idw} — and every composite PK — resolve to {@code null} and
+     * fail the save outright, even though the correct key was sitting right there in {@code rowKey}.
+     * Guessing a PK column is what caused that bug; a partially-resolved key is worse than none,
+     * because it would merge into (i.e. overwrite) the wrong participant's row.
+     *
+     * @return the row key's PK columns/values, or {@code null} when the loop variable carries no
+     *         usable {@code rowKey} map (absent, wrong shape, empty, or any PK value null/blank).
+     *         Only call when {@link #isMiSubTaskSubmission} is true — a {@code null} result here
+     *         means "MI, but broken", not "not MI".
      */
     @SuppressWarnings("unchecked")
     Map<String, Object> resolveCurrentItemRowKey(Map<String, Object> formData) {
@@ -81,7 +116,21 @@ class MiSubTaskSubTableRowMerger {
         if (!(raw instanceof Map)) {
             return null;
         }
-        return SubTableRowKeySupport.rowKeyFromCurrentItem((Map<String, Object>) raw, DEFAULT_PK_COLUMNS);
+        Object rawRowKey = ((Map<String, Object>) raw).get("rowKey");
+        if (!(rawRowKey instanceof Map<?, ?> rowKeyMap) || rowKeyMap.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> rowKey = SubTableRowKeySupport.normalizeStringKeyMap(rowKeyMap);
+        for (Map.Entry<String, Object> e : rowKey.entrySet()) {
+            if (e.getKey().isBlank()
+                    || e.getValue() == null
+                    || String.valueOf(e.getValue()).trim().isEmpty()) {
+                // A blank column name or blank PK value cannot identify a row. Merging on a
+                // partial key would silently target the wrong participant's row.
+                return null;
+            }
+        }
+        return rowKey;
     }
 
     /**
@@ -104,16 +153,12 @@ class MiSubTaskSubTableRowMerger {
      * into the corresponding baseline (already-persisted) slice, leaving every other row in the
      * baseline untouched — regardless of what the submitted slice contains for those other rows.
      *
-     * <p>Also patches every OTHER numeric {@code dw_form_table_bindings} alias of the same designer
-     * table that is absent from the submission (see {@link #findSiblingBindingIdKeys}). A single
-     * designer sub-table is bound once per Task/Process Design form — e.g. an MI collection table
-     * bound by "Assign Task", "Sub task", "Sub task (My Request)", "Main", … — and each binding gets
-     * its own numeric key in {@code __subTables__}. The submitting sub-task's own binding (and the
-     * shared string aliases such as table name) are the only keys present in {@code submittedSubTables};
-     * every sibling numeric key is left stale in the baseline unless patched here too, which used to
-     * let the frontend's own cross-binding-pooling fallbacks (e.g. resolving "my row" by scanning all
-     * sibling slices for a PK match) resurrect a sibling's stale copy of this exact row ahead of the
-     * freshly-saved one — a 3rd occurrence of the same class of cross-binding contamination.
+     * <p><b>No sibling patching.</b> Keys are now canonical, one per designer table
+     * ({@code dw:<name>} / {@code rt:<name>} — see {@link SubTableStoreKeys}), so a table's rows exist
+     * exactly once. Previously a table bound by "Assign Task", "Sub task", "Main", … got a separate
+     * numeric key per binding plus table-name aliases; a submission only carried some of them, so the
+     * rest stayed stale in the baseline and had to be patched here. That whole class of divergence —
+     * and the patching that compensated for it — is gone with the single-source-of-truth key.
      *
      * @param submittedSubTables {@code editableData.get("__subTables__")}, already field-permission
      *                           filtered; every alias key (numeric bindingId, table name,
@@ -162,18 +207,6 @@ class MiSubTaskSubTableRowMerger {
                     : new ArrayList<>();
             List<Object> submittedRowsList = (List<Object>) submittedRows;
             merged.put(key, mergeRowsKeepingBaselineExceptCurrent(baselineRows, submittedRowsList, pkCols, rowKey));
-
-            for (String siblingKey : findSiblingBindingIdKeys(key, baseline.keySet())) {
-                if (merged.containsKey(siblingKey) || submittedSubTables.containsKey(siblingKey)) {
-                    continue;
-                }
-                Object siblingBaselineValue = baseline.get(siblingKey);
-                List<Object> siblingBaselineRows = siblingBaselineValue instanceof List<?> l
-                        ? new ArrayList<>((List<Object>) l)
-                        : new ArrayList<>();
-                merged.put(siblingKey,
-                        mergeRowsKeepingBaselineExceptCurrent(siblingBaselineRows, submittedRowsList, pkCols, rowKey));
-            }
         }
         return merged;
     }
@@ -198,22 +231,29 @@ class MiSubTaskSubTableRowMerger {
      * whole mechanism exists to protect.
      */
     private boolean isParticipantScopedBinding(String submittedKey) {
+        // A relation-table slice (`rt:<name>`) is never one MI participant's row set: relation tables
+        // are not designer sub-tables, carry no participant FK, and legitimately have no primary key.
+        // Row-scoping one by the current sub-task's participant PK finds no match and — since the
+        // slice is non-empty — fails the whole save. Measured: a form binding relation table `test`
+        // alongside the MI sub-table made every Save on that task return 500, even though the
+        // sub-task's own PK (`id_idwnn`) was configured correctly and submitted correctly.
+        if (submittedKey != null && submittedKey.startsWith(SubTableStoreKeys.RT_PREFIX)) {
+            return false;
+        }
         try {
-            String foreignKeyField;
-            Long bindingId = parseLongOrNull(submittedKey);
-            if (bindingId != null) {
-                List<String> fk = jdbcTemplate.queryForList(
-                        "SELECT foreign_key_field FROM dw_form_table_bindings WHERE id = ?",
-                        String.class, bindingId);
-                foreignKeyField = fk.isEmpty() ? null : fk.get(0);
-                if (fk.isEmpty()) {
-                    // Not a real binding id (e.g. it just happens to parse as a number) — fall
-                    // through to the table-name lookup below using the same raw key.
-                    foreignKeyField = lookupForeignKeyFieldByTableName(submittedKey);
-                }
-            } else {
-                foreignKeyField = lookupForeignKeyFieldByTableName(submittedKey);
+            // Belt-and-braces for LEGACY `dw:` keys naming a relation table.
+            //
+            // The `rt:` check above handles anything written since `relationTableId` was added to the
+            // binding payload. Before that the portal could not tell the two apart and filed relation
+            // tables under `dw:<name>` too — those keys are still sitting in persisted
+            // `__subTables__` and keep arriving on submit. Measured on FU fu-20260422: binding 50550
+            // is relation table `test` (dw_form_table_bindings.relation_table_id=1) yet arrived as
+            // `dw:test`, and every Save on that task returned 500 — while the MI sub-table's own PK
+            // (`id_idwnn`) was configured and submitted correctly.
+            if (!isDesignerSubTableStoreKey(submittedKey)) {
+                return false;
             }
+            String foreignKeyField = lookupForeignKeyFieldByStoreKey(submittedKey);
             if (foreignKeyField == null) {
                 return true;
             }
@@ -223,51 +263,78 @@ class MiSubTaskSubTableRowMerger {
         }
     }
 
-    private String lookupForeignKeyFieldByTableName(String tableName) {
+    /**
+     * Whether this canonical key names a table that exists in {@code dw_table_definitions} — i.e. a
+     * real designer table rather than a relation table (or the platform's virtual {@code sys_users}).
+     *
+     * <p>Unknown / unresolvable names answer {@code true} so the participant guard stays on: this
+     * check exists to EXCLUDE things we can prove are not designer tables, never to weaken isolation
+     * for something we merely failed to look up.
+     */
+    private boolean isDesignerSubTableStoreKey(String storeKey) {
+        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
+            return true;
+        }
+        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
+        if (tableName.isBlank()) {
+            return true;
+        }
+        Integer n = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM dw_table_definitions WHERE lower(table_name) = lower(?)",
+                Integer.class, tableName);
+        return n == null || n > 0;
+    }
+
+    /**
+     * {@code foreign_key_field} of any binding on the table this canonical key names.
+     *
+     * <p>Every binding of one table shares the same FK role for this purpose, so the first match is
+     * representative — and after the single-source-of-truth change a table has exactly one key, so
+     * there is no per-binding distinction left to make. Keys are {@code dw:<name>} / {@code rt:<name>}
+     * (see {@link SubTableStoreKeys}); RT keys have no {@code dw_form_table_bindings.table_id} row and
+     * correctly resolve to {@code null} → treated as participant-scoped, matching the previous default.
+     */
+    private String lookupForeignKeyFieldByStoreKey(String storeKey) {
+        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
+            return null;
+        }
+        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
         List<String> fk = jdbcTemplate.queryForList("""
                 SELECT b.foreign_key_field
                 FROM dw_form_table_bindings b
                 JOIN dw_table_definitions t ON t.id = b.table_id
-                WHERE lower(t.table_name) = lower(?)
+                WHERE lower(t.table_name) = lower(?) AND b.foreign_key_field IS NOT NULL
                 LIMIT 1
                 """, String.class, tableName);
         return fk.isEmpty() ? null : fk.get(0);
     }
 
-    private Set<String> findSiblingBindingIdKeys(String submittedKey, Set<String> baselineKeys) {
-        Long bindingId = parseLongOrNull(submittedKey);
-        if (bindingId == null) {
-            return Set.of();
+    /**
+     * True when this row points at the current MI participant through a structural FK.
+     *
+     * <p>The participant's identity is the VALUE of the collection row key (e.g.
+     * {@code {id_idwnn: "Test-000002"}} → {@code "Test-000002"}); a link-child row carries that same
+     * value in {@code sub_task_id} / {@code participant_id} / … Composite collection keys are not
+     * expressible as a single FK value, so those fall through to PK matching unchanged.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean rowBelongsToParticipantByStructuralFk(
+            Map<String, Object> rowMap, Map<String, Object> rowKey) {
+        if (rowMap == null || rowKey == null || rowKey.size() != 1) {
+            return false;
         }
-        try {
-            List<Long> siblingIds = jdbcTemplate.queryForList("""
-                    SELECT sibling.id
-                    FROM dw_form_table_bindings binding
-                    JOIN dw_form_table_bindings sibling ON sibling.table_id = binding.table_id
-                    WHERE binding.id = ? AND binding.table_id IS NOT NULL AND sibling.id <> binding.id
-                    """, Long.class, bindingId);
-            if (siblingIds == null || siblingIds.isEmpty()) {
-                return Set.of();
+        Object participantId = rowKey.values().iterator().next();
+        if (participantId == null || String.valueOf(participantId).isBlank()) {
+            return false;
+        }
+        String want = String.valueOf(participantId).trim();
+        for (String fk : MI_STRUCTURAL_PARENT_FK_FIELDS) {
+            Object v = SubTableRowKeySupport.getRowValueIgnoreCase(rowMap, fk);
+            if (v != null && want.equals(String.valueOf(v).trim())) {
+                return true;
             }
-            Set<String> result = new HashSet<>();
-            for (Long siblingId : siblingIds) {
-                String key = String.valueOf(siblingId);
-                if (baselineKeys.contains(key)) {
-                    result.add(key);
-                }
-            }
-            return result;
-        } catch (RuntimeException ex) {
-            return Set.of();
         }
-    }
-
-    private Long parseLongOrNull(String s) {
-        try {
-            return Long.valueOf(s);
-        } catch (NumberFormatException ex) {
-            return null;
-        }
+        return false;
     }
 
     @SuppressWarnings("unchecked")
@@ -289,9 +356,80 @@ class MiSubTaskSubTableRowMerger {
             }
         }
         if (submittedCurrentRow == null) {
-            // Current row absent from submission (shouldn't happen — the form always carries its
-            // own row) — nothing of ours to merge in; baseline stands untouched.
-            return baselineRows;
+            // A link-child table (People-style) does not carry the COLLECTION's primary key: its own
+            // PK is its row id (a UUID) and it points at the participant through a structural FK
+            // (sub_task_id / participant_id / …). Matching by pkCols therefore never succeeds and the
+            // guard below rejected the whole save. Measured: `people` rows
+            // {id=<uuid>, sub_task_id=Test-000002, …} failed every Save on that sub-task.
+            //
+            // Such a table is NOT one-row-per-participant — a participant may own several rows — so it
+            // cannot go through the single-row replace below without dropping every row but the first.
+            // Replace this participant's whole set instead, leaving other participants' rows untouched.
+            List<Object> ownByFk = new ArrayList<>();
+            for (Object row : submittedRows) {
+                if (row instanceof Map && rowBelongsToParticipantByStructuralFk((Map<String, Object>) row, rowKey)) {
+                    ownByFk.add(row);
+                }
+            }
+            if (!ownByFk.isEmpty()) {
+                List<Object> out = new ArrayList<>();
+                for (Object row : baselineRows) {
+                    if (row instanceof Map
+                            && rowBelongsToParticipantByStructuralFk((Map<String, Object>) row, rowKey)) {
+                        continue;   // drop this participant's stale rows; the submission replaces them
+                    }
+                    out.add(row);
+                }
+                out.addAll(ownByFk);
+                return out;
+            }
+            if (submittedRows.isEmpty()) {
+                // An EMPTY slice carries no claim about any row — it means this alias key simply has
+                // nothing to contribute (the task form does not render this binding, MI isolation
+                // rebuilt the payload without it, …). There is nothing of ours to merge in, so the
+                // baseline stands untouched. This is not the corruption case below: no submitted row
+                // disagrees with rowKey, so nothing the user typed can be lost by leaving it alone.
+                return baselineRows;
+            }
+            // Every submitted row provably belongs to ANOTHER participant (each carries a structural
+            // FK naming someone else). That is not corruption — it is a link-child table on which
+            // this participant simply has no row yet, while a sibling's row rides along in the shared
+            // slice. Measured: participant Test-000002 opened a task whose `people` slice held only
+            // {sub_task_id: Test-000001}; failing here rejected every Save even though nothing of
+            // ours was at stake. Leave the baseline untouched, exactly like the empty-slice case.
+            boolean everySubmittedRowBelongsToAnotherParticipant = true;
+            for (Object row : submittedRows) {
+                if (!(row instanceof Map)) {
+                    everySubmittedRowBelongsToAnotherParticipant = false;
+                    break;
+                }
+                Map<String, Object> rowMap = (Map<String, Object>) row;
+                String otherFk = null;
+                for (String fk : MI_STRUCTURAL_PARENT_FK_FIELDS) {
+                    Object v = SubTableRowKeySupport.getRowValueIgnoreCase(rowMap, fk);
+                    if (v != null && !String.valueOf(v).trim().isEmpty()) {
+                        otherFk = String.valueOf(v).trim();
+                        break;
+                    }
+                }
+                // No structural FK at all, or one naming US, means this row is not provably foreign.
+                if (otherFk == null || rowBelongsToParticipantByStructuralFk(rowMap, rowKey)) {
+                    everySubmittedRowBelongsToAnotherParticipant = false;
+                    break;
+                }
+            }
+            if (everySubmittedRowBelongsToAnotherParticipant) {
+                return baselineRows;
+            }
+            // Non-empty slice that nonetheless lacks our own row: the submitted rows do not agree
+            // with rowKey on what identifies a row. Returning the baseline here (as this used to)
+            // silently discards everything the user just typed and reports success; fail loud.
+            log.warn("[MI] own row {} not found among {} submitted row(s); pkCols={}; submitted rows={}",
+                    rowKey, submittedRows.size(), pkCols, submittedRows);
+            throw new PortalException("MI_ROW_KEY_UNRESOLVED",
+                    "This multi-instance sub-task's own row (" + rowKey + ") is missing from the "
+                            + "submitted sub-table data — refusing to save, as saving would discard "
+                            + "your changes. Please reload and try again.");
         }
 
         List<Object> result = new ArrayList<>();
@@ -309,7 +447,12 @@ class MiSubTaskSubTableRowMerger {
             result.add(row);
         }
         if (!replaced) {
-            // New participant row not yet in the baseline — append rather than drop it.
+            // Deliberately NOT a guess-style fallback: a participant whose row has never been
+            // saved genuinely has no baseline row yet, and the very first save must create it.
+            // Dropping it (or failing) here would lose that participant's first submission
+            // outright. The row key is already proven complete by resolveCurrentItemRowKey, so
+            // this appends a row identified by the real PK — it cannot collide with an existing
+            // one, since a matching baseline row would have taken the replace branch above.
             result.add(submittedCurrentRow);
         }
         return result;

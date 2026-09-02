@@ -2,8 +2,10 @@
  * Capture Designer screens for /help/ article figures (DW login, no SSO).
  * Writes PNGs into frontend/help/public/guides/.
  * Requires HELP_GUIDE_FU_ID from create-help-demo-purchase-request.mjs.
- * After recapture, bump GUIDE_FIGURE_REV in frontend/help/src/components/GuideArticle.vue
- * so the help SPA does not keep a cached PNG at the same URL.
+ * After recapture:
+ * 1. Bump GUIDE_FIGURE_REV in frontend/help/src/components/GuideArticle.vue
+ * 2. cd frontend/help && pnpm run build   (copies public/guides → dist/guides)
+ * 3. Rebuild platform-help-frontend — Dockerfile.local only COPY dist, not public/
  */
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
@@ -48,7 +50,83 @@ async function clickTab(label) {
   const tab = page.getByRole('tab', { name: label, exact: true })
   await tab.waitFor({ state: 'visible', timeout: 15000 })
   await tab.click()
-  await page.waitForTimeout(1200)
+  await page.waitForTimeout(600)
+}
+
+async function openFormPreview() {
+  const previewBtn = page
+    .locator('.form-editor-view .header-actions')
+    .getByRole('button', { name: 'Preview', exact: true })
+  await previewBtn.waitFor({ state: 'visible', timeout: 15000 })
+  await previewBtn.click()
+  const dlg = page.locator('.form-preview-dialog')
+  await dlg.waitFor({ state: 'visible', timeout: 20000 })
+  await dlg.locator('.form-preview-wrapper, form-create').first().waitFor({ state: 'visible', timeout: 20000 })
+  await page.waitForTimeout(800)
+  return dlg
+}
+
+async function closeFormPreview() {
+  await page.keyboard.press('Escape')
+  await page.locator('.form-preview-dialog').waitFor({ state: 'hidden', timeout: 8000 }).catch(() => {})
+  await page.waitForTimeout(400)
+}
+
+function previewBodySelector() {
+  return '.form-preview-dialog .el-dialog__body'
+}
+
+async function injectPreviewBanner() {
+  await page.evaluate((bodySel) => {
+    const body = document.querySelector(bodySel)
+    if (!body) return
+    body.querySelectorAll('.help-capture-banner').forEach((n) => n.remove())
+    const banner = document.createElement('div')
+    banner.className =
+      'help-capture-banner el-alert el-alert--warning is-light form-event-banner'
+    banner.setAttribute('role', 'alert')
+    banner.innerHTML =
+      '<i class="el-icon el-alert__icon"><svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896zm0 832a384 384 0 1 0 0-768 384 384 0 0 0 0 768zm48-176a48 48 0 1 1-96 0 48 48 0 0 1 96 0zm-48-368a32 32 0 0 1 32 32v224a32 32 0 0 1-64 0V384a32 32 0 0 1 32-32z"/></svg></i><div class="el-alert__content"><span class="el-alert__title">Check the title</span></div>'
+    body.insertBefore(banner, body.firstChild)
+  }, previewBodySelector())
+}
+
+async function injectPreviewFieldError() {
+  await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.form-preview-dialog .el-form-item')]
+    const titleItem = items.find((el) => /^Title\b/.test(el.querySelector('.el-form-item__label')?.textContent?.trim() || ''))
+    if (!titleItem) return
+    titleItem.classList.add('is-error')
+    let err = titleItem.querySelector('.el-form-item__error')
+    if (!err) {
+      err = document.createElement('div')
+      err.className = 'el-form-item__error'
+      titleItem.appendChild(err)
+    }
+    err.textContent = 'Title is required'
+  })
+}
+
+async function injectPreviewDisabledCostCenter() {
+  await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.form-preview-dialog .el-form-item')]
+    const ccItem = items.find((el) => /^Cost center\b/i.test(el.querySelector('.el-form-item__label')?.textContent?.trim() || ''))
+    if (!ccItem) return
+    ccItem.querySelectorAll('.el-input, .el-select, .el-input-number').forEach((el) => {
+      el.classList.add('is-disabled')
+    })
+    ccItem.querySelectorAll('input, textarea').forEach((el) => {
+      el.setAttribute('disabled', 'disabled')
+    })
+  })
+}
+
+async function capturePreviewEffect(name, injectFn) {
+  const dlg = await openFormPreview()
+  await injectFn()
+  await page.waitForTimeout(500)
+  await shot(name, dlg.locator('.el-dialog__body'))
+  await closeFormPreview()
 }
 
 async function clickBpmnNode(text) {
@@ -74,6 +152,55 @@ try {
   await shot('dw-table-design.png', page.locator('.designer-workspace'))
   await page.getByRole('button', { name: 'Back to List' }).click()
   await page.waitForTimeout(400)
+
+  await clickTab('Form Design')
+  try {
+    const formEdit = page.locator('.form-list-sidebar .el-table__row').filter({ hasText: 'help_pr' }).getByRole('button', { name: 'Edit' }).first()
+    await formEdit.waitFor({ state: 'visible', timeout: 10000 })
+    await formEdit.click()
+    await page.locator('.fc-designer-wrapper').first().waitFor({ state: 'visible', timeout: 15000 })
+    await page.waitForTimeout(800)
+
+    const scenarioField = page.locator('.el-form-item').filter({ hasText: /^Scenario/ }).first()
+    if (await scenarioField.count()) await scenarioField.click({ force: true })
+    await page.waitForTimeout(500)
+    await shot('dw-form-events-canvas.png', page.locator('.fc-designer-wrapper').first())
+
+    const formTab = page.locator('._fc-r-tab').filter({ hasText: /^Form$/ }).first()
+    if (await formTab.count()) {
+      await formTab.click()
+      await page.waitForTimeout(800)
+      const formEventBtn = page.locator('._fd-fn-list .el-button').first()
+      if (await formEventBtn.count()) {
+        await formEventBtn.scrollIntoViewIfNeeded()
+        await page.waitForTimeout(400)
+      }
+      await shot('dw-form-events-form-tab.png', page.locator('.fc-designer-wrapper').first())
+    }
+
+    await capturePreviewEffect('dw-form-events-preview-notify.png', injectPreviewBanner)
+    await capturePreviewEffect('dw-form-events-preview-errors.png', injectPreviewFieldError)
+    await capturePreviewEffect('dw-form-events-preview-disabled.png', injectPreviewDisabledCostCenter)
+
+    const titleField = page.locator('.el-form-item').filter({ hasText: /^Title/ }).first()
+    if (await titleField.count()) await titleField.click({ force: true })
+    else await page.locator('.el-form-item').first().click({ force: true })
+    await page.waitForTimeout(500)
+    await page.locator('._fd-event .el-button').first().click()
+    const eventDlg = page.locator('._fd-event-dialog').last()
+    await eventDlg.waitFor({ state: 'visible', timeout: 8000 })
+    await page.waitForTimeout(500)
+    await shot('dw-form-events.png', eventDlg)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    await page.getByRole('button', { name: 'Back to List' }).click()
+    await page.waitForTimeout(400)
+  } catch (err) {
+    console.warn('skip form-events screenshots', err)
+    const back = page.getByRole('button', { name: 'Back to List' })
+    if (await back.count()) await back.click().catch(() => {})
+    await page.waitForTimeout(400)
+  }
 
   await clickTab('Connections')
   await shot('dw-connections.png', page.locator('.designer-workspace'))
@@ -126,3 +253,8 @@ try {
 } finally {
   await browser.close()
 }
+
+console.log('')
+console.log('Next: cd frontend/help && pnpm run build')
+console.log('Then: docker compose ... up -d --build platform-help-frontend')
+console.log('(Help image only ships dist/guides — public/ alone is not served.)')

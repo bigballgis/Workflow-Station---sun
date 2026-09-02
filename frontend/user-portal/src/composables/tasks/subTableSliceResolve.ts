@@ -8,6 +8,7 @@ import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isMiDashboardSubTableBinding } from './subTableBindingKinds'
 import { mergeAllSlicesForSharedProcessSubTableBinding } from './subTableSliceMerge'
 import { rowIsSelfOwnedByStructuralFk } from './miLinkChildIdentity'
+import { subTableStoreKey, type SubTableStoreBindingLike } from './subTableStore'
 
 /**
  * Resolve saved rows for a binding — tolerates sibling binding-id keys and display/physical table names.
@@ -115,6 +116,30 @@ export function resolveSubTableRowsForBinding(
 ): any[] | undefined {
   if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
 
+  // Canonical key first: one key per designer table (`dw:<name>` / `rt:<name>`). When present it is
+  // the single source of truth — no sibling-slice overlay, no name fallback, both of which exist
+  // only to paper over the legacy "one key per binding + name aliases" fan-out.
+  const canonicalKey = subTableStoreKey(binding as SubTableStoreBindingLike)
+  if (canonicalKey) {
+    const canonical = savedSubTables[canonicalKey]
+    if (Array.isArray(canonical)) return canonical as any[]
+  }
+  // Falling through means some writer produced a non-canonical key. The legacy chain below still
+  // resolves it, so the user sees data either way — but a silent fallback is exactly how the
+  // divergence this refactor removed stayed invisible for so long. Surface it in dev: a warning
+  // here names a write path that still needs converging. Only warn when the fallback actually
+  // finds rows, since an empty store is the normal "table has no data yet" case, not a miss.
+  const warnLegacyKeyFallback = (rows: any[] | undefined) => {
+    if (!import.meta.env.DEV || !rows || rows.length === 0) return rows
+    console.warn(
+      '[subTables] canonical key missed, resolved via legacy key — some writer is not using '
+      + 'writeSubTableRows()',
+      { canonicalKey, bindingId: binding.bindingId, tableName: binding.tableName,
+        availableKeys: Object.keys(savedSubTables) },
+    )
+    return rows
+  }
+
   const tryKey = (key: string | number): any[] | undefined => {
     const v = savedSubTables[key] ?? savedSubTables[String(key)]
     return Array.isArray(v) && v.length > 0 ? (v as any[]) : undefined
@@ -135,7 +160,7 @@ export function resolveSubTableRowsForBinding(
   let rows: any[] | undefined
   for (const alias of legacyBindingIdAliases(binding.bindingId)) {
     rows = tryKey(alias)
-    if (rows) return finish(rows)
+    if (rows) return finish(warnLegacyKeyFallback(rows)!)
   }
 
   const selfTid =
@@ -149,14 +174,17 @@ export function resolveSubTableRowsForBinding(
       if (tid == null || Number(tid) !== selfTid) continue
       for (const alias of legacyBindingIdAliases(bid)) {
         rows = tryKey(alias)
-        if (rows) return enrichMiDashboardResolvedRows(rows, savedSubTables, binding, opts)
+        if (rows) {
+          return enrichMiDashboardResolvedRows(
+            warnLegacyKeyFallback(rows)!, savedSubTables, binding, opts)
+        }
       }
     }
   }
 
   if (opts?.mergeSiblingSlices !== false && isMiDashboardSubTableBinding(binding)) {
     const merged = mergeAllSubTableSlicesFromVariables(savedSubTables, binding.primaryKeyFields ?? null)
-    if (merged.length > 0) return merged
+    if (merged.length > 0) return warnLegacyKeyFallback(merged)!
   }
 
   return undefined

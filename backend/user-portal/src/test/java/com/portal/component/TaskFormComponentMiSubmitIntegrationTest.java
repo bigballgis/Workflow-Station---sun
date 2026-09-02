@@ -79,8 +79,18 @@ class TaskFormComponentMiSubmitIntegrationTest {
         return r;
     }
 
-    private static Map<String, Object> currentItem(String rowId) {
-        return Map.of("rowId", rowId);
+    /**
+     * Real MI loop-variable shape: the engine always writes a {@code rowKey} map built from the
+     * designer-configured PK of the collection table (MiCollectionVariableBuilder /
+     * SubTableDataInjector). The key set of that map is the authority on the PK columns — a bare
+     * {@code rowId} is not accepted, since honouring it would mean guessing which column it names.
+     */
+    private static Map<String, Object> currentItem(String idIdw) {
+        return Map.of("rowKey", Map.of("id_idw", idIdw));
+    }
+
+    private static Map<String, Object> currentItemWithRowKey(Map<String, Object> rowKey) {
+        return Map.of("rowKey", rowKey);
     }
 
     @Test
@@ -138,6 +148,106 @@ class TaskFormComponentMiSubmitIntegrationTest {
                 .isEqualTo("B-saved");
 
         verify(processInstanceRepository, org.mockito.Mockito.times(2)).save(processInstance);
+    }
+
+    @Test
+    void submitTaskForm_miParticipantWithNonIdIdwPrimaryKeySavesInsteadOfBeingRejected() {
+        // Regression for the reported "Unable to resolve this multi-instance sub-task's own row"
+        // Save failure: the merger used to hardcode the MI collection PK as ["id_idw"], so a
+        // sub-table whose Table Design PK is any other column could never resolve its own row and
+        // every Save was refused — even though _currentItem.rowKey carried the correct key.
+        JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
+        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("__subTables__", new HashMap<>(Map.of(
+                "50539", new java.util.ArrayList<>(List.of(
+                        new HashMap<>(Map.of("emp_no", "E-77", "name", "A-original")),
+                        new HashMap<>(Map.of("emp_no", "E-88", "name", "B-original")))))));
+        ProcessInstance processInstance = processInstanceWithVariables(baseline);
+        when(processInstanceRepository.findById(PROCESS_INSTANCE_ID)).thenReturn(Optional.of(processInstance));
+
+        Map<String, Object> formData = new HashMap<>();
+        formData.put("_currentItem", currentItemWithRowKey(Map.of("emp_no", "E-88")));
+        formData.put("__subTables__", new HashMap<>(Map.of(
+                "50539", new java.util.ArrayList<>(List.of(
+                        Map.of("emp_no", "E-77"),
+                        new HashMap<>(Map.of("emp_no", "E-88", "name", "B-saved")))))));
+
+        taskFormComponent.submitTaskForm(TASK_ID, "user-b", formData);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> after = (Map<String, Object>) processInstance.getVariables().get("__subTables__");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) after.get("50539");
+        assertThat(rows.stream().filter(r -> "E-88".equals(r.get("emp_no"))).findFirst().orElseThrow().get("name"))
+                .isEqualTo("B-saved");
+        assertThat(rows.stream().filter(r -> "E-77".equals(r.get("emp_no"))).findFirst().orElseThrow().get("name"))
+                .as("row isolation must still hold when the PK is not id_idw")
+                .isEqualTo("A-original");
+    }
+
+    @Test
+    void submitTaskForm_miSubmissionWithOnlyRowIdIsRejectedRatherThanGuessingThePkColumn() {
+        JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
+        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("__subTables__", new HashMap<>(Map.of(
+                "50539", new java.util.ArrayList<>(List.of(row("Test-014", "original"))))));
+        ProcessInstance processInstance = processInstanceWithVariables(baseline);
+        when(processInstanceRepository.findById(PROCESS_INSTANCE_ID)).thenReturn(Optional.of(processInstance));
+
+        // A bare rowId does not say which column it is: treating it as id_idw is precisely the
+        // guess that caused the original bug, so this fails closed instead.
+        Map<String, Object> formData = new HashMap<>();
+        formData.put("_currentItem", Map.of("rowId", "Test-014"));
+        formData.put("__subTables__", new HashMap<>(Map.of(
+                "50539", new java.util.ArrayList<>(List.of(row("Test-014", "SHOULD-NOT-BE-SAVED"))))));
+
+        assertThatThrownBy(() -> taskFormComponent.submitTaskForm(TASK_ID, "user-a", formData))
+                .isInstanceOf(PortalException.class)
+                .satisfies(e -> assertThat(((PortalException) e).getCode()).isEqualTo("MI_ROW_KEY_UNRESOLVED"));
+
+        assertThat(processInstance.getVariables()).isEqualTo(baseline);
+        verify(processInstanceRepository, never()).save(any());
+    }
+
+    @Test
+    void submitTaskForm_neverPersistsTheExecutionScopedMiLoopVariableProcessWide() {
+        // Regression: _currentItem is EXECUTION-scoped (one per MI participant), but
+        // up_process_instance.variables is a single process-wide blob. Persisting it there stamped
+        // participant A's row identity onto the whole process, so participant B's task then loaded
+        // A's row as "mine", edited the wrong row, and had its save rejected.
+        JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
+        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("__subTables__", new HashMap<>(Map.of(
+                "50539", new java.util.ArrayList<>(List.of(row("Test-014", "A-original"))))));
+        ProcessInstance processInstance = processInstanceWithVariables(baseline);
+        when(processInstanceRepository.findById(PROCESS_INSTANCE_ID)).thenReturn(Optional.of(processInstance));
+
+        Map<String, Object> formData = new HashMap<>();
+        formData.put("_currentItem", currentItem("Test-014"));
+        formData.put("currentItem", currentItem("Test-014"));
+        formData.put("__subTables__", new HashMap<>(Map.of(
+                "50539", new java.util.ArrayList<>(List.of(row("Test-014", "A-saved"))))));
+
+        taskFormComponent.submitTaskForm(TASK_ID, "user-a", formData);
+
+        // Row isolation still applied (so the loop variable WAS honoured for this submission)...
+        @SuppressWarnings("unchecked")
+        Map<String, Object> after = (Map<String, Object>) processInstance.getVariables().get("__subTables__");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) after.get("50539");
+        assertThat(rows.get(0).get("name")).isEqualTo("A-saved");
+
+        // ...but it must NOT be left behind in the shared process-wide variables.
+        assertThat(processInstance.getVariables())
+                .as("execution-scoped MI loop variable must never be persisted process-wide")
+                .doesNotContainKey("_currentItem")
+                .doesNotContainKey("currentItem");
     }
 
     @Test

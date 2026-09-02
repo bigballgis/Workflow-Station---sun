@@ -5,6 +5,7 @@ import {
   flattenNestedSubTableRowsIntoPayload,
   mergeSubTableRowsByRowId,
 } from '@/composables/tasks/shared'
+import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 
 export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
@@ -200,6 +201,18 @@ export const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
   'task_definition_key',
 ])
 
+/**
+ * 「这个列是 MI 运行时元数据，而不是用户填的业务数据」。
+ *
+ * <p>上面的集合是跨 FU 的已知名字并集，覆盖不了某个 FU 在 Sub-Task Config 里自定义的列名，
+ * 那样的列会被误判成业务数据，故先问当前 FU 的配置。
+ */
+export function isMiPlaceholderKey(lowerKey: string): boolean {
+  if (SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lowerKey)) return true
+  const { statusField, currentNodeField } = getActiveMiFieldNames()
+  return lowerKey === statusField.toLowerCase() || lowerKey === currentNodeField.toLowerCase()
+}
+
 /** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */
 export const SUB_TABLE_STRUCTURAL_FK_KEYS = new Set([
   'sub_task_id',
@@ -226,7 +239,7 @@ export function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, f
   if (!Array.isArray(rows) || rows.length === 0) return true
   const checkKeys = [...fieldKeys].filter(k => {
     const lk = k.toLowerCase()
-    return !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
+    return !isMiPlaceholderKey(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
   })
   if (checkKeys.length === 0) return true
   for (const row of rows) {

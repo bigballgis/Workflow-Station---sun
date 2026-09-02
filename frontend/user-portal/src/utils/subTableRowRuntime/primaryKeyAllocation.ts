@@ -15,20 +15,35 @@ import {
   bindingForeignKeyFieldIsRowPrimaryKey,
 } from './types'
 
-/** Clear link-child row PK values wrongly copied from parent MI id_idw (e.g. People.id), not collection id_idw. */
+/**
+ * Clear link-child row PK values wrongly copied from the parent MI participant key
+ * (e.g. People.id), while never stripping the MI collection's own PK.
+ *
+ * @param parentPrimaryKeyFields 父（MI collection）表在设计器里配置的主键列名。该表自己的
+ *   主键必须等于父展开键，不能当成「误copy」删掉。此前这里写死 `'id_idw'`：主键叫别的名字
+ *   （实测 ATM_Transaction 是 `row_id`）时守卫失效，会把 collection 自己的主键删掉。
+ */
 export function repairMisassignedPrimaryKeyFromParentId(
   row: Record<string, unknown>,
   fieldDefinitions: BindingFieldDefinition[] | undefined | null,
   parentIdIdw: string | number | null | undefined,
+  parentPrimaryKeyFields?: string[] | null,
 ): Record<string, unknown> {
   if (parentIdIdw == null || String(parentIdIdw).trim() === '') return row
   const parentKey = String(parentIdIdw).trim()
+  // 父表主键**不猜**（不写死 'id_idw'）：猜错时保护失效，会把 MI collection 自己的主键
+  // 当成「误copy」删掉。
+  // 解析不出来时**什么都不删**（直接返回原行）—— 这个函数是删值的，无从判断该保护谁时
+  // 保持原样是安全的一侧；抛错则会中断整个 Save。
+  const parentPks = (parentPrimaryKeyFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
+  if (parentPks.length === 0) return row
+  const protectedPks = new Set(parentPks.map(n => n.toLowerCase()))
   const out = { ...row }
   for (const def of fieldDefinitions ?? []) {
     if (!def.isPrimaryKey) continue
     const name = def.fieldName
     /** MI collection PK — must equal parent expansion key; never strip. */
-    if (name === 'id_idw') continue
+    if (protectedPks.has(String(name).trim().toLowerCase())) continue
     const v = out[name]
     if (v != null && v !== '' && String(v).trim() === parentKey) {
       delete out[name]

@@ -15,6 +15,7 @@ import {
   type FormCreateEventContext,
   type PortalFormApi,
 } from './formCreateEventApi'
+import { readFormEventCurrentUser } from './formCreateEventUser'
 
 // Re-export the script primitives, API surface, and validator runtime so existing
 // `@/utils/formCreateEventRuntime` imports keep working unchanged (single entry point).
@@ -26,11 +27,20 @@ export {
   createFieldKeyResolver,
   createFormEventOptionsBridge,
   createPortalFormApi,
+  isEffectivelyDisabled,
+  isEffectivelyRequired,
+  overlayEventRequiredOnFormRules,
   type FieldKeyResolver,
   type FormCreateChangeHandler,
   type FormCreateEventContext,
   type FormEventOptionsBridge,
   type PortalFormApi,
+  type FormEventChoiceOption,
+  type FormEventLookupFilter,
+  type FormEventNotification,
+  type PortalFormApiOverlays,
+  type PortalFormRequiredBag,
+  type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from './formCreateEventApi'
 export {
@@ -94,6 +104,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           'var value = $inject.value;',
           'var formData = $inject.formData;',
           'var data = $inject.data;',
+          'var user = $inject.user;',
           body,
         ].join('\n'),
       ) as (inject: Record<string, unknown>) => unknown
@@ -110,6 +121,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           value: ctx.value,
           formData: formSnapshot,
           data: formSnapshot,
+          user: readFormEventCurrentUser(),
         })
       }
     }
@@ -125,6 +137,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       'args',
       'formData',
       'data',
+      'user',
       body,
     ) as (
       field: string,
@@ -137,6 +150,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       args: unknown,
       formData: Record<string, unknown>,
       data: Record<string, unknown>,
+      user: ReturnType<typeof readFormEventCurrentUser>,
     ) => unknown
 
     return (ctx) => {
@@ -153,6 +167,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
         ctx.args,
         formSnapshot,
         formSnapshot,
+        readFormEventCurrentUser(),
       )
     }
   } catch (err) {

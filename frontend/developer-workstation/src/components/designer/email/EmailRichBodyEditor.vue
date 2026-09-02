@@ -43,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { shallowRef, ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { shallowRef, ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
@@ -53,6 +53,7 @@ import {
   type EmailVariableGroup,
 } from '@/composables/email/useEmailTemplateVariables'
 import { buildEmailRichEditorConfig, buildEmailRichToolbarConfig } from './emailRichEditorConfig'
+import { htmlFromVisualEditor } from './emailPreviewShell'
 
 const props = defineProps<{
   modelValue: string
@@ -80,12 +81,22 @@ function groupLabel(label: string): string {
   return resolveEmailVariableGroupLabel(label, t)
 }
 
-function onCreated(editor: any) {
-  editorRef.value = editor
+function emitSerializedHtml(editor: { getHtml: () => string }): void {
+  const html = htmlFromVisualEditor(editor)
+  if (html == null) return
+  emit('update:modelValue', html)
 }
 
-function onChange(editor: any) {
-  emit('update:modelValue', editor.getHtml())
+function onCreated(editor: { getHtml: () => string }): void {
+  editorRef.value = editor
+  void nextTick(() => {
+    if (editorRef.value !== editor) return
+    emitSerializedHtml(editor)
+  })
+}
+
+function onChange(editor: { getHtml: () => string }): void {
+  emitSerializedHtml(editor)
 }
 
 function onInsert(token: string) {

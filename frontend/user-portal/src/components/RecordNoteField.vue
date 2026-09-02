@@ -229,6 +229,11 @@ const props = defineProps<{
   processInstanceId?: string | null
   functionUnitId?: number | string | null
   readonly?: boolean
+  /**
+   * Set when this panel sits on a To Do task form. Sent with the write calls so the server can
+   * authorize by task rather than by audit role; verified server-side, so it grants nothing here.
+   */
+  taskId?: string | null
 }>()
 
 const { t } = useI18n()
@@ -266,6 +271,7 @@ const target = computed<RecordNoteTargetParams | null>(() => {
     functionUnitId: props.functionUnitId ?? null,
     // RECORD scope authorizes against the hosting request — a row id alone identifies no instance.
     processInstanceId: props.processInstanceId ?? null,
+    taskId: props.taskId ?? null,
   }
 })
 

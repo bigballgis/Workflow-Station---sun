@@ -25,6 +25,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -51,6 +52,8 @@ public class ProcessComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
     private final RestTemplate restTemplate;
+    /** Relation-table identity lookup for {@link #enrichRelationTableIdentity}. */
+    private final JdbcTemplate jdbcTemplate;
     private final I18nService i18nService;
     private final ProcessStartComponent processStartComponent;
     private final ProcessApplicationQueryComponent processApplicationQueryComponent;
@@ -504,7 +507,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content: name={}", payload.get("name"));
-                Map<String, Object> enrichedPayload = enrichMiAssignments(payload);
+                Map<String, Object> enrichedPayload = enrichRelationTableIdentity(enrichMiAssignments(payload));
                 fuContentCache.put(functionUnitId, new CachedFuContent(enrichedPayload, System.currentTimeMillis()));
                 return enrichedPayload;
             }
@@ -522,6 +525,94 @@ public class ProcessComponent {
             errorResult.put("error", e.getMessage());
             return errorResult;
         }
+    }
+
+    /**
+     * Stamps {@code relationTableId} / {@code relationTableName} onto every form's table binding that
+     * targets a RELATION table, so the portal can tell relation tables from designer sub-tables.
+     *
+     * <p>Without it both kinds arrive with only a {@code tableName}, the portal files them under the
+     * same {@code dw:<name>} canonical key, and MI row isolation then treats a relation table's rows
+     * as one participant's — rejecting every Save on that task. Relation tables carry no participant
+     * FK and legitimately have no primary key.
+     *
+     * <p>Best-effort: on any lookup failure the payload is returned unchanged (previous behaviour),
+     * never failing form load.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> enrichRelationTableIdentity(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return payload;
+        }
+        try {
+            List<Map<String, Object>> allBindings = new ArrayList<>();
+            Object forms = payload.get("forms");
+            if (forms instanceof List<?> formList) {
+                for (Object f : formList) {
+                    if (!(f instanceof Map<?, ?> form)) {
+                        continue;
+                    }
+                    Object tb = ((Map<String, Object>) form).get("tableBindings");
+                    if (tb instanceof List<?> list) {
+                        for (Object o : list) {
+                            if (o instanceof Map) {
+                                allBindings.add((Map<String, Object>) o);
+                            }
+                        }
+                    }
+                }
+            }
+            if (allBindings.isEmpty()) {
+                return payload;
+            }
+            List<Long> ids = allBindings.stream()
+                    .map(b -> b.get("bindingId"))
+                    .filter(Number.class::isInstance)
+                    .map(v -> ((Number) v).longValue())
+                    .distinct()
+                    .toList();
+            if (ids.isEmpty()) {
+                return payload;
+            }
+            String placeholders = String.join(",", Collections.nCopies(ids.size(), "?"));
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT b.id AS binding_id, b.relation_table_id, rt.table_name AS relation_table_name"
+                            + " FROM dw_form_table_bindings b"
+                            + " LEFT JOIN rt_table_definitions rt ON rt.id = b.relation_table_id"
+                            + " WHERE b.relation_table_id IS NOT NULL AND b.id IN (" + placeholders + ")",
+                    ids.toArray());
+            if (rows.isEmpty()) {
+                return payload;
+            }
+            Map<Long, Map<String, Object>> byId = new HashMap<>();
+            for (Map<String, Object> row : rows) {
+                Object id = row.get("binding_id");
+                if (id instanceof Number n) {
+                    byId.put(n.longValue(), row);
+                }
+            }
+            for (Map<String, Object> b : allBindings) {
+                Object raw = b.get("bindingId");
+                if (!(raw instanceof Number n)) {
+                    continue;
+                }
+                Map<String, Object> row = byId.get(n.longValue());
+                if (row == null) {
+                    continue;
+                }
+                Object rtId = row.get("relation_table_id");
+                if (rtId instanceof Number rn) {
+                    b.put("relationTableId", rn.longValue());
+                }
+                Object rtName = row.get("relation_table_name");
+                if (rtName != null) {
+                    b.put("relationTableName", String.valueOf(rtName));
+                }
+            }
+        } catch (RuntimeException e) {
+            log.debug("enrichRelationTableIdentity skipped: {}", e.getMessage());
+        }
+        return payload;
     }
 
     /**
@@ -558,7 +649,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content from admin-center: name={}", payload.get("name"));
-                Map<String, Object> enrichedPayload = enrichMiAssignments(payload);
+                Map<String, Object> enrichedPayload = enrichRelationTableIdentity(enrichMiAssignments(payload));
                 attachRequestIdConfig(enrichedPayload);
                 // Cache successful result
                 fuContentCache.put(functionUnitId, new CachedFuContent(enrichedPayload, System.currentTimeMillis()));

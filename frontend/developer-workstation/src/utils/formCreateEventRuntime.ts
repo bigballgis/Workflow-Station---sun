@@ -3,13 +3,31 @@
  * Designer stores functions as [[FORM-CREATE-PREFIX-…]] or $FNX: + body.
  */
 
+import { readFormEventCurrentUser } from './formCreateEventUser'
+import {
+  buildOverlayMethods,
+  forwardOverlayMethods,
+  type PortalFormApiOverlayMethods,
+  type PortalFormApiOverlays,
+} from './formCreateEventOverlays'
+
+export type {
+  FormEventChoiceOption,
+  FormEventLookupFilter,
+  FormEventNotification,
+  FormEventNotificationLevel,
+  PortalFormApiOverlays,
+  PortalFormDisabledState,
+} from './formCreateEventOverlays'
+export { isEffectivelyDisabled } from './formCreateEventOverlays'
+
 const FC_FN_WRAPPER_RE =
   /^\[\[FORM-CREATE-PREFIX-function\s([\s\S]*)\}-FORM-CREATE-SUFFIX\]\]$/
 const FC_FNX_PREFIX = '$FNX:'
 
 const DANGEROUS_KEYWORDS = /\b(eval|Function|import|require|window|document|globalThis|process)\b/
 
-export interface PortalFormApi {
+export interface PortalFormApi extends PortalFormApiOverlayMethods {
   setValue: (fieldOrData: string | Record<string, unknown>, value?: unknown) => void
   getValue: (field: string) => unknown
   hidden: (status: boolean, field?: string | string[]) => void
@@ -18,12 +36,66 @@ export interface PortalFormApi {
   displayStatus: (field: string) => boolean
   setFieldError: (field: string, message: string) => void
   clearFieldError: (field: string) => void
+  required: (status: boolean, field?: string | string[]) => void
+  requiredStatus: (field: string) => boolean
   readonly form: Record<string, unknown>
 }
 
 export interface PortalFormVisibilityState {
   hidden: Map<string, boolean>
   display: Map<string, boolean>
+}
+
+export interface PortalFormRequiredState {
+  flags: Map<string, boolean>
+}
+
+export type PortalFormRequiredBag = {
+  state: PortalFormRequiredState
+  notify: () => void
+  getAllFieldKeys: () => string[]
+}
+
+export function isEffectivelyRequired(
+  fieldKey: string,
+  fallback: boolean,
+  flags?: Map<string, boolean> | null,
+): boolean {
+  if (flags?.has(fieldKey)) return flags.get(fieldKey) === true
+  return fallback
+}
+
+function isRequiredRuleEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false
+  const item = entry as Record<string, unknown>
+  return item.required === true || item.mode === 'required'
+}
+
+export function overlayEventRequiredOnFormRules<T extends Record<string, unknown>>(
+  base: T,
+  fieldKeys: string[],
+  flags: Map<string, boolean> | undefined,
+  makeRequiredRule: (fieldKey: string) => unknown[],
+): T {
+  if (!flags || flags.size === 0) return base
+  const out = { ...base } as T
+  for (const key of fieldKeys) {
+    const flag = flags.get(key)
+    if (flag === undefined) continue
+    const existing = Array.isArray(out[key as keyof T])
+      ? [...(out[key as keyof T] as unknown[])]
+      : []
+    if (flag === true) {
+      if (!existing.some(isRequiredRuleEntry)) {
+        (out as Record<string, unknown>)[key] = [...makeRequiredRule(key), ...existing]
+      }
+    } else {
+      const stripped = existing.filter((entry) => !isRequiredRuleEntry(entry))
+      if (stripped.length > 0) (out as Record<string, unknown>)[key] = stripped
+      else delete (out as Record<string, unknown>)[key]
+    }
+  }
+  return out
 }
 
 export type FieldKeyResolver = (name: string) => string
@@ -168,6 +240,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           'var value = $inject.value;',
           'var formData = $inject.formData;',
           'var data = $inject.data;',
+          'var user = $inject.user;',
           body,
         ].join('\n'),
       ) as (inject: Record<string, unknown>) => unknown
@@ -184,6 +257,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           value: ctx.value,
           formData: formSnapshot,
           data: formSnapshot,
+          user: readFormEventCurrentUser(),
         })
       }
     }
@@ -199,6 +273,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       'args',
       'formData',
       'data',
+      'user',
       body,
     ) as (
       field: string,
@@ -211,6 +286,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       args: unknown,
       formData: Record<string, unknown>,
       data: Record<string, unknown>,
+      user: ReturnType<typeof readFormEventCurrentUser>,
     ) => unknown
 
     return (ctx) => {
@@ -227,6 +303,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
         ctx.args,
         formSnapshot,
         formSnapshot,
+        readFormEventCurrentUser(),
       )
     }
   } catch (err) {
@@ -260,6 +337,37 @@ export function createFormEventOptionsBridge(
     displayStatus: (field: string) => api.displayStatus(field),
     setFieldError: (field: string, message: string) => api.setFieldError(field, message),
     clearFieldError: (field: string) => api.clearFieldError(field),
+    required: (status: boolean, field?: string | string[]) => {
+      if (typeof api.required === 'function') {
+        api.required(status, field)
+        return
+      }
+      applyNativeFcRequiredFallback(api, status, field)
+    },
+    requiredStatus: (field: string) => {
+      if (typeof api.requiredStatus === 'function') return api.requiredStatus(field)
+      return false
+    },
+    ...forwardOverlayMethods(api),
+  }
+}
+
+function applyNativeFcRequiredFallback(
+  api: PortalFormApi,
+  status: boolean,
+  field?: string | string[],
+): void {
+  const fc = api as PortalFormApi & {
+    mergeRule?: (f: string, rule: Record<string, unknown>) => void
+    setEffect?: (f: string, attr: string, value: unknown) => void
+    sync?: (f: string) => void
+  }
+  if (field === undefined) return
+  const keys = Array.isArray(field) ? field : [field]
+  for (const key of keys) {
+    if (typeof fc.setEffect === 'function') fc.setEffect.call(api, key, 'required', status)
+    if (typeof fc.mergeRule === 'function') fc.mergeRule.call(api, key, { $required: status })
+    if (typeof fc.sync === 'function') fc.sync.call(api, key)
   }
 }
 
@@ -304,6 +412,8 @@ export function createPortalFormApi(
     setFieldError: (fieldKey: string, message: string) => void
     clearFieldError: (fieldKey: string) => void
   },
+  required?: PortalFormRequiredBag,
+  overlays?: PortalFormApiOverlays,
 ): PortalFormApi {
   const resolve = (key: string) => resolveFieldKey?.(key) ?? key
 
@@ -374,6 +484,18 @@ export function createPortalFormApi(
     clearFieldError(field: string) {
       fieldErrors?.clearFieldError(resolve(field))
     },
+    required(status: boolean, field?: string | string[]) {
+      const bag = required
+      if (!bag?.state) return
+      for (const key of resolveFieldTargets(field, bag.getAllFieldKeys)) {
+        bag.state.flags.set(key, status)
+      }
+      bag.notify()
+    },
+    requiredStatus(field: string) {
+      return required?.state?.flags.get(resolve(field)) === true
+    },
+    ...buildOverlayMethods(resolve, (field, getAll) => resolveFieldTargets(field, getAll), overlays),
   }
 }
 

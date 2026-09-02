@@ -24,11 +24,36 @@ import java.util.regex.Pattern;
  */
 final class MiOverlaySupport {
 
+    /**
+     * Platform default MI mirror column names — the single definition point on this side.
+     *
+     * <p>These are NOT a guess: they are the names this platform itself generates when a Function
+     * Unit's Sub-Task Config does not name its own ({@code miTaskStatusField} /
+     * {@code miTaskCurrentNodeField}). Measured 2026-09-01: all 19 deployed BPMN definitions carry
+     * {@code subTableName} / {@code assigneeField} but none configures these two, so this default
+     * is the live path for every existing Function Unit. A configured name always wins — see
+     * {@link MiOverlayComponent#resolveMiRowProgress} — mirroring the engine
+     * ({@code MultiInstanceDataResolver.resolveMiNamedColumn}) and the frontend
+     * ({@code composables/tasks/useMiConfig.ts}).
+     */
+    static final String PORTAL_MI_STATUS_COLUMN = "task_status";
+    static final String PORTAL_MI_CURRENT_NODE_COLUMN = "task_current_node";
+
     private MiOverlaySupport() {
     }
 
     record MiRowProgress(String statusColumn, String nodeColumn, String status, String currentNode) {}
 
+    /**
+     * Last-resort numeric row id, used ONLY after the designer-PK match found nothing.
+     *
+     * <p>The primary path is {@code resolveBestMiProgressForVariableRow}, which keys on the real
+     * primary-key columns read from table metadata ({@code resolvePkColumnsCached}) — that is the
+     * config-driven match and it runs first. The literals below are not an assumption about what a
+     * sub-table's PK is called: they are the handful of envelope keys a variables row can carry a
+     * numeric id under, tried only when no PK match succeeded. Reaching here and matching nothing
+     * simply leaves the row without an overlay, which is safe.
+     */
     static Long extractNumericSubTableRowId(Map<String, Object> row) {
         if (row == null || row.isEmpty()) {
             return null;
@@ -65,10 +90,37 @@ final class MiOverlaySupport {
         }
     }
 
+    /**
+     * This table's configured MI status / current-node column names, or the platform defaults when
+     * no engine row carries a Sub-Task Config override. Every row of one sub-table shares the
+     * configuration, so the first non-blank wins.
+     */
+    static String[] miColumnNamesFor(Map<String, MiRowProgress> miProgress) {
+        String status = null;
+        String node = null;
+        if (miProgress != null) {
+            for (MiRowProgress p : miProgress.values()) {
+                if (p == null) {
+                    continue;
+                }
+                if (status == null && p.statusColumn != null && !p.statusColumn.isBlank()) {
+                    status = p.statusColumn.trim();
+                }
+                if (node == null && p.nodeColumn != null && !p.nodeColumn.isBlank()) {
+                    node = p.nodeColumn.trim();
+                }
+            }
+        }
+        return new String[] {
+                firstNonBlank(status, PORTAL_MI_STATUS_COLUMN),
+                firstNonBlank(node, PORTAL_MI_CURRENT_NODE_COLUMN),
+        };
+    }
+
     static Set<String> miDashboardColumnsToProtect(Map<String, MiRowProgress> miProgress) {
         Set<String> cols = new LinkedHashSet<>();
-        cols.add("task_status");
-        cols.add("task_current_node");
+        cols.add(PORTAL_MI_STATUS_COLUMN);
+        cols.add(PORTAL_MI_CURRENT_NODE_COLUMN);
         if (miProgress == null) {
             return cols;
         }
@@ -234,15 +286,16 @@ final class MiOverlaySupport {
         if (row == null || p == null) {
             return;
         }
-        if (p.statusColumn != null && !p.statusColumn.isBlank()) {
-            row.put(p.statusColumn, p.status);
-        }
-        if (p.nodeColumn != null && !p.nodeColumn.isBlank()) {
-            row.put(p.nodeColumn, p.currentNode);
-        }
-        row.put("task_status", mapWorkflowMiStatusToPortalTaskStatus(p.status));
-        row.put("task_current_node",
-                p.currentNode != null && !p.currentNode.isBlank() ? p.currentNode : "-");
+        // The column names come from Sub-Task Config (miTaskStatusField / miTaskCurrentNodeField),
+        // already resolved into MiRowProgress with the platform defaults as fallback — see
+        // MiOverlayComponent.resolveMiRowProgress. Writing the literals in ADDITION to those
+        // stamped a second, differently named status column onto every row of a Function Unit that
+        // configured its own names: the portal then rendered two status columns, and whichever the
+        // reader picked was a coin flip. Write the resolved names only.
+        String statusCol = firstNonBlank(p.statusColumn, PORTAL_MI_STATUS_COLUMN);
+        String nodeCol = firstNonBlank(p.nodeColumn, PORTAL_MI_CURRENT_NODE_COLUMN);
+        row.put(statusCol, mapWorkflowMiStatusToPortalTaskStatus(p.status));
+        row.put(nodeCol, p.currentNode != null && !p.currentNode.isBlank() ? p.currentNode : "-");
     }
 
     private static String mapWorkflowMiStatusToPortalTaskStatus(String workflowStatus) {
@@ -266,22 +319,34 @@ final class MiOverlaySupport {
      * Fallback when process is archived but variable snapshot/MI API still shows in-progress placeholders (often after soft-deleted extended tasks).
      */
     static void normalizeStuckMiParticipantRowForCompletedProcess(Map<String, Object> row) {
+        normalizeStuckMiParticipantRowForCompletedProcess(row, null);
+    }
+
+    /**
+     * @param p the row's resolved MI progress when one is known — supplies this Function Unit's
+     *          configured status / current-node column names. When no engine row matched
+     *          ({@code null}) the platform defaults are used, which is the only thing that can be
+     *          said about a row we have no configuration for.
+     */
+    static void normalizeStuckMiParticipantRowForCompletedProcess(Map<String, Object> row, MiRowProgress p) {
         if (row == null || row.isEmpty()) {
             return;
         }
-        Object ts = row.get("task_status");
+        String statusCol = firstNonBlank(p != null ? p.statusColumn : null, PORTAL_MI_STATUS_COLUMN);
+        String nodeCol = firstNonBlank(p != null ? p.nodeColumn : null, PORTAL_MI_CURRENT_NODE_COLUMN);
+        Object ts = row.get(statusCol);
         String s = ts != null ? String.valueOf(ts).trim() : "";
         if ("COMPLETED".equalsIgnoreCase(s) || "CANCELLED".equalsIgnoreCase(s)) {
             return;
         }
         boolean miLike = row.containsKey("assignee_user_id")
                 || row.containsKey("assignee_display_name")
-                || row.containsKey("task_current_node");
+                || row.containsKey(nodeCol);
         if (!miLike) {
             return;
         }
-        row.put("task_status", "COMPLETED");
-        row.put("task_current_node", "end");
+        row.put(statusCol, "COMPLETED");
+        row.put(nodeCol, "end");
     }
 
     /**

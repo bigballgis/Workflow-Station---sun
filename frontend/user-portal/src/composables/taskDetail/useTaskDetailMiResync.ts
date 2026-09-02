@@ -1,3 +1,4 @@
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
   mergeSubTableRowsByRowId,
   coerceSubTablesVariableToMap,
@@ -237,10 +238,8 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
             mergedSub[sliceKey] = mergedRows
             mergedSub[String(sliceKey)] = mergedRows
           }
-          const bn = bindingHint?.tableName
-          if (bn) {
-            mergedSub[bn] = mergedSub[sliceKey]
-            mergedSub[normalizeSubTableName(bn)] = mergedSub[sliceKey]
+          if (bindingHint) {
+            writeSubTableRows(mergedSub, bindingHint, mergedSub[sliceKey] as unknown[])
           }
         }
         delete incoming.__subTables__
@@ -287,12 +286,10 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
         const prevRows = Array.isArray(prevRaw) ? cloneSubTableRows(prevRaw as any[]) : []
         const pk = bindingHint?.primaryKeyFields ?? null
         const mergedRows = mergeSubTableRowsByRowId(prevRows, rows, pk)
-        mergedSub[sliceKey] = mergedRows
-        mergedSub[String(sliceKey)] = mergedRows
-        const bn = bindingHint?.tableName
-        if (bn) {
-          mergedSub[bn] = mergedRows
-          mergedSub[normalizeSubTableName(bn)] = mergedRows
+        if (bindingHint) {
+          writeSubTableRows(mergedSub, bindingHint, mergedRows)
+        } else {
+          mergedSub[String(sliceKey)] = mergedRows
         }
       }
     }

@@ -16,9 +16,16 @@ import {
 } from '../shared'
 
 describe('linkFormMiIsolation helpers', () => {
-  it('rowMatchesMiExpansionId matches id_idw', () => {
-    expect(rowMatchesMiExpansionId({ id_idw: 88, name: '8' }, 88)).toBe(true)
-    expect(rowMatchesMiExpansionId({ id_idw: 88 }, 44)).toBe(false)
+  it('rowMatchesMiExpansionId matches the designer PK', () => {
+    // 设计器主键必须显式传入 —— 不传会抛 MiConfigMissingError（不猜列名）
+    expect(rowMatchesMiExpansionId({ id_idw: 88, name: '8' }, 88, ['id_idw'])).toBe(true)
+    expect(rowMatchesMiExpansionId({ id_idw: 88 }, 44, ['id_idw'])).toBe(false)
+  })
+
+  it('rowMatchesMiExpansionId 未传主键时不抛错（共享附件等合法无 PK 的 binding 也会走到）', () => {
+    // 只跳过主键匹配、继续跨字段兜底；抛错会中断整个 Save。
+    expect(rowMatchesMiExpansionId({ id_idw: 88 }, 88)).toBe(true)
+    expect(rowMatchesMiExpansionId({ id_idwvvbz: 88 }, 88)).toBe(false)
   })
 
   it('findSubTableRowByMiExpansionId returns the participant row', () => {
@@ -26,15 +33,15 @@ describe('linkFormMiIsolation helpers', () => {
       { id: '44', id_idw: 245, assignee: { id: 'other' } },
       { name: '8', id_idw: 88, assignee: { id: 'user-e2e-sunqiang' } }
     ]
-    const found = findSubTableRowByMiExpansionId(rows, 88)
+    const found = findSubTableRowByMiExpansionId(rows, 88, ['id_idw'])
     expect(found?.name).toBe('8')
     expect(found?.id).toBeUndefined()
   })
 
   it('findMiIsolatedParentRow falls back to sole row when rowId is id_idw but row only has SQL id', () => {
     const rows = [{ id: 6532, assignee_user_id: '44053631', task_current_node: 'sub form2' }]
-    expect(findSubTableRowByMiExpansionId(rows, 44053631)).toBeNull()
-    const parent = findMiIsolatedParentRow(rows, 44053631)
+    expect(findSubTableRowByMiExpansionId(rows, 44053631, ['id_idw'])).toBeNull()
+    const parent = findMiIsolatedParentRow(rows, 44053631, ['id_idw'])
     expect(parent?.id).toBe(6532)
   })
 
@@ -121,7 +128,7 @@ describe('linkFormMiIsolation helpers', () => {
 
   it('findMiIsolatedParentRow rejects sole row for a different MI participant', () => {
     const rows = [{ id_idw: 'Test-000057', id: 'Test-000057', assignee: { id: 'user-dev' } }]
-    expect(findMiIsolatedParentRow(rows, 'Test-000058')).toBeNull()
+    expect(findMiIsolatedParentRow(rows, 'Test-000058', ['id_idw'])).toBeNull()
   })
 
   /**

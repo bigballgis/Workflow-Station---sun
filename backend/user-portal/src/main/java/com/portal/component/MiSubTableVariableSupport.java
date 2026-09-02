@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.platform.common.subtable.SubTableStoreKeys;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,32 +18,46 @@ final class MiSubTableVariableSupport {
 
     /**
      * Stops alias-slice key monotonic growth (bindingId / tableName / normalizedName) for JSONB {@code __subTables__}.
-     * <p>
-     * When numeric keys exist at a given {@code __subTables__} level, keep only those numeric keys and recursively
-     * canonicalize nested {@code __subTables__} stored under each row.
+     *
+     * <p><b>Canonical keys win.</b> {@code dw:<name>} / {@code rt:<name>} (see {@link SubTableStoreKeys}) are the
+     * single source of truth — one key per designer table — so when any are present this keeps ONLY those and
+     * discards the legacy bindingId / table-name aliases they replace. Dropping the canonical keys instead
+     * (which the previous "numeric keys win" rule did, since they are not digits) silently deleted the real
+     * sub-table data whenever a legacy numeric key happened to co-exist.
+     *
+     * <p>With no canonical key present the legacy behaviour is unchanged: when numeric keys exist keep only
+     * those, otherwise keep the map as-is. Nested {@code __subTables__} under each row is canonicalized
+     * recursively either way.
      */
     static Map<String, Object> canonicalizeSubTablesAliasKeys(Map<String, Object> subTables) {
         if (subTables == null || subTables.isEmpty()) {
             return subTables;
         }
+        boolean hasCanonical = false;
         boolean hasNumeric = false;
         for (String k : subTables.keySet()) {
-            if (isDigitsKey(k)) {
+            if (SubTableStoreKeys.isCanonical(k)) {
+                hasCanonical = true;
+            } else if (isDigitsKey(k)) {
                 hasNumeric = true;
-                break;
             }
         }
-        Map<String, Object> out = hasNumeric ? new LinkedHashMap<>() : subTables;
+        // Canonical keys take precedence over the legacy numeric-key rule.
+        boolean filtering = hasCanonical || hasNumeric;
+        Map<String, Object> out = filtering ? new LinkedHashMap<>() : subTables;
         for (Map.Entry<String, Object> e : subTables.entrySet()) {
             if (e.getKey() == null || e.getValue() == null) {
                 continue;
             }
-            if (hasNumeric && !isDigitsKey(e.getKey())) {
+            boolean keep = hasCanonical
+                    ? SubTableStoreKeys.isCanonical(e.getKey())
+                    : (!hasNumeric || isDigitsKey(e.getKey()));
+            if (filtering && !keep) {
                 continue;
             }
             Object v = e.getValue();
             canonicalizeNestedSubTablesInValue(v);
-            if (hasNumeric) {
+            if (filtering) {
                 out.put(e.getKey(), v);
             }
         }

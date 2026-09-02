@@ -1,4 +1,5 @@
 import { collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
+import { writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
   mergeSubTableRowsByRowId,
   isMiParticipantScopedSubTableBinding,
@@ -16,7 +17,6 @@ import {
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
-  normalizeSubTableName,
 } from './subTableRowUtils'
 import { isEmptySeedableFormValue } from './seedTaskFormFromProcessValues'
 import type { TaskDetailCtx } from './context'
@@ -269,12 +269,7 @@ export function createTaskDetailMiIsolation(ctx: TaskDetailCtx): TaskDetailMiIso
               ? collapseMiLinkChildRowsToOnePerParticipant(tempBinding.data)
               : scopedMerged,
         )
-        nextRowSub[binding.bindingId] = rows
-        nextRowSub[String(binding.bindingId)] = rows
-        if (binding.tableName) {
-          nextRowSub[binding.tableName] = rows
-          nextRowSub[normalizeSubTableName(binding.tableName)] = rows
-        }
+        writeSubTableRows(nextRowSub, binding, rows)
       }
       rowRec.__subTables__ = nextRowSub
       for (const binding of subTableBindings.value) {

@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue'
+import { subTableStoreKey } from './subTableStore'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { submitTaskForm } from '@/api/processForm'
@@ -8,7 +9,6 @@ import {
   cloneSubTableRows,
   mergeSubTableRowsByRowId,
   getSavedSubTableRows,
-  normalizeSubTableName,
   flattenNestedSubTableRowsIntoPayload,
   scrubMiCorruptLinkChildRowsForParent,
   buildMiCollectionSliceKeySet,
@@ -38,16 +38,12 @@ function stampBindingTableNameAliases(
   binding: { tableName?: string; physicalTableName?: string },
   rows: unknown[],
 ) {
-  if (binding.tableName) {
-    subTables[binding.tableName] = rows
-    subTables[normalizeSubTableName(binding.tableName)] = rows
-    subTableData[binding.tableName] = rows as Array<Record<string, unknown>>
-  }
-  const physical = binding.physicalTableName
-  if (physical && physical !== binding.tableName) {
-    subTables[physical] = rows
-    subTables[normalizeSubTableName(physical)] = rows
-    subTableData[physical] = rows as Array<Record<string, unknown>>
+  // 规范 key：一张表一个 key。subTableData 是提交时的另一个字段（controller 会并进
+  // __subTables__），用同一个 key 规则，避免两边再度分叉。
+  const key = subTableStoreKey(binding)
+  if (key) {
+    subTables[key] = rows
+    subTableData[key] = rows as Array<Record<string, unknown>>
   }
 }
 
@@ -178,15 +174,12 @@ export function useTaskForm(options: {
         scrubMiCorruptLinkChildRowsForParent(wrap, miParentIdIdw, { skipSliceKeys: null })
         out = wrap.rows as typeof out
       }
-      subTables[binding.bindingId] = out
-      subTables[String(binding.bindingId)] = out
-      subTableData[String(binding.bindingId)] = out
-      // Unchanged list-only bindings still hold page-load N; do not let them be last-writer
-      // of the table-name alias after the live form slice already wrote Y.
-      const nameMissing = Boolean(binding.tableName) && !Array.isArray(subTables[binding.tableName])
-      if (nameMissing || !subTableSliceUnchanged(snapshot, binding.bindingId, out)) {
-        stampBindingTableNameAliases(subTables, subTableData, binding, out)
-      }
+      // One canonical key per designer table. The previous code also wrote the bindingId key and
+      // then arbitrated, via `nameMissing` / `subTableSliceUnchanged`, which binding got to be the
+      // last writer of the shared table-name alias — an arbitration only needed because several
+      // bindings each held their own copy. With a single key there is no second copy to lose to,
+      // so an unchanged list-only binding writing the same rows is a no-op rather than a clobber.
+      stampBindingTableNameAliases(subTables, subTableData, binding, out)
     }
 
     if (!options.isMiSubTaskMode.value) {

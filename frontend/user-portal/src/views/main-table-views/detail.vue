@@ -138,11 +138,13 @@ async function load() {
   }
 }
 
+/**
+ * 列表页跳过来时 `?rowKey=` 就是后端下发的 `rowKey`（见 useMainTableViewPage.resolveRowKey），
+ * 故这里按同一个字段匹配 —— 两边必须用同一套 key，否则详情页找不到行。
+ * 不再按 `['id', 'id_idw', 'row_id']` 猜列名。
+ */
 function matchesRowKey(row: any): boolean {
-  const values = row?.values || {}
-  for (const candidate of ['id', 'id_idw', 'row_id']) {
-    if (values[candidate] != null && String(values[candidate]) === rowKey.value) return true
-  }
+  if (row?.rowKey != null && String(row.rowKey) === rowKey.value) return true
   return row?.processInstanceId != null && String(row.processInstanceId) === rowKey.value
 }
 

@@ -5,6 +5,10 @@ import {
   mergeMiCurrentNodePreferPrevious, mergeMiTaskStatusPreferTerminal, miDashboardSliceRichness,
   miSubFormOrdinalHint, miTaskStatusIsTerminal, roughNonEmptyFieldCount,
 } from './internal'
+import {
+  resolveMiDashboardFieldNames,
+  type MiDashboardFieldNames,
+} from './subTableBindingKinds'
 
 const ROW_KEY_MERGE_SEP = '\u001f'
 
@@ -151,15 +155,22 @@ export function rowResolvesDesignerPrimaryKey(
  *    merges snapshots that use only `id` with ones that attach a full `rowKey` map.
  * 2. Legacy `id` / `rowId` when no designer PK list — before bare `rowKey`, so mixed payloads dedupe.
  * 3. Flowable / platform `rowKey` object canonical string.
- * 4. Designer `row_id` / `rowId` when `id` / `id_idw` were never allocated — same physical row
- *    otherwise fingerprints as two rows (stale N vs saved Y) and form-below-table reopens as N.
- * 5. Stable content fingerprint — when PK values are missing so rows are not dropped.
+ * 4. Stable content fingerprint — when PK values are missing so rows are not dropped.
+ *
+ * There is deliberately NO `row_id` step: `row_id` is a per-snapshot frontend value, so the same
+ * physical row carries different ones in the engine-variables copy and the portal `subTableData`
+ * copy, and keying on it merged one MI participant's row over another's and submitted the wrong
+ * row. A table whose designer PK genuinely IS `row_id` (e.g. ATM_Transaction) still keys on it —
+ * through `pkFieldNames` like any other PK, not through a hardcoded column name.
  */
 export function mergeSubTableRowsByRowId(
   existing: any[] | undefined,
   incoming: any[],
-  pkFieldNames?: string[] | null
+  pkFieldNames?: string[] | null,
+  miFields?: MiDashboardFieldNames | null
 ): any[] {
+  const { statusField: miStatusField, currentNodeField: miCurrentNodeField } =
+    resolveMiDashboardFieldNames(miFields)
   const byId = new Map<string, any>()
   let keyFallbackSeq = 0
   const pkCols =
@@ -185,8 +196,8 @@ export function mergeSubTableRowsByRowId(
     previous: Record<string, unknown>,
     incoming: Record<string, unknown>
   ): Record<string, unknown> => {
-    const MI_STATUS_KEY = 'task_status'
-    const MI_NODE_KEY = 'task_current_node'
+    const MI_STATUS_KEY = miStatusField
+    const MI_NODE_KEY = miCurrentNodeField
     const out: Record<string, unknown> = { ...previous }
     for (const [key, val] of Object.entries(incoming)) {
       if (val === undefined) continue
@@ -245,8 +256,8 @@ export function mergeSubTableRowsByRowId(
     }
     const statusStr = String(out[MI_STATUS_KEY] ?? '').trim()
     const terminal = miTaskStatusIsTerminal(statusStr)
-    const rp = miDashboardSliceRichness(previous) * 512 + roughNonEmptyFieldCount(previous)
-    const ri = miDashboardSliceRichness(incoming) * 512 + roughNonEmptyFieldCount(incoming)
+    const rp = miDashboardSliceRichness(previous, miStatusField, miCurrentNodeField) * 512 + roughNonEmptyFieldCount(previous)
+    const ri = miDashboardSliceRichness(incoming, miStatusField, miCurrentNodeField) * 512 + roughNonEmptyFieldCount(incoming)
     let mergedNode: string | undefined
     if (terminal) {
       mergedNode = mergeMiCurrentNodeForTerminal(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
@@ -263,7 +274,7 @@ export function mergeSubTableRowsByRowId(
         mergedNode = mergeMiCurrentNodeInFlight(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
       } else if (rp > ri) {
         mergedNode = mergeMiCurrentNodePreferPrevious(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
-      } else if (incomingIsStrictNonMiKeySubset(previous, incoming)) {
+      } else if (incomingIsStrictNonMiKeySubset(previous, incoming, miStatusField, miCurrentNodeField)) {
         mergedNode = mergeMiCurrentNodePreferPrevious(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
       } else {
         mergedNode = mergeMiCurrentNodeInFlight(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
@@ -297,13 +308,6 @@ export function mergeSubTableRowsByRowId(
       if (canon != null && canon !== '') {
         k = `__rowKey__${canon}`
       }
-    }
-
-    if (k == null) {
-      const rowId =
-        scalarForMergeKey(getRowValueIgnoreCase(o, 'row_id'))
-        ?? scalarForMergeKey(getRowValueIgnoreCase(o, 'rowId'))
-      if (rowId != null) k = `__row_id__${rowId}`
     }
 
     if (k == null) {

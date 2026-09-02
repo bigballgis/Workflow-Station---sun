@@ -78,8 +78,8 @@ function pushEditorBody(data: string[], raw: unknown): void {
  * 把 rule 的事件 / hook 配置反序列化为编辑器侧的 { [name]: string[] } 结构。
  * 对应原 loadFN()，modelValue / activeRule 由调用方传入。
  *
- * Empty `$FNX:` stubs (seeded defaults) are omitted so reopening Event only lists
- * handlers that actually have code — matching what users expect after Save.
+ * Empty `$FNX:` stubs stay in the list as `['']` so Event → Edit shows
+ * `change` / hooks to click; Save still drops blank bodies via parseEventData.
  */
 export function loadEventData(modelValue: any, activeRule: any): Record<string, string[]> {
     const fromModel = (modelValue && typeof modelValue === 'object')
@@ -113,11 +113,11 @@ export function loadEventData(modelValue: any, activeRule: any): Record<string, 
             e[k].forEach((v: any) => {
                 pushEditorBody(data, v);
             });
-            if (data.length > 0) val[k] = data;
+            val[k] = data.length > 0 ? data : [''];
         } else {
             const data: string[] = [];
             pushEditorBody(data, e[k]);
-            if (data.length > 0) val[k] = data;
+            val[k] = data.length > 0 ? data : [''];
         }
     });
     return val;

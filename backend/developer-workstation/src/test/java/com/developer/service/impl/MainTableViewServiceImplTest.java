@@ -10,6 +10,8 @@ import com.developer.entity.MainTableViewConfig;
 import com.developer.entity.MainTableViewAccess;
 import com.developer.entity.MainTableViewField;
 import com.developer.enums.MainTableViewAccessTargetType;
+import com.developer.entity.SubTableViewConfig;
+import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.MainTableViewStatus;
 import com.developer.enums.TableType;
@@ -18,6 +20,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.MainTableViewAccessRepository;
 import com.developer.repository.MainTableViewConfigRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.MainTableViewService;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +51,8 @@ class MainTableViewServiceImplTest {
     @Mock
     private MainTableViewConfigRepository viewConfigRepository;
     @Mock
+    private SubTableViewConfigRepository subTableViewConfigRepository;
+    @Mock
     private MainTableViewAccessRepository mainTableViewAccessRepository;
     @Mock
     private FunctionUnitRepository functionUnitRepository;
@@ -61,7 +66,7 @@ class MainTableViewServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new MainTableViewServiceImpl(
-                viewConfigRepository, mainTableViewAccessRepository,
+                viewConfigRepository, subTableViewConfigRepository, mainTableViewAccessRepository,
                 functionUnitRepository, tableDefinitionRepository, jdbcTemplate);
     }
 
@@ -661,6 +666,60 @@ class MainTableViewServiceImplTest {
                 .isInstanceOf(DeveloperBusinessException.class)
                 .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
                 .isEqualTo("BIZ_VIEW_FK_DISPLAY_SOURCE");
+    }
+
+    @Test
+    void propagateFieldChangesToViews_renamesSubTableListViewColumn() {
+        // Regression: field renames reached MAIN table views only, so a SUB table's list view kept
+        // pointing at the old field name and the Portal rendered "-" for that column.
+        SubTableViewField pk = SubTableViewField.builder()
+                .fieldName("id_idw").displayLabel("Id").sortOrder(0).visible(true).build();
+        SubTableViewField other = SubTableViewField.builder()
+                .fieldName("name").displayLabel("Name").sortOrder(1).visible(true).build();
+        SubTableViewConfig view = SubTableViewConfig.builder()
+                .id(500L).viewFields(new ArrayList<>(List.of(pk, other))).build();
+        when(viewConfigRepository.findByMainTableIdWithFields(50331L)).thenReturn(List.of());
+        when(subTableViewConfigRepository.findByBindingTableIdWithFields(50331L)).thenReturn(List.of(view));
+
+        service.propagateFieldChangesToViews(50331L, List.of(
+                new MainTableViewService.FieldLabelChange("id_idw", "id_idwvv", "Id", "Id")));
+
+        assertThat(pk.getFieldName()).isEqualTo("id_idwvv");
+        assertThat(other.getFieldName()).as("unrelated column untouched").isEqualTo("name");
+        verify(subTableViewConfigRepository).saveAll(List.of(view));
+    }
+
+    @Test
+    void propagateFieldChangesToViews_keepsCustomSubTableColumnLabel() {
+        SubTableViewField vf = SubTableViewField.builder()
+                .fieldName("qty").displayLabel("My Custom Label").sortOrder(0).visible(true).build();
+        SubTableViewConfig view = SubTableViewConfig.builder()
+                .id(501L).viewFields(new ArrayList<>(List.of(vf))).build();
+        when(viewConfigRepository.findByMainTableIdWithFields(77L)).thenReturn(List.of());
+        when(subTableViewConfigRepository.findByBindingTableIdWithFields(77L)).thenReturn(List.of(view));
+
+        service.propagateFieldChangesToViews(77L, List.of(
+                new MainTableViewService.FieldLabelChange("qty", "quantity", "Qty", "Quantity")));
+
+        assertThat(vf.getFieldName()).isEqualTo("quantity");
+        assertThat(vf.getDisplayLabel())
+                .as("a hand-typed label must survive the rename")
+                .isEqualTo("My Custom Label");
+    }
+
+    @Test
+    void propagateFieldChangesToViews_savesNothingWhenNoColumnMatches() {
+        SubTableViewField vf = SubTableViewField.builder()
+                .fieldName("untouched").displayLabel("Untouched").sortOrder(0).visible(true).build();
+        SubTableViewConfig view = SubTableViewConfig.builder()
+                .id(502L).viewFields(new ArrayList<>(List.of(vf))).build();
+        when(viewConfigRepository.findByMainTableIdWithFields(88L)).thenReturn(List.of());
+        when(subTableViewConfigRepository.findByBindingTableIdWithFields(88L)).thenReturn(List.of(view));
+
+        service.propagateFieldChangesToViews(88L, List.of(
+                new MainTableViewService.FieldLabelChange("qty", "quantity", "Qty", "Quantity")));
+
+        verify(subTableViewConfigRepository, never()).saveAll(any());
     }
 
     private MainTableViewConfig viewConfigForAccessUpdate() {
