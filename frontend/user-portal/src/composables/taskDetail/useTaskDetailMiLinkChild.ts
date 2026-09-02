@@ -148,6 +148,20 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
         b.data = cloneSubTableRows(
           mergeSubTableRowsByRowId(existing, nested, b.primaryKeyFields ?? null),
         )
+        continue
+      }
+      // A child table nested inside the parent's inlineSubForm (People inside Participants) is
+      // edited through the PARENT row: new rows land in `parentRow.__subTables__` and never reach
+      // this binding's own `data`. The old rule only adopted the nested slice when `existing` had
+      // no saved payload, so as soon as the binding held one loaded row every row added afterwards
+      // was dropped here — and then `syncMiLinkChildRowsIntoParentNested` wrote this stale slice
+      // back over the parent's correct one, so Save persisted 1 row out of 3 (#1546).
+      //
+      // Rows the nested slice has and the binding does not are additions, not deletions: the delete
+      // path removes rows from the nested slice too, so a row present there is a row the user kept.
+      const adopted = mergeSubTableRowsByRowId(existing, nested, b.primaryKeyFields ?? null)
+      if (adopted.length > existing.length) {
+        b.data = cloneSubTableRows(adopted)
       }
     }
   }

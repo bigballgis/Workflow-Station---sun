@@ -378,8 +378,16 @@ public class TaskFormComponent {
         // form submissions. Gap-fill from the live engine variables so task forms
         // render those results.
         mergeEngineOnlyVariables(taskInfo.processInstanceId, hydratedVariables);
-        // Per-task MI identity, straight from the engine's execution scope (Flowable resolves the
-        // MI sub-process parent). Overwrites whatever process-wide merge may have reintroduced.
+        // `mergeEngineOnlyVariables` reads PROCESS-INSTANCE-level engine variables, so it can
+        // reintroduce the instance-wide `_currentItem` that was deliberately dropped above — that
+        // copy belongs to whichever participant wrote it last. Drop it again, then let the per-task
+        // lookup be the only writer: if the engine cannot answer for this task, the form must carry
+        // NO participant identity rather than a foreign one. Measured: task aa9fd949 owns
+        // Test-000001 (its MI execution's own loop variable) while this merge left Test-000002 —
+        // the form then saved People rows under the wrong participant, and MI isolation, which reads
+        // the task-detail endpoint's correct value, filtered them straight back out on reload.
+        hydratedVariables.remove("_currentItem");
+        hydratedVariables.remove("currentItem");
         applyTaskScopedMiCurrentItem(taskId, hydratedVariables);
         if (ownerFieldComponent != null) {
             ownerFieldComponent.projectForRead(
@@ -402,6 +410,16 @@ public class TaskFormComponent {
         __t = System.nanoTime();
         ProcessFormData processFormRef = processFormComponent.getProcessFormData(taskInfo.processInstanceId);
         log.info("[PERF] form-data.nested.getProcessFormData took {} ms", (System.nanoTime() - __t) / 1_000_000L);
+        // `getProcessFormData` is keyed by PROCESS INSTANCE only, so its fieldValues carry the
+        // instance-wide `_currentItem` — the copy left by whichever participant wrote it last. The
+        // portal reads THIS one when building the submit payload, so a task whose own MI execution
+        // owns a different row saved under a foreign participant while the read path (task detail,
+        // already task-scoped) filtered those rows straight back out. Measured on FU fu-20260422:
+        // task aa9fd949 owns Test-000001, this payload said Test-000002, and People rows added on
+        // that sub-task vanished on reload. Re-scope it to this task, same as hydratedVariables.
+        if (processFormRef != null && processFormRef.getFieldValues() != null) {
+            applyTaskScopedMiCurrentItem(taskId, processFormRef.getFieldValues());
+        }
 
         if (formDefinition == null) {
             // Fallback: no Task Form binding, return only ProcessFormData in read-only

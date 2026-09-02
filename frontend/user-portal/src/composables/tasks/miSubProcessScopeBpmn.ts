@@ -72,14 +72,28 @@ function findUserTaskByRef(doc: Document, userTaskId?: string, userTaskName?: st
   return null
 }
 
-function firstSubTableNameInSubProcess(sp: Element): string | null {
+/**
+ * Sub-Task Config of the node that SPLITS this MI sub-process, i.e. the first user task inside it
+ * that carries a `subTableName`.
+ *
+ * <p>A multi-instance sub-process is split exactly once. Only the splitting node is configured
+ * (`subTableName` / `assigneeField` / `rowIdVariable`); every later node in the same sub-process —
+ * `sub form2`, a review step, … — runs INSIDE an already-assigned sub-task and is deliberately left
+ * unconfigured by the designer. Those nodes must therefore inherit the whole contract, not just the
+ * table name: they describe the same collection row.
+ *
+ * <p>Previously only `subTableName` was inherited while `assigneeField` fell back to `null`. On
+ * FU fu-20260422 that left `sub form2` with an incomplete scope, the participant identity resolved
+ * differently on the read and write paths, and rows saved under one participant were filtered out
+ * for the other — People rows vanished on reload.
+ */
+function splittingTaskPropsInSubProcess(sp: Element): Record<string, string> | null {
   const desc = sp.getElementsByTagName('*')
   for (let i = 0; i < desc.length; i++) {
     const el = desc[i]!
     if (localName(el) !== 'userTask') continue
     const props = readExtensionProperties(el)
-    const st = props.subTableName?.trim()
-    if (st) return st
+    if (props.subTableName?.trim()) return props
   }
   return null
 }
@@ -98,9 +112,13 @@ function readMiLoopAttributes(sp: Element): { collection: string | null; element
 }
 
 function buildScopeFromElements(userTaskEl: Element, miSubProcess: Element): MiSubProcessScopeConfig | null {
-  const taskProps = readExtensionProperties(userTaskEl)
+  const ownProps = readExtensionProperties(userTaskEl)
   const spProps = readExtensionProperties(miSubProcess)
-  const subTableName = (taskProps.subTableName || firstSubTableNameInSubProcess(miSubProcess) || '').trim()
+  // Own config wins; anything this node leaves unset is inherited from the splitting node, which is
+  // the only one the designer configures for the whole sub-process (see splittingTaskPropsInSubProcess).
+  const inherited = ownProps.subTableName?.trim() ? null : splittingTaskPropsInSubProcess(miSubProcess)
+  const taskProps: Record<string, string> = { ...(inherited ?? {}), ...ownProps }
+  const subTableName = (taskProps.subTableName || '').trim()
   if (!subTableName) return null
 
   const loop = readMiLoopAttributes(miSubProcess)

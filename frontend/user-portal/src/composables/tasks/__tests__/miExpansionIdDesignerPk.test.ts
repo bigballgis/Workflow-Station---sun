@@ -72,4 +72,35 @@ describe('findMiIsolatedParentRow — 单行排他守卫', () => {
     const rows = [{ id_idwvvbz: 'A' }, { id_idwvvbz: 'B' }]
     expect(findMiIsolatedParentRow(rows, 'Test-000016', PK)).toBeNull()
   })
+
+  /**
+   * link-child 捷径不得绕过主键排他判定。
+   *
+   * <p>miLinkChildRowBelongsToParticipant 会对「一个参与者标识都没有」的行放行（给弹窗里刚新增、
+   * 结构 FK 尚未种下的行留的口子）。但它看不到设计器主键：主键叫 id_idwvvbz 时，**别人的行**在它
+   * 眼里同样"无标识"。若把它放在主键排他判定之前无条件调用，就会直接 return 别人的行，
+   * 把整段排他判定跳过 —— 跨参与者数据覆盖。故捷径必须限定在真有结构 FK 时。
+   */
+  it('无结构 FK 的外来行不走 link-child 捷径，仍按主键排他拒绝', () => {
+    const rows = [{ id_idwvvbz: 'Test-000017', name: 'theirs' }]
+    expect(findMiIsolatedParentRow(rows, 'Test-000016', PK)).toBeNull()
+  })
+
+  it('带结构 FK 指向我的 link-child 行仍然认（主键是 UUID、与参与者 id 不等）', () => {
+    const rows = [{
+      id_idwvvbz: '1b526ca5-08ec-4c7f-b1b7-60c8a8567f15',
+      sub_task_id: 'Test-000016',
+      name: 'mine',
+    }]
+    expect(findMiIsolatedParentRow(rows, 'Test-000016', PK)).toEqual(rows[0])
+  })
+
+  it('带结构 FK 指向别人的 link-child 行拒绝', () => {
+    const rows = [{
+      id_idwvvbz: '1b526ca5-08ec-4c7f-b1b7-60c8a8567f15',
+      sub_task_id: 'Test-000017',
+      name: 'theirs',
+    }]
+    expect(findMiIsolatedParentRow(rows, 'Test-000016', PK)).toBeNull()
+  })
 })

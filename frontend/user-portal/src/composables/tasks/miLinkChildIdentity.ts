@@ -241,6 +241,24 @@ export function miLinkChildRowBelongsToParticipant(
 
   if (childIdIdw === pid) return true
   if (legacyId === pid && !isAllocatedUuidPrimaryKey(legacyId)) return true
+
+  // 刚在弹窗里新增、还没保存过的行：没有结构 FK（FK 是保存时才种下的），也没有指向任何人的
+  // id_idw —— 它**只可能**属于正在编辑的这个参与者，因为别人的行不会出现在我的表单里。
+  //
+  // 判成 false 的后果不是"显示不出来"而是**存不进去**：提交 payload 是按本函数过滤的
+  // （useTaskDetailSubTableSync），新行会在发请求前就被剔除，后端连见都没见过。实测用户给
+  // People 加两行、Save 无报错、刷新后全没了，就是这条路径。
+  //
+  // 只在"完全没有参与者标识"时放行；带着别人 FK / id_idw 的行在上面已经 return false
+  // （structuralFk 非空的分支上面每条路径都 return 了，走到这里它必为 null）。
+  //
+  // 注意：本函数看不到**设计器主键**。主键不叫 id_idw / id 时（如 id_idwvvbz），别人的行在这里
+  // 同样表现为"无标识"而被放行，所以调用方**不能**拿它当唯一归属依据——findMiIsolatedParentRow
+  // 就为此把本函数限定在真有结构 FK 时才用，其余情况回落到按设计器主键排他判定。
+  const hasAnyParticipantMark =
+    childIdIdw != null && !isAllocatedUuidPrimaryKey(childIdIdw)
+  if (!hasAnyParticipantMark) return true
+
   return false
 }
 

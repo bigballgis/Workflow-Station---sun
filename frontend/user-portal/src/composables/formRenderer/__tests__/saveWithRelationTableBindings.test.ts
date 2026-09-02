@@ -152,3 +152,28 @@ describe('resolveSubTablePrimaryKeyFields — 按表的种类决定要不要报�
     )).toThrow(/MI_CONFIG_MISSING/)
   })
 })
+
+/**
+ * link-child 行（People 式）的归属由**结构 FK** 决定，不是它自己的主键。
+ *
+ * <p>回归：用户给 People 子表加了两行、Save 后刷新全没了。People 行的主键是行 UUID，
+ * 而排他守卫拿它和参与者 id 比 —— 对 link-child 行**恒不相等**，于是刚存进去的行被判成
+ * "别人的"，页面渲染 0 行，下一次保存又把它当陈旧数据丢掉。
+ */
+describe('findMiIsolatedParentRow — link-child 按结构 FK 判归属', () => {
+  const myRow = { id: '1b526ca5-08ec-4c7f-b1b7-60c8a8567f15', age: '1', sub_task_id: 'Test-000002' }
+
+  it('结构 FK 指向我 → 返回该行（哪怕主键是 UUID、与参与者 id 不等）', () => {
+    expect(findMiIsolatedParentRow([myRow], 'Test-000002', ['id'])).toEqual(myRow)
+  })
+
+  it('结构 FK 指向别人 → 拒绝', () => {
+    expect(findMiIsolatedParentRow([myRow], 'Test-000001', ['id'])).toBeNull()
+  })
+
+  it('没有结构 FK 时仍按主键做排他判定', () => {
+    const collectionRow = { id_idw: 'Test-000002', name: 'mine' }
+    expect(findMiIsolatedParentRow([collectionRow], 'Test-000002', ['id_idw'])).toEqual(collectionRow)
+    expect(findMiIsolatedParentRow([{ id_idw: 'Test-000009' }], 'Test-000002', ['id_idw'])).toBeNull()
+  })
+})

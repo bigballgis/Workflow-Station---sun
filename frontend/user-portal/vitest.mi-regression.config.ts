@@ -23,6 +23,11 @@ const MI_REGRESSION_FILES = [
   'src/composables/tasks/__tests__/dropSubsumedSubTableRows.test.ts',
   'src/utils/__tests__/inlineFormBelowTableRuntime.test.ts',
   'src/utils/__tests__/subTableRowRuntime.test.ts',
+  'src/composables/taskDetail/__tests__/miLinkChildNoPhantomRow.test.ts',
+  'src/composables/taskDetail/__tests__/miNestedChildRowsSurviveSave.test.ts',
+  // 参与者归属语义（跨子任务串行的第一道闸）——曾因不在门禁清单里而漏掉一次跨参与者行泄漏
+  'src/composables/tasks/__tests__/miExpansionIdDesignerPk.test.ts',
+  'src/composables/formRenderer/__tests__/saveWithRelationTableBindings.test.ts',
 ]
 
 export default defineConfig({

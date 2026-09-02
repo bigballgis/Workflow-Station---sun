@@ -123,6 +123,17 @@ export function collapseMiLinkChildRowsToOnePerParticipant(rows: unknown[]): any
       out.push(group[0])
       continue
     }
+    // 同一参与者**本来就可以有多行**（People 是普通子表，用户点 Add 就加一行）。
+    // 这个折叠只为合并「同一行被 sub form1 / sub form2 拆成的碎片」，不是去重：
+    // 每行都带着自己**已分配的 UUID 主键**时，它们是不同的行，折叠会把用户刚加的行吃掉。
+    // 实测：加两行 People 后 Save，3 行被折成 1 行，刷新只剩最早那条。
+    const allocatedIds = group
+      .map(r => normalizeMiLinkMatchId(r.id))
+      .filter((v): v is string => !!v && isAllocatedUuidPrimaryKey(v))
+    if (allocatedIds.length === group.length && new Set(allocatedIds).size === group.length) {
+      out.push(...group)
+      continue
+    }
     const pkField = resolveParticipantMergePkField(group)
     const sorted = [...group].sort(
       (a, b) =>
@@ -219,6 +230,20 @@ export function findMiIsolatedParentRow(
     //
     // 也**不能**抛错：本函数会被逐个 peer binding 调用（useSubTableBindings 等），
     // 共享附件（main_id）、非 MI 单行子表本来就没有设计器 PK —— 在这里抛会中断整个 Save。
+    // link-child 行（People 式）通过**结构 FK**（sub_task_id / participant_id …）指向参与者，
+    // 它自己的主键是行 UUID。带结构 FK 时按它判归属 —— 命中就是我的行，不能再拿主键去比：
+    // 那个比较对 link-child 行**恒不相等**（UUID ≠ 参与者 id），会把用户刚存的行判成别人的、
+    // 于是页面渲染 0 行、下一次保存又把它当陈旧数据丢掉（实测 People 加两行 Save 后消失）。
+    //
+    // **必须先确认真有结构 FK 才走这条捷径**：miLinkChildRowBelongsToParticipant 对「一个参与者
+    // 标识都没有」的行会放行（那是给弹窗里刚新增、FK 尚未种下的行留的口子）。而设计器主键不叫
+    // id_idw / id 时（如 id_idwvvbz），别人的行在它眼里同样"没有标识"——不加这道门就会走捷径
+    // return rec，把下面那段本该拒绝外来行的主键排他判定整段跳过，等于把别人的行交给当前用户编辑。
+    if (resolveMiChildStructuralParentFk(rec) != null) {
+      if (miLinkChildRowBelongsToParticipant(rec, miRowId)) return rec
+    }
+    if (linkChildRowIsForeignParticipantPlaceholder(rec, miRowId)) return null
+
     const pkNames = (primaryKeyFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
     // 无主键：无从判定这唯一一行归谁 —— 拒绝（放行 = 把别人的行交给当前用户编辑）。
     // 是不是"子任务表缺主键"这种配置错误，由 binding 入口 resolveSubTablePrimaryKeyFields 负责判定。

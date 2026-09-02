@@ -233,10 +233,19 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
     writeSubTableRows(subTables, source, outForPayload)
 
     if (isMiSubTaskMode.value) {
-      ctx.syncMiLinkChildRowsIntoParentNested(
-        { bindingId: source.bindingId, tableName: source.tableName },
-        out
-      )
+      // 只有「link-child binding 被编辑」时才需要把它的行回写进父行的嵌套槽。
+      // source 本身就是 MI collection（Participants）时不能调：那会把 collection 的行
+      // 当成 child slice 塞进其他 binding 的父行嵌套里，把刚写好的嵌套 People 覆盖掉。
+      //
+      // 实测现场：People 子表嵌在 Participants 的内联表单里，所以新增 People 触发的是
+      // syncMainSubTableRows(Participants)，行本身已正确带着 nested People 进来
+      // （[SYNCIN] nestedPeople=[1]），却在这一步被抹平，提交 payload 里 nested people = []。
+      if (!ctx.isCurrentMiCollectionSubTableBinding(source)) {
+        ctx.syncMiLinkChildRowsIntoParentNested(
+          { bindingId: source.bindingId, tableName: source.tableName },
+          out
+        )
+      }
       const ambiguous = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
       for (const parentBinding of subTableBindings.value) {
         if (parentBinding.bindingId === source.bindingId) continue
@@ -252,6 +261,64 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
   }
 
   /** After MI refilter, align {@link formData}.__subTables__ keys for current bindings so autosave/submit matches the grid. */
+  /**
+   * Re-attach each row's nested {@code __subTables__} from the slice being replaced.
+   *
+   * <p>A sub-table can be rendered inside ANOTHER table's inline form; its rows then live in the
+   * host row's nested slice and its own `binding.data` is empty. Any rebuild that starts from
+   * `binding.data` would drop that payload, so copy it back per row (matched by designer PK) unless
+   * the incoming row already carries one.
+   */
+  function preserveNestedSubTablesFromExisting(
+    existingRows: any[],
+    nextRows: any[],
+    pkFields: string[] | null,
+  ): any[] {
+    const pks = (pkFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
+    if (pks.length === 0 || !Array.isArray(existingRows) || existingRows.length === 0) return nextRows
+    const keyOf = (row: any): string | null => {
+      if (!row || typeof row !== 'object') return null
+      const parts: string[] = []
+      for (const pk of pks) {
+        const v = row[pk]
+        if (v == null || String(v).trim() === '') return null
+        parts.push(String(v).trim())
+      }
+      return parts.join('')
+    }
+    const nestedByKey = new Map<string, unknown>()
+    for (const row of existingRows) {
+      const k = keyOf(row)
+      const nested = row && typeof row === 'object' ? (row as any).__subTables__ : null
+      if (k && nested && typeof nested === 'object') nestedByKey.set(k, nested)
+    }
+    if (nestedByKey.size === 0) return nextRows
+    return nextRows.map((row: any) => {
+      if (!row || typeof row !== 'object') return row
+      const k = keyOf(row)
+      const existingNested = k ? (nestedByKey.get(k) as Record<string, unknown> | undefined) : undefined
+      if (!existingNested) return row
+      const own = (row.__subTables__ && typeof row.__subTables__ === 'object'
+        ? row.__subTables__
+        : {}) as Record<string, unknown>
+      // 逐 key 比较，而不是「有 __subTables__ 就整体跳过」：重建出来的行往往**带着**一个
+      // `__subTables__`，只是里面的那张表是空数组（binding.data 视角看不到嵌套行）。
+      // 只有当本行该 key 确实为空、而被替换的切片里非空时，才把旧的补回来 —— 用户主动删空
+      // 不会被这里复活，因为删空走的是嵌套写入路径，两边都会是空。
+      const merged: Record<string, unknown> = { ...own }
+      let changed = false
+      for (const [key, val] of Object.entries(existingNested)) {
+        const incoming = own[key]
+        const incomingEmpty = !Array.isArray(incoming) || incoming.length === 0
+        if (incomingEmpty && Array.isArray(val) && val.length > 0) {
+          merged[key] = val
+          changed = true
+        }
+      }
+      return changed ? { ...row, __subTables__: merged } : row
+    })
+  }
+
   function patchFormDataSubTablesFromCurrentBindings() {
     // Use toRaw to bypass Vue's reactivity during bulk mutation, then trigger one update at the end.
     const rawFormData = toRaw(formData.value)
@@ -297,6 +364,17 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
           )
         }
       }
+      // `binding.data` is the GRID's view of this table and never carries a row's nested
+      // `__subTables__`. A sub-table rendered inside another table's inline form (measured:
+      // People nested in the Participants inline form) lives ONLY in the host row's nested slice —
+      // its own binding stays empty. Rebuilding from binding.data alone therefore erased the row
+      // the user had just added: [P4] Test-000001 → 1 nested People, [P5] → 0, and the submit
+      // payload went out without it. Carry the nested payload over from the slice being replaced.
+      rows = preserveNestedSubTablesFromExisting(
+        ctx.getSavedSubTableRows(tbl, binding) ?? [],
+        rows,
+        binding.primaryKeyFields ?? null,
+      )
       writeSubTableRows(tbl, binding, rows)
     }
     // Defer triggerRef to next macrotask — avoids synchronous watcher cascade during MI isolate.
