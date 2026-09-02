@@ -200,7 +200,7 @@
             :drag-text="t('form.uploadDragText')"
             :click-text="t('form.uploadClickText')"
             :handle-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
-            :handle-change="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => writeUploadColumn(col, list ?? [])"
+            :handle-change="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadChange(col, list)"
             :handle-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
             :handle-exceed="() => handleUploadExceed(col)"
             :handle-error="() => handleUploadError(col)"
@@ -522,7 +522,16 @@ function handleUploadSuccess(
   col: DialogColumn,
   list?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
 ) {
-  writeUploadColumn(col, list ?? toElUploadFileList(formData.value[col.field]))
+  if (!list) return
+  writeUploadColumn(col, list)
+}
+
+function handleUploadChange(
+  col: DialogColumn,
+  list?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+) {
+  if (!list) return
+  writeUploadColumn(col, list)
 }
 
 function handleUploadRemove(
@@ -537,7 +546,7 @@ function handleUploadExceed(col: DialogColumn) {
 }
 
 function handleUploadError(col: DialogColumn) {
-  ElMessage.error(`File upload failed for field "${col.label}"`)
+  ElMessage.error(t('form.uploadFailedForField', { field: col.label }))
 }
 </script>
 

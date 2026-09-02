@@ -709,6 +709,7 @@ export default {
     clickToUpload: 'Upload',
     uploadDragText: 'Drop files here, or ',
     uploadClickText: 'click to select',
+    uploadFailedForField: 'File upload failed for "{field}"',
     yes: 'Yes',
     no: 'No',
     // Binding types

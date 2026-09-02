@@ -10,9 +10,9 @@ describe('injectPreviewUploadHandlers', () => {
       props: { multiple: false, limit: 1 },
     }]
     injectPreviewUploadHandlers(rules, formData)
+    expect(rules[0].type).toBe('formUploadDrop')
     expect(rules[0].props.multiple).toBe(true)
     expect(rules[0].props.limit).toBe(10)
-    expect(rules[0].props.drag).toBe(true)
   })
 
   it('keeps single-file Preview when maxFiles is 1', () => {
@@ -23,9 +23,9 @@ describe('injectPreviewUploadHandlers', () => {
       props: { maxFiles: 1 },
     }]
     injectPreviewUploadHandlers(rules, formData)
+    expect(rules[0].type).toBe('formUploadDrop')
     expect(rules[0].props.multiple).toBe(false)
     expect(rules[0].props.limit).toBe(1)
-    expect(rules[0].props.drag).toBe(true)
   })
 
   it('does not clear in-flight files when the first upload succeeds', () => {

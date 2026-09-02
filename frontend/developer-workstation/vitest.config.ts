@@ -31,5 +31,7 @@ export default defineConfig({
       // Keep in sync with vite.config.ts — cross-app shared TS sources.
       '@platform-shared': resolve(__dirname, '../shared/src'),
     },
+    // Keep in sync with vite.config.ts — shared SFCs need bare imports pinned to this app.
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue'],
   },
 })

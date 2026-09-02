@@ -3,8 +3,9 @@
  * Screenshots land in developer-workstation/verification-screenshots/.
  */
 import { chromium } from 'playwright'
-import { mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { loginViaDwPassword } from './playwright-login.mjs'
 import { redactHelpGuidePii } from './redact-help-guide-pii.mjs'
@@ -37,6 +38,14 @@ async function findUploadForm(page) {
     }
   }
   return null
+}
+
+function tmpPdf(name) {
+  const dir = join(tmpdir(), 'ws-form-upload-verify')
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, name)
+  writeFileSync(path, '%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n')
+  return path
 }
 
 const results = []
@@ -126,6 +135,35 @@ try {
     rec('Help ? opens /help/form-upload', popup.url().includes('/help/form-upload'), popup.url())
     await popup.close()
   }
+
+  const previewBtn = page.getByRole('button', { name: 'Preview', exact: true })
+  await previewBtn.click()
+  const dialog = page.locator('.form-preview-dialog').last()
+  await dialog.waitFor({ state: 'visible', timeout: 20000 })
+  const drop = dialog.getByTestId('form-upload-drop').first()
+  await drop.waitFor({ state: 'visible', timeout: 20000 })
+  rec('Form Preview uses the shared upload drop zone', await drop.isVisible())
+  const previewInput = drop.locator('input[type="file"]').first()
+  const isMultiple = (await previewInput.getAttribute('multiple')) !== null
+  if (isMultiple) {
+    rec('Form Preview file input is multiple', true)
+    await previewInput.setInputFiles([
+      tmpPdf('alpha-upload.pdf'),
+      tmpPdf('beta-upload.pdf'),
+      tmpPdf('gamma-upload.pdf'),
+    ])
+    await page.waitForFunction(() => {
+      const names = [...document.querySelectorAll('.form-preview-dialog .el-upload-list__item-name, .form-preview-dialog .el-upload-list__item')]
+      return names.filter((el) => /alpha-upload|beta-upload|gamma-upload/.test(el.textContent || '')).length >= 3
+    }, null, { timeout: 25000 })
+    rec('Form Preview keeps three files after one picker', true)
+  } else {
+    rec('Form Preview drop zone present for a single-file field', true)
+  }
+
+  const previewShot = resolve(DW_SHOTS, `${DATE}_dw-form-preview-upload-drop.png`)
+  await drop.screenshot({ path: previewShot })
+  console.log(`screenshot ${previewShot}`)
 } finally {
   await browser.close()
 }

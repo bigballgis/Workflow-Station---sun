@@ -226,7 +226,8 @@ function stampPreviewUploadRule(
   r.props.maxFiles = maxFiles
   r.props.limit = maxFiles
   r.props.multiple = maxFiles > 1
-  r.props.drag = true
+  // Preview-only: shared drop zone (canvas stays native fcUpload so field drag still works).
+  r.type = 'formUploadDrop'
   r.props.httpRequest = queuedUploadRequest
   const field = String(r.field)
   const nameTarget = r.props.fileNameTargetField as string | undefined

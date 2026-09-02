@@ -753,6 +753,7 @@ export default {
     clickToUpload: '上传',
     uploadDragText: '将文件拖到此处，或',
     uploadClickText: '点击选择',
+    uploadFailedForField: '字段“{field}”文件上传失败',
     yes: '是',
     no: '否',
     // Binding types
