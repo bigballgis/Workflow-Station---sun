@@ -85,11 +85,51 @@ class BuRolePoolTasksTest {
         assertThat(BuRolePoolTasks.requireEnginePage(Optional.of(page), 1)).isEqualTo(page);
     }
 
+    /**
+     * MI 子任务按角色分派：内层 userTask 的 assigneeType 恒是 ELEMENT_VARIABLE，节点级配置
+     * 回答不了「这一行是按人还是按角色派」（assigneeMode=both 时同节点两种行并存）。
+     * 判据改用引擎逐行落地的 miAssigneeMode。
+     *
+     * <p>实测 FU 50005（2026-09-02）：同一 sub form1 节点下，按角色派的行 extendedProperties
+     * 带 {@code assigneeMode=role} + {@code roleCodes=[HMDC_Index_Role]}，按人派的行为空。
+     * 修复前这些行显示成 "Direct Assignment" 且不进认领池。
+     */
+    @Test
+    void miRoleAssignedSubTaskIsAClaimPoolTaskDespiteElementVariableAssigneeType() {
+        TaskInfo roleRow = miTask("ELEMENT_VARIABLE", "role");
+        assertThat(BuRolePoolTasks.isMiRoleAssignedTask(roleRow)).isTrue();
+        assertThat(BuRolePoolTasks.isClaimPoolTask(roleRow)).isTrue();
+        // 未认领的角色行要离开 My To Do，走认领池
+        assertThat(BuRolePoolTasks.staysOnTodoList(roleRow)).isFalse();
+    }
+
+    @Test
+    void miDirectlyAssignedSubTaskStaysADirectAssignment() {
+        // 同一节点下按人派的行：miAssigneeMode 为空 —— 不能因为它也是 MI 就当成角色池
+        TaskInfo userRow = miTask("ELEMENT_VARIABLE", null);
+        assertThat(BuRolePoolTasks.isMiRoleAssignedTask(userRow)).isFalse();
+        assertThat(BuRolePoolTasks.isClaimPoolTask(userRow)).isFalse();
+        assertThat(BuRolePoolTasks.staysOnTodoList(userRow)).isTrue();
+
+        assertThat(BuRolePoolTasks.isMiRoleAssignedTask(miTask("ELEMENT_VARIABLE", "  "))).isFalse();
+        assertThat(BuRolePoolTasks.isMiRoleAssignedTask(miTask("ELEMENT_VARIABLE", "user"))).isFalse();
+        assertThat(BuRolePoolTasks.isMiRoleAssignedTask(null)).isFalse();
+    }
+
     private static TaskInfo task(String bpmnAssigneeType, String assignee) {
         return TaskInfo.builder()
                 .taskId("t-1")
                 .bpmnAssigneeType(bpmnAssigneeType)
                 .assignee(assignee)
+                .build();
+    }
+
+    private static TaskInfo miTask(String bpmnAssigneeType, String miAssigneeMode) {
+        return TaskInfo.builder()
+                .taskId("t-mi")
+                .bpmnAssigneeType(bpmnAssigneeType)
+                .miAssigneeMode(miAssigneeMode)
+                .multiInstanceSubTask(true)
                 .build();
     }
 }

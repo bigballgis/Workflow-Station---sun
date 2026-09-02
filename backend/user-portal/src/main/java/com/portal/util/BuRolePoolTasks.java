@@ -37,8 +37,29 @@ public final class BuRolePoolTasks {
         return BU_ROLE_ASSIGNEE_TYPES.contains(bpmnAssigneeType.trim().toUpperCase(Locale.ROOT));
     }
 
+    /**
+     * MI 子任务的角色分派**判不出来自 BPMN 的 assigneeType**：内层 userTask 上写的恒是
+     * {@code ELEMENT_VARIABLE}（逐行取 currentItem），真正的「按角色分派」配置在父 SubProcess 上
+     * （{@code assigneeMode} / {@code roleField} / {@code buField}）。而 {@code assigneeMode=both}
+     * 时还要**逐行**二选一：同一个节点上有的行按人派、有的行按角色派，节点级配置无法回答某一行。
+     *
+     * <p>所以这里用引擎逐行落地的结果：{@code ExtendedTaskInfo.extendedProperties.assigneeMode=role}
+     * 由 {@code MultiInstanceTaskWriter.handleRoleModeAssignment} 在真的走了 BU_ROLE 解析时写入
+     * （引擎再经 {@code TaskInfoAssembler} 透出为 {@code miAssigneeMode}）。实测同一节点下
+     * 按角色派的行有 {@code role}、按人派的行为空，区分干净。
+     *
+     * <p>不用 {@code assignmentType=CANDIDATE_USERS} 判：那只是角色解析出多人时的**下游结果**，
+     * 角色池恰好只有一人时会落成 {@code USER}，判据会漏。
+     */
+    public static boolean isMiRoleAssignedTask(TaskInfo task) {
+        return task != null
+                && task.getMiAssigneeMode() != null
+                && "role".equalsIgnoreCase(task.getMiAssigneeMode().trim());
+    }
+
     public static boolean isClaimPoolTask(TaskInfo task) {
-        return task != null && isClaimPoolAssigneeType(task.getBpmnAssigneeType());
+        return task != null
+                && (isClaimPoolAssigneeType(task.getBpmnAssigneeType()) || isMiRoleAssignedTask(task));
     }
 
     /**
