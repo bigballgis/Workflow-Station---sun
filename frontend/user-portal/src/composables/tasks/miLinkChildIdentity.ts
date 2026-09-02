@@ -15,16 +15,44 @@ import {
  * <p>`fieldDefinitions` is the binding's own field metadata — the single source of truth for which
  * columns are foreign keys. `miCollectionTableId` narrows multi-FK children to the FK that points
  * at the MI collection. Both come straight off the sub-table binding.
+ *
+ * <p>`primaryKeyFields` is the designer's declared primary key for the CHILD table. It exists so
+ * row-identity code never falls back to the literal column name {@code id}: People's PK is
+ * {@code idqc} in the Multi-Instance Subtask Demo, and reading {@code row.id} there silently
+ * answered "this row has no allocated PK" for every row — which made
+ * {@code collapseMiLinkChildRowsToOnePerParticipant} treat two distinct rows as fragments of one
+ * and merge them, so a participant's second People row vanished on reload.
  */
 export interface MiChildFkConfig {
   fieldDefinitions?: Array<{
     fieldName?: string
     isForeignKey?: boolean
+    isPrimaryKey?: boolean
     refTableId?: number | null
   }> | null
   bindingForeignKeyField?: string | null
   bindingLinkMode?: string | null
   miCollectionTableId?: number | null
+  /** Designer primary key of the child table (`binding.primaryKeyFields`). */
+  primaryKeyFields?: string[] | null
+}
+
+/**
+ * The child table's designer primary key columns, from the binding's own config.
+ *
+ * <p>Prefers the binding's `primaryKeyFields`, else the `isPrimaryKey` field definitions. Returns
+ * an empty array when neither is available — callers must then skip PK-dependent logic rather than
+ * guess a column name.
+ */
+export function resolveMiChildPrimaryKeyColumns(config?: MiChildFkConfig | null): string[] {
+  const declared = (config?.primaryKeyFields ?? [])
+    .map(f => String(f ?? '').trim())
+    .filter(Boolean)
+  if (declared.length > 0) return declared
+  return (config?.fieldDefinitions ?? [])
+    .filter(f => f?.isPrimaryKey)
+    .map(f => String(f?.fieldName ?? '').trim())
+    .filter(Boolean)
 }
 
 /** Count designer business columns filled on a link-child row (excludes id/FK/MI meta). */
@@ -100,6 +128,7 @@ export function miChildFkConfigOfBinding(
     fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     foreignKeyField?: string | null
     bindingLinkMode?: string | null
+    primaryKeyFields?: string[] | null
   } | null | undefined,
   miCollectionTableId?: number | null,
 ): MiChildFkConfig | null {
@@ -109,6 +138,7 @@ export function miChildFkConfigOfBinding(
     bindingForeignKeyField: binding.foreignKeyField ?? null,
     bindingLinkMode: binding.bindingLinkMode ?? null,
     miCollectionTableId: miCollectionTableId ?? null,
+    primaryKeyFields: binding.primaryKeyFields ?? null,
   }
 }
 
@@ -267,14 +297,35 @@ export function miParentRowAlignsWithChildRow(
   parentRow: Record<string, unknown>,
   childRow: Record<string, unknown>,
   config?: MiChildFkConfig | null,
+  /** MI collection 的设计器主键列（`binding.primaryKeyFields`）。 */
+  collectionPrimaryKeyFields?: string[] | null,
 ): boolean {
-  const parentPk =
-    parentRow.id_idw
-    ?? parentRow.rowId
-    ?? parentRow.participant_id
-    ?? parentRow.participantId
-    ?? parentRow.id
-  const parentPkNorm = normalizeMiLinkMatchId(parentPk)
+  // 参与者标识**先读设计器主键**，再退回历史列名表。
+  //
+  // 只认 id_idw / rowId / participant_id / participantId / id 时，一旦设计器把 collection 主键
+  // 改成别的名字（本 demo 是 id_idwxwc），parentPk 恒为 undefined → 下面的结构 FK 比较拿不到
+  // 参与者值，于是**每一行都判不属于这个宿主行**：嵌套切片被过滤成 0，
+  // PortalFormFields 的 participant-scoped 分支再返回 []，用户刚存的 People 行刷新后全不见。
+  // 实测 sub_task_idqc="Test-000004" 与宿主 id_idwxwc="Test-000004" 明明相等却被判 false。
+  let parentPkNorm: string | null = null
+  for (const pk of collectionPrimaryKeyFields ?? []) {
+    const name = String(pk ?? '').trim()
+    if (!name) continue
+    const v = normalizeMiLinkMatchId(parentRow[name])
+    if (v) {
+      parentPkNorm = v
+      break
+    }
+  }
+  if (parentPkNorm == null) {
+    const parentPk =
+      parentRow.id_idw
+      ?? parentRow.rowId
+      ?? parentRow.participant_id
+      ?? parentRow.participantId
+      ?? parentRow.id
+    parentPkNorm = normalizeMiLinkMatchId(parentPk)
+  }
 
   /**
    * Structural FK is authoritative for link-child rows: a child's own {@code id_idw} is its OWN PK

@@ -12,8 +12,10 @@ import {
   isSharedAttachmentFileBinding,
   isSubTableRowMetaField,
 } from './subTableBindingKinds'
-import { miParentRowAlignsWithChildRow } from './miLinkChildIdentity'
+import { miChildFkConfigOfBinding, miParentRowAlignsWithChildRow } from './miLinkChildIdentity'
+import type { MiChildFkConfig } from './miLinkChildIdentity'
 import { collapseSubTableRowsPreferFilled } from './miLinkChildRows'
+import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { pullNestedRowsForBindingFromParentRows } from './subTableNestedRows'
 
 function buildBindingTableIdMapFromPeers<T extends { bindingId: number; tableId?: number | null }>(
@@ -39,12 +41,26 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
     tableId?: number | null
     data: any[]
     primaryKeyFields?: string[] | null | undefined
+    // 归属判定要读的设计器配置：FK 列来自 fieldDefinitions，collection 由 bindingLinkMode 声明。
+    // 所有调用点传的都是完整 binding，这里只是把类型放开，无需改调用方。
+    foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
   },
 >(bindings: T[]): void {
   const childAllowsMiMeta = new Map<number, boolean>()
   for (const child of bindings) {
     childAllowsMiMeta.set(child.bindingId, isMiDashboardSubTableBinding(child))
   }
+
+  // MI collection 由设计器**显式声明**（Link Mode = MI Participant Row）认出来，不猜表名。
+  // 它的 primaryKeyFields 就是「参与者标识存在宿主行的哪一列」—— 本 demo 是 id_idwxwc。
+  const collectionBinding = bindings.find(b => bindingDeclaresMiParticipantRow(b))
+  const collectionPk = collectionBinding?.primaryKeyFields ?? null
+  const collectionTableId =
+    collectionBinding?.tableId != null && Number.isFinite(Number(collectionBinding.tableId))
+      ? Number(collectionBinding.tableId)
+      : null
 
   // MI 镜像列名来自 Sub-Task Config，不写死；在循环外解析一次
   const { statusField, currentNodeField } = getActiveMiFieldNames()
@@ -126,6 +142,10 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
     }
 
     if (!Array.isArray(child.data) || child.data.length === 0) continue
+    // 子行的结构外键列同样读设计器配置（fieldDefinitions.isForeignKey + refTableId）。
+    // 不传配置时 resolveMiChildStructuralParentFk 恒返回 null，归属判定会对**自己的行和
+    // 别人的行一律答 false** —— 于是这段 enrich 整体空转，宿主行的嵌套字段永远补不进来。
+    const childFkConfig = miChildFkConfigOfBinding(child, collectionTableId)
     for (const parent of bindings) {
       if (parent.bindingId === child.bindingId || !Array.isArray(parent.data)) continue
       for (const parentRow of parent.data) {
@@ -151,6 +171,8 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
               !miParentRowAlignsWithChildRow(
                 parentRow as Record<string, unknown>,
                 childRow as Record<string, unknown>,
+                childFkConfig,
+                collectionPk,
               )
             ) {
               continue

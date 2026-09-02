@@ -79,7 +79,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       ) {
         return row
       }
-      const scopedSlice = scopeMiLinkChildRowsForParentRow(rec, childSlice, childFkConfig)
+      const scopedSlice = scopeMiLinkChildRowsForParentRow(rec, childSlice, childFkConfig, collectionPk)
       const nest = {
         ...(rec.__subTables__ && typeof rec.__subTables__ === 'object'
           ? (rec.__subTables__ as Record<string, unknown>)

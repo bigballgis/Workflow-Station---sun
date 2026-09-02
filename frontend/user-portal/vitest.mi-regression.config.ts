@@ -34,6 +34,10 @@ const MI_REGRESSION_FILES = [
   'src/composables/subTableField/__tests__/linkFormFkFromConfig.test.ts',
   // 共享附件泄漏过滤：结构外键 / 主键都按配置识别
   'src/composables/tasks/__tests__/sharedAttachmentLeakFkConfig.test.ts',
+  // collection 主键改名后，宿主行仍能认出自己的 link-child 行（People 刷新后消失）
+  'src/composables/tasks/__tests__/miRenamedCollectionPkAlign.test.ts',
+  // 嵌套 enrich 同样要带配置，否则改名 FU 上整段空转（字段补不进子表行）
+  'src/composables/tasks/__tests__/miRenamedPkNestedEnrich.test.ts',
 ]
 
 export default defineConfig({

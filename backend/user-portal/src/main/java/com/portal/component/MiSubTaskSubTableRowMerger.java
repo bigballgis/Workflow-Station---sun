@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * MI (multi-instance) sub-task row-level save isolation.
@@ -47,27 +46,6 @@ import java.util.Set;
 class MiSubTaskSubTableRowMerger {
 
     private final JdbcTemplate jdbcTemplate;
-
-    /**
-     * Foreign-key column names that mark a sub-table as scoped to the WHOLE process/request rather
-     * than to one MI participant row — e.g. a shared attachment table FK'd by {@code main_id} to the
-     * request itself. Mirrors the frontend's {@code SHARED_PROCESS_SUB_TABLE_FK}
-     * (subTableBindingKinds.ts) so both sides agree on which bindings must NOT be row-scoped by the
-     * current sub-task's participant PK.
-     */
-    private static final Set<String> SHARED_PROCESS_SUB_TABLE_FK = Set.of(
-            "main_id", "mainid", "process_id", "processid", "main_record_id");
-
-    /**
-     * Columns through which a link-child row points at its MI participant row.
-     *
-     * <p>Mirrors the frontend's {@code MI_STRUCTURAL_PARENT_FK_FIELDS}
-     * ({@code composables/tasks/internal.ts}) — both sides must agree on what "belongs to this
-     * participant" means, or one will merge a row the other refuses.
-     */
-    private static final List<String> MI_STRUCTURAL_PARENT_FK_FIELDS = List.of(
-            "sub_task_id", "participant_id", "participantId", "parent_id", "parentId",
-            "meeting_participant_id");
 
     /**
      * Whether {@code formData} identifies this submission as an MI sub-task (carries a
@@ -206,7 +184,9 @@ class MiSubTaskSubTableRowMerger {
                     ? new ArrayList<>((List<Object>) l)
                     : new ArrayList<>();
             List<Object> submittedRowsList = (List<Object>) submittedRows;
-            merged.put(key, mergeRowsKeepingBaselineExceptCurrent(baselineRows, submittedRowsList, pkCols, rowKey));
+            merged.put(key, mergeRowsKeepingBaselineExceptCurrent(
+                    baselineRows, submittedRowsList, pkCols, rowKey,
+                    lookupForeignKeyColumnsByStoreKey(key)));
         }
         return merged;
     }
@@ -223,7 +203,7 @@ class MiSubTaskSubTableRowMerger {
     /**
      * True unless {@code submittedSubTables} key resolves to a binding whose {@code foreign_key_field}
      * marks it as scoped to the whole process/request rather than to one MI participant row (see
-     * {@link #SHARED_PROCESS_SUB_TABLE_FK}). Defaults to {@code true} (participant-scoped, i.e. row-merge
+     * {@link #foreignKeyTargetsMainTable}). Defaults to {@code true} (participant-scoped, i.e. row-merge
      * as before) when the key cannot be resolved to a binding at all — the common case for this method
      * is the MI collection table itself, so an unresolvable key is far more likely to be a legitimate
      * participant table under an alias this lookup doesn't recognize than a new shared-table shape;
@@ -253,11 +233,26 @@ class MiSubTaskSubTableRowMerger {
             if (!isDesignerSubTableStoreKey(submittedKey)) {
                 return false;
             }
-            String foreignKeyField = lookupForeignKeyFieldByStoreKey(submittedKey);
-            if (foreignKeyField == null) {
+            // 判据 1（最高优先）：设计器把这张表**显式声明**为 MI 参与者行集合
+            // （Manage Table Bindings 里 Link Mode = MI Participant Row）。
+            //
+            // 必须排在结构判据前面：collection 表自己通常也有一个指向主表的外键
+            // （demo FU 的 subtable.main_idaaz -> main），只看「FK 指向 MAIN」会把 collection
+            // 判成共享表 → 整片跳过行合并 → 当前参与者提交的 thin stub 直接盖掉兄弟参与者
+            // 已保存的字段（实测：Test-000003 的 name 被覆盖成空串）。这正是本类要防的事故。
+            if (bindingDeclaredAsMiParticipantRow(submittedKey)) {
                 return true;
             }
-            return !SHARED_PROCESS_SUB_TABLE_FK.contains(foreignKeyField.trim().toLowerCase());
+            // 判据 2：是不是「整个请求共享」的表，按**结构事实**判定：它的外键指向 MAIN 表，
+            // 而不是指向 MI 子任务表。曾经这里比对一张写死的列名表（main_id / process_id / …），
+            // 改名后（attachment 的外键成了 main_idva）一个都命中不了 —— 共享附件表会被当成
+            // 参与者子表逐行隔离，正是本方法注释自己警告的那种静默丢数据。
+            Boolean pointsAtMainTable = foreignKeyTargetsMainTable(submittedKey);
+            if (pointsAtMainTable == null) {
+                // 查不出外键指向：保持参与者守卫开着（与 isDesignerSubTableStoreKey 同样的保守方向）
+                return true;
+            }
+            return !pointsAtMainTable;
         } catch (RuntimeException ex) {
             return true;
         }
@@ -310,16 +305,101 @@ class MiSubTaskSubTableRowMerger {
     }
 
     /**
+     * Did the designer explicitly declare this table as the MI participant-row collection?
+     *
+     * <p>{@code dw_form_table_bindings.binding_link_mode = 'miParticipantRow'} is the Developer
+     * Workstation's "Link Mode = MI Participant Row" setting — an explicit statement, not an
+     * inference, which is why it outranks every structural check.
+     *
+     * <p>It has to outrank {@link #foreignKeyTargetsMainTable} specifically: a collection table
+     * normally carries its own foreign key to the main table too (demo FU:
+     * {@code subtable.main_idaaz -> main}), so judging by "FK points at MAIN" alone classifies the
+     * collection as a shared table, skips row merging for it entirely, and lets one participant's
+     * thin stubs overwrite the fields every sibling had already saved.
+     *
+     * <p>Mirrors the frontend's {@code bindingDeclaresMiParticipantRow}
+     * ({@code miBindingKindFromConfig.ts}), whose classifier checks this same declaration first.
+     */
+    private boolean bindingDeclaredAsMiParticipantRow(String storeKey) {
+        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
+            return false;
+        }
+        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
+        Integer n = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM dw_form_table_bindings b
+                JOIN dw_table_definitions t ON t.id = b.table_id
+                WHERE lower(t.table_name) = lower(?) AND b.binding_link_mode = 'miParticipantRow'
+                """, Integer.class, tableName);
+        return n != null && n > 0;
+    }
+
+    /**
+     * Does this table's designer-declared foreign key point at the MAIN table?
+     *
+     * <p>That is the structural definition of "shared by the whole request": an attachment or an
+     * action table FK'd to the request itself, as opposed to a link-child FK'd to the MI collection.
+     * Column names cannot tell these apart — only the FK's target can — which is why the old
+     * {@code main_id}/{@code process_id} literal list broke the moment the demo FU renamed its keys.
+     *
+     * @return {@code null} when the table or its FK target cannot be resolved (caller keeps the
+     *         participant guard on rather than guessing)
+     */
+    private Boolean foreignKeyTargetsMainTable(String storeKey) {
+        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
+            return null;
+        }
+        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
+        List<String> refTypes = jdbcTemplate.queryForList("""
+                SELECT ref.table_type
+                FROM dw_field_definitions f
+                JOIN dw_table_definitions t ON t.id = f.table_id
+                JOIN dw_table_definitions ref ON ref.id = f.ref_table_id
+                WHERE lower(t.table_name) = lower(?) AND f.is_foreign_key = true
+                """, String.class, tableName);
+        if (refTypes.isEmpty()) {
+            return null;
+        }
+        return refTypes.stream().anyMatch("MAIN"::equalsIgnoreCase);
+    }
+
+    /**
+     * Foreign-key column names the DESIGNER declared on the table a canonical store key names.
+     *
+     * <p>This is what decides "which column points at the participant", and it must come from the
+     * design, never from a list of likely names. Renaming the demo FU's keys (sub_task_id →
+     * sub_task_idqc) made every guessed name miss: the merger then could neither find this
+     * participant's own rows nor prove the submitted rows were someone else's, so it failed the
+     * save outright with MI_ROW_KEY_UNRESOLVED while the payload was in fact correct.
+     */
+    private List<String> lookupForeignKeyColumnsByStoreKey(String storeKey) {
+        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
+            return List.of();
+        }
+        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
+        return jdbcTemplate.queryForList("""
+                SELECT f.field_name
+                FROM dw_field_definitions f
+                JOIN dw_table_definitions t ON t.id = f.table_id
+                WHERE lower(t.table_name) = lower(?) AND f.is_foreign_key = true
+                """, String.class, tableName);
+    }
+
+    /**
      * True when this row points at the current MI participant through a structural FK.
      *
      * <p>The participant's identity is the VALUE of the collection row key (e.g.
      * {@code {id_idwnn: "Test-000002"}} → {@code "Test-000002"}); a link-child row carries that same
-     * value in {@code sub_task_id} / {@code participant_id} / … Composite collection keys are not
+     * value in one of its designer-declared FK columns. Composite collection keys are not
      * expressible as a single FK value, so those fall through to PK matching unchanged.
+     *
+     * <p>{@code fkColumns} comes from {@link #lookupForeignKeyColumnsByStoreKey} — the designer's
+     * own declaration. An empty list means "this caller could not resolve the table's FK columns",
+     * and the answer is a plain {@code false}: refuse to guess rather than fall back to column-name
+     * literals, which silently mis-answered once the keys were renamed.
      */
-    @SuppressWarnings("unchecked")
     private boolean rowBelongsToParticipantByStructuralFk(
-            Map<String, Object> rowMap, Map<String, Object> rowKey) {
+            Map<String, Object> rowMap, Map<String, Object> rowKey, List<String> fkColumns) {
         if (rowMap == null || rowKey == null || rowKey.size() != 1) {
             return false;
         }
@@ -328,7 +408,7 @@ class MiSubTaskSubTableRowMerger {
             return false;
         }
         String want = String.valueOf(participantId).trim();
-        for (String fk : MI_STRUCTURAL_PARENT_FK_FIELDS) {
+        for (String fk : fkColumns) {
             Object v = SubTableRowKeySupport.getRowValueIgnoreCase(rowMap, fk);
             if (v != null && want.equals(String.valueOf(v).trim())) {
                 return true;
@@ -342,7 +422,8 @@ class MiSubTaskSubTableRowMerger {
             List<Object> baselineRows,
             List<Object> submittedRows,
             List<String> pkCols,
-            Map<String, Object> rowKey) {
+            Map<String, Object> rowKey,
+            List<String> fkColumns) {
         Object submittedCurrentRow = null;
         for (Object row : submittedRows) {
             if (!(row instanceof Map)) {
@@ -367,7 +448,8 @@ class MiSubTaskSubTableRowMerger {
             // Replace this participant's whole set instead, leaving other participants' rows untouched.
             List<Object> ownByFk = new ArrayList<>();
             for (Object row : submittedRows) {
-                if (row instanceof Map && rowBelongsToParticipantByStructuralFk((Map<String, Object>) row, rowKey)) {
+                if (row instanceof Map
+                        && rowBelongsToParticipantByStructuralFk((Map<String, Object>) row, rowKey, fkColumns)) {
                     ownByFk.add(row);
                 }
             }
@@ -375,7 +457,8 @@ class MiSubTaskSubTableRowMerger {
                 List<Object> out = new ArrayList<>();
                 for (Object row : baselineRows) {
                     if (row instanceof Map
-                            && rowBelongsToParticipantByStructuralFk((Map<String, Object>) row, rowKey)) {
+                            && rowBelongsToParticipantByStructuralFk(
+                                    (Map<String, Object>) row, rowKey, fkColumns)) {
                         continue;   // drop this participant's stale rows; the submission replaces them
                     }
                     out.add(row);
@@ -405,7 +488,7 @@ class MiSubTaskSubTableRowMerger {
                 }
                 Map<String, Object> rowMap = (Map<String, Object>) row;
                 String otherFk = null;
-                for (String fk : MI_STRUCTURAL_PARENT_FK_FIELDS) {
+                for (String fk : fkColumns) {
                     Object v = SubTableRowKeySupport.getRowValueIgnoreCase(rowMap, fk);
                     if (v != null && !String.valueOf(v).trim().isEmpty()) {
                         otherFk = String.valueOf(v).trim();
@@ -413,7 +496,7 @@ class MiSubTaskSubTableRowMerger {
                     }
                 }
                 // No structural FK at all, or one naming US, means this row is not provably foreign.
-                if (otherFk == null || rowBelongsToParticipantByStructuralFk(rowMap, rowKey)) {
+                if (otherFk == null || rowBelongsToParticipantByStructuralFk(rowMap, rowKey, fkColumns)) {
                     everySubmittedRowBelongsToAnotherParticipant = false;
                     break;
                 }

@@ -11,6 +11,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -342,9 +343,9 @@ class MiSubTaskSubTableRowMergerTest {
         // Row-scoping the attachment table by the current participant's PK would never find a
         // matching row and would silently drop every submitted attachment row (the exact bug this
         // classification exists to prevent).
-        // FK is now looked up by the canonical key's table name, not by a numeric binding id.
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("attachment")))
-                .thenReturn(List.of("main_id"));
+        // 共享与否按**结构**判定：附件表的外键指向 MAIN 表（列名叫什么无关）。
+        when(jdbcTemplate.queryForList(contains("ref.table_type"), eq(String.class), eq("attachment")))
+                .thenReturn(List.of("MAIN"));
 
         Map<String, Object> attachmentRow = new HashMap<>();
         attachmentRow.put("id", "att-1");
@@ -431,7 +432,7 @@ class MiSubTaskSubTableRowMergerTest {
     /** The MI sub-task table itself keeps its guard: a slice without our own row still fails loud. */
     @Test
     void mergeCurrentRowOnly_miSubTaskTableStillRejectsSliceMissingOwnRow() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("subtable")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("subtable")))
                 .thenReturn(List.of("id_idwnn"));
 
         Map<String, Object> submitted = new HashMap<>();
@@ -487,8 +488,11 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_linkChildRowMatchedByStructuralForeignKey() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
                 .thenReturn(List.of("id"));
+        // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("id", "d9f73b1a-fea2-45e0-af77-ca75edd984c0");
@@ -526,8 +530,11 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_structuralForeignKeyOfAnotherParticipantIsNotAdopted() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
                 .thenReturn(List.of("id"));
+        // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> foreign = new HashMap<>();
         foreign.put("id", "0000aaaa-0000-0000-0000-00000000ffff");
@@ -554,8 +561,11 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_participantOwningSeveralLinkChildRowsKeepsAllOfThem() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
                 .thenReturn(List.of("id"));
+        // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> first = new HashMap<>();
         first.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -603,8 +613,12 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_linkChildMatchedAcrossDifferentStructuralFkColumns() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
                 .thenReturn(List.of("id"));
+        // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
+        // 本用例的表在设计器里声明了两个外键列，两条行各用其中之一指向同一参与者
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id", "participant_id"));
 
         Map<String, Object> viaSubTask = new HashMap<>();
         viaSubTask.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -638,8 +652,11 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_emptyLinkChildSliceKeepsBaselineRatherThanDeleting() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
                 .thenReturn(List.of("id"));
+        // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mineOld = new HashMap<>();
         mineOld.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -677,8 +694,11 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_sliceWithOnlyOtherParticipantsRowsLeavesBaselineAlone() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
                 .thenReturn(List.of("id"));
+        // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> foreign = new HashMap<>();
         foreign.put("id", "bad0d243-7e3c-4c67-9137-69ea487980fd");
@@ -706,7 +726,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_rowsWithoutStructuralFkStillFailLoud() {
-        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("subtable")))
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("subtable")))
                 .thenReturn(List.of("id_idwnn"));
 
         Map<String, Object> mismatched = new HashMap<>();
@@ -719,5 +739,122 @@ class MiSubTaskSubTableRowMergerTest {
         assertThatThrownBy(() ->
                 merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002")))
                 .hasMessageContaining("own row");
+    }
+
+    /**
+     * 现场回归：Multi-Instance Subtask Demo 把主外键改名后（people.sub_task_id → sub_task_idqc、
+     * subtable 主键 → id_idwxwc），保存直接被 MI_ROW_KEY_UNRESOLVED 拒掉。
+     *
+     * <p>根因是本类曾用一张写死的列名表（sub_task_id / participant_id / …）判「这行属于哪个参与者」。
+     * 改名后那张表一个都命中不了：既找不到本参与者的行，也无法证明提交的行属于别人，于是落到
+     * "own row missing" 的硬失败分支 —— 而实际上 payload 完全正确。
+     *
+     * <p>现在外键列来自 dw_field_definitions.is_foreign_key，列叫什么都不影响。
+     */
+    @Test
+    void mergeCurrentRowOnly_renamedForeignKeyColumnStillMatchesParticipant() {
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
+                .thenReturn(List.of("idqc"));
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_idqc"));
+
+        Map<String, Object> mine = new HashMap<>();
+        mine.put("idqc", "000c88a8-dcd0-4d7b-b35b-3fb684e2ab4d");
+        mine.put("sub_task_idqc", "Test-000003");
+        mine.put("age", "q");
+
+        Map<String, Object> mine2 = new HashMap<>();
+        mine2.put("idqc", "892cc8c0-8b75-40c1-a2ca-3037c5b93a48");
+        mine2.put("sub_task_idqc", "Test-000003");
+        mine2.put("age", "w");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(mine, mine2)));
+
+        // 改名后的 collection 主键；改动前这里会抛 MI_ROW_KEY_UNRESOLVED
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"));
+
+        @SuppressWarnings("unchecked")
+        List<Object> people = (List<Object>) merged.get("dw:people");
+        org.assertj.core.api.Assertions.assertThat(people).hasSize(2);
+    }
+
+    /**
+     * 现场回归：共享表（附件）的外键改名后，不能再被当成参与者子表逐行隔离。
+     *
+     * <p>改名前外键叫 main_id，命中写死的 SHARED_PROCESS_SUB_TABLE_FK；改名成 main_idva 后一个
+     * 都命中不了，附件表被判成「参与者子表」，于是拿子任务 PK 去逐行匹配 —— 匹配不上就整单
+     * 拒绝保存（或静默丢掉全部附件行）。现在按结构判定：外键指向 MAIN 表即为共享表。
+     */
+    @Test
+    void mergeCurrentRowOnly_sharedTableWithRenamedForeignKeyStillPassesThrough() {
+        when(jdbcTemplate.queryForList(contains("ref.table_type"), eq(String.class), eq("attachment")))
+                .thenReturn(List.of("MAIN"));
+
+        Map<String, Object> attachmentRow = new HashMap<>();
+        attachmentRow.put("idfa", "att-1");
+        attachmentRow.put("main_idva", "Meeting-000002");
+        attachmentRow.put("file", "notes.pdf");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(attachmentRow)));
+
+        // 改动前这里会抛 MI_ROW_KEY_UNRESOLVED（附件行里没有 id_idwxwc）
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"));
+
+        @SuppressWarnings("unchecked")
+        List<Object> out = (List<Object>) merged.get("dw:attachment");
+        org.assertj.core.api.Assertions.assertThat(out).containsExactly(attachmentRow);
+    }
+
+    /**
+     * Code review 抓到的 Blocker 回归：**MI collection 表自己的外键也指向主表**
+     * （demo FU：{@code subtable.main_idaaz -> main}）。
+     *
+     * <p>只按「FK 指向 MAIN = 共享表」判定，会把 collection 判成共享 → 整片跳过行合并 →
+     * 当前参与者提交里那份「兄弟参与者被 MI 隔离削薄成 thin stub」的行原样落库，
+     * 把别人已经保存好的字段覆盖成空。实测：Test-000003 的 name 从 "THEIR SAVED DATA"
+     * 变成 ""。这比它要修的原 bug 更严重 —— 丢的是别人已存的数据。
+     *
+     * <p>修法：`binding_link_mode = 'miParticipantRow'` 是设计器的**显式声明**，
+     * 优先级高于任何结构判据。
+     */
+    @Test
+    void mergeCurrentRowOnly_collectionTableWhoseFkAlsoPointsAtMainStillRowIsolates() {
+        // collection 表：设计器显式声明 miParticipantRow，同时它的 FK 也指向 MAIN
+        when(jdbcTemplate.queryForObject(contains("binding_link_mode"), eq(Integer.class), eq("subtable")))
+                .thenReturn(1);
+        when(jdbcTemplate.queryForList(contains("ref.table_type"), eq(String.class), eq("subtable")))
+                .thenReturn(List.of("MAIN"));
+
+        Map<String, Object> mine = new HashMap<>();
+        mine.put("id_idwxwc", "Test-000004");
+        mine.put("name", "MY NEW VALUE");
+
+        // MI 隔离后，兄弟参与者的行只剩身份字段，业务字段是空的
+        Map<String, Object> siblingThinStub = new HashMap<>();
+        siblingThinStub.put("id_idwxwc", "Test-000003");
+        siblingThinStub.put("name", "");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(mine, siblingThinStub)));
+
+        Map<String, Object> siblingSaved = new HashMap<>();
+        siblingSaved.put("id_idwxwc", "Test-000003");
+        siblingSaved.put("name", "THEIR SAVED DATA");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:subtable", new java.util.ArrayList<>(List.of(siblingSaved)));
+
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, baseline, Map.of("id_idwxwc", "Test-000004"));
+
+        @SuppressWarnings("unchecked")
+        List<Object> out = (List<Object>) merged.get("dw:subtable");
+        // 兄弟参与者已保存的数据必须原封不动；当前参与者的新值要写进去
+        org.assertj.core.api.Assertions.assertThat(out)
+                .containsExactlyInAnyOrder(siblingSaved, mine);
     }
 }

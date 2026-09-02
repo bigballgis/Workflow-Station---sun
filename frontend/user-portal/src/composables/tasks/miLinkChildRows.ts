@@ -16,6 +16,7 @@ import {
   miLinkChildRowBusinessFieldRank,
   miParentRowAlignsWithChildRow,
   miChildFkConfigOfBinding,
+  resolveMiChildPrimaryKeyColumns,
   resolveMiChildStructuralFkColumns,
   resolveMiChildStructuralParentFk,
   rowMatchesMiExpansionId,
@@ -23,10 +24,32 @@ import {
 } from './miLinkChildIdentity'
 import type { MiChildFkConfig } from './miLinkChildIdentity'
 
-function pickAllocatedUuidFromLinkChildGroup(group: Record<string, unknown>[]): string | undefined {
+/**
+ * The row's own allocated primary key value, read through the DESIGNER's PK column.
+ *
+ * <p>Never `row.id` by default: People's designer PK is `idqc` in the Multi-Instance Subtask Demo,
+ * and reading `id` there answered `undefined` for every row. `id` is kept only as the last resort
+ * for callers with no config in scope (legacy payloads whose PK genuinely is `id`).
+ */
+function linkChildRowAllocatedPk(
+  row: Record<string, unknown>,
+  config?: MiChildFkConfig | null,
+): string | undefined {
+  const pkCols = resolveMiChildPrimaryKeyColumns(config)
+  for (const col of pkCols.length > 0 ? pkCols : ['id']) {
+    const v = row[col]
+    if (v != null && isAllocatedUuidPrimaryKey(v)) return String(v).trim()
+  }
+  return undefined
+}
+
+function pickAllocatedUuidFromLinkChildGroup(
+  group: Record<string, unknown>[],
+  config?: MiChildFkConfig | null,
+): string | undefined {
   for (const r of group) {
-    const id = r.id
-    if (id != null && isAllocatedUuidPrimaryKey(id)) return String(id).trim()
+    const id = linkChildRowAllocatedPk(r, config)
+    if (id) return id
   }
   return undefined
 }
@@ -147,9 +170,12 @@ export function collapseMiLinkChildRowsToOnePerParticipant(
     // 这个折叠只为合并「同一行被 sub form1 / sub form2 拆成的碎片」，不是去重：
     // 每行都带着自己**已分配的 UUID 主键**时，它们是不同的行，折叠会把用户刚加的行吃掉。
     // 实测：加两行 People 后 Save，3 行被折成 1 行，刷新只剩最早那条。
+    // 主键列取自设计器（binding.primaryKeyFields / isPrimaryKey 字段定义），不是写死的 `id`：
+    // 本 demo 的 People 主键叫 idqc，读 `id` 会让每行都「没有已分配主键」，守卫失效 ——
+    // 两条各自独立的行于是被当成同一行的碎片合并，刷新后用户只剩一条。
     const allocatedIds = group
-      .map(r => normalizeMiLinkMatchId(r.id))
-      .filter((v): v is string => !!v && isAllocatedUuidPrimaryKey(v))
+      .map(r => linkChildRowAllocatedPk(r, config))
+      .filter((v): v is string => !!v)
     if (allocatedIds.length === group.length && new Set(allocatedIds).size === group.length) {
       out.push(...group)
       continue
@@ -170,10 +196,12 @@ export function collapseMiLinkChildRowsToOnePerParticipant(
     for (const r of sorted) {
       merged = mergeSubTableRowsByRowId(merged, [r], [pkField])
     }
-    const allocatedId = pickAllocatedUuidFromLinkChildGroup(group)
+    const allocatedId = pickAllocatedUuidFromLinkChildGroup(group, config)
     const row = merged[0] ?? sorted[sorted.length - 1]
     if (row && allocatedId) {
-      out.push({ ...(row as Record<string, unknown>), id: allocatedId })
+      // 回填到设计器主键列（没有配置时才退回 `id`），否则会给 idqc 表凭空加一个 `id` 字段。
+      const pkCol = resolveMiChildPrimaryKeyColumns(config)[0] ?? 'id'
+      out.push({ ...(row as Record<string, unknown>), [pkCol]: allocatedId })
     } else if (row) {
       out.push(row)
     }
@@ -193,19 +221,30 @@ export function collapseSubTableRowsPreferFilled(rows: any[]): any[] {
   return mergeSubTableRowsByRowId([], rows, ['id'])
 }
 
-/** Rows in a link-child binding slice that belong to the given MI parent participant row. */
+/**
+ * Rows in a link-child binding slice that belong to the given MI parent participant row.
+ *
+ * @param collectionPrimaryKeyFields MI collection 的设计器主键列 —— 宿主行的参与者标识按它取。
+ *   不传时归属判定退回历史列名表（id_idw / rowId / …），collection 主键改过名的 FU 会判不出。
+ */
 export function pickMiLinkChildRowsForParent(
   parentRow: Record<string, unknown>,
   candidateRows: unknown[],
   primaryKeyFields?: string[] | null,
   config?: MiChildFkConfig | null,
+  collectionPrimaryKeyFields?: string[] | null,
 ): any[] {
   if (!Array.isArray(candidateRows) || candidateRows.length === 0) return []
   const matched = candidateRows.filter(
     r =>
       r &&
       typeof r === 'object' &&
-      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>, config),
+      miParentRowAlignsWithChildRow(
+        parentRow,
+        r as Record<string, unknown>,
+        config,
+        collectionPrimaryKeyFields,
+      ),
   )
   if (matched.length === 0) return []
   const deduped = collapseMiLinkChildRowsToOnePerParticipant(matched, config)
@@ -294,13 +333,20 @@ export function scopeMiLinkChildRowsForParentRow(
   parentRow: Record<string, unknown>,
   candidateRows: unknown[],
   config?: MiChildFkConfig | null,
+  /** MI collection 的设计器主键列 —— 宿主行的参与者标识按它取，不猜列名。 */
+  collectionPrimaryKeyFields?: string[] | null,
 ): Record<string, unknown>[] {
   if (!Array.isArray(candidateRows)) return []
   return candidateRows.filter(
     (r): r is Record<string, unknown> =>
       !!r &&
       typeof r === 'object' &&
-      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>, config),
+      miParentRowAlignsWithChildRow(
+        parentRow,
+        r as Record<string, unknown>,
+        config,
+        collectionPrimaryKeyFields,
+      ),
   )
 }
 
