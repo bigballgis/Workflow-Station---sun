@@ -3103,4 +3103,20 @@
     虚拟组集合差（补缺、摘离开者）；拉取失败的组不删成员。全量仍先清空再重建。
     验证：LdapSyncServiceTest + LdapUserSyncServiceTest 19 tests pass。
 
+- id: "1588"
+  status: fixed
+  fixed_at: "2026-09-02"
+  severity: major
+  category: bug
+  summary: "Form Design Import Table Fields: selecting created/updated at/by had no effect"
+  file: "frontend/developer-workstation/src/utils/formFieldMeta.ts"
+  note: |
+    根因：shouldIncludeFieldOnFormCanvas 与 syncFormRulesWithTableFields 把
+    created_at/created_by/updated_at/updated_by 当隐藏列丢掉；导入对话框仍可勾选，
+    确认后 mapFieldsToFormRules 生成 0 条 rule，画布无控件。
+    修复：允许显式导入为只读控件；Preview/Portal 仍由平台填值。空表单自动铺字段
+    与新建 binding 仍排除这四列，避免每个新表单默认堆出审计字段。
+    验证：formFieldMeta + useTableFieldRules.auditFields 单测通过；
+    pnpm run build；compose rebuild developer-workstation-frontend。
+
 

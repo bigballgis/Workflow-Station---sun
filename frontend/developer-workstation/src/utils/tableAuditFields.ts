@@ -17,7 +17,11 @@ export function isTableAuditField(fieldName: string | null | undefined): boolean
   return isSystemAuditField(fieldName)
 }
 
-/** Exclude platform-managed audit columns from Form Design canvas / list view / import. */
+/**
+ * Drop platform-managed audit columns from "import every table field" auto-fill
+ * (new binding / empty form). Explicit Import Table Fields still includes them
+ * as readonly canvas controls — see {@link shouldIncludeFieldOnFormCanvas}.
+ */
 export function filterOutTableAuditFields<T extends { fieldName?: string | null }>(fields: T[]): T[] {
   return fields.filter((f) => !isTableAuditField(f.fieldName))
 }

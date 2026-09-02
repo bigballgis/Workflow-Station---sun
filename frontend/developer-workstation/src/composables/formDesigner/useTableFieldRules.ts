@@ -16,6 +16,7 @@ import {
   isRequestIdSyntheticField,
 } from '@/utils/formFieldMeta'
 import { inflateComponentEventsForDesigner } from '@/utils/formCreateDefaultEvents'
+import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
 import type { RequestIdConfig } from '@/api/functionUnit'
 import {
   nestAssignmentFieldsIntoContainer,
@@ -338,7 +339,9 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     const primary = bindings.find((b) => b.bindingType === 'PRIMARY')
     const table = primary ? store.tables.find((t) => t.id === primary.tableId) : undefined
     const fields = table?.fieldDefinitions?.length
-      ? [...table.fieldDefinitions].sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      ? filterOutTableAuditFields(
+          [...table.fieldDefinitions].sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+        )
       : []
     if (fields.length === 0) {
       return base
@@ -391,7 +394,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     if (rawRule.length > 0) {
       return { rule: nest(rawRule), options, miAssignmentAdopted: true }
     }
-    const fields = getTableFieldDefinitionsByTableId(tableId)
+    const fields = filterOutTableAuditFields(getTableFieldDefinitionsByTableId(tableId))
     if (!fields.length) {
       return { rule: [], options, miAssignmentAdopted: alreadyAdopted }
     }

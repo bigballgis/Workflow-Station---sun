@@ -76,10 +76,13 @@ function toFkMeta(field: FieldDefinition): FieldFkMeta {
   }
 }
 
-/** Hidden structural FK or platform audit fields: omit from form canvas auto-import; List View catalog still shows them. */
+/**
+ * Hidden structural FK: omit from the form canvas (runtime still fills them).
+ * Platform audit fields (created_at/by, updated_at/by) ARE allowed — designers
+ * may import them as readonly display controls. Values stay server-filled.
+ */
 export function shouldIncludeFieldOnFormCanvas(field: FieldDefinition): boolean {
   if (!field?.fieldName?.trim()) return false
-  if (isTableAuditField(field.fieldName)) return false
   if (field.isForeignKey && isFkHidden(toFkMeta(field))) return false
   return true
 }
@@ -117,6 +120,13 @@ export function applyTableFieldMetaToFormRule(
   rule: Record<string, unknown>,
 ): Record<string, unknown> {
   const props = { ...((rule.props as Record<string, unknown> | undefined) || {}) }
+
+  // Audit columns are platform-filled at insert/update — always locked, even if
+  // the designer Readonly toggle was turned off (Portal also forces this).
+  if (isTableAuditField(field.fieldName)) {
+    props.readonly = true
+    return { ...rule, props, readonly: true }
+  }
 
   // Designer explicitly turned Readonly off — do not re-apply PK/FK readonly after Save reload.
   if (props.readonly === false || rule.readonly === false) {
@@ -179,10 +189,6 @@ function syncRuleNode(rule: unknown, fieldByName: Map<string, FieldDefinition>):
   const fieldName = typeof r.field === 'string' ? r.field : ''
   const field = fieldName ? fieldByName.get(fieldName) : undefined
 
-  if (fieldName && isTableAuditField(fieldName)) {
-    return null
-  }
-
   if (field && !shouldIncludeFieldOnFormCanvas(field)) {
     return null
   }
@@ -219,6 +225,9 @@ export function syncFormRulesWithTableFields(
 }
 
 export function taskFieldPermissionForField(field: FieldDefinition): TaskFieldPermission | null {
+  if (isTableAuditField(field.fieldName)) {
+    return 'READONLY'
+  }
   if (field.isForeignKey && isFkReadonly(toFkMeta(field))) {
     return 'READONLY'
   }
