@@ -380,7 +380,7 @@ platform:
           - http://127.0.0.1:3000/dev/sso/callback
           - http://127.0.0.1:3102/dev/sso/callback
 
-# LDAP / AD 配置（前缀 ldap.*）。LDAP 为用户画像权威源：定期同步 + 登录 JIT 回写 sys_users。
+# LDAP 为用户画像权威源：定期对目标 AD 组成员对账 + 登录 JIT 回写 sys_users。
 # 所有连接参数/密钥仅经 ${ENV} 注入，严禁硬编码（见 security-guard）。默认关闭；本地用 OpenLDAP mock 验证。
 # 属性名默认 HSBC AD 命名，本地标准 schema(OpenLDAP/inetOrgPerson) 可经 env 覆盖。
 ldap:

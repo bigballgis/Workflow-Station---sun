@@ -13,9 +13,8 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>触发时机：
  * <ol>
- *   <li>应用启动后就绪（{@link ApplicationReadyEvent}）→ 异步执行一次组同步；
- *   若 LDAP 提供用户变更水位字段（如 {@code whenChanged}）则优先增量，否则回退全量</li>
- *   <li>按 cron 表达式定时触发增量同步（默认每 2 小时，{@code ldap.sync-cron}）</li>
+ *   <li>应用启动后就绪（{@link ApplicationReadyEvent}）→ 异步执行一次组同步（增量对账；无基线则全量）</li>
+ *   <li>按 cron 表达式定时触发增量对账（默认每 2 小时，{@code ldap.sync-cron}）</li>
  * </ol>
  *
  * <p>增量同步无基线时自动降级为全量（见 {@link LdapSyncService#runHermesAdGroupIncrementalSync}）。
@@ -41,13 +40,8 @@ public class LdapHermesGroupSyncComponent {
     }
     private void runStartupSyncQuietly() {
         try {
-            if (ldapSyncService.supportsUserChangeIncrementalSync()) {
-                log.info("LDAP user change watermark attribute detected; using incremental Hermes AD group sync on startup");
-                ldapSyncService.runHermesAdGroupIncrementalSync();
-            } else {
-                log.info("LDAP user change watermark attribute not configured; using full Hermes AD group sync on startup");
-                ldapSyncService.runHermesAdGroupSync();
-            }
+            log.info("Starting Hermes AD group membership reconcile (full if no baseline)");
+            ldapSyncService.runHermesAdGroupIncrementalSync();
         } catch (Exception e) {
             log.error("Startup Hermes AD group sync error: {}", e.getMessage());
         }

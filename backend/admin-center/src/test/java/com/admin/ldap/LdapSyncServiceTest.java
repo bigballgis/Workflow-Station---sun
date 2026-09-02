@@ -321,10 +321,113 @@ class LdapSyncServiceTest {
         attributes.setWhenChanged("whenChanged");
         assertTrue(ldapSyncService.supportsUserChangeIncrementalSync());
     }
+
     @Test
-    @DisplayName("组对象未变化时仍会同步目标组内资料变更用户")
-    void incrementalSyncStillProcessesChangedUsersWhenGroupsUnchanged() throws Exception {
+    @DisplayName("组 whenChanged 未变时仍拉取目标组成员并 upsert（Claudia：平台无此人）")
+    void incrementalReconcilesGroupMembersWhenWhenChangedUnchanged() throws Exception {
         groupSync.setGroups("User=Infodir-PowerPlatform-WPBPP-DEV-User");
+        stubIncrementalBaseline();
+        VirtualGroup usersVg = VirtualGroup.builder()
+                .id("vg-users").code("HERMES_DEFAULT_USERS").name("Hermes Default Users").build();
+        when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
+        when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.findByGroupId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        Map<String, String> claudia = ldapAttrs("45455063", "Claudia");
+        claudia.put("memberOf", "CN=Infodir-PowerPlatform-WPBPP-DEV-User,OU=Groups,DC=InfoDir,DC=Prod,DC=HSBC");
+        when(ldapClient.fetchUsersInGroup("Infodir-PowerPlatform-WPBPP-DEV-User")).thenReturn(List.of(claudia));
+        when(ldapUserMapper.mapToUser(any())).thenReturn(Optional.of(LdapUserData.builder()
+                .id("45455063")
+                .employeeId("45455063")
+                .username("45455063")
+                .displayName("Claudia")
+                .build()));
+        when(ldapUserSyncService.upsertUser(any()))
+                .thenReturn(new LdapUserSyncService.UpsertResult("45455063", true));
+
+        LdapSyncAudit audit = ldapSyncService.runHermesAdGroupIncrementalSync();
+
+        assertEquals("SUCCESS", audit.getStatus());
+        assertEquals(1, audit.getUpserted());
+        assertEquals(1, audit.getInsertCount());
+        verify(ldapClient).fetchUsersInGroup("Infodir-PowerPlatform-WPBPP-DEV-User");
+        verify(ldapClient, never()).hasGroupChangedSince(anyString(), any());
+        verify(ldapClient, never()).fetchUsersWithFilter(anyString());
+        verify(ldapUserSyncService).upsertUser(any());
+    }
+
+    @Test
+    @DisplayName("增量对账会覆盖已存在用户画像（平台改过也跟 LDAP）")
+    void incrementalOverwritesExistingProfileFromLdap() throws Exception {
+        groupSync.setGroups("User=Infodir-PowerPlatform-WPBPP-DEV-User");
+        stubIncrementalBaseline();
+        VirtualGroup usersVg = VirtualGroup.builder()
+                .id("vg-users").code("HERMES_DEFAULT_USERS").name("Hermes Default Users").build();
+        when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(true);
+        when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.findByGroupId(anyString())).thenReturn(List.of());
+        Map<String, String> ldapUser = ldapAttrs("45455063", "LDAP Name");
+        when(ldapClient.fetchUsersInGroup("Infodir-PowerPlatform-WPBPP-DEV-User")).thenReturn(List.of(ldapUser));
+        when(ldapUserMapper.mapToUser(any())).thenReturn(Optional.of(LdapUserData.builder()
+                .id("45455063")
+                .employeeId("45455063")
+                .username("45455063")
+                .displayName("LDAP Name")
+                .email("claudia@hsbc.com")
+                .build()));
+        when(ldapUserSyncService.upsertUser(any()))
+                .thenReturn(new LdapUserSyncService.UpsertResult("45455063", false));
+
+        LdapSyncAudit audit = ldapSyncService.runHermesAdGroupIncrementalSync();
+
+        assertEquals("SUCCESS", audit.getStatus());
+        assertEquals(1, audit.getUpdateCount());
+        ArgumentCaptor<LdapUserData> captor = ArgumentCaptor.forClass(LdapUserData.class);
+        verify(ldapUserSyncService).upsertUser(captor.capture());
+        assertEquals("LDAP Name", captor.getValue().getDisplayName());
+        assertEquals("claudia@hsbc.com", captor.getValue().getEmail());
+    }
+
+    @Test
+    @DisplayName("已离开目标 AD 组的 LDAP 虚拟组成员会被摘掉，账号行不在本同步中删除")
+    void incrementalPrunesLeaversFromHermesVirtualGroup() throws Exception {
+        groupSync.setGroups("User=Infodir-PowerPlatform-WPBPP-DEV-User");
+        stubIncrementalBaseline();
+        VirtualGroup usersVg = VirtualGroup.builder()
+                .id("vg-users").code("HERMES_DEFAULT_USERS").name("Hermes Default Users").build();
+        when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
+        when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        VirtualGroupMember leaver = VirtualGroupMember.builder()
+                .id("m-leaver")
+                .groupId("vg-users")
+                .userId("leaver-user")
+                .addedBy("HERMES_AD_SYNC")
+                .build();
+        when(virtualGroupMemberRepository.findByGroupId("vg-users")).thenReturn(List.of(leaver));
+        Map<String, String> stayer = ldapAttrs("11111111", "Stayer");
+        when(ldapClient.fetchUsersInGroup("Infodir-PowerPlatform-WPBPP-DEV-User")).thenReturn(List.of(stayer));
+        when(ldapUserMapper.mapToUser(any())).thenReturn(Optional.of(LdapUserData.builder()
+                .id("11111111")
+                .employeeId("11111111")
+                .username("11111111")
+                .displayName("Stayer")
+                .build()));
+        when(ldapUserSyncService.upsertUser(any()))
+                .thenReturn(new LdapUserSyncService.UpsertResult("11111111", false));
+
+        LdapSyncAudit audit = ldapSyncService.runHermesAdGroupIncrementalSync();
+
+        assertEquals("SUCCESS", audit.getStatus());
+        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId("vg-users", "leaver-user");
+        verify(ldapUserSyncService, never()).upsertUser(org.mockito.ArgumentMatchers.argThat(
+                data -> data != null && "leaver-user".equals(data.getId())));
+    }
+
+    private void stubIncrementalBaseline() {
         LdapSyncAudit baseline = LdapSyncAudit.builder()
                 .id("audit-1")
                 .syncType("HERMES_AD_GROUP")
@@ -335,30 +438,5 @@ class LdapSyncServiceTest {
         when(auditRepository.findTopBySyncTypeInAndStatusOrderByStartedAtDesc(anyList(), anyString()))
                 .thenReturn(Optional.of(baseline));
         when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));
-        VirtualGroup usersVg = VirtualGroup.builder().id("vg-users").code("HERMES_DEFAULT_USERS").name("Hermes Default Users").build();
-        when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
-        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
-        when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
-        when(virtualGroupMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(ldapClient.hasGroupChangedSince("Infodir-PowerPlatform-WPBPP-DEV-User", baseline.getSnapshotAt()))
-                .thenReturn(false);
-        Map<String, String> changedUser = new HashMap<>();
-        changedUser.put("employeeID", "45455063");
-        changedUser.put("uid", "45455063");
-        changedUser.put("displayName", "Test User");
-        changedUser.put("memberOf", "CN=Infodir-PowerPlatform-WPBPP-DEV-User,OU=Groups,DC=InfoDir,DC=Prod,DC=HSBC");
-        when(ldapClient.fetchUsersWithFilter(anyString())).thenReturn(List.of(changedUser));
-        when(ldapUserMapper.mapToUser(any())).thenReturn(Optional.of(LdapUserData.builder()
-                .id("45455063")
-                .employeeId("45455063")
-                .username("45455063")
-                .displayName("Test User")
-                .build()));
-        when(ldapUserSyncService.upsertUser(any()))
-            .thenReturn(new LdapUserSyncService.UpsertResult("45455063", false));
-        LdapSyncAudit audit = ldapSyncService.runHermesAdGroupIncrementalSync();
-        assertEquals("SUCCESS", audit.getStatus());
-        assertEquals(1, audit.getUpserted());
-        verify(ldapClient).fetchUsersWithFilter(anyString());
     }
 }

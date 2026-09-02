@@ -3089,4 +3089,18 @@
     bindFunctionUnit 追加关联；结构冲突仍 FU_IMPORT_RT_BOUND_OTHER_FU。
     验证：RelationTableStructureImporter* 8 tests pass；mvn -pl backend/admin-center -am package -DskipTests；E2E 双 FU 导入手测通过。
 
+- id: "1587"
+  status: fixed
+  fixed_at: "2026-09-02"
+  severity: major
+  category: bug
+  summary: "Hermes LDAP incremental skipped users added only to AD group (whenChanged miss)"
+  file: "backend/admin-center/src/main/java/com/admin/ldap/LdapSyncService.java"
+  note: |
+    根因：增量用组/用户 whenChanged 当准入门槛。AD 加组通常不改用户 whenChanged；
+    GC 复制延迟还会把组 whenChanged 水位跨过去，平台已删的 Claudia 类用户永远进不了批次。
+    修复：增量改为目标 AD 组成员期望态对账——每次 fetchUsersInGroup + upsert（LDAP 覆盖画像），
+    虚拟组集合差（补缺、摘离开者）；拉取失败的组不删成员。全量仍先清空再重建。
+    验证：LdapSyncServiceTest + LdapUserSyncServiceTest 19 tests pass。
+
 
