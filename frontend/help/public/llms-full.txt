@@ -73,6 +73,20 @@ Unclaimed pool: Delegate is hidden until someone is assigned.
 
 Failures: Please select user; Please select both business unit and role; cannot delegate to yourself; completed tasks cannot be delegated.
 
+## Form Design — Upload (/help/form-upload)
+
+Upload fields accept several files. Default Max files is 10, 10MB each. Set Max files to 1 for a single file. Saved JSON that still has Multiple off + Limit 1 was a generator default, not designer intent; those fields also accept up to 10 until Max files is set. The properties panel only shows Max files.
+
+Order: open Form Design → select an Upload field → set Max files → save → check Preview or User Portal.
+
+Properties: Max files (default 10; 1 = single file). No Multiple switch and no Maximum number of uploads allowed; Max files is the only cap. Tip: Supported formats: jpg/png/pdf/docx/xlsx. Up to 10 files, 10MB each. At most 3 uploads run at once.
+
+Runtime: drop several files onto the dashed box, or click it and multi-select in the file picker (Ctrl/Shift). Portal and Preview keep the list; sub-table cell shows report.pdf +2; companion filename column joins names with "; ". Send Email FILE attachments include every stored file.
+
+Failures: Maximum {limit} files allowed; zip is skipped from the in-form preview playlist.
+
+Related: /help/email-send#send-task
+
 ## Form events (/help/form-events)
 
 Two places to write scripts: Edit on a selected control, and Form event on the Form tab (button still Edit). Not Table Design Formula.

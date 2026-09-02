@@ -1,5 +1,6 @@
 import type { FormField } from '@/components/formRendererHelpers'
 import { isCannotDownload, uploadPropsBlockDownload } from '@/utils/filePreview'
+import { resolveUploadMaxFiles } from '@platform-shared/upload/uploadFieldValue'
 
 const DEFAULT_UPLOAD_URL = '/api/v1/upload'
 const EMPTY_BLOCKED_KEYS = new Set<string>()
@@ -24,7 +25,10 @@ export function applyUploadPropsFromRule(
     ? action
     : DEFAULT_UPLOAD_URL
   field.uploadAccept = typeof props.accept === 'string' ? props.accept : ''
-  field.uploadLimit = typeof props.limit === 'number' ? props.limit : 1
+  field.uploadLimit = resolveUploadMaxFiles(props)
+  if (typeof props.fileNameTargetField === 'string' && props.fileNameTargetField) {
+    field.fileNameTargetField = props.fileNameTargetField
+  }
   if (uploadRuleBlocksDownload(rule) || (field.key != null && blockedFieldKeys?.has(field.key))) {
     field.cannotDownload = true
   }

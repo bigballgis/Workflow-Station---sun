@@ -66,6 +66,8 @@ export default defineConfig({
         replacement: resolve(__dirname, 'node_modules/@form-create/designer/src/index.js'),
       },
     ],
+    // frontend/shared SFCs import vue-i18n / element-plus icons; pin them to this app's copy.
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue'],
   },
   server: {
     port: 3002,

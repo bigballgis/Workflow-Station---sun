@@ -14,6 +14,7 @@ import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subT
 import { fileExtension, isBlockedPreviewExtension } from '@/utils/filePreviewKinds'
 import { isCannotDownload, uploadPropsBlockDownload } from '@/utils/filePreviewFlags'
 import type { FilePreviewItem } from '@/composables/filePreview/useFilePreview'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
 
 export interface PreviewBindingSlice {
   bindingId: number
@@ -74,11 +75,6 @@ function findBinding(bindings: PreviewBindingSlice[], id?: number): PreviewBindi
   return bindings.find((b) => Number(b.bindingId) === n)
 }
 
-function storedUrl(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  return value.trim()
-}
-
 function pushItem(
   out: FilePreviewItem[],
   seen: Set<string>,
@@ -91,19 +87,23 @@ function pushItem(
   out.push({ url, name, cannotDownload })
 }
 
+function pushUploadValue(
+  value: unknown,
+  cannotDownload: boolean,
+  out: FilePreviewItem[],
+  seen: Set<string>,
+  savedName?: string,
+) {
+  const links = extractFileLinks(value)
+  for (const link of links) {
+    const name = links.length === 1 && savedName ? savedName : link.name
+    pushItem(out, seen, link.url, name, cannotDownload)
+  }
+}
+
 function uploadColumnsOf(binding: PreviewBindingSlice) {
   const cols = binding.dialogColumns?.length ? binding.dialogColumns : (binding.columns || [])
   return cols.filter((col) => isUploadColumn(col))
-}
-
-function fileNameForColumn(
-  row: Record<string, unknown>,
-  col: { field: string; props?: Record<string, unknown> },
-  url: string,
-): string {
-  const target = col.props?.fileNameTargetField
-  const saved = typeof target === 'string' ? row[target] : undefined
-  return previewFileNameFromUrl(url, typeof saved === 'string' ? saved : undefined)
 }
 
 function rowsForBinding(binding: PreviewBindingSlice, formData: Record<string, unknown>): unknown[] {
@@ -125,11 +125,15 @@ function pushUploadFields(
 ) {
   for (const field of fields) {
     if (field.hidden === true || field.type !== 'upload') continue
-    const url = storedUrl(formData[field.key])
     const target = (field as { fileNameTargetField?: string }).fileNameTargetField
     const saved = target ? formData[target] : undefined
-    const name = previewFileNameFromUrl(url, typeof saved === 'string' ? saved : undefined)
-    pushItem(out, seen, url, name, isCannotDownload(field.cannotDownload))
+    pushUploadValue(
+      formData[field.key],
+      isCannotDownload(field.cannotDownload),
+      out,
+      seen,
+      typeof saved === 'string' ? saved : undefined,
+    )
   }
 }
 
@@ -144,8 +148,15 @@ function pushRowUploads(
     if (!raw || typeof raw !== 'object') continue
     const row = raw as Record<string, unknown>
     for (const col of cols) {
-      const url = storedUrl(row[col.field])
-      pushItem(out, seen, url, fileNameForColumn(row, col, url), uploadPropsBlockDownload(col.props))
+      const target = col.props?.fileNameTargetField
+      const saved = typeof target === 'string' ? row[target] : undefined
+      pushUploadValue(
+        row[col.field],
+        uploadPropsBlockDownload(col.props),
+        out,
+        seen,
+        typeof saved === 'string' ? saved : undefined,
+      )
     }
   }
 }

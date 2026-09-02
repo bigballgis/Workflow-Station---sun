@@ -2,84 +2,99 @@ import { ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { isUploadColumn } from '@/components/subTableAddDialogHelpers'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
+import {
+  joinTargetFileNames,
+  resolveUploadMaxFiles,
+  splitUploadFileList,
+  toElUploadFileList,
+} from '@platform-shared/upload/uploadFieldValue'
+import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
 
-/** i18n translate signature (kept loose to match the SFC's useI18n usage). */
 type DialogT = (key: string, named?: Record<string, unknown>) => string
+type UploadListItem = { name: string; url: string; status?: string; response?: unknown }
 
-/**
- * Upload column state for the sub-table add/edit dialog: file-name tags,
- * success/error/clear handlers and URL → filename back-fill.
- *
- * Behaviour is preserved verbatim from the original SFC — including
- * auto-filling the configured fileNameTargetField on success.
- */
 export function useSubTableDialogUpload(
   formData: Ref<Record<string, any>>,
   columns: () => DialogColumn[],
   t: DialogT,
 ) {
-  const uploadNames = ref<Record<string, string>>({})
+  const uploadFileLists = ref<Record<string, UploadListItem[]>>({})
 
-  function extractFilenameFromUrl(url: string): string {
-    if (!url) return ''
-    try {
-      const parsed = new URL(url, window.location.origin)
-      const fromQuery = parsed.searchParams.get('originalName')
-        || parsed.searchParams.get('fileName')
-        || parsed.searchParams.get('filename')
-        || parsed.searchParams.get('name')
-      if (fromQuery) return decodeURIComponent(fromQuery)
-      const pathPart = parsed.pathname.split('/').pop() || url
-      return decodeURIComponent(pathPart)
-    } catch {
-      const [pathPart] = String(url).split('?')
-      return decodeURIComponent(pathPart.split('/').pop() || url)
+  function maxFilesOf(col: DialogColumn): number {
+    return resolveUploadMaxFiles(col.props)
+  }
+
+  function writeLiveList(col: DialogColumn, list: UploadListItem[]) {
+    const { stored, display } = splitUploadFileList(list, maxFilesOf(col))
+    formData.value[col.field] = stored
+    const links = extractFileLinks(stored)
+    uploadFileLists.value = { ...uploadFileLists.value, [col.field]: display }
+    const target = col.props?.fileNameTargetField
+    if (target && columns().some((c) => c.field === target)) {
+      formData.value[target] = joinTargetFileNames(links)
     }
   }
 
-  /** Back-fill upload file names from URL when entering edit mode. */
   function backfillUploadNames() {
+    const next: Record<string, UploadListItem[]> = {}
     for (const col of columns()) {
-      if (isUploadColumn(col, formData.value[col.field]) && formData.value[col.field]) {
-        const url: string = formData.value[col.field]
-        uploadNames.value[col.field] = extractFilenameFromUrl(url)
-      }
+      if (!isUploadColumn(col, formData.value[col.field])) continue
+      next[col.field] = toElUploadFileList(formData.value[col.field])
     }
+    uploadFileLists.value = next
   }
 
   function resetUploadNames() {
-    uploadNames.value = {}
+    uploadFileLists.value = {}
   }
 
-  function handleUploadSuccess(res: any, file: any, col: DialogColumn) {
-    const url: string = res?.data?.url || ''
-    formData.value[col.field] = url
-    uploadNames.value = { ...uploadNames.value, [col.field]: file.name }
-    // Auto-fill filename to the configured target column (if any)
-    const target = col.props?.fileNameTargetField
-    if (target && columns().some(c => c.field === target)) {
-      formData.value[target] = file.name
-    }
+  function handleUploadSuccess(
+    res: unknown,
+    file: { name?: string; url?: string },
+    col: DialogColumn,
+    uploadFiles?: UploadListItem[],
+  ) {
+    const list = uploadFiles ?? [
+      ...toElUploadFileList(formData.value[col.field]),
+      { name: String(file.name || ''), url: String(file.url || ''), status: 'success', response: res },
+    ]
+    writeLiveList(col, list)
+  }
+
+  function handleUploadRemove(col: DialogColumn, uploadFiles?: UploadListItem[]) {
+    writeLiveList(col, uploadFiles ?? [])
+  }
+
+  function handleUploadChange(col: DialogColumn, uploadFiles?: UploadListItem[]) {
+    if (!uploadFiles) return
+    writeLiveList(col, uploadFiles)
   }
 
   function handleUploadError(col: DialogColumn) {
     ElMessage.error(t('subTable.uploadFailed', { field: col.label }))
   }
 
+  function handleUploadExceed(col: DialogColumn) {
+    ElMessage.warning(t('upload.limitExceed', { limit: maxFilesOf(col) }))
+  }
+
   function clearUpload(col: DialogColumn) {
-    formData.value[col.field] = ''
-    const next = { ...uploadNames.value }
-    delete next[col.field]
-    uploadNames.value = next
+    writeLiveList(col, [])
   }
 
   return {
-    uploadNames,
-    extractFilenameFromUrl,
+    uploadFileLists,
+    httpRequest: queuedUploadRequest,
+    maxFilesOf,
+    isMultiple: (col: DialogColumn) => maxFilesOf(col) > 1,
     backfillUploadNames,
     resetUploadNames,
     handleUploadSuccess,
+    handleUploadRemove,
+    handleUploadChange,
     handleUploadError,
+    handleUploadExceed,
     clearUpload,
   }
 }

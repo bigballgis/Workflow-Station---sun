@@ -163,9 +163,15 @@ import {
   extractUploadNameFromResponse,
   extractUploadUrlFromResponse,
   getFilenameFromUrl,
-  syncFormCreateUploadFieldValue,
 } from '@/components/designer/uploadFieldUtils'
 import { ensureEmptyFormOptionsEvents } from '@/utils/formCreateDefaultEvents'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
+import {
+  joinTargetFileNames,
+  resolveUploadMaxFiles,
+  splitUploadFileList,
+} from '@platform-shared/upload/uploadFieldValue'
+import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
 
 /**
  * Collect upload rules from a form-create rule tree (including nested layout children).
@@ -187,7 +193,7 @@ export function collectUploadRulesFromTree(rules: any[]): Array<{ field: string;
 }
 
 /**
- * Wire form-create upload rules so successful uploads persist URL strings on formData.
+ * Wire form-create upload rules so successful uploads persist URL strings or file arrays.
  * form-create requires assigning file.url in onSuccess — otherwise v-model stays empty.
  */
 export function injectPreviewUploadHandlers(
@@ -199,71 +205,68 @@ export function injectPreviewUploadHandlers(
     for (const r of items) {
       if (!r || typeof r !== 'object') continue
       if (r.type === 'upload' && r.field) {
-        r.props = r.props || {}
-        if (!r.props.uploadType) r.props.uploadType = 'file'
-        if (!r.props.action || r.props.action === '/') r.props.action = '/api/v1/upload'
-        const field = String(r.field)
-        const nameTarget = r.props.fileNameTargetField as string | undefined
-
-        r.props.onSuccess = (
-          res: unknown,
-          file?: { url?: string; name?: string; value?: unknown; response?: unknown },
-        ) => {
-          const url = extractUploadUrlFromResponse(res)
-          const displayName = extractUploadNameFromResponse(res, file) || (url ? getFilenameFromUrl(url) : '')
-          if (file && url && displayName) {
-            applyUploadFileDisplayMeta(file, url, displayName)
-          }
-          if (url && uploadSession) {
-            uploadSession.value = {
-              ...uploadSession.value,
-              [field]: { url, name: displayName },
-            }
-          }
-          if (nameTarget && displayName) {
-            formData.value[nameTarget] = displayName
-          }
-        }
-        // fcUpload handleChange runs after onSuccess and may emit a bare URL (UUID display name).
-        // Sync formData once here — not in onSuccess — to avoid double re-render / filename flash.
-        r.props.onChange = (
-          file?: { url?: string; name?: string; value?: unknown; response?: unknown; status?: string },
-          fileList?: Array<{ url?: string; name?: string; value?: unknown; response?: unknown; status?: string }>,
-        ) => {
-          if (file?.status !== 'success') return
-          const src = file
-            || (fileList || []).slice().reverse().find((f) => f.status === 'success')
-          if (!src) return
-          const url = extractUploadUrlFromResponse(src.response) || String(src.url || '').trim()
-          if (!url) return
-          const displayName = extractUploadNameFromResponse(src.response, src) || getFilenameFromUrl(url)
-          applyUploadFileDisplayMeta(src, url, displayName)
-          syncFormCreateUploadFieldValue(formData, field, url, displayName)
-          if (uploadSession) {
-            uploadSession.value = {
-              ...uploadSession.value,
-              [field]: { url, name: displayName },
-            }
-          }
-          if (nameTarget && displayName) {
-            formData.value[nameTarget] = displayName
-          }
-        }
-        r.props.onRemove = () => {
-          formData.value[field] = []
-          if (uploadSession) {
-            const next = { ...uploadSession.value }
-            delete next[field]
-            uploadSession.value = next
-          }
-          if (nameTarget) formData.value[nameTarget] = ''
-        }
+        stampPreviewUploadRule(r, formData, uploadSession)
       }
       const children = getRuleChildren(r)
       if (children.length) walk(children)
     }
   }
   walk(rules)
+}
+
+function stampPreviewUploadRule(
+  r: Record<string, any>,
+  formData: { value: Record<string, unknown> },
+  uploadSession?: { value: Record<string, { url: string; name?: string }> },
+): void {
+  r.props = r.props || {}
+  if (!r.props.uploadType) r.props.uploadType = 'file'
+  if (!r.props.action || r.props.action === '/') r.props.action = '/api/v1/upload'
+  const maxFiles = resolveUploadMaxFiles(r.props)
+  r.props.maxFiles = maxFiles
+  r.props.limit = maxFiles
+  r.props.multiple = maxFiles > 1
+  // Preview-only: shared drop zone (canvas stays native fcUpload so field drag still works).
+  r.type = 'formUploadDrop'
+  r.props.httpRequest = queuedUploadRequest
+  const field = String(r.field)
+  const nameTarget = r.props.fileNameTargetField as string | undefined
+
+  r.props.onSuccess = (
+    res: unknown,
+    file?: { url?: string; name?: string; value?: unknown; response?: unknown },
+  ) => {
+    const url = extractUploadUrlFromResponse(res)
+    const displayName = extractUploadNameFromResponse(res, file) || (url ? getFilenameFromUrl(url) : '')
+    if (file && url && displayName) applyUploadFileDisplayMeta(file, url, displayName)
+  }
+  r.props.onChange = (
+    _file?: { status?: string },
+    fileList?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+  ) => {
+    const { stored, display } = splitUploadFileList(fileList ?? [], maxFiles)
+    formData.value[field] = display
+    const links = extractFileLinks(stored)
+    if (uploadSession && links[0]) {
+      uploadSession.value = { ...uploadSession.value, [field]: { url: links[0].url, name: links[0].name } }
+    }
+    if (nameTarget) formData.value[nameTarget] = joinTargetFileNames(links)
+  }
+  r.props.onRemove = (
+    _file?: unknown,
+    fileList?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+  ) => {
+    const { stored, display } = splitUploadFileList(fileList ?? [], maxFiles)
+    formData.value[field] = display
+    const links = extractFileLinks(stored)
+    if (uploadSession) {
+      const next = { ...uploadSession.value }
+      if (links[0]) next[field] = { url: links[0].url, name: links[0].name }
+      else delete next[field]
+      uploadSession.value = next
+    }
+    if (nameTarget) formData.value[nameTarget] = joinTargetFileNames(links)
+  }
 }
 
 /**

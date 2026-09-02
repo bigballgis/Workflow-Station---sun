@@ -15,6 +15,25 @@ describe('applyUploadPropsFromRule', () => {
     applyUploadPropsFromRule(f, { type: 'upload', props: {} })
     expect(f.uploadUrl).toBe('/api/v1/upload')
     expect(f.cannotDownload).toBeUndefined()
+    expect(f.uploadLimit).toBe(10)
+  })
+
+  it('treats legacy limit:1 + multiple:false as 10 files', () => {
+    const f = field()
+    applyUploadPropsFromRule(f, { type: 'upload', props: { limit: 1, multiple: false } })
+    expect(f.uploadLimit).toBe(10)
+  })
+
+  it('honors explicit maxFiles:1', () => {
+    const f = field()
+    applyUploadPropsFromRule(f, { type: 'upload', props: { maxFiles: 1 } })
+    expect(f.uploadLimit).toBe(1)
+  })
+
+  it('copies fileNameTargetField', () => {
+    const f = field()
+    applyUploadPropsFromRule(f, { type: 'upload', props: { fileNameTargetField: 'file_name' } })
+    expect(f.fileNameTargetField).toBe('file_name')
   })
 
   it('sets cannotDownload from rule-level designer switch (itemConfig.rule field)', () => {

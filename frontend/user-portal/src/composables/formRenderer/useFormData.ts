@@ -311,15 +311,13 @@ export function useFormData(deps: FormDataDeps) {
   // ---------------------------------------------------------------------------
   // Upload handlers
   // ---------------------------------------------------------------------------
-  function handleUploadSuccess(response: any, _file: any, fieldKey: string) {
-    const url = response?.data?.url || ''
-    formData.value[fieldKey] = url
-    deps.emitModelValue({ ...formData.value })
+  function handleUploadSuccess(_response: unknown, _file: unknown, _fieldKey: string) {
+    // Value already applied via FieldRenderer update:modelValue (single URL or file array).
+    if (!deps.readonly()) deps.emitModelValue({ ...formData.value })
   }
 
-  function handleUploadRemove(_file: any, fieldKey: string) {
-    formData.value[fieldKey] = ''
-    deps.emitModelValue({ ...formData.value })
+  function handleUploadRemove(_file: unknown, _fieldKey: string) {
+    if (!deps.readonly()) deps.emitModelValue({ ...formData.value })
   }
 
   // ---------------------------------------------------------------------------

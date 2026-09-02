@@ -157,6 +157,10 @@ export default {
       title: 'Delegate a task',
       summary: 'Hand this one To Do to a person or a BU+Role pair without changing Current Assignee.',
     },
+    formUpload: {
+      title: 'Form Design — Upload',
+      summary: 'Upload fields accept multiple files by default. Set Max files to 1 for a single file.',
+    },
     formEvents: {
       title: 'Form events',
       summary: 'How to write control scripts and Form event: parameters, values, required, lock, show/hide, options, errors, banners, lookup filter, focus, labels, hooks, and user.',
@@ -399,6 +403,27 @@ export default {
     failTitle: 'When it fails',
     failBody:
       'Confirm without a user shows Please select user. Confirm without both Business Unit and Role shows Please select both business unit and role. Delegating to yourself is rejected. A completed task cannot be delegated. An unclaimed pool task has no Delegate button.',
+  },
+  formUploadGuide: {
+    pageTitle: 'Form Design — Upload',
+    crumb: 'Developer Workstation · Function Units · Form Design',
+    intro:
+      'An Upload field on the form can take several files. Default is 10 files, 10MB each. Set Max files to 1 if the field must stay a single file. Saved JSON that still has Multiple off and Limit 1 was a generator default, not a designer choice — those fields also accept up to 10 until you set Max files. The properties panel only shows Max files.',
+    flowTitle: 'Order of work',
+    flow1: 'Open Form Design and select an Upload field',
+    flow2: 'Set Max files (default 10; 1 means a single file)',
+    flow3: 'Save the form, then check Preview or User Portal',
+    maxTitle: 'Max files',
+    maxBody:
+      'On the Upload field properties, Max files is the cap. Default 10. Set 1 for a single file. Each file can be up to 10MB. At most 3 uploads run at once. The properties panel does not show Multiple or Maximum number of uploads allowed; Max files is the only cap. The field tip reads: Supported formats: jpg/png/pdf/docx/xlsx. Up to 10 files, 10MB each.',
+    maxSample: 'the Max files number on the Upload properties panel',
+    runtimeTitle: 'What people see at runtime',
+    runtimeBody:
+      'Drop several files onto the dashed box, or click it and select several files in one go (Ctrl or Shift click in the file picker). User Portal and Form Preview keep the whole list. A sub-table list cell shows the first file name and +N for the rest, for example report.pdf +2. If a companion filename column is configured on the Upload field, the original names are written there, joined with a semicolon and space. Send Email attachments from a FILE field include every stored file.',
+    runtimeSample: 'report.pdf +2 on a sub-table cell',
+    failTitle: 'When it fails',
+    failBody:
+      'Choosing more files than Max files shows Maximum {limit} files allowed. Zip files are not added to the in-form preview playlist. Each file still posts one at a time; a failed file does not remove the ones that already succeeded.',
   },
   ...formEventMessages,
 }

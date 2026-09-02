@@ -190,29 +190,22 @@
           v-else-if="col.type === 'upload'"
           style="display: flex; flex-direction: column; gap: 4px;"
         >
-          <el-upload
+          <FormUploadDropZone
+            compact
             :action="col.props?.action && col.props.action !== '/' ? col.props.action : '/api/v1/upload'"
             :accept="col.props?.accept || ''"
-            :show-file-list="false"
-            :on-success="(res: any, file: any) => handleUploadSuccess(res, file, col)"
-            :on-error="() => handleUploadError(col)"
-          >
-            <el-button
-              size="small"
-              type="primary"
-            >
-              <el-icon><Upload /></el-icon> Upload
-            </el-button>
-          </el-upload>
-          <el-tag
-            v-if="uploadNames[col.field]"
-            size="small"
-            type="success"
-            closable
-            @close="clearUpload(col)"
-          >
-            {{ uploadNames[col.field] }}
-          </el-tag>
+            :limit="maxFilesOf(col)"
+            :multiple="maxFilesOf(col) > 1"
+            :file-list="uploadFileLists[col.field] || []"
+            :http-request="httpRequest"
+            :drag-text="t('form.uploadDragText')"
+            :click-text="t('form.uploadClickText')"
+            :handle-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
+            :handle-change="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadChange(col, list)"
+            :handle-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
+            :handle-exceed="() => handleUploadExceed(col)"
+            :handle-error="() => handleUploadError(col)"
+          />
         </div>
 
         <!-- tree (el-tree with checkbox, uses id/label node format) -->
@@ -365,7 +358,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
+import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { buildInitialRow, buildRules, isColReadonly as designerColReadonly, mergeFormRowWithSeed } from './subTableAddDialogHelpers'
@@ -373,7 +366,15 @@ import type { DialogColumn } from './subTableAddDialogHelpers'
 import { overlayEventRequiredOnFormRules } from '@/utils/formCreateEventRuntime'
 import { isTableAuditField } from '@/utils/tableAuditFields'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
-import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
+import { normalizeUploadFieldsInRow } from './uploadFieldUtils'
+import { extractFileLinks } from '@platform-shared/list/fileNames'
+import {
+  joinTargetFileNames,
+  resolveUploadMaxFiles,
+  splitUploadFileList,
+  toElUploadFileList,
+} from '@platform-shared/upload/uploadFieldValue'
+import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
 import { useSubTableDialogComponentEvents } from '@/composables/designerSubTableField/useSubTableDialogComponentEvents'
 
 const { t } = useI18n()
@@ -411,11 +412,29 @@ const {
   formData,
   () => props.columns,
 )
+const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; status?: string }>>>({})
+const httpRequest = queuedUploadRequest
+
+function maxFilesOf(col: DialogColumn): number {
+  return resolveUploadMaxFiles(col.props)
+}
+
+function writeUploadColumn(
+  col: DialogColumn,
+  list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+) {
+  const { stored, display } = splitUploadFileList(list, maxFilesOf(col))
+  formData.value[col.field] = stored
+  uploadFileLists.value = { ...uploadFileLists.value, [col.field]: display }
+  const target = col.props?.fileNameTargetField
+  if (target && props.columns.some((c) => c.field === target)) {
+    formData.value[target] = joinTargetFileNames(extractFileLinks(stored))
+  }
+}
 
 function isColReadonly(col: DialogColumn): boolean {
   return isDialogFieldDisabled(col.field, designerColReadonly(col) || isTableAuditField(col.field))
 }
-const uploadNames = ref<Record<string, string>>({})
 
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
 const signingField = ref<string | null>(null)
@@ -484,17 +503,16 @@ watch(
   () => props.visible,
   (open) => {
     if (!open) return
-    uploadNames.value = {}
+    uploadFileLists.value = {}
     resetDialogEventVisibility()
     const seed = props.initialData ? JSON.parse(JSON.stringify(props.initialData)) : {}
     formData.value = { ...buildInitialRow(props.columns), ...seed }
     if (props.mode === 'edit' && props.initialData) {
+      const next: Record<string, Array<{ name: string; url: string; status?: string }>> = {}
       for (const col of props.columns) {
-        if (col.type === 'upload' && formData.value[col.field]) {
-          const url: string = formData.value[col.field]
-          uploadNames.value[col.field] = getFilenameFromUrl(url)
-        }
+        if (col.type === 'upload') next[col.field] = toElUploadFileList(formData.value[col.field])
       }
+      uploadFileLists.value = next
     }
   },
   { immediate: false },
@@ -502,7 +520,7 @@ watch(
 
 function onShellClosed() {
   formRef.value?.resetFields()
-  uploadNames.value = {}
+  uploadFileLists.value = {}
   formData.value = buildInitialRow(props.columns)
 }
 
@@ -522,25 +540,37 @@ async function handleSave() {
   visibleModel.value = false
 }
 
-function handleUploadSuccess(res: any, file: any, col: DialogColumn) {
-  const url = extractUploadUrlFromResponse(res)
-  formData.value[col.field] = url
-  uploadNames.value = { ...uploadNames.value, [col.field]: file.name }
-  const target = col.props?.fileNameTargetField
-  if (target && props.columns.some(c => c.field === target)) {
-    formData.value[target] = file.name
-  }
+function handleUploadSuccess(
+  _res: unknown,
+  _file: { name?: string; url?: string },
+  col: DialogColumn,
+  list?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+) {
+  if (!list) return
+  writeUploadColumn(col, list)
+}
+
+function handleUploadChange(
+  col: DialogColumn,
+  list?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+) {
+  if (!list) return
+  writeUploadColumn(col, list)
+}
+
+function handleUploadRemove(
+  col: DialogColumn,
+  list?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+) {
+  writeUploadColumn(col, list ?? [])
+}
+
+function handleUploadExceed(col: DialogColumn) {
+  ElMessage.warning(t('form.uploadLimitExceed', { limit: maxFilesOf(col) }))
 }
 
 function handleUploadError(col: DialogColumn) {
-  ElMessage.error(`File upload failed for field "${col.label}"`)
-}
-
-function clearUpload(col: DialogColumn) {
-  formData.value[col.field] = ''
-  const next = { ...uploadNames.value }
-  delete next[col.field]
-  uploadNames.value = next
+  ElMessage.error(t('form.uploadFailedForField', { field: col.label }))
 }
 </script>
 

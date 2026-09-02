@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FieldDefinition, FormDefinition, TableBinding } from '@/api/functionUnit'
 import type { FormPreviewItem, RecordNotePreviewConfig } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren, isCardRule, getLayoutLabel, snapshotRulesForPreview, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
+import { getRuleChildren, isCardRule, getLayoutLabel, snapshotRulesForPreview, walkFormCreateRules, withSubTableBindingIdInProps, injectPreviewUploadHandlers } from '@/utils/formDesigner'
 import {
   applyPreviewDefaultsToItemRules,
   attachPreviewMountedDefaultSync,
@@ -47,6 +47,17 @@ function hasAssignmentContainer(rules: unknown[]): boolean {
     if (rule.type === 'miAssignment') found = true
   })
   return found
+}
+
+function injectPreviewUploadHandlersOnItems(
+  items: FormPreviewItem[],
+  formData: Ref<Record<string, unknown>>,
+): void {
+  for (const item of items) {
+    if (item.kind === 'fields') injectPreviewUploadHandlers(item.rule, formData)
+    else if (item.kind === 'card') injectPreviewUploadHandlersOnItems(item.items, formData)
+    else if (item.kind === 'inlineSubForm') injectPreviewUploadHandlers(item.binding.rule || [], formData)
+  }
 }
 
 interface UseFormPreviewBuildOptions {
@@ -556,8 +567,10 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     materializePreviewItemsEvents(previewItems.value, previewData)
     // Guard: the base form-create preview instance can't run designer `$FNX:` handler strings.
     // Any non-function left on rule.on/rule.hook would throw "w is not a function" every render
-    // tick and freeze the preview. Runs last so real handlers installed above are kept.
+    // tick and freeze the preview. Strip those first; then stamp upload httpRequest/onChange
+    // (functions) onto the cloned preview rules only.
     sanitizePreviewItemsHandlers(previewItems.value)
+    injectPreviewUploadHandlersOnItems(previewItems.value, previewData)
     const previewOpt = mergePreviewValidateFormOption(
       {
         ...getPreviewOption(),

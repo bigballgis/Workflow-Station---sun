@@ -432,41 +432,37 @@
 
     <!-- upload (Task 6.8) -->
     <template v-else-if="field.type === 'upload'">
-      <el-upload
+      <FormUploadDropZone
         v-if="!readonly"
         :action="resolvedUploadUrl"
         :accept="field.uploadAccept || ''"
-        :limit="field.uploadLimit || 1"
-        :multiple="false"
+        :limit="uploadLimit"
+        :multiple="uploadMultiple"
         :disabled="isDisabled"
         :file-list="fileList"
-        :on-success="onUploadSuccess"
-        :on-remove="onUploadRemove"
-        :on-preview="previewCurrentFile"
-        list-type="text"
+        :http-request="httpRequest"
+        :drag-text="t('upload.dragText')"
+        :click-text="t('upload.clickText')"
+        :tip="field.uploadAccept || '.jpg/.png/.pdf/.docx/.xlsx'"
+        :handle-success="onUploadSuccess"
+        :handle-change="onUploadChange"
+        :handle-remove="onUploadRemove"
+        :handle-exceed="onUploadExceed"
+        :handle-preview="previewCurrentFile"
+      />
+      <div
+        v-else
+        class="upload-readonly-list"
       >
-        <el-button
-          type="primary"
-          :disabled="disabled"
-        >
-          <el-icon><Upload /></el-icon>
-          {{ t('upload.selectFile') }}
-        </el-button>
-        <template #tip>
-          <div class="el-upload__tip">
-            {{ field.uploadAccept || '.jpg/.png/.pdf/.docx/.xlsx' }}
-          </div>
-        </template>
-      </el-upload>
-      <div v-else>
         <span
-          v-if="modelValue"
+          v-for="item in fileList"
+          :key="item.url"
           class="file-preview-link"
-          @click="previewCurrentFile()"
+          @click="previewCurrentFile(item)"
         >
-          {{ fileList[0]?.name || modelValue }}
+          {{ item.name }}
         </span>
-        <span v-else>-</span>
+        <span v-if="!fileList.length">-</span>
       </div>
     </template>
 
@@ -648,8 +644,8 @@
 // ---------------------------------------------------------------------------
 import { computed, inject, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
+import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
 import '@wangeditor/editor/dist/css/style.css'
 import type { FormField } from './formRendererHelpers'
 import LookupField from './lookup/LookupField.vue'
@@ -787,9 +783,14 @@ function handleLookupClear() {
 // Upload URL + file list — registers the modelValue watch second.
 const {
   resolvedUploadUrl,
+  uploadLimit,
+  uploadMultiple,
   fileList,
+  httpRequest,
   onUploadSuccess,
+  onUploadChange,
   onUploadRemove,
+  onUploadExceed,
   previewCurrentFile,
 } = useFieldUpload(props, emit)
 
@@ -910,6 +911,12 @@ onMounted(() => {
   color: #165DFF;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.upload-readonly-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .file-preview-link:hover {

@@ -58,7 +58,7 @@
           <!-- upload / file (first: avoid falling through to plain text for stored URLs) -->
           <template v-if="isUploadColumn(col, scope.row[col.field])">
             <span
-              v-if="resolveRowUploadUrl(scope.row, col)"
+              v-if="uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field])"
               class="file-download-link"
               :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
               @click.stop="downloadFile(resolveRowUploadUrl(scope.row, col)!, uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
@@ -72,7 +72,7 @@
               <el-icon v-else>
                 <Document />
               </el-icon>
-              {{ getFilenameFromUrl(resolveRowUploadUrl(scope.row, col) || '', uploadNames[scope.$index + '_' + col.field]) }}
+              {{ uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
             </span>
             <span
               v-else
@@ -299,7 +299,7 @@ import { Plus, Loading, Document, Download, Upload } from '@element-plus/icons-v
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
-import { getFilenameFromUrl, isUploadColumn } from './uploadFieldUtils'
+import { isUploadColumn } from './uploadFieldUtils'
 import { PREVIEW_SUBTABLE_DIALOG_KEY, PREVIEW_MY_REQUESTS_ACTIVE_KEY } from './previewSubTableDialog'
 import dayjs from 'dayjs'
 import type { SubTableConfig, ColumnConfig } from '@/composables/designerSubTableField/types'
@@ -726,6 +726,7 @@ const {
   resolveRowUploadUrl,
   rememberUploadNamesForRow,
   downloadFile,
+  uploadCellLabel,
 } = useSubTableUploadCells({ displayColumns, uploadNames, t })
 
 // linkForm 关联表单弹层

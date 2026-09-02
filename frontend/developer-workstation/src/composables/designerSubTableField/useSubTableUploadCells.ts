@@ -8,6 +8,7 @@ import {
   resolveFileFetchUrl,
   resolveUploadCellUrl,
 } from '@/components/designer/uploadFieldUtils'
+import { formatUploadCellText } from '@platform-shared/upload/uploadFieldValue'
 import type { ColumnConfig } from './types'
 
 interface UseSubTableUploadCellsOptions {
@@ -92,11 +93,18 @@ export function useSubTableUploadCells(options: UseSubTableUploadCellsOptions) {
     }
   }
 
+  function uploadCellLabel(value: unknown, savedName?: string): string {
+    const formatted = formatUploadCellText(value)
+    if (formatted.count === 1 && savedName) return savedName
+    return formatted.text
+  }
+
   return {
     downloadingKeys,
     sanitizeHtml,
     resolveRowUploadUrl,
     rememberUploadNamesForRow,
     downloadFile,
+    uploadCellLabel,
   }
 }

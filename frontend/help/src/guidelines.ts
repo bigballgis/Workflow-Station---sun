@@ -69,6 +69,13 @@ export const GUIDELINES: Guideline[] = [
     load: () => import('@/views/TaskDelegateGuide.vue'),
   },
   {
+    id: 'form-upload',
+    path: '/form-upload',
+    titleKey: 'guides.formUpload.title',
+    summaryKey: 'guides.formUpload.summary',
+    load: () => import('@/views/FormUploadGuide.vue'),
+  },
+  {
     id: 'form-events',
     path: '/form-events',
     titleKey: 'guides.formEvents.title',
@@ -107,6 +114,7 @@ const FORM_DESIGN_NAV: NavGroup = {
   id: 'dw-form-design',
   titleKey: 'nav.formDesign',
   children: [
+    { kind: 'leaf', id: 'dw-form-upload', titleKey: 'guides.formUpload.title', to: '/form-upload' },
     {
       kind: 'group',
       id: 'dw-form-controls',

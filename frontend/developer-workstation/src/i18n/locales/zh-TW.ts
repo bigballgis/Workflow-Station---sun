@@ -750,8 +750,11 @@ export default {
     datePicker: '日期選擇器',
     dateTimePicker: '日期時間選擇器',
     fileUpload: '檔案上傳',
-    fileUploadTip: '支援格式：jpg/png/pdf/docx/xlsx，最大 10MB',
+    fileUploadTip: '支援格式：jpg/png/pdf/docx/xlsx。最多 10 個檔案，每個 10MB。',
     clickToUpload: '上傳',
+    uploadDragText: '將檔案拖到此處，或',
+    uploadClickText: '點擊選擇',
+    uploadFailedForField: '欄位「{field}」檔案上傳失敗',
     yes: '是',
     no: '否',
     // Binding types
@@ -841,6 +844,10 @@ export default {
     componentDefaultValuePlaceholder: '從選項中選擇預設值',
     // 子表逐操作權限（右側屬性面板）：獨立控制 新增 / 編輯 / 刪除
     uploadCannotDownload: '禁止下載',
+    uploadMaxFiles: '最多檔案數',
+    uploadMaxFilesHint: '預設 10。設為 1 即單檔。每個檔案最大 10MB。同時最多 3 個上傳請求。',
+    uploadGuideLinkAria: '開啟上傳欄位說明',
+    uploadLimitExceed: '最多允許 {limit} 個檔案',
     subTablePermission: {
       allowAdd: '允許新增',
       allowEdit: '允許編輯',

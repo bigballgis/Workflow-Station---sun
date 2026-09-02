@@ -68,12 +68,12 @@
             </template>
             <template v-else-if="isUploadColumn(col, scope.row[col.field])">
               <span
-                v-if="scope.row[col.field]"
+                v-if="uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field])"
                 class="file-download-link"
                 @click="previewStoredFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], col)"
               >
                 <el-icon><Document /></el-icon>
-                {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
+                {{ uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
               </span>
               <span
                 v-else
@@ -580,7 +580,7 @@ import { useSubTableRowKeys } from '@/composables/subTableField/useSubTableRowKe
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
 import { useSubTableLinkFormDialog } from '@/composables/subTableField/useSubTableLinkFormDialog'
 import { useSubTableLinkFormOpen } from '@/composables/subTableField/useSubTableLinkFormOpen'
-import { getFilenameFromUrl, useSubTableFileDownload } from '@/composables/subTableField/useSubTableFileDownload'
+import { useSubTableFileDownload } from '@/composables/subTableField/useSubTableFileDownload'
 import { formatAssigneeDisplayLabel, useSubTableAssignment } from '@/composables/subTableField/useSubTableAssignment'
 import { useSubTableAssigneeHydration } from '@/composables/subTableField/useSubTableAssigneeHydration'
 import { useSubTablePollingSync } from '@/composables/subTableField/useSubTablePollingSync'
@@ -948,7 +948,7 @@ const {
 
 const { handleLinkFormClick } = useSubTableLinkFormOpen(props, linkFormDialog, linkFormScope)
 
-const { uploadNames, previewStoredFile } = useSubTableFileDownload(t)
+const { uploadNames, previewStoredFile, uploadCellLabel } = useSubTableFileDownload(t)
 
 const assignment = useSubTableAssignment(props, rows, emit, t, rowKeys)
 const {
