@@ -125,26 +125,52 @@ function mapReadonlyOnNode(rule: Record<string, unknown>): Record<string, unknow
   }
 }
 
+/**
+ * Containers whose Readonly toggle must cascade onto the fields they own.
+ *
+ * `miAssignment` declares `input: false` and renders no control of its own, so marking
+ * only the container `disabled` changed nothing on screen — its assignee / BU / role
+ * pickers stayed editable. The block owns those fields (they move with it), so the
+ * author setting Readonly on the block means "this row's assignment is fixed".
+ *
+ * Deliberately NOT every container: for a card or a row the designer's Readonly toggle
+ * has never implied its contents, and making it do so would silently freeze existing
+ * forms. Ordinary fields keep their own per-field toggle either way.
+ */
+const READONLY_CASCADING_CONTAINER_TYPES = new Set(['miAssignment'])
+
 export function mapFormCreateRulesReadonlyDeep(rules: unknown[]): unknown[] {
   if (!Array.isArray(rules)) return []
   const visited = new WeakSet<object>()
 
-  function mapItem(rule: unknown): unknown {
+  function mapItem(rule: unknown, inheritedReadonly = false): unknown {
     if (!rule || typeof rule !== 'object') return rule
     if (visited.has(rule)) return rule
     visited.add(rule)
 
     const r = rule as Record<string, unknown>
+    // A child that explicitly turned Readonly OFF still wins — same precedence the
+    // per-node mapping already gives that flag.
+    const effective = inheritedReadonly && !isFormCreateRuleExplicitlyEditable(r)
+    const cascade = effective
+      || (READONLY_CASCADING_CONTAINER_TYPES.has(String(r.type)) && isFormCreateRuleReadonly(r))
+
     const children = getRuleChildren(r)
-    const mappedChildren = children.length ? children.map(mapItem) : []
+    const mappedChildren = children.length ? children.map(child => mapItem(child, cascade)) : []
     const childrenChanged = children.length > 0 && mappedChildren.some((c, i) => c !== children[i])
     const withChildren = childrenChanged
       ? replaceRuleChildren(r, mappedChildren)
       : r
-    return mapReadonlyOnNode(withChildren)
+    return mapReadonlyOnNode(effective ? markRuleReadonly(withChildren) : withChildren)
   }
 
-  return rules.map(mapItem)
+  return rules.map(rule => mapItem(rule))
+}
+
+/** Stamp inherited readonly so the per-node mapping below turns it into `disabled`. */
+function markRuleReadonly(rule: Record<string, unknown>): Record<string, unknown> {
+  const props = (rule.props as Record<string, unknown> | undefined) || {}
+  return { ...rule, readonly: true, props: { ...props, readonly: true } }
 }
 
 /** Remove designer `disabled`; migrate legacy disabled → props.readonly before persist/load. */

@@ -48,3 +48,19 @@ export type FormPreviewItem =
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
   | { kind: 'lookup'; field: string; rule: Record<string, unknown>; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; selectedDisplayField?: string; filterConditions?: any[]; derivedFrom?: import('@/utils/lookupCascade').LookupDerivedFrom; multiple?: boolean; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number; readonly?: boolean }
   | { kind: 'card'; title: string; items: FormPreviewItem[]; modelKey: string }
+  /**
+   * Record Note panel: display-only, no data field. Split out of `fields` segments so Preview
+   * renders the portal-shaped panel (RecordNotePreview) instead of form-create resolving the
+   * type to the designer canvas placeholder.
+   */
+  | { kind: 'recordNote'; config: RecordNotePreviewConfig; modelKey: string }
+
+export interface RecordNotePreviewConfig {
+  scope?: string
+  panelTitle?: string
+  allowAttachment?: boolean
+  maxFileSizeMb?: number
+  pageSize?: number
+  /** Designer Readonly switch — seals the panel on a To Do form. Opt-in; absent means writable. */
+  readonly?: boolean
+}

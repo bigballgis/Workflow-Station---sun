@@ -116,7 +116,7 @@ class RecordNoteAuditTest {
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT)
                         .bodyText("Hello reviewer").build());
 
-        component.createComment("u1", tableTarget(), null, "<p>Hello reviewer</p>", List.of(), List.of(), null);
+        component.createComment("u1", tableTarget(), null, "<p>Hello reviewer</p>", List.of(), List.of(), null, null);
 
         verify(changeHistoryComponent).recordNoteChange(
                 eq(INSTANCE_ID), eq("u1"), eq(ChangeType.RECORD_NOTE_ADD),
@@ -136,7 +136,7 @@ class RecordNoteAuditTest {
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_ATTACHMENT)
                         .fileName("report.pdf").build());
 
-        component.createComment("u1", rowTarget(), null, null, List.of(file), List.of(), INSTANCE_ID);
+        component.createComment("u1", rowTarget(), null, null, List.of(file), List.of(), INSTANCE_ID, null);
 
         verify(changeHistoryComponent).recordNoteChange(
                 eq(INSTANCE_ID), eq("u1"), eq(ChangeType.RECORD_NOTE_ADD),
@@ -155,7 +155,7 @@ class RecordNoteAuditTest {
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
 
         assertThatThrownBy(() ->
-                component.createComment("u1", rowTarget(), null, "<p>hi</p>", List.of(), List.of(), INSTANCE_ID))
+                component.createComment("u1", rowTarget(), null, "<p>hi</p>", List.of(), List.of(), INSTANCE_ID, null))
                 .isInstanceOf(RecordNoteService.RecordNoteException.class)
                 .hasMessageContaining("not a participant");
 
@@ -267,7 +267,7 @@ class RecordNoteAuditTest {
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT).bodyText("hi").build());
 
-        component.createComment("u1", draft, null, "<p>hi</p>", List.of(), List.of(), null);
+        component.createComment("u1", draft, null, "<p>hi</p>", List.of(), List.of(), null, null);
 
         verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
     }
@@ -323,7 +323,7 @@ class RecordNoteAuditTest {
                 .thenReturn(NoteItem.builder().id("n2").noteType(RecordNote.TYPE_ATTACHMENT)
                         .fileName("shot.png").build());
 
-        component.createInlineImage("u1", tableTarget(), img, INSTANCE_ID);
+        component.createInlineImage("u1", tableTarget(), img, INSTANCE_ID, null);
 
         verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
     }

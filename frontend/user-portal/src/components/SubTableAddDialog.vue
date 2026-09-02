@@ -640,6 +640,8 @@
         :record-id="editingRowStableId"
         :process-instance-id="recordNoteInstanceId ?? null"
         :function-unit-id="recordNoteFunctionUnitId ?? null"
+        :task-id="hostTaskId ?? null"
+        :readonly="hostTaskId != null && rn._recordNote?.readonly === true"
       />
     </div>
 
@@ -1014,6 +1016,8 @@ const lockedMode = computed(() =>
   lockedAssignMode(effectiveAssignmentConfig.value))
 /** BPMN configured only one mode — the other card renders but is not selectable. */
 function isModeCardDisabled(value: AssignmentMode): boolean {
+  // Readonly block → neither card is selectable (see assignmentBlockReadonly).
+  if (assignmentBlockReadonly.value) return true
   return !assignModeSwitchable.value && lockedMode.value !== value
 }
 /**
@@ -1144,6 +1148,20 @@ const dialogLayoutGroups = computed(() => {
     items: groupAssignmentFieldsUnderMarker(group.items, assignmentOwnedFields.value),
   }))
   return groups
+})
+
+/**
+ * The designer set Readonly on the Assignment Mode block: its pickers already render
+ * disabled (dialogFormLayout stamps them), so the mode cards must stop switching too —
+ * otherwise the user could still move the row between an assignee and a role pool.
+ * Read back off the stamped columns so there is one source of truth for the flag.
+ */
+const assignmentBlockReadonly = computed(() => {
+  const owned = dialogLayoutGroups.value
+    .flatMap(group => group.items)
+    .filter(item => item.type === 'column' && !!item.assignmentSlot)
+  return owned.length > 0
+    && owned.every(item => item.type === 'column' && item.column.readonly === true)
 })
 
 // ─── Form core (state / rules / formulas / validation / open / save) ───────────

@@ -12,6 +12,13 @@ export interface RecordNoteTargetParams {
    * rather than trusting it. Omitting it on a row target yields 403.
    */
   processInstanceId?: string | null
+  /**
+   * The To Do task this panel is rendered on, when it is one. Notes on a task form are comments
+   * by whoever works the task, so holding the task authorizes the write and no audit grant is
+   * needed. The server verifies the claim — the task must be live, must belong to this very
+   * instance, and must be one the caller may process — so sending it grants nothing on its own.
+   */
+  taskId?: string | null
 }
 
 export interface RecordNoteAttachment {
@@ -78,6 +85,7 @@ function targetQuery(target: RecordNoteTargetParams): Record<string, unknown> {
       ? { functionUnitId: target.functionUnitId }
       : {}),
     ...(target.processInstanceId ? { processInstanceId: target.processInstanceId } : {}),
+    ...(target.taskId ? { taskId: target.taskId } : {}),
   }
 }
 
@@ -94,8 +102,9 @@ export async function listRecordNotes(
 
 /**
  * Whether this user may add a note here. Reading and writing follow different rules — anyone who
- * can open the request reads its notes, but writing needs participation or an audit grant on the
- * active role — so the panel asks first instead of letting a composed note fail with a 403.
+ * can open the request reads its notes, but writing needs either an audit grant on the active role
+ * (request form) or the task itself (To Do form, via `taskId`) — so the panel asks first instead of
+ * letting a composed note fail with a 403.
  */
 export async function canAddRecordNote(target: RecordNoteTargetParams): Promise<boolean> {
   const res = (await service.get('/record-notes/can-add', {

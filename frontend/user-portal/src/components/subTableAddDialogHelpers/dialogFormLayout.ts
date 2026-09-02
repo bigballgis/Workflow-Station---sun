@@ -19,6 +19,24 @@ export type DialogLayoutGroup = {
   items: DialogLayoutItem[]
 }
 
+/**
+ * The designer's Readonly toggle on the Assignment Mode block fixes this row's
+ * assignment, so it must reach the pickers the block owns — the block itself renders no
+ * control, so marking only the marker changed nothing on screen.
+ *
+ * `isColDisabled` already reads `column.readonly`, so stamping it here is all the
+ * dialog needs; a column that is readonly for its own reasons is left as it is.
+ */
+function applyAssignmentReadonly(
+  items: DialogLayoutItem[],
+  readonly: boolean,
+): DialogLayoutItem[] {
+  if (!readonly) return items
+  return items.map(item => item.type === 'column'
+    ? { ...item, column: { ...item.column, readonly: true } }
+    : item)
+}
+
 function collectLayoutItems(
   fields: FormField[],
   colByField: Map<string, DialogColumn>,
@@ -57,7 +75,10 @@ function collectLayoutItems(
       // The container owns its fields as children — emit them immediately after
       // the marker so they render inside the block. groupAssignmentFieldsUnderMarker
       // then only has to tag them; it finds them already adjacent.
-      items.push(...collectLayoutItems(ch.children || [], colByField, used))
+      items.push(...applyAssignmentReadonly(
+        collectLayoutItems(ch.children || [], colByField, used),
+        ch.readonly === true,
+      ))
       continue
     }
     if (ch.key && colByField.has(ch.key) && !used.has(ch.key)) {
@@ -190,7 +211,10 @@ export function buildDialogLayoutGroups(
           title: null,
           items: [
             { type: 'miAssignment', key: f.key },
-            ...collectLayoutItems(f.children || [], colByField, used),
+            ...applyAssignmentReadonly(
+              collectLayoutItems(f.children || [], colByField, used),
+              f.readonly === true,
+            ),
           ],
         })
       }

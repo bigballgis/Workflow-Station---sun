@@ -14,8 +14,7 @@ import {
   linkFormRowsLackFormPayload,
   maxFormFieldOverlapScore,
   peerSubTableDataByFormFieldOverlap,
-  resolveLinkFormFieldValueForModal,
-  rowValueForLinkedFormField
+  seedLinkedFormDataFromFields
 } from './subTableLinkFormFields'
 
 /** Link Form detail modal: dialog state, binding resolution and save/close flow. */
@@ -190,17 +189,9 @@ export function useSubTableLinkFormDialog(
     const next: Record<string, any> = {}
     const modalOpts = { readonly: opts?.readonly ?? !props.editable }
     if (binding?.formFields?.length) {
-      binding.formFields.forEach(field => {
-        if (field.type === 'card') {
-          field.children?.forEach(child => {
-            const v = rowValueForLinkedFormField(raw, child.key)
-            next[child.key] = resolveLinkFormFieldValueForModal(child, v, modalOpts)
-          })
-        } else {
-          const v = rowValueForLinkedFormField(raw, field.key)
-          next[field.key] = resolveLinkFormFieldValueForModal(field, v, modalOpts)
-        }
-      })
+      // Descends through layout containers so a block's nested fields are seeded too
+      // (an Assignment Mode block owns its pickers as children) — see the helper.
+      Object.assign(next, seedLinkedFormDataFromFields(binding.formFields, raw, modalOpts))
       // Keep the nested-child slice: PortalFormFields resolves nested sub-table rows from
       // this model and writes edits back to it (grandchild persistence via saveLinkedFormData).
       if (raw.__subTables__ && typeof raw.__subTables__ === 'object') {

@@ -53,21 +53,46 @@ function getLayoutRuleChildren(item: Record<string, unknown>): unknown[] {
   return (sources.find(Array.isArray) as unknown[] | undefined) ?? []
 }
 
+/** Designer Readonly toggle, as stored on a rule (`props.readonly` / legacy `disabled`). */
+function isLayoutRuleReadonly(item: Record<string, unknown>): boolean {
+  const props = (item.props ?? {}) as Record<string, unknown>
+  return props.readonly === true || props.disabled === true
+    || item.readonly === true || item.disabled === true
+}
+
+/** Stamp an inherited Readonly onto a child rule, unless it explicitly opted out. */
+function inheritReadonly(item: unknown): unknown {
+  const r = item as Record<string, unknown> | null
+  if (!r || typeof r !== 'object') return item
+  const props = (r.props ?? {}) as Record<string, unknown>
+  if (props.readonly === false || r.readonly === false) return item
+  return { ...r, props: { ...props, readonly: true } }
+}
+
 /**
  * Expand layout containers (Card/Row/Col/…) into their children so field rules nested
  * inside them still participate in column derivation. Field-bearing rules and
  * placeholders (`subTable`, `linkForm`) pass through untouched, in document order.
+ *
+ * Flattening DROPS the container rule itself, which silently discarded the Readonly the
+ * designer set on an Assignment Mode block — the block renders no control of its own, so
+ * the flag only means anything once it reaches the assignee / BU / role pickers it owns.
+ * Those children therefore inherit it here. Only `miAssignment` cascades: for a card or a
+ * row, Readonly has never implied its contents, and making it do so would silently freeze
+ * existing forms.
  */
 export function flattenSubFormRuleLayoutContainers(rules: unknown[] | undefined | null): unknown[] {
   if (!Array.isArray(rules)) return []
   const out: unknown[] = []
-  const walk = (items: unknown[]) => {
+  const walk = (items: unknown[], inheritedReadonly = false) => {
     for (const item of items) {
       const r = item as Record<string, unknown> | null
       if (r && typeof r === 'object' && !r.field && LAYOUT_CONTAINER_TYPES.has(String(r.type))) {
-        walk(getLayoutRuleChildren(r))
+        const cascade = inheritedReadonly
+          || (String(r.type) === 'miAssignment' && isLayoutRuleReadonly(r))
+        walk(getLayoutRuleChildren(r), cascade)
       } else {
-        out.push(item)
+        out.push(inheritedReadonly ? inheritReadonly(item) : item)
       }
     }
   }

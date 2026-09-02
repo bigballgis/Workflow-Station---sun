@@ -2,7 +2,7 @@ import { computed, nextTick, reactive, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FieldDefinition, FormDefinition, TableBinding } from '@/api/functionUnit'
-import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
+import type { FormPreviewItem, RecordNotePreviewConfig } from '@/components/designer/formPreviewTypes'
 import { getRuleChildren, isCardRule, getLayoutLabel, snapshotRulesForPreview, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import {
   applyPreviewDefaultsToItemRules,
@@ -497,6 +497,18 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           if (!isFormCreateRuleHidden(ruleItem)) {
             flushSegment()
             items.push(makeLookupPreviewItem(ruleItem, config))
+          }
+        } else if (ruleItem.type === 'recordNote') {
+          // Keep it out of the form-create segment: inside one, type 'recordNote' resolves to
+          // the designer canvas placeholder (dashed "active after deploy" box) instead of the
+          // portal-shaped Notes panel Preview is supposed to show.
+          if (!isFormCreateRuleHidden(ruleItem)) {
+            flushSegment()
+            items.push({
+              kind: 'recordNote',
+              config: (ruleItem.props ?? {}) as RecordNotePreviewConfig,
+              modelKey: `${keyPrefix}_note_${segmentIndex++}`,
+            })
           }
         } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
           const layoutChildren = getRuleChildren(ruleItem)

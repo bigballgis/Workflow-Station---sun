@@ -170,6 +170,7 @@ public class FormTableBindingLoader {
         }
         Map<Long, List<TableFieldDefinitionDTO>> dwFields = loadFieldDefinitionsFromTable("dw_field_definitions", dwTableIds);
         Map<Long, List<TableFieldDefinitionDTO>> rtFields = loadFieldDefinitionsFromTable("rt_field_definitions", rtTableIds);
+        realignForeignKeyReferencesToLivePrimaryKeys(dwFields, rtFields);
         for (TableBindingDTO binding : bindings) {
             if (binding.getTableId() == null) {
                 binding.setFieldDefinitions(Collections.emptyList());
@@ -179,6 +180,59 @@ public class FormTableBindingLoader {
                 binding.setFieldDefinitions(rtFields.getOrDefault(binding.getTableId(), Collections.emptyList()));
             } else {
                 binding.setFieldDefinitions(dwFields.getOrDefault(binding.getTableId(), Collections.emptyList()));
+            }
+        }
+    }
+
+    /**
+     * Resolve every FK's {@code refPrimaryKeyFields} from the referenced table's CURRENT primary key
+     * columns instead of trusting the copy stored on the FK row.
+     *
+     * <p>{@code ref_primary_key_fields} duplicates the parent's PK column names as free text. Renaming
+     * a parent PK in Table Design therefore leaves every child FK pointing at a column that no longer
+     * exists, and nothing fails loudly: the Portal's FK guard simply cannot find that column on the
+     * parent row and refuses every child row Add with "create a &lt;parent&gt; record first". Deriving
+     * the names here — from the same live {@code *_field_definitions} config this method already
+     * loaded — makes a rename self-correcting at read time, so no data repair is ever needed and a
+     * stale stored copy cannot break the runtime.
+     *
+     * <p>Only overrides when the referenced table's PK is actually known and differs; an FK pointing
+     * at a table outside this form's bindings keeps whatever it had (nothing better is available).
+     */
+    private void realignForeignKeyReferencesToLivePrimaryKeys(
+            Map<Long, List<TableFieldDefinitionDTO>> dwFields,
+            Map<Long, List<TableFieldDefinitionDTO>> rtFields) {
+        Map<Long, List<String>> primaryKeysByTable = new LinkedHashMap<>();
+        for (Map<Long, List<TableFieldDefinitionDTO>> source : List.of(dwFields, rtFields)) {
+            for (Map.Entry<Long, List<TableFieldDefinitionDTO>> e : source.entrySet()) {
+                List<String> pk = e.getValue().stream()
+                        .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
+                        .map(TableFieldDefinitionDTO::getFieldName)
+                        .filter(n -> n != null && !n.isBlank())
+                        .toList();
+                if (!pk.isEmpty()) {
+                    primaryKeysByTable.put(e.getKey(), pk);
+                }
+            }
+        }
+        if (primaryKeysByTable.isEmpty()) {
+            return;
+        }
+        for (Map<Long, List<TableFieldDefinitionDTO>> source : List.of(dwFields, rtFields)) {
+            for (List<TableFieldDefinitionDTO> fields : source.values()) {
+                for (TableFieldDefinitionDTO field : fields) {
+                    if (!Boolean.TRUE.equals(field.getIsForeignKey()) || field.getRefTableId() == null) {
+                        continue;
+                    }
+                    List<String> livePk = primaryKeysByTable.get(field.getRefTableId());
+                    if (livePk == null || livePk.equals(field.getRefPrimaryKeyFields())) {
+                        continue;
+                    }
+                    log.info("FK {} -> table {}: realigned refPrimaryKeyFields {} to live PK {}",
+                            field.getFieldName(), field.getRefTableId(),
+                            field.getRefPrimaryKeyFields(), livePk);
+                    field.setRefPrimaryKeyFields(livePk);
+                }
             }
         }
     }

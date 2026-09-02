@@ -89,9 +89,10 @@ public class RecordNoteController {
             @RequestParam(required = false) String tableKind,
             @RequestParam String tableId,
             @RequestParam(required = false) String functionUnitId,
-            @RequestParam(required = false) String processInstanceId) {
+            @RequestParam(required = false) String processInstanceId,
+            @RequestParam(required = false) String taskId) {
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
-        return ApiResponse.success(recordNoteComponent.canAddNote(userId, target, processInstanceId));
+        return ApiResponse.success(recordNoteComponent.canAddNote(userId, target, processInstanceId, taskId));
     }
 
     @Operation(summary = "Note detail including sanitized rich-text body")
@@ -114,10 +115,11 @@ public class RecordNoteController {
             @RequestParam(required = false) String bodyHtml,
             @RequestParam(required = false) List<String> inlineImageIds,
             @RequestParam(required = false) List<MultipartFile> files,
-            @RequestParam(required = false) String processInstanceId) {
+            @RequestParam(required = false) String processInstanceId,
+            @RequestParam(required = false) String taskId) {
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
         return ApiResponse.success(recordNoteComponent.createComment(
-                userId, target, subject, bodyHtml, files, inlineImageIds, processInstanceId));
+                userId, target, subject, bodyHtml, files, inlineImageIds, processInstanceId, taskId));
     }
 
     @Operation(summary = "Upload an inline image referenced from a rich-text body")
@@ -130,10 +132,11 @@ public class RecordNoteController {
             @RequestParam String tableId,
             @RequestParam(required = false) String functionUnitId,
             @RequestParam(required = false) String processInstanceId,
+            @RequestParam(required = false) String taskId,
             @RequestParam MultipartFile file) {
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
         return ApiResponse.success(
-                recordNoteComponent.createInlineImage(userId, target, file, processInstanceId));
+                recordNoteComponent.createInlineImage(userId, target, file, processInstanceId, taskId));
     }
 
     @Operation(summary = "Re-anchor New-Request draft notes onto the started process instance")

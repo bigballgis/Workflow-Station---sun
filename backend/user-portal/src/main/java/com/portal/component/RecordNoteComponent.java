@@ -1,16 +1,20 @@
 package com.portal.component;
 
+import com.platform.security.util.SecurityContextUtils;
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.RecordNoteDtos.NoteDetail;
 import com.portal.dto.RecordNoteDtos.NoteItem;
 import com.portal.dto.RecordNoteDtos.NoteTarget;
+import com.portal.dto.TaskInfo;
 import com.portal.entity.RecordNote;
 import com.portal.enums.ChangeType;
 import com.portal.service.RecordNoteService;
 import com.portal.service.RecordNoteService.RecordNoteException;
 import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.RecordNoteAuditSummary;
+import com.portal.util.WorkflowEnginePayloadHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -41,9 +45,11 @@ import java.util.List;
  * Deliberately NOT a function unit role check: that would deny the very participants
  * working a row (e.g. an MI assignee whose task role was never granted FU access).
  *
- * Writing is gated separately and more tightly — see {@link #checkWriteAccess}: adding a
- * note requires an audit grant on the user's currently selected role (or SYS_ADMIN),
- * and participation in the request grants nothing.
+ * Writing is gated separately and more tightly — see {@link #checkWriteAccess}: on a request
+ * form, adding a note requires an audit grant on the user's currently selected role (or
+ * SYS_ADMIN), and participation in the request grants nothing. Notes on a To Do task form are
+ * comments by whoever works the task, not audit opinions, so holding the task grants the write
+ * instead; the designer's Readonly switch decides whether that box is writable at all.
  */
 @Slf4j
 @Component
@@ -55,6 +61,8 @@ public class RecordNoteComponent {
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final ChangeHistoryComponent changeHistoryComponent;
+    private final WorkflowEngineClient workflowEngineClient;
+    private final TaskPermissionEvaluator taskPermissionEvaluator;
 
     public PageResponse<NoteItem> list(String userId, NoteTarget target, int page, int size,
                                        String processInstanceId) {
@@ -81,10 +89,10 @@ public class RecordNoteComponent {
 
     public NoteItem createComment(String userId, NoteTarget target, String subject, String bodyHtml,
                                   List<MultipartFile> files, List<String> adoptInlineIds,
-                                  String processInstanceId) {
+                                  String processInstanceId, String taskId) {
         checkTargetShape(target);
         checkAccess(userId, target, processInstanceId);
-        checkWriteAccess(userId, target, processInstanceId);
+        checkWriteAccess(userId, target, processInstanceId, taskId);
         NoteItem created = recordNoteService.createComment(target, subject, bodyHtml, files, adoptInlineIds,
                 userId, resolveName(userId));
         audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
@@ -93,18 +101,22 @@ public class RecordNoteComponent {
     }
 
     public NoteItem createInlineImage(String userId, NoteTarget target, MultipartFile file,
-                                      String processInstanceId) {
+                                      String processInstanceId, String taskId) {
         checkTargetShape(target);
         checkAccess(userId, target, processInstanceId);
-        checkWriteAccess(userId, target, processInstanceId);
+        checkWriteAccess(userId, target, processInstanceId, taskId);
         return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
     }
 
-    /** Whether this user may add notes to the given target; drives the UI's Add button. */
-    public boolean canAddNote(String userId, NoteTarget target, String processInstanceId) {
+    /**
+     * Whether this user may add notes to the given target; drives the UI's Add button.
+     * {@code taskId} is set when the panel is rendered on a To Do task form, so the answer
+     * matches what a subsequent create would decide.
+     */
+    public boolean canAddNote(String userId, NoteTarget target, String processInstanceId, String taskId) {
         try {
             checkAccess(userId, target, processInstanceId);
-            checkWriteAccess(userId, target, processInstanceId);
+            checkWriteAccess(userId, target, processInstanceId, taskId);
             return true;
         } catch (RecordNoteException e) {
             return false;
@@ -278,20 +290,27 @@ public class RecordNoteComponent {
      * Extra gate for <em>adding</em> a note, on top of the read gate.
      *
      * <p>Reading a request and commenting on it are different acts. Anyone who can open the
-     * request may read its notes; writing one is an act of review, so it needs one of:
+     * request may read its notes; writing one needs one of:
      * <ul>
      *   <li>system administrator;</li>
+     *   <li>holding the To Do task the note is being written from ({@code taskId}) — see below;</li>
      *   <li>an audit grant on the function unit held by the user's <em>currently selected</em>
      *       role (admin-center → Function Unit → Access Config → Audit).</li>
      * </ul>
      *
-     * <p>Participation in the request deliberately grants nothing here. Writing a note is done
-     * <em>as</em> a role, so it is the audit configuration that decides — never who happens to be
-     * working the request. An initiator or assignee whose active role holds no audit grant reads
-     * the notes and may not add one; granting their role audit access in admin-center is the
-     * supported way to let them write.
+     * <p>The two note surfaces mean different things. A note on the <b>request form</b> is an audit
+     * opinion, so it is written <em>as</em> a role and the audit configuration decides — merely
+     * participating in the request grants nothing there. A note on a <b>To Do task form</b> is a
+     * comment by whoever is working that task, so holding the task is the whole qualification and
+     * no audit grant is needed; whether that box is writable at all is the Developer Workstation
+     * Readonly switch's business, enforced client-side on the design.
+     *
+     * <p>The task claim is verified, never trusted: the task must resolve, must belong to the very
+     * instance these notes hang off, and must be one this user may process. Without the instance
+     * cross-check, holding any task anywhere would unlock note-writing on every other request.
      */
-    private void checkWriteAccess(String userId, NoteTarget target, String hostProcessInstanceId) {
+    private void checkWriteAccess(String userId, NoteTarget target, String hostProcessInstanceId,
+                                  String taskId) {
         if (functionUnitAccessComponent.isSystemAdministrator(userId)) {
             return;
         }
@@ -309,15 +328,60 @@ public class RecordNoteComponent {
         if (detail == null) {
             throw new RecordNoteException("FORBIDDEN", "Cannot resolve the request hosting this row's notes");
         }
+        if (holdsTaskOnInstance(userId, taskId, detail.getId())) {
+            return;
+        }
         String functionUnitCode = detail.getFunctionUnitCode();
         if (functionUnitCode != null && !functionUnitCode.isBlank()
                 && functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(userId, functionUnitCode)) {
             return;
         }
         log.debug("Note write denied for user {} on process {}: active role holds no audit grant "
-                + "on function unit {}", userId, detail.getId(), functionUnitCode);
+                + "on function unit {}{}", userId, detail.getId(), functionUnitCode,
+                taskId == null || taskId.isBlank()
+                        ? " and no task was named"
+                        : " and task " + taskId + " is not a live task they hold on this request");
         throw new RecordNoteException("FORBIDDEN",
                 "Your current role is not granted audit access to this function unit");
+    }
+
+    /**
+     * Whether {@code taskId} is a live task on {@code processInstanceId} that this user may process.
+     *
+     * <p>Deliberately {@code canProcessTask} and not {@code canViewTaskForm}: an initiator can open
+     * a task form for a task they do not hold, and letting a viewer write would put the
+     * participation loophole straight back into the request-form gate.
+     *
+     * <p>Resolved through the raw engine client rather than {@code TaskQueryComponent#getTaskById},
+     * which hydrates sub-tables and persists process variables as a side effect — far too much work
+     * for an authorization probe, and not something a rejected write should leave behind. Identity,
+     * instance and candidate links all come off the engine payload, which is all this decision reads.
+     */
+    private boolean holdsTaskOnInstance(String userId, String taskId, String processInstanceId) {
+        if (taskId == null || taskId.isBlank() || processInstanceId == null || processInstanceId.isBlank()) {
+            return false;
+        }
+        try {
+            TaskInfo task = workflowEngineClient.getTaskById(taskId)
+                    .map(WorkflowEnginePayloadHelper::singleTaskFromPayload)
+                    .map(EngineTaskMapper::convertMapToTaskInfo)
+                    .orElse(null);
+            if (task == null || TaskPermissionEvaluator.isTaskAlreadyClosedInEngineView(task)) {
+                return false;
+            }
+            if (!processInstanceId.equals(task.getProcessInstanceId())) {
+                log.warn("Note write named task {} on process {} but the notes belong to process {}; "
+                        + "falling through to the audit gate", taskId, task.getProcessInstanceId(),
+                        processInstanceId);
+                return false;
+            }
+            return taskPermissionEvaluator.canProcessTask(task, userId,
+                    SecurityContextUtils.getCurrentUsername().orElse(null));
+        } catch (Exception e) {
+            // An unresolvable task is not an authorization; fall through to the audit gate.
+            log.debug("Could not verify task {} for note write by {}: {}", taskId, userId, e.getMessage());
+            return false;
+        }
     }
 
     /**

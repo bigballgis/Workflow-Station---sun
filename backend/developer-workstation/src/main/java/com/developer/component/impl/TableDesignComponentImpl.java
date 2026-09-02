@@ -244,6 +244,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                             c.oldFieldName(), c.newFieldName(), c.oldDisplayName(), c.newDisplayName()))
                     .toList());
             propagateFieldRenamesToBindingForeignKeys(saved.getId(), changes);
+            propagateFieldRenamesToReferencingForeignKeys(functionUnitId, saved.getId(), changes);
         }
 
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
@@ -291,6 +292,69 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             formTableBindingRepository.saveAll(dirty);
             log.info("Propagated field rename(s) on table {} to {} binding foreign_key_field(s)",
                     tableId, dirty.size());
+        }
+    }
+
+    /**
+     * Within the transaction: rewrite {@code dw_field_definitions.ref_primary_key_fields} on every
+     * OTHER table's FK column that references a primary key of this table which was just renamed.
+     *
+     * <p>The referencing side stores the parent's PK column name as free text, so renaming that PK
+     * leaves every child FK pointing at a column that no longer exists. Nothing fails loudly when
+     * that happens — {@code FieldFkPkSyncService.resolveFirstRefPkField} simply returns null and the
+     * FK row is skipped — so the break stays invisible until runtime, where the Portal's FK guard
+     * refuses every child row Add with "create a &lt;parent&gt; record first" (the parent row is
+     * right there, but the guard looks for a PK column the row does not have).
+     *
+     * <p>Only renames of columns that are actually a PK of this table matter here; a non-PK rename
+     * cannot be the target of someone else's {@code refPrimaryKeyFields}.
+     */
+    private void propagateFieldRenamesToReferencingForeignKeys(
+            Long functionUnitId, Long tableId, List<FormConfigFieldRenamer.FieldChange> changes) {
+        Set<String> primaryKeyNames = fieldDefinitionRepository.findByTableDefinitionIdOrderBySortOrderAsc(tableId).stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
+                .map(FieldDefinition::getFieldName)
+                .collect(Collectors.toSet());
+        Map<String, String> renamedPkByOldName = new LinkedHashMap<>();
+        for (FormConfigFieldRenamer.FieldChange c : changes) {
+            if (!c.fieldNameChanged() || c.oldFieldName() == null || c.oldFieldName().isBlank()
+                    || c.newFieldName() == null || c.newFieldName().isBlank()) {
+                continue;
+            }
+            // The rename already landed, so the PK set carries the NEW name.
+            if (primaryKeyNames.contains(c.newFieldName())) {
+                renamedPkByOldName.put(c.oldFieldName(), c.newFieldName());
+            }
+        }
+        if (renamedPkByOldName.isEmpty()) {
+            return;
+        }
+
+        List<FieldDefinition> dirty = new ArrayList<>();
+        for (TableDefinition other : tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId)) {
+            if (Objects.equals(other.getId(), tableId)) {
+                continue;
+            }
+            for (FieldDefinition f : other.getFieldDefinitions()) {
+                if (!Boolean.TRUE.equals(f.getIsForeignKey()) || !Objects.equals(f.getRefTableId(), tableId)) {
+                    continue;
+                }
+                List<String> refPk = f.getRefPrimaryKeyFields();
+                if (refPk == null || refPk.isEmpty()) {
+                    continue;
+                }
+                List<String> rewritten = refPk.stream()
+                        .map(name -> renamedPkByOldName.getOrDefault(name, name))
+                        .toList();
+                if (!rewritten.equals(refPk)) {
+                    f.setRefPrimaryKeyFields(rewritten);
+                    dirty.add(f);
+                }
+            }
+        }
+        if (!dirty.isEmpty()) {
+            fieldDefinitionRepository.saveAll(dirty);
+            log.info("Propagated PK rename(s) on table {} to {} referencing FK ref_primary_key_fields", tableId, dirty.size());
         }
     }
 
