@@ -54,6 +54,33 @@ export function persistFromUploadFileList(
   return persistUploadValue(files, maxFiles)
 }
 
+export function isInflightUploadStatus(status?: string): boolean {
+  return Boolean(status && status !== 'success')
+}
+
+/**
+ * Persist only finished files, but keep the live el-upload rows (including uploading)
+ * so the first success cannot wipe the rest of a multi-file batch.
+ */
+export function splitUploadFileList<T extends {
+  url?: string
+  name?: string
+  status?: string
+  response?: unknown
+}>(
+  liveList: T[],
+  maxFiles: number,
+): { stored: string | StoredUploadFile[]; display: T[] } {
+  const stored = persistFromUploadFileList(liveList, maxFiles)
+  const storedUrls = new Set(extractFileLinks(stored).map((link) => link.url))
+  const display = liveList.filter((item) => {
+    if (isInflightUploadStatus(item.status)) return true
+    const url = extractStoredUploadUrl(item.response) || String(item.url || '').trim()
+    return Boolean(url && storedUrls.has(url))
+  })
+  return { stored, display }
+}
+
 export function joinTargetFileNames(files: Array<{ name: string }>): string {
   return files.map((f) => f.name).filter(Boolean).join('; ')
 }

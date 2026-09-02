@@ -1012,7 +1012,7 @@ export default {
   },
   upload: {
     dragText: '将文件拖到此处，或',
-    clickText: '点击上传',
+    clickText: '点击选择',
     selectFile: '选择文件',
     tip: '支持 {types} 等格式，单个文件不超过 {size}MB',
     sizeExceed: '文件大小不能超过 {size}MB',

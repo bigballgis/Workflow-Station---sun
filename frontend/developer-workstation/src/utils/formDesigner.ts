@@ -168,8 +168,8 @@ import { ensureEmptyFormOptionsEvents } from '@/utils/formCreateDefaultEvents'
 import { extractFileLinks } from '@platform-shared/list/fileNames'
 import {
   joinTargetFileNames,
-  persistFromUploadFileList,
   resolveUploadMaxFiles,
+  splitUploadFileList,
 } from '@platform-shared/upload/uploadFieldValue'
 import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
 
@@ -226,6 +226,7 @@ function stampPreviewUploadRule(
   r.props.maxFiles = maxFiles
   r.props.limit = maxFiles
   r.props.multiple = maxFiles > 1
+  r.props.drag = true
   r.props.httpRequest = queuedUploadRequest
   const field = String(r.field)
   const nameTarget = r.props.fileNameTargetField as string | undefined
@@ -242,8 +243,8 @@ function stampPreviewUploadRule(
     _file?: { status?: string },
     fileList?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
   ) => {
-    const stored = persistFromUploadFileList(fileList ?? [], maxFiles)
-    formData.value[field] = stored
+    const { stored, display } = splitUploadFileList(fileList ?? [], maxFiles)
+    formData.value[field] = display
     const links = extractFileLinks(stored)
     if (uploadSession && links[0]) {
       uploadSession.value = { ...uploadSession.value, [field]: { url: links[0].url, name: links[0].name } }
@@ -254,8 +255,8 @@ function stampPreviewUploadRule(
     _file?: unknown,
     fileList?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
   ) => {
-    const stored = persistFromUploadFileList(fileList ?? [], maxFiles)
-    formData.value[field] = stored
+    const { stored, display } = splitUploadFileList(fileList ?? [], maxFiles)
+    formData.value[field] = display
     const links = extractFileLinks(stored)
     if (uploadSession) {
       const next = { ...uploadSession.value }

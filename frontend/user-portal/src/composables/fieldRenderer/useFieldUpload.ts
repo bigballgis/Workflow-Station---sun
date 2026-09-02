@@ -10,8 +10,9 @@ import { isCannotDownload } from '@/utils/filePreview'
 import { extractFileLinks } from '@platform-shared/list/fileNames'
 import {
   DEFAULT_UPLOAD_MAX_FILES,
+  isInflightUploadStatus,
   joinTargetFileNames,
-  persistFromUploadFileList,
+  splitUploadFileList,
   toElUploadFileList,
   uploadValueFingerprint,
 } from '@platform-shared/upload/uploadFieldValue'
@@ -36,6 +37,7 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
     () => props.modelValue,
     (val) => {
       if (props.field.type !== 'upload') return
+      if (fileList.value.some((item) => isInflightUploadStatus(item.status))) return
       const next = toElUploadFileList(val)
       if (uploadValueFingerprint(fileList.value) === uploadValueFingerprint(next)) return
       fileList.value = next
@@ -44,13 +46,21 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
   )
 
   function persistFromList(list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) {
-    const stored = persistFromUploadFileList(list, uploadLimit.value)
-    fileList.value = toElUploadFileList(stored)
+    const { stored, display } = splitUploadFileList(list, uploadLimit.value)
+    fileList.value = display
     emit('update:modelValue', stored)
     const target = props.field.fileNameTargetField
     if (target && props.formData) {
       props.formData[target] = joinTargetFileNames(extractFileLinks(stored))
     }
+  }
+
+  function onUploadChange(
+    _file: unknown,
+    uploadFiles?: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
+  ) {
+    if (!uploadFiles) return
+    fileList.value = splitUploadFileList(uploadFiles, uploadLimit.value).display
   }
 
   function onUploadSuccess(
@@ -97,6 +107,7 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
     fileList,
     httpRequest: queuedUploadRequest,
     onUploadSuccess,
+    onUploadChange,
     onUploadRemove,
     onUploadExceed,
     previewCurrentFile,

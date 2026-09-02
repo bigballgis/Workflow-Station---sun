@@ -432,7 +432,7 @@
 
     <!-- upload (Task 6.8) -->
     <template v-else-if="field.type === 'upload'">
-      <el-upload
+      <FormUploadDropZone
         v-if="!readonly"
         :action="resolvedUploadUrl"
         :accept="field.uploadAccept || ''"
@@ -441,25 +441,15 @@
         :disabled="isDisabled"
         :file-list="fileList"
         :http-request="httpRequest"
-        :on-success="onUploadSuccess"
-        :on-remove="onUploadRemove"
-        :on-exceed="onUploadExceed"
-        :on-preview="previewCurrentFile"
-        list-type="text"
-      >
-        <el-button
-          type="primary"
-          :disabled="disabled"
-        >
-          <el-icon><Upload /></el-icon>
-          {{ t('upload.selectFile') }}
-        </el-button>
-        <template #tip>
-          <div class="el-upload__tip">
-            {{ field.uploadAccept || '.jpg/.png/.pdf/.docx/.xlsx' }}
-          </div>
-        </template>
-      </el-upload>
+        :drag-text="t('upload.dragText')"
+        :click-text="t('upload.clickText')"
+        :tip="field.uploadAccept || '.jpg/.png/.pdf/.docx/.xlsx'"
+        :handle-success="onUploadSuccess"
+        :handle-change="onUploadChange"
+        :handle-remove="onUploadRemove"
+        :handle-exceed="onUploadExceed"
+        :handle-preview="previewCurrentFile"
+      />
       <div
         v-else
         class="upload-readonly-list"
@@ -654,8 +644,8 @@
 // ---------------------------------------------------------------------------
 import { computed, inject, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
+import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
 import '@wangeditor/editor/dist/css/style.css'
 import type { FormField } from './formRendererHelpers'
 import LookupField from './lookup/LookupField.vue'
@@ -798,6 +788,7 @@ const {
   fileList,
   httpRequest,
   onUploadSuccess,
+  onUploadChange,
   onUploadRemove,
   onUploadExceed,
   previewCurrentFile,

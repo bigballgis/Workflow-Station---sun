@@ -60,17 +60,25 @@ try {
   if (!found) throw new Error(`No start form with an Upload field (tried ${keys.length} keys)`)
 
   const input = page.locator('.el-upload input[type="file"]').first()
-  await input.setInputFiles([tmpPdf('alpha-upload.pdf'), tmpPdf('beta-upload.pdf')])
+  await input.waitFor({ state: 'attached', timeout: 15000 })
+  const drop = page.getByTestId('form-upload-drop').first()
+  if (!(await drop.count())) throw new Error('Upload drop zone missing on start form')
+  const multiple = await input.getAttribute('multiple')
+  if (multiple === null) throw new Error('file input is missing the multiple attribute')
+
+  await input.setInputFiles([
+    tmpPdf('alpha-upload.pdf'),
+    tmpPdf('beta-upload.pdf'),
+    tmpPdf('gamma-upload.pdf'),
+  ])
   await page.waitForFunction(() => {
     const names = [...document.querySelectorAll('.el-upload-list__item-name, .el-upload-list__item')]
-    return names.filter((el) => /alpha-upload|beta-upload/.test(el.textContent || '')).length >= 2
+    return names.filter((el) => /alpha-upload|beta-upload|gamma-upload/.test(el.textContent || '')).length >= 3
   }, null, { timeout: 25000 })
 
   const shot = join(OUT, `${DATE}_portal-form-upload-multi.png`)
-  const host = page.locator('.el-upload, .field-renderer-root').first()
-  if (await host.count()) await host.screenshot({ path: shot })
-  else await page.screenshot({ path: shot, fullPage: false })
-  console.log(`PASS  two files visible on start form ${found}`)
+  await drop.screenshot({ path: shot })
+  console.log(`PASS  three files visible on start form ${found}`)
   console.log(`screenshot ${shot}`)
 } finally {
   await browser.close()

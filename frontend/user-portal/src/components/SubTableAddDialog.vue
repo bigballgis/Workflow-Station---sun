@@ -342,26 +342,23 @@
                     v-else-if="isUploadColumn(col, formData[col.field])"
                     style="display: flex; flex-direction: column; gap: 4px;"
                   >
-                    <el-upload
+                    <FormUploadDropZone
+                      compact
                       :action="col.props?.action && col.props.action !== '/' ? col.props.action : (uploadUrl || '/api/v1/upload')"
                       :accept="col.props?.accept || ''"
                       :limit="maxFilesOf(col)"
                       :multiple="isMultiple(col)"
                       :file-list="uploadFileLists[col.field] || []"
                       :http-request="httpRequest"
-                      :on-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
-                      :on-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
-                      :on-exceed="() => handleUploadExceed(col)"
-                      :on-error="() => handleUploadError(col)"
-                      :on-preview="(file: { url?: string }) => previewDialogFile(col, file.url)"
-                    >
-                      <el-button
-                        size="small"
-                        type="primary"
-                      >
-                        <el-icon><Upload /></el-icon> {{ t('subTable.upload') }}
-                      </el-button>
-                    </el-upload>
+                      :drag-text="t('upload.dragText')"
+                      :click-text="t('upload.clickText')"
+                      :handle-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
+                      :handle-change="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadChange(col, list)"
+                      :handle-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
+                      :handle-exceed="() => handleUploadExceed(col)"
+                      :handle-error="() => handleUploadError(col)"
+                      :handle-preview="(file: { url?: string }) => previewDialogFile(col, file.url)"
+                    />
                   </div>
 
                   <!-- colorPicker -->
@@ -656,8 +653,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, inject, nextTick, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
+import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
 import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
@@ -939,6 +936,7 @@ const {
   backfillUploadNames,
   handleUploadSuccess,
   handleUploadRemove,
+  handleUploadChange,
   handleUploadError,
   handleUploadExceed,
 } = useSubTableDialogUpload(formData, () => props.columns, t)

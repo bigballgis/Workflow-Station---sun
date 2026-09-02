@@ -751,6 +751,8 @@ export default {
     fileUpload: '文件上传',
     fileUploadTip: '支持格式：jpg/png/pdf/docx/xlsx。最多 10 个文件，每个 10MB。',
     clickToUpload: '上传',
+    uploadDragText: '将文件拖到此处，或',
+    uploadClickText: '点击选择',
     yes: '是',
     no: '否',
     // Binding types

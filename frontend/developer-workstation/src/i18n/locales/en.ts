@@ -707,6 +707,8 @@ export default {
     fileUploadTip: 'Supported formats: jpg/png/pdf/docx/xlsx. Up to 10 files, 10MB each.',
     /** form-create fcUpload button (overrides library default Chinese fallback) */
     clickToUpload: 'Upload',
+    uploadDragText: 'Drop files here, or ',
+    uploadClickText: 'click to select',
     yes: 'Yes',
     no: 'No',
     // Binding types

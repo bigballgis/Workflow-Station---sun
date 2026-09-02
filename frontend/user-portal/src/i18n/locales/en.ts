@@ -1039,8 +1039,8 @@ export default {
     completed: 'Completed'
   },
   upload: {
-    dragText: 'Drag file here, or',
-    clickText: 'click to upload',
+    dragText: 'Drop files here, or ',
+    clickText: 'click to select',
     selectFile: 'Select File',
     tip: 'Supports {types} formats, max {size}MB per file',
     sizeExceed: 'File size cannot exceed {size}MB',

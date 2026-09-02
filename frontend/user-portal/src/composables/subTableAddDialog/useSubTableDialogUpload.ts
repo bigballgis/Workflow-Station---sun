@@ -5,9 +5,8 @@ import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import { extractFileLinks } from '@platform-shared/list/fileNames'
 import {
   joinTargetFileNames,
-  persistFromUploadFileList,
-  persistUploadValue,
   resolveUploadMaxFiles,
+  splitUploadFileList,
   toElUploadFileList,
 } from '@platform-shared/upload/uploadFieldValue'
 import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
@@ -26,10 +25,11 @@ export function useSubTableDialogUpload(
     return resolveUploadMaxFiles(col.props)
   }
 
-  function writeColumn(col: DialogColumn, stored: string | Array<{ url: string; name: string }>) {
+  function writeLiveList(col: DialogColumn, list: UploadListItem[]) {
+    const { stored, display } = splitUploadFileList(list, maxFilesOf(col))
     formData.value[col.field] = stored
     const links = extractFileLinks(stored)
-    uploadFileLists.value = { ...uploadFileLists.value, [col.field]: toElUploadFileList(stored) }
+    uploadFileLists.value = { ...uploadFileLists.value, [col.field]: display }
     const target = col.props?.fileNameTargetField
     if (target && columns().some((c) => c.field === target)) {
       formData.value[target] = joinTargetFileNames(links)
@@ -59,11 +59,16 @@ export function useSubTableDialogUpload(
       ...toElUploadFileList(formData.value[col.field]),
       { name: String(file.name || ''), url: String(file.url || ''), status: 'success', response: res },
     ]
-    writeColumn(col, persistFromUploadFileList(list, maxFilesOf(col)))
+    writeLiveList(col, list)
   }
 
   function handleUploadRemove(col: DialogColumn, uploadFiles?: UploadListItem[]) {
-    writeColumn(col, persistFromUploadFileList(uploadFiles ?? [], maxFilesOf(col)))
+    writeLiveList(col, uploadFiles ?? [])
+  }
+
+  function handleUploadChange(col: DialogColumn, uploadFiles?: UploadListItem[]) {
+    if (!uploadFiles) return
+    writeLiveList(col, uploadFiles)
   }
 
   function handleUploadError(col: DialogColumn) {
@@ -75,7 +80,7 @@ export function useSubTableDialogUpload(
   }
 
   function clearUpload(col: DialogColumn) {
-    writeColumn(col, persistUploadValue([], maxFilesOf(col)))
+    writeLiveList(col, [])
   }
 
   return {
@@ -87,6 +92,7 @@ export function useSubTableDialogUpload(
     resetUploadNames,
     handleUploadSuccess,
     handleUploadRemove,
+    handleUploadChange,
     handleUploadError,
     handleUploadExceed,
     clearUpload,

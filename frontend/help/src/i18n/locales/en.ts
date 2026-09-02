@@ -346,7 +346,7 @@ export default {
     maxSample: 'the Max files number on the Upload properties panel',
     runtimeTitle: 'What people see at runtime',
     runtimeBody:
-      'The file picker lets people choose several files in one go. User Portal and Form Preview keep the whole list. A sub-table list cell shows the first file name and +N for the rest, for example report.pdf +2. If a companion filename column is configured on the Upload field, the original names are written there, joined with a semicolon and space. Send Email attachments from a FILE field include every stored file.',
+      'Drop several files onto the dashed box, or click it and select several files in one go (Ctrl or Shift click in the file picker). User Portal and Form Preview keep the whole list. A sub-table list cell shows the first file name and +N for the rest, for example report.pdf +2. If a companion filename column is configured on the Upload field, the original names are written there, joined with a semicolon and space. Send Email attachments from a FILE field include every stored file.',
     runtimeSample: 'report.pdf +2 on a sub-table cell',
     failTitle: 'When it fails',
     failBody:

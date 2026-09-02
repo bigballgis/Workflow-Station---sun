@@ -189,25 +189,22 @@
           v-else-if="col.type === 'upload'"
           style="display: flex; flex-direction: column; gap: 4px;"
         >
-          <el-upload
+          <FormUploadDropZone
+            compact
             :action="col.props?.action && col.props.action !== '/' ? col.props.action : '/api/v1/upload'"
             :accept="col.props?.accept || ''"
             :limit="maxFilesOf(col)"
             :multiple="maxFilesOf(col) > 1"
             :file-list="uploadFileLists[col.field] || []"
             :http-request="httpRequest"
-            :on-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
-            :on-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
-            :on-exceed="() => handleUploadExceed(col)"
-            :on-error="() => handleUploadError(col)"
-          >
-            <el-button
-              size="small"
-              type="primary"
-            >
-              <el-icon><Upload /></el-icon> {{ t('form.clickToUpload') }}
-            </el-button>
-          </el-upload>
+            :drag-text="t('form.uploadDragText')"
+            :click-text="t('form.uploadClickText')"
+            :handle-success="(res: unknown, file: { name?: string; url?: string }, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadSuccess(res, file, col, list)"
+            :handle-change="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => writeUploadColumn(col, list ?? [])"
+            :handle-remove="(_file: unknown, list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>) => handleUploadRemove(col, list)"
+            :handle-exceed="() => handleUploadExceed(col)"
+            :handle-error="() => handleUploadError(col)"
+          />
         </div>
 
         <!-- tree (el-tree with checkbox, uses id/label node format) -->
@@ -360,7 +357,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
+import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { buildInitialRow, buildRules, isColReadonly, mergeFormRowWithSeed } from './subTableAddDialogHelpers'
@@ -370,8 +367,8 @@ import { normalizeUploadFieldsInRow } from './uploadFieldUtils'
 import { extractFileLinks } from '@platform-shared/list/fileNames'
 import {
   joinTargetFileNames,
-  persistFromUploadFileList,
   resolveUploadMaxFiles,
+  splitUploadFileList,
   toElUploadFileList,
 } from '@platform-shared/upload/uploadFieldValue'
 import { queuedUploadRequest } from '@platform-shared/upload/queuedUploadRequest'
@@ -419,9 +416,9 @@ function writeUploadColumn(
   col: DialogColumn,
   list: Array<{ url?: string; name?: string; status?: string; response?: unknown }>,
 ) {
-  const stored = persistFromUploadFileList(list, maxFilesOf(col))
+  const { stored, display } = splitUploadFileList(list, maxFilesOf(col))
   formData.value[col.field] = stored
-  uploadFileLists.value = { ...uploadFileLists.value, [col.field]: toElUploadFileList(stored) }
+  uploadFileLists.value = { ...uploadFileLists.value, [col.field]: display }
   const target = col.props?.fileNameTargetField
   if (target && props.columns.some((c) => c.field === target)) {
     formData.value[target] = joinTargetFileNames(extractFileLinks(stored))

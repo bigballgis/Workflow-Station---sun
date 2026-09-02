@@ -7,6 +7,7 @@ import {
   persistFromUploadFileList,
   persistUploadValue,
   resolveUploadMaxFiles,
+  splitUploadFileList,
   uploadValueFingerprint,
 } from '../uploadFieldValue'
 
@@ -60,6 +61,28 @@ describe('persistFromUploadFileList', () => {
       { url: '/api/v1/upload/files/a?originalName=a.pdf', name: 'a.pdf' },
       { url: '/api/v1/upload/files/c?originalName=c.pdf', name: 'c.pdf' },
     ])
+  })
+})
+
+describe('splitUploadFileList', () => {
+  it('does not drop uploading rows when the first file succeeds', () => {
+    const a = { status: 'success' as const, url: '/api/v1/upload/files/a?originalName=a.pdf', name: 'a.pdf', uid: 1 }
+    const b = { status: 'uploading' as const, url: '', name: 'b.pdf', uid: 2 }
+    const c = { status: 'ready' as const, url: '', name: 'c.pdf', uid: 3 }
+    const { stored, display } = splitUploadFileList([a, b, c], 10)
+    expect(stored).toEqual([{ url: a.url, name: 'a.pdf' }])
+    expect(display).toEqual([a, b, c])
+    expect(display[1]).toBe(b)
+  })
+
+  it('keeps the live rows when nothing has succeeded yet', () => {
+    const live = [
+      { status: 'uploading' as const, name: 'a.pdf', url: '' },
+      { status: 'uploading' as const, name: 'b.pdf', url: '' },
+    ]
+    const { stored, display } = splitUploadFileList(live, 10)
+    expect(stored).toEqual([])
+    expect(display).toEqual(live)
   })
 })
 
