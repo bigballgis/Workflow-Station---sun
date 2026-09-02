@@ -267,7 +267,7 @@ export function createApplicationDetailSecondary(ctx: ApplicationDetailCtx): App
         const filterByAssignee = (bindings: typeof subTableBindings.value) => {
           for (const binding of bindings) {
             if (!binding.data || binding.data.length === 0) continue
-            const assigneeField = resolveAssigneeFieldForBinding(binding.columns, binding.tableName)
+            const assigneeField = resolveAssigneeFieldForBinding(binding as never)
             if (!assigneeField || !hasAssignmentData(binding.data, assigneeField)) continue
             const filtered = binding.data.filter(
               (row: any) =>

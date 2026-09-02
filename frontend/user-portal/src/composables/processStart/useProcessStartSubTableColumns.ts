@@ -75,10 +75,7 @@ export function createSubTableColumnDeriver(deps: {
         (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem]),
       )
       const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
-      const assigneeField = resolveAssigneeFieldForBinding(
-        subFormColumns as Array<{ field?: string }>,
-        binding.tableDisplayName || binding.tableName,
-      )
+      const assigneeField = resolveAssigneeFieldForBinding(binding as never)
       return enrichLookupColumnPropsFromSubFormRule(
         listColumns.map((column: any): DialogColumn => {
         if (column.columnType === 'linkForm') {

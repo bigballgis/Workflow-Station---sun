@@ -217,10 +217,7 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
         (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem])
       )
       const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
-      const assigneeField = resolveAssigneeFieldForBinding(
-        subFormColumns as Array<{ field?: string }>,
-        binding.tableDisplayName || binding.tableName
-      )
+      const assigneeField = resolveAssigneeFieldForBinding(binding as never)
       return listColumns
         .filter((col: any) => col && col.fieldName)
         .map((column: any) => {

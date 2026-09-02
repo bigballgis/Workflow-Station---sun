@@ -121,10 +121,7 @@ export function useSubTableBindings(deps: SubTableBindingsDeps) {
   function subTableAssigneeField(bindingId?: number): string | undefined {
     const b = resolveBinding(bindingId)
     if (!b) return undefined
-    return resolveAssigneeFieldForBinding(
-      b.columns as Array<{ field?: string }>,
-      b.tableName
-    )
+    return resolveAssigneeFieldForBinding(b as never)
   }
 
   /** MI To Do: seed link-child / attachment Add dialog with the active collection row (e.g. row_id). */

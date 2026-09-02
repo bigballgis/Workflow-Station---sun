@@ -409,7 +409,7 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
     const na = aid
     const apply = (bindings: typeof subTableBindings.value) => {
       for (const b of bindings) {
-        const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
+        const af = resolveAssigneeFieldForBinding(b as never)
         if (!af) continue
         for (const r of b.data || []) {
           if (!r || typeof r !== 'object') continue

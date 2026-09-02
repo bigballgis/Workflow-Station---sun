@@ -6,26 +6,60 @@ import {
 } from '../subTableAssignment'
 import { setActiveMiConfig, clearActiveMiConfig } from '@/composables/tasks/useMiConfig'
 
+/**
+ * 分派列**只**来自 Sub-Task Config 的 `assigneeField`，且**只适用于 MI collection**。
+ *
+ * <p>列名推断（`assignee_user_id` / `assignee_id` / 正则 `/assignee/i`）与表名兜底
+ * （`participants`）已一并删除 —— 与其它被删的启发式同类：改名即失效。
+ */
 describe('resolveAssigneeFieldForBinding', () => {
-  it('recognizes plain assignee columns for generic sub-tables', () => {
-    expect(resolveAssigneeFieldForBinding([{ field: 'assignee' }], 'subtable')).toBe('assignee')
-  })
+  const COLLECTION = { tableId: 50331, bindingLinkMode: 'miParticipantRow' }
+  const ATTACHMENT = { tableId: 50330, bindingLinkMode: 'structuralFk' }
 
-  /**
-   * 表名兜底已删除：表名叫 participants 不再凭空返回 assignee_user_id
-   * （表名一改即失效，且普通子表会被安上并不存在的分派列）。
-   */
-  it('列里没有分派列且未注册 Sub-Task Config 时返回 undefined（不按表名猜）', () => {
-    expect(resolveAssigneeFieldForBinding([{ field: 'name' }], 'participants')).toBeUndefined()
-  })
-
-  it('Sub-Task Config 的 assigneeField 优先于列名推断', () => {
+  it('MI collection：返回 Sub-Task Config 配置的列名', () => {
     setActiveMiConfig({ subTableName: 'subtable', assigneeField: 'my_owner' } as never)
     try {
-      expect(resolveAssigneeFieldForBinding([{ field: 'assignee' }], 'subtable')).toBe('my_owner')
+      expect(resolveAssigneeFieldForBinding(COLLECTION))
+        .toBe('my_owner')
     } finally {
       clearActiveMiConfig()
     }
+  })
+
+  /**
+   * 回归（现场 FU 50005 / Assign Task 表单）：Attachment 子表与 Participants 同表单，
+   * 此前 `resolveAssigneeFieldForBinding` 无视 binding 一律返回 FU 级 assigneeField，
+   * 于是附件表也被当成「需要分派」，Approve 恒被拦下报
+   * “Assign a user to every sub-table row”。附件行本就没有分派人。
+   * 返回 undefined 同时承载「跳过分派校验」语义。
+   */
+  it('非 collection（共享附件）：返回 undefined，绝不套用 collection 的分派列', () => {
+    setActiveMiConfig({ subTableName: 'subtable', assigneeField: 'assignee' } as never)
+    try {
+      expect(resolveAssigneeFieldForBinding(ATTACHMENT)).toBeUndefined()
+    } finally {
+      clearActiveMiConfig()
+    }
+  })
+
+  /** 列名推断（assignee_user_id / assignee_id / 正则）已随硬编码名单一并删除。 */
+  it('非 collection 即便列名带 assignee 也不返回分派列', () => {
+    setActiveMiConfig({ subTableName: 'subtable', assigneeField: 'assignee' } as never)
+    try {
+      const looksLikeAssignee = {
+        tableId: 50330,
+        bindingLinkMode: 'structuralFk',
+        columns: [{ field: 'assignee_user_id' }],
+      }
+      expect(resolveAssigneeFieldForBinding(looksLikeAssignee)).toBeUndefined()
+    } finally {
+      clearActiveMiConfig()
+    }
+  })
+
+  it('未传 binding → undefined；是 collection 但未注册配置 → 同样 undefined（不猜）', () => {
+    expect(resolveAssigneeFieldForBinding(undefined)).toBeUndefined()
+    expect(resolveAssigneeFieldForBinding(COLLECTION)).toBeUndefined()
   })
 })
 

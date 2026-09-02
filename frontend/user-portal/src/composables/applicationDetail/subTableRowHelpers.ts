@@ -387,7 +387,7 @@ export function resolveBindingAssigneeField(binding: {
   tableName?: string
   data?: any[]
 }): string | undefined {
-  const assigneeField = resolveAssigneeFieldForBinding(binding.columns, binding.tableName)
+  const assigneeField = resolveAssigneeFieldForBinding(binding as never)
   if (assigneeField && hasAssignmentData(binding.data || [], assigneeField)) {
     return assigneeField
   }

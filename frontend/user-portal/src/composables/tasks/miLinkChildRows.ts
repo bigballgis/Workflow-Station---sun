@@ -322,8 +322,18 @@ const MI_HOST_ROW_PARTICIPANT_KEYS = [
  * <p>Also gates whether the cross-participant {@code binding.data} fallback may be used at all — for
  * an MI participant host it must not be, since that pool holds every sibling sub-task's rows.
  */
-export function hostRowIsMiParticipant(row: Record<string, unknown> | null | undefined): boolean {
+export function hostRowIsMiParticipant(
+  row: Record<string, unknown> | null | undefined,
+  collectionPrimaryKeyFields?: string[] | null,
+): boolean {
   if (!row || typeof row !== 'object') return false
+  // 设计器主键优先：MI collection 的 PK 叫什么由配置决定（demo FU 改名后是 id_idwze）。
+  // 只认下面那张历史列名表的话，改名即失效 —— 宿主行认不出来，嵌套子表就完全不做参与者过滤，
+  // 于是一个参与者的内联表单里会同时列出别人的子行（实测 2 行而非 1 行）。
+  for (const pk of collectionPrimaryKeyFields ?? []) {
+    const name = String(pk ?? '').trim()
+    if (name && normalizeMiLinkMatchId(row[name])) return true
+  }
   for (const k of MI_HOST_ROW_PARTICIPANT_KEYS) {
     if (normalizeMiLinkMatchId(row[k])) return true
   }
@@ -351,13 +361,19 @@ export function scopeLinkChildRowsToMiHostRow(
   hostRow: Record<string, unknown> | null | undefined,
   candidateRows: unknown[],
   config?: MiChildFkConfig | null,
+  collectionPrimaryKeyFields?: string[] | null,
 ): unknown[] {
   if (!Array.isArray(candidateRows) || candidateRows.length === 0) return candidateRows
-  if (!hostRowIsMiParticipant(hostRow)) return candidateRows
+  if (!hostRowIsMiParticipant(hostRow, collectionPrimaryKeyFields)) return candidateRows
 
-  const pid = MI_HOST_ROW_PARTICIPANT_KEYS
-    .map(k => normalizeMiLinkMatchId(hostRow![k]))
-    .find(v => v != null)
+  // 取宿主行的参与者 id：同样先按设计器主键，再退回历史列名。
+  const pid =
+    (collectionPrimaryKeyFields ?? [])
+      .map(k => normalizeMiLinkMatchId(hostRow![String(k ?? '').trim()]))
+      .find(v => v != null)
+    ?? MI_HOST_ROW_PARTICIPANT_KEYS
+      .map(k => normalizeMiLinkMatchId(hostRow![k]))
+      .find(v => v != null)
   if (!pid) return candidateRows
 
   return candidateRows.filter(raw => {

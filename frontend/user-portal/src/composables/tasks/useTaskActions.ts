@@ -89,7 +89,7 @@ export function useTaskActions(options: {
           ? b.assignmentConfig
           : undefined
       const af = config?.assigneeField
-        ?? resolveAssigneeFieldForBinding(b.columns, b.tableName)
+        ?? resolveAssigneeFieldForBinding(b as never)
       if (!af && !config) continue
       if (!allSubTableRowsHaveAssignee(b.data || [], af ?? '', config)) {
         ElMessage.warning(t('task.allParticipantsMustHaveAssignee'))

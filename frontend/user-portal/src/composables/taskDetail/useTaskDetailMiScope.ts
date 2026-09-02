@@ -176,22 +176,6 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
     return bindingMatchesMiSubTableName(binding, miSubProcessScope.value?.subTableName)
   }
 
-  /** When slice binding metadata is missing, match MI rows via FK columns to the participant row id. */
-  function miIncomingRowLikelyForParticipant(row: unknown, myRowId: MiParticipantRowId): boolean {
-    if (!row || typeof row !== 'object') return false
-    const collectionPk = miCollectionPrimaryKeyFields()
-    if (hasConfiguredPrimaryKeyFields(collectionPk) && rowMatchesSubTablePrimaryKey(row, myRowId, collectionPk)) {
-      return true
-    }
-    const rec = row as Record<string, unknown>
-    const fkKeys = ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']
-    for (const k of fkKeys) {
-      const v = rec[k]
-      if (v != null && v !== '' && miParticipantRowIdsEqual(v, myRowId)) return true
-    }
-    return false
-  }
-
   /** MI isolation: participant-scoped sub-tables only; main-table-linked tables (e.g. attachment) stay shared. */
   function rowBelongsToCurrentMiScope(
     row: unknown,
@@ -279,19 +263,10 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
       const v = row[fd.fieldName]
       if (v != null && v !== '' && miParticipantRowIdsEqual(v, myRowId)) return true
     }
-    const fallbackFkKeys = [
-      'sub_task_id',
-      'participant_id',
-      'participantId',
-      'parent_id',
-      'parentId',
-      'meeting_participant_id',
-    ]
-    for (const k of fallbackFkKeys) {
-      if (row[k] != null && row[k] !== '' && miParticipantRowIdsEqual(row[k], myRowId)) {
-        return true
-      }
-    }
+    // 这里曾有一张兜底列名表（sub_task_id / participant_id / parent_id …）。它不是"补充"，
+    // 而是**会推翻上面按配置得出的正确结论**：改名后的表里，历史行仍残留旧列名，于是
+    // 「按 fieldDefinitions 判定不属于我」之后，兜底表又用那个残留旧列把它判成我的 ——
+    // 别人的行被卷进当前用户的提交。配置判定已经是权威答案，猜列名只会覆盖它，故删除。
     const pksRel = binding.primaryKeyFields
     const collPk = miCollectionPrimaryKeyFields()
     const pkForMatch = pksRel?.length ? pksRel : collPk

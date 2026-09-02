@@ -114,28 +114,27 @@ export function normalizeFkIdForMatch(v: unknown): string | null {
   return s.toLowerCase()
 }
 
+/**
+ * FK columns a child row may use to point at its parent — read from the DESIGNER CONFIG only.
+ *
+ * <p>Sources, in order: the binding's own `foreignKeyField`, then every field the designer marked
+ * `isForeignKey`. Both come from the form/table design, so renaming a column keeps working.
+ *
+ * <p>This used to append fourteen guessed names (`sub_task_id`, `participant_id`, `user_id`, …).
+ * Renaming the demo FU's keys proved why that is unsound: `sub_task_id` became `sub_task_idk`, so
+ * NONE of the guesses matched and the only surviving entry was `foreignKeyField` — which on a
+ * People-style child is `idk`, the row's OWN primary key rather than a parent reference. The list
+ * matched nothing real while looking like it covered everything.
+ */
 export function buildFkListForChildMatch(binding?: SubTableBinding): string[] {
   const fkList: string[] = []
-  if (binding?.foreignKeyField && String(binding.foreignKeyField).trim()) {
-    fkList.push(String(binding.foreignKeyField))
+  const push = (name: unknown) => {
+    const s = String(name ?? '').trim()
+    if (s && !fkList.includes(s)) fkList.push(s)
   }
-  for (const k of [
-    'sub_task_id',
-    'subTaskId',
-    'participant_id',
-    'participantId',
-    'parent_id',
-    'parentId',
-    'id_idw',
-    'meeting_participant_id',
-    'user_id',
-    'userId',
-    'assignee_id',
-    'assigneeId',
-    'owner_id',
-    'ownerId'
-  ]) {
-    if (!fkList.includes(k)) fkList.push(k)
+  push(binding?.foreignKeyField)
+  for (const fd of binding?.fieldDefinitions ?? []) {
+    if (fd?.isForeignKey) push(fd.fieldName)
   }
   return fkList
 }

@@ -179,10 +179,16 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
 function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
   const hostRow = (props.model && typeof props.model === 'object' ? props.model : props.parentRow) ?? null
   const participantScoped =
-    isMiParticipantScopedSubTableBinding(binding, miKindContext.value) && hostRowIsMiParticipant(hostRow)
+    isMiParticipantScopedSubTableBinding(binding, miKindContext.value)
+    && hostRowIsMiParticipant(hostRow, miKindContext.value.collectionPrimaryKeyFields)
   const scope = (rows: unknown[]) =>
     participantScoped
-      ? scopeLinkChildRowsToMiHostRow(hostRow, rows, miChildFkConfigOfBinding(binding as never))
+      ? scopeLinkChildRowsToMiHostRow(
+          hostRow,
+          rows,
+          miChildFkConfigOfBinding(binding as never),
+          miKindContext.value.collectionPrimaryKeyFields,
+        )
       : rows
 
   // Model first: it carries local __subTables__ edits before the host round-trips them
@@ -324,6 +330,9 @@ const miKindContext = computed(() => {
   return {
     miCollectionTableId: (collection as { tableId?: number | null } | undefined)?.tableId ?? null,
     primaryTableId: props.hostTableId ?? null,
+    // MI collection 的设计器主键：宿主行是不是参与者行、参与者 id 取哪一列，都按它判定。
+    collectionPrimaryKeyFields:
+      (collection as { primaryKeyFields?: string[] | null } | undefined)?.primaryKeyFields ?? null,
   }
 })
 

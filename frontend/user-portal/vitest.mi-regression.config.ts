@@ -30,6 +30,8 @@ const MI_REGRESSION_FILES = [
   'src/composables/formRenderer/__tests__/saveWithRelationTableBindings.test.ts',
   // 结构外键按配置解析（改名 FU 的回归闸）
   'src/composables/tasks/__tests__/miChildFkFromConfig.test.ts',
+  // 子表链接表单的 FK 列同样按配置解析
+  'src/composables/subTableField/__tests__/linkFormFkFromConfig.test.ts',
 ]
 
 export default defineConfig({
