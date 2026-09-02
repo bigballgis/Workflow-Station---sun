@@ -31,23 +31,43 @@ describe('formFieldMeta', () => {
     expect(shouldIncludeFieldOnFormCanvas(fk)).toBe(false)
   })
 
-  it('omits platform audit fields from canvas import', () => {
+  it('allows platform audit fields on the canvas so Import Table Fields can add them', () => {
     for (const name of ['created_at', 'created_by', 'updated_at', 'updated_by']) {
-      expect(shouldIncludeFieldOnFormCanvas(field({ fieldName: name, dataType: 'TIMESTAMP' }))).toBe(false)
+      expect(shouldIncludeFieldOnFormCanvas(field({ fieldName: name, dataType: 'TIMESTAMP' }))).toBe(true)
     }
   })
 
-  it('removes audit field rules when syncing canvas with table metadata', () => {
-    const fields = [field({ fieldName: 'name' })]
+  it('marks imported audit fields readonly and ignores designer unlock', () => {
+    for (const name of ['created_at', 'created_by', 'updated_at', 'updated_by']) {
+      const audit = field({ fieldName: name, dataType: name.endsWith('_at') ? 'TIMESTAMP' : 'VARCHAR' })
+      const rule = applyTableFieldMetaToFormRule(audit, {
+        field: name,
+        type: 'input',
+        props: { readonly: false },
+        readonly: false,
+      }) as Record<string, unknown>
+      expect(rule.readonly).toBe(true)
+      expect((rule.props as Record<string, unknown>).readonly).toBe(true)
+      expect(taskFieldPermissionForField(audit)).toBe('READONLY')
+    }
+  })
+
+  it('keeps audit field rules when syncing canvas and locks them readonly', () => {
+    const fields = [
+      field({ fieldName: 'name' }),
+      field({ fieldName: 'created_at', dataType: 'TIMESTAMP' }),
+    ]
     const synced = syncFormRulesWithTableFields(
       [
         { field: 'name', type: 'input', props: {} },
-        { field: 'created_at', type: 'input', props: {} },
+        { field: 'created_at', type: 'datePicker', props: {} },
       ],
       fields,
     ) as Array<Record<string, unknown>>
-    expect(synced).toHaveLength(1)
-    expect(synced[0].field).toBe('name')
+    expect(synced).toHaveLength(2)
+    const audit = synced.find(r => r.field === 'created_at')
+    expect(audit?.readonly).toBe(true)
+    expect((audit?.props as Record<string, unknown>).readonly).toBe(true)
   })
 
   it('marks readonly FK and auto PK on imported rules', () => {

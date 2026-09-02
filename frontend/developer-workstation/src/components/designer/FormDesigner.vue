@@ -908,6 +908,7 @@ import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, isInlineSubF
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
+import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
 import TableBindingManager from './TableBindingManager.vue'
 import FormRenameDialog from './form-designer/FormRenameDialog.vue'
 import FormCreateDialog from './form-designer/FormCreateDialog.vue'
@@ -1819,7 +1820,7 @@ async function applySubDesignerRulesWhenReady(bindingId: number, rules: any[], a
  */
 async function handleBindingAdded(payload: { tableId: number; bindingType: string; bindingId: number }) {
   const { tableId, bindingType, bindingId } = payload
-  const fields = getTableFieldDefinitions(tableId)
+  const fields = filterOutTableAuditFields(getTableFieldDefinitions(tableId))
   if (!fields || fields.length === 0) return
 
   if (bindingType === 'PRIMARY') {
