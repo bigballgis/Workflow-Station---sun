@@ -42,13 +42,18 @@ class MiOverlayConfiguredColumnsTest {
     }
 
     @Test
-    @DisplayName("no configuration → platform defaults (the live path for every deployed FU today)")
-    void platformDefaultsWhenUnconfigured() {
+    @DisplayName("no configuration → nothing is written (2026-09-02: platform defaults removed)")
+    void unconfiguredWritesNoMiColumns() {
         Map<String, Object> r = row();
+        int before = r.size();
+
         MiOverlaySupport.applyMiOverlayToVariableRow(r, new MiRowProgress(null, null, "COMPLETED", "end"));
 
-        assertThat(r).containsEntry("task_status", "COMPLETED");
-        assertThat(r).containsEntry("task_current_node", "end");
+        // 曾经兜底成 task_status / task_current_node —— 而这两个名字只是设计器注入的假选项，
+        // 子表真实列名可能完全不同（FU 50005 实为 task_statuss / task_current_nodes）。
+        assertThat(r).doesNotContainKey("task_status");
+        assertThat(r).doesNotContainKey("task_current_node");
+        assertThat(r).hasSize(before);
     }
 
     @Test
@@ -105,10 +110,10 @@ class MiOverlayConfiguredColumnsTest {
     }
 
     @Test
-    @DisplayName("miColumnNamesFor: first configured name wins, else platform defaults")
+    @DisplayName("miColumnNamesFor: first configured name wins; unconfigured → null, not a literal")
     void miColumnNamesResolution() {
         assertThat(MiOverlaySupport.miColumnNamesFor(null))
-                .containsExactly("task_status", "task_current_node");
+                .containsExactly(null, null);
 
         Map<String, MiRowProgress> progress = new LinkedHashMap<>();
         progress.put("r1", new MiRowProgress("review_state", "review_step", "IN_PROGRESS", "n"));
@@ -117,12 +122,27 @@ class MiOverlayConfiguredColumnsTest {
     }
 
     @Test
-    @DisplayName("protected columns include both the defaults and this FU's configured names")
+    @DisplayName("protected columns are exactly this FU's configured names — no default literals")
     void protectedColumnsCoverConfiguredNames() {
         Map<String, MiRowProgress> progress = new LinkedHashMap<>();
         progress.put("r1", new MiRowProgress("review_state", "review_step", "IN_PROGRESS", "n"));
 
         assertThat(MiOverlaySupport.miDashboardColumnsToProtect(progress))
-                .contains("task_status", "task_current_node", "review_state", "review_step");
+                .containsExactlyInAnyOrder("review_state", "review_step");
+        assertThat(MiOverlaySupport.miDashboardColumnsToProtect(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("stuck-row normalizer does nothing without configured column names")
+    void stuckRowNormalizerSkipsWhenUnconfigured() {
+        Map<String, Object> r = row();
+        r.put("assignee_user_id", "u1");
+        int before = r.size();
+
+        MiOverlaySupport.normalizeStuckMiParticipantRowForCompletedProcess(
+                r, new MiRowProgress(null, null, "COMPLETED", "end"));
+
+        assertThat(r).doesNotContainKey("task_status");
+        assertThat(r).hasSize(before);
     }
 }

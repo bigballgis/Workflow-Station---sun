@@ -1320,7 +1320,7 @@ export default {
     miTaskCurrentNodeField: 'Current node column',
     miTaskCurrentNodeFieldTip:
       'Logical column holding the inner user task name for the active iteration. Cleared when the row completes.',
-    miProgressFieldSelectPlaceholder: 'Select or input a column name',
+    miProgressFieldSelectPlaceholder: 'Select a sub-table column',
     miProgressFieldInvalid: 'Only letters, digits and underscore; must not start with a digit',
     // Element-variable assignee config (inner user task)
     subTaskConfig: 'Sub-Task Config',

@@ -152,7 +152,8 @@ Process Design → Sub-Task Config 配置） — 子表 people 未携带设计�
 > `miDashboardBindingBpmnOverride.test.ts` 的 AP 服务任务用例都是这一类。
 > 一开始我在这里也抛了错，结果 9 个测试红 —— 说明这是**真实支持的场景**，不是测试写得随便。
 
-**（b）`task_status` / `task_current_node`。** 这两个不是"猜"，是**平台契约**：
+**（b）`task_status` / `task_current_node`。** ~~这两个不是"猜"，是**平台契约**~~
+**（2026-09-02 全面推翻并删除，见下节）**：
 
 - 实测 **19 个已部署 BPMN 全部没有** `miTaskStatusField`（只有 `subTableName` /
   `assigneeField` / `rowIdVariable` / `assigneeMode`）：
@@ -172,6 +173,59 @@ Process Design → Sub-Task Config 配置） — 子表 people 未携带设计�
 
 注意引擎侧的处理完全一致，可作旁证：`subTableName` 缺失 →
 `throw new WorkflowValidationException(...)`；状态列缺失 → 用默认名。**本轮前端与之对齐。**
+
+## 2026-09-02 修订：这两个默认列名已全部删除（写入侧 + 读取侧）
+
+上节（b）的结论已被推翻。触发点：Sub-Task Config 的两个下拉框把 `task_status` /
+`task_current_node` 作为**固定选项注入**，而 demo FU 50005 的子表 `subtable` 上真实列名是
+`task_statuss` / `task_current_nodes`（结尾多个 s）。选中注入的假选项，引擎 UPDATE 就打到
+不存在的列上，被 `columnExists` 判否后**静默跳过** —— 表现为"配了却不生效"。
+
+推翻（b）两条论据的实测（2026-09-02，dev 库）：
+
+| 原论据 | 复测结果 |
+|---|---|
+| 19 个已部署 BPMN 全都没有 `miTaskStatusField` | 现为 **7 个中 1 个有**（FU 50005 已配）；`subTableName` 去重后**只有 `subtable` 一张 MI 子表** |
+| 无配置时字面量是"平台确定写入的真实列名" | 全库只有 `participants` 有 `task_status` 列，而它属 FU 3、**无任何已部署 BPMN 引用**、表内 0 行 —— 兜底服务不了任何一行数据，只能写到不存在的列 |
+
+### 第一轮：写入侧
+
+| 位置 | 修法 |
+|---|---|
+| `MultiInstanceTaskWriter.resolveMiProgressColumnNames` | 删除 `statusDefault` / `nodeDefault`；未配置或非法标识符返回 `null` |
+| `MultiInstanceTaskWriter.safeSqlColumnName` | 去掉 `defaultName` 参数，不合法 → `null` |
+| `MultiInstanceTaskWriter.updateSubTableTaskProgress` | 逐列判空；两列都没配 → **warn 并跳过**（原先是 catch 里的 debug，静默）；配了但表上没这列 → 同样 warn |
+
+测试 `MultiInstanceProgressColumnConfigTest`（6 用例）锁定：配置生效、缺失返回 `null` 而**不是**
+两个字面量、非法标识符不回落、两列都没配则一条 SQL 都不发、只配一列时只写那一列。
+
+### 第二轮：读取侧（按用户决定，「不要这个契约，读配置」）
+
+既然写入侧已经「没配就不写」，读取侧再兜底一个名字，只会去读一个永远不存在的键。
+
+| 位置 | 修法 |
+|---|---|
+| `MiOverlaySupport.PORTAL_MI_STATUS_COLUMN` / `..._CURRENT_NODE_COLUMN` | **删除常量**；新增 `trimToNull` 取代 `firstNonBlank(x, 默认)` |
+| `MiOverlaySupport.applyMiOverlayToVariableRow` | 逐列判空，没配置就**不 put**（原先必须 put 一个 key，只能盖默认名） |
+| `MiOverlaySupport.normalizeStuckMiParticipantRowForCompletedProcess` | 列名缺失直接 return —— 否则得猜哪个 key 是状态 |
+| `MiOverlaySupport.miColumnNamesFor` | 返回 `{null, null}` 而非默认名 |
+| `MiOverlaySupport.miDashboardColumnsToProtect` | 只保护配置出来的列；无配置=空集 |
+| `MiOverlayComponent.resolveMiRowProgress` | 引擎下发的列名为空即 `null` |
+| `SubTableEnrichmentComponent.repairStaleTaskStatus` | 列名缺失直接 return，不再对着默认名发 UPDATE |
+| `MultiInstanceDataResolver.resolveMiNamedColumn` | 去掉 `defaultName` 参数 → `null`；`columnExists` / 排除判定按「没有这一列」处理 |
+| 前端 `useMiConfig.MI_DEFAULT_*` | **删除常量**；`MiFieldNames.statusField/currentNodeField` 改 `string \| null` |
+| 前端消费点 | `useSubTableStatusColumns`(2)、`subTableRowHelpers`、`subTableRowUtils`、`useApplicationDetailMiScope`(3)、`SubTableField.vue`、`subTableRowMerge`、`internal.ts`(2)、`subTableBindingKinds` 全部 null 安全 |
+
+**行为变化**：没配置进度列的 FU，其 MI 状态/节点列在 Portal 上**不再出现**（原先会显示平台盖上的
+`task_status`）。这正是本轮目的——如实反映「没配置」。已配置的 FU（如 FU 50005）不受影响。
+
+**保留不动**：`SUB_TABLE_ROW_META_KEYS` 等「跨 FU 已知名并集」（本文档 B 类）仍含这两个名字 ——
+它们回答的是"这是不是运行时元数据"，不是"本 FU 的状态列叫什么"，两回事。
+
+测试：后端 `MiOverlayConfiguredColumnsTest` 9 用例（3 条旧断言改为断言新契约 + 新增 normalizer 用例）、
+`MultiInstanceProgressColumnConfigTest` 6 用例；前端 `useMiConfig.test.ts` 11 用例、
+`mergeSubTableRowsMiMerge.test.ts` 18 用例（后者补 `setActiveMiConfig` 注册 ——
+terminal-wins 本就只对配置了进度列的 FU 生效）。
 
 ### 三、本轮改动的真正价值
 

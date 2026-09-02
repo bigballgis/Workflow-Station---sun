@@ -7,6 +7,7 @@ import {
   dropSubsumedSubTableRows,
   isSharedAttachmentFileBinding,
   rowIsSelfOwnedByStructuralFk,
+  miChildFkConfigOfBinding,
 } from '@/composables/tasks/shared'
 import { readSubTableRows, type SubTableStoreBindingLike } from '@/composables/tasks/subTableStore'
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
@@ -186,8 +187,12 @@ export function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]
     const selfOwnedChunks: any[][] = []
     for (const b of group) {
       const rows = Array.isArray(b.data) ? b.data : []
-      const ownRows = rows.filter((r: any) => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, pkFields))
-      const restRows = rows.filter((r: any) => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, pkFields)))
+      // FK 列名按该 binding 的设计器字段定义解析，不猜列名。
+      const bFkConfig = miChildFkConfigOfBinding(b as never)
+      const isOwn = (r: any) =>
+        r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, pkFields, bFkConfig)
+      const ownRows = rows.filter(isOwn)
+      const restRows = rows.filter((r: any) => !isOwn(r))
       merged = mergeSubTableRowsByRowId(merged, restRows, pkFields)
       if (ownRows.length > 0) selfOwnedChunks.push(ownRows)
     }
@@ -284,7 +289,9 @@ export const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
 export function isMiPlaceholderKey(lowerKey: string): boolean {
   if (SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lowerKey)) return true
   const { statusField, currentNodeField } = getActiveMiFieldNames()
-  return lowerKey === statusField.toLowerCase() || lowerKey === currentNodeField.toLowerCase()
+  // 未配置的列名为 null —— 没有这一列，也就无从"是"它。
+  return (!!statusField && lowerKey === statusField.toLowerCase())
+    || (!!currentNodeField && lowerKey === currentNodeField.toLowerCase())
 }
 
 /** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */

@@ -12,9 +12,11 @@ export function normalizeColumnHeaderLabel(s: string): string {
  */
 function columnRepresentsMiOrTaskStatusList(col: Column): boolean {
   const f = String(col.field || '').toLowerCase()
-  // 首选：当前 FU 的 Sub-Task Config 配置的状态列名（miTaskStatusField）。
-  // 下面的字面量/标签匹配是配置缺失时的兜底启发式（老流程定义、非 MI 上下文）。
-  if (f === getActiveMiFieldNames().statusField.toLowerCase()) return true
+  // 首选：当前 FU 的 Sub-Task Config 配置的状态列名（miTaskStatusField）；未配置为 null。
+  // 下面的字面量/标签匹配是配置缺失时的兜底启发式（老流程定义、非 MI 上下文）——
+  // 这里是"这列该不该显示"的显示层判定，猜错只影响一列的显隐，不会写错数据，故保留。
+  const cfgStatusField = getActiveMiFieldNames().statusField
+  if (cfgStatusField && f === cfgStatusField.toLowerCase()) return true
   if (f === 'task_status' || f.endsWith('_task_status')) return true
   if (/\btask[_-]?status\b/i.test(f) || f.includes('taskstatus')) return true
   const lab = normalizeColumnHeaderLabel(String(col.label || ''))
@@ -50,7 +52,9 @@ export function useSubTableStatusColumns(props: SubTableFieldProps, rows: Ref<an
   function listViewLikelyAlreadyShowsTaskStatus(rowsSample: unknown[]): boolean {
     const r0 = rowsSample?.[0]
     if (!r0 || typeof r0 !== 'object') return false
-    if ((r0 as Record<string, unknown>)[getActiveMiFieldNames().statusField] === undefined) return false
+    const statusField = getActiveMiFieldNames().statusField
+    if (!statusField) return false
+    if ((r0 as Record<string, unknown>)[statusField] === undefined) return false
     if ((props.columns || []).some(columnHeaderIsGenericStatusLabel)) return true
     return (props.columns || []).some(c => {
       const lab = normalizeColumnHeaderLabel(String(c.label || ''))

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   collapseSubTableRowsPreferFilled,
   enrichChildBindingRowsFromParentsNestedSubTables,
@@ -6,8 +6,27 @@ import {
   mergeSubTableRowsByRowId,
   miParentRowAlignsWithChildRow,
 } from '../shared'
+import { clearActiveMiConfig, setActiveMiConfig } from '../useMiConfig'
+
+/**
+ * MI 进度列名没有平台默认值（2026-09-02 删除，见 useMiConfig.ts）：terminal-wins 合并
+ * 只对**配置了进度列**的 FU 生效。下面的用例用 task_status / task_current_node 这两个名字，
+ * 所以必须像真实详情页那样先注册配置——否则合并会（正确地）退化成普通合并。
+ */
+const SCOPE_WITH_PROGRESS_COLUMNS = {
+  subTableName: 'subtable',
+  assigneeField: 'assignee',
+  rowIdVariable: 'currentItem.rowId',
+  miTaskStatusField: 'task_status',
+  miTaskCurrentNodeField: 'task_current_node',
+  collectionVariable: null,
+  elementVariable: 'currentItem',
+}
 
 describe('mergeSubTableRowsByRowId MI dashboard columns', () => {
+  beforeEach(() => setActiveMiConfig(SCOPE_WITH_PROGRESS_COLUMNS as any))
+  afterEach(() => clearActiveMiConfig())
+
   /**
    * My Request link-form popup (useSubTableLinkFormOpen readOnlyIsolateLinkForm branch) merges this
    * binding's own nested row ("pool") with peer-binding fallback rows sharing the same table_id

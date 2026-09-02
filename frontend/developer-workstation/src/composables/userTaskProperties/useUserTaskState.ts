@@ -59,8 +59,9 @@ export function useUserTaskState(
   const loadingSubTables = ref(false)
 
   // Multi-instance sub-process row progress columns (stored on parent SubProcess)
-  const miTaskStatusField = ref('task_status')
-  const miTaskCurrentNodeField = ref('task_current_node')
+  // 空 = 未配置；候选项来自所选子表 Table Design 的真实字段，不预填约定列名。
+  const miTaskStatusField = ref('')
+  const miTaskCurrentNodeField = ref('')
   const FIELD_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
   const miStatusFieldInvalid = computed(() => {
     return !!miTaskStatusField.value && !FIELD_NAME_RE.test(miTaskStatusField.value.trim())

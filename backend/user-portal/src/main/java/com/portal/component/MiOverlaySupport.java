@@ -24,20 +24,17 @@ import java.util.regex.Pattern;
  */
 final class MiOverlaySupport {
 
-    /**
-     * Platform default MI mirror column names — the single definition point on this side.
+    /*
+     * 2026-09-02：平台默认列名 PORTAL_MI_STATUS_COLUMN / PORTAL_MI_CURRENT_NODE_COLUMN 已删除。
      *
-     * <p>These are NOT a guess: they are the names this platform itself generates when a Function
-     * Unit's Sub-Task Config does not name its own ({@code miTaskStatusField} /
-     * {@code miTaskCurrentNodeField}). Measured 2026-09-01: all 19 deployed BPMN definitions carry
-     * {@code subTableName} / {@code assigneeField} but none configures these two, so this default
-     * is the live path for every existing Function Unit. A configured name always wins — see
-     * {@link MiOverlayComponent#resolveMiRowProgress} — mirroring the engine
-     * ({@code MultiInstanceDataResolver.resolveMiNamedColumn}) and the frontend
-     * ({@code composables/tasks/useMiConfig.ts}).
+     * 原按「平台契约」保留，依据是 2026-09-01 实测无一 FU 配置过这两项。该依据不成立：
+     * developer-workstation 的 Sub-Task Config 下拉曾把 task_status / task_current_node
+     * 作为固定选项**注入**，子表真实列名可能完全不同（demo FU 50005 的 subtable 实为
+     * task_statuss / task_current_nodes）——「平台确定写入的列名」其实是设计器造出来的假象。
+     *
+     * 现在列名一律来自 Sub-Task Config（经引擎随 MI 任务下发）。解析不出就不写、不改、不保护：
+     * 宁可这一行没有状态列，也不要盖一个按配置去读的人永远读不到的键。
      */
-    static final String PORTAL_MI_STATUS_COLUMN = "task_status";
-    static final String PORTAL_MI_CURRENT_NODE_COLUMN = "task_current_node";
 
     private MiOverlaySupport() {
     }
@@ -91,9 +88,10 @@ final class MiOverlaySupport {
     }
 
     /**
-     * This table's configured MI status / current-node column names, or the platform defaults when
-     * no engine row carries a Sub-Task Config override. Every row of one sub-table shares the
-     * configuration, so the first non-blank wins.
+     * This table's configured MI status / current-node column names. Every row of one sub-table
+     * shares the configuration, so the first non-blank wins. An element is {@code null} when
+     * Sub-Task Config does not name that column — callers must skip it rather than substitute a
+     * literal (see the note at the top of this class).
      */
     static String[] miColumnNamesFor(Map<String, MiRowProgress> miProgress) {
         String status = null;
@@ -111,16 +109,12 @@ final class MiOverlaySupport {
                 }
             }
         }
-        return new String[] {
-                firstNonBlank(status, PORTAL_MI_STATUS_COLUMN),
-                firstNonBlank(node, PORTAL_MI_CURRENT_NODE_COLUMN),
-        };
+        return new String[] { status, node };
     }
 
     static Set<String> miDashboardColumnsToProtect(Map<String, MiRowProgress> miProgress) {
+        // 只保护本 FU 配置出来的列名；没有配置就没有需要保护的 MI 列。
         Set<String> cols = new LinkedHashSet<>();
-        cols.add(PORTAL_MI_STATUS_COLUMN);
-        cols.add(PORTAL_MI_CURRENT_NODE_COLUMN);
         if (miProgress == null) {
             return cols;
         }
@@ -292,10 +286,14 @@ final class MiOverlaySupport {
         // stamped a second, differently named status column onto every row of a Function Unit that
         // configured its own names: the portal then rendered two status columns, and whichever the
         // reader picked was a coin flip. Write the resolved names only.
-        String statusCol = firstNonBlank(p.statusColumn, PORTAL_MI_STATUS_COLUMN);
-        String nodeCol = firstNonBlank(p.nodeColumn, PORTAL_MI_CURRENT_NODE_COLUMN);
-        row.put(statusCol, mapWorkflowMiStatusToPortalTaskStatus(p.status));
-        row.put(nodeCol, p.currentNode != null && !p.currentNode.isBlank() ? p.currentNode : "-");
+        String statusCol = trimToNull(p.statusColumn);
+        String nodeCol = trimToNull(p.nodeColumn);
+        if (statusCol != null) {
+            row.put(statusCol, mapWorkflowMiStatusToPortalTaskStatus(p.status));
+        }
+        if (nodeCol != null) {
+            row.put(nodeCol, p.currentNode != null && !p.currentNode.isBlank() ? p.currentNode : "-");
+        }
     }
 
     private static String mapWorkflowMiStatusToPortalTaskStatus(String workflowStatus) {
@@ -332,8 +330,11 @@ final class MiOverlaySupport {
         if (row == null || row.isEmpty()) {
             return;
         }
-        String statusCol = firstNonBlank(p != null ? p.statusColumn : null, PORTAL_MI_STATUS_COLUMN);
-        String nodeCol = firstNonBlank(p != null ? p.nodeColumn : null, PORTAL_MI_CURRENT_NODE_COLUMN);
+        String statusCol = trimToNull(p != null ? p.statusColumn : null);
+        String nodeCol = trimToNull(p != null ? p.nodeColumn : null);
+        if (statusCol == null || nodeCol == null) {
+            return;
+        }
         Object ts = row.get(statusCol);
         String s = ts != null ? String.valueOf(ts).trim() : "";
         if ("COMPLETED".equalsIgnoreCase(s) || "CANCELLED".equalsIgnoreCase(s)) {
@@ -538,5 +539,13 @@ final class MiOverlaySupport {
             }
         }
         return null;
+    }
+
+    /** 空/空白 → {@code null}，用于「没配这一列」的判定。 */
+    static String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

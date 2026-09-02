@@ -229,10 +229,10 @@
       <el-select
         v-model="miTaskStatusField"
         filterable
-        allow-create
-        default-first-option
         clearable
-        :placeholder="t('properties.miProgressFieldSelectPlaceholder')"
+        :disabled="!elementSubTableId"
+        :loading="loadingSubTables"
+        :placeholder="miProgressFieldPlaceholder"
         style="width: 100%"
         @change="handleMiTaskStatusFieldChange"
       >
@@ -257,10 +257,10 @@
       <el-select
         v-model="miTaskCurrentNodeField"
         filterable
-        allow-create
-        default-first-option
         clearable
-        :placeholder="t('properties.miProgressFieldSelectPlaceholder')"
+        :disabled="!elementSubTableId"
+        :loading="loadingSubTables"
+        :placeholder="miProgressFieldPlaceholder"
         style="width: 100%"
         @change="handleMiTaskCurrentNodeFieldChange"
       >
@@ -320,6 +320,7 @@ const {
   assigneeFieldOptions,
   miProgressFieldOptions,
   assigneeFieldPlaceholder,
+  miProgressFieldPlaceholder,
   handleMiTaskStatusFieldChange,
   handleMiTaskCurrentNodeFieldChange,
 } = multiInstance

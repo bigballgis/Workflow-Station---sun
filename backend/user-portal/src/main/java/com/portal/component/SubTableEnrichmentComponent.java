@@ -226,7 +226,8 @@ public class SubTableEnrichmentComponent {
                 Map<String, MiRowProgress> miProgress =
                         miOverlayComponent.lookupMiProgressForDesignerTable(miProgressByTable, tableName);
                 Set<String> protectedMiCols = MiOverlaySupport.miDashboardColumnsToProtect(miProgress);
-                // This FU's configured MI column names (platform defaults when unconfigured).
+                // This FU's configured MI column names; an element is null when Sub-Task Config
+                // does not name that column — repairStaleTaskStatus then skips the row.
                 String[] miCols = MiOverlaySupport.miColumnNamesFor(miProgress);
 
                 String safeTableName = SubTablePhysicalMetadataCache.requireSafeIdentifier(tableName);
@@ -401,12 +402,14 @@ public class SubTableEnrichmentComponent {
      */
     private void repairStaleTaskStatus(String tableName, Map<String, Object> dbRow, Map<String, Object> rowKey,
                                        List<String> pkCols, String statusColumn, String nodeColumn) {
-        // Column names come from Sub-Task Config when this Function Unit names its own; the
-        // platform defaults apply otherwise (see MiOverlaySupport.PORTAL_MI_STATUS_COLUMN).
-        // `columnExists` still gates the UPDATE, so a table without the column is skipped rather
-        // than issuing SQL against a column that is not there.
-        String statusCol = MiOverlaySupport.firstNonBlank(statusColumn, MiOverlaySupport.PORTAL_MI_STATUS_COLUMN);
-        String nodeCol = MiOverlaySupport.firstNonBlank(nodeColumn, MiOverlaySupport.PORTAL_MI_CURRENT_NODE_COLUMN);
+        // 列名只来自 Sub-Task Config：没配就没有「该修哪一列」的答案，直接不修。
+        // 早先兜底成 task_status，要么对没有该列的表发 UPDATE（被 columnExists 挡下后静默跳过），
+        // 要么更糟——修到一张恰好也叫 task_status、却不属于本 FU 的表的列上。
+        String statusCol = MiOverlaySupport.trimToNull(statusColumn);
+        String nodeCol = MiOverlaySupport.trimToNull(nodeColumn);
+        if (statusCol == null || nodeCol == null) {
+            return;
+        }
         Object ts = dbRow.get(statusCol);
         if (ts != null && !"PENDING".equals(String.valueOf(ts))) {
             return;

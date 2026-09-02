@@ -45,16 +45,6 @@ export function normalizeMiLinkMatchId(v: unknown): string | null {
   return s === '' ? null : s
 }
 
-/** Structural FK field names linking a child row to its MI participant (sub task) row. */
-export const MI_STRUCTURAL_PARENT_FK_FIELDS = [
-  'sub_task_id',
-  'participant_id',
-  'participantId',
-  'parent_id',
-  'parentId',
-  'meeting_participant_id',
-] as const
-
 /** Rank for MI dashboard {@code task_status}; higher wins when merging conflicting snapshots. */
 export function miTaskStatusRank(raw: string): number {
   const u = raw.trim().toUpperCase().replace(/\s+/g, '_')
@@ -126,8 +116,9 @@ export function mergeMiCurrentNodePreferPrevious(prevNode: unknown, nextNode: un
 /** Heuristic richness: which snapshot likely came from fuller portal/backend MI hydration vs a thin duplicate binding. */
 export function miDashboardSliceRichness(
   rec: Record<string, unknown>,
-  statusField = 'task_status',
-  currentNodeField = 'task_current_node',
+  // 无平台默认列名（见 useMiConfig.ts）：未配置传 null，该项不计分。
+  statusField: string | null = null,
+  currentNodeField: string | null = null,
 ): number {
   let s = 0
   const au = rec['assignee_user_id']
@@ -138,9 +129,9 @@ export function miDashboardSliceRichness(
   if (tk !== undefined && tk !== null && String(tk).trim() !== '') s += 2
   const ti = rec['task_id'] ?? rec['taskId']
   if (ti !== undefined && ti !== null && String(ti).trim() !== '') s += 2
-  const st = rec[statusField]
+  const st = statusField ? rec[statusField] : undefined
   if (st !== undefined && st !== null && String(st).trim() !== '') s += 1
-  const node = rec[currentNodeField]
+  const node = currentNodeField ? rec[currentNodeField] : undefined
   if (node !== undefined && node !== null && String(node).trim() !== '') s += 1
   return s
 }
@@ -162,11 +153,14 @@ export function roughNonEmptyFieldCount(rec: Record<string, unknown>): number {
 export function incomingIsStrictNonMiKeySubset(
   prior: Record<string, unknown>,
   incoming: Record<string, unknown>,
-  statusField = 'task_status',
-  currentNodeField = 'task_current_node',
+  // 无平台默认列名（见 useMiConfig.ts）：未配置传 null，不把任何列当 MI 元数据。
+  statusField: string | null = null,
+  currentNodeField: string | null = null,
 ): boolean {
   const meta = (k: string) =>
-    k.startsWith('__') || k === statusField || k === currentNodeField
+    k.startsWith('__')
+    || (!!statusField && k === statusField)
+    || (!!currentNodeField && k === currentNodeField)
   const prevKeys = [...Object.keys(prior)].filter(k => !meta(k))
   const incKeys = [...Object.keys(incoming)].filter(k => !meta(k))
   if (incKeys.length === 0 || incKeys.length >= prevKeys.length) {

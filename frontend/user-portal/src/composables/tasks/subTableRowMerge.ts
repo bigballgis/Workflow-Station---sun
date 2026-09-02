@@ -250,6 +250,11 @@ export function mergeSubTableRowsByRowId(
       out[key] = val
     }
 
+    // 本 FU 没配 MI 进度列 → 没有可做 terminal-wins 的状态/节点列，普通合并即为结果。
+    if (MI_STATUS_KEY === null || MI_NODE_KEY === null) {
+      return out
+    }
+
     const mergedStatus = mergeMiTaskStatusPreferTerminal(out[MI_STATUS_KEY], incoming[MI_STATUS_KEY])
     if (mergedStatus !== undefined) {
       out[MI_STATUS_KEY] = mergedStatus

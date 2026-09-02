@@ -66,17 +66,13 @@ export interface MiDashboardFieldNames {
 }
 
 /**
- * Column names the designer configured, falling back to the platform defaults ONLY when the BPMN
- * carries no configuration (older process definitions saved before Sub-Task Config exposed these,
- * and non-MI contexts that still merge these mirror columns). A configured name always wins, so a
- * Function Unit whose status column is called anything else is handled by config, not by adding
- * another literal here.
+ * 设计器配置的 MI 进度列名。**没有平台默认值**（2026-09-02 删除，见 `useMiConfig.ts` 顶部说明）：
+ * 未配置时返回 `null`，调用方按「这个 FU 没有这一列」处理，不要再兜底一个字面量。
  */
 export function resolveMiDashboardFieldNames(
   fields?: MiDashboardFieldNames | null,
-): { statusField: string; currentNodeField: string } {
-  // 显式传入 > 当前 FU 的 Sub-Task Config（useMiConfig 注册表）> 平台默认字面量。
-  // 实测此前无任何调用点传过 fields，导致 100% 落在默认值上、状态列改名的 FU 静默失效。
+): { statusField: string | null; currentNodeField: string | null } {
+  // 显式传入 > 当前 FU 的 Sub-Task Config（useMiConfig 注册表）。
   const { statusField, currentNodeField } = getActiveMiFieldNames({
     statusField: fields?.statusField,
     currentNodeField: fields?.currentNodeField,

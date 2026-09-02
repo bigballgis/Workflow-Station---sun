@@ -638,16 +638,27 @@ class MultiInstanceTaskWriter {
         if (subTableName == null || rowKey == null || rowKey.isEmpty()) {
             return;
         }
+        // 两列都没配 = 设计上就不跟踪进度。这不是错误，但静默跳过会让"配了不生效"很难查，
+        // 所以留一条 warn（而不是原先 catch 里的 debug）指向具体该配哪里。
+        if (statusColumn == null && currentNodeColumn == null) {
+            log.warn("MI progress columns are not configured for sub-table {}; skipping progress update. "
+                    + "Set them in Process Design > Sub-Task Config (Sub-task status column / Current node column).",
+                    subTableName);
+            return;
+        }
         try {
             String tableName = requireSafeIdentifier(subTableName);
             List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, tableName);
             String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
             Object[] pkArgs = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
-            String statusCol = requireSafeIdentifier(statusColumn);
-            String nodeCol = requireSafeIdentifier(currentNodeColumn);
-            boolean hasTaskStatus = columnExists(jdbcTemplate, tableName, statusCol);
-            boolean hasTaskCurrentNode = columnExists(jdbcTemplate, tableName, nodeCol);
+            String statusCol = statusColumn == null ? null : requireSafeIdentifier(statusColumn);
+            String nodeCol = currentNodeColumn == null ? null : requireSafeIdentifier(currentNodeColumn);
+            boolean hasTaskStatus = statusCol != null && columnExists(jdbcTemplate, tableName, statusCol);
+            boolean hasTaskCurrentNode = nodeCol != null && columnExists(jdbcTemplate, tableName, nodeCol);
             if (!hasTaskStatus && !hasTaskCurrentNode) {
+                // 配了列名但表上没这列（例如列被改名）——同样值得告警，否则又是静默不生效。
+                log.warn("MI progress columns {} / {} do not exist on sub-table {}; skipping progress update.",
+                        statusCol, nodeCol, subTableName);
                 return;
             }
 
@@ -671,20 +682,28 @@ class MultiInstanceTaskWriter {
         }
     }
 
+    /**
+     * 进度列名只认 Process Design > Sub-Task Config 里配置的、子表上真实存在的列。
+     * <p>
+     * 这里**没有**默认列名：早先兜底成 {@code task_status} / {@code task_current_node}，
+     * 而这两个名字只是约定，子表上未必存在（例如列实际叫 {@code task_statuss}），
+     * 兜底的结果就是 UPDATE 打到不存在的列上被静默跳过，看起来"配了却不生效"。
+     * 未配置时返回 {@code null}，由 {@link #updateSubTableTaskProgress} 跳过对应列并告警。
+     *
+     * @return 长度为 2 的数组 {status 列, current node 列}，未配置的元素为 {@code null}
+     */
     String[] resolveMiProgressColumnNames(TaskAssignmentListener owner, String processDefinitionId,
             String taskDefinitionKey) {
         BpmnActionParser bpmnActionParser = owner.bpmnActionParser();
-        String statusDefault = "task_status";
-        String nodeDefault = "task_current_node";
         if (processDefinitionId == null || processDefinitionId.isBlank()
                 || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
-            return new String[] { statusDefault, nodeDefault };
+            return new String[] { null, null };
         }
         String st = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
                 processDefinitionId, taskDefinitionKey, "miTaskStatusField");
         String nd = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
                 processDefinitionId, taskDefinitionKey, "miTaskCurrentNodeField");
-        return new String[] { safeSqlColumnName(st, statusDefault), safeSqlColumnName(nd, nodeDefault) };
+        return new String[] { safeSqlColumnName(st), safeSqlColumnName(nd) };
     }
 
     void updateCurrentItemProgress(TaskAssignmentListener owner, Map<String, Object> processVariables,
@@ -727,12 +746,13 @@ class MultiInstanceTaskWriter {
         updateSubTableTaskProgress(owner, subTableName, rowKey, taskName, cols[0], cols[1]);
     }
 
-    private static String safeSqlColumnName(String candidate, String defaultName) {
+    /** 未配置或不是合法 SQL 标识符 → {@code null}（表示"没有这一列"），不再回落到约定列名。 */
+    private static String safeSqlColumnName(String candidate) {
         if (candidate == null || candidate.isBlank()) {
-            return defaultName;
+            return null;
         }
         String t = candidate.trim();
-        return SAFE_SQL_IDENTIFIER.matcher(t).matches() ? t : defaultName;
+        return SAFE_SQL_IDENTIFIER.matcher(t).matches() ? t : null;
     }
 
     private static Long extractLong(Object value) {

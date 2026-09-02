@@ -916,10 +916,14 @@ const { formatTaskStatus, effectiveShowTaskStatus, effectiveShowViewDetail } =
 /**
  * MI 状态列名来自当前 FU 的 Sub-Task Config（miTaskStatusField），不写死 `task_status`。
  * 用 computed 而非常量：切换 task / application 详情时活动配置会变。
+ *
+ * <p>未配置时为 `null` —— 模板里用它取值会落到不存在的键上，故统一给一个不可能命中的占位键，
+ * 让 `scope.row[miStatusField]` 恒为 undefined（渲染成 Pending），而不是误读某个真实列。
  */
-const miStatusField = computed(() => getActiveMiFieldNames().statusField)
+const miStatusFieldRaw = computed(() => getActiveMiFieldNames().statusField)
+const miStatusField = computed(() => miStatusFieldRaw.value ?? '__mi_status_unconfigured__')
 const isMiStatusColumnField = (field: unknown): boolean =>
-  String(field ?? '') === miStatusField.value
+  !!miStatusFieldRaw.value && String(field ?? '') === miStatusFieldRaw.value
 
 const rowKeys = useSubTableRowKeys(props)
 

@@ -147,8 +147,9 @@ public class MultiInstanceDataResolver {
         Map<String, Object> rowKey = resolveRowKeyFromExt(extProps, safeSubTableName);
         List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeSubTableName);
 
-        String statusCol = resolveMiNamedColumn(extProps, "miTaskStatusField", "miTaskStatusField", extInfo, "task_status");
-        String nodeCol = resolveMiNamedColumn(extProps, "miTaskCurrentNodeField", "miTaskCurrentNodeField", extInfo, "task_current_node");
+        // 未配置 → null，下面的 columnExists / 排除判定都按「没有这一列」处理。
+        String statusCol = resolveMiNamedColumn(extProps, "miTaskStatusField", "miTaskStatusField", extInfo);
+        String nodeCol = resolveMiNamedColumn(extProps, "miTaskCurrentNodeField", "miTaskCurrentNodeField", extInfo);
 
         String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
         String checkSql = String.format(
@@ -175,17 +176,18 @@ public class MultiInstanceDataResolver {
         }
 
         // 3. Build UPDATE with optimistic lock
-        boolean hasTaskStatus = columnExists(safeSubTableName, statusCol);
-        boolean hasTaskCurrentNode = columnExists(safeSubTableName, nodeCol);
+        boolean hasTaskStatus = statusCol != null && columnExists(safeSubTableName, statusCol);
+        boolean hasTaskCurrentNode = nodeCol != null && columnExists(safeSubTableName, nodeCol);
         StringBuilder updateSql = new StringBuilder(String.format("UPDATE %s SET ", safeSubTableName));
         List<Object> params = new ArrayList<>();
         Set<String> pkSet = new HashSet<>(pkCols);
 
         for (Map.Entry<String, Object> entry : formData.entrySet()) {
             String colName = requireSafeIdentifier(entry.getKey());
+            // colName 在前：statusCol / nodeCol 可能为 null（未配置该列）。
             if (pkSet.contains(colName) || "row_version".equals(colName)
-                    || statusCol.equals(colName)
-                    || nodeCol.equals(colName)) {
+                    || colName.equals(statusCol)
+                    || colName.equals(nodeCol)) {
                 continue;
             }
             updateSql.append(colName).append(" = ?, ");
@@ -318,8 +320,16 @@ public class MultiInstanceDataResolver {
     /**
      * Resolve MI status/node column from ext props or BPMN subprocess extensions.
      */
+    /**
+     * MI 进度列名：先读任务落地的 extendedProperties，再回读 BPMN。
+     *
+     * <p>2026-09-02 起**没有默认列名**：解析不出返回 {@code null}，调用方跳过该列。
+     * 早先兜底成 {@code task_status} / {@code task_current_node} 源于「设计器把这两个名字
+     * 作为固定选项注入」造成的假象——子表真实列名可能是别的（如 {@code task_statuss}），
+     * 兜底只会让 UPDATE 打在不存在的列上被静默跳过。
+     */
     private String resolveMiNamedColumn(Map<String, Object> extProps, String extJsonKey, String bpmnPropertyName,
-                                      ExtendedTaskInfo extInfo, String defaultName) {
+                                      ExtendedTaskInfo extInfo) {
         String v = getStringValue(extProps, extJsonKey);
         if (v != null && v.trim().matches("[A-Za-z_][A-Za-z0-9_]*")) {
             return v.trim();
@@ -332,7 +342,7 @@ public class MultiInstanceDataResolver {
                 return fromBpmn.trim();
             }
         }
-        return defaultName;
+        return null;
     }
 
     private String requireSafeIdentifier(String identifier) {

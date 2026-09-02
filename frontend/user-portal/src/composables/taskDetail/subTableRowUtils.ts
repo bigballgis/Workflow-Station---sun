@@ -210,7 +210,9 @@ export const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
 export function isMiPlaceholderKey(lowerKey: string): boolean {
   if (SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lowerKey)) return true
   const { statusField, currentNodeField } = getActiveMiFieldNames()
-  return lowerKey === statusField.toLowerCase() || lowerKey === currentNodeField.toLowerCase()
+  // 未配置的列名为 null —— 没有这一列，也就无从"是"它。
+  return (!!statusField && lowerKey === statusField.toLowerCase())
+    || (!!currentNodeField && lowerKey === currentNodeField.toLowerCase())
 }
 
 /** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */

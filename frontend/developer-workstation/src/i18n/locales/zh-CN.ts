@@ -1315,7 +1315,7 @@ export default {
       '子表每一行上由引擎维护的状态列（如 PENDING / IN_PROGRESS / COMPLETED）。须与关联表字段名及门户列表列配置一致。',
     miTaskCurrentNodeField: '当前节点列名',
     miTaskCurrentNodeFieldTip: '记录当前迭代内在办用户任务名称的列；该行子流程全部完成后由引擎清空。',
-    miProgressFieldSelectPlaceholder: '请选择或输入列名',
+    miProgressFieldSelectPlaceholder: '请选择子表字段',
     miProgressFieldInvalid: '只能包含字母、数字、下划线，且不能以数字开头',
     // 子表行处理人配置（内部用户任务）
     subTaskConfig: '子任务配置',

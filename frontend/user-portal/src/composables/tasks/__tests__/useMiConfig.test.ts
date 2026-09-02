@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  MI_DEFAULT_CURRENT_NODE_FIELD,
-  MI_DEFAULT_STATUS_FIELD,
   clearActiveMiConfig,
   getActiveMiConfig,
   getActiveMiFieldNames,
@@ -18,10 +16,12 @@ import { isSubTableRowMetaField, resolveMiDashboardFieldNames } from '../subTabl
  * 任何调用点传过** —— 113 个调用点 100% 落在 `task_status` / `task_current_node` 默认值上，
  * 于是状态列改过名的 FU 静默失效，且只在那个 FU 上复现。
  *
- * <p>这里锁定：注册配置后，深层纯函数无需改签名即可拿到正确列名；未注册时仍退回平台默认值。
+ * <p>这里锁定：注册配置后，深层纯函数无需改签名即可拿到正确列名；
+ * **未注册时返回 `null`** —— 2026-09-02 删除了平台默认列名（那两个名字其实是设计器
+ * 下拉注入的假选项，子表真实列名可能完全不同）。
  */
 
-/** FU 50005 实测：默认列名。 */
+/** 恰好用了 task_status / task_current_node 这两个名字的 FU（现在只是普通配置值，不是默认值）。 */
 const DEFAULT_SCOPE = {
   subTableName: 'subtable',
   assigneeField: 'assignee',
@@ -44,10 +44,10 @@ const CUSTOM_SCOPE = {
 afterEach(() => clearActiveMiConfig())
 
 describe('活动配置的注册与清除', () => {
-  it('未注册时用平台默认列名（老流程定义没有 Sub-Task Config）', () => {
+  it('未注册时列名为 null —— 没有平台默认值可猜（2026-09-02 删除）', () => {
     expect(getActiveMiFieldNames()).toMatchObject({
-      statusField: MI_DEFAULT_STATUS_FIELD,
-      currentNodeField: MI_DEFAULT_CURRENT_NODE_FIELD,
+      statusField: null,
+      currentNodeField: null,
     })
   })
 
@@ -65,14 +65,14 @@ describe('活动配置的注册与清除', () => {
     setActiveMiConfig(CUSTOM_SCOPE as any)
     clearActiveMiConfig()
     expect(getActiveMiConfig()).toBeNull()
-    expect(getActiveMiFieldNames().statusField).toBe(MI_DEFAULT_STATUS_FIELD)
+    expect(getActiveMiFieldNames().statusField).toBeNull()
   })
 
-  it('配置里该字段为空时退回默认值，不返回空字符串', () => {
+  it('配置里该字段为空白时返回 null，既不返回空字符串也不兜底字面量', () => {
     setActiveMiConfig({ ...DEFAULT_SCOPE, miTaskStatusField: '  ', miTaskCurrentNodeField: null } as any)
     expect(getActiveMiFieldNames()).toMatchObject({
-      statusField: MI_DEFAULT_STATUS_FIELD,
-      currentNodeField: MI_DEFAULT_CURRENT_NODE_FIELD,
+      statusField: null,
+      currentNodeField: null,
     })
   })
 

@@ -131,10 +131,12 @@ public class MiOverlayComponent {
                         continue;
                     }
 
-                    String statusCol = MiOverlaySupport.firstNonBlank(
-                            MiOverlaySupport.stringVal(rowTasks.get(0).get("miTaskStatusField")), "task_status");
-                    String nodeCol = MiOverlaySupport.firstNonBlank(
-                            MiOverlaySupport.stringVal(rowTasks.get(0).get("miTaskCurrentNodeField")), "task_current_node");
+                    // 列名只认 Sub-Task Config（引擎随任务下发）；没配就是 null，
+                    // 下游 applyMiOverlayToVariableRow 跳过该列，不再盖一个字面量。
+                    String statusCol = MiOverlaySupport.trimToNull(
+                            MiOverlaySupport.stringVal(rowTasks.get(0).get("miTaskStatusField")));
+                    String nodeCol = MiOverlaySupport.trimToNull(
+                            MiOverlaySupport.stringVal(rowTasks.get(0).get("miTaskCurrentNodeField")));
 
                     MiRowProgress computed;
                     if (processEndedCompleted) {

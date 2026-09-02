@@ -199,13 +199,14 @@ export function useUserTaskMultiInstance(
     return table?.fieldDefinitions || []
   })
 
+  // 进度列只能来自所选子表在 Table Design 里真实存在的字段：不注入任何硬编码
+  // 约定列名（task_status / task_current_node），否则设计器会让人选到表上没有的列，
+  // 运行时 UPDATE 静默写不进去。
   const miProgressFieldOptions = computed(() => {
-    const base = ['task_status', 'task_current_node']
-    const fromTable = (assigneeFieldOptions.value || []).map((f: any) => f.fieldName).filter(Boolean)
     const seen = new Set<string>()
     const merged: string[] = []
-    for (const n of [...base, ...fromTable]) {
-      const key = String(n || '').trim()
+    for (const f of assigneeFieldOptions.value || []) {
+      const key = String((f as any)?.fieldName || '').trim()
       if (!key || seen.has(key)) continue
       seen.add(key)
       merged.push(key)
@@ -216,6 +217,11 @@ export function useUserTaskMultiInstance(
   const assigneeFieldPlaceholder = computed(() => {
     if (!elementSubTableId.value) return ctx.t('properties.selectSubTableFirst')
     return ctx.t('properties.selectAssigneeField')
+  })
+
+  const miProgressFieldPlaceholder = computed(() => {
+    if (!elementSubTableId.value) return ctx.t('properties.selectSubTableFirst')
+    return ctx.t('properties.miProgressFieldSelectPlaceholder')
   })
 
   const parentIsMultiInstanceSubProcess = computed(() => {
@@ -238,12 +244,13 @@ export function useUserTaskMultiInstance(
     if (!props.modeler || !props.element) return
     const parent = getParentMiSubProcessElement()
     if (!parent) return
-    const st = (miTaskStatusField.value || 'task_status').trim()
-    const nd = (miTaskCurrentNodeField.value || 'task_current_node').trim()
-    if (FIELD_NAME_RE.test(st)) {
+    // 清空即写回空串（而不是回落到硬编码列名），让「没配」如实存进 BPMN。
+    const st = (miTaskStatusField.value || '').trim()
+    const nd = (miTaskCurrentNodeField.value || '').trim()
+    if (!st || FIELD_NAME_RE.test(st)) {
       setExtensionProperty(props.modeler, parent, 'miTaskStatusField', st)
     }
-    if (FIELD_NAME_RE.test(nd)) {
+    if (!nd || FIELD_NAME_RE.test(nd)) {
       setExtensionProperty(props.modeler, parent, 'miTaskCurrentNodeField', nd)
     }
   }
@@ -336,14 +343,15 @@ export function useUserTaskMultiInstance(
       const pExt = getExtensionProperties(parent)
       const rawSt = pExt?.miTaskStatusField
       const rawNd = pExt?.miTaskCurrentNodeField
+      // 没配过就显示为空，由用户从子表真实字段里选，不预填约定列名。
       miTaskStatusField.value =
         typeof rawSt === 'string' && rawSt.trim() && FIELD_NAME_RE.test(rawSt.trim())
           ? rawSt.trim()
-          : 'task_status'
+          : ''
       miTaskCurrentNodeField.value =
         typeof rawNd === 'string' && rawNd.trim() && FIELD_NAME_RE.test(rawNd.trim())
           ? rawNd.trim()
-          : 'task_current_node'
+          : ''
     }
   }
 
@@ -359,6 +367,7 @@ export function useUserTaskMultiInstance(
     assigneeFieldOptions,
     miProgressFieldOptions,
     assigneeFieldPlaceholder,
+    miProgressFieldPlaceholder,
     parentIsMultiInstanceSubProcess,
     getParentMiSubProcessElement,
     persistMiProgressFieldProps,

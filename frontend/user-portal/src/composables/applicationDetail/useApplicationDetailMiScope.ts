@@ -15,6 +15,7 @@ import {
   type SubTableBindingAlignable,
 } from './subTableRowHelpers'
 import { getActiveMiFieldNames, setActiveMiConfig } from '@/composables/tasks/useMiConfig'
+import { probeMiKinds } from '@/composables/taskDetail/miKindProbe'
 import type { ApplicationDetailState } from './useApplicationDetailState'
 import type { ApplicationDetailCtx } from './context'
 
@@ -115,22 +116,26 @@ export function createApplicationDetailMiScope(ctx: ApplicationDetailCtx): Appli
     ...previousForms.value.flatMap(form => form.subTableBindings.flatMap(binding => binding.data || []))
   ]
 
+  // 状态列名来自 Sub-Task Config（miTaskStatusField），无平台默认值：
+  // 没配置就没有状态列可读，一律判定为"没有 MI 状态数据"。
   const hasIncompleteMiRows = (): boolean => {
     const sf = getActiveMiFieldNames().statusField
+    if (!sf) return false
     const rows = getMiRows().filter((row: any) => row && row[sf] !== undefined)
     return rows.length > 0 && rows.some((row: any) => String(row[sf] || '').toUpperCase() !== 'COMPLETED')
   }
 
   const hasCompletedMiRows = (): boolean => {
     const sf = getActiveMiFieldNames().statusField
+    if (!sf) return false
     const rows = getMiRows().filter((row: any) => row && row[sf] !== undefined)
     return rows.length > 0 && rows.every((row: any) => String(row[sf] || '').toUpperCase() === 'COMPLETED')
   }
 
   function hasTaskStatusData(rows: any[]): boolean {
     if (!Array.isArray(rows) || rows.length === 0) return false
-    // 状态列名来自 Sub-Task Config（miTaskStatusField），不写死 task_status
     const sf = getActiveMiFieldNames().statusField
+    if (!sf) return false
     if (snapshotTaskName) {
       return rows.some(r => r && r[sf] === 'COMPLETED')
     }
@@ -158,6 +163,12 @@ export function createApplicationDetailMiScope(ctx: ApplicationDetailCtx): Appli
    * Initiators see the full case (all MI transaction rows + case attachments), not one participant slice.
    */
   function filterRunningMiBindingsByProcessDesignScope(bindings: typeof subTableBindings.value) {
+    // 阶段 0 影子探针：只观测，不改行为。My Request 链路目前**完全没有盖章**（盖章器只挂在
+    // task detail 三处），所以这里是启发式触发面最大的地方，必须测。放在最前面：下面几个 early
+    // return（发起人视图 / 非 RUNNING）不代表分类不发生，binding 照样被启发式分类。
+    probeMiKinds('application-detail', bindings, activeMiSubProcessScope.value, {
+      bpmnParsed: !!bpmnXml.value,
+    })
     if (isInitiatorMyRequestView.value) return
     if (snapshotTaskName || processInfo.value.status !== 'RUNNING') return
     const scope = activeMiSubProcessScope.value

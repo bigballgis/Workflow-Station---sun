@@ -1316,7 +1316,7 @@ export default {
       '子表每一列上由引擎維護的狀態欄（如 PENDING / IN_PROGRESS / COMPLETED）。須與關聯表欄位名稱及入口網站列表欄設定一致。',
     miTaskCurrentNodeField: '目前節點欄位名稱',
     miTaskCurrentNodeFieldTip: '記錄目前迭代內在辦使用者任務名稱的欄位；該列子流程全部完成後由引擎清空。',
-    miProgressFieldSelectPlaceholder: '請選擇或輸入欄位名稱',
+    miProgressFieldSelectPlaceholder: '請選擇子表欄位',
     miProgressFieldInvalid: '只能包含字母、數字、底線，且不能以數字開頭',
     // 子表行處理人配置（內部使用者任務）
     subTaskConfig: '子任務配置',

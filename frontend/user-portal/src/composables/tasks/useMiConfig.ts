@@ -26,35 +26,25 @@
 
 import type { MiSubProcessScopeConfig } from './miSubProcessScopeBpmn'
 
-/**
- * 平台自己生成这两列时用的列名 —— **不是"猜一个名字"，而是平台契约**。
+/*
+ * 2026-09-02：MI_DEFAULT_STATUS_FIELD / MI_DEFAULT_CURRENT_NODE_FIELD 已删除。
  *
- * <p>实测（2026-09-01）：19 个已部署 BPMN **全部**带 `subTableName` / `assigneeField`，
- * **没有一个**带 `miTaskStatusField` / `miTaskCurrentNodeField`：
- * ```sql
- * SELECT count(*) FILTER (WHERE b LIKE '%miTaskStatusField%'),  -- 0
- *        count(*) FILTER (WHERE b LIKE '%subTableName%'),       -- 19
- *        count(*)                                               -- 19
- * FROM (SELECT convert_from(bytes_,'UTF8') b FROM act_ge_bytearray WHERE name_ LIKE '%.bpmn%') t;
- * ```
+ * 原按「平台契约」保留，依据是 2026-09-01 实测无一 FU 配置过这两项。该依据不成立：
+ * developer-workstation 的 Sub-Task Config 下拉曾把 `task_status` / `task_current_node`
+ * 作为固定选项**注入**，而子表真实列名可能完全不同（demo FU 50005 的 subtable 实为
+ * `task_statuss` / `task_current_nodes`）——「平台确定写入的列名」其实是设计器造出来的假象。
  *
- * <p>而后端**正是用这两个字面量写入数据的**（`MiOverlaySupport.java:243`
- * `row.put("task_status", ...)`、`SubTableEnrichmentComponent` 的 `SET task_status='COMPLETED'`），
- * 引擎侧 `MultiInstanceDataResolver.resolveMiNamedColumn(..., "task_status")` 也是同一套默认。
- * 所以在无配置时，这两个名字是**平台确定写入的真实列名**，不是猜测。
- *
- * <p>与之相对，`subTableName` / `assigneeField` 这类是**每个 FU 各不相同、只能由配置回答**的，
- * 解析不出时必须报错（见 {@link requireMiSubTableName} / {@link requireMiAssigneeField}），
- * 引擎侧同样是 `throw new WorkflowValidationException("missing multi-instance configuration")`。
+ * 后端写入/读取侧的兜底已同步删除（MultiInstanceTaskWriter / MiOverlaySupport /
+ * MiOverlayComponent / SubTableEnrichmentComponent / MultiInstanceDataResolver）：
+ * 没配置时后端根本不写这两列 —— 前端再兜底一个名字，只会去读一个永远不存在的键。
+ * 列名一律来自 Sub-Task Config；解析不出就是 null，调用方按「没有这一列」处理。
  */
-export const MI_DEFAULT_STATUS_FIELD = 'task_status'
-export const MI_DEFAULT_CURRENT_NODE_FIELD = 'task_current_node'
 
 export interface MiFieldNames {
-  /** Sub-Task Config `miTaskStatusField`。 */
-  statusField: string
-  /** Sub-Task Config `miTaskCurrentNodeField`。 */
-  currentNodeField: string
+  /** Sub-Task Config `miTaskStatusField`；无配置时为 null（调用方不得猜列名）。 */
+  statusField: string | null
+  /** Sub-Task Config `miTaskCurrentNodeField`；无配置时为 null。 */
+  currentNodeField: string | null
   /** Sub-Task Config `assigneeField`；无配置时为 null（调用方不得猜列名）。 */
   assigneeField: string | null
   /** Sub-Task Config `subTableName`（设计器表名）；无配置时为 null。 */
@@ -99,11 +89,9 @@ export function getActiveMiFieldNames(
   const status =
     trimOrNull(explicit?.statusField)
     ?? trimOrNull(cfg?.miTaskStatusField)
-    ?? MI_DEFAULT_STATUS_FIELD
   const currentNode =
     trimOrNull(explicit?.currentNodeField)
     ?? trimOrNull(cfg?.miTaskCurrentNodeField)
-    ?? MI_DEFAULT_CURRENT_NODE_FIELD
   return {
     statusField: status,
     currentNodeField: currentNode,
