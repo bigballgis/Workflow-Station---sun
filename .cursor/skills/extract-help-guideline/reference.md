@@ -39,9 +39,12 @@ Each article should let a reader answer without opening source:
    `GuideArticle` (see SKILL.md Readability gates): one card with user labels
    **Default / After you run the sample / Note**, not writer taxonomy. Visual
    effects use Form Preview figures.
-4. **Exact samples** — field/table names that appear on those screenshots
-5. **Failures** — save blockers the designer can see
-6. **Related** — other `/help/` ids, not a paste of their full text
+4. **Field catalog** — one sample row per visible control: on-screen label
+   (`code`), meaning + required/blank (`hintKey`). List dropdown choices. If a
+   value is filled by Admin Center, say so on that row.
+5. **Exact samples** — field/table names that appear on those screenshots
+6. **Failures** — save blockers the designer can see
+7. **Related** — other `/help/` ids, not a paste of their full text
 
 Demo Function Unit for figures (when present): Purchase Request. Main table
 `help_pr`, sub-table `help_pr_line`. Formula samples must use those names
@@ -78,7 +81,13 @@ guides.myTopic: { title, summary }
 myTopicGuide: { pageTitle, intro, flowTitle, flow1…, relatedTitle, sectionTitle, sectionBody, sampleHint? }
 ```
 
-`vue-i18n` must not contain a raw `${name}` in the locale file.
+`vue-i18n` must not contain a raw `${name}` or `{ }` in the locale file
+(named interpolation). Literal `{`: `{'{'}`. Literal `}`: `{'}'}`. A JUEL
+token in help copy is `${'{'}fieldName{'}'}`, never `${fieldName}`.
+
+Field-catalog `hintKey`s: meaning + required vs optional + what blank does.
+One `samples` row per visible control. Name every dropdown choice. If Host /
+Port / TLS are filled in Admin Center, still list that row.
 
 ## One article = one designer job
 

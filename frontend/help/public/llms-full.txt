@@ -27,13 +27,17 @@ Three pieces: Outbound connection, Email Template, Send Task. Subject and body l
 
 Order: Outbound connection → template (enabled) → Send Task → To + Connection + Template → save.
 
-SMTP host/port/TLS come from Admin Center → System Config. Same email cannot have two connections in the same direction.
+SMTP host/port/TLS come from Admin Center → System Config (not typed on the connection form). Same email cannot have two connections in the same direction.
 
-Template example: PR Approved Notice. Insert Variable for main fields, lookup attributes, or a sub-table (rendered as a table). Visual and HTML panes; HTML mode keeps <style> tags in the design-time preview. Switching back to Visual may simplify tables and styles.
+Connection fields: Direction (Outbound send / Inbound monitor); Sender Email (From address, required, also the name); Sender Display Name (optional); Username / Password (SMTP login; password required when username set; blank on edit keeps stored); SMTP Host, Port, Use TLS (Admin System Config); Email Provider (list column); Enabled; Test / Test Recipient / Send Test Email.
 
-Send Task required: To, Connection, Template. From override optional. Failures: missing connection, empty To, missing/disabled template, empty subject after variables, attachment not a FILE field, no global SMTP.
+Template fields: Template Name (required); Subject (Insert Variable, empty after fill fails send); Insert Variable (main / Lookup / sub-table table); Body; Visual / HTML; Email preview (design-time); Enabled (required for send).
 
-Related: /help/email-monitor , /help/computed-fields
+Send Task fields: To (required, address or ${fieldName}; multiple addresses semicolon-separated); Insert field button (main-table ${fieldName} only, plus initiator); Connection (required outbound); From override (optional); Template (required); Basic Info Task ID / Type / Task Name. Advanced: Cc, Bcc, Attachments (FILE Upload field), Sensitivity (Normal/Personal/Private/Confidential), Reply-To, Importance (Low/Normal/High).
+
+Template example: PR Approved Notice. Failures: missing/inbound/disabled connection; empty To; missing/disabled template; empty subject after variables; attachment not FILE; no global SMTP; instance started before Deploy or user task after the Send Task not completed first.
+
+Related: /help/email-monitor , /help/computed-fields , /help/form-upload
 
 ## Email Monitor (/help/email-monitor)
 
@@ -41,7 +45,13 @@ Starts a process when mail arrives.
 
 Order: Inbound connection → monitor template → bind sample text to main-table fields → Inbound Email Trigger on Start event → save binding → Deploy.
 
-Do not set From/Subject filters on the template; those belong only on the Start Event. Do not set Process Key on the template.
+Inbound connection fields: Direction Inbound; Mailbox Email (required, also the name); IMAP Username / Password; IMAP Host, Port, SSL from Admin System Config; Enabled.
+
+Monitor template fields: Rule Name (required); Inbound Mailbox (required); System Initiator (optional search); Folder / Label (blank → INBOX); Poll Interval seconds (min 30); Send to manual review when required fields are missing; Enabled is list-only (new rules start enabled). Do not set Process Key, From Filter, or Subject Filter on the template.
+
+Extraction wizard: Sample Email (Subject, From, Plain Text Body, HTML Body); Field Mapping (Add Field, Bind selection, Target Field, Source: Subject / Text+HTML recommended / Text+HTML / HTML only / Header / Constant; Method: LABEL BETWEEN REGEX CONST HEADER; Rule; Required; Preview); Sub-table HTML table (Add Sub-table, Sub Table Binding, Table # 0-based, Table selector, First row is header, Add Column, Column #).
+
+Start Event fields: Start process when email arrives; Process Key (auto); Start Event ID (auto); Email Monitor template (required when on); Inbound Mailbox (read-only); Field extraction status; From Filter; Subject Filter (example Quote); Save Start Event binding.
 
 Examples: template Vendor quote to PR; folder INBOX; extraction to request_title; Subject Filter Quote on StartEvent_Email.
 

@@ -20,17 +20,18 @@
             <span class="crumb-current">{{ crumbTitle }}</span>
           </template>
         </nav>
-        <div class="help-langs" :aria-label="t('app.langAria')">
-          <button
-            v-for="opt in locales"
-            :key="opt.id"
-            type="button"
-            class="help-lang"
-            :class="{ 'is-on': locale === opt.id }"
-            @click="setLocale(opt.id)"
+        <div class="help-langs">
+          <select
+            class="help-lang-select"
+            data-testid="help-locale-select"
+            :aria-label="t('app.langAria')"
+            :value="locale"
+            @change="onLocaleChange"
           >
-            {{ t(opt.labelKey) }}
-          </button>
+            <option v-for="opt in locales" :key="opt.id" :value="opt.id">
+              {{ t(opt.labelKey) }}
+            </option>
+          </select>
         </div>
       </header>
       <main class="help-main">
@@ -46,7 +47,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import HelpNav from '@/components/HelpNav.vue'
 import { GUIDELINES, NAV_TREE, navGroupIdsForArticle } from '@/guidelines'
-import { persistLocale, type HelpLocale } from '@/i18n'
+import { isHelpLocale, persistLocale, type HelpLocale } from '@/i18n'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -73,6 +74,14 @@ const locales: { id: HelpLocale; labelKey: string }[] = [
 function setLocale(next: HelpLocale): void {
   locale.value = next
   persistLocale(next)
+}
+
+function onLocaleChange(event: Event): void {
+  const next = (event.target as HTMLSelectElement).value
+  if (!isHelpLocale(next)) {
+    throw new Error(`Unsupported help locale: ${next}`)
+  }
+  setLocale(next)
 }
 
 function toggleGroup(id: string): void {

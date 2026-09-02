@@ -8,8 +8,8 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 ## Index by job
 
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
-- /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task)
-- /help/email-monitor — Email Monitor (inbound connection, monitor template, Start Event binding)
+- /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task; field catalog for every control)
+- /help/email-monitor — Email Monitor (inbound connection, monitor template, extraction wizard, Start Event #start-event; field catalog for every control)
 - /help/up-tasks-to-claim — To Do: claim pool on the same list; Claim all; selection-bar Claim/Unclaim; Unclaim all (own holds); auto-claim on open (default off); Leader / Approver / SYS_ADMIN force unclaim
 - /help/task-delegate — Delegate a task (User Portal To Do; specified user lookup or BU+Role; does not change Current Assignee)
 - /help/form-upload — Form Design Upload (drop or multi-select files; Max files default 10; set 1 for a single file; list cells show firstName +N)

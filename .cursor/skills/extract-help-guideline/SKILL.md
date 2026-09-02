@@ -45,8 +45,8 @@ User names a topic (View 访问、计算字段、邮件模板) or says 提取 gu
 - Write operational copy: what to tick / type / save, and what fails. No marketing.
 - Script **effect** methods: Intent → Before → Code → After (see Voice). Parameter
   lists stay reference. Do not write a JavaScript tutorial.
-- Layer each article: **overview → order of work → how-to with figures → exact
-  fields/samples → failures → related articles**.
+- Layer each article: **overview → order of work → how-to with figures → field
+  catalog (every control) → exact samples → failures → related articles**.
 - Cross-link related guidelines with `router-link` (Send email ↔ Email Monitor ↔
   Computed fields). Do not duplicate the other article.
 - Use a **flow** (`GuideArticle` `flow-keys`) for multi-step designer jobs.
@@ -101,7 +101,8 @@ Output this block, then **stop**. No Edit/Write until 确认 / 可以 / 执行.
 - view + i18n keys（en / zh-CN / zh-TW）
 - `frontend/help/public/llms.txt`（及可选 `llms-full.txt`）
 - 需要截图时：`frontend/help/public/guides/…png` + bump `GUIDE_FIGURE_REV`
-【章节】overview / flow / how-to / samples / failures / related
+【章节】overview / flow / how-to / field-catalog / samples / failures / related
+【字段目录】将写入的每个 UI 标签（必填/选填、空白时怎样）— 禁止写「等其他选项」
 【不写】agent-only / 实现细节
 【已有页面】无 | 将更新 `computed-fields` 等
 
@@ -137,8 +138,11 @@ Checklist:
       `GUIDE_FIGURE_REV` in `GuideArticle.vue` so browsers drop the old PNG
 - [ ] Samples use the **same table/field names as the figures**
 - [ ] `data-testid="…-guide-page"`
-- [ ] i18n **three locales in the same change**; no raw `${token}` in locale strings
+- [ ] i18n **three locales in the same change**; no raw `${token}` or `{ }` in locale
+      strings (vue-i18n interpolates `{name}`). Literal braces: `{'{'}` / `{'}'}`.
+      Tokens: `${'{'}fieldName{'}'}`
 - [ ] Voice: ticks / types / saves; **script methods** use Intent → Before → Code → After (see Voice)
+- [ ] **Field catalog:** every visible control on the documented screens (see Field catalog)
 - [ ] Update `public/llms.txt` (and `llms-full.txt` if present)
 - [ ] Do not add Element Plus; styles already in `help.css`
 
@@ -148,6 +152,35 @@ Checklist:
 - Rebuild `platform-help-frontend` (compose) when shipping to `localhost:3000/help/`
 - Playwright `frontend/scripts/verify-help-portal.mjs`
 - Quote screenshot paths under `frontend/developer-workstation/verification-screenshots/`
+
+## Field catalog (required)
+
+Every article that documents a form, properties panel, or dialog **must** list
+**each visible control** the person can tick, type, or save. Do not write “and
+other options”. Optional and advanced fields count. Dropdown / radio **choices**
+the designer can pick must be named.
+
+For each control, the catalog row must say:
+
+1. **Label** — exact on-screen text (the `code` on a `GuideArticle` sample).
+2. **Meaning** — what it is for (`hintKey`).
+3. **Required vs optional** — and what happens if it is left blank.
+4. **Filled elsewhere** — if Host / Port / TLS come from Admin Center (or another
+   tab), say so on that row; do not omit the control because it is disabled.
+
+Place the catalog in the **reference** layer: `samples` with
+`sampleLayout: 'block'` on the matching how-to section, or a dedicated
+`anchor` section whose samples are one row per field. How-to prose stays
+click-the-UI; the catalog stays reference. Do not mix a paragraph that both
+narrates the flow and defines every field.
+
+Email send / Email Monitor articles are the calibration: Connections, Email
+Templates, Send Task Config, Email Monitors, extraction wizard, and Start Event
+Inbound Email Trigger each have a complete catalog.
+
+Locale strings that mention the Insert field button or `${'{'}fieldName{'}'}`
+must use vue-i18n escapes. A raw `{ }` in `en.ts` / `zh-CN.ts` / `zh-TW.ts`
+throws at render and blanks the page.
 
 ## Voice
 

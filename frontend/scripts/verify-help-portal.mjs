@@ -87,6 +87,14 @@ try {
     'Send-email HTML mode keeps style tags',
     (await sendArticle.textContent())?.includes('<style>') === true,
   )
+  rec(
+    'Send-email field catalog names Sender Email',
+    (await sendArticle.textContent())?.includes('Sender Email (From address)') === true,
+  )
+  rec(
+    'Send-email field catalog names From override',
+    (await sendArticle.textContent())?.includes('From (override)') === true,
+  )
   rec('URL is /help/email-send', page.url().includes('/help/email-send'), page.url())
   const sendShot = resolve(DW_SHOTS, `${DATE}_help-portal-email-send.png`)
   await page.screenshot({ path: sendShot, fullPage: true })
@@ -99,6 +107,14 @@ try {
   rec(
     'Email-monitor names Vendor quote to PR',
     (await monitorArticle.textContent())?.includes('Vendor quote to PR') === true,
+  )
+  rec(
+    'Email-monitor field catalog names Rule Name',
+    (await monitorArticle.textContent())?.includes('Rule Name') === true,
+  )
+  rec(
+    'Email-monitor field catalog names Start process when email arrives',
+    (await monitorArticle.textContent())?.includes('Start process when email arrives') === true,
   )
   rec(
     'URL is /help/email-monitor',

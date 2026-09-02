@@ -15,12 +15,14 @@
           {{ t('properties.emailTo') }}
           <span class="email-required-mark">*</span>
         </label>
-        <el-input
-          v-model="emailTo"
+        <RecipientExpressionField
+          :model-value="emailTo"
           :placeholder="t('properties.emailToPlaceholder')"
-          @input="onEmailConfigChange('emailTo', emailTo)"
+          :groups="recipientVariableGroups"
+          :loading="variablesLoading"
+          @update:model-value="onRecipientFieldChange('emailTo', $event)"
         />
-        <div class="form-tip">{{ t('properties.emailToHint') }}</div>
+        <div class="form-tip">{{ t('properties.emailToHint', { button: '{ }' }) }}</div>
       </div>
 
       <div class="email-field-block">
@@ -49,10 +51,12 @@
         <label class="email-field-label">
           {{ t('properties.emailFrom') }}
         </label>
-        <el-input
-          v-model="emailFrom"
+        <RecipientExpressionField
+          :model-value="emailFrom"
           :placeholder="t('properties.emailFromPlaceholder')"
-          @input="onEmailConfigChange('emailFrom', emailFrom)"
+          :groups="recipientVariableGroups"
+          :loading="variablesLoading"
+          @update:model-value="onRecipientFieldChange('emailFrom', $event)"
         />
         <div class="form-tip">{{ t('properties.emailFromHint') }}</div>
       </div>
@@ -98,18 +102,22 @@
       >
         <div class="email-field-block">
           <label class="email-field-label">{{ t('properties.emailCc') }}</label>
-          <el-input
-            v-model="emailCc"
+          <RecipientExpressionField
+            :model-value="emailCc"
             :placeholder="t('properties.emailCcPlaceholder')"
-            @input="onEmailConfigChange('emailCc', emailCc)"
+            :groups="recipientVariableGroups"
+            :loading="variablesLoading"
+            @update:model-value="onRecipientFieldChange('emailCc', $event)"
           />
         </div>
         <div class="email-field-block">
           <label class="email-field-label">{{ t('properties.emailBcc') }}</label>
-          <el-input
-            v-model="emailBcc"
+          <RecipientExpressionField
+            :model-value="emailBcc"
             :placeholder="t('properties.emailBccPlaceholder')"
-            @input="onEmailConfigChange('emailBcc', emailBcc)"
+            :groups="recipientVariableGroups"
+            :loading="variablesLoading"
+            @update:model-value="onRecipientFieldChange('emailBcc', $event)"
           />
         </div>
         <div class="email-attachments-block">
@@ -184,10 +192,12 @@
         </div>
         <div class="email-field-block">
           <label class="email-field-label">{{ t('properties.emailReplyTo') }}</label>
-          <el-input
-            v-model="emailReplyTo"
+          <RecipientExpressionField
+            :model-value="emailReplyTo"
             :placeholder="t('properties.emailReplyToPlaceholder')"
-            @input="onEmailConfigChange('emailReplyTo', emailReplyTo)"
+            :groups="recipientVariableGroups"
+            :loading="variablesLoading"
+            @update:model-value="onRecipientFieldChange('emailReplyTo', $event)"
           />
         </div>
         <div class="email-field-block">
@@ -247,8 +257,11 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
+import RecipientExpressionField from '@/components/designer/email/RecipientExpressionField.vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties } from '@/utils/bpmnExtensions'
+import { useEmailTemplateVariables } from '@/composables/email/useEmailTemplateVariables'
+import { filterGroupsForSendTaskRecipient } from '@/utils/sendTaskJuelVariables'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
 import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
@@ -324,6 +337,25 @@ const {
   loadingFieldOptions,
   loadFieldOptions
 } = useSendTaskAttachmentFieldOptions()
+
+const { groups: templateVariableGroups, loading: variablesLoading, load: loadTemplateVariables } =
+  useEmailTemplateVariables(props.functionUnitId)
+
+const recipientVariableGroups = computed(() =>
+  filterGroupsForSendTaskRecipient(templateVariableGroups.value),
+)
+
+function onRecipientFieldChange(
+  key: 'emailTo' | 'emailFrom' | 'emailCc' | 'emailBcc' | 'emailReplyTo',
+  value: string,
+) {
+  if (key === 'emailTo') emailTo.value = value
+  else if (key === 'emailFrom') emailFrom.value = value
+  else if (key === 'emailCc') emailCc.value = value
+  else if (key === 'emailBcc') emailBcc.value = value
+  else if (key === 'emailReplyTo') emailReplyTo.value = value
+  onEmailConfigChange(key, value)
+}
 
 const attachmentOptionGroups = computed(() => {
   const byGroup = new Map<string, typeof fieldOptions.value>()
@@ -412,7 +444,10 @@ watch(
 watch(
   () => props.functionUnitId,
   (id) => {
-    if (id) loadFieldOptions(id)
+    if (id) {
+      loadFieldOptions(id)
+      void loadTemplateVariables()
+    }
   },
   { immediate: true }
 )

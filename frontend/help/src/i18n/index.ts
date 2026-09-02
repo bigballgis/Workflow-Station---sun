@@ -8,10 +8,16 @@ const SUPPORTED = ['en', 'zh-CN', 'zh-TW'] as const
 
 export type HelpLocale = (typeof SUPPORTED)[number]
 
+export function isHelpLocale(value: string): value is HelpLocale {
+  return (SUPPORTED as readonly string[]).includes(value)
+}
+
 export function readStoredLocale(): HelpLocale {
   if (typeof localStorage === 'undefined') return 'en'
   const raw = localStorage.getItem(STORAGE_KEY)
-  return SUPPORTED.includes(raw as HelpLocale) ? (raw as HelpLocale) : 'en'
+  // FALLBACK(ux): missing or unknown stored locale → English so the picker still works
+  if (raw && isHelpLocale(raw)) return raw
+  return 'en'
 }
 
 export function persistLocale(locale: HelpLocale): void {

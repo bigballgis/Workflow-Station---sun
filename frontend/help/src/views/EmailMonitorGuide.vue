@@ -6,13 +6,18 @@
     crumb-key="emailMonitorGuide.crumb"
     flow-title-key="emailMonitorGuide.flowTitle"
     :flow-keys="flowKeys"
+    :jump-links="jumpLinks"
     :related="related"
     :sections="sections"
   />
 </template>
 
 <script setup lang="ts">
-import GuideArticle, { type GuideRelated, type GuideSection } from '@/components/GuideArticle.vue'
+import GuideArticle, {
+  type GuideJump,
+  type GuideRelated,
+  type GuideSection,
+} from '@/components/GuideArticle.vue'
 
 const flowKeys = [
   'emailMonitorGuide.flow1',
@@ -22,39 +27,137 @@ const flowKeys = [
   'emailMonitorGuide.flow5',
 ]
 
+const jumpLinks: GuideJump[] = [
+  { anchor: 'inbound', titleKey: 'emailMonitorGuide.inboundTitle' },
+  { anchor: 'template', titleKey: 'emailMonitorGuide.templateTitle' },
+  { anchor: 'extract', titleKey: 'emailMonitorGuide.extractTitle' },
+  { anchor: 'start-event', titleKey: 'emailMonitorGuide.startEventTitle' },
+  { anchor: 'deploy', titleKey: 'emailMonitorGuide.deployTitle' },
+]
+
 const related: GuideRelated[] = [
   { to: '/email-send#connection', titleKey: 'guides.emailSend.title' },
   { to: '/computed-fields', titleKey: 'guides.computedFields.title' },
 ]
 
+const catalog = { sampleLayout: 'block' as const }
+
 const sections: GuideSection[] = [
   {
+    anchor: 'inbound',
     titleKey: 'emailMonitorGuide.inboundTitle',
     bodyKey: 'emailMonitorGuide.inboundBody',
-    figure: { src: 'guides/dw-connections-inbound.png', captionKey: 'emailMonitorGuide.inboundFigure' },
-    samples: [{ code: 'Inbound (monitor)', hintKey: 'emailMonitorGuide.inboundSample' }],
-  },
-  {
-    titleKey: 'emailMonitorGuide.templateTitle',
-    bodyKey: 'emailMonitorGuide.templateBody',
-    figure: { src: 'guides/dw-email-monitors.png', captionKey: 'emailMonitorGuide.templateFigure' },
+    bodyKeys: ['emailMonitorGuide.inboundCatalogLead'],
+    figure: {
+      src: 'guides/dw-connections-inbound.png',
+      captionKey: 'emailMonitorGuide.inboundFigure',
+    },
+    ...catalog,
     samples: [
-      { code: 'Vendor quote to PR', hintKey: 'emailMonitorGuide.templateNameSample' },
-      { code: 'INBOX', hintKey: 'emailMonitorGuide.templateSample' },
+      { code: 'Direction', hintKey: 'emailMonitorGuide.fDirection' },
+      { code: 'Inbound (monitor)', hintKey: 'emailMonitorGuide.fDirectionInbound' },
+      { code: 'Mailbox Email', hintKey: 'emailMonitorGuide.fMailboxEmail' },
+      { code: 'IMAP Username', hintKey: 'emailMonitorGuide.fImapUsername' },
+      { code: 'IMAP Password', hintKey: 'emailMonitorGuide.fImapPassword' },
+      { code: 'IMAP Host', hintKey: 'emailMonitorGuide.fImapHost' },
+      { code: 'IMAP Port', hintKey: 'emailMonitorGuide.fImapPort' },
+      { code: 'IMAP SSL', hintKey: 'emailMonitorGuide.fImapSsl' },
+      { code: 'Enabled', hintKey: 'emailMonitorGuide.fConnEnabled' },
     ],
   },
   {
-    titleKey: 'emailMonitorGuide.extractTitle',
-    bodyKey: 'emailMonitorGuide.extractBody',
-    samples: [{ code: 'request_title', hintKey: 'emailMonitorGuide.extractSample' }],
+    anchor: 'template',
+    titleKey: 'emailMonitorGuide.templateTitle',
+    bodyKey: 'emailMonitorGuide.templateBody',
+    bodyKeys: ['emailMonitorGuide.templateCatalogLead'],
+    figure: {
+      src: 'guides/dw-email-monitors.png',
+      captionKey: 'emailMonitorGuide.templateFigure',
+    },
+    ...catalog,
+    samples: [
+      { code: 'Rule Name', hintKey: 'emailMonitorGuide.fRuleName' },
+      { code: 'Inbound Mailbox', hintKey: 'emailMonitorGuide.fInboundMailbox' },
+      { code: 'System Initiator', hintKey: 'emailMonitorGuide.fSystemInitiator' },
+      { code: 'Folder / Label', hintKey: 'emailMonitorGuide.fFolder' },
+      { code: 'Poll Interval (sec)', hintKey: 'emailMonitorGuide.fPoll' },
+      { code: 'Send to manual review when required fields are missing', hintKey: 'emailMonitorGuide.fReview' },
+      { code: 'Enabled', hintKey: 'emailMonitorGuide.fMonitorEnabled' },
+      { code: 'Vendor quote to PR', hintKey: 'emailMonitorGuide.templateNameSample' },
+      { code: 'INBOX', hintKey: 'emailMonitorGuide.templateSample' },
+      { code: 'Process Key', hintKey: 'emailMonitorGuide.fProcessKeyNotHere' },
+      { code: 'From Filter', hintKey: 'emailMonitorGuide.fFromNotHere' },
+      { code: 'Subject Filter', hintKey: 'emailMonitorGuide.fSubjectNotHere' },
+    ],
   },
   {
+    anchor: 'extract',
+    titleKey: 'emailMonitorGuide.extractTitle',
+    bodyKey: 'emailMonitorGuide.extractBody',
+    bodyKeys: ['emailMonitorGuide.extractCatalogLead'],
+    ...catalog,
+    samples: [
+      { code: 'Sample Email', hintKey: 'emailMonitorGuide.fSampleTab' },
+      { code: 'Subject', hintKey: 'emailMonitorGuide.fSampleSubject' },
+      { code: 'From', hintKey: 'emailMonitorGuide.fSampleFrom' },
+      { code: 'Plain Text Body', hintKey: 'emailMonitorGuide.fSampleText' },
+      { code: 'HTML Body (optional, for tables)', hintKey: 'emailMonitorGuide.fSampleHtml' },
+      { code: 'Field Mapping', hintKey: 'emailMonitorGuide.fFieldMapping' },
+      { code: 'Add Field', hintKey: 'emailMonitorGuide.fAddField' },
+      { code: 'Bind selection', hintKey: 'emailMonitorGuide.fBindSelection' },
+      { code: 'Target Field', hintKey: 'emailMonitorGuide.fTargetField' },
+      { code: 'Source', hintKey: 'emailMonitorGuide.fSource' },
+      { code: 'Method', hintKey: 'emailMonitorGuide.fMethod' },
+      { code: 'Rule', hintKey: 'emailMonitorGuide.fRule' },
+      { code: 'Required', hintKey: 'emailMonitorGuide.fRequired' },
+      { code: 'Preview', hintKey: 'emailMonitorGuide.fPreview' },
+      { code: 'request_title', hintKey: 'emailMonitorGuide.extractSample' },
+      { code: 'Sub-table (HTML table)', hintKey: 'emailMonitorGuide.fSubTableTab' },
+      { code: 'Add Sub-table', hintKey: 'emailMonitorGuide.fAddSubTable' },
+      { code: 'Sub Table Binding', hintKey: 'emailMonitorGuide.fSubBinding' },
+      { code: 'Table # in email', hintKey: 'emailMonitorGuide.fTableIndex' },
+      { code: 'Table selector (optional)', hintKey: 'emailMonitorGuide.fTableSelector' },
+      { code: 'First row is header', hintKey: 'emailMonitorGuide.fHeaderRow' },
+      { code: 'Add Column', hintKey: 'emailMonitorGuide.fAddColumn' },
+      { code: 'Column #', hintKey: 'emailMonitorGuide.fColumnIndex' },
+    ],
+  },
+  {
+    anchor: 'start-event',
     titleKey: 'emailMonitorGuide.startEventTitle',
     bodyKey: 'emailMonitorGuide.startEventBody',
+    bodyKeys: ['emailMonitorGuide.startEventCatalogLead'],
     figure: { src: 'guides/dw-start-event.png', captionKey: 'emailMonitorGuide.startEventFigure' },
-    samples: [{ code: 'Quote', hintKey: 'emailMonitorGuide.subjectFilterSample' }],
+    ...catalog,
+    samples: [
+      { code: 'Inbound Email Trigger', hintKey: 'emailMonitorGuide.fPanelTitle' },
+      { code: 'Start process when email arrives', hintKey: 'emailMonitorGuide.fEnable' },
+      { code: 'Process Key (auto)', hintKey: 'emailMonitorGuide.fBoundProcess' },
+      { code: 'Start Event ID (auto)', hintKey: 'emailMonitorGuide.fBoundEvent' },
+      { code: 'Email Monitor', hintKey: 'emailMonitorGuide.fSelectTemplate' },
+      { code: 'Inbound Mailbox', hintKey: 'emailMonitorGuide.fStartMailbox' },
+      { code: 'Field extraction', hintKey: 'emailMonitorGuide.fExtractionStatus' },
+      { code: 'From Filter', hintKey: 'emailMonitorGuide.fFromFilter' },
+      { code: 'Subject Filter', hintKey: 'emailMonitorGuide.fSubjectFilter' },
+      { code: 'Quote', hintKey: 'emailMonitorGuide.subjectFilterSample' },
+      { code: 'Save Start Event binding', hintKey: 'emailMonitorGuide.fSaveBinding' },
+    ],
   },
-  { titleKey: 'emailMonitorGuide.deployTitle', bodyKey: 'emailMonitorGuide.deployBody' },
-  { titleKey: 'emailMonitorGuide.deleteTitle', bodyKey: 'emailMonitorGuide.deleteBody' },
+  {
+    anchor: 'deploy',
+    titleKey: 'emailMonitorGuide.deployTitle',
+    bodyKey: 'emailMonitorGuide.deployBody',
+    failKeys: [
+      'emailMonitorGuide.failUnbound',
+      'emailMonitorGuide.failDisabledConn',
+      'emailMonitorGuide.failNoId',
+      'emailMonitorGuide.failNoProcessKey',
+      'emailMonitorGuide.failNoExtraction',
+    ],
+  },
+  {
+    titleKey: 'emailMonitorGuide.deleteTitle',
+    bodyKey: 'emailMonitorGuide.deleteBody',
+  },
 ]
 </script>

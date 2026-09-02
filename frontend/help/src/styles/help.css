@@ -187,22 +187,36 @@ a {
 
 .help-langs {
   display: flex;
-  gap: 4px;
+  align-items: center;
 }
 
-.help-lang {
-  border: 0;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.75);
+.help-lang-select {
+  appearance: none;
+  min-width: 132px;
+  height: 32px;
+  padding: 0 28px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.12);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M2.2 4.2h7.6L6 8.4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: #fff;
   font: inherit;
   font-size: 13px;
-  padding: 4px 8px;
+  font-weight: 650;
   cursor: pointer;
 }
 
-.help-lang.is-on {
-  color: #fff;
-  font-weight: 650;
+.help-lang-select:focus {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.help-lang-select option {
+  color: var(--help-ink);
+  background: #fff;
+  font-weight: 500;
 }
 
 .help-main {

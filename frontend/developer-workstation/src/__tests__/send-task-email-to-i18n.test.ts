@@ -10,23 +10,28 @@ const locales: Array<[string, typeof en]> = [
   ['zh-TW', zhTW]
 ]
 
-function translate(locale: string, messages: typeof en, key: string): string {
+function translate(
+  locale: string,
+  messages: typeof en,
+  key: string,
+  params?: Record<string, unknown>,
+): string {
   const i18n = createI18n({
     legacy: false,
     locale,
     messages: { [locale]: messages }
   })
-  return String(i18n.global.t(key))
+  return String(params ? i18n.global.t(key, params) : i18n.global.t(key))
 }
 
 describe('send task email To / Cc / Bcc i18n literals', () => {
-  it.each(locales)('%s shows ${assigneeEmail} in To placeholder and hint', (locale, messages) => {
+  it.each(locales)('%s shows ${assigneeEmail} in To placeholder and ${fieldName} in hint', (locale, messages) => {
     const placeholder = translate(locale, messages, 'properties.emailToPlaceholder')
-    const hint = translate(locale, messages, 'properties.emailToHint')
+    const hint = translate(locale, messages, 'properties.emailToHint', { button: '{ }' })
     expect(placeholder).toContain('${assigneeEmail}')
     expect(placeholder).not.toMatch(/\$'assigneeEmail/)
-    expect(hint).toContain('${assigneeEmail}')
-    expect(hint).not.toMatch(/\$'assigneeEmail/)
+    expect(hint).toContain('${fieldName}')
+    expect(hint).not.toMatch(/\$'fieldName/)
   })
 
   it.each(locales)('%s shows ${variable} in Cc and Bcc placeholders', (locale, messages) => {

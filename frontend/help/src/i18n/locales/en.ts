@@ -9,9 +9,9 @@ export default {
     flowAria: 'Order of work',
     relatedTitle: 'Related guidelines',
     langAria: 'Language',
-    langEn: 'EN',
-    langZhCn: '简',
-    langZhTw: '繁',
+    langEn: 'English',
+    langZhCn: '简体中文',
+    langZhTw: '繁體中文',
     jumpAria: 'Jump to a task',
     howToDefault: 'Default',
     howToResult: 'After you run the sample',
@@ -142,11 +142,13 @@ export default {
     },
     emailSend: {
       title: 'Send email',
-      summary: 'Outbound connection, email template, and Send Task — what you set, and why a send can fail.',
+      summary:
+        'Outbound connection, email template, and Send Task — every field, what it means, and why a send can fail.',
     },
     emailMonitor: {
       title: 'Email Monitor',
-      summary: 'Inbound mailbox, monitor template, field extraction, and Start Event binding before Deploy.',
+      summary:
+        'Inbound mailbox, monitor template, field extraction, and Start Event binding — every field, before Deploy.',
     },
     upTasksToClaim: {
       title: 'To Do — claim pool',
@@ -236,7 +238,7 @@ export default {
     pageTitle: 'Send email',
     crumb: 'Developer Workstation · Function Units · Connections / Email Templates / Process Design',
     intro:
-      'Outbound mail needs three pieces: a send connection, an Email Template, and a Send Task on the process. Subject and body live on the template, not on the node.',
+      'Outbound mail needs three pieces: a send connection, an Email Template, and a Send Task on the process. Subject and body live on the template, not on the node. Each screen below lists every control: what it is, required or optional, and what blank does.',
     flowTitle: 'Order of work',
     flow1: 'Create an Outbound connection',
     flow2: 'Write an Email Template and enable it',
@@ -245,35 +247,117 @@ export default {
     connectionFigure: 'Connections: Custom SMTP (PR Notify SMTP) and Gmail. Emails are masked in the figure.',
     templateFigure: 'Email Templates: PR Approved Notice. Subject uses the request title field.',
     bodyFigure: 'PR Approved Notice: Visual / HTML, preview on the right. Insert Variable for request_title and grand_total.',
-    sendTaskFigure: 'Process Design: Send approval notice selected. To, Connection, and Template are on the right.',
+    sendTaskFigure:
+      "Process Design: Send task selected. Click {'{'} {'}'} beside To to insert a main-table field as ${\'{'}fieldName{\'}'}.",
     connectionTitle: 'First: an Outbound connection',
     connectionBody:
       'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and password. Host, port, and Use TLS come from Admin Center → System Config. Use Test to send a trial message before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead.',
-    connectionSample: 'Direction on the connection form',
+    connectionCatalogLead: 'Field catalog — every control on New / Edit Connection (Outbound) and Test.',
+    fDirection:
+      'Required. Outbound (send) for this job; Inbound (monitor) is for Email Monitor. A legacy Both row must be saved as one of those two.',
+    fDirectionOutbound: 'Choice: this connection sends mail (SMTP). Pick this before you fill sender and SMTP login.',
+    fDirectionInbound:
+      'Choice: this connection only polls a mailbox (IMAP). Do not pick this for Send Task. See Email Monitor.',
+    fFromEmail:
+      'Required. Outbound From address; also used as the connection name. SMTP login goes in Username, not here. Blank blocks save.',
+    fFromName:
+      'Optional display name in the From header (for example Hermes Notify). Blank uses only the sender email.',
+    fSmtpUsername:
+      'SMTP login (service account). Usually different from the sender email. Leave blank only for an anonymous relay that does not use SMTP AUTH.',
+    fSmtpPassword:
+      'Required when Username is set (new row). SMTP password or provider app password. On edit, leave blank to keep the stored password.',
+    fSmtpHost:
+      'Not typed here. SMTP hostname comes from Admin Center → System Config (Outbound connections).',
+    fSmtpPort:
+      'Not typed here. Common 25/587 (STARTTLS) or 465 (SSL). Set with Use TLS in Admin Center → System Config.',
+    fUseTls:
+      'Not typed here. Yes for SSL on 465 or STARTTLS on 25/587. Set in Admin Center → System Config.',
+    fProvider:
+      'List column (Gmail, Outlook / Office 365, Yahoo Mail, QQ Mail, 163 Mail, Custom SMTP). Identifies the row; host still comes from System Config.',
+    fConnEnabled:
+      'Switch. Off: Send Task cannot use this connection at runtime. Turn on after Test succeeds.',
+    fTest: 'Opens Test Connection. Use before wiring a Send Task so a bad password fails here, not on a live run.',
+    fTestRecipient: 'Required in the Test dialog. Address that receives the trial message. Blank blocks send.',
+    fSendTest: 'Sends one trial message using this outbound connection and the test recipient.',
     templateTitle: 'Write an Email Template',
     templateBody:
       'Open Email Templates. Give the template a name, write Subject and Body, then tick Enabled. Use Insert Variable for a main field, a Lookup or Related attribute, or a sub-table (rendered as a table). Do not type quoted field names.',
-    templateSample: 'adds runtime data into subject or body',
-    templateNameSample: 'template name in the screenshot',
+    templateCatalogLead: 'Field catalog — every control on New / Edit Template.',
+    templateNameSample: 'Template name in the screenshot (Purchase Request demo).',
+    fTemplateName: 'Required. Name in the Send Task Template list. Blank blocks save.',
+    fTemplateSubject:
+      "Required at send time. Use Insert Variable (same tokens as Body). Do not type $\'name\' or quoted field names. If every token is empty at send, the run fails.",
+    fInsertVariable:
+      'Dropdown. Pick a main field, a Lookup / Related attribute, or a sub-table (rendered as a table in the body). Inserts a token; do not wrap the name in quotes.',
+    fTemplateBody:
+      'HTML of the message. Compose in Visual or HTML below. Empty body still sends if Subject is non-empty after variables.',
     bodyTitle: 'Visual and HTML',
     bodyBody:
       'Switch Visual and HTML as needed. Email preview on the right is for design time only. HTML mode keeps <style> tags so class-based table CSS shows in the preview; stay in HTML to author that markup. Switching from HTML back to Visual may simplify tables, <style> tags, and inline styles — confirm the dialog if you still need the rich editor.',
+    bodyCatalogLead: 'Field catalog — body editor and Enabled on the same template dialog.',
+    fBodyVisual: 'Rich editor. Default for most notices. Insert Variable is on the toolbar.',
+    fBodyHtml:
+      'Source editor. Keeps <style> and class selectors in the design-time preview. Confirm if you switch back to Visual.',
+    fEmailPreview: 'Design-time only. Tokens stay visible; it is not a live send.',
+    fTemplateEnabled:
+      'Required for Send Task. Off: the template stays in the list but send fails until you turn it on.',
     sendTaskTitle: 'Put a Send Task on the process',
     sendTaskBody:
-      'To, Connection, and Template are required. Subject and body are taken from the selected template at send time — you cannot edit them on this node. From (override) is optional; leave it blank to use the connection default. Saving the process requires a template; it does not require From or Subject on the node.',
-    sendTaskSample: 'example process variable for To',
+      "To, Connection, and Template are required. For To, From, Cc, Bcc, and Reply-To, type an email or click {'{'} {'}'} to pick a main-table field (${\'{\'}fieldName{\'}'}). Subject and body come from the selected template — not from the recipient fields. Email sends when the flow reaches this node (complete any user task before it first).",
+    sendTaskCatalogLead:
+      'Field catalog — Send Task Config (required row) and Basic Info. Advanced options are in the next section.',
+    fTo:
+      "Required. One address, semicolon-separated addresses, or ${\'{'}fieldName{\'}'} from the main table (for example ${\'{'}to{\'}'}). Do not put the subject here. Blank: send fails.",
+    fInsertField:
+      "Insert field. Opens a searchable list. Picks a main-table field as ${\'{'}fieldName{\'}'} only — not Lookup or sub-table tokens. Also available on From, Cc, Bcc, and Reply-To.",
+    fInsertSearch: 'Filters the insert list. Empty result: No matching fields.',
+    fProcessVars: 'Group in the insert list for process variables (not main-table columns).',
+    fInitiator:
+      "Process variable. Inserts ${\'{'}initiator{\'}'} (the user who started the instance). At send time the engine treats it as a user id and looks up that user's email; if lookup fails, send fails.",
+    fSendConnection:
+      'Required. Outbound connection from Function Unit → Connections. Empty or inbound: send fails.',
+    fFromOverride:
+      'Optional. Overrides the From address on the selected connection. Blank: connection Sender Email is used.',
+    fSendTemplate:
+      'Required. Subject and body are taken from this Email Template at send time. Missing or disabled: send fails.',
+    fTaskId: 'Read-only BPMN id (for example Activity_…). Set when you save the diagram.',
+    fTaskType: 'Read-only. Shows Send Task.',
+    fTaskName: 'Optional label on the diagram. Blank keeps the default name.',
     extraTitle: 'Cc, Bcc, and attachments',
     extraBody:
-      'Cc and Bcc accept comma-separated addresses or process variables. For attachments, pick a FILE / Upload field on the main table, a sub-table, or a Lookup target. Files uploaded to that field at runtime are attached. If the list is empty, add an Upload field on the form, then reopen the panel. Sensitivity, Importance, and Reply-To are optional under advanced options.',
+      "Open Show advanced options on the Send Task. Cc and Bcc accept semicolon-separated addresses or ${\'{'}fieldName{\'}'}; use {'{'} {'}'} on those fields too. For attachments, pick a FILE / Upload field. Sensitivity, Importance, and Reply-To are optional.",
+    extraCatalogLead: 'Field catalog — Show advanced options on Send Task Config.',
+    fShowAdvanced: 'Reveals Cc, Bcc, Attachments, Sensitivity, Reply-To, and Importance. Hide when you are done.',
+    fCc:
+      "Optional extra recipients (visible to others). Semicolon-separated addresses or ${\'{'}fieldName{\'}'}. Blank: no Cc.",
+    fBcc:
+      "Optional hidden extra recipients. Same format as Cc. Blank: no Bcc.",
+    fAttachments:
+      'Optional. Files uploaded to the chosen FILE field at runtime are attached. Empty list: add an Upload field on the form, then reopen this panel.',
+    fUploadField:
+      'One FILE / Upload field per row: main table, sub-table, or Lookup target. Not a FILE field: send fails.',
+    fAddAttachment: 'Adds another Upload field row. Disabled when no FILE fields exist on the forms.',
+    fRemoveAttachment: 'Deletes that attachment row. Does not delete files already stored on records.',
+    fSensitivity: 'Optional header. Choices: Normal, Personal, Private, Confidential. Default Normal.',
+    fReplyTo:
+      "Optional reply address (email or ${\'{'}fieldName{\'}'}). Blank: replies go to From.",
+    fImportance: 'Optional header. Choices: Low, Normal, High. Default Normal.',
     failTitle: 'When send fails',
-    failBody:
-      'At send time the run fails if the connection is missing, To is empty, the template is missing or disabled, the whole subject is empty after variables fill in, an attachment is not a FILE field or cannot be downloaded, or Admin Center has no global SMTP. Fix the template or connection, then run the process again.',
+    failBody: 'Fix the template or connection, then start a new process (Deploy does not change running instances).',
+    failConnection: 'Connection missing, inbound, or disabled.',
+    failTo: 'To is empty after variables fill in.',
+    failTemplate: 'Template missing or Enabled is off.',
+    failSubject: 'Whole Subject is empty after variables fill in.',
+    failAttachment: 'Attachment is not a FILE field, or the file cannot be downloaded.',
+    failSmtp: 'Admin Center has no global SMTP (host / port / TLS) for outbound.',
+    failRunning:
+      'You completed a user task after the Send Task, or this instance started before Deploy. Complete the user task before the Send Task, then start a new instance.',
   },
   emailMonitorGuide: {
     pageTitle: 'Email Monitor',
     crumb: 'Developer Workstation · Function Units · Email Monitors / Process Design',
     intro:
-      'Email Monitor starts a process when mail arrives. Create an inbound connection, a monitor template (mailbox plus extraction), then bind that template on a Start Event.',
+      'Email Monitor starts a process when mail arrives. Create an inbound connection, a monitor template (mailbox plus extraction), then bind that template on a Start Event. Each screen below lists every control: what it is, required or optional, and what blank does.',
     flowTitle: 'Order of work',
     flow1: 'Create an Inbound connection',
     flow2: 'Create a monitor template',
@@ -286,23 +370,115 @@ export default {
     inboundTitle: 'First: an Inbound connection',
     inboundBody:
       'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address and IMAP username and password. IMAP host, port, and SSL come from Admin Center → System Config. There is no inbound connection until Direction is Inbound.',
-    inboundSample: 'Direction on the connection form',
+    inboundCatalogLead: 'Field catalog — every control on New / Edit Connection (Inbound).',
+    fDirection: 'Required. Must be Inbound (monitor) or this mailbox never appears under Email Monitors.',
+    fDirectionInbound: 'Choice: poll this mailbox with IMAP. Outbound (send) is for Send email, not this page.',
+    fMailboxEmail:
+      'Required. Mailbox to poll; also used as the connection name. Blank blocks save.',
+    fImapUsername:
+      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row.',
+    fImapPassword:
+      'IMAP password or provider app password. Required on create when username is set. On edit, leave blank to keep the stored password.',
+    fImapHost:
+      'Not typed here. IMAP hostname comes from Admin Center → System Config (Inbound connections).',
+    fImapPort:
+      'Not typed here. Common 993 (SSL) or 143 (STARTTLS/plain). Set in Admin Center → System Config.',
+    fImapSsl:
+      'Not typed here. Yes: imaps, usually port 993. No: plain or STARTTLS imap, usually port 143. Set in System Config.',
+    fConnEnabled:
+      'Switch on the connection. Off: Email Monitor cannot poll this mailbox. Turn on before Deploy.',
     templateTitle: 'Create a monitor template',
     templateBody:
       'Open Email Monitors. Set the rule name, inbound mailbox, folder, poll interval (seconds; minimum 30), and System Initiator. Tick “Send to manual review when required fields are missing” if incomplete mail should wait for a person. Do not set From or Subject filters here, and do not set Process Key on the template.',
-    templateSample: 'typical folder / label',
-    templateNameSample: 'monitor template in the screenshot',
-    extractSample: 'main-table field filled from the email subject',
-    subjectFilterSample: 'Subject Filter on the Start Event only, not on the template',
+    templateCatalogLead:
+      'Field catalog — New / Edit Monitor. Rows marked not on this form belong only on the Start Event.',
+    templateSample: 'Typical folder / label in the screenshot.',
+    templateNameSample: 'Monitor template name in the screenshot (Purchase Request demo).',
+    fRuleName: 'Required. Name in the Start Event Email Monitor list. Blank blocks save.',
+    fInboundMailbox:
+      'Required. Inbound connection created under Connections. Empty list: set a connection Direction to Inbound first.',
+    fSystemInitiator:
+      'Optional. User recorded as initiator of processes started from mail. Search by name, username, or email. Blank: platform default initiator.',
+    fFolder:
+      'IMAP folder or label to poll. Placeholder INBOX. Blank is stored as INBOX.',
+    fPoll:
+      'Seconds between polls. Minimum 30; step 30. Lower values are rejected. Typical sample: 60.',
+    fReview:
+      'Optional. On: mail that is missing a Required extraction field waits for a person. Off: that mail is skipped.',
+    fMonitorEnabled:
+      'List column only (Yes / No). New monitors start enabled. There is no Enabled switch on the create/edit dialog.',
+    fProcessKeyNotHere:
+      'Not on this form. The process key is filled automatically on the Start Event (Process Key (auto)).',
+    fFromNotHere:
+      'Not on this form. Hint on the dialog: From / Subject filters are configured on each Start Event, not here.',
+    fSubjectNotHere:
+      'Not on this form. Set Subject Filter on the Start Event only.',
+    extractSample: 'Main-table field filled from the email subject (Purchase Request demo).',
     extractTitle: 'Field extraction (no code)',
     extractBody:
       'Paste a real sample subject and plain-text body. Select a value, then Bind selection to a main-table field. Mark Required as needed. Optional HTML body is for tables: map one HTML table to a sub-table (one email row per record). Add a Sub-Table on the main process form first if the binding list is empty.',
+    extractCatalogLead: 'Field catalog — Field Extraction (no code) on the monitor dialog.',
+    fSampleTab: 'First tab. Holds the sample message you bind from. Not sent anywhere.',
+    fSampleSubject: 'Paste a real sample subject, then select text to bind. Blank: subject mappings have no preview.',
+    fSampleFrom: 'Optional sample From line for Header mappings. Blank: From-based rules preview empty.',
+    fSampleText:
+      'Paste the plain-text body, then select a value and Bind selection. Blank: text mappings have no preview.',
+    fSampleHtml:
+      'Optional HTML for table mapping. Blank: Sub-table (HTML table) has nothing to map.',
+    fFieldMapping: 'Second tab. Rows that copy values from the sample into main-table fields.',
+    fAddField: 'Adds an empty mapping row. Then set Target Field, Source, Method, and Rule.',
+    fBindSelection:
+      'Writes the highlighted sample text into the selected mapping (before/after or label). Does nothing if nothing is selected.',
+    fTargetField:
+      'Required per row. Main-table column to fill. Empty list: the main table has no mappable fields.',
+    fSource:
+      'Where to read. Choices: Subject; Text + HTML (recommended); Text + HTML; HTML only; Header; Constant.',
+    fMethod:
+      'How to cut the value. Choices: LABEL, BETWEEN, REGEX, CONST, HEADER (shown as those codes).',
+    fRule:
+      'Depends on Method: LABEL uses a label such as Case No; BETWEEN uses before text and after text; REGEX uses a pattern; CONST uses a fixed value; HEADER uses a header name such as From. Blank: preview stays empty.',
+    fRequired:
+      'On: missing value follows the manual-review checkbox. Off: the field may stay empty and the process can still start.',
+    fPreview: 'Read-only. Shows what the rule extracts from the sample. Empty means the rule does not match yet.',
+    fSubTableTab: 'Third tab. Maps one HTML <table> in the email to a form Sub-Table (one email row per record).',
+    fAddSubTable:
+      'Adds a sub-table block. Disabled when the process form has no Sub-Table binding — add a Sub-Table on the main form first.',
+    fSubBinding: 'Which form Sub-Table this HTML table fills. Required per block.',
+    fTableIndex:
+      'Which HTML table in the email, 0-based (0 is the first table). Wrong index maps the wrong grid.',
+    fTableSelector: 'Optional CSS selector. Blank: all <table> elements, then Table # picks among them.',
+    fHeaderRow: 'On: first row is column titles, not data. Off: first row is the first record.',
+    fAddColumn: 'Adds a column mapping (column number → Target Field).',
+    fColumnIndex: '0-based column in that HTML table. Must match the sample table.',
     startEventTitle: 'Bind it on the Start Event',
     startEventBody:
       'In Process Design, open Inbound Email Trigger and tick Start process when email arrives. Select the monitor template. From Filter and Subject Filter belong only on this Start Event. Save Start Event binding. If the start event has no ID, save the diagram first. If Field extraction says none, edit the template under Email Monitors.',
+    startEventCatalogLead: 'Field catalog — Inbound Email Trigger on the Start event.',
+    subjectFilterSample: 'Subject Filter on the Start Event only, not on the template (screenshot uses Quote).',
+    fPanelTitle: 'Properties heading. Open this when the Start event is selected.',
+    fEnable:
+      'On: this Start event starts a process when matching mail arrives. Off: the bound template is ignored until you tick it again. Select a monitor template below.',
+    fBoundProcess: 'Read-only. Filled from Process ID in process properties. Empty: save the process properties first.',
+    fBoundEvent: 'Read-only. BPMN id of this Start event. Empty: save the diagram first, then bind.',
+    fSelectTemplate:
+      'Required when the trigger is on. Monitor template from Email Monitors. Empty list: create a template first.',
+    fStartMailbox: 'Read-only. Mailbox of the selected template. Change it under Email Monitors, not here.',
+    fExtractionStatus:
+      'Read-only. Extraction configured, or No extraction rules — edit the template under Email Monitors.',
+    fFromFilter:
+      'Optional. Only mail whose From contains this text. Blank: any sender. Not set on the Email Monitors template.',
+    fSubjectFilter:
+      'Optional. Only subjects containing this text (screenshot: Quote). Blank: any subject. Not set on the template.',
+    fSaveBinding:
+      'Writes the trigger, template, and filters. Does not Deploy. Failures: no Start Event ID, no process key, no template.',
     deployTitle: 'Before Deploy',
     deployBody:
       'Every enabled monitor template must be bound to a Start Event. The mailbox connection must be Enabled, Direction Inbound, with username and password filled. Enable the connection before using it for Email Monitor.',
+    failUnbound: 'An enabled monitor template is not bound to any Start Event.',
+    failDisabledConn: 'The mailbox connection is disabled, not Inbound, or username / password is missing.',
+    failNoId: 'Start event has no ID — save the process diagram first.',
+    failNoProcessKey: 'Process key not found — set Process ID in process properties.',
+    failNoExtraction: 'Field extraction says none — edit the template under Email Monitors.',
     deleteTitle: 'Deleting a template',
     deleteBody:
       'A template bound to one or more Start Events cannot be deleted. Unbind it in Process Design first, then delete the template.',
