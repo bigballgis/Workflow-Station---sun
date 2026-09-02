@@ -71,6 +71,7 @@ IDE 无红线或「理论上能编译」不能代替命令输出。
 |---|---|
 | 任意代码 | `code-quality-standards` · `change-playbook` · `cross-cutting` · `ai-guardrails` |
 | 异常/空值/降级 | `error-handling-governance`；量化用 skill `fallback-audit` |
+| 按名字判断业务语义（列名/表名/字段名白名单、`x === 'some_column'`、正则匹字段名），或把此类判据改为读配置 | skill `config-over-heuristics`（重点查：默认类是否写成 else 兜底、配置是否对所有调用点可达、构建点是否透传判据字段、返回值是否兼任控制流开关） |
 | 鉴权/输入/URL/SQL/XML/LDAP/凭证 | `security-guard` + skill `secure-coding-sast` |
 | Entity / `deploy/init-scripts` / schema | `init-scripts-append-only` · `json-row-storage-no-physical-tables` · `deployment-infra`（若触 deploy） |
 | 性能/缓存/并发/批量/前端热路径 | `performance-guardrails`；Portal 热路径再加 `performance-change-safety` |

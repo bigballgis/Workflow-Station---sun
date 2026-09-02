@@ -14,6 +14,7 @@
 |-------|------|
 | [feature-design-plan](feature-design-plan/SKILL.md) | 功能/模块设计 Plan（方案权衡、影响面、分期、验收）；确认后再 playbook 执行；细则见 [reference.md](feature-design-plan/reference.md) |
 | [code-review](code-review/SKILL.md) | 只读、证据驱动的 staged/PR 审查编排（规则/skill、编译测试、安全隐私、FU 生命周期与通用性）；细则见 [reference.md](code-review/reference.md) |
+| [config-over-heuristics](config-over-heuristics/SKILL.md) | 把「猜列名/表名/字段名」的运行时判据换成读设计器配置，并安全删掉兜底（影子探针、上下文可达性、返回值兼任开关、端到端验证） |
 | [fallback-audit](fallback-audit/SKILL.md) | 复扫静默兜底反模式,对比 2026-07 基线量化治理降幅 |
 | [function-unit-portability](function-unit-portability/SKILL.md) | FU 导出/导入/clone/版本快照必须带全部设计配置 |
 | [function-unit-version-rollback](function-unit-version-rollback/SKILL.md) | DW 版本回滚必须还原目标版本完整 FU 设计 |

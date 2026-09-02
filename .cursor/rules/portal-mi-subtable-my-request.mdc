@@ -139,6 +139,9 @@ function filterRunningMiBindingsByProcessDesignScope(bindings) {
 
 > 这一节是 MI 反复出 bug 的**结构性根因所在**。归错类的后果不是显示问题，是**跨参与者数据串写**。
 > 唯一判据见 `composables/tasks/miBindingKindFromConfig.ts`（`resolveMiBindingKindFromConfig`）。
+>
+> **要新做同类改造（把别处的名字猜测换成读配置）→ 先看 skill `config-over-heuristics`**：
+> 影子探针、上下文可达性、返回值兼任控制流开关、端到端验证等踩过的坑都在那里。
 
 ### 三类的权威判据
 
