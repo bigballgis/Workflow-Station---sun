@@ -6,11 +6,16 @@
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import { SUB_TABLE_ROW_META_KEYS } from './internal'
 import { normalizeSubTableName } from './subTableCore'
+import { getActiveMiFieldNames } from './useMiConfig'
 
 /** Runtime / MI dashboard keys that must not become inferred sub-table columns or leak into non-MI bindings. */
 export function isSubTableRowMetaField(key: string): boolean {
   if (!key || key.startsWith('__')) return true
-  return SUB_TABLE_ROW_META_KEYS.has(key)
+  if (SUB_TABLE_ROW_META_KEYS.has(key)) return true
+  // 上面的集合是跨 FU 的已知名字并集；当前 FU 在 Sub-Task Config 里自定义的状态/节点列
+  // 同样是运行时元数据，漏判会让它被当成用户业务数据处理。
+  const { statusField, currentNodeField } = getActiveMiFieldNames()
+  return key === statusField || key === currentNodeField
 }
 
 /** True for a non-empty nested `__subTables__` payload (grandchild rows of a sub-table-in-sub-table). */
@@ -70,12 +75,13 @@ export interface MiDashboardFieldNames {
 export function resolveMiDashboardFieldNames(
   fields?: MiDashboardFieldNames | null,
 ): { statusField: string; currentNodeField: string } {
-  const status = String(fields?.statusField ?? '').trim()
-  const node = String(fields?.currentNodeField ?? '').trim()
-  return {
-    statusField: status || 'task_status',
-    currentNodeField: node || 'task_current_node',
-  }
+  // 显式传入 > 当前 FU 的 Sub-Task Config（useMiConfig 注册表）> 平台默认字面量。
+  // 实测此前无任何调用点传过 fields，导致 100% 落在默认值上、状态列改名的 FU 静默失效。
+  const { statusField, currentNodeField } = getActiveMiFieldNames({
+    statusField: fields?.statusField,
+    currentNodeField: fields?.currentNodeField,
+  })
+  return { statusField, currentNodeField }
 }
 
 /**

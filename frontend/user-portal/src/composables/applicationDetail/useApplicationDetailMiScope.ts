@@ -14,6 +14,7 @@ import {
   applyUnionFindMergeToBindingList,
   type SubTableBindingAlignable,
 } from './subTableRowHelpers'
+import { getActiveMiFieldNames, setActiveMiConfig } from '@/composables/tasks/useMiConfig'
 import type { ApplicationDetailState } from './useApplicationDetailState'
 import type { ApplicationDetailCtx } from './context'
 
@@ -115,32 +116,40 @@ export function createApplicationDetailMiScope(ctx: ApplicationDetailCtx): Appli
   ]
 
   const hasIncompleteMiRows = (): boolean => {
-    const rows = getMiRows().filter((row: any) => row && row.task_status !== undefined)
-    return rows.length > 0 && rows.some((row: any) => String(row.task_status || '').toUpperCase() !== 'COMPLETED')
+    const sf = getActiveMiFieldNames().statusField
+    const rows = getMiRows().filter((row: any) => row && row[sf] !== undefined)
+    return rows.length > 0 && rows.some((row: any) => String(row[sf] || '').toUpperCase() !== 'COMPLETED')
   }
 
   const hasCompletedMiRows = (): boolean => {
-    const rows = getMiRows().filter((row: any) => row && row.task_status !== undefined)
-    return rows.length > 0 && rows.every((row: any) => String(row.task_status || '').toUpperCase() === 'COMPLETED')
+    const sf = getActiveMiFieldNames().statusField
+    const rows = getMiRows().filter((row: any) => row && row[sf] !== undefined)
+    return rows.length > 0 && rows.every((row: any) => String(row[sf] || '').toUpperCase() === 'COMPLETED')
   }
 
   function hasTaskStatusData(rows: any[]): boolean {
     if (!Array.isArray(rows) || rows.length === 0) return false
+    // 状态列名来自 Sub-Task Config（miTaskStatusField），不写死 task_status
+    const sf = getActiveMiFieldNames().statusField
     if (snapshotTaskName) {
-      return rows.some(r => r && r.task_status === 'COMPLETED')
+      return rows.some(r => r && r[sf] === 'COMPLETED')
     }
-    return rows.some(r => r && r.task_status !== undefined)
+    return rows.some(r => r && r[sf] !== undefined)
   }
 
   function refreshActiveMiSubProcessScopeFromBpmn() {
     const xml = bpmnXml.value
     if (!xml) {
       activeMiSubProcessScope.value = null
+      // 清掉上一个 FU 的配置，否则会泄漏到下一个（跨 FU 串配置和写死一样糟）
+      setActiveMiConfig(null)
       return
     }
     activeMiSubProcessScope.value = resolveMiSubProcessScopeFromBpmn(xml, {
       userTaskName: snapshotTaskName || processInfo.value.currentNode || null,
     })
+    // MI 列名的唯一真源：注册给深层纯函数隐式读取，避免 113 个调用点逐个传参
+    setActiveMiConfig(activeMiSubProcessScope.value)
   }
 
   /**

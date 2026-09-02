@@ -27,6 +27,9 @@ export interface PreviousFormEntry {
     foreignKeyField: string | null
     tableName: string
     physicalTableName?: string
+    /** 规范 key（`dw:` / `rt:`）的命名空间判定依据，见 composables/tasks/subTableStore.ts */
+    relationTableId?: number | null
+    relationTableName?: string | null
     tableType: string
     tableDescription: string
     columns: Column[]
@@ -117,6 +120,9 @@ export function createApplicationDetailState(options: {
     foreignKeyField: string | null
     tableName: string
     physicalTableName?: string
+    /** 规范 key（`dw:` / `rt:`）的命名空间判定依据，见 composables/tasks/subTableStore.ts */
+    relationTableId?: number | null
+    relationTableName?: string | null
     tableType: string
     tableDescription: string
     columns: Column[]
@@ -182,6 +188,9 @@ export function createApplicationDetailState(options: {
     foreignKeyField: string | null
     tableName: string
     physicalTableName?: string
+    /** 规范 key（`dw:` / `rt:`）的命名空间判定依据，见 composables/tasks/subTableStore.ts */
+    relationTableId?: number | null
+    relationTableName?: string | null
     tableType: string
     tableDescription: string
     columns: Column[]

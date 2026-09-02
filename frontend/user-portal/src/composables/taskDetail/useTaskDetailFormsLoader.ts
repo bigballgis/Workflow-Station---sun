@@ -370,6 +370,10 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         foreignKeyField: null,
         tableName: (b as any).tableDisplayName || b.tableName,
         physicalTableName: b.tableName,
+        // 关联表必须落 rt: 命名空间；缺这两个字段会被当成设计器子表存进 dw:，
+        // 进而被 MI 行隔离当成某个参与者的行，导致 Save 被拒。
+        relationTableId: (b as any).relationTableId ?? null,
+        relationTableName: (b as any).relationTableName ?? null,
         tableType: '',
         tableDescription: '',
         columns: Array.isArray(b.columns) ? (b.columns as any[]) : [],

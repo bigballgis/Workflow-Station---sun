@@ -23,6 +23,41 @@ final class EngineTaskMapper {
      * such as {@code __subTables__}). Keeps Flowable-supplied execution-scoped {@code _currentItem}/{@code currentItem}
      * when present: the portal snapshot is single process-wide JSON and would otherwise overwrite MI iteration context.
      */
+    /**
+     * Overwrites {@code _currentItem} with the value scoped to THIS task's own MI execution.
+     *
+     * <p>{@code _currentItem} identifies which collection row an MI sub-task owns. It is
+     * execution-scoped, but a copy also exists at process-instance level, and a task whose own
+     * execution carries no copy inherits that instance-wide one — which belongs to whichever
+     * participant wrote it last. Measured on FU fu-20260422: task 30fb0670 owns participant
+     * {@code Test-000001}, yet task detail reported {@code Test-000002}; the form then submitted the
+     * wrong participant and the backend's MI guard rejected every Save.
+     *
+     * <p>Best-effort: any failure leaves {@code target} untouched (previous behaviour).
+     *
+     * @param engineTaskBody the workflow engine's task payload, or empty when unavailable
+     */
+    static void applyTaskScopedMiCurrentItem(Map<String, Object> engineTaskBody, Map<String, Object> target) {
+        if (engineTaskBody == null || engineTaskBody.isEmpty() || target == null) {
+            return;
+        }
+        Object dataRaw = engineTaskBody.containsKey("data") ? engineTaskBody.get("data") : engineTaskBody;
+        if (!(dataRaw instanceof Map<?, ?> data)) {
+            return;
+        }
+        Object varsRaw = data.get("variables");
+        if (!(varsRaw instanceof Map<?, ?> vars)) {
+            return;
+        }
+        Object currentItem = vars.get("_currentItem");
+        if (currentItem == null) {
+            currentItem = vars.get("currentItem");
+        }
+        if (currentItem instanceof Map) {
+            target.put("_currentItem", currentItem);
+        }
+    }
+
     static void mergePortalProcessVariablesPreferringFlowableMiElementItem(
             Map<String, Object> mergedOut,
             Map<String, Object> flowableVariables,

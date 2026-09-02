@@ -79,7 +79,9 @@ function isLeakedForeignRowOnSharedAttachment(
    */
   if (!sharedBindingRowHasNonIdColumnData(rec, colFields)) return true
 
-  // Backend MI overlay may stamp id_idw on persisted attachment rows — not a subtable leak.
+  // 后端 MI overlay 的 id 信封归一化（MiOverlaySupport.normalizeVariableRowPkEnvelope）会在
+  // 持久化的附件行上补写 id_idw —— 这是**后端确定写入的键名**，不是这里在猜某张表的主键，
+  // 所以按字面量匹配是对的。该行不是子表泄漏行。
   if (rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {
     return true
   }

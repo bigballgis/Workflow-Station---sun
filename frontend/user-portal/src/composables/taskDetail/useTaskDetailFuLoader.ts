@@ -297,6 +297,8 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             foreignKeyField: b.foreignKeyField,
             tableName: b.tableDisplayName || b.tableName,
             physicalTableName: b.tableName,
+            relationTableId: (b as any).relationTableId ?? null,
+            relationTableName: (b as any).relationTableName ?? null,
             tableType: b.tableType,
             tableDescription: b.tableDescription,
             columns,

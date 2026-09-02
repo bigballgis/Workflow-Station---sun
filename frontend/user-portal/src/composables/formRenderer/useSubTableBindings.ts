@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { resolveAssigneeFieldForBinding } from '../../utils/subTableAssignment'
 import { legacyBindingIdAliases } from '../../components/formRendererHelpers'
 import { findMiIsolatedParentRow } from '../tasks/shared'
+import { resolveSubTablePrimaryKeyFields } from '../tasks/useMiConfig'
 import type { FormField } from '../../components/formRendererHelpers'
 import type { BindingFieldDefinition } from '../../utils/subTableRowRuntime'
 import type { AssignmentConfig } from '../../utils/miAssignmentConfig'
@@ -14,6 +15,9 @@ export interface SubTableBinding {
   bindingMode: string
   tableName: string
   physicalTableName?: string
+  /** 关联表标识：决定 __subTables__ 走 rt: 还是 dw: 命名空间 */
+  relationTableId?: number | null
+  relationTableName?: string | null
   tableType: string
   tableDescription: string
   columns: any[]
@@ -137,7 +141,8 @@ export function useSubTableBindings(deps: SubTableBindingsDeps) {
     for (const b of peers) {
       if (bindingId != null && b.bindingId === bindingId) continue
       const rows = Array.isArray(b.data) ? b.data : []
-      const parent = findMiIsolatedParentRow(rows, rowId)
+      // 按表的种类解析主键：子任务表缺主键 = 配置错误（抛错）；其它表允许没有主键。
+      const parent = findMiIsolatedParentRow(rows, rowId, resolveSubTablePrimaryKeyFields(b))
       if (parent) {
         return {
           rowId,

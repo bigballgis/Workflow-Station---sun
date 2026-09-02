@@ -216,7 +216,10 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
         {
           bindingId: Number(b.bindingId ?? 0),
           tableName: b.physicalTableName ?? b.tableName,
-          tableDisplayName: b.tableName
+          tableDisplayName: b.tableName,
+          // 规范 key 的命名空间由「绑的是 DW 还是 RT 表」决定，缺了就会去 dw: 里找 rt: 的数据
+          relationTableId: (b as { relationTableId?: number | null }).relationTableId,
+          relationTableName: (b as { relationTableName?: string | null }).relationTableName
         },
         pk
       )

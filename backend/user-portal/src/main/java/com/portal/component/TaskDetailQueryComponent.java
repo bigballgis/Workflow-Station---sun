@@ -92,6 +92,15 @@ public class TaskDetailQueryComponent {
             Map<String, Object> merged = new HashMap<>();
             EngineTaskMapper.mergePortalProcessVariablesPreferringFlowableMiElementItem(
                     merged, taskInfo.getVariables(), pi.getVariables());
+            // `_currentItem` is execution-scoped; a task whose own execution carries no copy would
+            // otherwise inherit the process-instance-level one (another participant's). Task detail
+            // feeds the form, and the form's submit payload carries this value back — so a wrong
+            // value here made the backend's MI guard reject every Save on that sub-task.
+            EngineTaskMapper.applyTaskScopedMiCurrentItem(
+                    workflowEngineClient != null && taskInfo.getTaskId() != null
+                            ? workflowEngineClient.getTaskById(taskInfo.getTaskId()).orElse(null)
+                            : null,
+                    merged);
             miParticipantEnricher.enrichMissingParticipantRowIdsInSubTables(merged);
             long tEnrich = System.nanoTime();
             processComponent.enrichSubTablesVariablesFromPhysicalTables(processInstanceId, merged);

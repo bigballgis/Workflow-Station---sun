@@ -251,6 +251,9 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
               foreignKeyField: b.foreignKeyField,
               tableName: b.tableDisplayName || b.tableName,
               physicalTableName: b.tableName,
+              // 规范 key 的命名空间靠这两个字段判定 DW / RT；不带上则 rt: 切片解析不到
+              relationTableId: (b as { relationTableId?: number | null }).relationTableId ?? null,
+              relationTableName: (b as { relationTableName?: string | null }).relationTableName ?? null,
               tableType: b.tableType,
               tableDescription: b.tableDescription,
               columns: cols,
@@ -266,7 +269,10 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
                 {
                   bindingId: b.bindingId,
                   tableName: b.tableName,
-                  tableDisplayName: b.tableDisplayName
+                  tableDisplayName: b.tableDisplayName,
+                  // 规范 key 的命名空间由「绑的是 DW 还是 RT 表」决定，缺了就会去 dw: 里找 rt: 的数据
+                  relationTableId: (b as { relationTableId?: number | null }).relationTableId,
+                  relationTableName: (b as { relationTableName?: string | null }).relationTableName
                 },
                 binding.primaryKeyFields
               )
@@ -284,7 +290,9 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
                 {
                   bindingId: binding.bindingId,
                   tableName: (binding as { physicalTableName?: string }).physicalTableName,
-                  tableDisplayName: binding.tableName
+                  tableDisplayName: binding.tableName,
+                  relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
+                  relationTableName: (binding as { relationTableName?: string | null }).relationTableName
                 },
                 binding.primaryKeyFields
               )

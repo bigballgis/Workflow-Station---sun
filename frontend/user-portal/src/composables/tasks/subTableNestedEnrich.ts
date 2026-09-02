@@ -5,6 +5,7 @@
 
 import { mergeMiTaskStatusPreferTerminal } from './internal'
 import { cloneSubTableRows } from './subTableCore'
+import { getActiveMiFieldNames } from './useMiConfig'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import {
   isMiDashboardSubTableBinding,
@@ -45,6 +46,9 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
     childAllowsMiMeta.set(child.bindingId, isMiDashboardSubTableBinding(child))
   }
 
+  // MI 镜像列名来自 Sub-Task Config，不写死；在循环外解析一次
+  const { statusField, currentNodeField } = getActiveMiFieldNames()
+
   const mergePatchIntoRow = (
     target: Record<string, unknown>,
     patch: Record<string, unknown>,
@@ -56,10 +60,10 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
         if (!allowMiMeta) continue
       }
       if (val === undefined || val === null || val === '') continue
-      if (k === 'task_status' || k === 'task_current_node') {
+      if (k === statusField || k === currentNodeField) {
         const cur = target[k]
         if (cur !== undefined && cur !== null && String(cur).trim() !== '') continue
-        if (k === 'task_status') {
+        if (k === statusField) {
           const merged = mergeMiTaskStatusPreferTerminal(undefined, val)
           if (merged !== undefined) {
             target[k] = merged

@@ -12,15 +12,13 @@ export function resolveFkDisplayAttribute(
   const fkScalar = scalarString(fkValue)
   if (!fkScalar) return undefined
 
+  // 只按被引用表配置的主键匹配（ref_primary_key_fields）。
+  // 此前这里还有一段「PK 元数据缺失时试 id / id_idw」的兜底：主键恰好叫这两个名字的表看似正常，
+  // 而主键是别的名字、且行里恰好也有 id 列的表会**匹配到错误的行**并显示错误的关联属性 ——
+  // 猜列名比不显示更糟。配置缺失时返回 undefined，调用方显示原始 FK 值。
   const pkFields = primaryKeyFields?.filter(f => !!f?.trim()) || []
   for (const pk of pkFields) {
     if (fkEquals(mainVars[pk], fkScalar)) {
-      return mainVars[displayField]
-    }
-  }
-  // FALLBACK(migration): try common id keys when PK meta is missing
-  for (const candidate of ['id', 'id_idw']) {
-    if (fkEquals(mainVars[candidate], fkScalar)) {
       return mainVars[displayField]
     }
   }

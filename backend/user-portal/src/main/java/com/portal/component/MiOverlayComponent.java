@@ -310,7 +310,8 @@ public class MiOverlayComponent {
                     MiOverlaySupport.applyMiOverlayToVariableRow(row, best);
                 }
                 if (MiOverlaySupport.isPortalProcessCompleted(info)) {
-                    MiOverlaySupport.normalizeStuckMiParticipantRowForCompletedProcess(row);
+                    // best carries this FU's configured status / node column names when an engine row matched
+                    MiOverlaySupport.normalizeStuckMiParticipantRowForCompletedProcess(row, best);
                 }
                 Object nestedRaw = row.get("__subTables__");
                 if (nestedRaw instanceof Map<?, ?> nestedMap && !nestedMap.isEmpty()) {

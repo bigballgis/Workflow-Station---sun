@@ -10,6 +10,7 @@ import {
 } from '../tasks/miLinkChildIdentity'
 import { normalizeMiLinkMatchId } from '../tasks/internal'
 import type { FormField } from '../../components/formRendererHelpers'
+import { resolveSubTablePrimaryKeyFields } from '../tasks/useMiConfig'
 import type { SubTableBinding } from './useSubTableBindings'
 
 /**
@@ -199,15 +200,30 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
         if (idx >= 0) return idx
         // A row with no participant identity yet is this participant's own in-progress row
         // (the FK is only seeded at save), so it is writable — but a FOREIGN row never is.
+        // 「有没有自己的主键」按设计器 PK 判定，**不猜 'id_idw'**：猜错会恒判为「无 PK」，
+        // 把别人已保存的行当成自己的空行接着编辑（覆盖他人数据）。
+        // 无主键时返回 -1（渲染空表单、首次编辑创建自己的行），而不是抛错 ——
+        // 抛错会中断整个 Save。
+        const pkNames = (binding.primaryKeyFields ?? [])
+          .map(f => String(f ?? '').trim())
+          .filter(Boolean)
+        if (pkNames.length === 0) return -1
+        const rowHasOwnPk = (r: SubTableRow): boolean =>
+          pkNames.some(name => !!normalizeMiLinkMatchId((r as Record<string, unknown>)[name]))
         const fresh = rows.findIndex(
-          r => !resolveMiChildStructuralParentFk(r) && !normalizeMiLinkMatchId(r.id_idw),
+          r => !resolveMiChildStructuralParentFk(r) && !rowHasOwnPk(r),
         )
         return fresh
       }
-      const matched = findMiIsolatedParentRow(rows, miRowId)
-      if (matched) {
-        const idx = rows.indexOf(matched)
-        if (idx >= 0) return idx
+      // 按表的种类解析主键：子任务表缺主键 = 配置错误（抛错）；其它表（共享附件 main_id、
+      // 非 MI 单行子表）允许没有主键 —— 它们本就不是按参与者分片的，跳到下面的 index-0 分支。
+      const pk = resolveSubTablePrimaryKeyFields(binding)
+      if (pk) {
+        const matched = findMiIsolatedParentRow(rows, miRowId, pk)
+        if (matched) {
+          const idx = rows.indexOf(matched)
+          if (idx >= 0) return idx
+        }
       }
     }
     return 0

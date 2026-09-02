@@ -6,8 +6,8 @@ import { chromium } from 'playwright'
 import { loginViaPortalPassword } from './playwright-login.mjs'
 import {
   listMiCollectionTables,
+  openFirstTodoMatching,
   pickMiCollectionTable,
-  resolveAndOpenTodo,
   screenshotPath,
 } from './mi-regression-helpers.mjs'
 
@@ -20,9 +20,16 @@ const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
 await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 
-const taskId = await resolveAndOpenTodo(page, {
-  prefer: /multi-instance: transaction|fu-20260422|subtask demo|atm-20260623/i,
-})
+// 取「确实渲染出 MI collection」的那个 To Do：只取列表第一条会随机落到刚新建、
+// 还没有 collection 行的任务上，把数据前置条件问题伪装成产品缺陷。
+const taskId = await openFirstTodoMatching(
+  page,
+  async (p) => {
+    const t = pickMiCollectionTable(await listMiCollectionTables(p))
+    return !!t && t.rows.length > 0
+  },
+  { prefer: /multi-instance: transaction|fu-20260422|subtask demo|atm-20260623/i, limit: 6 },
+)
 console.log('[task]', taskId)
 
 const table = pickMiCollectionTable(await listMiCollectionTables(page))

@@ -381,4 +381,343 @@ class MiSubTaskSubTableRowMergerTest {
 
         assertThat(merged.get("someRow")).isSameAs(nestedShape);
     }
+
+    /**
+     * Relation-table slice (`rt:<name>`) must pass through untouched.
+     *
+     * <p>Real incident: a Function Unit's MI task form also binds a relation table (`test`) and the
+     * platform's virtual `sys_users` table. Relation tables are not designer sub-tables — no
+     * participant FK, and legitimately no primary key. Treating their slice as "one MI participant's
+     * rows" finds no row matching the participant PK and, because the slice is non-empty, fails the
+     * whole submission: every Save on that task returned 500, even though the sub-task table's own
+     * PK (`id_idwnn`) was configured and submitted correctly.
+     */
+    @Test
+    void mergeCurrentRowOnly_relationTableSlicePassesThroughUnchanged() {
+        Map<String, Object> relationRow = new HashMap<>();
+        relationRow.put("id_idwnn", "Test-000002");   // a DIFFERENT row than the current participant
+        relationRow.put("test", "r");
+
+        // 该 FU 的子任务主键叫 id_idwnn（用户实际改过的名字），不是 helper 里的 id_idw
+        Map<String, Object> ownOld = new HashMap<>();
+        ownOld.put("id_idwnn", "Test-000001");
+        ownOld.put("name", "old");
+        Map<String, Object> ownNew = new HashMap<>();
+        ownNew.put("id_idwnn", "Test-000001");
+        ownNew.put("name", "new");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:subtable", new java.util.ArrayList<>(List.of(ownOld)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(ownNew)));
+        submitted.put("rt:test", new java.util.ArrayList<>(List.of(relationRow)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000001"));
+
+        // Relation table: untouched, and it must NOT fail the save.
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rel = (List<Map<String, Object>>) merged.get("rt:test");
+        assertThat(rel).hasSize(1);
+        assertThat(rel.get(0).get("id_idwnn")).isEqualTo("Test-000002");
+
+        // The MI sub-task table is still row-merged as usual.
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> own = (List<Map<String, Object>>) merged.get("dw:subtable");
+        assertThat(own.get(0).get("name")).isEqualTo("new");
+    }
+
+    /** The MI sub-task table itself keeps its guard: a slice without our own row still fails loud. */
+    @Test
+    void mergeCurrentRowOnly_miSubTaskTableStillRejectsSliceMissingOwnRow() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("subtable")))
+                .thenReturn(List.of("id_idwnn"));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(row("Test-000002", "theirs"))));
+
+        assertThatThrownBy(() ->
+                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000001")))
+                .hasMessageContaining("own row");
+    }
+
+    /**
+     * A relation table filed under a `dw:` key must still pass through.
+     *
+     * <p>The task-form API does not send `relationTableId`, so the frontend cannot distinguish a
+     * relation table from a designer table and writes BOTH as `dw:<name>`. Measured on the live
+     * incident: binding 50550 is relation table `test` yet its slice arrived as `dw:test`, and the
+     * participant guard rejected it — failing every Save on that task.
+     */
+    @Test
+    void mergeCurrentRowOnly_relationTableUnderDwKeyPassesThroughUnchanged() {
+        // Not present in dw_table_definitions → not a designer sub-table.
+        when(jdbcTemplate.queryForObject(any(String.class), eq(Integer.class), eq("test")))
+                .thenReturn(0);
+
+        Map<String, Object> relationRow = new HashMap<>();
+        relationRow.put("id_idwnn", "Test-000002");
+        relationRow.put("test", "r");
+
+        Map<String, Object> ownNew = new HashMap<>();
+        ownNew.put("id_idwnn", "Test-000001");
+        ownNew.put("name", "new");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(ownNew)));
+        submitted.put("dw:test", new java.util.ArrayList<>(List.of(relationRow)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000001"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rel = (List<Map<String, Object>>) merged.get("dw:test");
+        assertThat(rel).hasSize(1);
+        assertThat(rel.get(0).get("id_idwnn")).isEqualTo("Test-000002");
+    }
+
+    /**
+     * A link-child (People-style) row belongs to its participant through a STRUCTURAL FK, not the
+     * collection's primary key.
+     *
+     * <p>Live incident: `people` rows are {@code {id=<uuid>, sub_task_id=Test-000002, sex, age}} while
+     * the collection key is {@code {id_idwnn: Test-000002}}. Matching the slice by pkCols never found
+     * a row, so the "own row missing" guard rejected every Save on that sub-task.
+     */
+    @Test
+    void mergeCurrentRowOnly_linkChildRowMatchedByStructuralForeignKey() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+
+        Map<String, Object> mine = new HashMap<>();
+        mine.put("id", "d9f73b1a-fea2-45e0-af77-ca75edd984c0");
+        mine.put("sub_task_id", "Test-000002");
+        mine.put("age", "a");
+
+        Map<String, Object> theirs = new HashMap<>();
+        theirs.put("id", "0000aaaa-0000-0000-0000-00000000ffff");
+        theirs.put("sub_task_id", "Test-000001");
+        theirs.put("age", "keep-me");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(theirs)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(mine)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        // Our own row is merged in...
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("a"));
+        // ...and the other participant's row is preserved untouched.
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("keep-me"));
+    }
+
+    /**
+     * A row pointing at ANOTHER participant is never merged in as ours.
+     *
+     * <p>It is also not an error: the slice simply carries a sibling's row while this participant has
+     * none yet (see {@code sliceWithOnlyOtherParticipantsRowsLeavesBaselineAlone}). What must hold is
+     * that the foreign row is never adopted — the baseline is returned unchanged.
+     */
+    @Test
+    void mergeCurrentRowOnly_structuralForeignKeyOfAnotherParticipantIsNotAdopted() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+
+        Map<String, Object> foreign = new HashMap<>();
+        foreign.put("id", "0000aaaa-0000-0000-0000-00000000ffff");
+        foreign.put("sub_task_id", "Test-000001");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(foreign)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        // Baseline was empty and the foreign row must NOT be adopted as ours.
+        assertThat(rows).isEmpty();
+    }
+
+    /**
+     * A participant may own SEVERAL link-child rows — all of them must survive the save.
+     *
+     * <p>A link-child table is not one-row-per-participant. Routing it through the single-row replace
+     * kept only the first match and silently dropped the rest (data loss, worse than the original
+     * rejection). This participant's whole set is replaced instead, and other participants' rows stay.
+     */
+    @Test
+    void mergeCurrentRowOnly_participantOwningSeveralLinkChildRowsKeepsAllOfThem() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+
+        Map<String, Object> first = new HashMap<>();
+        first.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        first.put("sub_task_id", "Test-000002");
+        first.put("age", "first");
+
+        Map<String, Object> second = new HashMap<>();
+        second.put("id", "bbbbbbbb-0000-0000-0000-000000000002");
+        second.put("sub_task_id", "Test-000002");
+        second.put("age", "second");
+
+        Map<String, Object> otherParticipant = new HashMap<>();
+        otherParticipant.put("id", "cccccccc-0000-0000-0000-000000000003");
+        otherParticipant.put("sub_task_id", "Test-000001");
+        otherParticipant.put("age", "keep-me");
+
+        Map<String, Object> staleOwn = new HashMap<>();
+        staleOwn.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        staleOwn.put("sub_task_id", "Test-000002");
+        staleOwn.put("age", "stale");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(otherParticipant, staleOwn)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(first, second)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(3);
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("first"));
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("second"));
+        // Another participant's row is untouched...
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("keep-me"));
+        // ...and our own stale row is gone, not duplicated.
+        assertThat(rows).noneSatisfy(r -> assertThat(r.get("age")).isEqualTo("stale"));
+    }
+
+    /**
+     * Link-child rows are matched by whichever structural FK column the table actually uses —
+     * {@code sub_task_id}, {@code participant_id}, … — including a mix within one slice.
+     */
+    @Test
+    void mergeCurrentRowOnly_linkChildMatchedAcrossDifferentStructuralFkColumns() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+
+        Map<String, Object> viaSubTask = new HashMap<>();
+        viaSubTask.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        viaSubTask.put("sub_task_id", "Test-000002");
+        viaSubTask.put("age", "a");
+
+        Map<String, Object> viaParticipant = new HashMap<>();
+        viaParticipant.put("id", "bbbbbbbb-0000-0000-0000-000000000002");
+        viaParticipant.put("participant_id", "Test-000002");
+        viaParticipant.put("age", "b");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(viaSubTask, viaParticipant)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(2);
+    }
+
+    /**
+     * An EMPTY slice leaves the baseline untouched — including for link-child tables.
+     *
+     * <p>Documents a deliberate, pre-existing trade-off: an empty slice is ambiguous. It can mean
+     * "the user deleted their rows" OR "this binding was not rendered / MI isolation rebuilt the
+     * payload without it". Deleting on that signal would wipe rows a form never showed, so the
+     * merger keeps the baseline. Consequence: deleting ALL of one's link-child rows does not persist
+     * through this path — the delete must be carried by a non-empty slice or a dedicated delete API.
+     */
+    @Test
+    void mergeCurrentRowOnly_emptyLinkChildSliceKeepsBaselineRatherThanDeleting() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+
+        Map<String, Object> mineOld = new HashMap<>();
+        mineOld.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        mineOld.put("sub_task_id", "Test-000002");
+        mineOld.put("age", "old");
+
+        Map<String, Object> other = new HashMap<>();
+        other.put("id", "cccccccc-0000-0000-0000-000000000003");
+        other.put("sub_task_id", "Test-000001");
+        other.put("age", "keep");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(other, mineOld)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>());
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(2);
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("keep"));
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("old"));
+    }
+
+    /**
+     * A link-child slice holding ONLY other participants' rows is not corruption.
+     *
+     * <p>This participant simply has no row on that table yet, while a sibling's row rides along in
+     * the shared slice. Measured: participant {@code Test-000002} opened a task whose `people` slice
+     * held only {@code {sub_task_id: Test-000001}} — failing there rejected every Save although
+     * nothing of ours was at stake.
+     */
+    @Test
+    void mergeCurrentRowOnly_sliceWithOnlyOtherParticipantsRowsLeavesBaselineAlone() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+
+        Map<String, Object> foreign = new HashMap<>();
+        foreign.put("id", "bad0d243-7e3c-4c67-9137-69ea487980fd");
+        foreign.put("sub_task_id", "Test-000001");
+        foreign.put("age", "q");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(foreign)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(foreign)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("sub_task_id")).isEqualTo("Test-000001");
+    }
+
+    /**
+     * The corruption guard still fires when rows carry NO structural FK and no matching PK — i.e.
+     * the submission genuinely disagrees about what identifies a row.
+     */
+    @Test
+    void mergeCurrentRowOnly_rowsWithoutStructuralFkStillFailLoud() {
+        when(jdbcTemplate.queryForList(any(String.class), eq(String.class), eq("subtable")))
+                .thenReturn(List.of("id_idwnn"));
+
+        Map<String, Object> mismatched = new HashMap<>();
+        mismatched.put("id_idwnn", "Test-000009");
+        mismatched.put("name", "someone else");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(mismatched)));
+
+        assertThatThrownBy(() ->
+                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002")))
+                .hasMessageContaining("own row");
+    }
 }

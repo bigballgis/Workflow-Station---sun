@@ -226,6 +226,8 @@ public class SubTableEnrichmentComponent {
                 Map<String, MiRowProgress> miProgress =
                         miOverlayComponent.lookupMiProgressForDesignerTable(miProgressByTable, tableName);
                 Set<String> protectedMiCols = MiOverlaySupport.miDashboardColumnsToProtect(miProgress);
+                // This FU's configured MI column names (platform defaults when unconfigured).
+                String[] miCols = MiOverlaySupport.miColumnNamesFor(miProgress);
 
                 String safeTableName = SubTablePhysicalMetadataCache.requireSafeIdentifier(tableName);
                 List<String> pkCols;
@@ -278,7 +280,7 @@ public class SubTableEnrichmentComponent {
                                 displayName = resolveUsernameById(userId);
                                 dbRow.put("assignee_display_name", displayName);
                             }
-                            repairStaleTaskStatus(safeTableName, dbRow, rowKey, pkCols);
+                            repairStaleTaskStatus(safeTableName, dbRow, rowKey, pkCols, miCols[0], miCols[1]);
                             for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
                                 if (entry.getValue() == null) {
                                     continue;
@@ -317,7 +319,8 @@ public class SubTableEnrichmentComponent {
                             MiOverlaySupport.applyMiOverlayToVariableRow(row, p);
                         }
                         if (MiOverlaySupport.isPortalProcessCompleted(info)) {
-                            MiOverlaySupport.normalizeStuckMiParticipantRowForCompletedProcess(row);
+                            // p carries this FU's configured status / node column names when an engine row matched
+                            MiOverlaySupport.normalizeStuckMiParticipantRowForCompletedProcess(row, p);
                         }
                     }
                 } else if (MiOverlaySupport.isPortalProcessCompleted(info)) {
@@ -397,12 +400,18 @@ public class SubTableEnrichmentComponent {
      * This self-heals rows that were stuck before the writeBack fix.
      */
     private void repairStaleTaskStatus(String tableName, Map<String, Object> dbRow, Map<String, Object> rowKey,
-                                       List<String> pkCols) {
-        Object ts = dbRow.get("task_status");
+                                       List<String> pkCols, String statusColumn, String nodeColumn) {
+        // Column names come from Sub-Task Config when this Function Unit names its own; the
+        // platform defaults apply otherwise (see MiOverlaySupport.PORTAL_MI_STATUS_COLUMN).
+        // `columnExists` still gates the UPDATE, so a table without the column is skipped rather
+        // than issuing SQL against a column that is not there.
+        String statusCol = MiOverlaySupport.firstNonBlank(statusColumn, MiOverlaySupport.PORTAL_MI_STATUS_COLUMN);
+        String nodeCol = MiOverlaySupport.firstNonBlank(nodeColumn, MiOverlaySupport.PORTAL_MI_CURRENT_NODE_COLUMN);
+        Object ts = dbRow.get(statusCol);
         if (ts != null && !"PENDING".equals(String.valueOf(ts))) {
             return;
         }
-        if (!subTablePhysicalMetadataCache.columnExists(tableName, "task_status")) {
+        if (!subTablePhysicalMetadataCache.columnExists(tableName, statusCol)) {
             return;
         }
         if (pkCols.size() != 1 || !(rowKey.get(pkCols.get(0)) instanceof Number)) {
@@ -432,16 +441,19 @@ public class SubTableEnrichmentComponent {
                 return;
             }
 
-            // 1. Fix task_status
+            // 1. Fix the MI status column (name from Sub-Task Config, platform default otherwise).
+            // Identifiers are concatenated into SQL, so they must be validated first — a configured
+            // name reaches us from BPMN and is not a trusted literal.
             StringBuilder statusSql = new StringBuilder("UPDATE ").append(tableName)
-                    .append(" SET task_status = 'COMPLETED'");
-            if (subTablePhysicalMetadataCache.columnExists(tableName, "task_current_node")) {
-                statusSql.append(", task_current_node = NULL");
-                dbRow.put("task_current_node", null);
+                    .append(" SET ").append(SqlIdentifiers.requireIdentifier(statusCol)).append(" = 'COMPLETED'");
+            if (subTablePhysicalMetadataCache.columnExists(tableName, nodeCol)) {
+                statusSql.append(", ").append(SqlIdentifiers.requireIdentifier(nodeCol)).append(" = NULL");
+                dbRow.put(nodeCol, null);
             }
-            statusSql.append(" WHERE ").append(pkColumn).append(" = ? AND task_status = 'PENDING'");
+            statusSql.append(" WHERE ").append(pkColumn).append(" = ? AND ")
+                    .append(SqlIdentifiers.requireIdentifier(statusCol)).append(" = 'PENDING'");
             jdbcTemplate.update(statusSql.toString(), rowId);
-            dbRow.put("task_status", "COMPLETED");
+            dbRow.put(statusCol, "COMPLETED");
 
             // 2. Recover form field values from Flowable execution history.
             recoverFormFieldsFromHistory(tableName, dbRow, rowKey, pkCols, completedTaskId);

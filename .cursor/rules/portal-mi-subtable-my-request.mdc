@@ -1,12 +1,123 @@
 ---
-description: My Request / MI 子表数据规则 — 发起人全量 vs 办理人切片、file-only 附件禁止 global MI merge
-globs: frontend/user-portal/src/{views/applications,views/tasks,composables/tasks}/**/*
+description: My Request / MI 子表数据规则 — __subTables__ 规范 key 单一真相源、MI 字段名读 Sub-Task Config、发起人全量 vs 办理人切片、file-only 附件禁止 global MI merge
+globs: frontend/user-portal/src/{views/applications,views/tasks,composables/tasks,composables/taskDetail,composables/applicationDetail,composables/subTableField}/**/*
 alwaysApply: false
 ---
 
 # Portal — My Request × MI 子表数据规则
 
 与 `portal-design-parity.mdc` **数据 parity** 配套：同一 `__subTables__` 在不同 **viewContext** 下 MUST 按下列语义 hydrate，不得混用 To Do 的 MI 切片逻辑。
+
+## `__subTables__` 规范 key —— 一张表一份数据（单一真相源）
+
+**Key 规则**：`dw:<table_name>` / `rt:<relation_table_name>`（小写归一）。唯一入口
+`composables/tasks/subTableStore.ts`：写 `writeSubTableRows()`、读 `readSubTableRows()` / `subTableStoreKey()`。
+
+| MUST | MUST NOT |
+|---|---|
+| 每张设计器表**只写一个** key | 按 `bindingId` / 表名 / 展示名**扇出多份**（历史上同一批行存了 9 份，副本会分叉） |
+| 用 `tableName` / `physicalTableName`（设计器名） | 用 `tableDisplayName`（`Participants` 这类展示名跨 FU 可重复） |
+| 用**表名**做 key | 用**表 id**（FU clone / import / 部署到新环境会重新映射 id） |
+| RT binding 落 `rt:` 命名空间 | 让 RT binding 掉进 `dw:`（构造 binding 对象时**必须透传** `relationTableId` / `relationTableName`，否则 `rt:` 切片永远解析不到） |
+| 命中即返回，`Array.isArray` 判定 | 用 `length > 0` 判命中（刚被清空的表会回退到陈旧副本，表现为「删了又回来」） |
+
+**为什么 binding 不能做数据身份**：binding 只是「表单 ↔ 表」的连接，同一张表被多个表单绑定
+（实测 `subtable` 有 6 个 binding）。按 binding 存就会各存一份、各自更新、互相覆盖。
+
+**新增读写点的自查**：改任何 hydrate / resync / merge / submit payload 前，先问
+「这里是**读写 `__subTables__` 行**，还是读**表单配置**（`subForms[bindingId]` 等）？」
+前者一律走 `subTableStore.ts`；后者按 binding id 索引是**正确**的，不要误改。
+
+**回退与观测**：过渡期存量实例仍是旧 binding id key，读取侧可在规范 key 未命中时回退，
+但**禁止按表名兜底**（共享展示名 key 无从判断行属于哪个 binding）。dev 下回退且取到数据会
+`console.warn('canonical key missed')` —— 出现即说明**有写入路径没收敛**，须定位而非忽略。
+
+> **踩过的坑（#1441 后续）**：规范 key 改造只切了「任务保存链路」，My Request 的读取入口
+> `composables/applicationDetail/subTableRowHelpers.ts` 仍只按 binding id 取值，导致新实例
+> 在 My Request 上 MI 子表**整块不渲染**。改 key 规则**必须同时扫读侧**：
+> `grep -rn "savedSubTables\[" src/` 找出所有直接下标访问。
+
+## MI 字段名一律读 Sub-Task Config —— 禁止硬编码
+
+MI 的字段名由每个 FU 在 developer-workstation 的 **Sub-Task Config**（BPMN extension properties）配置：
+`subTableId` / `subTableName` / `assigneeField` / `assigneeMode` / `roleField` / `buField` /
+`miTaskStatusField` / `miTaskCurrentNodeField` / `rowIdVariable`。
+
+| MUST | MUST NOT |
+|---|---|
+| 行主键取 binding 的 `primaryKeyFields`（来自 `dw_field_definitions`） | 写死 `id_idw` / `row_id`（实测 ATM_Transaction 的 PK 就是 `row_id`，`subtable` 是 `id_idwvvbz`） |
+| 状态列取 `miTaskStatusField` | 写死 `task_status` |
+| 当前节点列取 `miTaskCurrentNodeField` | 写死 `task_current_node` |
+| 表判定取 scope 的 `subTableName` | 写死 `participants` / `subtable` |
+| 分派字段取 `assigneeField` / `roleField` | 写死 `assignee` / `role_code` |
+
+写死会让「PK 不叫 `id_idw` / 状态列不叫 `task_status` / 表不叫 `participants`」的 FU **静默失效**，
+且**只在那个 FU 上复现**——这是 MI 反复出问题的结构性根因。
+
+**配置缺失时 MUST 报错，不得猜列名。** 判据是「这个问题**只有配置**能回答，还是**平台自己**定义了答案」：
+
+| 情形 | 处理 | 入口 |
+|---|---|---|
+| 行主键 / 子表名 / 分派字段 —— **只有配置能回答** | **抛 `MI_CONFIG_MISSING`** | `requireSubTablePrimaryKeyFields()` / `requireMiSubTableName()` / `requireMiAssigneeField()` |
+| `task_status` / `task_current_node` —— **平台契约**（后端 `MiOverlaySupport` 就是用这两个字面量写数据；实测 19 个已部署 BPMN 无一配置过） | 用平台默认 | `getActiveMiFieldNames()` |
+| 本就没有主键的合法 binding（共享附件 `main_id`、AP 服务任务行、列名启发式误判的 FU 副本） | 返回 `null`，调用方**跳过该判定** | `resolveMiCollectionPrimaryKeyFields()` |
+
+> 与引擎侧一致：`MultiInstanceDataResolver` 对 `subTableName` 缺失
+> `throw new WorkflowValidationException(...)`，对状态列缺失用默认名。
+>
+> **别把显示问题升级成崩溃**：在「合法地没有主键」的 binding 上抛错会让共享附件、AP 写回行
+> 整页崩掉（实测会红 9 个测试）。那里要跳过判定，不是抛错、更不是拿 `id_idw` 顶上。
+>
+> **踩过的坑（真实事故）**：行匹配函数会**逐个遍历 peer binding**，而同一个表单上除了子表，
+> 还挂着 **relation table**（实测 FU fu-20260422 的 binding 50550=`test`、50551=`sys_users`
+> 虚拟只读表），它们不是设计器子表、`primaryKeyFields` 恒为 null。在那里抛
+> `MI_CONFIG_MISSING` 会让用户**点 Save 直接中断** —— 而用户的子任务其实**配了主键**
+> （`id_idwnn`），报错跟他的配置毫无关系。加抛错前先问：**这个函数会不会被非子表 binding 调到？**
+>
+> 降级方向按「猜错的后果」定，不是一律返回空：
+> - `findMiIsolatedParentRow` 单行分支 → **拒绝该行**（放行=把别人的行交给你编辑）
+> - `repairMisassignedPrimaryKeyFromParentId` → **什么都不删**（它是删值的）
+> - `rowMatchesMiExpansionId` → 跳过主键匹配，继续跨字段兜底
+>
+> 回归测试：`saveWithRelationTableBindings.test.ts`（用现场 binding 集合，去掉修复红 3 个）。
+
+**link-child 表不是「一行一参与者」**：People 式子表用**结构 FK**（`sub_task_id` / `participant_id` …）
+指向参与者，自己的 PK 是行 UUID，**不携带 collection 的主键**。所以：
+
+- 按 collection 的 `pkCols` 匹配它永远匹配不到 → 会被「own row missing」守卫拒掉整次保存；
+- 但也**不能**塞进「单行替换」分支 —— 一个参与者可能有**多行**，那样只留第一行、其余静默丢失
+  （比拒绝保存更糟）。正确做法：**整组替换该参与者的行**，其他参与者的行原样保留。
+
+> 切片里**全是别人的行**（每行的结构 FK 都指向其他参与者）**不是**损坏 —— 只是这张表上
+> 「我」还没有行，而同事的行搭在共享切片里。此时保持基线、放行保存；只有「行既没有结构 FK、
+> 主键也对不上」才是真的语义不一致，才 fail loud。
+>
+> 空切片仍**不删除**基线（歧义：可能是"用户删光了"，也可能是"这个 binding 没渲染"），
+> 这是既有的有意取舍；删除需由非空切片或专用删除接口承载。
+>
+> **`_currentItem` 是 execution 级的**：自己 execution 上没有副本的 task 会继承**流程实例级**
+> 的那份（属于最后写入的参与者）。task 详情与 form-data **两条链都要**套用
+> `EngineTaskMapper.applyTaskScopedMiCurrentItem` —— 实测只修了 form-data 时，task 详情仍返回
+> 别人的参与者 id，表单据此提交，后端 MI 守卫拒绝每一次 Save。
+> 测试：`mergeCurrentRowOnly_participantOwningSeveralLinkChildRowsKeepsAllOfThem`、
+> `mergeCurrentRowOnly_emptyLinkChildSliceKeepsBaselineRatherThanDeleting`。
+
+**后端同源规则**（`MiOverlaySupport` / `SubTableEnrichmentComponent`）：MI 镜像列一律写
+**解析出的**列名（配置优先、`PORTAL_MI_STATUS_COLUMN` 等常量兜底），**不得**在写配置列的同时
+再写一遍字面量 —— 那会让配了自定义列名的 FU 每行带两套状态列、且两者取值不一致。
+配置列名会拼进 SQL 时**必须**先过 `SqlIdentifiers.requireIdentifier`（它来自 BPMN，不是可信字面量）。
+
+**统一入口**：`composables/tasks/useMiConfig.ts`。详情页解析完 BPMN 后 `setActiveMiConfig()`
+注册一次（`useTaskDetailMiScope` / `useApplicationDetailMiScope` 各一处），深层纯函数用
+`getActiveMiFieldNames()` / `isMiStatusField()` 隐式取到 —— 不必给 113 个调用点逐个加参数
+（漏一处就是一个静默失效的 FU）。优先级：**显式传参 > 活动配置 > 平台默认字面量**。
+
+> **踩过的坑**：`resolveMiDashboardFieldNames(miFields)` 早就支持传配置，但实测**没有任何
+> 调用点传过** —— 参数形同虚设、100% 落在 `task_status` 默认值上。**加了参数不等于收敛**，
+> 必须确认调用点真的传了值。
+
+完整分类清单（已修 / 保留及其依据）见 [docs/mi-hardcoded-field-names-inventory.md](../../docs/mi-hardcoded-field-names-inventory.md)。
+新代码**不得**再增加此类写死。
 
 ## 视图与受众（谁先决定能不能 filter）
 
@@ -229,6 +340,10 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 
 ## 变更检查清单
 
+- [ ] **规范 key**：新增/改动的 `__subTables__` 读写点是否都走 `subTableStore.ts`？有无按 `bindingId` / 表名扇出第二份？
+- [ ] **规范 key 读侧**：`grep -rn "savedSubTables\[" src/` 是否已全部收敛？**To Do 与 My Request 两条读链是否都改了**？
+- [ ] **规范 key RT**：构造 binding 对象时是否透传 `relationTableId` / `relationTableName`（否则 `rt:` 切片解析不到）？
+- [ ] **无硬编码**：PK / 状态列 / 当前节点列 / 表名 / 分派字段是否都取自 binding `primaryKeyFields` 与 Sub-Task Config，而非 `id_idw` / `task_status` / `participants` 等字面量？
 - [ ] 发起人 My Request 是否仍 **跳过** MI 参与者 filter？
 - [ ] File-only 子表 resync 是否 **未** 使用 `mergeAllSubTableSlicesFromVariables`？
 - [ ] 同 `tableId` 的 **transaction** binding union merge 是否未误伤 **attachment** binding？

@@ -31,13 +31,22 @@ export async function countSubTableRows(page, titleMatch) {
 }
 
 /** @param {import('playwright').Page} page */
+/**
+ * Fields of the **People** inline form, or null when this task has none.
+ *
+ * The old implementation took `.sub-table-inline-form` FIRST and only fell back to a
+ * name match. On a task whose first inline form is another sub-table (measured: FU 50005
+ * renders Participants and Meeting Remark, and no People form at all) it returned that
+ * form's fields instead — so `verify-mi-people-inline-uuid` asserted a UUID against the
+ * Participants `Id` (`Test-000019`) and failed on a product that was behaving correctly.
+ * Match the People form by name; return null when it is absent so the caller can skip.
+ */
 export async function readPeopleInlineFields(page) {
   return page.evaluate(() => {
+    const isPeople = (el) => /\bpeople\b/i.test(el.textContent || '')
     const root =
-      document.querySelector('.sub-table-inline-form')
-      || [...document.querySelectorAll('.el-card, .form-layout-card, .sub-table-field')].find(c =>
-        /people/i.test(c.textContent || ''),
-      )
+      [...document.querySelectorAll('.sub-table-inline-form')].find(isPeople)
+      || [...document.querySelectorAll('.el-card, .form-layout-card, .sub-table-field')].find(isPeople)
     if (!root) return null
     return [...root.querySelectorAll('.el-form-item')].map(i => ({
       label: i.querySelector('.el-form-item__label')?.textContent?.trim() ?? '',

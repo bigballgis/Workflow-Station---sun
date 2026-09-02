@@ -28,6 +28,18 @@ public class SubTableBindingData {
     private List<Map<String, Object>> data;
     /** Primary key field names from dw_field_definitions.is_primary_key. */
     private List<String> primaryKeyFields;
+    /**
+     * {@code dw_form_table_bindings.relation_table_id} when this binding targets a RELATION table
+     * (including the platform's virtual {@code sys_users}), else {@code null}.
+     *
+     * <p>Without it the portal cannot tell a relation table from a designer sub-table: it filed both
+     * under the same {@code dw:<name>} canonical key, and MI row isolation then treated a relation
+     * table's rows as one participant's — failing every Save on that task. A relation table is not a
+     * designer sub-table: it has no participant FK and legitimately no primary key.
+     */
+    private Long relationTableId;
+    /** Relation table's own name ({@code rt_table_definitions.table_name}); null for designer tables. */
+    private String relationTableName;
     /** MI assignment contract (allowUser/allowRole/assigneeField/roleField/buField) parsed from BPMN, keyed by tableName. */
     private Map<String, Object> assignmentConfig;
 }

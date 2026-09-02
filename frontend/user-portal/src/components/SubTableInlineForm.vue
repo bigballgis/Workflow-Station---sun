@@ -69,6 +69,11 @@ interface Props {
   formOptions?: Record<string, unknown> | null
   /** Canvas columns from the source binding — sourceRule fallback when FormField has none. */
   dialogColumns?: DialogColumnWithEvents[] | Array<Record<string, unknown>> | null
+  /**
+   * 该子表在设计器里配置的主键（`dw_field_definitions`）。用于行身份判定 —— 主键不叫
+   * `id_idw` 的表（实测 ATM_Transaction 是 `row_id`、subtable 是 `id_idwnn`）不能靠猜列名。
+   */
+  primaryKeyFields?: string[] | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -92,7 +97,17 @@ const { t } = useI18n()
 
 const rowModel = ref<Record<string, unknown>>({})
 
-const INLINE_ROW_IDENTITY_KEYS = ['row_id', 'sub_task_id', 'id', 'id_idw'] as const
+/**
+ * 行身份候选键的**顺序有意义**：先业务键（`row_id` / `sub_task_id`），再设计器主键。
+ * 因为 PK 是保存时才分配的，若先用 PK，分配动作会改变身份字符串 → 重新 bootstrap →
+ * 复制父快照 → 正在编辑的值丢失。
+ *
+ * <p>设计器主键从 `primaryKeyFields` 读取（不写死）；末尾保留 `id` / `id_idw` 作为兜底。
+ */
+const inlineRowIdentityKeys = computed<string[]>(() => {
+  const pk = (props.primaryKeyFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
+  return [...new Set(['row_id', 'sub_task_id', ...pk, 'id', 'id_idw'])]
+})
 
 function identityKeyValue(row: Record<string, unknown>, key: string): string | null {
   const v = row[key]
@@ -107,7 +122,7 @@ function identityKeyValue(row: Record<string, unknown>, key: string): string | n
  */
 function inlineFormRowIdentity(row: Record<string, unknown> | null | undefined): string {
   if (!row) return ''
-  for (const k of INLINE_ROW_IDENTITY_KEYS) {
+  for (const k of inlineRowIdentityKeys.value) {
     const v = identityKeyValue(row, k)
     if (v != null) return `${k}:${v}`
   }
@@ -125,7 +140,7 @@ function inlineFormIsSameLogicalRow(
 ): boolean {
   if (!prev || !next) return false
   let compared = false
-  for (const k of INLINE_ROW_IDENTITY_KEYS) {
+  for (const k of inlineRowIdentityKeys.value) {
     const a = identityKeyValue(prev, k)
     const b = identityKeyValue(next, k)
     if (a == null || b == null) continue
@@ -133,8 +148,8 @@ function inlineFormIsSameLogicalRow(
     if (a !== b) return false
   }
   if (compared) return true
-  const prevHadId = INLINE_ROW_IDENTITY_KEYS.some(k => identityKeyValue(prev, k) != null)
-  const nextHadId = INLINE_ROW_IDENTITY_KEYS.some(k => identityKeyValue(next, k) != null)
+  const prevHadId = inlineRowIdentityKeys.value.some(k => identityKeyValue(prev, k) != null)
+  const nextHadId = inlineRowIdentityKeys.value.some(k => identityKeyValue(next, k) != null)
   return !prevHadId && nextHadId
 }
 

@@ -99,7 +99,7 @@ class ProcessOperationProperties {
                 userDisplayNameResolver,
                 i18nService,
                 Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
-        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processInstanceRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, restTemplate, i18nService, processStartComponent, processApplicationQueryComponent, subTableEnrichmentComponent));
+        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processInstanceRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, restTemplate, Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class), i18nService, processStartComponent, processApplicationQueryComponent, subTableEnrichmentComponent));
         // ProcessStartComponent resolves FU content via the (lazy) ProcessComponent facade — point it at the spy
         // so the getFunctionUnitContent stub below stays effective for startProcess.
         org.springframework.test.util.ReflectionTestUtils.setField(processStartComponent, "processComponent", processComponent);

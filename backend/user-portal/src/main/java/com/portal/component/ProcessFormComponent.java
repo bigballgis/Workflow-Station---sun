@@ -675,9 +675,66 @@ public class ProcessFormComponent {
                 }
             }
 
+            attachRelationTableIdentity(result);
+
             return result;
         }
         return Collections.emptyList();
+    }
+
+    /**
+     * Stamps {@code relationTableId} / {@code relationTableName} onto bindings that target a RELATION
+     * table, so the portal can tell them apart from designer sub-tables.
+     *
+     * <p>Without this the portal filed both kinds under the same {@code dw:<name>} canonical key and
+     * MI row isolation treated a relation table's rows as one participant's — rejecting every Save on
+     * that task. Best-effort: a lookup failure simply leaves the fields null, i.e. the previous
+     * behaviour, rather than failing form load.
+     */
+    private void attachRelationTableIdentity(List<SubTableBindingData> bindings) {
+        List<Long> bindingIds = bindings.stream()
+                .map(SubTableBindingData::getBindingId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (bindingIds.isEmpty()) {
+            return;
+        }
+        try {
+            String placeholders = String.join(",", Collections.nCopies(bindingIds.size(), "?"));
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT b.id AS binding_id, b.relation_table_id, rt.table_name AS relation_table_name"
+                            + " FROM dw_form_table_bindings b"
+                            + " LEFT JOIN rt_table_definitions rt ON rt.id = b.relation_table_id"
+                            + " WHERE b.relation_table_id IS NOT NULL AND b.id IN (" + placeholders + ")",
+                    bindingIds.toArray());
+            if (rows.isEmpty()) {
+                return;
+            }
+            Map<Long, Map<String, Object>> byBindingId = new HashMap<>();
+            for (Map<String, Object> row : rows) {
+                Object id = row.get("binding_id");
+                if (id instanceof Number n) {
+                    byBindingId.put(n.longValue(), row);
+                }
+            }
+            for (SubTableBindingData b : bindings) {
+                Map<String, Object> row = b.getBindingId() != null ? byBindingId.get(b.getBindingId()) : null;
+                if (row == null) {
+                    continue;
+                }
+                Object rtId = row.get("relation_table_id");
+                if (rtId instanceof Number n) {
+                    b.setRelationTableId(n.longValue());
+                }
+                Object rtName = row.get("relation_table_name");
+                if (rtName != null) {
+                    b.setRelationTableName(String.valueOf(rtName));
+                }
+            }
+        } catch (RuntimeException e) {
+            log.debug("attachRelationTableIdentity skipped: {}", e.getMessage());
+        }
     }
 
     /**
