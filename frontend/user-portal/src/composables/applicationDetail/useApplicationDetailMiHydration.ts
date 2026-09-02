@@ -244,11 +244,14 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
          * too — only its self-owned rows should override b.data; non-self-owned rows only fill gaps.
          */
         const existingData = Array.isArray(b.data) ? b.data : []
+        // 本函数里当前 binding 是循环变量 b（`binding` 是别的函数的形参，这里不在作用域内）。
+        // 每行都重算一次 FK 配置没有意义，循环外解析一次即可。
+        const bFkConfig = miChildFkConfigOfBinding(b as never)
         const ownFromSlice = fromOwnSlice.filter(
-          r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk, miChildFkConfigOfBinding(binding as never)),
+          r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk, bFkConfig),
         )
         const restFromSlice = fromOwnSlice.filter(
-          r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk, miChildFkConfigOfBinding(binding as never))),
+          r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk, bFkConfig)),
         )
         let mergedRows = mergeSubTableRowsByRowId(restFromSlice, existingData, pk)
         if (ownFromSlice.length > 0) {
