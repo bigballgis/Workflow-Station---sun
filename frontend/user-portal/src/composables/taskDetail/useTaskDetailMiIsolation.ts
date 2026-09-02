@@ -9,6 +9,7 @@ import {
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
   filterRowsForMiParticipantSubTableBinding,
+  miChildFkConfigOfBinding,
 } from '@/composables/tasks/shared'
 import {
   rowMatchesSubTablePrimaryKey,
@@ -266,7 +267,10 @@ export function createTaskDetailMiIsolation(ctx: TaskDetailCtx): TaskDetailMiIso
           ctx.isCurrentMiCollectionSubTableBinding(binding)
             ? finalizeMiCollectionSubTableBindingRows(scopedMerged, binding)
             : isMiParticipantScopedSubTableBinding(binding)
-              ? collapseMiLinkChildRowsToOnePerParticipant(tempBinding.data)
+              ? collapseMiLinkChildRowsToOnePerParticipant(
+                  tempBinding.data,
+                  miChildFkConfigOfBinding(tempBinding as any),
+                )
               : scopedMerged,
         )
         writeSubTableRows(nextRowSub, binding, rows)

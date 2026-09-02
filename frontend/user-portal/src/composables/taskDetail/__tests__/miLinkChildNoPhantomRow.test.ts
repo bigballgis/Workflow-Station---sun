@@ -37,6 +37,23 @@ describe('seedMiParticipantScopedBindingForeignKeys — 空 link-child 绑定', 
     } as unknown as TaskDetailCtx
   }
 
+  /**
+   * MI collection（subtable）绑定 —— 必须存在，child 才判得出来：
+   * 「FK 指向 collection 的 tableId」是 participant-child 的唯一判据。
+   */
+  function collectionBinding() {
+    return {
+      bindingId: 50544,
+      tableId: 50331,
+      tableName: 'subtable',
+      physicalTableName: 'subtable',
+      bindingLinkMode: 'miParticipantRow',
+      primaryKeyFields: ['id_idw'],
+      fieldDefinitions: [{ fieldName: 'id_idw', isPrimaryKey: true }],
+      data: [{ id_idw: PARTICIPANT }],
+    }
+  }
+
   /** People 绑定：MI 参与人维度的 link child，foreignKeyField=id。 */
   function peopleBinding(data: any[]) {
     return {
@@ -46,8 +63,10 @@ describe('seedMiParticipantScopedBindingForeignKeys — 空 link-child 绑定', 
       foreignKeyField: 'id',
       primaryKeyFields: ['id'],
       fieldDefinitions: [
-        { fieldName: 'id', primaryKey: true, pkStrategy: 'UUID' },
-        { fieldName: 'sub_task_id' },
+        { fieldName: 'id', primaryKey: true, isPrimaryKey: true, pkStrategy: 'UUID' },
+        // 结构外键必须在设计器里声明并指向 MI collection（50331 subtable）——
+        // 分类与行归属都读它，不猜列名。
+        { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 50331 },
       ],
       data,
     }
@@ -56,7 +75,7 @@ describe('seedMiParticipantScopedBindingForeignKeys — 空 link-child 绑定', 
   it('空绑定 + Save：不造行、不申请主键', async () => {
     allocatePrimaryKeys.mockClear()
     const binding = peopleBinding([])
-    const fns = createTaskDetailMiLinkChild(ctxOf([binding]))
+    const fns = createTaskDetailMiLinkChild(ctxOf([collectionBinding(), binding]))
 
     await fns.seedMiParticipantScopedBindingForeignKeys(PARTICIPANT, {
       allocateMissingPrimaryKeys: true,
@@ -69,7 +88,7 @@ describe('seedMiParticipantScopedBindingForeignKeys — 空 link-child 绑定', 
   it('已有真实行 + Save：仍然给缺主键的行分配（修复未误伤正常新增）', async () => {
     allocatePrimaryKeys.mockClear()
     const binding = peopleBinding([{ sub_task_id: PARTICIPANT, sex: 'M' }])
-    const fns = createTaskDetailMiLinkChild(ctxOf([binding]))
+    const fns = createTaskDetailMiLinkChild(ctxOf([collectionBinding(), binding]))
 
     await fns.seedMiParticipantScopedBindingForeignKeys(PARTICIPANT, {
       allocateMissingPrimaryKeys: true,

@@ -7,7 +7,9 @@ import { legacyBindingIdAliases } from '@/components/formRendererHelpers'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isMiDashboardSubTableBinding } from './subTableBindingKinds'
 import { mergeAllSlicesForSharedProcessSubTableBinding } from './subTableSliceMerge'
-import { rowIsSelfOwnedByStructuralFk } from './miLinkChildIdentity'
+import { rowIsSelfOwnedByStructuralFk,
+  miChildFkConfigOfBinding,
+} from './miLinkChildIdentity'
 import { subTableStoreKey, type SubTableStoreBindingLike } from './subTableStore'
 
 /**
@@ -55,7 +57,7 @@ function enrichMiDashboardResolvedRows(
   const ownSlice = savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
   if (Array.isArray(ownSlice) && ownSlice.length > 0) {
     const ownSelfOwnedRows = ownSlice.filter(
-      (r: any) => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields),
+      (r: any) => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields, miChildFkConfigOfBinding(binding as never)),
     )
     if (ownSelfOwnedRows.length > 0) {
       merged = mergeSubTableRowsByRowId(merged, ownSelfOwnedRows, binding.primaryKeyFields ?? null)
@@ -90,8 +92,8 @@ function mergeSameTableIdNumericSlicesInto(
    * self-owned rows merge in LAST (after every sibling) so they always win; the rest keep the
    * original fold-in-order behavior.
    */
-  const ownRows = rows.filter(r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields))
-  const restRows = rows.filter(r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields)))
+  const ownRows = rows.filter(r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields, miChildFkConfigOfBinding(binding as never)))
+  const restRows = rows.filter(r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields, miChildFkConfigOfBinding(binding as never))))
   let merged = restRows
   for (const [bid, mapped] of rtMap.entries()) {
     if (legacyBindingIdAliases(binding.bindingId).includes(Number(bid))) continue

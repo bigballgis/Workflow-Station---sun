@@ -27,6 +27,7 @@ function syncStaleSiblingSubTableSlicesFromActiveBindings(
     columns?: Array<{ field?: string }> | null
     formFields?: unknown[] | null
     foreignKeyField?: string | null
+    bindingLinkMode?: string | null
   }>,
   tableMap?: Map<number, number | null>,
   snapshot?: Record<string, any>,
@@ -58,6 +59,8 @@ const miCollectionBinding = {
   bindingId: 66,
   tableId: 10,
   tableName: 'sub_task',
+  // MI collection 靠设计器 Link Mode 声明，不再靠 assignee / task_status 列名猜。
+  bindingLinkMode: 'miParticipantRow',
   primaryKeyFields: ['id_idw'],
   columns: [{ field: 'assignee' }, { field: 'task_status' }],
 }
@@ -75,11 +78,7 @@ describe('syncStaleSiblingSubTableSlicesFromActiveBindings', () => {
       }],
     }
     syncStaleSiblingSubTableSlicesFromActiveBindings(subTables, [{
-      bindingId: 66,
-      tableId: 10,
-      tableName: 'sub_task',
-      primaryKeyFields: ['id_idw'],
-      columns: [{ field: 'assignee' }, { field: 'task_status' }],
+      ...miCollectionBinding,
       data: subTables['66'],
     }])
     expect(subTables['64'][0].assignee.id).toBe('user-e2e-sunqiang')

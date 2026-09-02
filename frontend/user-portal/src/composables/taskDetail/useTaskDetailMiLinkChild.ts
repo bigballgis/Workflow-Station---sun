@@ -16,6 +16,7 @@ import {
   isMiParticipantScopedSubTableBinding,
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
+  miChildFkConfigOfBinding,
   repairMisassignedLinkChildStructuralFk,
   linkChildRowIsForeignParticipantPlaceholder,
   stripForeignParticipantIdIdwFromLinkChildRow,
@@ -62,6 +63,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     myRowId: MiParticipantRowId,
     childBinding: { bindingId: number; tableName: string },
     childSlice: any[],
+    childFkConfig?: Parameters<typeof scopeMiLinkChildRowsForParentRow>[2],
   ): any[] {
     if (!Array.isArray(parentRows)) return parentRows
     const collectionPk = ctx.miCollectionPrimaryKeyFields()
@@ -77,7 +79,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       ) {
         return row
       }
-      const scopedSlice = scopeMiLinkChildRowsForParentRow(rec, childSlice)
+      const scopedSlice = scopeMiLinkChildRowsForParentRow(rec, childSlice, childFkConfig)
       const nest = {
         ...(rec.__subTables__ && typeof rec.__subTables__ === 'object'
           ? (rec.__subTables__ as Record<string, unknown>)
@@ -124,8 +126,17 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       const tid = b.tableId != null ? Number(b.tableId) : null
       if (tid != null && Number.isFinite(tid)) peerMap.set(b.bindingId, tid)
     }
+    // collection 的 tableId 来自 parentBinding（按 subTableName 解析）—— 有了它，child 与
+    // shared 才能按「字段级 FK 指向谁」区分，而不是靠 FK 列名猜。
+    const miKindCtx = {
+      miCollectionTableId:
+        parentBinding.tableId != null && Number.isFinite(Number(parentBinding.tableId))
+          ? Number(parentBinding.tableId)
+          : null,
+      primaryTableId: null,
+    }
     for (const b of subTableBindings.value) {
-      if (!isMiParticipantScopedSubTableBinding(b)) continue
+      if (!isMiParticipantScopedSubTableBinding(b, miKindCtx)) continue
       if (b.bindingId === parentBinding.bindingId) continue
       const existing = Array.isArray(b.data) ? b.data : []
       const nested = pullNestedRowsForBindingFromParentRows(
@@ -202,8 +213,10 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
           }
         : null
 
+    // 同上：collection tableId 取自 parentBinding，让 child/shared 按配置区分。
+    const miKindCtx = { miCollectionTableId: parentTableId, primaryTableId: null }
     for (const b of subTableBindings.value) {
-      if (!isMiParticipantScopedSubTableBinding(b)) continue
+      if (!isMiParticipantScopedSubTableBinding(b, miKindCtx)) continue
       /** Sub task / MI collection rows — id_idw is the real PK; only link-child bindings (People) get repair/allocate. */
       if (bindingMatchesMiSubTableName(b, scopeName) || isMiDashboardSubTableBinding(b)) {
         continue
@@ -215,6 +228,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       // UUID, so every Save on an empty People table persisted one blank phantom row (#1531).
       const rowCount = Array.isArray(b.data) ? b.data.length : 0
       if (rowCount === 0) continue
+      const fkConfig = miChildFkConfigOfBinding(b as any, parentBinding?.tableId ?? null)
       // Sibling participants' placeholder rows live in this same binding. Seeding/allocating them with the
       // CURRENT participant FK makes them falsely claim this participant; collapse then merges all into one
       // corrupt row (cross-participant id_idw leak). Only seed rows that belong to (or are fresh for) the
@@ -227,7 +241,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
           continue
         }
         const row = raw as Record<string, unknown>
-        if (linkChildRowIsForeignParticipantPlaceholder(row, myRowId)) {
+        if (linkChildRowIsForeignParticipantPlaceholder(row, myRowId, fkConfig)) {
           foreignRows.push(row)
           continue
         }
@@ -252,8 +266,8 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
           fkSeed,
           parentBinding?.primaryKeyFields ?? ctx.miCollectionPrimaryKeyFields(),
         )
-        next = repairMisassignedLinkChildStructuralFk(next, fkSeed)
-        next = stripForeignParticipantIdIdwFromLinkChildRow(next, myRowId)
+        next = repairMisassignedLinkChildStructuralFk(next, fkSeed, fkConfig)
+        next = stripForeignParticipantIdIdwFromLinkChildRow(next, myRowId, fkConfig)
         seedableRows.push(next)
       }
       let allocated = seedableRows
@@ -267,7 +281,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
         )
       }
       b.data = cloneSubTableRows(
-        collapseMiLinkChildRowsToOnePerParticipant([...foreignRows, ...allocated]),
+        collapseMiLinkChildRowsToOnePerParticipant([...foreignRows, ...allocated], fkConfig),
       )
       syncMiLinkChildRowsIntoParentNested(
         { bindingId: b.bindingId, tableName: b.tableName ?? '' },
@@ -281,6 +295,10 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     childBinding: { bindingId: number; tableName: string },
     childRows: any[]
   ) {
+    // child binding 的 FK 配置：把子行归到哪个父行，靠设计器声明的外键列，不猜列名。
+    const childFkConfig = miChildFkConfigOfBinding(
+      subTableBindings.value.find(b => b.bindingId === childBinding.bindingId) as never,
+    )
     const rid = ctx.currentMiRowId.value
     if (rid == null) return
     const myRowId = rid
@@ -291,7 +309,8 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
         Array.isArray(parentBinding.data) ? parentBinding.data : [],
         myRowId,
         childBinding,
-        childRows
+        childRows,
+        childFkConfig,
       )
     }
   }
@@ -302,6 +321,11 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     if (!flat) return
     const rtMap = lastBindingRelationTableMap.value
     ctx.refreshPreviousFormsSubTableDataFromSnapshot(flat)
+
+    // MI collection 的 tableId：child 的 FK 必须指向它才算「指向参与者行」的结构外键。
+    const scopeName = miSubProcessScope.value?.subTableName ?? ''
+    const collectionTableId =
+      subTableBindings.value.find(b => bindingMatchesMiSubTableName(b, scopeName))?.tableId ?? null
 
     for (const binding of subTableBindings.value) {
       if (!isMiParticipantScopedSubTableBinding(binding)) continue
@@ -328,25 +352,26 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
           if (Array.isArray(prev.data)) candidates.push(...prev.data)
         }
       }
+      const fkConfig = miChildFkConfigOfBinding(binding as any, collectionTableId)
       const scoped = candidates
-        .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+        .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId, fkConfig))
         .filter(r => ctx.rowBelongsToCurrentMiScope(r, myRowId, binding))
-      let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped)
+      let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped, fkConfig)
       const ownScoped = ownSlice
-        .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+        .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId, fkConfig))
         .filter(r => ctx.rowBelongsToCurrentMiScope(r, myRowId, binding))
       if (ownScoped.length > 0) {
         // Current task binding slice wins over stale sibling slices (e.g. prior userTask binding 63 vs 30).
         merged = mergeSubTableRowsByRowId(
           merged,
-          collapseMiLinkChildRowsToOnePerParticipant(ownScoped),
+          collapseMiLinkChildRowsToOnePerParticipant(ownScoped, fkConfig),
           binding.primaryKeyFields,
         )
       }
       if (merged.length > 0) {
         const temp = { ...binding, data: merged }
         backfillMiLinkChildPrimaryKeysFromVariables([temp as typeof binding], flat, myRowId)
-        merged = collapseMiLinkChildRowsToOnePerParticipant(temp.data)
+        merged = collapseMiLinkChildRowsToOnePerParticipant(temp.data, fkConfig)
         binding.data = cloneSubTableRows(merged)
       }
     }

@@ -3,7 +3,12 @@
  * attachment bindings, MI dashboard rows and runtime meta fields.
  */
 
-import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import {
+  bindingDeclaresMiParticipantRow,
+  resolveMiBindingKindFromConfig,
+  type MiKindContext,
+  type MiKindFieldDef,
+} from './miBindingKindFromConfig'
 import { SUB_TABLE_ROW_META_KEYS } from './internal'
 import { normalizeSubTableName } from './subTableCore'
 import { getActiveMiFieldNames } from './useMiConfig'
@@ -45,13 +50,6 @@ export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record
   }
   return out
 }
-
-const MI_DASHBOARD_STATUS_FIELDS = new Set([
-  'task_status',
-  'task_current_node',
-  'sub_task_status',
-  'sub_task_current_node',
-])
 
 /**
  * The sub-table columns a multi-instance sub-process mirrors its per-participant progress into,
@@ -96,57 +94,52 @@ export function resolveMiDashboardFieldNames(
 export function isMiDashboardSubTableBinding(binding: {
   columns?: Array<{ field?: string }> | null
   tableName?: string
+  tableId?: number | null
+  bindingLinkMode?: string | null
+  fieldDefinitions?: MiKindFieldDef[] | null
   miCollection?: boolean | null
 }, miFields?: MiDashboardFieldNames | null): boolean {
   if (binding.miCollection === false) return false
+  // 设计器显式声明 Link Mode = MI Participant Row —— **唯一**判据。
+  if (bindingDeclaresMiParticipantRow(binding)) return true
+  // 同一张 collection 表的其它 binding（同 tableId）也是 collection。
+  if (resolveMiBindingKindFromConfig(binding, null) === 'collection') return true
+  // Sub-Task Config 显式配置的状态/节点列：这也是配置，不是猜 —— 但只在调用方**传了**
+  // miFields 时才算数，不再退回 task_status / assignee_* / 'participants' 这些字面量。
   const cols = binding.columns ?? []
-  // Configured Sub-Task Config columns win over the name guesses below.
   const configured = [miFields?.statusField, miFields?.currentNodeField]
     .map(f => String(f ?? '').trim())
     .filter(Boolean)
-  if (configured.length > 0 && cols.some(c => c?.field != null && configured.includes(String(c.field)))) {
-    return true
-  }
-  if (cols.some(c => c?.field != null && MI_DASHBOARD_STATUS_FIELDS.has(String(c.field)))) return true
-  const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)
-  if (assigneeField && cols.some(c => c?.field === assigneeField)) return true
-  const tn = (binding.tableName || '').toLowerCase()
-  return tn === 'participants' || tn.endsWith('participants')
+  return (
+    configured.length > 0
+    && cols.some(c => c?.field != null && configured.includes(String(c.field)))
+  )
 }
-
-const SHARED_PROCESS_SUB_TABLE_FK = new Set([
-  'main_id',
-  'mainid',
-  'process_id',
-  'processid',
-  'main_record_id',
-])
-
-const MI_PARTICIPANT_SUB_TABLE_FK = new Set([
-  'id_idw',
-  'row_id',
-  'participant_id',
-  'parent_id',
-  'meeting_participant_id',
-])
 
 /**
  * True when sub-table rows are scoped to one MI participant (assignee dashboard, link-form child, etc.).
  * False for process-level tables keyed to the main form (e.g. attachment.main_id) — those rows are shared by every MI sub-task.
  */
-export function isMiParticipantScopedSubTableBinding(binding: {
-  columns?: Array<{ field?: string }> | null
-  tableName?: string
-  foreignKeyField?: string | null
-}): boolean {
+export function isMiParticipantScopedSubTableBinding(
+  binding: {
+    columns?: Array<{ field?: string }> | null
+    tableName?: string
+    tableId?: number | null
+    foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    fieldDefinitions?: MiKindFieldDef[] | null
+  },
+  ctx?: MiKindContext | null,
+): boolean {
   if (isMiDashboardSubTableBinding(binding)) return true
-  const fk = String(binding.foreignKeyField || '').trim().toLowerCase()
-  if (!fk) return false
-  if (SHARED_PROCESS_SUB_TABLE_FK.has(fk)) return false
-  if (MI_PARTICIPANT_SUB_TABLE_FK.has(fk)) return true
-  // Link-form child rows often FK via generic {@code id} to the parent MI row.
-  if (fk === 'id') return true
-  return false
+  // 配置判据是**唯一**判据：FK 指向 collection = participant-child；FK 指向主表 = shared。
+  // 二者的 bindingLinkMode 都是 structuralFk，只有 refTableId 能区分（实测 attachment vs people）。
+  //
+  // 判不出来时返回 false（= 不按参与者分片），**不再回退猜列名**。猜列名曾经两个方向都答错：
+  // demo FU 把 sub_task_id 改名成 sub_task_idq 后，别人的行被当成无归属放行给当前用户，
+  // 自己的行又被判成别人的而在保存时丢弃。返回 false 是安全的一侧 —— 最多是不做参与者过滤
+  // （显示全量，用户看得见），而猜错会**跨参与者写数据**。
+  return resolveMiBindingKindFromConfig(binding, ctx) === 'participant-child'
 }
 
 /** Designer list columns are file-only (e.g. HMDC Attachment) — not {@link isSharedAttachmentFileBinding} (main_id). */

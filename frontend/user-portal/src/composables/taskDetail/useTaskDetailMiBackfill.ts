@@ -3,6 +3,7 @@ import {
   collectSubTableSliceRowsForRelationTableId,
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
+  miChildFkConfigOfBinding,
   repairMisassignedLinkChildStructuralFk,
   filterRowsForMiParticipantSubTableBinding,
   finalizeMiCollectionSubTableBindingRows,
@@ -128,14 +129,16 @@ export function createTaskDetailMiBackfill(ctx: TaskDetailCtx): TaskDetailMiBack
         const own = ctx.getSavedSubTableRows(flat, binding) ?? []
         candidates.push(...own)
       }
+      // FK 列名按 binding 的设计器字段定义解析，不猜列名。
+      const fkConfig = miChildFkConfigOfBinding(binding as any)
       const scoped = candidates
-        .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+        .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId, fkConfig))
         .filter(r => ctx.rowBelongsToCurrentMiScope(r, myRowId, binding))
-      let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped)
+      let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped, fkConfig)
       if (merged.length > 0) {
         const temp = { ...binding, data: merged } as typeof binding
         backfillMiLinkChildPrimaryKeysFromVariables([temp], flat, myRowId)
-        merged = collapseMiLinkChildRowsToOnePerParticipant(temp.data)
+        merged = collapseMiLinkChildRowsToOnePerParticipant(temp.data, fkConfig)
         binding.data = cloneSubTableRows(
           filterRowsForMiParticipantSubTableBinding(merged, binding),
         )

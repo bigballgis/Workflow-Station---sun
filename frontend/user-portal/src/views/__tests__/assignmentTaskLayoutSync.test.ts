@@ -74,6 +74,9 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
         bindingType: b.bindingType,
         bindingMode: b.bindingMode,
         foreignKeyField: b.foreignKeyField ?? null,
+        // 生产的 binding 构建都透传它 —— MI collection 的判据就是它，漏传会判成非 MI。
+        bindingLinkMode: b.bindingLinkMode ?? null,
+        fieldDefinitions: b.fieldDefinitions ?? null,
         tableName: b.tableDisplayName || b.tableName,
         physicalTableName: b.tableName,
         columns:

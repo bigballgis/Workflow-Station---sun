@@ -57,8 +57,9 @@ describe('seedMiParticipantScopedBindingForeignKeys — 嵌套新增行不得被
     foreignKeyField: 'id',
     primaryKeyFields: ['id'],
     fieldDefinitions: [
-      { fieldName: 'id', primaryKey: true, pkStrategy: 'UUID' },
-      { fieldName: 'sub_task_id' },
+      { fieldName: 'id', isPrimaryKey: true, primaryKey: true, pkStrategy: 'UUID' },
+      // 结构外键必须在设计器里声明 —— 运行时按它解析"哪一列指向参与者"，不猜列名。
+      { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 50331 },
       { fieldName: 'age' },
     ],
     data,

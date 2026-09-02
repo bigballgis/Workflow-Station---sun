@@ -44,6 +44,20 @@ const PEOPLE_FIELD: FormField = {
 const ALICE_PERSON = { id: 101, sub_task_id: '1', sex: true, age: '30' }
 const BOB_PERSON = { id: 202, sub_task_id: '2', sex: false, age: '41' }
 
+/** MI collection（subtable）：设计器 Link Mode = MI Participant Row。 */
+function collectionBinding() {
+  return {
+    bindingId: 50544,
+    tableName: 'subtable',
+    tableId: 50331,
+    bindingLinkMode: 'miParticipantRow',
+    primaryKeyFields: ['id_idw'],
+    fieldDefinitions: [{ fieldName: 'id_idw', isPrimaryKey: true }],
+    columns: [],
+    data: [],
+  }
+}
+
 function peopleBinding(data: unknown[]) {
   return {
     bindingId: 50547,
@@ -57,9 +71,11 @@ function peopleBinding(data: unknown[]) {
     primaryKeyFields: ['id'],
     foreignKeyField: 'id',
     bindingLinkMode: 'structuralFk',
+    // 指向参与者的是 sub_task_id，且 refTableId 指向 MI collection（50331 subtable）——
+    // participant-child 的唯一判据。binding 上的 foreignKeyField='id' 是本行自己的主键。
     fieldDefinitions: [
       { fieldName: 'id', isPrimaryKey: true },
-      { fieldName: 'sub_task_id', isForeignKey: true },
+      { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 50331 },
     ],
   }
 }
@@ -72,7 +88,8 @@ function mountPeopleGrid(participantRow: Record<string, unknown>, flatData: unkn
       model: participantRow,
       parentRow: participantRow,
       editable: true,
-      subTableBindings: [peopleBinding(flatData)],
+      // collection binding 必须在场：participant-child 的判据是「FK 的 refTableId 指向它」。
+      subTableBindings: [collectionBinding(), peopleBinding(flatData)],
     },
     global: { stubs: globalStubs },
   })
@@ -192,6 +209,10 @@ describe('PortalFormFields — sub-table nested in an Inline Form is scoped to t
             columns: [{ field: 'file', label: 'file' }],
             data: attachments,
             foreignKeyField: 'main_id',
+            fieldDefinitions: [
+              { fieldName: 'id', isPrimaryKey: true },
+              { fieldName: 'main_id', isForeignKey: true },
+            ],
           },
         ],
       },

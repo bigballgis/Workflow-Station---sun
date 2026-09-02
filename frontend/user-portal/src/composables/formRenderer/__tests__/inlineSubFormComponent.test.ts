@@ -40,6 +40,10 @@ function makeBinding(over: Partial<SubTableBinding> = {}): SubTableBinding {
     data: [],
     formFields: [],
     foreignKeyField: 'main_id',
+    fieldDefinitions: [
+      { fieldName: 'id', isPrimaryKey: true },
+      { fieldName: 'main_id', isForeignKey: true },
+    ],
     ...over,
   } as SubTableBinding
 }
@@ -51,6 +55,9 @@ function setup(binding: SubTableBinding | undefined, over: Record<string, unknow
     resolveBinding: () => binding,
     isBindingModeEditable: (m) => String(m ?? '').toUpperCase() === 'EDITABLE',
     handleSubTableUpdate,
+    // 生产里详情页总能提供分类上下文（collection = subtable 50331 / 主表 = main 50332）；
+    // 单测默认给上，个别用例可用 over 覆盖。
+    miKindContext: () => ({ miCollectionTableId: 50331, primaryTableId: 50332 }),
     ...over,
   } as never)
   return { api, handleSubTableUpdate }
@@ -155,10 +162,18 @@ describe('useInlineSubFormComponent — link-child binding has no index-0 fallba
       tableId: 50333,
       tableName: 'people',
       foreignKeyField: 'id',
+      // 指向参与者的是 sub_task_id（结构外键）；binding 上的 foreignKeyField='id' 是历史字段，
+      // 指的是本行自己的主键，不是父引用 —— 运行时按 fieldDefinitions 解析，不猜列名。
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true },
+        // refTableId 指向 MI collection（50331 subtable）—— 这是 participant-child 的判据。
+        { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 50331 },
+      ],
       // 生产 binding 都带设计器主键；缺失会抛 MI_CONFIG_MISSING（不猜列名）
       primaryKeyFields: ['id'],
       data,
     } as Partial<SubTableBinding>)
+
 
   const ALICE = { id: 101, sub_task_id: '1', age: '30' }
 
@@ -197,6 +212,10 @@ describe('useInlineSubFormComponent — link-child binding has no index-0 fallba
       bindingId: 50548,
       tableName: 'attachment',
       foreignKeyField: 'main_id',
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true },
+        { fieldName: 'main_id', isForeignKey: true },
+      ],
       data: [{ id: 1, main_id: 'M1', file: 'a.pdf' }],
     } as Partial<SubTableBinding>)
     const { api } = setup(attachment, { currentMiRowId: () => '2' })

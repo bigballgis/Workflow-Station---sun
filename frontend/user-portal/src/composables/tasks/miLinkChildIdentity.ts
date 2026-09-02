@@ -6,9 +6,26 @@
 import {
   isAllocatedUuidPrimaryKey,
   MI_LINK_CHILD_SCALAR_KEYS,
-  MI_STRUCTURAL_PARENT_FK_FIELDS,
   normalizeMiLinkMatchId,
 } from './internal'
+
+/**
+ * The designer config a caller must supply to interpret a link-child row's parent reference.
+ *
+ * <p>`fieldDefinitions` is the binding's own field metadata — the single source of truth for which
+ * columns are foreign keys. `miCollectionTableId` narrows multi-FK children to the FK that points
+ * at the MI collection. Both come straight off the sub-table binding.
+ */
+export interface MiChildFkConfig {
+  fieldDefinitions?: Array<{
+    fieldName?: string
+    isForeignKey?: boolean
+    refTableId?: number | null
+  }> | null
+  bindingForeignKeyField?: string | null
+  bindingLinkMode?: string | null
+  miCollectionTableId?: number | null
+}
 
 /** Count designer business columns filled on a link-child row (excludes id/FK/MI meta). */
 export function miLinkChildRowBusinessFieldRank(row: Record<string, unknown>): number {
@@ -27,9 +44,79 @@ export function miLinkChildRowBusinessFieldRank(row: Record<string, unknown>): n
  * MI parent row ↔ child binding row pairing for nested {@code __subTables__} patch.
  * Must be the same multi-instance element — never match on shared {@code task_status} alone (all active rows are IN_PROGRESS).
  */
-/** First non-empty structural FK on a link-child row (e.g. People.sub_task_id → participant). */
-export function resolveMiChildStructuralParentFk(childRow: Record<string, unknown>): string | null {
-  for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+/**
+ * Which columns of a link-child row hold its reference to the MI participant row.
+ *
+ * <p>Resolved from the DESIGNER CONFIG, never from a list of column names. A field is a structural
+ * parent reference when the designer marked it `isForeignKey`; when the MI collection's table id is
+ * known, only FKs that actually point at it count, so a child with several FKs (parent + a lookup)
+ * cannot pick the wrong one.
+ *
+ * <p>The legacy `bindingForeignKeyField` of an `miParticipantRow` binding is excluded for the same
+ * reason {@link filterStructuralFkMetasForBinding} excludes it on the write path: on the collection
+ * binding that field names the collection's OWN primary key, not a parent reference.
+ */
+export function resolveMiChildStructuralFkColumns(config: MiChildFkConfig | null | undefined): string[] {
+  const collectionTid = config?.miCollectionTableId != null ? Number(config.miCollectionTableId) : null
+  // `foreignKeyField` on an `miParticipantRow` binding names the COLLECTION's own primary key, not a
+  // reference to a parent — the same exclusion the write path applies in filterStructuralFkMetasForBinding.
+  const isCollectionBinding = String(config?.bindingLinkMode ?? '').trim() === 'miParticipantRow'
+  const bindingFk = String(config?.bindingForeignKeyField ?? '').trim()
+  const out: string[] = []
+  for (const f of config?.fieldDefinitions ?? []) {
+    if (!f?.isForeignKey) continue
+    const name = String(f.fieldName ?? '').trim()
+    if (!name) continue
+    if (isCollectionBinding && name.toLowerCase() === bindingFk.toLowerCase()) continue
+    if (collectionTid != null && Number.isFinite(collectionTid)) {
+      const ref = f.refTableId != null ? Number(f.refTableId) : null
+      if (ref == null || !Number.isFinite(ref) || ref !== collectionTid) continue
+    }
+    out.push(name)
+  }
+  // No field definitions reached this caller (older binding payloads carry only the binding row's
+  // own `foreign_key_field`). That column IS designer config — the FK the binding was wired with —
+  // so it is a legitimate second source, unlike a list of column names nobody configured.
+  if (out.length === 0 && bindingFk && !isCollectionBinding) return [bindingFk]
+  return out
+}
+
+/**
+ * First non-empty structural FK value on a link-child row (People → participant).
+ *
+ * <p>`config` names the FK columns; it comes from the designer field definitions, so renaming
+ * `sub_task_id` to anything else keeps working. Passing no config means "this caller cannot see the
+ * binding", and the answer is `null` — refuse to guess rather than fall back to a column-name list.
+ * A hardcoded list silently mis-answered BOTH ways once the demo FU's keys were renamed: a foreign
+ * row read as unowned (claimed by the current user) and the user's own row read as someone else's
+ * (dropped from the payload on save).
+ */
+/**
+ * Build {@link MiChildFkConfig} straight off a sub-table binding. Use this at every call site that
+ * has a binding in scope so the FK columns come from the designer, not from a name list.
+ */
+export function miChildFkConfigOfBinding(
+  binding: {
+    fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
+    foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+  } | null | undefined,
+  miCollectionTableId?: number | null,
+): MiChildFkConfig | null {
+  if (!binding) return null
+  return {
+    fieldDefinitions: binding.fieldDefinitions ?? null,
+    bindingForeignKeyField: binding.foreignKeyField ?? null,
+    bindingLinkMode: binding.bindingLinkMode ?? null,
+    miCollectionTableId: miCollectionTableId ?? null,
+  }
+}
+
+export function resolveMiChildStructuralParentFk(
+  childRow: Record<string, unknown>,
+  config?: MiChildFkConfig | null,
+): string | null {
+  for (const fk of resolveMiChildStructuralFkColumns(config)) {
     const cv = normalizeMiLinkMatchId(childRow[fk])
     if (cv) return cv
   }
@@ -49,13 +136,14 @@ export function resolveMiChildStructuralParentFk(childRow: Record<string, unknow
 export function rowIsSelfOwnedByStructuralFk(
   row: Record<string, unknown>,
   pkFields: string[] | null | undefined,
+  config?: MiChildFkConfig | null,
 ): boolean {
   if (!pkFields?.length) return false
   const pkValue = pkFields
     .map(f => normalizeMiLinkMatchId(row[f]))
     .find(v => v != null)
   if (pkValue == null) return false
-  for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+  for (const fk of resolveMiChildStructuralFkColumns(config)) {
     const fkValue = normalizeMiLinkMatchId(row[fk])
     if (fkValue != null && fkValue === pkValue) return true
   }
@@ -70,11 +158,12 @@ export function rowIsSelfOwnedByStructuralFk(
 export function repairMisassignedLinkChildStructuralFk(
   row: Record<string, unknown>,
   participantId: string | number,
+  config?: MiChildFkConfig | null,
 ): Record<string, unknown> {
   const pid = normalizeMiLinkMatchId(participantId)
   if (!pid) return row
 
-  const structuralFk = resolveMiChildStructuralParentFk(row)
+  const structuralFk = resolveMiChildStructuralParentFk(row, config)
   if (structuralFk === pid) return row
 
   const childIdIdw = normalizeMiLinkMatchId(row.id_idw)
@@ -85,8 +174,12 @@ export function repairMisassignedLinkChildStructuralFk(
 
   if (!rowKeyedToParticipant) return row
 
+  // Only repair FK columns the designer actually declared. Writing every name from a guessed list
+  // stamped columns the table does not have, which then travelled into the saved row.
+  const fkColumns = resolveMiChildStructuralFkColumns(config)
+  if (fkColumns.length === 0) return row
   const out = { ...row }
-  for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+  for (const fk of fkColumns) {
     const cv = normalizeMiLinkMatchId(out[fk])
     if (!cv || cv !== pid) {
       out[fk] = pid
@@ -106,10 +199,11 @@ export function repairMisassignedLinkChildStructuralFk(
 export function linkChildRowIsForeignParticipantPlaceholder(
   row: Record<string, unknown>,
   myRowId: string | number,
+  config?: MiChildFkConfig | null,
 ): boolean {
   const pid = normalizeMiLinkMatchId(myRowId)
   if (!pid) return false
-  const structuralFk = resolveMiChildStructuralParentFk(row)
+  const structuralFk = resolveMiChildStructuralParentFk(row, config)
   if (structuralFk) return structuralFk !== pid
   const idIdw = normalizeMiLinkMatchId(row.id_idw)
   // No structural FK yet: a participant-style id_idw pointing at someone else marks a foreign placeholder.
@@ -126,13 +220,14 @@ export function linkChildRowIsForeignParticipantPlaceholder(
 export function stripForeignParticipantIdIdwFromLinkChildRow(
   row: Record<string, unknown>,
   myRowId: string | number,
+  config?: MiChildFkConfig | null,
 ): Record<string, unknown> {
   const pid = normalizeMiLinkMatchId(myRowId)
   if (!pid) return row
   const idIdw = normalizeMiLinkMatchId(row.id_idw)
   if (!idIdw || idIdw === pid) return row
   if (isAllocatedUuidPrimaryKey(idIdw)) return row
-  const structuralFk = resolveMiChildStructuralParentFk(row)
+  const structuralFk = resolveMiChildStructuralParentFk(row, config)
   if (structuralFk !== pid) return row
   if (!isAllocatedUuidPrimaryKey(normalizeMiLinkMatchId(row.id))) return row
   const out = { ...row }
@@ -141,9 +236,12 @@ export function stripForeignParticipantIdIdwFromLinkChildRow(
 }
 
 /** Prefer rows with backend-allocated PK (UUID) over legacy rows where {@code id} was copied from participant id. */
-export function scoreMiLinkChildRowQuality(row: Record<string, unknown>): number {
+export function scoreMiLinkChildRowQuality(
+  row: Record<string, unknown>,
+  config?: MiChildFkConfig | null,
+): number {
   let score = 0
-  const structuralFk = resolveMiChildStructuralParentFk(row)
+  const structuralFk = resolveMiChildStructuralParentFk(row, config)
   const id = normalizeMiLinkMatchId(row.id)
   if (id) {
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
@@ -168,6 +266,7 @@ export function scoreMiLinkChildRowQuality(row: Record<string, unknown>): number
 export function miParentRowAlignsWithChildRow(
   parentRow: Record<string, unknown>,
   childRow: Record<string, unknown>,
+  config?: MiChildFkConfig | null,
 ): boolean {
   const parentPk =
     parentRow.id_idw
@@ -182,7 +281,7 @@ export function miParentRowAlignsWithChildRow(
    * (sequential ids can collide with another participant's id), so once {@code sub_task_id} etc. is set
    * parentage MUST be decided by it alone — never by comparing the child's id_idw.
    */
-  const structuralFk = resolveMiChildStructuralParentFk(childRow)
+  const structuralFk = resolveMiChildStructuralParentFk(childRow, config)
   if (structuralFk) {
     return parentPkNorm != null && structuralFk === parentPkNorm
   }
@@ -212,13 +311,14 @@ export function miParentRowAlignsWithChildRow(
 export function miLinkChildRowBelongsToParticipant(
   row: Record<string, unknown>,
   participantId: string | number,
+  config?: MiChildFkConfig | null,
 ): boolean {
   const pid = normalizeMiLinkMatchId(participantId)
   if (!pid) return false
 
   const childIdIdw = normalizeMiLinkMatchId(row.id_idw)
   const legacyId = normalizeMiLinkMatchId(row.id)
-  const structuralFk = resolveMiChildStructuralParentFk(row)
+  const structuralFk = resolveMiChildStructuralParentFk(row, config)
 
   if (structuralFk) {
     if (structuralFk === pid) {

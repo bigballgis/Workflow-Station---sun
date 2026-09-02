@@ -77,6 +77,8 @@ export {
 
 export {
   miLinkChildRowBusinessFieldRank,
+  miChildFkConfigOfBinding,
+  resolveMiChildStructuralFkColumns,
   resolveMiChildStructuralParentFk,
   rowIsSelfOwnedByStructuralFk,
   repairMisassignedLinkChildStructuralFk,

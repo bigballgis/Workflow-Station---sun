@@ -6,7 +6,9 @@
 import { cloneSubTableRows } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isSharedAttachmentFileBinding } from './subTableBindingKinds'
-import { rowIsSelfOwnedByStructuralFk } from './miLinkChildIdentity'
+import { rowIsSelfOwnedByStructuralFk,
+  miChildFkConfigOfBinding,
+} from './miLinkChildIdentity'
 import {
   assignRowsPerBindingForSharedMetadataTid,
   claimedNumericSubTableSliceKeys,
@@ -169,10 +171,10 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
      * the row's real current value even when `existing` already has non-empty fields for it).
      */
     const selfOwnedChunkRows = chunks.filter(
-      r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, b.primaryKeyFields ?? null),
+      r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, b.primaryKeyFields ?? null, miChildFkConfigOfBinding(b as never)),
     )
     const restChunkRows = chunks.filter(
-      r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, b.primaryKeyFields ?? null)),
+      r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, b.primaryKeyFields ?? null, miChildFkConfigOfBinding(b as never))),
     )
     let mergedRows = mergeSubTableRowsByRowId(restChunkRows, existing, b.primaryKeyFields ?? null)
     if (selfOwnedChunkRows.length > 0) {

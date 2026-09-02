@@ -97,6 +97,7 @@ import { useSubTableBindings, type SubTableBinding } from '@/composables/formRen
 import { useSubTablePortalViews } from '@/composables/formRenderer/useSubTablePortalViews'
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
 import { getSavedSubTableRows } from '@/composables/tasks/shared'
+import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
 import { useBusinessLogicEngine } from '@/composables/formRenderer/useBusinessLogicEngine'
 import { useFormCreateEvents } from '@/composables/formRenderer/useFormCreateEvents'
 import { useFormData } from '@/composables/formRenderer/useFormData'
@@ -284,6 +285,22 @@ watch(
 // Computed columns are forced read-only here rather than trusted from the form design: the server
 // overwrites them on every write regardless of what the designer left editable.
 const primaryFieldDefinitions = computed(() => props.primaryTableBinding?.fieldDefinitions)
+
+/**
+ * Binding 分类的配置上下文（见 {@code miBindingKindFromConfig}）。
+ *
+ * <p>collection 的 tableId 从 binding 列表里**读**出来 —— 设计器把 Link Mode 标成
+ * "MI Participant Row" 的那个就是；不靠表名/列名猜。拿到它之后，child 与 shared 才能
+ * 按「字段级 FK 的 refTableId 指向 collection 还是主表」区分（两者 linkMode 都是 structuralFk）。
+ */
+const miKindContext = computed(() => {
+  const all = [...(props.subTableBindings ?? []), ...(props.linkedSubTableBindings ?? [])]
+  const collection = all.find(b => bindingDeclaresMiParticipantRow(b as never))
+  return {
+    miCollectionTableId: collection?.tableId ?? null,
+    primaryTableId: props.primaryTableBinding?.tableId ?? null,
+  }
+})
 
 const renderedFields = computed(() =>
   applyComputedReadonlyToFormFields(props.fields, primaryFieldDefinitions.value),
@@ -584,6 +601,7 @@ const {
   handleSubTableUpdate,
   fieldPermissions: () => props.fieldPermissions,
   currentMiRowId: () => props.currentMiRowId,
+  miKindContext: () => miKindContext.value,
 })
 
 // ---------------------------------------------------------------------------

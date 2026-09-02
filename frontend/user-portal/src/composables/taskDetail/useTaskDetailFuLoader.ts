@@ -33,6 +33,7 @@ import {
 } from '@/components/subTableAddDialogHelpers'
 import { createFuContentCache } from './fuContentCache'
 import { stampMiCollectionFromBpmn } from './miCollectionStamp'
+import { registerMiKindTableIdsFromBindings } from '@/composables/tasks/miBindingKindFromConfig'
 import {
   cloneSubTableRows,
   cloneAndFlattenSubTablesMap,
@@ -430,6 +431,9 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         ctx.ensureSubTableBindingsFromLayoutAndConfig(bindings, formConfigForSubTables)
         // ensure* appends layout-only bindings after the stamp above — re-apply so they carry it too.
         stampMiCollectionFromBpmn(ctx, bindings)
+        // Binding 分类的表 id：注册给深层纯函数隐式读取（39 个调用点无法逐个传参）。
+        // collection 认设计器 Link Mode = MI Participant Row 的那个 binding，不猜表名。
+        registerMiKindTableIdsFromBindings(bindings, primaryTableBinding.value?.tableId ?? null)
         attachAssignmentConfigsToBindings(bindings, content.miAssignments)
         // Fill ACTION binding rows from the dedicated per-request query (never __subTables__) —
         // applied last so nothing above (which only knows __subTables__ semantics) can touch it.

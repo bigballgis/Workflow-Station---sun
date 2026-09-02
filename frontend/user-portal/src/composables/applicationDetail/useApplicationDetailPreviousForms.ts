@@ -53,6 +53,8 @@ export function createApplicationDetailPreviousForms(ctx: ApplicationDetailCtx):
         bindingType: b.bindingType,
         bindingMode: b.bindingMode,
         foreignKeyField: b.foreignKeyField,
+        // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
+        bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
         tableName: b.tableDisplayName || b.tableName,
         physicalTableName: b.tableName,
         // 规范 key 的命名空间靠这两个字段判定 DW / RT；不带上则 rt: 切片解析不到

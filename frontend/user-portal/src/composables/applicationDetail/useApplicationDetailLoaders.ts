@@ -271,6 +271,8 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             bindingType: b.bindingType,
             bindingMode: b.bindingMode,
             foreignKeyField: b.foreignKeyField,
+            // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
+            bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
             tableName: b.tableDisplayName || b.tableName,
             physicalTableName: b.tableName,
             tableType: b.tableType,

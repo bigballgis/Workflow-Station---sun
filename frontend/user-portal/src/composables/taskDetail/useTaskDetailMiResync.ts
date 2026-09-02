@@ -1,4 +1,4 @@
-import { writeSubTableRows } from '@/composables/tasks/subTableStore'
+import { writeSubTableRows, subTableStoreKey } from '@/composables/tasks/subTableStore'
 import {
   mergeSubTableRowsByRowId,
   coerceSubTablesVariableToMap,
@@ -20,6 +20,7 @@ import {
   mergeMiCollectionSubTableRows,
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
+  miChildFkConfigOfBinding,
   repairMisassignedLinkChildStructuralFk,
 } from '@/composables/tasks/shared'
 import {
@@ -112,13 +113,15 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
       }
 
       if (isMiParticipantScopedSubTableBinding(current) && myRowId != null) {
+        // FK 列名按设计器字段定义解析，不猜列名。
+        const fkConfig = miChildFkConfigOfBinding(current as any)
         const candidates: any[] = cloneSubTableRows(Array.isArray(current.data) ? current.data : [])
         for (const pf of previousForms.value) {
           for (const prev of pf.subTableBindings) {
             if (!subTableBindingMatches(current, prev)) continue
             if (!Array.isArray(prev.data) || prev.data.length === 0) continue
             const prevRows = prev.data
-              .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+              .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId, fkConfig))
               .filter(r => ctx.rowBelongsToCurrentMiScope(r, myRowId, current))
             candidates.push(...cloneSubTableRows(prevRows))
           }
@@ -137,16 +140,16 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
               current.physicalTableName,
             )
             const scoped = slices
-              .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+              .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId, fkConfig))
               .filter(r => ctx.rowBelongsToCurrentMiScope(r, myRowId, current))
             candidates.push(...cloneSubTableRows(scoped))
           }
         }
-        let merged = collapseMiLinkChildRowsToOnePerParticipant(candidates)
+        let merged = collapseMiLinkChildRowsToOnePerParticipant(candidates, fkConfig)
         if (flat && merged.length > 0) {
           const tempBinding = { ...current, data: merged } as typeof current
           backfillMiLinkChildPrimaryKeysFromVariables([tempBinding], flat, myRowId)
-          merged = collapseMiLinkChildRowsToOnePerParticipant(tempBinding.data)
+          merged = collapseMiLinkChildRowsToOnePerParticipant(tempBinding.data, fkConfig)
         }
         if (merged.length > 0) {
           current.data = cloneSubTableRows(merged)
@@ -324,12 +327,23 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
         miSubProcessScope.value?.subTableName,
       ),
     })
-    for (const slice of Object.values(flattened)) {
+    // 每个切片按表名找回它的 binding，才能拿到该表的 FK 配置。找不到 binding 就**不修**这条切片
+    // —— 修 FK 必须知道哪一列是 FK，没有配置时猜列名正是本次要根除的做法。
+    for (const [sliceKey, slice] of Object.entries(flattened)) {
       if (!Array.isArray(slice)) continue
+      const owner = subTableBindings.value.find(
+        b => subTableStoreKey(b as Parameters<typeof subTableStoreKey>[0]) === sliceKey,
+      )
+      if (!owner) continue
+      const sliceFkConfig = miChildFkConfigOfBinding(owner as any)
       for (let i = 0; i < slice.length; i++) {
         const r = slice[i]
         if (r && typeof r === 'object') {
-          slice[i] = repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId)
+          slice[i] = repairMisassignedLinkChildStructuralFk(
+            r as Record<string, unknown>,
+            myRowId,
+            sliceFkConfig,
+          )
         }
       }
     }
@@ -402,7 +416,10 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
         )
       } else if (participantScoped) {
         binding.data = cloneSubTableRows(
-          collapseMiLinkChildRowsToOnePerParticipant([...existing, ...scoped]),
+          collapseMiLinkChildRowsToOnePerParticipant(
+            [...existing, ...scoped],
+            miChildFkConfigOfBinding(binding as any),
+          ),
         )
       } else {
         let merged = cloneSubTableRows(
@@ -436,7 +453,9 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
     for (const binding of subTableBindings.value) {
       if (ctx.isCurrentMiCollectionSubTableBinding(binding)) continue
       if (!isMiParticipantScopedSubTableBinding(binding)) continue
-      binding.data = cloneSubTableRows(collapseMiLinkChildRowsToOnePerParticipant(binding.data))
+      binding.data = cloneSubTableRows(
+        collapseMiLinkChildRowsToOnePerParticipant(binding.data, miChildFkConfigOfBinding(binding as any)),
+      )
     }
     ctx.applyMiParticipantFilterToCurrentSubTableBindings(myRowId)
 

@@ -7,6 +7,12 @@ const makeBindingWithPk = (bindingId: number, rows: any[]) => ({
   tableName: 'participants',
   data: rows,
   primaryKeyFields: ['id_idw'],
+  // 自持有标记（sub_task_id === 自己的 PK）要能被识别，该列必须是设计器声明的外键 ——
+  // 运行时按 fieldDefinitions 解析 FK 列名，不再有列名清单兜底。
+  fieldDefinitions: [
+    { fieldName: 'id_idw', isPrimaryKey: true },
+    { fieldName: 'sub_task_id', isForeignKey: true },
+  ],
 })
 
 /**

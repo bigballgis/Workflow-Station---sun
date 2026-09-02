@@ -17,6 +17,7 @@ import {
   collapseMiLinkChildRowsToOnePerParticipant,
   getSavedSubTableRows,
   rowIsSelfOwnedByStructuralFk,
+  miChildFkConfigOfBinding,
 } from '@/composables/tasks/shared'
 import {
   collectSubTableBindingMatchKeys,
@@ -76,7 +77,7 @@ function resolveSameTableIdSliceForBinding(
     const otherTid = bindingTableById.get(kid)
     if (otherTid == null || Number(otherTid) !== selfTid) continue
     const isSelfOwned = val.some(
-      r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, binding.primaryKeyFields ?? null),
+      r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, binding.primaryKeyFields ?? null, miChildFkConfigOfBinding(binding as any)),
     )
     const better =
       (isSelfOwned && !bestIsSelfOwned) ||
@@ -195,7 +196,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
       }
       if (merged.length > 0) {
         binding.data = dropSubsumedSubTableRows(
-          collapseMiLinkChildRowsToOnePerParticipant(merged),
+          collapseMiLinkChildRowsToOnePerParticipant(merged, miChildFkConfigOfBinding(binding as any)),
         )
       }
     }
@@ -244,10 +245,10 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
          */
         const existingData = Array.isArray(b.data) ? b.data : []
         const ownFromSlice = fromOwnSlice.filter(
-          r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk),
+          r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk, miChildFkConfigOfBinding(binding as never)),
         )
         const restFromSlice = fromOwnSlice.filter(
-          r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk)),
+          r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk, miChildFkConfigOfBinding(binding as never))),
         )
         let mergedRows = mergeSubTableRowsByRowId(restFromSlice, existingData, pk)
         if (ownFromSlice.length > 0) {

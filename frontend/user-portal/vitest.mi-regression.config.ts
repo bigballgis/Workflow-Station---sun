@@ -28,6 +28,8 @@ const MI_REGRESSION_FILES = [
   // 参与者归属语义（跨子任务串行的第一道闸）——曾因不在门禁清单里而漏掉一次跨参与者行泄漏
   'src/composables/tasks/__tests__/miExpansionIdDesignerPk.test.ts',
   'src/composables/formRenderer/__tests__/saveWithRelationTableBindings.test.ts',
+  // 结构外键按配置解析（改名 FU 的回归闸）
+  'src/composables/tasks/__tests__/miChildFkFromConfig.test.ts',
 ]
 
 export default defineConfig({

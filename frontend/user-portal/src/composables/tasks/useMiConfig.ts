@@ -60,16 +60,57 @@ let activeMiConfig: MiSubProcessScopeConfig | null = null
  */
 export function setActiveMiConfig(scope: MiSubProcessScopeConfig | null): void {
   activeMiConfig = scope
+  // 注销 MI 配置时一并清掉分类表 id：两者描述同一个 FU，留着上一个 FU 的 collection tableId
+  // 会让下一个 FU 的 binding 被判成 participant-child（跨 FU 串配置，和写死一样糟）。
+  // 注册表在 `registerMiKindTableIdsFromBindings` 里于 binding 构建完成后重新写入。
+  if (scope == null) {
+    activeMiKindTableIds = { miCollectionTableId: null, primaryTableId: null }
+  }
 }
 
 /** 离开详情页时清除，避免配置泄漏到下一个 FU。 */
 export function clearActiveMiConfig(): void {
   activeMiConfig = null
+  activeMiKindTableIds = { miCollectionTableId: null, primaryTableId: null }
 }
 
 /** 当前活动的 MI 配置（只读）。 */
 export function getActiveMiConfig(): MiSubProcessScopeConfig | null {
   return activeMiConfig
+}
+
+/**
+ * Binding 分类所需的表 id（`{ miCollectionTableId, primaryTableId }`）。
+ *
+ * <p>与 {@link activeMiConfig} 同样是模块级注册表，理由也相同：分类谓词
+ * （`isMiParticipantScopedSubTableBinding` 等）有 **39 个调用点**散布在 20+ 文件里，多数是深层
+ * 纯函数。逐个加参数的 diff 巨大且漏一处就是一个静默失效的 FU —— 而"漏传就退回猜列名"正是
+ * 本次要根除的东西。改为详情页解析完 BPMN + binding 后注册一次，谓词隐式读取。
+ *
+ * <p>显式传入的 ctx 永远优先（见 `resolveMiKindContext`），所以已经传参的调用点不受影响。
+ */
+let activeMiKindTableIds: { miCollectionTableId: number | null; primaryTableId: number | null } = {
+  miCollectionTableId: null,
+  primaryTableId: null,
+}
+
+/** 注册当前详情页的 collection / 主表 tableId。 */
+export function setActiveMiKindTableIds(ids: {
+  miCollectionTableId?: number | null
+  primaryTableId?: number | null
+} | null): void {
+  activeMiKindTableIds = {
+    miCollectionTableId: ids?.miCollectionTableId ?? null,
+    primaryTableId: ids?.primaryTableId ?? null,
+  }
+}
+
+/** 当前活动的分类表 id（只读）。 */
+export function getActiveMiKindTableIds(): {
+  miCollectionTableId: number | null
+  primaryTableId: number | null
+} {
+  return activeMiKindTableIds
 }
 
 function trimOrNull(v: unknown): string | null {

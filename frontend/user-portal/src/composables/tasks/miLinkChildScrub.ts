@@ -6,7 +6,10 @@
 import { isAllocatedUuidPrimaryKey, MI_LINK_CHILD_SCALAR_KEYS } from './internal'
 import { subTableFieldValueKey } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
-import { stripForeignParticipantIdIdwFromLinkChildRow } from './miLinkChildIdentity'
+import type { MiChildFkConfig } from './miLinkChildIdentity'
+import { stripForeignParticipantIdIdwFromLinkChildRow,
+  miChildFkConfigOfBinding,
+} from './miLinkChildIdentity'
 
 /**
  * Link Form / 「表格下表单」在编辑态常把子表行只写在 {@code parentRow.__subTables__[childBindingId]}，而流程变量提交
@@ -49,7 +52,11 @@ function repairMiCorruptLinkChildRowId(
 export function scrubMiCorruptLinkChildRowsForParent(
   subTables: Record<string, unknown>,
   parentIdIdw: string | number,
-  options?: { skipSliceKeys?: Set<string> | null },
+  options?: {
+    skipSliceKeys?: Set<string> | null
+    /** 按切片 key 取该表的 FK 配置。没有对应配置时不做 FK 相关修复（不猜列名）。 */
+    fkConfigForSliceKey?: ((sliceKey: string) => MiChildFkConfig | null) | null
+  },
 ): void {
   const key = normalizeFkIdForMatchLocal(parentIdIdw)
   if (key == null) return
@@ -61,7 +68,11 @@ export function scrubMiCorruptLinkChildRowsForParent(
    * link-child slices (People etc.) only; on collection slices we leave rows untouched but still recurse
    * nested so genuine link-child rows under a participant parent are still cleaned.
    */
-  const repairSlice = (rows: unknown[], isCollectionSlice: boolean): unknown[] => {
+  const repairSlice = (
+    rows: unknown[],
+    isCollectionSlice: boolean,
+    sliceFkConfig: MiChildFkConfig | null,
+  ): unknown[] => {
     const out: unknown[] = []
     for (const row of rows) {
       if (!row || typeof row !== 'object') {
@@ -97,7 +108,7 @@ export function scrubMiCorruptLinkChildRowsForParent(
       // UUID, so the foreign id_idw is spurious and would make load-side participant filters reject the row.
       const healed =
         !isCollectionSlice
-          ? stripForeignParticipantIdIdwFromLinkChildRow(rec, parentIdIdw)
+          ? stripForeignParticipantIdIdwFromLinkChildRow(rec, parentIdIdw, sliceFkConfig)
           : rec
       const nest = healed.__subTables__
       if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
@@ -110,7 +121,11 @@ export function scrubMiCorruptLinkChildRowsForParent(
 
   for (const [sliceKey, val] of Object.entries(subTables)) {
     if (!Array.isArray(val)) continue
-    const cleaned = repairSlice(val, skipKeys?.has(String(sliceKey)) ?? false)
+    const cleaned = repairSlice(
+      val,
+      skipKeys?.has(String(sliceKey)) ?? false,
+      options?.fkConfigForSliceKey?.(String(sliceKey)) ?? null,
+    )
     subTables[sliceKey] = cleaned
     subTables[String(sliceKey)] = cleaned
   }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { findMiIsolatedParentRow, findSubTableRowByMiExpansionId } from '@/composables/tasks/miLinkChildRows'
-import { rowMatchesMiExpansionId } from '@/composables/tasks/miLinkChildIdentity'
+import {
+  findMiIsolatedParentRow,
+  findSubTableRowByMiExpansionId,
+} from '@/composables/tasks/miLinkChildRows'
+import {
+  miChildFkConfigOfBinding,
+  rowMatchesMiExpansionId,
+} from '@/composables/tasks/miLinkChildIdentity'
 import { repairMisassignedPrimaryKeyFromParentId } from '@/utils/subTableRowRuntime/primaryKeyAllocation'
 import {
   clearActiveMiConfig,
@@ -38,6 +44,15 @@ const BINDINGS = [
   { bindingId: 50550, tableName: 'test', primaryKeyFields: null },        // relation table
   { bindingId: 50551, tableName: 'sys_users', primaryKeyFields: null },   // 虚拟只读表
 ]
+
+
+/** 该表的设计器 FK 配置：结构外键列名从这里解析（不再有列名清单兜底）。 */
+const FK_CFG = miChildFkConfigOfBinding({
+  fieldDefinitions: [
+    { fieldName: 'id', isPrimaryKey: true },
+    { fieldName: 'sub_task_id', isForeignKey: true },
+  ],
+} as never)
 
 describe('Save 路径遍历 peer binding 时不得因关联表无主键而中断', () => {
   it('逐个 binding 做行匹配：无主键的关联表只是不匹配，不抛错', () => {
@@ -164,11 +179,11 @@ describe('findMiIsolatedParentRow — link-child 按结构 FK 判归属', () => 
   const myRow = { id: '1b526ca5-08ec-4c7f-b1b7-60c8a8567f15', age: '1', sub_task_id: 'Test-000002' }
 
   it('结构 FK 指向我 → 返回该行（哪怕主键是 UUID、与参与者 id 不等）', () => {
-    expect(findMiIsolatedParentRow([myRow], 'Test-000002', ['id'])).toEqual(myRow)
+    expect(findMiIsolatedParentRow([myRow], 'Test-000002', ['id'], FK_CFG)).toEqual(myRow)
   })
 
   it('结构 FK 指向别人 → 拒绝', () => {
-    expect(findMiIsolatedParentRow([myRow], 'Test-000001', ['id'])).toBeNull()
+    expect(findMiIsolatedParentRow([myRow], 'Test-000001', ['id'], FK_CFG)).toBeNull()
   })
 
   it('没有结构 FK 时仍按主键做排他判定', () => {

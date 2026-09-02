@@ -11,7 +11,16 @@ import {
   applySharedAttachmentFinalizeAndMaterialize,
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
   resolveSubTableRowsForBinding,
+  miChildFkConfigOfBinding,
 } from '../shared'
+
+/** People 表的设计器 FK 配置：结构外键列名从这里解析（不再有列名清单兜底）。 */
+const PEOPLE_FK_CFG = miChildFkConfigOfBinding({
+  fieldDefinitions: [
+    { fieldName: 'id', isPrimaryKey: true },
+    { fieldName: 'sub_task_id', isForeignKey: true },
+  ],
+} as never)
 
 describe('subTableRowMetaFields merge/materialize/hydrate', () => {
   it('mergeSubTableSlicesForRelationTableId merges only same tableId slices', () => {
@@ -69,6 +78,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
       tableId: 74,
       tableName: 'attachment',
       foreignKeyField: 'main_id',
+      // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true },
+        { fieldName: 'main_id', isForeignKey: true },
+      ],
       columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
       primaryKeyFields: ['id'],
       data: [] as any[],
@@ -89,6 +103,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
       tableId: 74,
       tableName: 'attachment',
       foreignKeyField: 'main_id',
+      // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true },
+        { fieldName: 'main_id', isForeignKey: true },
+      ],
       columns: [{ field: 'file' }],
       primaryKeyFields: ['id'],
       data: [{ id: 1, main_id: '19', file: '/api/v1/upload/files/a.pdf' }],
@@ -107,6 +126,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 74,
         tableName: 'attachment',
         foreignKeyField: 'main_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+        ],
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
         data: [{ id: 343, name: '3', id_idw: 343, task_status: 'IN_PROGRESS' }],
@@ -143,6 +167,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 74,
         tableName: 'attachment',
         foreignKeyField: 'main_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+        ],
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
         data: [],
@@ -152,6 +181,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 74,
         tableName: 'attachment',
         foreignKeyField: 'main_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+        ],
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
         data: [{ id: 666, file: '/api/v1/upload/files/d.pdf', main_id: '' }],
@@ -173,6 +207,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableName: 'attachment',
         physicalTableName: 'attachment',
         foreignKeyField: 'main_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+        ],
         columns: [{ field: 'id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
         data: [
@@ -266,7 +305,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
     }
     // RAW collect then filter to current participant, then merge — the correct order.
     const raw = collectSubTableSliceRowsForRelationTableId(saved, 20, rtMap, 'People')
-    const scoped = raw.filter(r => miLinkChildRowBelongsToParticipant(r, myRowId))
+    const scoped = raw.filter(r => miLinkChildRowBelongsToParticipant(r, myRowId, PEOPLE_FK_CFG))
     const merged = mergeSubTableRowsByRowId([], scoped, ['id'])
     expect(merged).toHaveLength(1)
     expect(merged[0]!.sub_task_id).toBe('Test-000058')
@@ -274,7 +313,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
 
     // CONTRAST: collapsing by id BEFORE the filter loses the current participant's row (the bug).
     const collapsedFirst = mergeSubTableSlicesForRelationTableId(saved, 20, rtMap, ['id'], 'People')
-    const wronglyScoped = collapsedFirst.filter(r => miLinkChildRowBelongsToParticipant(r, myRowId))
+    const wronglyScoped = collapsedFirst.filter(r => miLinkChildRowBelongsToParticipant(r, myRowId, PEOPLE_FK_CFG))
     expect(wronglyScoped).toHaveLength(0)
   })
 
@@ -294,6 +333,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableName: 'People',
         physicalTableName: 'people',
         foreignKeyField: 'sub_task_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'sub_task_id', isForeignKey: true },
+        ],
         primaryKeyFields: ['id'],
         columns: [{ field: 'id' }, { field: 'sub_task_id' }, { field: 'age' }],
         data: [{ id: 'Test-000058', sub_task_id: 'Test-000058', age: 'ii66' }],
@@ -326,6 +370,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 74,
         tableName: 'attachment',
         foreignKeyField: 'main_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+        ],
         columns: [{ field: 'file' }],
         data: [],
       },
@@ -334,6 +383,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 74,
         tableName: 'attachment',
         foreignKeyField: 'main_id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+        ],
         columns: [{ field: 'file' }],
         data: [],
       },
@@ -372,6 +426,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 50331,
         tableName: 'Participants',
         primaryKeyFields: ['id_idw'],
+        // 自持有标记（sub_task_id === 自己的 PK）要能被识别，该列必须是设计器声明的外键。
+        fieldDefinitions: [
+          { fieldName: 'id_idw', isPrimaryKey: true },
+          { fieldName: 'sub_task_id', isForeignKey: true },
+        ],
         columns: [{ field: 'id_idw' }, { field: 'name' }, { field: 'main_id' }],
         data: [{ id_idw: 'Test-000002', name: 'ssa', main_id: 'Meeting-000001' }],
       },
@@ -397,6 +456,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         tableId: 50331,
         tableName: 'Participants',
         primaryKeyFields: ['id_idw'],
+        // 自持有标记（sub_task_id === 自己的 PK）要能被识别，该列必须是设计器声明的外键。
+        fieldDefinitions: [
+          { fieldName: 'id_idw', isPrimaryKey: true },
+          { fieldName: 'sub_task_id', isForeignKey: true },
+        ],
         columns: [{ field: 'id_idw' }, { field: 'name' }, { field: 'main_id' }],
         data: [{ id_idw: 'Test-000002', name: 'ssa', main_id: 'Meeting-000001' }],
       },
@@ -477,6 +541,11 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
       tableId: 50331,
       tableName: 'Participants',
       primaryKeyFields: ['id_idw'],
+      // 自持有标记（sub_task_id === 自己的 PK）要能被识别，该列必须是设计器声明的外键。
+      fieldDefinitions: [
+        { fieldName: 'id_idw', isPrimaryKey: true },
+        { fieldName: 'sub_task_id', isForeignKey: true },
+      ],
       columns: [{ field: 'id_idw' }, { field: 'name' }, { field: 'main_id' }],
     }
     const rows = resolveSubTableRowsForBinding(saved, binding, {
@@ -498,6 +567,8 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
     ]
     const out = finalizeSharedProcessSubTableBindingRows(rows, {
       tableName: 'Sub Task',
+      // MI collection 靠设计器 Link Mode 声明，不再靠 assignee/task_status 列名猜。
+      bindingLinkMode: 'miParticipantRow',
       columns: [{ field: 'assignee' }, { field: 'task_status' }],
     })
     expect(out[0].assignee).toEqual({ id: 'user-dev', display_name: 'Developer Tester' })

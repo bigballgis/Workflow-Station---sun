@@ -18,7 +18,9 @@ import {
   scopeLinkChildRowsToMiHostRow,
   hostRowIsMiParticipant,
   isMiParticipantScopedSubTableBinding,
+  miChildFkConfigOfBinding,
 } from '@/composables/tasks/shared'
+import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
@@ -177,9 +179,11 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
 function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
   const hostRow = (props.model && typeof props.model === 'object' ? props.model : props.parentRow) ?? null
   const participantScoped =
-    isMiParticipantScopedSubTableBinding(binding) && hostRowIsMiParticipant(hostRow)
+    isMiParticipantScopedSubTableBinding(binding, miKindContext.value) && hostRowIsMiParticipant(hostRow)
   const scope = (rows: unknown[]) =>
-    participantScoped ? scopeLinkChildRowsToMiHostRow(hostRow, rows) : rows
+    participantScoped
+      ? scopeLinkChildRowsToMiHostRow(hostRow, rows, miChildFkConfigOfBinding(binding as never))
+      : rows
 
   // Model first: it carries local __subTables__ edits before the host round-trips them
   // into parentRow (SubTableInlineForm rowModel vs. currentRow).
@@ -307,6 +311,20 @@ const inlineSubForm = useInlineSubFormComponent({
     resolveSubTableRows(binding as unknown as PortalSubTableBindingLite) as Record<string, unknown>[],
   handleSubTableUpdate: (bindingId, rows) => onInlineSubFormRowUpdate(bindingId, rows),
   fieldPermissions: () => props.fieldPermissions,
+  miKindContext: () => miKindContext.value,
+})
+
+/**
+ * Binding 分类的配置上下文（见 {@code miBindingKindFromConfig}）。collection 的 tableId
+ * 读自设计器 Link Mode = "MI Participant Row" 的那个 binding；主表用宿主行所属表。
+ */
+const miKindContext = computed(() => {
+  const pool = [...(props.linkedSubTableBindings ?? []), ...(props.subTableBindings ?? [])]
+  const collection = pool.find(b => bindingDeclaresMiParticipantRow(b as never))
+  return {
+    miCollectionTableId: (collection as { tableId?: number | null } | undefined)?.tableId ?? null,
+    primaryTableId: props.hostTableId ?? null,
+  }
 })
 
 /** Host row's own table joins the ancestor pool so a nested FK to it can be auto-filled. */

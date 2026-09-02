@@ -168,6 +168,9 @@ export function createTaskDetailNodeFormMap(ctx: TaskDetailCtx): TaskDetailNodeF
             foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
             relationTableId: (b as any).relationTableId ?? null,
             relationTableName: (b as any).relationTableName ?? null,
+            // 分类判据（MI collection / child / shared）只读这两项 —— 漏传就判不出 MI。
+            bindingLinkMode: b.bindingLinkMode ?? null,
+            fieldDefinitions: b.fieldDefinitions ?? null,
             tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,

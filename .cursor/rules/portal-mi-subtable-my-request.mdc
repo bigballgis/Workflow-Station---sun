@@ -135,16 +135,75 @@ function filterRunningMiBindingsByProcessDesignScope(bindings) {
 }
 ```
 
-## 子表 binding 类型（决定 hydrate / resync 走哪条管道）
+## 子表 binding 分类 —— **一律读配置，禁止靠列名/表名/FK 名猜**
 
-改 `shared.ts`、`applications/detail.vue`、`tasks/detail.vue` 的 hydrate / resync / align 前，先归类 binding：
+> 这一节是 MI 反复出 bug 的**结构性根因所在**。归错类的后果不是显示问题，是**跨参与者数据串写**。
+> 唯一判据见 `composables/tasks/miBindingKindFromConfig.ts`（`resolveMiBindingKindFromConfig`）。
+
+### 三类的权威判据
+
+| 类 | 含义 | **判据（全部来自设计器配置）** |
+|---|---|---|
+| **collection** | MI 子任务集合，一行 = 一个参与者 = 一个子任务 | `bindingLinkMode === 'miParticipantRow'`（DW → Manage Table Bindings → Link Mode = *MI Participant Row*），或 `tableId` 等于该 binding 的 `tableId` |
+| **participant-child** | 挂在某参与者名下的明细（People 式） | 字段级 FK（`fieldDefinitions[].isForeignKey`）的 **`refTableId` 指向 collection 的 tableId** |
+| **shared** | 流程级共享（附件式），所有子任务看同一份 | 字段级 FK 的 **`refTableId` 指向主表**（PRIMARY binding 的 tableId） |
+
+### 必须记住的三条（每条都踩过坑）
+
+1. **`bindingLinkMode` 区分不了 child 和 shared** —— 两者都是 `structuralFk`。现场实测：
+
+   | 表 | linkMode | FK 字段 | FK 指向 | 类 |
+   |---|---|---|---|---|
+   | `attachment` | structuralFk | `main_idv` | → `main`（主表） | **shared** |
+   | `people` | structuralFk | `sub_task_idq` | → `subtable`（collection） | **participant-child** |
+
+   **区分二者的唯一信息是 `refTableId` 指向哪张表。**
+
+2. **`shared` 必须是正面判据，不能写成 else 兜底。** FK 元数据缺失（只有 `isForeignKey`、没有 `refTableId`）时
+   MUST 返回 `null`（"判不了"），由调用方退回旧启发式。静默判成 `shared` 会让真 child 失去参与者隔离。
+
+3. **`foreignKeyField`（binding 层）不是父引用。** 在 `miParticipantRow` binding 上它指的是 **collection 自己的主键**；
+   在 People 式 child 上它常等于该表自己的 PK。父引用只在**字段级** `fieldDefinitions` 里。
+
+### 禁止 —— 以下启发式**已全部物理删除**，不得以任何形式重新引入
+
+| 已删除的猜法 | 原位置 |
+|---|---|
+| 列名撞表 `task_status` / `task_current_node` / `sub_task_status` | `MI_DASHBOARD_STATUS_FIELDS` |
+| 表名撞表 `tableName === 'participants'` / `endsWith('participants')` | `isMiDashboardSubTableBinding`、`isParticipantsBinding`、`resolveAssigneeFieldForBinding` |
+| FK 列名撞表 `fk === 'id'` → participant-scoped | `isMiParticipantScopedSubTableBinding`（**真 collection 被当 link-child，Inline Form 空白 + 保存追加孤儿行**） |
+| FK 列名清单 `main_id` / `id_idw` / `row_id` / … | `SHARED_PROCESS_SUB_TABLE_FK`、`MI_PARTICIPANT_SUB_TABLE_FK` |
+| 结构 FK 列名清单 `sub_task_id` / `participant_id` / `parent_id` | `MI_STRUCTURAL_PARENT_FK_FIELDS` |
+
+**没有兜底了**：判不出来就返回 `null` / `false`，不猜。
+`grep -rn "fk === 'id'\|MI_PARTICIPANT_SUB_TABLE_FK\|endsWith('participants')" src/` 必须为空。
+
+### 上下文怎么来（删掉兜底的前提）
+
+分类谓词有 **39 个调用点**，多数是深层纯函数，不可能逐个传参。上下文走**模块级注册表**，
+与 `setActiveMiConfig` 同一套路：
+
+- 详情页在 binding 构建完成后调 `registerMiKindTableIdsFromBindings(bindings, primaryTableId)`
+  —— **To Do（`useTaskDetailFuLoader`）与 My Request（`useApplicationDetailMiScope`）两条链路都必须调**，漏一条那条链路就判不出 child
+- 深层函数通过 `resolveMiKindContext()` 隐式读取；显式传入的 `MiKindContext` 永远优先
+- 离开详情页 `clearActiveMiConfig()` 会一并清空，避免跨 FU 泄漏
+
+**新增 binding 构建点时 MUST 透传 `bindingLinkMode` 与 `fieldDefinitions`** —— 漏传等于把配置藏起来，
+分类会静默降级（实测 `assignmentTaskLayoutSync` 就因为构建时漏了 `bindingLinkMode` 而判错）。
+
+### 各类的 resync / merge 规则
 
 | 类型 | 识别 | resync / merge 规则 |
 |---|---|---|
-| **MI collection** | BPMN `subTableName` 对应表；列含 assignee / task_status（`isMiDashboardSubTableBinding`） | **办理人** 可 `mergeAllSubTableSlicesFromVariables`；**发起人 My Request MUST 仅用本 binding slice**（禁止 allSlices 注入 People 占位行 → Sub Task 4 条） |
+| **MI collection** | `bindingLinkMode === 'miParticipantRow'`（回退：`isMiDashboardSubTableBinding`） | **办理人** 可 `mergeAllSubTableSlicesFromVariables`；**发起人 My Request MUST 仅用本 binding slice**（禁止 allSlices 注入 People 占位行 → Sub Task 4 条） |
 | **Shared attachment** | `isSharedAttachmentFileBinding`（`main_id` FK 等） | 仅 `applySharedAttachmentFinalizeAndMaterialize`；勿走 per-binding numeric slice 拆分 |
 | **File-only 子表** | `isFileOnlySubTableBinding`（列 **仅** `file`，如 HMDC_Attachment；FK 可为 `row_id`） | **禁止** `mergeAllSubTableSlicesFromVariables` — 会把 transaction 行注入附件表 → **空 file 行**；只用 **本 binding slice** + `filterRowsForSharedProcessSubTableBinding` |
-| **MI participant-scoped 子表** | `isMiParticipantScopedSubTableBinding`（`id_idw` / `participant_id` FK 等） | 仅 own slice + `filterRowsForMiParticipantSubTableBinding` |
+| **MI participant-scoped 子表** | `isMiParticipantScopedSubTableBinding(binding, ctx)` —— **务必传 ctx** | 仅 own slice + `filterRowsForMiParticipantSubTableBinding` |
+
+### 行归属（"这一行是谁的"）同样读配置
+
+FK **列名**由 `miChildFkConfigOfBinding(binding, miCollectionTableId)` 从 `fieldDefinitions` 解析，
+再用 `refTableId` 限定为"指向 collection"的那一个。**不存在列名清单兜底**（`MI_STRUCTURAL_PARENT_FK_FIELDS` 已删除）。
 
 ```typescript
 // ✅ resyncMiDashboardFieldsFromVariablesOnBindings — file-only 分支（applications/detail.vue）
@@ -344,6 +403,10 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 - [ ] **规范 key 读侧**：`grep -rn "savedSubTables\[" src/` 是否已全部收敛？**To Do 与 My Request 两条读链是否都改了**？
 - [ ] **规范 key RT**：构造 binding 对象时是否透传 `relationTableId` / `relationTableName`（否则 `rt:` 切片解析不到）？
 - [ ] **无硬编码**：PK / 状态列 / 当前节点列 / 表名 / 分派字段是否都取自 binding `primaryKeyFields` 与 Sub-Task Config，而非 `id_idw` / `task_status` / `participants` 等字面量？
+- [ ] **binding 分类**：是否用 `resolveMiBindingKindFromConfig`？有没有新增列名/表名/FK 名判断？（`grep -rn "fk === 'id'\|endsWith('participants')" src/` 必须为空）
+- [ ] **上下文注册**：新的详情/加载链路是否调了 `registerMiKindTableIdsFromBindings`？新的 binding 构建点是否透传了 `bindingLinkMode` 与 `fieldDefinitions`？
+- [ ] **child vs shared**：是否靠**字段级 FK 的 `refTableId` 指向 collection 还是主表**区分？（`bindingLinkMode` 对二者都是 `structuralFk`，区分不了）
+- [ ] **判不了要返回 null**：配置缺失时是否**没有**静默降级成 `shared`（那会让真 child 丢失参与者隔离）？
 - [ ] 发起人 My Request 是否仍 **跳过** MI 参与者 filter？
 - [ ] File-only 子表 resync 是否 **未** 使用 `mergeAllSubTableSlicesFromVariables`？
 - [ ] 同 `tableId` 的 **transaction** binding union merge 是否未误伤 **attachment** binding？

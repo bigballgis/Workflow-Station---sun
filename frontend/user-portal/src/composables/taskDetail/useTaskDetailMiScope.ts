@@ -4,6 +4,7 @@ import {
   isMiDashboardSubTableBinding,
   isMiParticipantScopedSubTableBinding,
   finalizeMiCollectionSubTableBindingRows,
+  miChildFkConfigOfBinding,
   miLinkChildRowBelongsToParticipant,
 } from '@/composables/tasks/shared'
 import {
@@ -18,6 +19,7 @@ import {
   type MiParticipantRowId,
 } from '@/composables/tasks/miSubProcessScope'
 import { setActiveMiConfig } from '@/composables/tasks/useMiConfig'
+import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
 import type { TaskDetailState } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
 
@@ -35,7 +37,11 @@ export interface TaskDetailMiScopeFns {
   ) => MiParticipantRowId | null
   currentMiRowId: ComputedRef<MiParticipantRowId | null>
   isMiSubTask: (taskData: any) => boolean
-  isParticipantsBinding: (binding: { tableName: string }) => boolean
+  isParticipantsBinding: (binding: {
+    tableName: string
+    physicalTableName?: string
+    bindingLinkMode?: string | null
+  }) => boolean
   rowBelongsToCurrentMiScope: (
     row: unknown,
     myRowId: MiParticipantRowId,
@@ -154,9 +160,20 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
     return !!(vars?._currentItem || vars?.currentItem)
   }
 
-  function isParticipantsBinding(binding: { tableName: string }): boolean {
-    const tn = (binding.tableName || '').toLowerCase()
-    return tn === 'participants' || tn.endsWith('participants')
+  /**
+   * 这个 binding 是不是 MI collection。
+   *
+   * <p>判据是**设计器配置**：Sub-Task Config 的 `subTableName` 指向它，或设计器把它的 Link Mode
+   * 标成 MI Participant Row。曾经这里靠表名 `participants` 猜 —— 表名一改就失效，且任何名字里
+   * 带 participants 的普通子表都会被误判。
+   */
+  function isParticipantsBinding(binding: {
+    tableName: string
+    physicalTableName?: string
+    bindingLinkMode?: string | null
+  }): boolean {
+    if (bindingDeclaresMiParticipantRow(binding)) return true
+    return bindingMatchesMiSubTableName(binding, miSubProcessScope.value?.subTableName)
   }
 
   /** When slice binding metadata is missing, match MI rows via FK columns to the participant row id. */
@@ -229,7 +246,11 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
       && scopeName
       && !bindingMatchesMiSubTableName(binding, scopeName)
     ) {
-      return miLinkChildRowBelongsToParticipant(row as Record<string, unknown>, myRowId)
+      return miLinkChildRowBelongsToParticipant(
+        row as Record<string, unknown>,
+        myRowId,
+        miChildFkConfigOfBinding(binding as Parameters<typeof miChildFkConfigOfBinding>[0]),
+      )
     }
     const fk = binding.foreignKeyField
     const fkStr = fk ? String(fk).trim() : ''

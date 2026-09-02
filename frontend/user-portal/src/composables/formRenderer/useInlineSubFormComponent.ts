@@ -6,9 +6,14 @@ import {
 } from '../tasks/subTableBindingKinds'
 import {
   miLinkChildRowBelongsToParticipant,
+  miChildFkConfigOfBinding,
   resolveMiChildStructuralParentFk,
 } from '../tasks/miLinkChildIdentity'
 import { normalizeMiLinkMatchId } from '../tasks/internal'
+import {
+  resolveMiBindingKindFromConfig,
+  type MiKindContext,
+} from '../tasks/miBindingKindFromConfig'
 import type { FormField } from '../../components/formRendererHelpers'
 import { resolveSubTablePrimaryKeyFields } from '../tasks/useMiConfig'
 import type { SubTableBinding } from './useSubTableBindings'
@@ -66,6 +71,11 @@ interface InlineSubFormDeps {
    * `null`/absent for a plain non-MI single-row binding, which keeps the `rows[0]` fallback.
    */
   currentMiRowId?: () => number | string | null | undefined
+  /**
+   * MI collection / 主表的 tableId —— binding 分类的配置判据（见 {@link resolveMiBindingKindFromConfig}）。
+   * 省略时分类退回列名启发式，所以能提供的调用方都应该传。
+   */
+  miKindContext?: () => MiKindContext | null | undefined
 }
 
 /** A sub-table row: field name -> value, shape defined by the bound table's design. */
@@ -196,7 +206,10 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
        * sibling's. Match on participant ownership instead, and accept no substitute.
        */
       if (bindingIsMiLinkChild(binding)) {
-        const idx = rows.findIndex(r => miLinkChildRowBelongsToParticipant(r, miRowId))
+        // FK 列名来自设计器字段定义（binding.fieldDefinitions），不猜列名 —— demo FU 把
+        // sub_task_id 改名成 sub_task_idk 后，猜名字的旧实现两个方向都答错了。
+        const fkConfig = miChildFkConfigOfBinding(binding)
+        const idx = rows.findIndex(r => miLinkChildRowBelongsToParticipant(r, miRowId, fkConfig))
         if (idx >= 0) return idx
         // A row with no participant identity yet is this participant's own in-progress row
         // (the FK is only seeded at save), so it is writable — but a FOREIGN row never is.
@@ -211,7 +224,7 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
         const rowHasOwnPk = (r: SubTableRow): boolean =>
           pkNames.some(name => !!normalizeMiLinkMatchId((r as Record<string, unknown>)[name]))
         const fresh = rows.findIndex(
-          r => !resolveMiChildStructuralParentFk(r) && !rowHasOwnPk(r),
+          r => !resolveMiChildStructuralParentFk(r, fkConfig) && !rowHasOwnPk(r),
         )
         return fresh
       }
@@ -235,8 +248,14 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
    * child bindings need participant-ownership matching.
    */
   function bindingIsMiLinkChild(binding: SubTableBinding): boolean {
+    const ctx = deps.miKindContext?.()
+    // 配置判据优先：collection / shared 都不是 link-child，且都不该按参与者 FK 找行。
+    // 这正是本 bug 的修复点 —— 真 collection 的 foreignKeyField='id' 曾让列名启发式判成
+    // link-child，去找一个不存在的参与者 FK，于是 Inline Form 空白 + 保存追加孤儿行。
+    const kind = resolveMiBindingKindFromConfig(binding, ctx)
+    if (kind != null) return kind === 'participant-child'
     return (
-      isMiParticipantScopedSubTableBinding(binding)
+      isMiParticipantScopedSubTableBinding(binding, ctx)
       && !isMiDashboardSubTableBinding(binding)
     )
   }

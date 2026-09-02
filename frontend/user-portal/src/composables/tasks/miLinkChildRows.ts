@@ -5,7 +5,6 @@
 
 import {
   isAllocatedUuidPrimaryKey,
-  MI_STRUCTURAL_PARENT_FK_FIELDS,
   normalizeMiLinkMatchId,
 } from './internal'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
@@ -16,10 +15,13 @@ import {
   miLinkChildRowBelongsToParticipant,
   miLinkChildRowBusinessFieldRank,
   miParentRowAlignsWithChildRow,
+  miChildFkConfigOfBinding,
+  resolveMiChildStructuralFkColumns,
   resolveMiChildStructuralParentFk,
   rowMatchesMiExpansionId,
   scoreMiLinkChildRowQuality,
 } from './miLinkChildIdentity'
+import type { MiChildFkConfig } from './miLinkChildIdentity'
 
 function pickAllocatedUuidFromLinkChildGroup(group: Record<string, unknown>[]): string | undefined {
   for (const r of group) {
@@ -29,13 +31,22 @@ function pickAllocatedUuidFromLinkChildGroup(group: Record<string, unknown>[]): 
   return undefined
 }
 
-function resolveParticipantMergePkField(group: Record<string, unknown>[]): string {
+/**
+ * Which column to merge a participant's fragment rows on. Taken from the designer FK config; the
+ * first FK column that any row in the group actually carries wins. Returns null when the caller
+ * supplied no config — the caller then skips the merge instead of guessing a column name.
+ */
+function resolveParticipantMergePkField(
+  group: Record<string, unknown>[],
+  config?: MiChildFkConfig | null,
+): string | null {
+  const fkColumns = resolveMiChildStructuralFkColumns(config)
   for (const rec of group) {
-    for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+    for (const fk of fkColumns) {
       if (normalizeMiLinkMatchId(rec[fk])) return fk
     }
   }
-  return 'sub_task_id'
+  return fkColumns[0] ?? null
 }
 
 /**
@@ -51,16 +62,22 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
     physicalTableName?: string
     data: any[]
     foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     columns?: Array<{ field?: string }> | null
   },
 >(
   bindings: T[],
   savedSubTables: Record<string, unknown> | null | undefined,
   myRowId: string | number | null | undefined,
+  miCollectionTableId?: number | null,
 ): void {
   if (!savedSubTables || typeof savedSubTables !== 'object') return
+  // 调用方已经知道 collection 的 tableId —— 分类判据也要用它，否则判不出 participant-child。
+  const miKindCtx = { miCollectionTableId: miCollectionTableId ?? null, primaryTableId: null }
   for (const binding of bindings) {
-    if (!isMiParticipantScopedSubTableBinding(binding)) continue
+    if (!isMiParticipantScopedSubTableBinding(binding, miKindCtx)) continue
+    const config = miChildFkConfigOfBinding(binding, miCollectionTableId)
     const saved = getSavedSubTableRows(savedSubTables, binding) ?? []
     if (!Array.isArray(binding.data) || binding.data.length === 0) continue
     for (let i = 0; i < binding.data.length; i++) {
@@ -72,9 +89,9 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
       // A sibling participant's placeholder row (id_idw points elsewhere, no structural FK) must NOT inherit
       // the current participant's allocated id — that collides PKs and collapse then leaks its id_idw onto the
       // current row (#1444). Only backfill rows that actually belong to the current participant.
-      if (myRowId != null && linkChildRowIsForeignParticipantPlaceholder(rec, myRowId)) continue
+      if (myRowId != null && linkChildRowIsForeignParticipantPlaceholder(rec, myRowId, config)) continue
       const participantKey =
-        resolveMiChildStructuralParentFk(rec)
+        resolveMiChildStructuralParentFk(rec, config)
         ?? (myRowId != null ? normalizeMiLinkMatchId(myRowId) : null)
       if (!participantKey) continue
       const donor = saved.find(s => {
@@ -90,7 +107,7 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
         // parent's id_idw — the old `?? sidNorm` fallback made FK-less donors unmatchable, so
         // hydration lost the persisted UUID and every Save re-allocated a fresh PK (id churn).
         const sParticipant =
-          resolveMiChildStructuralParentFk(sr) ?? normalizeMiLinkMatchId(sr.id_idw)
+          resolveMiChildStructuralParentFk(sr, config) ?? normalizeMiLinkMatchId(sr.id_idw)
         return sParticipant != null && sParticipant === participantKey
       }) as Record<string, unknown> | undefined
       if (donor?.id != null && String(donor.id).trim() !== '') {
@@ -101,14 +118,17 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
 }
 
 /** When multiple link-child rows share the same participant FK, merge payloads (sub form1 → sub form2). */
-export function collapseMiLinkChildRowsToOnePerParticipant(rows: unknown[]): any[] {
+export function collapseMiLinkChildRowsToOnePerParticipant(
+  rows: unknown[],
+  config?: MiChildFkConfig | null,
+): any[] {
   if (!Array.isArray(rows) || rows.length <= 1) return Array.isArray(rows) ? [...rows] : []
   const byParticipant = new Map<string, Record<string, unknown>[]>()
   const ungrouped: Record<string, unknown>[] = []
   for (const raw of rows) {
     if (!raw || typeof raw !== 'object') continue
     const rec = raw as Record<string, unknown>
-    const pid = resolveMiChildStructuralParentFk(rec)
+    const pid = resolveMiChildStructuralParentFk(rec, config)
     if (!pid) {
       ungrouped.push(rec)
       continue
@@ -134,7 +154,13 @@ export function collapseMiLinkChildRowsToOnePerParticipant(rows: unknown[]): any
       out.push(...group)
       continue
     }
-    const pkField = resolveParticipantMergePkField(group)
+    const pkField = resolveParticipantMergePkField(group, config)
+    // No FK config reachable → we cannot tell fragments of one row apart from separate rows.
+    // Keep the group intact rather than merging on a guessed column and eating the user's rows.
+    if (!pkField) {
+      out.push(...group)
+      continue
+    }
     const sorted = [...group].sort(
       (a, b) =>
         miLinkChildRowBusinessFieldRank(a) - miLinkChildRowBusinessFieldRank(b)
@@ -172,16 +198,17 @@ export function pickMiLinkChildRowsForParent(
   parentRow: Record<string, unknown>,
   candidateRows: unknown[],
   primaryKeyFields?: string[] | null,
+  config?: MiChildFkConfig | null,
 ): any[] {
   if (!Array.isArray(candidateRows) || candidateRows.length === 0) return []
   const matched = candidateRows.filter(
     r =>
       r &&
       typeof r === 'object' &&
-      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
+      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>, config),
   )
   if (matched.length === 0) return []
-  const deduped = collapseMiLinkChildRowsToOnePerParticipant(matched)
+  const deduped = collapseMiLinkChildRowsToOnePerParticipant(matched, config)
   return mergeSubTableRowsByRowId([], deduped, primaryKeyFields ?? null)
 }
 
@@ -214,6 +241,7 @@ export function findMiIsolatedParentRow(
   rows: unknown[],
   miRowId: string | number | null | undefined,
   primaryKeyFields?: string[] | null,
+  config?: MiChildFkConfig | null,
 ): Record<string, unknown> | null {
   const matched = findSubTableRowByMiExpansionId(rows, miRowId, primaryKeyFields)
   if (matched) return matched
@@ -239,10 +267,10 @@ export function findMiIsolatedParentRow(
     // 标识都没有」的行会放行（那是给弹窗里刚新增、FK 尚未种下的行留的口子）。而设计器主键不叫
     // id_idw / id 时（如 id_idwvvbz），别人的行在它眼里同样"没有标识"——不加这道门就会走捷径
     // return rec，把下面那段本该拒绝外来行的主键排他判定整段跳过，等于把别人的行交给当前用户编辑。
-    if (resolveMiChildStructuralParentFk(rec) != null) {
-      if (miLinkChildRowBelongsToParticipant(rec, miRowId)) return rec
+    if (resolveMiChildStructuralParentFk(rec, config) != null) {
+      if (miLinkChildRowBelongsToParticipant(rec, miRowId, config)) return rec
     }
-    if (linkChildRowIsForeignParticipantPlaceholder(rec, miRowId)) return null
+    if (linkChildRowIsForeignParticipantPlaceholder(rec, miRowId, config)) return null
 
     const pkNames = (primaryKeyFields ?? []).map(f => String(f ?? '').trim()).filter(Boolean)
     // 无主键：无从判定这唯一一行归谁 —— 拒绝（放行 = 把别人的行交给当前用户编辑）。
@@ -265,13 +293,14 @@ export function findMiIsolatedParentRow(
 export function scopeMiLinkChildRowsForParentRow(
   parentRow: Record<string, unknown>,
   candidateRows: unknown[],
+  config?: MiChildFkConfig | null,
 ): Record<string, unknown>[] {
   if (!Array.isArray(candidateRows)) return []
   return candidateRows.filter(
     (r): r is Record<string, unknown> =>
       !!r &&
       typeof r === 'object' &&
-      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
+      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>, config),
   )
 }
 
@@ -321,6 +350,7 @@ export function hostRowIsMiParticipant(row: Record<string, unknown> | null | und
 export function scopeLinkChildRowsToMiHostRow(
   hostRow: Record<string, unknown> | null | undefined,
   candidateRows: unknown[],
+  config?: MiChildFkConfig | null,
 ): unknown[] {
   if (!Array.isArray(candidateRows) || candidateRows.length === 0) return candidateRows
   if (!hostRowIsMiParticipant(hostRow)) return candidateRows
@@ -334,7 +364,7 @@ export function scopeLinkChildRowsToMiHostRow(
     if (!raw || typeof raw !== 'object') return true
     const rec = raw as Record<string, unknown>
     // No participant identity yet — a fresh row the user just added. Keep it.
-    if (!resolveMiChildStructuralParentFk(rec) && !normalizeMiLinkMatchId(rec.id_idw)) return true
-    return miLinkChildRowBelongsToParticipant(rec, pid)
+    if (!resolveMiChildStructuralParentFk(rec, config) && !normalizeMiLinkMatchId(rec.id_idw)) return true
+    return miLinkChildRowBelongsToParticipant(rec, pid, config)
   })
 }

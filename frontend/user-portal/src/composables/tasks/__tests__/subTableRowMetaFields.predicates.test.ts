@@ -83,37 +83,37 @@ describe('subTableRowMetaFields predicates', () => {
     expect(cleaned).toEqual({ id: 343, name: '3', id_idw: 343 })
   })
 
-  it('isMiDashboardSubTableBinding detects designer MI columns only', () => {
+  /**
+   * 分类只认配置。历史上这里断言的是「表名叫 participants」「列里有 task_status /
+   * assignee_user_id」这类猜测 —— 那些字面量已随启发式一并删除（demo FU 改名后它们两个方向
+   * 都答错），断言随之改为配置判据。
+   */
+  it('isMiDashboardSubTableBinding 只认设计器配置（Link Mode / Sub-Task Config 列）', () => {
+    // 表名叫 participants 不再算数
     expect(
-      isMiDashboardSubTableBinding({
-        tableName: 'attachment',
-        columns: [{ field: 'id' }, { field: 'name' }],
-      }),
+      isMiDashboardSubTableBinding({ tableName: 'participants', columns: [{ field: 'id' }] }),
     ).toBe(false)
-    expect(
-      isMiDashboardSubTableBinding({
-        tableName: 'participants',
-        columns: [{ field: 'id' }],
-      }),
-    ).toBe(true)
+    // 列名撞 task_status / assignee_user_id 也不再算数
     expect(
       isMiDashboardSubTableBinding({
         tableName: 'subtable1',
         columns: [{ field: 'assignee_user_id' }, { field: 'task_status' }],
       }),
+    ).toBe(false)
+    // 设计器 Link Mode = MI Participant Row —— 唯一权威声明
+    expect(
+      isMiDashboardSubTableBinding({ tableName: 'anything', bindingLinkMode: 'miParticipantRow' }),
+    ).toBe(true)
+    // Sub-Task Config 显式配置的状态列（调用方传入）也算配置
+    expect(
+      isMiDashboardSubTableBinding(
+        { tableName: 'HMDC Transaction', columns: [{ field: 'row_id' }, { field: 'my_status' }] },
+        { statusField: 'my_status', currentNodeField: null },
+      ),
     ).toBe(true)
     expect(
-      isMiDashboardSubTableBinding({
-        tableName: 'HMDC Transaction',
-        columns: [{ field: 'row_id' }, { field: 'assignee_id' }],
-      }),
-    ).toBe(true)
-    expect(
-      isMiDashboardSubTableBinding({
-        tableName: 'HMDC Transaction',
-        columns: [{ field: 'row_id' }, { field: 'sub_task_status' }],
-      }),
-    ).toBe(true)
+      isMiDashboardSubTableBinding({ tableName: 'attachment', columns: [{ field: 'name' }] }),
+    ).toBe(false)
   })
 
   it('expansionKeyMatchesParticipantRow requires designer primary key fields', () => {
@@ -143,28 +143,42 @@ describe('subTableRowMetaFields predicates', () => {
     ).toBe(true)
   })
 
-  it('isMiParticipantScopedSubTableBinding treats main-table FK attachment as shared', () => {
+  /**
+   * child vs shared 只能靠**字段级 FK 的 refTableId 指向谁**区分 —— 两者的 bindingLinkMode
+   * 都是 structuralFk。FK 列名（main_id / id_idw / id）不再参与判定。
+   */
+  it('isMiParticipantScopedSubTableBinding 按 FK 指向判定 child vs shared', () => {
+    const CTX = { miCollectionTableId: 50331, primaryTableId: 50332 }
+    // attachment：FK 指向主表 => shared
     expect(
-      isMiParticipantScopedSubTableBinding({
-        tableName: 'attachment',
-        foreignKeyField: 'main_id',
-        columns: [{ field: 'id' }, { field: 'file' }],
-      }),
+      isMiParticipantScopedSubTableBinding(
+        {
+          tableName: 'attachment',
+          foreignKeyField: 'main_idv',
+          fieldDefinitions: [{ fieldName: 'main_idv', isForeignKey: true, refTableId: 50332 }],
+        },
+        CTX,
+      ),
     ).toBe(false)
+    // people：FK 指向 collection => participant-child
     expect(
-      isMiParticipantScopedSubTableBinding({
-        tableName: 'subtable1',
-        foreignKeyField: 'id_idw',
-        columns: [{ field: 'assignee_user_id' }],
-      }),
+      isMiParticipantScopedSubTableBinding(
+        {
+          tableName: 'people',
+          foreignKeyField: 'idq',
+          fieldDefinitions: [{ fieldName: 'sub_task_idq', isForeignKey: true, refTableId: 50331 }],
+        },
+        CTX,
+      ),
     ).toBe(true)
+    // collection 自己（Link Mode 声明）
     expect(
-      isMiParticipantScopedSubTableBinding({
-        tableName: 'subtable2',
-        foreignKeyField: 'id',
-        columns: [{ field: 'sex' }],
-      }),
+      isMiParticipantScopedSubTableBinding({ tableName: 'subtable', bindingLinkMode: 'miParticipantRow' }, CTX),
     ).toBe(true)
+    // FK 列名撞旧名单但没有配置 => 不再判为 scoped（旧启发式已删）
+    expect(
+      isMiParticipantScopedSubTableBinding({ tableName: 'subtable2', foreignKeyField: 'id_idw' }, CTX),
+    ).toBe(false)
   })
 
   it('enrichChildBindingRowsFromParentsNestedSubTables does not leak MI fields into non-MI child rows', () => {

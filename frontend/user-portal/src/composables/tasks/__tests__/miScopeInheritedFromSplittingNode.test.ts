@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { resolveMiSubProcessScopeFromBpmn } from '../miSubProcessScopeBpmn'
-import { miLinkChildRowBelongsToParticipant } from '../miLinkChildIdentity'
+import { miLinkChildRowBelongsToParticipant,
+  miChildFkConfigOfBinding,
+} from '../miLinkChildIdentity'
 
 /**
  * 一个 MI 子流程**只拆分一次**：只有拆分节点（`sub form1`）配 Sub-Task Config；
@@ -99,6 +101,14 @@ describe('MI scope — 后续节点继承拆分节点的整份配置', () => {
  * 不是"显示不出来"而是**存不进去** —— 新行在发请求前就被剔除，后端连见都没见过。
  * 实测：用户给 People 加两行、Save 无报错、刷新后全没了。
  */
+/** People 表的设计器 FK 配置：结构外键列名从这里解析（不再有列名清单兜底）。 */
+const FK_CFG = miChildFkConfigOfBinding({
+  fieldDefinitions: [
+    { fieldName: 'id', isPrimaryKey: true },
+    { fieldName: 'sub_task_id', isForeignKey: true },
+  ],
+} as never)
+
 describe('miLinkChildRowBelongsToParticipant — 新增行', () => {
   it('刚新增、只有分配好的 UUID 主键 → 属于当前参与者', () => {
     expect(miLinkChildRowBelongsToParticipant(
@@ -111,12 +121,12 @@ describe('miLinkChildRowBelongsToParticipant — 新增行', () => {
 
   it('已保存、结构 FK 指向我 → 属于我', () => {
     expect(miLinkChildRowBelongsToParticipant(
-      { id: 'u1', sub_task_id: 'Test-000001' }, 'Test-000001')).toBe(true)
+      { id: 'u1', sub_task_id: 'Test-000001' }, 'Test-000001', FK_CFG)).toBe(true)
   })
 
   it('结构 FK 指向别人 → 不属于我（放行会把别人的行卷进我的提交）', () => {
     expect(miLinkChildRowBelongsToParticipant(
-      { id: 'u1', sub_task_id: 'Test-000002' }, 'Test-000001')).toBe(false)
+      { id: 'u1', sub_task_id: 'Test-000002' }, 'Test-000001', FK_CFG)).toBe(false)
   })
 
   it('id_idw 指向别的参与者 → 不属于我', () => {

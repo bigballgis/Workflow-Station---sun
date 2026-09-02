@@ -13,7 +13,19 @@ import {
   backfillMiLinkChildPrimaryKeysFromVariables,
   repairMisassignedLinkChildStructuralFk,
   scopeMiLinkChildRowsForParentRow,
+  miChildFkConfigOfBinding,
 } from '../shared'
+
+/**
+ * 结构外键列名来自设计器配置。这些用例的表用的是历史列名 sub_task_id —— 现在必须把该表的
+ * 字段定义一起传进去，函数才知道哪一列是 FK（不再有列名清单兜底）。
+ */
+const CFG = miChildFkConfigOfBinding({
+  fieldDefinitions: [
+    { fieldName: 'id', isPrimaryKey: true },
+    { fieldName: 'sub_task_id', isForeignKey: true },
+  ],
+} as never)
 
 describe('linkFormMiIsolation helpers', () => {
   it('rowMatchesMiExpansionId matches the designer PK', () => {
@@ -65,7 +77,7 @@ describe('linkFormMiIsolation helpers', () => {
       { id: 44, id_idw: 88, sex: true, age: '12' },
       { id: 555, id_idw: 245, sex: false, age: '9' }
     ]
-    const picked = pickMiLinkChildRowsForParent(parent, candidates, null)
+    const picked = pickMiLinkChildRowsForParent(parent, candidates, null, CFG)
     expect(picked).toHaveLength(1)
     expect(picked[0].sex).toBe(true)
     expect(picked[0].age).toBe('12')
@@ -107,6 +119,7 @@ describe('linkFormMiIsolation helpers', () => {
       miParentRowAlignsWithChildRow(
         { id_idw: 'Test-000057', id: 'Test-000057' },
         { id_idw: 'Test-000058', sub_task_id: 'Test-000057', age: 'ii', sex: true },
+        CFG,
       ),
     ).toBe(true)
     // Must NOT attach to participant Test-000058 just because the People row's own id_idw equals it.
@@ -114,6 +127,7 @@ describe('linkFormMiIsolation helpers', () => {
       miParentRowAlignsWithChildRow(
         { id_idw: 'Test-000058', id: 'Test-000058' },
         { id_idw: 'Test-000058', sub_task_id: 'Test-000057', age: 'ii', sex: true },
+        CFG,
       ),
     ).toBe(false)
   })
@@ -121,9 +135,9 @@ describe('linkFormMiIsolation helpers', () => {
   it('miLinkChildRowBelongsToParticipant keeps own People (sub_task_id), rejects other participant', () => {
     const peopleRow = { id_idw: 'Test-000058', sub_task_id: 'Test-000057', age: 'ii', sex: true }
     // Current participant Test-000057 — its own People (sub_task_id match) must remain visible.
-    expect(miLinkChildRowBelongsToParticipant(peopleRow, 'Test-000057')).toBe(true)
+    expect(miLinkChildRowBelongsToParticipant(peopleRow, 'Test-000057', CFG)).toBe(true)
     // Participant Test-000058 must not inherit Test-000057's People even though id_idw collides.
-    expect(miLinkChildRowBelongsToParticipant(peopleRow, 'Test-000058')).toBe(false)
+    expect(miLinkChildRowBelongsToParticipant(peopleRow, 'Test-000058', CFG)).toBe(false)
   })
 
   it('findMiIsolatedParentRow rejects sole row for a different MI participant', () => {
@@ -148,7 +162,7 @@ describe('linkFormMiIsolation helpers', () => {
       { id: 'p57-row', id_idw: 'Test-000060', sub_task_id: 'Test-000057', age: '21', sex: true },
     ]
     const others = fullSnapshotRows.filter(
-      r => !miLinkChildRowBelongsToParticipant(r, myRowId),
+      r => !miLinkChildRowBelongsToParticipant(r, myRowId, CFG),
     )
     const persisted = mergeSubTableRowsByRowId(others, currentBindingRows, ['id'])
 
@@ -168,7 +182,7 @@ describe('linkFormMiIsolation helpers', () => {
       { id: 'Test-000058', sub_task_id: 'Test-000058', age: 'ii66', sex: true },
       { id: '586152b6-c284-456b-8cdd-e782436b63be', sub_task_id: 'Test-000058', age: 'ii66', sex: true },
     ]
-    const collapsed = collapseMiLinkChildRowsToOnePerParticipant(rows)
+    const collapsed = collapseMiLinkChildRowsToOnePerParticipant(rows, CFG)
     expect(collapsed).toHaveLength(1)
     expect(collapsed[0].id).toBe('586152b6-c284-456b-8cdd-e782436b63be')
     expect(scoreMiLinkChildRowQuality(rows[1] as Record<string, unknown>)).toBeGreaterThan(
@@ -182,7 +196,7 @@ describe('linkFormMiIsolation helpers', () => {
       { sub_task_id: 'Test-000061', age: '88', sex: true },
       { sub_task_id: 'Test-000062', age: '', sex: false },
     ]
-    const scoped = scopeMiLinkChildRowsForParentRow(parent062, slice)
+    const scoped = scopeMiLinkChildRowsForParentRow(parent062, slice, CFG)
     expect(scoped).toHaveLength(1)
     expect(scoped[0].sub_task_id).toBe('Test-000062')
     expect(scoped[0].age).toBe('')
@@ -195,8 +209,8 @@ describe('linkFormMiIsolation helpers', () => {
       sub_task_id: 'Test-000044',
       task_current_node: 'sub form2',
     }
-    expect(miLinkChildRowBelongsToParticipant(row, 'Test-000043')).toBe(true)
-    expect(miLinkChildRowBelongsToParticipant(row, 'Test-000044')).toBe(false)
+    expect(miLinkChildRowBelongsToParticipant(row, 'Test-000043', CFG)).toBe(true)
+    expect(miLinkChildRowBelongsToParticipant(row, 'Test-000044', CFG)).toBe(false)
   })
 
   it('repairMisassignedLinkChildStructuralFk fixes stale sub_task_id so sub form1 People survives filter', () => {
@@ -209,9 +223,9 @@ describe('linkFormMiIsolation helpers', () => {
       name: '33',
       task_current_node: 'sub form1',
     }
-    const fixed = repairMisassignedLinkChildStructuralFk(row, 'Test-000059')
+    const fixed = repairMisassignedLinkChildStructuralFk(row, 'Test-000059', CFG)
     expect(fixed.sub_task_id).toBe('Test-000059')
-    expect(miLinkChildRowBelongsToParticipant(fixed, 'Test-000059')).toBe(true)
+    expect(miLinkChildRowBelongsToParticipant(fixed, 'Test-000059', CFG)).toBe(true)
   })
 
   it('collapseMiLinkChildRowsToOnePerParticipant merges sub form1 fields into UUID row for same participant', () => {
@@ -225,6 +239,7 @@ describe('linkFormMiIsolation helpers', () => {
         task_current_node: 'sub form1',
       },
       'Test-000059',
+      CFG,
     )
     const subForm2Stub = {
       id: 'bc601a4c-6a89-4165-bc8a-132c184893d6',
@@ -232,7 +247,7 @@ describe('linkFormMiIsolation helpers', () => {
       age: 'rrr',
       task_current_node: 'sub form2',
     }
-    const collapsed = collapseMiLinkChildRowsToOnePerParticipant([subForm1Row, subForm2Stub])
+    const collapsed = collapseMiLinkChildRowsToOnePerParticipant([subForm1Row, subForm2Stub], CFG)
     expect(collapsed).toHaveLength(1)
     expect(collapsed[0].id).toBe('bc601a4c-6a89-4165-bc8a-132c184893d6')
     expect(collapsed[0].age).toBe('ii')
@@ -246,7 +261,7 @@ describe('linkFormMiIsolation helpers', () => {
       { id: 'Test-000058', sub_task_id: 'Test-000058', age: 'ii66' },
       { id: '586152b6-c284-456b-8cdd-e782436b63be', sub_task_id: 'Test-000058', age: 'ii66' },
     ]
-    const picked = pickMiLinkChildRowsForParent(parent, candidates, ['id'])
+    const picked = pickMiLinkChildRowsForParent(parent, candidates, ['id'], CFG)
     expect(picked).toHaveLength(1)
     expect(String(picked[0].id)).toMatch(/^[0-9a-f-]{36}$/i)
   })
@@ -260,11 +275,16 @@ describe('linkFormMiIsolation helpers', () => {
         bindingId: 30,
         tableName: 'People',
         foreignKeyField: 'id',
+        // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 50331 },
+        ],
         columns: [{ field: 'id' }, { field: 'sub_task_id' }, { field: 'age' }],
         data: [{ sub_task_id: 'Test-000058', age: 'ii66' }],
       },
     ]
-    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058')
+    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058', 50331)
     expect(bindings[0]!.data[0]!.id).toBe('586152b6-c284-456b-8cdd-e782436b63be')
   })
 
@@ -281,11 +301,16 @@ describe('linkFormMiIsolation helpers', () => {
         bindingId: 30,
         tableName: 'People',
         foreignKeyField: 'id_idw',
+        // 参与者判别列在设计器里声明为指向 MI collection 的外键（分类与行归属都读它）。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'id_idw', isForeignKey: true, refTableId: 50331 },
+        ],
         columns: [{ field: 'id' }, { field: 'id_idw' }, { field: 'age' }],
         data: [{ id_idw: 'Test-000058', age: 'ii66' }],
       },
     ]
-    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058')
+    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058', 50331)
     expect(bindings[0]!.data[0]!.id).toBe('586152b6-c284-456b-8cdd-e782436b63be')
   })
 
@@ -298,11 +323,16 @@ describe('linkFormMiIsolation helpers', () => {
         bindingId: 30,
         tableName: 'People',
         foreignKeyField: 'id_idw',
+        // 参与者判别列在设计器里声明为指向 MI collection 的外键（分类与行归属都读它）。
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'id_idw', isForeignKey: true, refTableId: 50331 },
+        ],
         columns: [{ field: 'id' }, { field: 'id_idw' }, { field: 'age' }],
         data: [{ id_idw: 'Test-000058', age: 'ii66' }],
       },
     ]
-    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058')
+    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058', 50331)
     expect(bindings[0]!.data[0]!.id).toBeUndefined()
   })
 })
