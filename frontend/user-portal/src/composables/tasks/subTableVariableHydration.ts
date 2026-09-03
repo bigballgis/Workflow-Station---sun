@@ -6,6 +6,7 @@
 import { cloneSubTableRows } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isSharedAttachmentFileBinding } from './subTableBindingKinds'
+import type { MiKindFieldDef } from './miBindingKindFromConfig'
 import { rowIsSelfOwnedByStructuralFk,
   miChildFkConfigOfBinding,
 } from './miLinkChildIdentity'
@@ -47,6 +48,13 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
     tableId?: number | null
     data: any[]
     primaryKeyFields?: string[] | null | undefined
+    // 共享附件分类要读这几项配置；漏在类型里会逼调用点窄化，把配置藏起来 → 分类恒 false。
+    tableName?: string
+    physicalTableName?: string
+    foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    fieldDefinitions?: MiKindFieldDef[] | null
+    columns?: Array<{ field?: string }> | null
   },
 >(
   bindings: T[],
@@ -62,18 +70,7 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
     // participants' rows that collide by PK and overwrite the current participant's data.
     if (options?.excludeBinding?.(b)) continue
     // attachment (main_id / table 74): shared across bindings 103+104 — handled by applySharedAttachmentFinalizeAndMaterialize.
-    if (
-      isSharedAttachmentFileBinding(
-        b as {
-          bindingId?: number
-          tableId?: number | null
-          tableName?: string
-          physicalTableName?: string
-          foreignKeyField?: string | null
-          columns?: Array<{ field?: string }> | null
-        },
-      )
-    ) {
+    if (isSharedAttachmentFileBinding(b)) {
       continue
     }
 

@@ -273,6 +273,34 @@ FK **列名**由 `miChildFkConfigOfBinding(binding, miCollectionTableId)` 从 `f
 > binding 字段后，portal 可能仍返回旧结构 —— 验证前先 `docker compose restart user-portal`，
 > 否则会误判成「后端改动没生效」。
 
+#### 「指向参与者的外键」必须按 collection 约束（#1546 回归）
+
+共享附件表**自己也有外键**（指向主表）。判定「这一行带着指向 MI 参与者的外键 ⇒ 是别的表
+漏进来的行」时，若不把 collection 的 tableId 传进 `miChildFkConfigOfBinding`，
+`resolveMiChildStructuralFkColumns` 会把该表的**每一个**设计器外键都当成「指向参与者」——
+于是附件自己的 `main_idvab → main` 命中，整行被当泄漏行丢掉。
+
+实测症状：**assignment 任务（非 MI 子任务）**加的 Attachment 已经写进库，刷新渲染 0 行。
+
+```typescript
+// ❌ 不传 collection：任何外键都算「指向参与者」
+const fkConfig = miChildFkConfigOfBinding(binding)
+
+// ✅ 按 collection 约束；解析不到 collection 就给 null 并跳过这条判据
+//    （没有参与者概念的流程里，本就不存在"指向参与者的外键"）
+const collectionTid = resolveMiKindContext().miCollectionTableId ?? null
+const fkConfig = collectionTid != null ? miChildFkConfigOfBinding(binding, collectionTid) : null
+```
+
+**连带的坑**：`resolveMiChildStructuralFkColumns` 末尾有一条
+`out.length === 0 → 回退 bindingFk`。`refTableId` 过滤把所有外键都正确排除后 `out` 为空，
+这条回退又把刚排除的列放回来 —— **过滤等于白做**。回退只在「真的没有字段级外键定义」时
+才成立：有定义却被全部排除，那是**确定的答案**（"这张表没有指向 collection 的外键"），
+不是"信息不足"。
+
+> 这是「判不出来返回 null」原则的一个易错变体：**空结果 ≠ 无信息**。写兜底前先分清
+> "查不到配置" 和 "配置查到了、答案就是空"。
+
 ```typescript
 // ✅ resyncMiDashboardFieldsFromVariablesOnBindings — file-only 分支（applications/detail.vue）
 if (isFileOnlySubTableBinding(b)) {
@@ -478,6 +506,8 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 - [ ] **两个主键都传了吗**：归属判定是否同时拿到 **collection 的 `primaryKeyFields`**（宿主标识）和 **child 的 `primaryKeyFields`**（行标识）？漏前者 → 恒不匹配、行刷新后消失；漏后者 → 独立行被折叠合并
 - [ ] **判不了要返回 null**：配置缺失时是否**没有**静默降级成 `shared`（那会让真 child 丢失参与者隔离）？
 - [ ] **跨参与者验证**：是否用**第二个参与者**保存过一次、并**查库确认第一个参与者的字段没被覆盖**？（只测自己那份数据，1600+ 单测 + 真实 UI 全绿也漏掉过 Blocker）
+- [ ] **两类任务页都验了吗**：改共享表（附件等）判据后，是否**既验 MI 子任务页、又验非 MI 的普通任务页**（如 assignment）？（#1546：只验了 MI 子任务页，assignment 页的附件存进库却渲染 0 行）
+- [ ] **空结果 ≠ 无信息**：过滤后为空时是否**误当成"配置缺失"而走了兜底**？（`refTableId` 排除掉全部外键后回退 `bindingFk`，把刚排除的列放回来，过滤白做）
 - [ ] 发起人 My Request 是否仍 **跳过** MI 参与者 filter？
 - [ ] File-only 子表 resync 是否 **未** 使用 `mergeAllSubTableSlicesFromVariables`？
 - [ ] 同 `tableId` 的 **transaction** binding union merge 是否未误伤 **attachment** binding？

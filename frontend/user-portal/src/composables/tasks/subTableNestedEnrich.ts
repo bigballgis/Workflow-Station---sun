@@ -102,18 +102,9 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
   const peerMap = buildBindingTableIdMapFromPeers(bindings)
 
   for (const child of bindings) {
-    if (
-      isSharedAttachmentFileBinding(
-        child as {
-          bindingId?: number
-          tableId?: number | null
-          tableName?: string
-          physicalTableName?: string
-          foreignKeyField?: string | null
-          columns?: Array<{ field?: string }> | null
-        },
-      )
-    ) {
+    // 不要窄化 binding：判据要读 fieldDefinitions（data_type='FILE' / 字段级 FK），
+    // 窄化掉这些字段会让分类恒为 false —— 共享附件表于是漏进本该跳过它的这段逻辑。
+    if (isSharedAttachmentFileBinding(child)) {
       continue
     }
     if (!Array.isArray(child.data)) child.data = [] as any
