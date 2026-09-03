@@ -56,6 +56,12 @@ export interface PortalSubTableBindingLite {
   /** EDITABLE / READONLY, from Table Design — gates whether the inline form can be edited at all. */
   bindingMode?: string | null
   /**
+   * `structuralFk` / `miParticipantRow`, from the designer's Manage Table Bindings — a DIFFERENT
+   * field from {@link bindingMode} (which is only EDITABLE/READONLY). It tells a nested sub-table
+   * how to link a new row back to its parent, so PK allocation and FK seeding need it.
+   */
+  bindingLinkMode?: string | null
+  /**
    * FK column linking a row back to its parent. Distinguishes a participant-scoped child table
    * (People.sub_task_id / FK `id` → the MI participant row) from a shared process-level one
    * (attachment.main_id → the main record), which decides whether rows get scoped to the host row.
@@ -418,6 +424,10 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :field-definitions="resolveBinding(field._bindingId)?.fieldDefinitions"
         :function-unit-id="hostFunctionUnitId"
         :task-id="hostTaskId"
+        :binding-link-mode="resolveBinding(field._bindingId)?.bindingLinkMode"
+        :binding-foreign-key-field="resolveBinding(field._bindingId)?.foreignKeyField"
+        :binding-id="field._bindingId"
+        :field-permissions="fieldPermissions"
         :parent-row="model"
         :parent-table-id="hostTableId ?? null"
         :parent-tables-by-id="nestedParentTablesById"
