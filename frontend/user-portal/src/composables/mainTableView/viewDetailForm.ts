@@ -153,6 +153,7 @@ export function resolveLookupDisplayValues(
   // 时常常就是个 `input`（实测 FU atm 的 DETAIL 表单 12 个字段全是 input/datePicker），
   // 只认 type==='lookup' 会把真正出问题的字段全放过去。
   for (const [key, raw] of Object.entries(values)) {
+    if (key === '__subTables__') continue
     const isRowObject = raw != null && typeof raw === 'object'
       && (!Array.isArray(raw) || raw.some(v => v != null && typeof v === 'object'))
     if (!isRowObject) continue

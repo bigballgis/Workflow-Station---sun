@@ -7,6 +7,9 @@ import java.util.List;
  * One page request for a Main Table View: paging, the toolbar keyword, and the column filters,
  * sort the shared list header produces. All of it is answered by the database, so
  * the page the caller receives and the total it is told about describe the same set of rows.
+ *
+ * <p>{@code rowKey} is the list row's own identity (not a keyword). The view-detail page uses it
+ * to load that one row; it is ignored when blank.
  */
 public record MainTableViewQueryRequest(
         int page,
@@ -14,7 +17,8 @@ public record MainTableViewQueryRequest(
         String search,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection) {
+        String sortDirection,
+        String rowKey) {
 
     public MainTableViewQueryRequest {
         if (page < 0) {
@@ -31,5 +35,6 @@ public record MainTableViewQueryRequest(
         if (sortField != null && sortDirection == null) {
             throw new IllegalArgumentException("sortDirection is required when sortField is set");
         }
+        rowKey = rowKey == null || rowKey.isBlank() ? null : rowKey.trim();
     }
 }

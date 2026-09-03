@@ -65,6 +65,8 @@ export interface MainTableViewQueryRequest {
   page: number
   size: number
   search?: string | null
+  /** Exact list row identity; view-detail uses this instead of {@link search}. */
+  rowKey?: string | null
   filters?: ListColumnFilterRequest[]
   sortField?: string | null
   sortDirection?: 'ASC' | 'DESC' | null
