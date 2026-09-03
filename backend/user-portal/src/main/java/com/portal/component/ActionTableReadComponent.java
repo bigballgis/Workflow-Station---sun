@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.SqlIdentifiers;
 import com.portal.dto.ActionTableRowsDTO;
 import com.portal.dto.TaskInfo;
@@ -20,11 +21,12 @@ import java.util.Map;
  * read-back. Deliberately separate from {@link ProcessComponent#getFunctionUnitContent}, whose
  * result is cached per functionUnitId across every task/request of that FU — attaching per-request
  * row data there would leak one request's rows into every other request viewing the same FU.
- * This component queries the physical table directly, scoped by requestId, on every call.
+ * This component queries the JSON row container directly, scoped by requestId, on every call.
  *
- * <p>Binding metadata (which tables are ACTION-bound, their physical table name and
- * foreign_key_field) is read from the (safely cacheable) FU content design payload — only the
- * row data itself is fetched fresh each time.</p>
+ * <p>Binding metadata (which tables are ACTION-bound, their table name and foreign_key_field) is
+ * read from the (safely cacheable) FU content design payload — only the row data itself is fetched
+ * fresh each time, from {@code dw_table_data_rows} (Table Design defines structure only; there is
+ * no physical table per designer table name).</p>
  */
 @Slf4j
 @Component
@@ -33,6 +35,7 @@ public class ActionTableReadComponent {
 
     private final JdbcTemplate jdbcTemplate;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final ObjectMapper objectMapper;
 
     /** Lazy: same cycle-breaking rationale as SubTableEnrichmentComponent's ProcessComponent dependency. */
     @Lazy
@@ -143,11 +146,62 @@ public class ActionTableReadComponent {
         return out;
     }
 
+    /**
+     * Rows come from the unified JSON container {@code dw_table_data_rows}, not from a physical
+     * table named after the designer table — Table Design defines structure only
+     * (see {@code .cursor/rules/json-row-storage-no-physical-tables.mdc}).
+     *
+     * <p>This used to run {@code SELECT * FROM <tableName>}, which failed with
+     * {@code relation "..." does not exist} on every Function Unit. The failure was swallowed
+     * into a WARN by the caller, so the Remark list simply rendered empty instead of surfacing
+     * the real problem. Mirrors {@code ActionFormPopupSubmitComponent#insertRow}.
+     *
+     * <p>The foreign key that ties a row to its request is a designer-declared field, so it lives
+     * inside {@code data} rather than as a column — it is matched with a JSONB key lookup, and the
+     * field name is still identifier-validated because it is interpolated into the SQL text.
+     */
     private List<Map<String, Object>> queryRows(ActionBindingRef binding, String requestId) {
-        String tableName = SqlIdentifiers.requireIdentifier(binding.tableName());
-        String fkColumn = SqlIdentifiers.requireIdentifier(binding.foreignKeyField());
-        String sql = "SELECT * FROM " + tableName + " WHERE " + fkColumn + " = ? ORDER BY created_at ASC";
-        return jdbcTemplate.queryForList(sql, requestId);
+        Long tableId = resolveTableId(binding.bindingId());
+        if (tableId == null) {
+            return List.of();
+        }
+        String fkField = SqlIdentifiers.requireIdentifier(binding.foreignKeyField());
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT data::text AS data FROM dw_table_data_rows "
+                        + "WHERE table_id = ? AND status = 'ACTIVE' AND data ->> '" + fkField + "' = ? "
+                        + "ORDER BY created_at ASC, id ASC",
+                tableId, requestId);
+        List<Map<String, Object>> out = new ArrayList<>(rows.size());
+        for (Map<String, Object> r : rows) {
+            Map<String, Object> data = readDataJson(r.get("data"));
+            if (data != null) {
+                out.add(data);
+            }
+        }
+        return out;
+    }
+
+    private Long resolveTableId(Long bindingId) {
+        if (bindingId == null) {
+            return null;
+        }
+        return jdbcTemplate.query(
+                "SELECT table_id FROM dw_form_table_bindings WHERE id = ?",
+                rs -> rs.next() ? rs.getLong("table_id") : null,
+                bindingId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readDataJson(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(String.valueOf(raw), Map.class);
+        } catch (Exception e) {
+            log.debug("[ActionTableRead] skipped unreadable row data: {}", e.getMessage());
+            return null;
+        }
     }
 
     /** Mirrors {@link ActionFormPopupSubmitComponent#readRequestId} — must resolve to the same value the write path used. */

@@ -22,17 +22,21 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
  * Persists FORM_POPUP action submissions (e.g. "Add Remark") into their bound ACTION table.
  *
  * <p>ACTION-type table bindings ({@code dw_form_table_bindings.binding_type = 'ACTION'}) let a
- * FORM_POPUP action's form design its own fields on a dedicated physical table, independent of
- * the process's PRIMARY table / {@code __subTables__} variables — the row is written directly to
- * that table and keyed back to the running request via {@code foreign_key_field} (e.g.
- * {@code main_id}), populated with the request id (the same {@code id} process variable rendered
- * to end users as "Request ID"). This does not touch process variables at all.</p>
+ * FORM_POPUP action's form design its own fields on a dedicated Table Design table, independent
+ * of the process's PRIMARY table / {@code __subTables__} variables — the row is keyed back to the
+ * running request via {@code foreign_key_field} (e.g. {@code main_id}), populated with the request
+ * id (the same {@code id} process variable rendered to end users as "Request ID"). This does not
+ * touch process variables at all.</p>
+ *
+ * <p>Rows live in the unified JSON container {@code dw_table_data_rows} — Table Design defines
+ * structure only and never gets a physical table per designer table name.</p>
  */
 @Slf4j
 @Component
@@ -103,7 +107,7 @@ public class ActionFormPopupSubmitComponent {
             row.put(SystemAuditFields.UPDATED_BY, displayName);
         }
 
-        insertRow(binding.tableName(), row, validColumns);
+        insertRow(binding.tableId(), row);
         log.info("[ActionFormPopupSubmit] inserted row into {} for action {} (task {}, request {})",
                 binding.tableName(), actionId, task.getTaskId(), requestId);
     }
@@ -222,29 +226,43 @@ public class ActionFormPopupSubmitComponent {
         return id != null ? String.valueOf(id) : null;
     }
 
-    private void insertRow(String tableName, Map<String, Object> row, List<String> validColumns) {
+    /**
+     * Table Design keeps structure only — a designer table name never has a physical table
+     * (see {@code .cursor/rules/json-row-storage-no-physical-tables.mdc}). Rows go into the
+     * unified JSON container {@code dw_table_data_rows} keyed by {@code table_id}, mirroring
+     * {@code rt_table_data_rows} on the Relation Table side.
+     *
+     * <p>This used to build {@code INSERT INTO <tableName> (...)}, which threw
+     * {@code relation "meeting_remark" does not exist} on every Function Unit — the feature
+     * could never have worked, because the platform does not create those tables.
+     *
+     * <p>{@code created_at}/{@code updated_at} are real columns on the container, so they are
+     * not written into {@code data}; the audit *user* fields stay in {@code data} because they
+     * are designer-declared fields the form renders back.
+     */
+    private void insertRow(Long tableId, Map<String, Object> row) {
         if (row.isEmpty()) {
             throw new PortalException("400", "No valid fields to submit");
         }
-        List<String> columns = row.keySet().stream().toList();
-        columns.forEach(this::assertSafeIdentifier);
+        String rowId = UUID.randomUUID().toString();
+        String dataJson;
+        try {
+            dataJson = objectMapper.writeValueAsString(row);
+        } catch (Exception e) {
+            throw new PortalException("500", "Failed to serialize action row: " + e.getMessage());
+        }
+        jdbcTemplate.update(
+                "INSERT INTO dw_table_data_rows (table_id, row_id, data, created_by, updated_by) "
+                        + "VALUES (?, ?, ?::jsonb, ?, ?)",
+                tableId,
+                rowId,
+                dataJson,
+                stringOrNull(row.get(SystemAuditFields.CREATED_BY)),
+                stringOrNull(row.get(SystemAuditFields.UPDATED_BY)));
+    }
 
-        String columnList = String.join(", ", columns);
-        String placeholders = String.join(", ", columns.stream().map(c -> "?").toList());
-        boolean hasCreatedAt = validColumns.contains(SystemAuditFields.CREATED_AT);
-        boolean hasUpdatedAt = validColumns.contains(SystemAuditFields.UPDATED_AT);
-
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(tableName)
-                .append(" (").append(columnList);
-        if (hasCreatedAt) sql.append(", ").append(SystemAuditFields.CREATED_AT);
-        if (hasUpdatedAt) sql.append(", ").append(SystemAuditFields.UPDATED_AT);
-        sql.append(") VALUES (").append(placeholders);
-        if (hasCreatedAt) sql.append(", CURRENT_TIMESTAMP");
-        if (hasUpdatedAt) sql.append(", CURRENT_TIMESTAMP");
-        sql.append(")");
-
-        Object[] params = row.values().toArray();
-        jdbcTemplate.update(sql.toString(), params);
+    private static String stringOrNull(Object value) {
+        return value != null ? String.valueOf(value) : null;
     }
 
     private void assertSafeIdentifier(String identifier) {

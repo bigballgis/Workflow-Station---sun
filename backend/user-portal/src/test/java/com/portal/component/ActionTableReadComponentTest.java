@@ -6,7 +6,9 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ResultSetExtractor;
 
 import java.util.List;
 import java.util.Map;
@@ -38,7 +40,16 @@ class ActionTableReadComponentTest {
         jdbcTemplate = mock(JdbcTemplate.class);
         processInstanceRepository = mock(ProcessInstanceRepository.class);
         processComponent = mock(ProcessComponent.class);
-        component = new ActionTableReadComponent(jdbcTemplate, processInstanceRepository, processComponent);
+        component = new ActionTableReadComponent(
+                jdbcTemplate, processInstanceRepository, new com.fasterxml.jackson.databind.ObjectMapper(),
+                processComponent);
+    }
+
+    /** ACTION binding → its Table Design table id (the JSON container is keyed by table_id). */
+    @SuppressWarnings("unchecked")
+    private void stubTableId(Long bindingId, Long tableId) {
+        when(jdbcTemplate.query(anyString(), any(ResultSetExtractor.class), eq(bindingId)))
+                .thenReturn(tableId);
     }
 
     private static TaskInfo taskFor(String processInstanceId) {
@@ -87,22 +98,34 @@ class ActionTableReadComponentTest {
         verifyNoInteractions(jdbcTemplate);
     }
 
+    /**
+     * Table Design defines structure only — rows live in the unified JSON container
+     * {@code dw_table_data_rows}, never in a physical table named after the designer table
+     * (see .cursor/rules/json-row-storage-no-physical-tables.mdc). The old
+     * {@code SELECT * FROM meeting_remark} threw "relation does not exist" on every FU.
+     */
     @Test
-    void queriesPhysicalTableScopedToRequestId() {
+    void queriesJsonRowContainerScopedToRequestId() {
         ProcessInstance pi = processInstanceWithRequestId("pi-1", "req-abc");
         when(processInstanceRepository.findById("pi-1")).thenReturn(Optional.of(pi));
         when(processComponent.getFunctionUnitContent("fu-20260422-23tfag")).thenReturn(fuContentWithOneActionBinding());
-        when(jdbcTemplate.queryForList(anyString(), eq("req-abc")))
-                .thenReturn(List.of(Map.of("id", "r1", "remark_content", "hello")));
+        stubTableId(305L, 900L);
+        when(jdbcTemplate.queryForList(anyString(), eq(900L), eq("req-abc")))
+                .thenReturn(List.of(Map.of("data", "{\"id\":\"r1\",\"remark_content\":\"hello\"}")));
 
         List<ActionTableRowsDTO> rows = component.getActionTableRows(taskFor("pi-1"));
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).getBindingId()).isEqualTo(305L);
         assertThat(rows.get(0).getRows()).hasSize(1);
-        verify(jdbcTemplate).queryForList(
-                eq("SELECT * FROM meeting_remark WHERE main_id = ? ORDER BY created_at ASC"),
-                eq("req-abc"));
+        assertThat(rows.get(0).getRows().get(0)).containsEntry("remark_content", "hello");
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForList(sql.capture(), eq(900L), eq("req-abc"));
+        assertThat(sql.getValue()).contains("dw_table_data_rows");
+        assertThat(sql.getValue()).contains("data ->> 'main_id'");
+        // 回归守卫：一旦又拼回物理表名，这条就红
+        assertThat(sql.getValue()).doesNotContain("FROM meeting_remark");
     }
 
     @Test
@@ -114,9 +137,10 @@ class ActionTableReadComponentTest {
         when(processInstanceRepository.findById("pi-A")).thenReturn(Optional.of(piA));
         when(processInstanceRepository.findById("pi-B")).thenReturn(Optional.of(piB));
         when(processComponent.getFunctionUnitContent("fu-20260422-23tfag")).thenReturn(fuContentWithOneActionBinding());
-        when(jdbcTemplate.queryForList(anyString(), eq("req-A")))
-                .thenReturn(List.of(Map.of("id", "rA", "remark_content", "for A only")));
-        when(jdbcTemplate.queryForList(anyString(), eq("req-B")))
+        stubTableId(305L, 900L);
+        when(jdbcTemplate.queryForList(anyString(), eq(900L), eq("req-A")))
+                .thenReturn(List.of(Map.of("data", "{\"id\":\"rA\",\"remark_content\":\"for A only\"}")));
+        when(jdbcTemplate.queryForList(anyString(), eq(900L), eq("req-B")))
                 .thenReturn(List.of());
 
         List<ActionTableRowsDTO> rowsForA = component.getActionTableRows(taskFor("pi-A"));
@@ -149,8 +173,9 @@ class ActionTableReadComponentTest {
         ProcessInstance pi = processInstanceWithRequestId("pi-1", "req-abc");
         when(processInstanceRepository.findById("pi-1")).thenReturn(Optional.of(pi));
         when(processComponent.getFunctionUnitContent("fu-20260422-23tfag")).thenReturn(fuContentWithOneActionBinding());
-        when(jdbcTemplate.queryForList(anyString(), eq("req-abc")))
-                .thenReturn(List.of(Map.of("id", "r1", "remark_content", "hello")));
+        stubTableId(305L, 900L);
+        when(jdbcTemplate.queryForList(anyString(), eq(900L), eq("req-abc")))
+                .thenReturn(List.of(Map.of("data", "{\"id\":\"r1\",\"remark_content\":\"hello\"}")));
 
         List<ActionTableRowsDTO> rows = component.getActionTableRows("pi-1");
 
