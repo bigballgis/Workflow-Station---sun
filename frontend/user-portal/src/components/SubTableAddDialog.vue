@@ -1271,9 +1271,13 @@ watch(
    the picker the chosen mode needs sits directly beneath them — so the block
    always shows the consequence of the choice instead of an empty frame.
 
-   __head and the owned fields are siblings (the shared column branches below
-   can't be wrapped), so the frame is split across them: head draws top + sides,
-   fields continue the sides, and --last closes the bottom. */
+   The CARD presentation lives in styles/miAssignmentModeCard.scss, loaded once from
+   styles/index.scss — NOT imported here (see that file's header for why importing it
+   into both a scoped and an unscoped <style> silently breaks this dialog). Only the
+   FRAME below is local: __head and the owned fields are siblings here (the shared
+   column branches above can't be wrapped), so the frame is split across them — head
+   draws top + sides, fields continue the sides, and --last closes the bottom. */
+
 .mi-assignment-block__head {
   margin-top: 4px;
   padding: 12px 14px 4px;
@@ -1297,107 +1301,6 @@ watch(
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
-}
-
-/* Mode card: the rail on the left is the only saturated element in the block. */
-.mi-assignment-mode-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  position: relative;
-  margin: 0;
-  padding: 10px 12px 10px 14px;
-  overflow: hidden;
-  font: inherit;
-  text-align: left;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: transparent;
-  transition: background-color 0.15s ease;
-}
-
-.mi-assignment-mode-card:hover {
-  border-color: #b6bcc4;
-}
-
-.mi-assignment-mode-card.is-selected {
-  border-color: #c8102e;
-  box-shadow: 0 1px 3px rgba(200, 16, 46, 0.12);
-}
-
-.mi-assignment-mode-card.is-selected::before {
-  background: #c8102e;
-}
-
-/* BPMN configured only one mode — the other card stays visible but locked, so the
-   reader sees the mode was deliberately fixed rather than the block being narrower. */
-.mi-assignment-mode-card.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.mi-assignment-mode-card.is-disabled:hover {
-  border-color: #dcdfe6;
-}
-
-.mi-assignment-mode-card:focus-visible {
-  outline: 2px solid #c8102e;
-  outline-offset: 2px;
-}
-
-.mi-assignment-mode-card__dot {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
-  border: 1px solid #c0c4cc;
-  border-radius: 50%;
-  background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__dot {
-  border-color: #c8102e;
-  box-shadow: inset 0 0 0 3px #c8102e;
-}
-
-.mi-assignment-mode-card__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mi-assignment-mode-card__name {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.3;
-  color: #606266;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__name {
-  color: #1f2329;
-}
-
-.mi-assignment-mode-card__hint {
-  font-size: 11px;
-  line-height: 1.35;
-  color: #9aa0a8;
-  /* Wrap rather than clip — the hint is what tells you which picker you get. */
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 
 /* Owned fields continue the box: side borders only, no top border. Only the
@@ -1429,18 +1332,12 @@ watch(
   box-sizing: border-box;
 }
 
-/* Narrow dialogs (mobile): stack the modes rather than crushing the hint text. */
+/* Narrow dialogs (mobile): stack the modes rather than crushing the hint text.
+   Host-owned: it targets this dialog's own modes container. The reduced-motion rule for
+   the cards themselves lives in the shared stylesheet imported above. */
 @media (max-width: 560px) {
   .mi-assignment-block__modes {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mi-assignment-mode-card,
-  .mi-assignment-mode-card::before,
-  .mi-assignment-mode-card__dot {
-    transition: none;
   }
 }
 

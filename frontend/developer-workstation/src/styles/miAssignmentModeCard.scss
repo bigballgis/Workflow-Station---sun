@@ -1,0 +1,148 @@
+/**
+ * Assignment Mode — mode-card presentation, shared by every surface that draws the block.
+ *
+ * Routing a row has two destinations: a named person, or a role pool in a BU. The modes
+ * are cards rather than bare radios so each states what it will ask for, and the rail on
+ * the card's left edge is the only saturated element in the block.
+ *
+ * ── Why this file exists ─────────────────────────────────────────────────────────────
+ * Three components render these same cards:
+ *   - user-portal MiAssignmentModeBlock.vue   (Link Form dialog + Inline Form widget)
+ *   - user-portal SubTableAddDialog.vue       (sub-table grid Add/Edit dialog)
+ *   - developer-workstation MiAssignmentPlaceholderWidget.vue  (designer canvas + preview)
+ * They kept byte-identical copies of this CSS, so changing a colour meant remembering all
+ * three — and Portal is supposed to predict what DW Form Preview shows. Drift here is a
+ * parity bug by construction, so the card presentation lives in one place.
+ *
+ * ── Load this ONLY from styles/index.scss, never from an SFC <style> ────────────────
+ * `SubTableAddDialog` uses an UNSCOPED <style>; `MiAssignmentModeBlock` and the DW widget
+ * use `<style scoped>`. Importing this same file into both kinds of block does not give
+ * you two copies — the build emits ONE, stamped with the scoped component's `[data-v-…]`,
+ * so every selector stops matching the unscoped host and its cards silently degrade to
+ * bare browser buttons. (Observed exactly that; the compiled CSS looked "identical" only
+ * because a naive diff had stripped the `[data-v-…]` attribute that was the whole problem.)
+ * Loading it once globally keeps one copy that matches all three hosts, and it still loses
+ * to each host's own scoped rules, which is what the DW `is-static` overrides rely on.
+ *
+ * ── What deliberately stays OUT of this file ─────────────────────────────────────────
+ * Only the CARDS are shared. Each host still owns its own FRAME, because the frames are
+ * genuinely different shapes and cannot be unified:
+ *   - MiAssignmentModeBlock / the DW widget wrap their fields in a real container element,
+ *     so the frame is one box.
+ *   - SubTableAddDialog renders an ordered FLAT column list, where the marker and the
+ *     fields it owns are siblings that cannot share a parent — its frame is assembled from
+ *     `__head` (top + sides), `__field` (sides) and `--last` (bottom).
+ * The `@media (max-width: 560px)` rule that stacks the two cards is likewise host-owned:
+ * it targets each host's own modes container (`__modes`), whose class name differs.
+ *
+ * Keep this file in sync with its developer-workstation twin (same relative path).
+ */
+
+.mi-assignment-mode-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  margin: 0;
+  padding: 10px 12px 10px 14px;
+  overflow: hidden;
+  font: inherit;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mi-assignment-mode-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.mi-assignment-mode-card:hover {
+  border-color: #b6bcc4;
+}
+
+.mi-assignment-mode-card.is-selected {
+  border-color: #c8102e;
+  box-shadow: 0 1px 3px rgba(200, 16, 46, 0.12);
+}
+
+.mi-assignment-mode-card.is-selected::before {
+  background: #c8102e;
+}
+
+/* BPMN configured only one mode (or the form is read-only) — the card stays visible but
+   locked, so the reader sees the mode was deliberately fixed rather than the block
+   being narrower. */
+.mi-assignment-mode-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mi-assignment-mode-card.is-disabled:hover {
+  border-color: #dcdfe6;
+}
+
+.mi-assignment-mode-card:focus-visible {
+  outline: 2px solid #c8102e;
+  outline-offset: 2px;
+}
+
+.mi-assignment-mode-card__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1px solid #c0c4cc;
+  border-radius: 50%;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__dot {
+  border-color: #c8102e;
+  box-shadow: inset 0 0 0 3px #c8102e;
+}
+
+.mi-assignment-mode-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mi-assignment-mode-card__name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #606266;
+}
+
+.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__name {
+  color: #1f2329;
+}
+
+.mi-assignment-mode-card__hint {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #9aa0a8;
+  /* Wrap rather than clip — the hint is what tells you which picker you get. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-assignment-mode-card,
+  .mi-assignment-mode-card::before,
+  .mi-assignment-mode-card__dot {
+    transition: none;
+  }
+}

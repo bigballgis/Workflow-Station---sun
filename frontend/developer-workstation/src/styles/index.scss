@@ -2,6 +2,11 @@
 // 统一设计系统（Inter 字体 / 红主色板 / 胶囊按钮 / 账册表格 / 软色标签）——三端镜像文件
 @use './ws-theme.scss';
 
+// MI Assignment Mode 的两张模式卡片 —— 与 user-portal 同名文件保持一致（Portal 要能
+// 预测这里的 Form Preview 长什么样）。放全局入口而不是在 SFC 里 @import，理由见
+// miAssignmentModeCard.scss 文件头。
+@use './miAssignmentModeCard.scss';
+
 * {
   margin: 0;
   padding: 0;

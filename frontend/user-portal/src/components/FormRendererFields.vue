@@ -423,6 +423,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :field-permissions="ctx.fieldPermissions"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
+          :assignment-config="ctx.resolveBinding(field._bindingId)?.assignmentConfig"
           @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
         />
       </el-col>
@@ -453,6 +454,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :field-permissions="ctx.fieldPermissions"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
+          :assignment-config="ctx.resolveBinding(field._bindingId)?.assignmentConfig"
           @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
         />
       </div>

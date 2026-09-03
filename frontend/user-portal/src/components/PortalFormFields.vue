@@ -26,7 +26,8 @@ import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineForm
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
 import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
-import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+import { isAssignmentConfigured, type AssignmentConfig } from '@/utils/miAssignmentConfig'
+import MiAssignmentModeBlock from './MiAssignmentModeBlock.vue'
 
 // Lazily required to avoid a module-load cycle: SubTableInlineForm imports PortalFormFields
 // itself (nested subTable widgets inside the inline form use PortalFormFields recursively).
@@ -114,6 +115,14 @@ const props = withDefaults(
      * Event-runtime required overlay. Unset → designer `field.required` only.
      */
     isFieldRequired?: (field: FormField) => boolean
+    /**
+     * BPMN-derived MI assignment contract for the sub-table this form edits; absent means no
+     * Assignment Mode behavior. Supplies the block's CONTENT (which modes, which fields) while
+     * the designer's `miAssignment` marker decides where it renders — same split as
+     * SubTableAddDialog, so the Link Form dialog and the Inline Form widget match the grid's
+     * Add/Edit dialog and DW Form Preview.
+     */
+    assignmentConfig?: AssignmentConfig
   }>(),
   {
     readonly: false,
@@ -343,6 +352,26 @@ const nestedParentTablesById = computed(() => {
 })
 
 /**
+ * The designer's `miAssignment` marker owns the assignee / BU / role rules as its CHILDREN.
+ * Only render the block when BPMN actually configured the contract — an unconfigured marker
+ * must still render its children (flat, as before), never swallow them.
+ */
+const assignmentBlockConfigured = computed(() => isAssignmentConfigured(props.assignmentConfig))
+
+/**
+ * Switching mode blanks the other branch's values so a row never carries both a named
+ * assignee and a role pool. Mirrors SubTableAddDialog's onAssignModeChange.
+ */
+function onAssignmentClearFields(fields: string[]) {
+  for (const key of fields) onFieldUpdate(key, '')
+}
+
+/** Children the active mode hides — the marker's own subtree only. */
+function assignmentVisibleChildren(children: FormField[] | undefined, hidden: Set<string>): FormField[] {
+  return (children || []).filter(child => !hidden.has(child.key))
+}
+
+/**
  * Saving a nested row forces this row's auto PK to be allocated early (the child's FK needs it).
  * Adopt it as a field update so the host persists the row under the key the child references.
  */
@@ -425,6 +454,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :field-permissions="fieldPermissions"
         :form-options="resolveBinding(field._bindingId)!.formOptions"
         :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
+        :assignment-config="resolveBinding(field._bindingId)!.assignmentConfig"
         style="margin-bottom: 16px;"
         @update:row="(row: Record<string, any>) => inlineSubForm.handleInlineSubFormUpdate(field, row)"
       />
@@ -454,6 +484,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
             :is-field-required="isFieldRequired"
+            :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
             @field-blur="onFieldBlur"
           />
@@ -491,6 +522,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :field-permissions="fieldPermissions"
           :is-field-visible="isFieldVisible"
           :is-field-required="isFieldRequired"
+          :assignment-config="assignmentConfig"
           row-columns
           @update:field="(k, v) => onFieldUpdate(k, v)"
           @field-blur="onFieldBlur"
@@ -515,6 +547,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :field-permissions="fieldPermissions"
         :is-field-visible="isFieldVisible"
         :is-field-required="isFieldRequired"
+        :assignment-config="assignmentConfig"
         in-column
         @update:field="(k, v) => onFieldUpdate(k, v)"
         @field-blur="onFieldBlur"
@@ -545,6 +578,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
             :is-field-required="isFieldRequired"
+            :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
             @field-blur="onFieldBlur"
           />
@@ -580,11 +614,84 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
             :is-field-required="isFieldRequired"
+            :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
             @field-blur="onFieldBlur"
           />
         </el-row>
       </el-card>
+    </el-col>
+    <!-- Assignment Mode block: routing this row to a named person or to a role pool.
+         The marker is a container whose children are the assignee / BU / role rules, so the
+         block renders them inside its own frame — without this branch the marker fell through
+         to the leaf renderer, drawing an empty label-less box while its children never
+         rendered at all. Kept in parity with SubTableAddDialog and DW Form Preview. -->
+    <el-col
+      v-else-if="field.type === 'miAssignment' && !field.hidden && assignmentBlockConfigured"
+      :span="24"
+    >
+      <MiAssignmentModeBlock
+        :config="assignmentConfig"
+        :row="model"
+        :readonly="readonly || field.readonly === true || !editable"
+        @clear-fields="onAssignmentClearFields"
+      >
+        <template #default="{ hiddenFields }">
+          <el-row :gutter="20">
+            <PortalFormFields
+              :fields="assignmentVisibleChildren(field.children, hiddenFields)"
+              :model="model"
+              :readonly="readonly || field.readonly === true"
+              :editable="editable && field.readonly !== true"
+              :sub-table-bindings="subTableBindings"
+              :linked-sub-table-bindings="linkedSubTableBindings"
+              :parent-row="parentRow"
+              :show-link-form-dialog-footer="showLinkFormDialogFooter"
+              :compact-lookup-cells="compactLookupCells"
+              :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+              :field-permissions="fieldPermissions"
+              :is-field-visible="isFieldVisible"
+              :is-field-required="isFieldRequired"
+              :assignment-config="assignmentConfig"
+              @update:field="(k, v) => onFieldUpdate(k, v)"
+              @field-blur="onFieldBlur"
+            />
+          </el-row>
+        </template>
+      </MiAssignmentModeBlock>
+    </el-col>
+    <!-- Designer "Hide" toggle on the block — the whole thing goes, the fields it owns
+         included, matching dialogFormLayout's handling for the grid's Add/Edit dialog.
+         Rendering the children here instead would leak the very pickers Hide removes. -->
+    <template v-else-if="field.type === 'miAssignment' && field.hidden" />
+    <!-- Marker present but BPMN configured no assignment contract (or the FU predates it):
+         there is no block to draw, but the marker's children are ordinary fields and must
+         still render — flat, exactly where the designer placed the container. Rendering
+         nothing here is what made those fields vanish. -->
+    <el-col
+      v-else-if="field.type === 'miAssignment'"
+      :span="24"
+    >
+      <el-row :gutter="20">
+        <PortalFormFields
+          :fields="field.children || []"
+          :model="model"
+          :readonly="readonly || field.readonly === true"
+          :editable="editable && field.readonly !== true"
+          :sub-table-bindings="subTableBindings"
+          :linked-sub-table-bindings="linkedSubTableBindings"
+          :parent-row="parentRow"
+          :show-link-form-dialog-footer="showLinkFormDialogFooter"
+          :compact-lookup-cells="compactLookupCells"
+          :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+          :field-permissions="fieldPermissions"
+          :is-field-visible="isFieldVisible"
+          :is-field-required="isFieldRequired"
+          :assignment-config="assignmentConfig"
+          @update:field="(k, v) => onFieldUpdate(k, v)"
+          @field-blur="onFieldBlur"
+        />
+      </el-row>
     </el-col>
     <el-col
       v-else-if="!inColumn && shouldRenderLeafField(field)"

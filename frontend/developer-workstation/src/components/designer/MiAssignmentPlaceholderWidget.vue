@@ -154,11 +154,14 @@ function changeMode(value: AssignmentMode): void {
 </script>
 
 <style scoped>
-/* Routing a row has two destinations — a named person, or a role pool in a BU.
-   The modes are cards rather than bare radios so each one states what it will
-   ask for, and the container's own fields render inside it via the default slot,
-   so the block closes itself and moves as one unit when dragged.
-   Kept in parity with the same block in user-portal SubTableAddDialog. */
+/* Mode-card presentation lives in styles/miAssignmentModeCard.scss, loaded once from
+   styles/index.scss — Portal is supposed to predict what this preview shows, so the cards
+   come from one file (see its header for what stays host-owned and why it is not imported
+   into SFC style blocks). Being global, it also loses to the scoped `is-static` canvas
+   overrides below, which is what we want.
+
+   This widget's own FRAME: the container's fields render inside it via the default slot,
+   so the block closes itself and moves as one unit when dragged. */
 .mi-assignment-widget {
   display: flex;
   flex-direction: column;
@@ -224,16 +227,7 @@ function changeMode(value: AssignmentMode): void {
   border-color: #dcdfe6;
 }
 
-/* BPMN configured only one mode — the other card stays visible but locked, so the
-   reader sees the mode was deliberately fixed rather than the block being narrower. */
-.mi-assignment-mode-card.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.mi-assignment-mode-card.is-disabled:hover {
-  border-color: #dcdfe6;
-}
+/* The locked-card (`is-disabled`) presentation comes from the shared stylesheet. */
 
 .mi-assignment-widget__note {
   margin-top: 10px;
@@ -281,106 +275,11 @@ function changeMode(value: AssignmentMode): void {
   min-height: 74px;
 }
 
-.mi-assignment-mode-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  position: relative;
-  margin: 0;
-  padding: 10px 12px 10px 14px;
-  overflow: hidden;
-  font: inherit;
-  text-align: left;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: transparent;
-  transition: background-color 0.15s ease;
-}
-
-.mi-assignment-mode-card:hover {
-  border-color: #b6bcc4;
-}
-
-.mi-assignment-mode-card.is-selected {
-  border-color: #c8102e;
-  box-shadow: 0 1px 3px rgba(200, 16, 46, 0.12);
-}
-
-.mi-assignment-mode-card.is-selected::before {
-  background: #c8102e;
-}
-
-.mi-assignment-mode-card:focus-visible {
-  outline: 2px solid #c8102e;
-  outline-offset: 2px;
-}
-
-.mi-assignment-mode-card__dot {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
-  border: 1px solid #c0c4cc;
-  border-radius: 50%;
-  background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__dot {
-  border-color: #c8102e;
-  box-shadow: inset 0 0 0 3px #c8102e;
-}
-
-.mi-assignment-mode-card__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mi-assignment-mode-card__name {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.3;
-  color: #606266;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__name {
-  color: #1f2329;
-}
-
-.mi-assignment-mode-card__hint {
-  font-size: 11px;
-  line-height: 1.35;
-  color: #9aa0a8;
-  /* Wrap rather than clip — the hint is what tells you which picker you get. */
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
+/* Narrow viewports: stack the modes rather than crushing the hint text.
+   Host-owned: it targets this widget's own modes container. */
 @media (max-width: 560px) {
   .mi-assignment-widget__modes {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mi-assignment-mode-card,
-  .mi-assignment-mode-card::before,
-  .mi-assignment-mode-card__dot {
-    transition: none;
   }
 }
 </style>
