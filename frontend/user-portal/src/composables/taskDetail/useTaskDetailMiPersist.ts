@@ -10,6 +10,7 @@ import {
   isFileOnlySubTableBinding,
   backfillMiLinkChildPrimaryKeysFromVariables,
 } from '@/composables/tasks/shared'
+import { resolveMiBindingKindFromConfig } from '@/composables/tasks/miBindingKindFromConfig'
 import {
   bindingMatchesMiSubTableName,
 } from '@/composables/tasks/miSubProcessScope'
@@ -174,6 +175,27 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     miFillDialogVisible.value = true
   }
 
+  /**
+   * 全案共享表（FK 指向主表，如 attachment.main_idva → main）：这张表的行**不按 MI 参与者分片**，
+   * 当前用户在界面上看到的就是全部行，所以界面上的行集就是权威结果 —— 直接替换，不做并集。
+   *
+   * <p>参与者作用域的表（FK 指向 collection）必须继续走并集：那里界面上只有「我这一行」，
+   * 用它覆盖会抹掉其他参与者的行。
+   *
+   * <p>为什么必须区分：{@link mergeSubTableRowsByRowId} 是**按主键取并集**，
+   * 「在 existing 里、不在 incoming 里」的行永远会被保留 —— 结构上表达不了「删除」。
+   * 共享附件表走并集时，用户删掉一行、点 Save，被删的行会从 existing 原样回填，
+   * 请求体里仍是 3 行、数据库也仍是 3 行（2026-09-03 实测复现）。
+   *
+   * <p>判据来自设计器配置（字段级 FK 的 refTableId），与后端
+   * {@code MiSubTaskSubTableRowMerger.foreignKeyTargetsMainTable} 同源；判不出来时
+   * {@code resolveMiBindingKindFromConfig} 返回 null，此处按「不是 shared」保守处理，
+   * 继续走并集（最多是删不掉，不会跨参与者丢数据）。
+   */
+  function bindingIsWholeRequestShared(binding: { bindingId?: number }): boolean {
+    return resolveMiBindingKindFromConfig(binding as never, null) === 'shared'
+  }
+
   function syncMiFillSubTableRows(bindingId: number, rows: any[]) {
     const target = miFillSubTableBindings.value.find(binding => binding.bindingId === bindingId)
     if (!target) return
@@ -181,10 +203,14 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     target.data = nextRows
 
     const subTables = { ...((miFillDialogData.value.__subTables__ as Record<string, any>) || {}) }
-    const ambiguousMiDialog = bindingIdsPreferStrictSubTableLookup(miFillSubTableBindings.value)
-    const existing = ctx.getSavedSubTableRows(subTables, target, ambiguousMiDialog.has(target.bindingId))
-    const merged = mergeSubTableRowsByRowId(existing, nextRows, target.primaryKeyFields)
-    const out = cloneSubTableRows(merged)
+    let out: any[]
+    if (bindingIsWholeRequestShared(target)) {
+      out = cloneSubTableRows(nextRows)
+    } else {
+      const ambiguousMiDialog = bindingIdsPreferStrictSubTableLookup(miFillSubTableBindings.value)
+      const existing = ctx.getSavedSubTableRows(subTables, target, ambiguousMiDialog.has(target.bindingId))
+      out = cloneSubTableRows(mergeSubTableRowsByRowId(existing, nextRows, target.primaryKeyFields))
+    }
     writeSubTableRows(subTables, target, out)
     miFillDialogData.value = { ...miFillDialogData.value, __subTables__: subTables }
   }
@@ -214,9 +240,14 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
 
     for (const binding of miFillSubTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
-      const existing = ctx.getSavedSubTableRows(subTables, binding, ambiguousMiDialogSave.has(binding.bindingId))
-      const merged = mergeSubTableRowsByRowId(existing, rows, binding.primaryKeyFields)
-      const out = cloneSubTableRows(merged)
+      // 共享表：界面行集即权威，替换而非并集 —— 见 bindingIsWholeRequestShared 的说明。
+      let out: any[]
+      if (bindingIsWholeRequestShared(binding)) {
+        out = rows
+      } else {
+        const existing = ctx.getSavedSubTableRows(subTables, binding, ambiguousMiDialogSave.has(binding.bindingId))
+        out = cloneSubTableRows(mergeSubTableRowsByRowId(existing, rows, binding.primaryKeyFields))
+      }
       const key = subTableStoreKey(binding)
       if (key) {
         subTables[key] = out
