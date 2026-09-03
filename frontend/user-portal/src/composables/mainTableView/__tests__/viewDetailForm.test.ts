@@ -112,6 +112,19 @@ describe('resolveLookupDisplayValues', () => {
     expect(out.blank).toBeNull()
   })
 
+  it('does not treat the nested store as a lookup row', () => {
+    const correspondence = [{ correspondence_id: 'Corr-000032' }]
+    const out = resolveLookupDisplayValues(
+      [lookupField()],
+      {
+        merchant_credit: '1',
+        __subTables__: { 'dw:atm_correspondence': correspondence },
+      },
+    )
+    expect(out.__subTables__).toEqual({ 'dw:atm_correspondence': correspondence })
+    expect(out.merchant_credit).toBe('1')
+  })
+
   it('keeps a scalar array (not a row list) readable', () => {
     const out = resolveLookupDisplayValues(
       [lookupField()],

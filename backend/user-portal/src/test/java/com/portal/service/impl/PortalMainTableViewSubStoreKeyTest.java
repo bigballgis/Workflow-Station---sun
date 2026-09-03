@@ -113,7 +113,7 @@ class PortalMainTableViewSubStoreKeyTest {
     void theSliceKeyComesFromTheTableNameRatherThanItsFormBindings() {
         givenSubView("subtable");
 
-        service.queryViewData("user-dev", VIEW_ID, new MainTableViewQueryRequest(0, 20, null, null, null, null));
+        service.queryViewData("user-dev", VIEW_ID, new MainTableViewQueryRequest(0, 20, null, null, null, null, null));
 
         assertThat(capturedQuery().storeKey())
                 .as("rows live under dw:<table name>; a binding id finds nothing and the view "
@@ -125,7 +125,7 @@ class PortalMainTableViewSubStoreKeyTest {
     void theFormBindingsAreNotQueriedAtAllAnyMore() {
         givenSubView("subtable");
 
-        service.queryViewData("user-dev", VIEW_ID, new MainTableViewQueryRequest(0, 20, null, null, null, null));
+        service.queryViewData("user-dev", VIEW_ID, new MainTableViewQueryRequest(0, 20, null, null, null, null, null));
 
         verify(jdbcTemplate, never())
                 .queryForList(contains("dw_form_table_bindings"), eq(Long.class), anyLong());
@@ -135,7 +135,7 @@ class PortalMainTableViewSubStoreKeyTest {
     void aMixedCaseTableNameIsNormalisedToMatchTheStoredKey() {
         givenSubView("ATM_Transaction");
 
-        service.queryViewData("user-dev", VIEW_ID, new MainTableViewQueryRequest(0, 20, null, null, null, null));
+        service.queryViewData("user-dev", VIEW_ID, new MainTableViewQueryRequest(0, 20, null, null, null, null, null));
 
         assertThat(capturedQuery().storeKey())
                 .as("the store lowercases table names, matching the lower() unique index")

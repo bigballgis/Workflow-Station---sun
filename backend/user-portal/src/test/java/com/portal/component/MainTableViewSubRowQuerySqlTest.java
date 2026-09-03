@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.util.MainTableViewColumnSpec;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
+import com.portal.util.PortalMainTableViewRowKeys;
 import com.portal.util.SqlFragment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -150,6 +151,35 @@ class MainTableViewSubRowQuerySqlTest {
         assertThatThrownBy(() -> component.query(
                 query(List.of(new ListColumnFilter("secret", "contains", "x", null)), null)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aRowKeyMatchIsAppliedAfterTheRowIsExpanded() {
+        SqlFragment rowKey = PortalMainTableViewRowKeys.exactMatch(
+                "inst-1|row_id=ATM-DC-PW-TRANS-000030", true);
+        MainTableViewSubRowQueryComponent.Query keyed = new MainTableViewSubRowQueryComponent.Query(
+                7L,
+                "fu-atm",
+                "dw:atm_line",
+                MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
+                        "pi.id, pi.row_identity"),
+                rowKey,
+                List.of(),
+                null,
+                null,
+                null,
+                List.of(),
+                null,
+                0,
+                20);
+        component.query(keyed);
+
+        String sql = preparedSql.get(0);
+        assertThat(sql.indexOf("pi.row_identity = ?"))
+                .as("row_identity exists only after expansion; matching it inside LATERAL would "
+                        + "not find the list rowKey")
+                .isGreaterThan(sql.indexOf("WHERE TRUE"));
+        assertThat(sql).doesNotContain("ILIKE");
     }
 
     @Test
