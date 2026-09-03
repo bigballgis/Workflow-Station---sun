@@ -54,7 +54,11 @@ import { ArrowLeft, Loading } from '@element-plus/icons-vue'
 import FormRenderer from '@/components/FormRenderer.vue'
 import type { FormField } from '@/components/formRendererHelpers/formRendererTypes'
 import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
-import { buildViewDetailSubTableBindings, toViewDetailFields } from '@/composables/mainTableView/viewDetailForm'
+import {
+  buildViewDetailSubTableBindings,
+  resolveLookupDisplayValues,
+  toViewDetailFields,
+} from '@/composables/mainTableView/viewDetailForm'
 import { mainTableViewApi } from '@/api/mainTableView'
 import { processApi } from '@/api/process'
 import { relationTableApi } from '@/api/relationTable'
@@ -96,13 +100,12 @@ async function load() {
 
     // The row is fetched through the view's own data endpoint so that the view's
     // access rules and column projection apply here exactly as they do in the list.
-    const dataRes: any = await mainTableViewApi.queryData(viewId.value, {
-      page: 0,
-      size: 50,
-      search: rowKey.value,
-    })
-    const rows: any[] = dataRes.data?.rows || dataRes.data?.records || []
-    const row = rows.find(r => matchesRowKey(r)) || null
+    //
+    // The rowKey is NOT passed as `search`: the keyword search only covers the view's value
+    // columns, and a rowKey is a composite identity (`<instanceId>|row_id=<uuid>`) that is not
+    // any column's value — searching for it matched nothing and the detail page came up empty.
+    // Paging and matching on the identity is what actually finds the row.
+    const row = await findRowByKey(viewId.value)
     if (!row) return
     rowValues.value = row.values || {}
 
@@ -129,6 +132,8 @@ async function load() {
         config && typeof config === 'object' ? config : {},
         rowValues.value,
       )
+      // lookup 列存的是被引用表的整行对象，只读渲染会变成 [object Object]，换成显示列的值。
+      rowValues.value = resolveLookupDisplayValues(formFields.value, rowValues.value)
       rowFound.value = true
     }
   } catch {
@@ -146,6 +151,35 @@ async function load() {
 function matchesRowKey(row: any): boolean {
   if (row?.rowKey != null && String(row.rowKey) === rowKey.value) return true
   return row?.processInstanceId != null && String(row.processInstanceId) === rowKey.value
+}
+
+/**
+ * 翻页上限。200 是后端 `MainTableViewQueryRequest` 允许的最大 size；10 页 = 2000 行封顶，
+ * 避免超大视图把明细页拖成一串串行请求。超出上限时宁可显示「找不到该记录」，也不无限翻。
+ */
+const ROW_LOOKUP_PAGE_SIZE = 200
+const ROW_LOOKUP_MAX_PAGES = 10
+
+/**
+ * 按 rowKey 定位行：逐页拉取并用 {@link matchesRowKey} 匹配。
+ *
+ * <p>不能用 `search=rowKey` —— 关键字搜索只覆盖视图的值列，而 rowKey 是
+ * `<instanceId>|row_id=<uuid>` 这样的复合标识，不是任何一列的值，搜出来必然是空
+ * （实测 view 317：列表有 4 行，带 search 查同一行返回 0 行）。
+ *
+ * <p>也不能用 `filters`：过滤只认视图声明的列，同样表达不了这个复合标识。真正的解法是
+ * 后端支持按 rowKey 直接取行；在那之前，这里逐页找，并在拿到整页不足或已覆盖 total 时停。
+ */
+async function findRowByKey(id: number): Promise<any | null> {
+  for (let page = 0; page < ROW_LOOKUP_MAX_PAGES; page++) {
+    const res: any = await mainTableViewApi.queryData(id, { page, size: ROW_LOOKUP_PAGE_SIZE })
+    const rows: any[] = res.data?.rows || res.data?.records || []
+    const hit = rows.find(r => matchesRowKey(r))
+    if (hit) return hit
+    const total = Number(res.data?.total ?? 0)
+    if (rows.length < ROW_LOOKUP_PAGE_SIZE || (page + 1) * ROW_LOOKUP_PAGE_SIZE >= total) break
+  }
+  return null
 }
 
 onMounted(load)
