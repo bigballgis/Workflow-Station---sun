@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.util.MainTableViewColumnSpec;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
+import com.portal.util.PortalMainTableViewSubStoreKeys.SliceKeys;
 import com.portal.util.SqlFragment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,9 @@ class MainTableViewSubRowQuerySqlTest {
             new FieldSource("line_status", "Line status", false, "field", "VARCHAR"),
             new FieldSource("reconciled", "Reconciled", false, "field", "BOOLEAN"));
 
+    /** Historical copies that never wrote {@code dw:<table>} still sit under form binding ids. */
+    private static final SliceKeys HISTORICAL_BINDINGS = new SliceKeys(null, List.of("50522", "50527"));
+
     /** The statement that reads the page, which is the last one the component prepares. */
     private String pageSql() {
         return preparedSql.get(preparedSql.size() - 1);
@@ -72,10 +76,16 @@ class MainTableViewSubRowQuerySqlTest {
 
     private MainTableViewSubRowQueryComponent.Query query(List<ListColumnFilter> filters,
                                                           MainTableViewInvolvementScope.Predicate involvement) {
+        return query(HISTORICAL_BINDINGS, filters, involvement);
+    }
+
+    private MainTableViewSubRowQueryComponent.Query query(SliceKeys keys,
+                                                          List<ListColumnFilter> filters,
+                                                          MainTableViewInvolvementScope.Predicate involvement) {
         return new MainTableViewSubRowQueryComponent.Query(
                 7L,
                 "fu-atm",
-                List.of("50522", "50527"),
+                keys,
                 MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
                         "pi.id, pi.row_identity"),
                 SqlFragment.EMPTY,
@@ -96,6 +106,7 @@ class MainTableViewSubRowQuerySqlTest {
         String sql = preparedSql.get(0);
         assertThat(sql).contains("jsonb_array_elements(pi.variables->'__subTables__'->?::text)");
         assertThat(sql.split("jsonb_array_elements", -1)).as("one expansion per binding key").hasSize(3);
+        assertThat(sql).as("no canonical key, so historical slices must not be gated").doesNotContain("jsonb_exists");
         assertThat(sql)
                 .as("binding a table into two forms stores the same row twice; keying the "
                         + "de-duplication on the binding would show it twice")
@@ -134,15 +145,36 @@ class MainTableViewSubRowQuerySqlTest {
 
     @Test
     void aViewBoundToNoFormHasNowhereToReadItsRowsFromAndSaysSo() {
-        MainTableViewSubRowQueryComponent.Query unbound = new MainTableViewSubRowQueryComponent.Query(
-                7L, "fu-atm", List.of(),
-                MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
-                        "pi.id, pi.row_identity"),
-                SqlFragment.EMPTY, List.of(), null, null, null, List.of(), null, 0, 20);
+        MainTableViewSubRowQueryComponent.Query unbound = query(SliceKeys.none(), List.of(), null);
 
         assertThatThrownBy(() -> component.query(unbound))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least one form");
+                .hasMessageContaining("canonical store key");
+    }
+
+    @Test
+    void canonicalKeyIsExpandedFirstAndBindingIdsOnlyWhenThatKeyIsAbsent() {
+        SliceKeys keys = new SliceKeys("dw:atm_transaction", List.of("1152"));
+        component.query(query(keys, List.of(), null));
+
+        String sql = preparedSql.get(0);
+        assertThat(sql.split("jsonb_array_elements", -1))
+                .as("canonical key plus one historical binding").hasSize(3);
+        assertThat(sql.split("jsonb_exists", -1))
+                .as("only the binding-id slice is gated on the canonical key").hasSize(2);
+        assertThat(sql).contains(
+                "WHERE NOT COALESCE(jsonb_exists(pi.variables->'__subTables__', ?::text), false)");
+        assertThat(sql).contains("DISTINCT ON (pi.id, COALESCE(expanded.elem->>'row_id'");
+    }
+
+    @Test
+    void aCanonicalKeyAloneDoesNotOpenBindingIdFallback() {
+        SliceKeys keys = new SliceKeys("dw:atm_transaction", List.of());
+        component.query(query(keys, List.of(), null));
+
+        String sql = preparedSql.get(0);
+        assertThat(sql.split("jsonb_array_elements", -1)).as("one expansion for the canonical key").hasSize(2);
+        assertThat(sql).doesNotContain("jsonb_exists");
     }
 
     @Test

@@ -33,6 +33,8 @@ import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalMainTableViewService;
 import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.PortalMainTableViewCsvUtils;
+import com.portal.util.PortalMainTableViewSubStoreKeys;
+import com.portal.util.PortalMainTableViewSubStoreKeys.SliceKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -264,7 +266,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return new MainTableViewSubRowQueryComponent.Query(
                 view.id(),
                 view.functionUnitCode(),
-                view.subBindingKeys(),
+                view.subStoreKeys(),
                 MainTableViewColumnSpec.sqlFor(fields, view.sortConfig(), source, "pi.id, pi.row_identity"),
                 designerAndDerived(view, fields, source, request),
                 MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
@@ -1116,7 +1118,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT v.id, v.view_name, v.sort_config::text AS sort_config,
                        v.filter_config::text AS filter_config, fu.code AS fu_code,
-                       v.main_table_id, td.table_type,
+                       v.main_table_id, td.table_type, td.table_name,
                        v.restrict_to_involved_users
                 FROM dw_main_table_view_configs v
                 INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
@@ -1150,13 +1152,15 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         Long mainTableId = row.get("main_table_id") != null
                 ? ((Number) row.get("main_table_id")).longValue() : null;
         String tableType = stringVal(row.get("table_type"));
-        // SUB-table data is nested under variables.__subTables__, keyed by each binding id that maps
-        // this table into a form. Collect those binding keys so we can flatten the rows below.
-        List<String> subBindingKeys = new ArrayList<>();
+        // SUB-table data lives under variables.__subTables__, keyed by dw:<table_name>. Binding
+        // ids remain a read-only fallback for historical instances that never wrote the canonical key.
+        SliceKeys subStoreKeys = SliceKeys.none();
         if ("SUB".equalsIgnoreCase(tableType) && mainTableId != null) {
-            subBindingKeys = jdbcTemplate.queryForList(
+            List<Long> bindingIds = jdbcTemplate.queryForList(
                     "SELECT id FROM dw_form_table_bindings WHERE table_id = ?",
-                    Long.class, mainTableId).stream().map(String::valueOf).toList();
+                    Long.class, mainTableId);
+            subStoreKeys = PortalMainTableViewSubStoreKeys.forSubView(
+                    stringVal(row.get("table_name")), bindingIds);
         }
 
         return new ViewDefinition(
@@ -1168,7 +1172,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 fields,
                 mainTableId,
                 tableType,
-                subBindingKeys,
+                subStoreKeys,
                 Boolean.TRUE.equals(row.get("restrict_to_involved_users")),
                 loadAccessRules(viewId));
     }
@@ -1329,7 +1333,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             List<ViewFieldDef> fields,
             Long mainTableId,
             String tableType,
-            List<String> subBindingKeys,
+            SliceKeys subStoreKeys,
             boolean restrictToInvolvedUsers,
             List<AccessRule> accessRules) {}
 }

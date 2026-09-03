@@ -8,6 +8,7 @@ import com.platform.common.jdbc.SubTableRowIdentity;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
 
+import com.portal.util.PortalMainTableViewSubStoreKeys.SliceKeys;
 import com.portal.util.SqlFragment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,9 +27,11 @@ import java.util.Map;
  * Reads one page of a SUB Main Table View, where a row is a sub-table row rather than a process
  * instance.
  *
- * <p>The rows live in {@code variables -> '__subTables__' -> <bindingKey>}, so one instance
- * expands into many and the paging has to act on the expansion: the page is a LIMIT/OFFSET over
- * the expanded rows and the total counts them, not the instances they came from.
+ * <p>The rows live in {@code variables -> '__subTables__' -> <storeKey>}. Current writes use
+ * {@code dw:<table_name>}; historical instances still use form binding ids. The expansion
+ * prefers the canonical key and only opens binding-id slices when that key is absent, so an
+ * old copy cannot overlay newer rows. Paging is LIMIT/OFFSET over the expanded rows, not the
+ * instances they came from.
  *
      * <p>The query is two layers, and cannot be one. The inner layer expands and de-duplicates,
      * which forces its ORDER BY to lead with the de-duplication key; the outer layer applies the
@@ -51,14 +54,14 @@ public class MainTableViewSubRowQueryComponent {
     private final ObjectMapper objectMapper;
 
     /**
-     * @param bindingKeys    {@code __subTables__} keys this view's table is bound under
+     * @param sliceKeys      canonical {@code dw:<table>} plus historical binding ids
      * @param designerFilter the view's own filter, compiled against the expanded row
      * @param involvement    predicate restricting rows to the ones the user is involved in, or null
      */
     public record Query(
             Long viewId,
             String functionUnitCode,
-            List<String> bindingKeys,
+            SliceKeys sliceKeys,
             ListFilterSql sql,
             SqlFragment designerFilter,
             List<ListColumnFilter> filters,
@@ -117,20 +120,14 @@ public class MainTableViewSubRowQueryComponent {
      * data and should fail loudly.
      */
     private String expandedRows(Query query, List<Object> outParams) {
-        if (query.bindingKeys().isEmpty()) {
-            throw new IllegalArgumentException("A sub-table view must be bound to at least one form");
+        SliceKeys keys = query.sliceKeys();
+        if (keys == null || keys.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "A sub-table view must have a canonical store key or a form binding");
         }
         StringBuilder lateral = new StringBuilder();
-        for (String bindingKey : query.bindingKeys()) {
-            if (!lateral.isEmpty()) {
-                lateral.append(" UNION ALL ");
-            }
-            lateral.append("SELECT ?::text AS slice_key, e.elem, e.ord")
-                    .append(" FROM jsonb_array_elements(pi.variables->'__subTables__'->?::text)")
-                    .append(" WITH ORDINALITY AS e(elem, ord)");
-            outParams.add(bindingKey);
-            outParams.add(bindingKey);
-        }
+        appendCanonicalSlice(lateral, outParams, keys.canonicalStoreKey());
+        appendLegacySlices(lateral, outParams, keys);
         outParams.add(query.functionUnitCode());
 
         StringBuilder visible = new StringBuilder();
@@ -148,6 +145,41 @@ public class MainTableViewSubRowQueryComponent {
                 + " CROSS JOIN LATERAL (" + lateral + ") expanded"
                 + " WHERE pi.function_unit_code = ?" + visible
                 + " ORDER BY pi.id, " + ROW_IDENTITY + ", pi.start_time DESC NULLS LAST)";
+    }
+
+    private void appendCanonicalSlice(StringBuilder lateral, List<Object> outParams, String canonicalKey) {
+        if (canonicalKey != null) {
+            appendUnionSlice(lateral, outParams, canonicalKey, null);
+        }
+    }
+
+    private void appendLegacySlices(StringBuilder lateral, List<Object> outParams, SliceKeys keys) {
+        for (String bindingKey : keys.legacyBindingKeys()) {
+            appendUnionSlice(lateral, outParams, bindingKey, keys.canonicalStoreKey());
+        }
+    }
+
+    /**
+     * One {@code jsonb_array_elements} expansion. When {@code onlyWhenCanonicalAbsent} is set,
+     * historical binding-id slices are skipped on instances that already have the canonical key.
+     */
+    private void appendUnionSlice(StringBuilder lateral, List<Object> outParams,
+                                  String storeKey, String onlyWhenCanonicalAbsent) {
+        if (!lateral.isEmpty()) {
+            lateral.append(" UNION ALL ");
+        }
+        lateral.append("SELECT ?::text AS slice_key, e.elem, e.ord")
+                .append(" FROM jsonb_array_elements(pi.variables->'__subTables__'->?::text)")
+                .append(" WITH ORDINALITY AS e(elem, ord)");
+        outParams.add(storeKey);
+        outParams.add(storeKey);
+        if (onlyWhenCanonicalAbsent == null) {
+            return;
+        }
+        // FALLBACK(migration): historical instances under binding ids. Delete when no instance
+        // lacks dw: keys. jsonb_exists, not the ? operator — JDBC would treat ? as a bind.
+        lateral.append(" WHERE NOT COALESCE(jsonb_exists(pi.variables->'__subTables__', ?::text), false)");
+        outParams.add(onlyWhenCanonicalAbsent);
     }
 
     private List<Row> readRows(ResultSet rs, Long viewId) throws SQLException {

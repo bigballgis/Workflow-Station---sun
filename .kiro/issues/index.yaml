@@ -3137,3 +3137,18 @@
     验证：overlay 3008 / popper 3058；截图 merchant-credit-open_after-fix 可见 Y/N，
     refund-date-open_after-fix 可见日历。
 
+- id: "1590"
+  status: fixed
+  fixed_at: "2026-09-03"
+  severity: major
+  category: bug
+  summary: "Portal Data View SUB rows empty: query used form binding ids, writes use dw:<table_name>"
+  file: "backend/user-portal/src/main/java/com/portal/component/MainTableViewSubRowQueryComponent.java"
+  note: |
+    反例：ATM / Credit Card / ACQ 子表行在 variables.__subTables__ 的 dw:atm_transaction
+    等规范 key 下，Data View 仍按 binding id（1152、1167…）展开 → 0 行。
+    根因：loadPublishedView 只收集 dw_form_table_bindings.id，未读 table_name。
+    修复：SubTableStoreKeys.dwKey 作主 key；仅当该实例没有规范 key 时才打开 binding-id
+    切片（jsonb_exists，避免 JDBC ? 运算符）。DISTINCT ON 去重保留。
+    验证：*MainTableView* 77 tests pass；package + compose rebuild user-portal healthy。
+
