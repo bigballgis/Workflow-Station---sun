@@ -54,6 +54,11 @@ public class TaskApprovalCompletionComponent {
     @Autowired
     private ComputedFieldRecalculator computedFieldRecalculator;
 
+    /** Lazy: re-derives the readonly Request ID; null in {@code new}-constructed tests skips stamping. */
+    @Lazy
+    @Autowired
+    private RequestIdEnricher requestIdEnricher;
+
     /**
      * Handles approval completion
      * Via WorkflowEngineClient calling Flowable engine
@@ -186,6 +191,7 @@ public class TaskApprovalCompletionComponent {
                 // one-level structure before persisting the approval write-back.
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
+                stampRequestId(syncInstance.getFunctionUnitCode(), mergedVars);
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);
@@ -571,5 +577,17 @@ public class TaskApprovalCompletionComponent {
             return;
         }
         recalculator.recalculate(functionUnitCode, variables);
+    }
+
+    /**
+     * Re-derive the readonly Request ID before the approval write-back is persisted, so an approval
+     * that edits a contributing main-table field cannot leave the stored identifier stale.
+     */
+    private void stampRequestId(String functionUnitCode, Map<String, Object> variables) {
+        RequestIdEnricher enricher = requestIdEnricher;
+        if (enricher == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
+            return;
+        }
+        enricher.stampRequestId(functionUnitCode, variables);
     }
 }

@@ -13,6 +13,7 @@ import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.MainTableViewSubRowQueryComponent;
 import com.portal.component.OwnerFieldComponent;
 import com.portal.component.ProcessComponent;
+import com.portal.component.RequestIdEnricher;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewQueryRequest;
 import com.portal.util.MainTableViewColumnSpec;
@@ -34,6 +35,8 @@ import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.PortalMainTableViewCsvUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -65,6 +68,15 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private final ProcessComponent processComponent;
     private final ComputedFieldRecalculator computedFieldRecalculator;
     private final UserDisplayNameResolver userDisplayNameResolver;
+
+    /**
+     * Lazy: re-derives the readonly Request ID after a CSV import edits main-table fields.
+     * Field-injected (not a ctor arg) to keep the constructor arity stable for {@code new}-constructed
+     * tests; null there simply skips stamping.
+     */
+    @Lazy
+    @Autowired
+    private RequestIdEnricher requestIdEnricher;
 
     @Override
     @Transactional(readOnly = true)
@@ -447,6 +459,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             }
             if (changed) {
                 computedFieldRecalculator.recalculate(pi.getFunctionUnitCode(), vars);
+                // An import may edit a field that feeds the Request ID; re-derive it so the stored
+                // identifier keeps matching the row it names.
+                if (requestIdEnricher != null) {
+                    requestIdEnricher.stampRequestId(pi.getFunctionUnitCode(), vars);
+                }
                 pi.setVariables(vars);
                 processInstanceRepository.save(pi);
                 updated++;

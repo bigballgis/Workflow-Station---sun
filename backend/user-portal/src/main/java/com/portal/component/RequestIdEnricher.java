@@ -98,6 +98,28 @@ public class RequestIdEnricher {
     }
 
     /**
+     * 按主表配置重算 Request ID 并**覆盖**客户端传来的值,用于任何要落库 {@code variables} 的写入路径。
+     *
+     * <p>Request ID 是只读派生字段,值的所有权在服务端:客户端可能不传、可能用改配置前的旧配置算、
+     * 也可能在提交时才分配的自增主键到位前就算好了,这些都不允许落库。未配置或参与字段全空时
+     * **移除**该键,避免客户端传的值比它所依据的配置活得更久。
+     *
+     * <p>调用点约定:放在审计字段填充与计算字段重算之后、{@code setVariables} 之前,
+     * 此时所有参与拼接的字段都已是终值。
+     */
+    public void stampRequestId(String functionUnitCode, Map<String, Object> variables) {
+        if (variables == null) {
+            return;
+        }
+        String requestId = buildRequestId(functionUnitCode, variables);
+        if (requestId != null) {
+            variables.put(REQUEST_ID_FIELD, requestId);
+        } else {
+            variables.remove(REQUEST_ID_FIELD);
+        }
+    }
+
+    /**
      * 批量构建:返回 {@code functionUnitCode → spec} 的解析缓存,供调用方在循环里复用,避免逐行查库。
      * 调用方通常这样用:先收集本页所有 code,调 {@link #resolveSpecs}, 然后对每行调 {@link #buildRequestId(SpecCache, String, Map)}。
      */

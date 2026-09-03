@@ -642,6 +642,10 @@ public class TaskFormComponent {
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
+            // Request ID is platform-derived: recompute it from the main-table config so a task
+            // that edits a contributing field cannot leave the persisted identifier stale, and a
+            // client-supplied value never survives.
+            requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
             // Prevent geometric __subTables__ bloat: drop deep nested copies before
             // persisting so each
             // task save stores the canonical one-level structure instead of compounding
@@ -942,6 +946,9 @@ public class TaskFormComponent {
         Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey,
                 processInstanceId, merged);
         SubTableNestingSanitizer.stripDeepNestedSubTables(merged);
+        // The merge can pull a client-supplied Request ID in from completedVariables; re-derive it
+        // so a snapshot capture never rewrites the stored identifier with an unstamped value.
+        requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
 

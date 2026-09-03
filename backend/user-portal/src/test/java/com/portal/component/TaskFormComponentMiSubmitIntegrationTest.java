@@ -306,4 +306,37 @@ class TaskFormComponentMiSubmitIntegrationTest {
         assertThat(processInstance.getVariables()).isEqualTo(baseline);
         verify(processInstanceRepository, never()).save(any());
     }
+
+    /**
+     * A task save that edits a Request-ID-contributing field must re-derive the stored identifier
+     * instead of persisting the value the browser sent. The browser computes it from its own form
+     * model, which need not hold every contributing field, so trusting it lets the persisted
+     * Request ID drift away from the row it names — and filter/sort read that persisted value.
+     */
+    @Test
+    void submitTaskForm_rederivesRequestIdInsteadOfTrustingTheClientValue() {
+        JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
+        // RequestIdEnricher resolves the PRIMARY-table config through this same JdbcTemplate.
+        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), anyString()))
+                .thenReturn(List.of("{\"fieldNames\":[\"I\",\"idncfm\"],\"separator\":\"_\"}"));
+        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("I", "ORIG");
+        baseline.put("idncfm", "Meeting-000001");
+        baseline.put("__request_id", "ORIG_Meeting-000001");
+        ProcessInstance processInstance = processInstanceWithVariables(baseline);
+        when(processInstanceRepository.findById(PROCESS_INSTANCE_ID)).thenReturn(Optional.of(processInstance));
+
+        // Rename a contributing field while sending the now-stale Request ID the browser still held.
+        Map<String, Object> formData = new HashMap<>();
+        formData.put("I", "RENAMED");
+        formData.put("__request_id", "ORIG_Meeting-000001");
+
+        taskFormComponent.submitTaskForm(TASK_ID, "user-a", formData);
+
+        assertThat(processInstance.getVariables().get("__request_id"))
+                .as("stored Request ID must follow the edited field, not the client's stale value")
+                .isEqualTo("RENAMED_Meeting-000001");
+    }
 }

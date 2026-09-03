@@ -89,6 +89,28 @@ public class ProcessStartComponent {
         return filter;
     }
 
+    /** Lazy: stamps the derived Request ID; field-injected to keep ctor arity stable for tests. */
+    @Lazy
+    @Autowired
+    private RequestIdEnricher requestIdEnricher;
+
+    private RequestIdEnricher requestIdEnricher() {
+        RequestIdEnricher r = requestIdEnricher;
+        if (r == null) {
+            r = new RequestIdEnricher(jdbcTemplate, new ObjectMapper(), processInstanceRepository);
+            requestIdEnricher = r;
+        }
+        return r;
+    }
+
+    /**
+     * Recompute the derived Request ID server-side, overwriting whatever the client sent.
+     * See {@link RequestIdEnricher#stampRequestId(String, Map)} for why the server owns the value.
+     */
+    private void stampRequestId(String functionUnitCode, Map<String, Object> variables) {
+        requestIdEnricher().stampRequestId(functionUnitCode, variables);
+    }
+
     /**
      * Programmatic short transactions for the DB-write phases of a start.
      *
@@ -206,6 +228,7 @@ public class ProcessStartComponent {
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         SystemAuditFieldFiller.fillOnInsert(variables, startUserDisplayName);
         computedFieldRecalculator.recalculate(pin.code(), variables);
+        stampRequestId(pin.code(), variables);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
         Map<String, Object> data;
