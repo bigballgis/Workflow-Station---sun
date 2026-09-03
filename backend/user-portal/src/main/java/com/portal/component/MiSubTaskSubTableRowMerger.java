@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * MI (multi-instance) sub-task row-level save isolation.
@@ -156,6 +157,23 @@ class MiSubTaskSubTableRowMerger {
             Map<String, Object> submittedSubTables,
             Map<String, Object> baselineSubTables,
             Map<String, Object> rowKey) {
+        return mergeCurrentRowOnly(submittedSubTables, baselineSubTables, rowKey, Set.of());
+    }
+
+    /**
+     * @param explicitlyEmptiedKeys {@code __subTables__} store keys the frontend rendered, scoped to
+     *                              this participant, and submitted as EMPTY on purpose — i.e. the
+     *                              user deleted the last row they owned. Only these keys may clear
+     *                              the participant's baseline rows; every other empty slice leaves
+     *                              the baseline untouched (see the empty-slice branch below).
+     */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> mergeCurrentRowOnly(
+            Map<String, Object> submittedSubTables,
+            Map<String, Object> baselineSubTables,
+            Map<String, Object> rowKey,
+            Set<String> explicitlyEmptiedKeys) {
+        Set<String> emptied = explicitlyEmptiedKeys != null ? explicitlyEmptiedKeys : Set.<String>of();
         List<String> pkCols = List.copyOf(rowKey.keySet());
         Map<String, Object> merged = new LinkedHashMap<>();
         if (submittedSubTables == null) {
@@ -186,7 +204,7 @@ class MiSubTaskSubTableRowMerger {
             List<Object> submittedRowsList = (List<Object>) submittedRows;
             merged.put(key, mergeRowsKeepingBaselineExceptCurrent(
                     baselineRows, submittedRowsList, pkCols, rowKey,
-                    lookupForeignKeyColumnsByStoreKey(key)));
+                    lookupForeignKeyColumnsByStoreKey(key), emptied.contains(key)));
         }
         return merged;
     }
@@ -423,7 +441,8 @@ class MiSubTaskSubTableRowMerger {
             List<Object> submittedRows,
             List<String> pkCols,
             Map<String, Object> rowKey,
-            List<String> fkColumns) {
+            List<String> fkColumns,
+            boolean explicitlyEmptied) {
         Object submittedCurrentRow = null;
         for (Object row : submittedRows) {
             if (!(row instanceof Map)) {
@@ -466,12 +485,50 @@ class MiSubTaskSubTableRowMerger {
                 out.addAll(ownByFk);
                 return out;
             }
+            // The user deleted every row they owned on this table.
+            //
+            // Reaching here means the submission contains NO row of ours (ownByFk was empty). That
+            // is AMBIGUOUS on its own: it means either "the user deleted the last row they owned" or
+            // "this key has nothing to contribute" (the form does not render this binding, MI
+            // isolation rebuilt the payload without it, this participant simply has no row yet, …).
+            //
+            // Guessing either way is wrong in one direction: always keeping the baseline makes
+            // deleting a participant's LAST row impossible (measured — deleting one of several
+            // People rows persisted, deleting the only one silently came back on reload), while
+            // always clearing would wipe rows for a binding that was merely absent from the form.
+            //
+            // So the frontend states its intent explicitly: `explicitlyEmptiedKeys` names the keys it
+            // rendered, scoped to this participant, and emptied. Absent that declaration the baseline
+            // stands, exactly as before.
+            //
+            // NOTE this is deliberately checked BEFORE the empty/all-foreign branches below: the
+            // submitted slice is normally NOT empty even when the user deleted their last row,
+            // because it still carries the other participants' rows (measured: submitted=3 peers,
+            // baseline=4). An `isEmpty()`-only guard therefore never fired in practice.
+            //
+            // It requires resolvable FK columns. Deleting is expressed here as "drop the baseline
+            // rows whose structural FK names me"; with no FK columns that predicate is a constant
+            // false, so the delete would be a silent no-op — and, worse, checking this branch ahead
+            // of the MI_ROW_KEY_UNRESOLVED guard below would swallow the very corruption that guard
+            // exists to report. Without FK metadata, fall through and let the old branches decide.
+            if (explicitlyEmptied && !fkColumns.isEmpty()) {
+                List<Object> out = new ArrayList<>();
+                for (Object row : baselineRows) {
+                    if (row instanceof Map
+                            && rowBelongsToParticipantByStructuralFk(
+                                    (Map<String, Object>) row, rowKey, fkColumns)) {
+                        continue;   // the user deleted this participant's rows; honour it
+                    }
+                    out.add(row);   // other participants' rows are untouched
+                }
+                // Peers keep their PERSISTED rows verbatim. This submission is authoritative only
+                // about the rows it owns; a sibling's row reaches an MI sub-task thinned down to
+                // identity fields (see the class doc), so preferring the submitted copy here would
+                // overwrite a peer's data with stubs — the exact loss this class exists to prevent.
+                return out;
+            }
             if (submittedRows.isEmpty()) {
-                // An EMPTY slice carries no claim about any row — it means this alias key simply has
-                // nothing to contribute (the task form does not render this binding, MI isolation
-                // rebuilt the payload without it, …). There is nothing of ours to merge in, so the
-                // baseline stands untouched. This is not the corruption case below: no submitted row
-                // disagrees with rowKey, so nothing the user typed can be lost by leaving it alone.
+                // Empty and undeclared: nothing of ours to merge in, so the baseline stands.
                 return baselineRows;
             }
             // Every submitted row provably belongs to ANOTHER participant (each carries a structural

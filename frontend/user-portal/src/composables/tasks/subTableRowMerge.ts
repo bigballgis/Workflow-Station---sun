@@ -144,6 +144,44 @@ export function rowResolvesDesignerPrimaryKey(
 }
 
 /**
+ * True when two rows denote the SAME logical row.
+ *
+ * <p>Uses the designer PK when both rows resolve it; otherwise falls back to the same content
+ * fingerprint {@link mergeSubTableRowsByRowId} keys on, so callers do not have to reimplement (and
+ * drift from) that key resolution. Used to decide whether a row still present in a derivative
+ * nested cache also still exists in the authoritative live rows.
+ */
+export function sameSubTableRow(
+  a: unknown,
+  b: unknown,
+  pkFieldNames?: string[] | null,
+): boolean {
+  if (!a || typeof a !== 'object' || !b || typeof b !== 'object') return false
+  const pkCols =
+    Array.isArray(pkFieldNames) && pkFieldNames.length > 0
+      ? pkFieldNames.map(f => String(f).trim()).filter(Boolean)
+      : []
+  const ra = a as Record<string, unknown>
+  const rb = b as Record<string, unknown>
+  if (pkCols.length > 0) {
+    const ka = compositePkMergeKey(ra, pkCols)
+    const kb = compositePkMergeKey(rb, pkCols)
+    if (ka != null && kb != null) return ka === kb
+  }
+  // No resolvable designer PK on both sides: fall back to the platform row identifiers, then to the
+  // canonical `rowKey`. Returns false when neither side carries any identity — "cannot tell" must
+  // not read as "same row", or a caller pruning stale copies would drop a row it cannot identify.
+  for (const idField of ['id', 'row_id', 'rowId']) {
+    const va = scalarForMergeKey(getRowValueIgnoreCase(ra, idField))
+    const vb = scalarForMergeKey(getRowValueIgnoreCase(rb, idField))
+    if (va != null && vb != null) return va === vb
+  }
+  const cka = canonicalRowKeyFromPayload(ra)
+  const ckb = canonicalRowKeyFromPayload(rb)
+  return cka != null && ckb != null && cka === ckb
+}
+
+/**
  * Merge sub-table rows for the same logical table. Later rows win on field conflicts.
  *
  * {@code task_status} / {@code task_current_node} (multi-instance dashboard mirrors) use terminal-wins merge so a stale

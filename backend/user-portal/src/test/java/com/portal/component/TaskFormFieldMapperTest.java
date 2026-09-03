@@ -40,6 +40,27 @@ class TaskFormFieldMapperTest {
         assertThat(accepted).containsOnlyKeys("title", "notes");
     }
 
+    /**
+     * Documents WHY {@code TaskFormComponent} must re-attach {@code _currentItem} (and
+     * {@code __subTables__}) after this call: the subset keeps only DESIGNER form fields, so MI
+     * runtime state is filtered out here by design.
+     *
+     * <p>Measured on task 506809ee (Test-000009): the task-scoped {@code _currentItem} was resolved
+     * correctly and then dropped by this filter, which silently switched MI row isolation off —
+     * server-loaded People rows could not be deleted at all.
+     */
+    @Test
+    void extractFieldSubsetDropsMiRuntimeStateSoCallersMustReattachIt() {
+        Map<String, Object> variables = Map.of(
+                "title", "x",
+                "_currentItem", Map.of("rowId", "Test-000009"),
+                "__subTables__", Map.of("dw:people", java.util.List.of()));
+
+        Map<String, Object> subset = mapper.extractFieldSubset(variables, Set.of("title"));
+
+        assertThat(subset).containsOnlyKeys("title");
+    }
+
     @Test
     void extractFieldSubsetCopiesOwnerDisplayCompanion() {
         Map<String, Object> variables = Map.of(

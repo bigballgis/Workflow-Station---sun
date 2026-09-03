@@ -16,7 +16,7 @@ export {
   cloneSubTableBindings,
 } from './subTableCore'
 
-export { mergeSubTableRowsByRowId, rowResolvesDesignerPrimaryKey } from './subTableRowMerge'
+export { mergeSubTableRowsByRowId, rowResolvesDesignerPrimaryKey, sameSubTableRow } from './subTableRowMerge'
 
 export {
   isSubTableRowMetaField,

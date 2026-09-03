@@ -98,6 +98,8 @@ const emit = defineEmits<{
   (e: 'update:row', row: Record<string, unknown>): void
   (e: 'change', key: string, value: unknown): void
   (e: 'save'): void
+  /** 透传内层 PortalFormFields 的子表行变化，让宿主同步 `binding.data`（见该 emit 的说明）。 */
+  (e: 'update:sub-table-data', bindingId: number, rows: unknown[]): void
 }>()
 
 const { t } = useI18n()
@@ -334,6 +336,7 @@ const cardTitle = computed(() =>
           :is-field-required="isInlineFieldRequired"
           :assignment-config="assignmentConfig"
           @update:field="handleFieldUpdate"
+          @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
           @field-blur="handleFieldBlur"
         />
       </el-row>

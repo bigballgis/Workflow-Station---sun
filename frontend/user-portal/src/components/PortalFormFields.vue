@@ -144,6 +144,17 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:field', key: string, value: unknown): void
   (e: 'field-blur', key: string): void
+  /**
+   * 子表行集发生变化（增 / 改 / 删）。
+   *
+   * <p><b>为什么必须有这个 emit。</b>这个组件此前只把行集写进**宿主行的 `__subTables__`**，
+   * 从不通知外层，于是 `binding.data` 永远不会更新 —— 保存时读的是 `binding.data`，
+   * 用户在 inline 表格里的删除因此从未进入 payload（实测 task 9c46d613：删除写进了
+   * Participants row 0，而 `syncMainSubTableRows` 触发次数恒为 0）。
+   *
+   * <p>补上它之后两份数据由同一次事件同时更新，不再需要「哪一份是权威」的猜测。
+   */
+  (e: 'update:sub-table-data', bindingId: number, rows: unknown[]): void
 }>()
 
 defineOptions({ name: 'PortalFormFields' })
@@ -303,6 +314,8 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
     rows,
   )
   emit('update:field', '__subTables__', sto)
+  // 同一次编辑也要让外层更新 `binding.data`，否则保存时读到的是旧行集。
+  emit('update:sub-table-data', Number(binding.bindingId), rows)
 }
 
 /**
@@ -319,6 +332,7 @@ function onInlineSubFormRowUpdate(bindingId: number, rows: unknown[]) {
     rows,
   )
   emit('update:field', '__subTables__', sto)
+  emit('update:sub-table-data', Number(binding.bindingId), rows)
 }
 
 // PortalSubTableBindingLite and SubTableBinding are intentionally loose sibling types over the
@@ -496,6 +510,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :is-field-required="isFieldRequired"
             :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
             @field-blur="onFieldBlur"
           />
         </el-tab-pane>
@@ -535,6 +550,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :assignment-config="assignmentConfig"
           row-columns
           @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
           @field-blur="onFieldBlur"
         />
       </el-row>
@@ -560,6 +576,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :assignment-config="assignmentConfig"
         in-column
         @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
         @field-blur="onFieldBlur"
       />
     </el-col>
@@ -590,6 +607,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :is-field-required="isFieldRequired"
             :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
             @field-blur="onFieldBlur"
           />
         </el-collapse-item>
@@ -626,6 +644,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :is-field-required="isFieldRequired"
             :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
             @field-blur="onFieldBlur"
           />
         </el-row>
@@ -664,6 +683,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
               :is-field-required="isFieldRequired"
               :assignment-config="assignmentConfig"
               @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
               @field-blur="onFieldBlur"
             />
           </el-row>
@@ -699,6 +719,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :is-field-required="isFieldRequired"
           :assignment-config="assignmentConfig"
           @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
           @field-blur="onFieldBlur"
         />
       </el-row>

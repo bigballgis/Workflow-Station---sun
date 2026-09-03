@@ -59,6 +59,14 @@ export interface TaskFormSubmitRequest {
   formData: Record<string, unknown>
   subTableData?: Record<string, Array<Record<string, unknown>>>
   baselineValues?: Record<string, unknown>
+  /**
+   * 本次提交里被**主动删空**的参与者子表切片（canonical store key，如 `dw:people`）。
+   *
+   * <p>后端光看「空数组」区分不了「用户删空了」和「这个 binding 根本没渲染」，故由前端显式声明。
+   * 它是**传输元数据、不是表单字段** —— 放在 `formData` 之外，才不会被 approve/complete 链路
+   * 当成业务变量写进流程实例（那正是它曾经泄漏的方式）。
+   */
+  emptiedSubTableKeys?: string[]
 }
 
 export interface ChangeHistoryRecord {

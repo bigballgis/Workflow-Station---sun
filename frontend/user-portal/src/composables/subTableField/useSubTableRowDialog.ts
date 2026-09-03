@@ -18,6 +18,7 @@ import {
 import { unwrapPortalApiPayload, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { processApi } from '@/api/process'
 import { isAssignmentConfigured } from '@/utils/miAssignmentConfig'
+import { sameSubTableRow } from '@/composables/tasks/shared'
 import type { SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
 
 /** Add/Edit row dialog state machine + FK/PK runtime bridge (prepare / finalize on save). */
@@ -37,6 +38,8 @@ export function useSubTableRowDialog(
   const dialogVisible = ref(false)
   const dialogMode = ref<'add' | 'edit'>('add')
   const editingRowIndex = ref<number | null>(null)
+  /** 打开编辑弹窗时那一行的快照——用来在保存时按身份找回它，而不是相信下标。 */
+  const editingRowSnapshot = ref<Record<string, any> | null>(null)
   const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
 
   const dialogSourceColumns = computed(() =>
@@ -125,6 +128,7 @@ export function useSubTableRowDialog(
       dialogMode.value = 'add'
       dialogInitialData.value = result.initialRow as Record<string, any>
       editingRowIndex.value = null
+      editingRowSnapshot.value = null
       dialogVisible.value = true
     } catch (e) {
       ElMessage.error(resolveUserFacingHttpMessage(e, t('common.operationFailed')))
@@ -138,8 +142,33 @@ export function useSubTableRowDialog(
   function openEditDialog(i: number) {
     dialogMode.value = 'edit'
     editingRowIndex.value = i
+    // 记住这一行**本身**，而不只是它的下标：下标会因为删除 / 重新排序 / 重新 hydrate 而指向别人。
+    // 实测（task 9c46d613）：两行 age 都是 kk，删掉一行后另一行的值变成了 u —— 保存写回时
+    // `rows.value[idx]` 已经不是当初打开的那一行了。
+    editingRowSnapshot.value = { ...rows.value[i] }
     dialogInitialData.value = { ...rows.value[i] }
     dialogVisible.value = true
+  }
+
+  /**
+   * 当初打开编辑弹窗的那一行现在在哪。
+   *
+   * <p>优先按设计器主键匹配（{@link sameSubTableRow}）；匹配不到才退回下标，
+   * 且下标必须仍然指向「同一行」——否则宁可不写，也不要覆盖别人的行。
+   */
+  function resolveEditingRowIndex(): number {
+    const snap = editingRowSnapshot.value
+    const idx = editingRowIndex.value
+    if (snap) {
+      const pk = props.primaryKeyFields ?? null
+      const byIdentity = rows.value.findIndex(r => sameSubTableRow(r, snap, pk))
+      if (byIdentity >= 0) return byIdentity
+    }
+    if (idx != null && idx >= 0 && idx < rows.value.length) {
+      // 没有可用身份时才按下标写回（例如全新行还没分配主键）。
+      if (!snap || sameSubTableRow(rows.value[idx], snap, props.primaryKeyFields ?? null)) return idx
+    }
+    return -1
   }
 
   async function handleDialogSave(rowData: Record<string, any>) {
@@ -195,7 +224,14 @@ export function useSubTableRowDialog(
       }
       rows.value.push(savedRow)
     } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
-      const idx = editingRowIndex.value
+      const idx = resolveEditingRowIndex()
+      if (idx < 0) {
+        // 当初编辑的那一行已经不在了（被删掉 / 被别的保存改写）。按下标硬写会改到别人的行，
+        // 那正是「删掉一个 kk，另一个 kk 变成 u」的成因 —— 宁可提示重试。
+        ElMessage.warning(t('common.operationFailed'))
+        dialogVisible.value = false
+        return
+      }
       const prevRow = rows.value[idx] as Record<string, any> | undefined
       const af = props.assigneeField
       const prevAssigneeId = af && prevRow ? extractUserIdFromCellValue(prevRow[af]) : ''
@@ -268,7 +304,14 @@ export function useSubTableRowDialog(
     return () => style.remove()
   }
 
-  async function deleteRow(i: number) {
+  /**
+   * @param i   el-table 的渲染下标（仅在拿不到行身份时作为兜底）
+   * @param row 被点击的那一行本身。**优先按身份定位**：下标来自渲染序号，
+   *            确认框是异步的，用户确认期间数组可能已经变化（另一处保存、重新 hydrate），
+   *            此时 splice(i,1) 会删掉别人的行。实测（task 9c46d613）两行 age 同为 `kk`，
+   *            删掉其中一行后另一行的值变成了 `u` —— 删错了行、值也就跟着错位。
+   */
+  async function deleteRow(i: number, row?: Record<string, any>) {
     const z = confirmZIndex()
     const cleanup = z > 0 ? applyConfirmLayer(z) : null
     try {
@@ -279,7 +322,20 @@ export function useSubTableRowDialog(
     } finally {
       cleanup?.()
     }
-    rows.value.splice(i, 1)
+    let idx = -1
+    if (row) {
+      // 先按引用找（同一个对象），再按设计器主键找。
+      idx = rows.value.indexOf(row)
+      if (idx < 0) {
+        idx = rows.value.findIndex(r => sameSubTableRow(r, row, props.primaryKeyFields ?? null))
+      }
+    }
+    if (idx < 0) {
+      // 拿不到身份时才退回下标，且下标必须仍在范围内。
+      if (i < 0 || i >= rows.value.length) return
+      idx = i
+    }
+    rows.value.splice(idx, 1)
     emit('update:modelValue', [...rows.value])
   }
 

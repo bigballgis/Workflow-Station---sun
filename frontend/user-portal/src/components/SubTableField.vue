@@ -286,7 +286,7 @@
               link
               type="danger"
               size="small"
-              @click="deleteRowAndSyncNested(scope.$index)"
+              @click="deleteRowAndSyncNested(scope.$index, scope.row)"
             >
               {{ t('subTable.delete') }}
             </el-button>
@@ -474,6 +474,7 @@
                   :host-primary-form-data="primaryFormData"
                   :host-primary-table-id="primaryTableId ?? null"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
+                  @update:sub-table-data="() => syncNestedSubTableBindings()"
                 />
               </el-row>
             </el-form>
@@ -1058,8 +1059,10 @@ async function handleDialogSaveAndSyncNested(row: Record<string, unknown>) {
   syncNestedSubTableBindings()
 }
 
-async function deleteRowAndSyncNested(i: number) {
-  await deleteRow(i)
+async function deleteRowAndSyncNested(i: number, row?: Record<string, any>) {
+  // 传行对象而不是只传下标：下标来自 el-table 的渲染序号，一旦渲染顺序与底层数组不一致，
+  // splice(i,1) 删掉的就是**另一行**——表现为「删掉一个 kk，另一行的值变成了 u」。
+  await deleteRow(i, row)
   syncNestedSubTableBindings()
 }
 

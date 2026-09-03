@@ -17,7 +17,9 @@ import {
   isMiDashboardSubTableBinding,
   shouldSyncStaleSiblingSubTableSlice,
   syncMiLinkChildEditedRowsIntoSiblingSlices,
+  sameSubTableRow,
 } from './shared'
+import { mergeSubTableRowsForMiSave } from './miSubTableSaveMerge'
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -56,6 +58,18 @@ export function useTaskForm(options: {
   /** Binding-id → relation-table-id map; used to protect MI collection slices from id_idw scrub on save. */
   bindingRelationTableMap?: Ref<Map<number, number | null>>
   miSubProcessScopeName?: Ref<string | null | undefined>
+  /**
+   * 归属谓词的**延迟解析**入口：返回「这一行属不属于当前参与者」的判定函数，判不出时返回 null。
+   *
+   * <p>为什么是工厂而不是直接传函数：`useTaskForm` 在 detail.vue 里先于 `ctx` 构造，
+   * 而归属判定（`rowBelongsToCurrentMiScope`）挂在 `ctx` 上 —— 直接传会拿到 undefined。
+   * 工厂在**保存时**才调用，那时 `ctx` 已装配完毕。
+   *
+   * <p>不传 = participant-child 退回并集（保守侧），行为与修复前一致。
+   */
+  resolveMiRowOwnershipPredicate?: (
+    binding: unknown,
+  ) => ((row: unknown) => boolean) | null
   onFormReadOnlyChange?: (readonly: boolean) => void
 }) {
   const { t } = useI18n()
@@ -122,6 +136,19 @@ export function useTaskForm(options: {
   function buildSubTableSubmitPayload() {
     const snapshot = (formData.value.__subTables__ as Record<string, any>) || {}
     const subTables: Record<string, any> = { ...snapshot }
+    /**
+     * 这里曾有一段 `pruneDeletedRowsFromNestedCaches` —— 靠比较「顶层切片」和「嵌套副本」
+     * 哪边行数更少来猜谁是权威，以此补偿「删除没进 payload」。已删除。
+     *
+     * <p><b>为什么删掉。</b>那是在错误前提上打的补丁：真正的缺陷是
+     * `PortalFormFields` 没有 `update:sub-table-data` 这个 emit，inline 表格的编辑只写进宿主行的
+     * `__subTables__`，`binding.data` 永远不同步，于是同一张表出现两份互相矛盾的数据。
+     *
+     * <p>而「取行数少的一方」这个启发式**方向是反的**：删除时少的一方新，
+     * **新增时多的一方才新** —— 照此规则新增的行会被当成「已删除」剪掉，静默丢数据。
+     *
+     * <p>补上那个 emit 后两份数据由同一次事件同时更新，天然一致，不需要任何权威判定。
+     */
     flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>)
     let miParentIdIdw: string | number | null = null
     let miCollectionSliceKeys: Set<string> | null = null
@@ -143,18 +170,41 @@ export function useTaskForm(options: {
       }
     }
     const subTableData: Record<string, Array<Record<string, unknown>>> = {}
+    /**
+     * 本次提交里**用户主动删空**的参与者切片（删掉了自己最后一行）。
+     *
+     * <p>后端光看「空数组」区分不了「用户删空了」和「这个 binding 根本没渲染」，
+     * 所以由前端显式声明意图 —— 只有出现在这里的 key，后端才允许清掉该参与者的基线行。
+     * 见 `MiSubTaskSubTableRowMerger` 的 empty-slice 分支。
+     */
+    const emptiedSubTableKeys: string[] = []
 
     for (const binding of options.subTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
       const existing = getSavedSubTableRows(subTables, binding)
+      /**
+       * MI 模式下这里曾是**无差别并集**，是「删了行、刷新又回来」的第一现场：并集按主键取,
+       * 「在 existing 里、不在 incoming 里」的行永远保留，结构上表达不了删除，被删的行在
+       * 请求发出**之前**就被从已存切片填回去了（非 MI 走 `: rows` 直接替换，所以删得掉 ——
+       * 这也解释了为什么只有 MI 子任务复现）。
+       *
+       * <p>f14599671 / 57715d8d8 只给 **shared** 表加了替换豁免，改的是
+       * `useTaskDetailMiPersist` / `useTaskDetailSubTableSync` 两处，**漏了这里**，
+       * 而 People 是 participant-child，那些豁免对它一条都不生效。
+       *
+       * <p>合并规则统一收敛到 {@link mergeSubTableRowsForMiSave}（三类各走各的路，
+       * 判不出时保守并集）。
+       */
+      const ownRowPredicate = options.resolveMiRowOwnershipPredicate?.(binding) ?? null
       const merged = options.isMiSubTaskMode.value
-        ? mergeSubTableRowsByRowId(
+        ? mergeSubTableRowsForMiSave(binding as never, {
             existing,
-            rows,
-            Array.isArray((binding as { primaryKeyFields?: string[] }).primaryKeyFields)
+            uiRows: rows,
+            primaryKeyFields: Array.isArray((binding as { primaryKeyFields?: string[] }).primaryKeyFields)
               ? (binding as { primaryKeyFields?: string[] }).primaryKeyFields
-              : null
-          )
+              : null,
+            isOwnRow: ownRowPredicate,
+          })
         : rows
       let out = cloneSubTableRows(
         options.isMiSubTaskMode.value && isMiParticipantScopedSubTableBinding(binding)
@@ -173,6 +223,32 @@ export function useTaskForm(options: {
         const wrap: Record<string, unknown> = { rows: out }
         scrubMiCorruptLinkChildRowsForParent(wrap, miParentIdIdw, { skipSliceKeys: null })
         out = wrap.rows as typeof out
+      }
+      /**
+       * 声明「用户把**自己名下**这张表的行删光了」。
+       *
+       * <p>条件必须同时满足，缺一不可：
+       * <ul>
+       *   <li>MI 模式、且这是**参与者私有**的切片（shared 表由后端直接透传，不走这条路）；</li>
+       *   <li>**归属谓词可用**（`isOwnRow != null`）。判不出归属就不能声明，
+       *       否则后端会按 FK 清行，而我们其实无法确认清掉的是不是自己的；</li>
+       *   <li>界面上**属于我的**行为 0 —— 注意判据是「我的行数」而不是「整个切片为空」：
+       *       提交的切片里始终还带着**其他参与者**的行（实测 submitted=3 peers / baseline=4），
+       *       所以「切片为空」这个条件在真机上**永远不成立**，delete-last 因此一直没生效。</li>
+       * </ul>
+       * 三条都满足才发这个 key，后端也只对声明过的 key 清「我的」行 —— 其余情况一律保持基线。
+       */
+      if (
+        options.isMiSubTaskMode.value
+        && ownRowPredicate != null
+        && isMiParticipantScopedSubTableBinding(binding)
+        && !(out as unknown[]).some(row => ownRowPredicate(row))
+        // 只有「原本有我的行、现在没了」才算删除。基线里本来就没有我的行时不发声明 ——
+        // 那不是删除，是这张表我还没有行；发出去只是让后端对零行做一次空转。
+        && (Array.isArray(existing) ? existing.some(row => ownRowPredicate(row)) : false)
+      ) {
+        const emptiedKey = subTableStoreKey(binding)
+        if (emptiedKey) emptiedSubTableKeys.push(emptiedKey)
       }
       // One canonical key per designer table. The previous code also wrote the bindingId key and
       // then arbitrated, via `nameMissing` / `subTableSliceUnchanged`, which binding got to be the
@@ -215,7 +291,8 @@ export function useTaskForm(options: {
 
     return {
       formData: { __subTables__: subTables },
-      subTableData
+      subTableData,
+      emptiedSubTableKeys,
     }
   }
 
@@ -227,7 +304,10 @@ export function useTaskForm(options: {
         ...subTablePayload.formData
       },
       subTableData: subTablePayload.subTableData,
-      baselineValues: taskFormDTO.value?.fieldValues || {}
+      baselineValues: taskFormDTO.value?.fieldValues || {},
+      // 传输元数据，**刻意放在 formData 之外**：approve/complete 链路会把 formData 整体
+      // 灌进流程变量（Object.assign(variables, formData)），放进去就会被当成业务变量持久化。
+      emptiedSubTableKeys: subTablePayload.emptiedSubTableKeys,
     }
   }
 

@@ -675,7 +675,20 @@ const {
 const bpmnParser = useBpmnParser({ taskInfo: taskInfo as any, historyRecords, isCompletedTask })
 const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml } = bpmnParser
 
-const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName })
+/**
+ * 保存时判定「这一行是不是当前参与者的」——复用 `rowBelongsToCurrentMiScope`，不另造判据。
+ * 延迟到调用时才读 `ctx`：`useTaskForm` 构造早于 `ctx` 装配。
+ * 解析不出当前参与者（`currentMiRowId == null`）时返回 null，让合并退回保守并集。
+ */
+const resolveMiRowOwnershipPredicate = (binding: unknown) => {
+  const myRowId = (ctx as any)?.currentMiRowId?.value
+  if (myRowId == null) return null
+  const belongs = (ctx as any)?.rowBelongsToCurrentMiScope
+  if (typeof belongs !== 'function') return null
+  return (row: unknown) => belongs(row, myRowId, binding as any)
+}
+
+const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate })
 const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
 const showImplicitSaveAction = computed(() => !formReadOnly.value && !hasConfiguredSaveAction.value)

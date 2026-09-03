@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -642,13 +643,14 @@ class MiSubTaskSubTableRowMergerTest {
     }
 
     /**
-     * An EMPTY slice leaves the baseline untouched — including for link-child tables.
+     * An UNDECLARED empty slice leaves the baseline untouched — including for link-child tables.
      *
-     * <p>Documents a deliberate, pre-existing trade-off: an empty slice is ambiguous. It can mean
-     * "the user deleted their rows" OR "this binding was not rendered / MI isolation rebuilt the
-     * payload without it". Deleting on that signal would wipe rows a form never showed, so the
-     * merger keeps the baseline. Consequence: deleting ALL of one's link-child rows does not persist
-     * through this path — the delete must be carried by a non-empty slice or a dedicated delete API.
+     * <p>An empty slice is ambiguous on its own: it can mean "the user deleted their rows" OR "this
+     * binding was not rendered / MI isolation rebuilt the payload without it". Deleting on that
+     * signal alone would wipe rows a form never showed, so the baseline stands.
+     *
+     * <p>The user's actual intent is carried separately, by {@code explicitlyEmptiedKeys} — see
+     * {@link #mergeCurrentRowOnly_declaredEmptyLinkChildSliceDeletesOnlyMyRows()}.
      */
     @Test
     void mergeCurrentRowOnly_emptyLinkChildSliceKeepsBaselineRatherThanDeleting() {
@@ -682,6 +684,189 @@ class MiSubTaskSubTableRowMergerTest {
         assertThat(rows).hasSize(2);
         assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("keep"));
         assertThat(rows).anySatisfy(r -> assertThat(r.get("age")).isEqualTo("old"));
+    }
+
+    /**
+     * Deleting the LAST row a participant owns persists once the frontend declares that intent.
+     *
+     * <p>Measured before this fix: deleting one of several People rows persisted, deleting the only
+     * one silently came back on reload — the empty slice fell into the ambiguous branch above and
+     * the baseline (still holding the row) was returned untouched.
+     *
+     * <p>Only the declaring participant's rows are cleared; a sibling's row in the same shared slice
+     * must survive.
+     */
+    @Test
+    void mergeCurrentRowOnly_declaredEmptyLinkChildSliceDeletesOnlyMyRows() {
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
+
+        Map<String, Object> mineOnly = new HashMap<>();
+        mineOnly.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        mineOnly.put("sub_task_id", "Test-000002");
+        mineOnly.put("age", "delete-me");
+
+        Map<String, Object> other = new HashMap<>();
+        other.put("id", "cccccccc-0000-0000-0000-000000000003");
+        other.put("sub_task_id", "Test-000001");
+        other.put("age", "keep");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(other, mineOnly)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>());
+
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, baseline, Map.of("id_idwnn", "Test-000002"), Set.of("dw:people"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        // 我的最后一行被删掉
+        assertThat(rows).hasSize(1);
+        // peer 的行原样保留
+        assertThat(rows.get(0).get("age")).isEqualTo("keep");
+        assertThat(rows.get(0).get("sub_task_id")).isEqualTo("Test-000001");
+    }
+
+    /**
+     * The REAL delete-last-row shape: the submitted slice is NOT empty — it still carries the other
+     * participants' rows — it just has none of mine.
+     *
+     * <p>Measured on task 072f18ed (2026-09-03): submitted=3 peers, baseline=4. An
+     * {@code isEmpty()}-only guard therefore never fired, and delete-last-row silently kept the
+     * baseline even with the declaration present.
+     */
+    @Test
+    void mergeCurrentRowOnly_declaredDeleteOfMyLastRowWhilePeerRowsRideAlong() {
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
+
+        Map<String, Object> mine = new HashMap<>();
+        mine.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        mine.put("sub_task_id", "Test-000002");
+
+        Map<String, Object> peerA = new HashMap<>();
+        peerA.put("id", "cccccccc-0000-0000-0000-000000000003");
+        peerA.put("sub_task_id", "Test-000001");
+
+        Map<String, Object> peerB = new HashMap<>();
+        peerB.put("id", "dddddddd-0000-0000-0000-000000000004");
+        peerB.put("sub_task_id", "Test-000003");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(peerA, peerB, mine)));
+
+        // 界面删掉了我唯一一行，但提交的切片里仍带着两个 peer 的行 —— 非空！
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(peerA, peerB)));
+
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, baseline, Map.of("id_idwnn", "Test-000002"), Set.of("dw:people"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(2);
+        assertThat(rows).noneSatisfy(r -> assertThat(r.get("sub_task_id")).isEqualTo("Test-000002"));
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("sub_task_id")).isEqualTo("Test-000001"));
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("sub_task_id")).isEqualTo("Test-000003"));
+    }
+
+    /**
+     * Without the declaration, the same peers-only slice must NOT delete my row — that is the
+     * long-standing "this participant has no row yet" case.
+     */
+    @Test
+    void mergeCurrentRowOnly_peersOnlySliceWithoutDeclarationStillKeepsMyRow() {
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
+
+        Map<String, Object> mine = new HashMap<>();
+        mine.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        mine.put("sub_task_id", "Test-000002");
+
+        Map<String, Object> peerA = new HashMap<>();
+        peerA.put("id", "cccccccc-0000-0000-0000-000000000003");
+        peerA.put("sub_task_id", "Test-000001");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(peerA, mine)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(peerA)));
+
+        Map<String, Object> merged =
+                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(2);
+        assertThat(rows).anySatisfy(r -> assertThat(r.get("sub_task_id")).isEqualTo("Test-000002"));
+    }
+
+    /**
+     * The declaration must NOT be able to swallow the MI_ROW_KEY_UNRESOLVED guard.
+     *
+     * <p>The declared-delete branch is checked before that guard, so it must first prove it can
+     * even express a delete: with no resolvable FK columns, "drop the rows whose FK names me" is a
+     * constant false. Silently returning a no-op there would hide a genuinely corrupt submission
+     * (rows that disagree with rowKey about what identifies a row) that the guard is meant to
+     * reject loudly.
+     */
+    @Test
+    void mergeCurrentRowOnly_declarationWithoutFkMetadataStillFailsLoud() {
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+        // 没有任何字段级 FK —— 归属判不出来
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of());
+
+        Map<String, Object> stranger = new HashMap<>();
+        stranger.put("id", "eeeeeeee-0000-0000-0000-000000000009");
+        stranger.put("name", "typed-but-would-be-lost");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>(List.of(stranger)));
+
+        assertThatThrownBy(() -> merger.mergeCurrentRowOnly(
+                submitted, Map.of(), Map.of("id_idwnn", "Test-000002"), Set.of("dw:people")))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("missing from the");
+    }
+
+    /**
+     * A declaration for ONE key must not clear a different key's slice.
+     */
+    @Test
+    void mergeCurrentRowOnly_declarationIsScopedToTheDeclaredKeyOnly() {
+        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
+                .thenReturn(List.of("id"));
+        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
+                .thenReturn(List.of("sub_task_id"));
+
+        Map<String, Object> mine = new HashMap<>();
+        mine.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
+        mine.put("sub_task_id", "Test-000002");
+
+        Map<String, Object> baseline = new HashMap<>();
+        baseline.put("dw:people", new java.util.ArrayList<>(List.of(mine)));
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:people", new java.util.ArrayList<>());
+
+        // 声明的是另一张表 —— people 不受影响
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, baseline, Map.of("id_idwnn", "Test-000002"), Set.of("dw:somethingelse"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
+        assertThat(rows).hasSize(1);
     }
 
     /**
