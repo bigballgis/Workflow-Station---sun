@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { finalizeSharedProcessSubTableBindingRows } from '../sharedProcessSubTableFilters'
+import { setActiveMiKindTableIds } from '../useMiConfig'
+import { isSharedAttachmentFileBinding } from '../subTableBindingKinds'
 
 /**
  * 共享附件表的「泄漏行」防线之一是：带**结构外键指向 MI 参与者**的行不是附件行。
@@ -16,8 +18,16 @@ const FILE_FIELD = { fieldName: 'file', dataType: 'FILE' }
 const ATTACHMENT_PK = { fieldName: 'idfa', isPrimaryKey: true }
 
 describe('共享附件泄漏过滤 — 结构外键按配置识别', () => {
-  it('link-child 行即使填满附件列也不得进入附件表格', () => {
-    const binding = {
+  /**
+   * 一张表**同时**声明了指向主表和指向 collection 的外键时，它按 participant-child 处理
+   * （`isSharedAttachmentFileBinding` 返回 false），走参与者分片而不是共享附件路径。
+   *
+   * <p>这一条锁的是分类本身：曾经只要表名叫 attachment 就当共享附件，于是一张**按参与者
+   * 私有**的附件表会被全案共享，参与者互相看到对方的附件。
+   */
+  it('同时指向 collection 的附件表不按共享附件处理（参与者私有）', () => {
+    setActiveMiKindTableIds({ miCollectionTableId: 50331, primaryTableId: 50332 })
+    const perParticipant = {
       tableName: 'attachment', tableId: 50330, foreignKeyField: 'main_idva',
       columns: ATTACHMENT_COLUMNS,
       fieldDefinitions: [
@@ -25,8 +35,27 @@ describe('共享附件泄漏过滤 — 结构外键按配置识别', () => {
         { fieldName: 'sub_task_idqc', isForeignKey: true, refTableId: 50331 },
       ],
     }
-    const leaked = [{ idfa: 'y', sub_task_idqc: 'Test-000003', main_idva: 'Meeting-000002' }]
-    expect(finalizeSharedProcessSubTableBindingRows(leaked, binding as never)).toEqual([])
+    expect(isSharedAttachmentFileBinding(perParticipant as never)).toBe(false)
+  })
+
+  /**
+   * 真正的共享附件表（外键指向**主表**）：它自己的外键**不能**被当成「指向参与者」。
+   *
+   * <p>这是现场 bug：`main_idvab → main` 被判成参与者外键，assignment 任务加的附件
+   * 保存进了库、刷新却渲染 0 行。判据必须按 collection 的 tableId 约束。
+   */
+  it('指向主表的外键不是参与者外键，附件行必须保留', () => {
+    setActiveMiKindTableIds({ miCollectionTableId: 50331, primaryTableId: 50332 })
+    const binding = {
+      tableName: 'attachment', tableId: 50330, foreignKeyField: 'main_idva',
+      columns: ATTACHMENT_COLUMNS,
+      fieldDefinitions: [
+        ATTACHMENT_PK, FILE_FIELD,
+        { fieldName: 'main_idva', isForeignKey: true, refTableId: 50332 },
+      ],
+    }
+    const saved = [{ idfa: 'y', main_idva: 'Meeting-000002', file: [] }]
+    expect(finalizeSharedProcessSubTableBindingRows(saved, binding as never)).toHaveLength(1)
   })
 
   it('真正的附件行保留', () => {

@@ -18,6 +18,7 @@ import {
   type MiChildFkConfig,
 } from './miLinkChildIdentity'
 import { dropSubsumedSubTableRows } from './subTableRowNormalize'
+import { resolveMiKindContext } from './miBindingKindFromConfig'
 
 /**
  * 这一行在**本表自己的列**上有没有真实数据（主键列不算数据）。
@@ -157,8 +158,20 @@ export function filterRowsForSharedProcessSubTableBinding(
       .filter(Boolean),
   )
   const attachmentBinding = isSharedAttachmentFileBinding(binding)
-  // 结构外键列名来自设计器配置——改名后（sub_task_id → sub_task_idqc）仍能认出 link-child 行。
-  const fkConfig = miChildFkConfigOfBinding(binding as never)
+  /**
+   * 「这一行带着指向 **MI 参与者** 的结构外键」这条判据，必须拿到 collection 的 tableId 才成立。
+   *
+   * <p>不传 collection 时 {@code resolveMiChildStructuralFkColumns} 会把该表的**每一个**设计器
+   * 外键都当成「指向参与者」—— 共享附件表指向主表的外键（现场 {@code main_idvab → main}）于是
+   * 被误判成 link-child 标记，整行被当泄漏行丢掉：实测 assignment 任务加的附件已经写进库，
+   * 刷新却渲染 0 行。
+   *
+   * <p>解析不到 collection（非 MI 的 FU、或注册表尚未写入）时给 {@code null}，
+   * 下面据此**跳过**这条判据 —— 没有参与者概念的流程里，本就不存在「指向参与者的外键」。
+   */
+  const miCollectionTableId = resolveMiKindContext().miCollectionTableId ?? null
+  const fkConfig =
+    miCollectionTableId != null ? miChildFkConfigOfBinding(binding as never, miCollectionTableId) : null
   const pkFields =
     binding.primaryKeyFields
     ?? (binding.fieldDefinitions ?? [])

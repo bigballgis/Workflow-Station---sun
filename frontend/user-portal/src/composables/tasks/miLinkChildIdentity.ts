@@ -105,7 +105,14 @@ export function resolveMiChildStructuralFkColumns(config: MiChildFkConfig | null
   // No field definitions reached this caller (older binding payloads carry only the binding row's
   // own `foreign_key_field`). That column IS designer config — the FK the binding was wired with —
   // so it is a legitimate second source, unlike a list of column names nobody configured.
-  if (out.length === 0 && bindingFk && !isCollectionBinding) return [bindingFk]
+  //
+  // **只在真的没有字段级定义时才回退。** 有定义、却被上面的 refTableId 过滤全部排除掉时，
+  // 那是一个**确定的答案**（"这张表没有指向 collection 的外键"），不是"信息不足"——
+  // 此时回退 bindingFk 等于把刚刚正确排除的那一列又放回来：共享附件表指向主表的外键
+  // （main_idvab → main）于是被当成"指向参与者"，整行被泄漏过滤丢掉，
+  // 实测 assignment 任务加的附件保存进库却渲染 0 行。
+  const hasFieldLevelFk = (config?.fieldDefinitions ?? []).some(f => f?.isForeignKey)
+  if (out.length === 0 && !hasFieldLevelFk && bindingFk && !isCollectionBinding) return [bindingFk]
   return out
 }
 
