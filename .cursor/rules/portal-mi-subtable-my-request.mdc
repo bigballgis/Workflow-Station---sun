@@ -168,6 +168,24 @@ function filterRunningMiBindingsByProcessDesignScope(bindings) {
 3. **`foreignKeyField`（binding 层）不是父引用。** 在 `miParticipantRow` binding 上它指的是 **collection 自己的主键**；
    在 People 式 child 上它常等于该表自己的 PK。父引用只在**字段级** `fieldDefinitions` 里。
 
+4. **判据有优先级：显式声明 > 结构关系。**（#1546，一次 review 抓出的 Blocker）
+   collection 表**自己通常也有一个指向主表的 FK**（实测 `subtable.main_idaaz → main`）。
+   若先判「FK 指向 MAIN ⇒ shared」，collection 会被判成共享表 → 整片跳过行隔离 →
+   当前参与者提交里那份被 MI 隔离削薄的兄弟行（thin stub）原样落库，
+   **把别人已保存的字段覆盖成空**（实测 `Test-000003` 的 `name` 从有值变成 `""`）。
+
+   ```
+   ① bindingLinkMode === 'miParticipantRow'  → collection   ← 显式声明，必须最先判
+   ② 字段级 FK.refTableId → collection 的 tableId → participant-child
+   ③ 字段级 FK.refTableId → 主表的 tableId        → shared
+   ④ 都判不了                                     → null / 保持参与者守卫开着
+   ```
+
+   **前后端必须同序**：前端 `resolveMiBindingKindFromConfig` 第 1 条就是 ①；后端
+   `MiSubTaskSubTableRowMerger.isParticipantScopedBinding` 也必须先调
+   `bindingDeclaredAsMiParticipantRow`（查 `binding_link_mode`）再看 FK 指向。
+   漏掉 ① 的那一侧会静默关掉这个类存在的全部意义。
+
 ### 禁止 —— 以下启发式**已全部物理删除**，不得以任何形式重新引入
 
 | 已删除的猜法 | 原位置 |
@@ -207,6 +225,34 @@ function filterRunningMiBindingsByProcessDesignScope(bindings) {
 
 FK **列名**由 `miChildFkConfigOfBinding(binding, miCollectionTableId)` 从 `fieldDefinitions` 解析，
 再用 `refTableId` 限定为"指向 collection"的那一个。**不存在列名清单兜底**（`MI_STRUCTURAL_PARENT_FK_FIELDS` 已删除）。
+
+#### 归属判定要两边的主键，缺一不可（#1546）
+
+一次归属判定牵涉**两个**主键，来源不同、都不能猜：
+
+| 用途 | 从哪来 | 猜错的后果 |
+|---|---|---|
+| **宿主行**的参与者标识 | **collection binding** 的 `primaryKeyFields` | 取不到 → 子行与宿主**恒不匹配** → 嵌套切片被过滤成 0 |
+| **子行**自己的行标识 | **child binding** 的 `primaryKeyFields` | 取不到 → 每行都「没有已分配主键」→ 折叠守卫失效，独立行被当碎片合并掉 |
+
+现场（demo FU 主键改名后）三个函数各踩一次，症状都是「保存成功、刷新就没了」：
+
+| 函数 | 曾经写死 | 后果 |
+|---|---|---|
+| `miParentRowAlignsWithChildRow` | 宿主 PK 只认 `id_idw`/`rowId`/`participant_id`/`participantId`/`id` | collection PK 是 `id_idwxwc` → `parentPk` 恒 `undefined` → 子行 `sub_task_idqc` 与宿主明明相等也判 `false` |
+| `collapseMiLinkChildRowsToOnePerParticipant` | 子行 PK 读字面量 `row.id` | People PK 是 `idqc` → 守卫失效 → 两条独立行被合并成一条 |
+| `subTableNestedEnrich` 调 `miParentRowAlignsWithChildRow` | **一个配置都不传** | 自己的行和别人的行**一律判 `false`** → 整段 enrich 空转（方向安全，故长期无人发现） |
+
+**MUST**：`miParentRowAlignsWithChildRow` / `scopeMiLinkChildRowsForParentRow` /
+`pickMiLinkChildRowsForParent` 的调用点，**必须同时传 `config`（child FK）和
+`collectionPrimaryKeyFields`（宿主 PK）**。拿不到 collection binding 时用
+`bindingDeclaresMiParticipantRow` 从 binding 列表里认（不要按表名找）。
+取不到设计器主键才退回历史列名表 —— 那条兜底只为老 FU 保命，不是常规路径。
+
+> **注意 `isSharedAttachmentFileBinding` 仍是启发式**（`tableName === 'attachment'` /
+> `tableId === 74` / `fk === 'main_id'`）。实测它在当前 demo FU 上**只是碰巧对**：
+> 附件表恰好叫 `attachment`，而 `main_id` 分支其实已经失效（真实 FK 是 `main_idva`），
+> tableId 74 在库里根本不存在。**改附件表名就会坏**。下次动这块时按本节判据改成读配置。
 
 ```typescript
 // ✅ resyncMiDashboardFieldsFromVariablesOnBindings — file-only 分支（applications/detail.vue）
@@ -409,7 +455,10 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 - [ ] **binding 分类**：是否用 `resolveMiBindingKindFromConfig`？有没有新增列名/表名/FK 名判断？（`grep -rn "fk === 'id'\|endsWith('participants')" src/` 必须为空）
 - [ ] **上下文注册**：新的详情/加载链路是否调了 `registerMiKindTableIdsFromBindings`？新的 binding 构建点是否透传了 `bindingLinkMode` 与 `fieldDefinitions`？
 - [ ] **child vs shared**：是否靠**字段级 FK 的 `refTableId` 指向 collection 还是主表**区分？（`bindingLinkMode` 对二者都是 `structuralFk`，区分不了）
+- [ ] **判据顺序**：是否**先**判 `bindingLinkMode === 'miParticipantRow'` 再看 FK 指向？（collection 自己也 FK 到主表，顺序反了会把 collection 判成 shared → 关掉行隔离 → 覆盖别人的数据）**前后端都要查**
+- [ ] **两个主键都传了吗**：归属判定是否同时拿到 **collection 的 `primaryKeyFields`**（宿主标识）和 **child 的 `primaryKeyFields`**（行标识）？漏前者 → 恒不匹配、行刷新后消失；漏后者 → 独立行被折叠合并
 - [ ] **判不了要返回 null**：配置缺失时是否**没有**静默降级成 `shared`（那会让真 child 丢失参与者隔离）？
+- [ ] **跨参与者验证**：是否用**第二个参与者**保存过一次、并**查库确认第一个参与者的字段没被覆盖**？（只测自己那份数据，1600+ 单测 + 真实 UI 全绿也漏掉过 Blocker）
 - [ ] 发起人 My Request 是否仍 **跳过** MI 参与者 filter？
 - [ ] File-only 子表 resync 是否 **未** 使用 `mergeAllSubTableSlicesFromVariables`？
 - [ ] 同 `tableId` 的 **transaction** binding union merge 是否未误伤 **attachment** binding？
@@ -425,7 +474,9 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 ## 参考
 
 - 实现：`applications/detail.vue`（`isInitiatorMyRequestView`、`resyncMiDashboardFieldsFromVariablesOnBindings`、`hydrateMiLinkChildBindingsForInitiatorMyRequest`）；`SubTableField.vue`（`handleLinkFormClick`、`backfillMiLinkFormModalFieldsFromParent`、`collectLinkFormRowsFromProcessVariables`）
-- 类型/helpers：`shared.ts`（`isFileOnlySubTableBinding`、`isSharedAttachmentFileBinding`、`isMiDashboardSubTableBinding`、`collectForeignSubTableRowIdsFromVariables`、`isLeakedForeignRowOnSharedAttachment`、`filterRowsForMiParticipantSubTableBinding`、`scrubMiCorruptLinkChildRowsForParent`、`scopeMiLinkChildRowsForParentRow`、`collapseMiLinkChildRowsToOnePerParticipant`；纯 `id+file` 判定见 `collectForeignSubTableRowIdsFromRowWalk` 内联逻辑）
+- 类型/helpers：`shared.ts`（`isFileOnlySubTableBinding`、`isSharedAttachmentFileBinding`、`isMiDashboardSubTableBinding`、`isLeakedForeignRowOnSharedAttachment`、`filterRowsForMiParticipantSubTableBinding`、`scrubMiCorruptLinkChildRowsForParent`、`scopeMiLinkChildRowsForParentRow`、`collapseMiLinkChildRowsToOnePerParticipant`）
+- 后端行隔离：`backend/user-portal/.../component/MiSubTaskSubTableRowMerger.java`
+  （`isParticipantScopedBinding` 判据顺序、`bindingDeclaredAsMiParticipantRow`、`foreignKeyTargetsMainTable`）
 - MI 范围：`miSubProcessScope.ts`（`filterBindingsToMiParticipantRow`）
 - 验证：`frontend/scripts/mi-regression-scenarios.mjs`；`pnpm run regression:mi`；截图 `frontend/user-portal/verification-screenshots/`
-- Issue：**#1414**（MCY Debit Card Transaction Investigation）、**#1435**（People hydrate/id）、**#1438**（Attachment 新增后旧行消失）、**#1439**（sub form2 People 未继承 sub form1 字段）、**#1440**（People inline 开 sex 串上一参与者数据）、**#1441**（My Request Details 弹窗 / Sub Task 行数 / id vs sub_task_id 映射）
+- Issue：**#1414**（MCY Debit Card Transaction Investigation）、**#1435**（People hydrate/id）、**#1438**（Attachment 新增后旧行消失）、**#1439**（sub form2 People 未继承 sub form1 字段）、**#1440**（People inline 开 sex 串上一参与者数据）、**#1441**（My Request Details 弹窗 / Sub Task 行数 / id vs sub_task_id 映射）、**#1546**（主键/外键改名后 Attachment + People 刷新即消失；判据顺序反了会覆盖别人的数据）
