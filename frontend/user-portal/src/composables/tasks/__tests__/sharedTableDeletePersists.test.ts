@@ -148,4 +148,33 @@ describe('shared sub-table deletion survives Save', () => {
     expect(out).toHaveLength(2)
     expect(out.map((r) => r.idfa)).not.toContain('c')
   })
+
+  /**
+   * 审计：Add / Edit / Delete 三个行内动作**走的是同一条链路**
+   * （SubTableField 的 emit('update:modelValue') → syncMainSubTableRows →
+   *  patchFormDataSubTablesFromCurrentBindings），所以那处快照并集对三者一视同仁。
+   *
+   * <p>并集是 **prefer-filled 的按主键并集**，因此受影响的是「减少信息」的两类操作：
+   * <ul>
+   *   <li><b>删除</b>：行整个消失 → 被快照带回；</li>
+   *   <li><b>清空字段</b>：值变成空 → 被快照旧值盖回；</li>
+   *   <li>新增 / 改成非空值：并集本来就保留，不受影响。</li>
+   * </ul>
+   */
+  it('shared binding: delete AND field-clear both survive (add/edit never regressed)', () => {
+    register()
+    const snap = [{ idfa: 'a', file: 'A.jpg' }, { idfa: 'b', file: 'B.jpg' }]
+    const isShared = resolveMiBindingKindFromConfig(attachmentBinding, null) === 'shared'
+    const patch = (uiRows) =>
+      isShared ? uiRows : mergeSubTableRowsByRowId(snap, uiRows, ['idfa'])
+
+    // 删除 b
+    expect(patch([{ idfa: 'a', file: 'A.jpg' }]).map((r) => r.idfa)).toEqual(['a'])
+    // 清空 a.file —— prefer-filled 并集会用旧值盖回，这里必须保持为空
+    expect(patch([{ idfa: 'a', file: '' }, { idfa: 'b', file: 'B.jpg' }])
+      .find((r) => r.idfa === 'a').file).toBe('')
+    // 新增 c：本来就不受影响
+    expect(patch([...snap, { idfa: 'c', file: 'C.jpg' }]).map((r) => r.idfa).sort())
+      .toEqual(['a', 'b', 'c'])
+  })
 })
