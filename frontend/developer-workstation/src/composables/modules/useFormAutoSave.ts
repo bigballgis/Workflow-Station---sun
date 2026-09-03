@@ -35,6 +35,13 @@ export interface FormAutoSaveOptions {
   getPollDesigner?: () => { getRule?: () => unknown[]; getOption?: () => Record<string, unknown> } | null | undefined
 }
 
+/**
+ * How often the canvas is snapshotted to detect design changes. Each tick walks the whole
+ * rule tree and serializes it, so this is the designer's steady-state background cost —
+ * keep it comfortably above a keystroke and well under the save debounce below.
+ */
+const POLL_INTERVAL_MS = 3000
+
 export function useFormAutoSave(options: FormAutoSaveOptions) {
   const {
     selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving,
@@ -130,7 +137,7 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
       lastDesignerState.value = ''
     }
 
-    // Poll for changes every 1 second
+    // Poll for changes every 3 seconds
     pollTimerRef.value = setInterval(() => {
       if (!selectedForm.value || autoSaving.value) return
       try {
@@ -141,7 +148,7 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
           scheduleAutoSave()
         }
       } catch { /* silently ignore */ }
-    }, 1000)
+    }, POLL_INTERVAL_MS)
   }
 
   // --- Cleanup ---

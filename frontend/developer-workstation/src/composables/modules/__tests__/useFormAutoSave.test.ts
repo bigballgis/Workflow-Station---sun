@@ -3,6 +3,10 @@ import { defineComponent, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useFormAutoSave } from '../useFormAutoSave'
 
+/** Mirrors POLL_INTERVAL_MS / the scheduleAutoSave debounce in useFormAutoSave. */
+const POLL_INTERVAL_MS = 3000
+const SAVE_DEBOUNCE_MS = 5000
+
 function mountAutoSave(options: Parameters<typeof useFormAutoSave>[0]) {
   const Host = defineComponent({
     setup() {
@@ -47,11 +51,15 @@ describe('useFormAutoSave', () => {
     expect(rule[0].validate).toBeUndefined()
     setupDone = true
 
-    await vi.advanceTimersByTimeAsync(1000)
+    // One poll tick has to elapse before the flush runs and the change is noticed.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS - 1)
+    expect(rule[0].validate).toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(1)
     expect(rule[0].validate).toEqual([{ mode: 'email', email: true }])
     expect(handleSaveForm).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS)
     expect(handleSaveForm).toHaveBeenCalledWith(false)
     wrapper.unmount()
   })
@@ -87,11 +95,11 @@ describe('useFormAutoSave', () => {
     })
     setupDone = true
 
-    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
     expect(mainRule[0].validate).toBeUndefined()
     expect(subRule[0].validate).toEqual([{ mode: 'email', email: true }])
 
-    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS)
     expect(handleSaveForm).toHaveBeenCalledWith(false)
     wrapper.unmount()
   })
