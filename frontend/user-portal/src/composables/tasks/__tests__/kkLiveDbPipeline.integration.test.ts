@@ -46,6 +46,12 @@ function simulateApplicationsDetailLoad(flat: Record<string, unknown>) {
       physicalTableName: 'attachment',
       foreignKeyField: 'main_id',
       columns: defaultAttachmentListColumns(),
+      // 共享附件按设计器列类型认（data_type='FILE'）——真实 binding payload 带这份元数据
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true },
+        { fieldName: 'main_id', isForeignKey: true },
+        { fieldName: 'file', dataType: 'FILE' },
+      ],
       primaryKeyFields: ['id'],
       data: [] as any[],
     },
@@ -64,7 +70,7 @@ function simulateApplicationsDetailLoad(flat: Record<string, unknown>) {
 
 describe('kk live DB pipeline (4f31baaf)', () => {
 
-  it('isSharedAttachmentFileBinding true for binding 104 with default columns', () => {
+  it('isSharedAttachmentFileBinding true for binding 104 (designer FILE column)', () => {
     expect(
       isSharedAttachmentFileBinding({
         bindingId: 104,
@@ -73,6 +79,12 @@ describe('kk live DB pipeline (4f31baaf)', () => {
         physicalTableName: 'attachment',
         foreignKeyField: 'main_id',
         columns: defaultAttachmentListColumns(),
+        // 判据是设计器列类型，不再是表名 / tableId 74 / main_id
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
+        ],
       }),
     ).toBe(true)
   })

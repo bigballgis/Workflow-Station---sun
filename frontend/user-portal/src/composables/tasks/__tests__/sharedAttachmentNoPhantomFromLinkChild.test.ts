@@ -22,6 +22,12 @@ const ATTACHMENT_BINDING = {
   foreignKeyField: 'main_id',
   primaryKeyFields: ['id'],
   columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
+  // 真实 binding payload 里 columns 常为 null，判据走设计器字段定义（data_type='FILE'）
+  fieldDefinitions: [
+    { fieldName: 'id', isPrimaryKey: true },
+    { fieldName: 'main_id', isForeignKey: true },
+    { fieldName: 'file', dataType: 'FILE' },
+  ],
   data: [] as any[],
 }
 

@@ -17,6 +17,17 @@ import java.util.Map;
 @AllArgsConstructor
 public class TableFieldDefinitionDTO {
     private String fieldName;
+
+    /**
+     * Designer column type ({@code dw_field_definitions.data_type} / {@code rt_field_definitions.data_type}):
+     * VARCHAR, TEXT, BIGINT, DECIMAL, DATE, TIMESTAMP, BOOLEAN, FILE, …
+     *
+     * <p>Exposed so the runtime can answer "does this table hold uploaded files?" from the design
+     * instead of guessing at a column literally named {@code file} or a table literally named
+     * {@code attachment} — those guesses break the moment a Function Unit renames either.
+     */
+    private String dataType;
+
     private Boolean isPrimaryKey;
     private Boolean isForeignKey;
     private Long refTableId;

@@ -94,9 +94,6 @@ export function mapRelationFieldDataTypeToColumnType(dataType: string): ColumnTy
   return undefined
 }
 
-/** KK / shared attachment table (dw_table_definitions.id = 74) when designer subListViews are empty on copied forms. */
-export const SHARED_ATTACHMENT_RELATION_TABLE_ID = 74
-
 export function defaultAttachmentListColumns(): DialogColumn[] {
   return [
     { field: 'id', label: 'id', minWidth: 100 },

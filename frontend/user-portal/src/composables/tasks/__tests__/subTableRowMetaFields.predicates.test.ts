@@ -42,6 +42,12 @@ describe('subTableRowMetaFields predicates', () => {
         physicalTableName: 'attachment',
         foreignKeyField: 'main_id',
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
+        // 共享附件按设计器列类型认（data_type='FILE'）
+        fieldDefinitions: [
+          { fieldName: 'id', isPrimaryKey: true },
+          { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
+        ],
         primaryKeyFields: ['id'],
         data: [],
       },
@@ -126,16 +132,61 @@ describe('subTableRowMetaFields predicates', () => {
     expect(isSubTableMiDashboardRow({ card_number: '4111' })).toBe(false)
   })
 
-  it('isSharedAttachmentFileBinding recognizes tableId 74 even when list columns omit file', () => {
+  /**
+   * 共享附件表按**设计器列类型**认（`data_type = 'FILE'`），与表名/tableId/外键列名无关。
+   * 现场实测：附件表外键其实是 `main_idva`、tableId 74 在库里不存在、表名可被改 ——
+   * 旧判据只是碰巧对。列表视图不展示 file 列也不影响判定。
+   */
+  it('isSharedAttachmentFileBinding 认设计器 FILE 列，表名/tableId/外键改名都不影响', () => {
     expect(
       isSharedAttachmentFileBinding({
-        bindingId: 104,
-        tableId: 74,
-        tableName: 'attachment',
-        foreignKeyField: 'main_id',
-        columns: [{ field: 'id' }, { field: 'main_id' }],
+        bindingId: 50548,
+        tableId: 50330,
+        tableName: 'renamed_docs',
+        foreignKeyField: 'main_idva',
+        // 列表视图故意不含 file 列
+        columns: [{ field: 'idfa' }, { field: 'main_idva' }],
+        fieldDefinitions: [
+          { fieldName: 'idfa', isPrimaryKey: true },
+          { fieldName: 'main_idva', isForeignKey: true, refTableId: 50332 },
+          { fieldName: 'file', dataType: 'FILE' },
+        ],
       }),
     ).toBe(true)
+  })
+
+  /** 没有 FILE 列 = 不是附件表。`file_path:VARCHAR` 这种普通列不算（旧判据会按列名误判）。 */
+  it('isSharedAttachmentFileBinding 对没有 FILE 列的表返回 false', () => {
+    expect(
+      isSharedAttachmentFileBinding({
+        bindingId: 11,
+        tableId: 11,
+        tableName: 'attachment', // 名字撞上也不算数
+        foreignKeyField: 'main_id',
+        columns: [{ field: 'file_path' }],
+        fieldDefinitions: [
+          { fieldName: 'file_path', dataType: 'VARCHAR' },
+        ],
+      }),
+    ).toBe(false)
+  })
+
+  /** 指向 collection 的附件表是**某个参与者自己的**附件，必须按参与者分片，不能当全案共享。 */
+  it('isSharedAttachmentFileBinding 对 participant-child 附件表返回 false', () => {
+    expect(
+      isSharedAttachmentFileBinding(
+        {
+          bindingId: 900,
+          tableId: 901,
+          tableName: 'per_participant_files',
+          fieldDefinitions: [
+            { fieldName: 'file', dataType: 'FILE' },
+            { fieldName: 'sub_task_idqc', isForeignKey: true, refTableId: 50331 },
+          ],
+        },
+        { miCollectionTableId: 50331, primaryTableId: 50332 },
+      ),
+    ).toBe(false)
   })
 
   /**

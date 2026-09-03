@@ -11,13 +11,19 @@ import { finalizeSharedProcessSubTableBindingRows } from '../sharedProcessSubTab
  * <p>现场列名（改名后）：attachment 主键 idfa、外键 main_idva→main；people 外键 sub_task_idqc→subtable。
  */
 const ATTACHMENT_COLUMNS = [{ field: 'idfa' }, { field: 'main_idva' }, { field: 'file' }]
+/** 附件表的身份由设计器列类型决定：必须有 data_type='FILE' 的列。 */
+const FILE_FIELD = { fieldName: 'file', dataType: 'FILE' }
+const ATTACHMENT_PK = { fieldName: 'idfa', isPrimaryKey: true }
 
 describe('共享附件泄漏过滤 — 结构外键按配置识别', () => {
   it('link-child 行即使填满附件列也不得进入附件表格', () => {
     const binding = {
       tableName: 'attachment', tableId: 50330, foreignKeyField: 'main_idva',
       columns: ATTACHMENT_COLUMNS,
-      fieldDefinitions: [{ fieldName: 'sub_task_idqc', isForeignKey: true, refTableId: 50331 }],
+      fieldDefinitions: [
+        ATTACHMENT_PK, FILE_FIELD,
+        { fieldName: 'sub_task_idqc', isForeignKey: true, refTableId: 50331 },
+      ],
     }
     const leaked = [{ idfa: 'y', sub_task_idqc: 'Test-000003', main_idva: 'Meeting-000002' }]
     expect(finalizeSharedProcessSubTableBindingRows(leaked, binding as never)).toEqual([])
@@ -27,7 +33,10 @@ describe('共享附件泄漏过滤 — 结构外键按配置识别', () => {
     const binding = {
       tableName: 'attachment', tableId: 50330, foreignKeyField: 'main_idva',
       columns: ATTACHMENT_COLUMNS,
-      fieldDefinitions: [{ fieldName: 'main_idva', isForeignKey: true, refTableId: 50332 }],
+      fieldDefinitions: [
+        ATTACHMENT_PK, FILE_FIELD,
+        { fieldName: 'main_idva', isForeignKey: true, refTableId: 50332 },
+      ],
     }
     const real = [{ idfa: 'z', main_idva: 'Meeting-000002', file: 'a.pdf' }]
     expect(finalizeSharedProcessSubTableBindingRows(real, binding as never)).toHaveLength(1)
@@ -37,6 +46,7 @@ describe('共享附件泄漏过滤 — 结构外键按配置识别', () => {
     // 主键改名成 idfa：主键列不算「本表有数据」，靠 primaryKeyFields 配置识别
     const binding = {
       tableName: 'attachment', columns: ATTACHMENT_COLUMNS, primaryKeyFields: ['idfa'],
+      fieldDefinitions: [ATTACHMENT_PK, FILE_FIELD],
     }
     expect(finalizeSharedProcessSubTableBindingRows(
       [{ idfa: '9d4e0000-0000-4000-8000-000000000001' }], binding as never)).toEqual([])

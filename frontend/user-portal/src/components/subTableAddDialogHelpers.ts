@@ -46,7 +46,6 @@ export {
   resolveBindingFieldDefinitions,
   buildParentTablesByIdFromBindings,
   mapRelationFieldDataTypeToColumnType,
-  SHARED_ATTACHMENT_RELATION_TABLE_ID,
   defaultAttachmentListColumns,
   deriveColumnsFromRelationFieldDefinitions,
   mergeMissingTableFieldColumns,

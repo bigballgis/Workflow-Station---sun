@@ -24,6 +24,12 @@ const ATTACHMENT_BINDING = {
   physicalTableName: 'attachment',
   foreignKeyField: 'main_id',
   columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
+  // 真实 binding payload 里 columns 常为 null，判据走设计器字段定义（data_type='FILE'）
+  fieldDefinitions: [
+    { fieldName: 'id', isPrimaryKey: true },
+    { fieldName: 'main_id', isForeignKey: true },
+    { fieldName: 'file', dataType: 'FILE' },
+  ],
 }
 
 /** The real People row from instance a784cdde-… (link-child of participant Test-000002). */

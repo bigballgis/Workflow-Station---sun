@@ -1,7 +1,7 @@
 import type { FormField } from '@/components/FormRenderer.vue'
 import type { HistoryRecord } from '@/types/historyRecord'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
-import { SHARED_ATTACHMENT_RELATION_TABLE_ID, isAuditField } from '@/components/subTableAddDialogHelpers'
+import { isAuditField } from '@/components/subTableAddDialogHelpers'
 import {
   mergeSubTableRowsByRowId,
   dropSubsumedSubTableRows,
@@ -10,6 +10,7 @@ import {
   miChildFkConfigOfBinding,
 } from '@/composables/tasks/shared'
 import { readSubTableRows, type SubTableStoreBindingLike } from '@/composables/tasks/subTableStore'
+import type { MiKindFieldDef } from '@/composables/tasks/miBindingKindFromConfig'
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
@@ -70,6 +71,11 @@ export type SubTableBindingAlignable = {
   data: any[]
   primaryKeyFields?: string[]
   physicalTableName?: string
+  // binding 分类（共享附件 / participant-child / collection）**全部读这两项配置**。
+  // 漏在类型里 = 调用点被迫 `as {...}` 窄化，把配置藏起来，分类静默降级。
+  foreignKeyField?: string | null
+  bindingLinkMode?: string | null
+  fieldDefinitions?: MiKindFieldDef[] | null
 }
 
 /**
@@ -134,14 +140,7 @@ export function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]
     for (let j = i + 1; j < all.length; j++) {
       const a = all[i]!
       const b = all[j]!
-      if (
-        isSharedAttachmentFileBinding(
-          a as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null },
-        ) ||
-        isSharedAttachmentFileBinding(
-          b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null },
-        )
-      ) {
+      if (isSharedAttachmentFileBinding(a) || isSharedAttachmentFileBinding(b)) {
         continue
       }
       const tnA = normalizeSubTableName(a.tableName)
@@ -208,19 +207,6 @@ export function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]
 }
 
 /** Fast path: current form bindings only — enough for first paint on initiator My Request. */
-/** Resolve list columns for a binding, including sibling-form / dataTables fallbacks (binding 104 empty subListViews). */
-export function isPortalSharedAttachmentTableBinding(b: {
-  bindingId?: number
-  tableId?: number | null
-  tableName?: string
-  foreignKeyField?: string | null
-}): boolean {
-  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
-  const tn = normalizeSubTableName(String(b.tableName ?? ''))
-  if (Number.isFinite(tableIdNum) && tableIdNum === SHARED_ATTACHMENT_RELATION_TABLE_ID) return true
-  if (tn === 'attachment') return true
-  return String(b.foreignKeyField ?? '').trim().toLowerCase() === 'main_id' && tn === 'attachment'
-}
 
 /**
  * When `__subTables__` keys do not match any bindingId/table label on the current form, merge-by-table may still

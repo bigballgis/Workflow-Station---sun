@@ -249,10 +249,29 @@ FK **列名**由 `miChildFkConfigOfBinding(binding, miCollectionTableId)` 从 `f
 `bindingDeclaresMiParticipantRow` 从 binding 列表里认（不要按表名找）。
 取不到设计器主键才退回历史列名表 —— 那条兜底只为老 FU 保命，不是常规路径。
 
-> **注意 `isSharedAttachmentFileBinding` 仍是启发式**（`tableName === 'attachment'` /
-> `tableId === 74` / `fk === 'main_id'`）。实测它在当前 demo FU 上**只是碰巧对**：
-> 附件表恰好叫 `attachment`，而 `main_id` 分支其实已经失效（真实 FK 是 `main_idva`），
-> tableId 74 在库里根本不存在。**改附件表名就会坏**。下次动这块时按本节判据改成读配置。
+#### 共享附件表也按配置认（2026-09 已改造）
+
+`isSharedAttachmentFileBinding` 的判据是**两条正面条件**：
+
+1. 表里有 `data_type = 'FILE'` 的列（`bindingHasDesignerFileColumn`）——「这张表装的是上传文件」；
+2. 它不是 participant-child（字段级 FK 没指向 collection）——指向 collection 的附件表是
+   **某个参与者私有的**附件，必须按参与者分片。
+
+**已删除的猜法**（`grep -rn "tableId === 74\|SHARED_ATTACHMENT_RELATION_TABLE_ID" src/` 必须为空）：
+
+| 删掉的 | 为什么坏 |
+|---|---|
+| `tableName === 'attachment'` | 改表名就失效；同名普通表被误判 |
+| `tableId === 74` | 魔数，当前库里根本不存在这个 id |
+| `fk === 'main_id'` + 列名 `file` | 现场真实外键是 `main_idva`，这条分支早已失效；`file_path:VARCHAR`（Documents 表）会被列名误判成附件表 |
+
+> `data_type` 由 `TableFieldDefinitionDTO.dataType` 透传（`FormTableBindingLoader` 的 SQL
+> 新增了该列）。**新增 binding 构建点必须带上 `fieldDefinitions`**——真实 payload 里
+> `columns` 常为 `null`，只有 `fieldDefinitions` 可靠。
+>
+> 排查坑：`ProcessComponent.fuContentCache` 是**进程内 TTL 缓存**。改了 admin-center 的
+> binding 字段后，portal 可能仍返回旧结构 —— 验证前先 `docker compose restart user-portal`，
+> 否则会误判成「后端改动没生效」。
 
 ```typescript
 // ✅ resyncMiDashboardFieldsFromVariablesOnBindings — file-only 分支（applications/detail.vue）

@@ -130,6 +130,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         fieldDefinitions: [
           { fieldName: 'id', isPrimaryKey: true },
           { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
         ],
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
@@ -171,6 +172,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         fieldDefinitions: [
           { fieldName: 'id', isPrimaryKey: true },
           { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
         ],
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
@@ -185,6 +187,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         fieldDefinitions: [
           { fieldName: 'id', isPrimaryKey: true },
           { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
         ],
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
@@ -211,6 +214,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         fieldDefinitions: [
           { fieldName: 'id', isPrimaryKey: true },
           { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
         ],
         columns: [{ field: 'id' }, { field: 'file' }],
         primaryKeyFields: ['id'],
@@ -374,6 +378,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         fieldDefinitions: [
           { fieldName: 'id', isPrimaryKey: true },
           { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
         ],
         columns: [{ field: 'file' }],
         data: [],
@@ -387,6 +392,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         fieldDefinitions: [
           { fieldName: 'id', isPrimaryKey: true },
           { fieldName: 'main_id', isForeignKey: true },
+          { fieldName: 'file', dataType: 'FILE' },
         ],
         columns: [{ field: 'file' }],
         data: [],

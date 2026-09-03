@@ -245,7 +245,7 @@ public class FormTableBindingLoader {
         // is_computed / computed_field_json exist on both dw_ and rt_ field definitions
         // (00-schema/65 and /66), so the two table kinds still share one query.
         String sql =
-                "SELECT table_id, field_name, is_primary_key, is_foreign_key, ref_table_id, " +
+                "SELECT table_id, field_name, data_type, is_primary_key, is_foreign_key, ref_table_id, " +
                 "       ref_primary_key_fields, pk_generation_json, fk_display_mode, " +
                 "       is_computed, computed_field_json " +
                 "FROM " + table + " WHERE table_id IN (" + placeholders + ") " +
@@ -258,6 +258,7 @@ public class FormTableBindingLoader {
             }
             TableFieldDefinitionDTO field = TableFieldDefinitionDTO.builder()
                     .fieldName(rs.getString("field_name"))
+                    .dataType(rs.getString("data_type"))
                     .isPrimaryKey(rs.getBoolean("is_primary_key"))
                     .isForeignKey(rs.getBoolean("is_foreign_key"))
                     .refTableId(readNullableLong(rs, "ref_table_id"))

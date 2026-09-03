@@ -128,7 +128,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
     formData.value = { ...formData.value, __subTables__: savedMap }
 
     for (const b of bindings) {
-      if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
+      if (isSharedAttachmentFileBinding(b)) {
         continue
       }
       const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })
@@ -224,7 +224,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
         },
         pk
       )
-      if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
+      if (isSharedAttachmentFileBinding(b)) {
         continue
       }
       /** Initiator full case: MI collection rows come from this binding's slice only — never global allSlices (injects People / duplicate placeholders). */
@@ -355,7 +355,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
     ]
 
     for (const b of all) {
-      if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
+      if (isSharedAttachmentFileBinding(b)) {
         continue
       }
       const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })

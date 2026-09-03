@@ -41,6 +41,8 @@ export type MiBindingKind = 'collection' | 'participant-child' | 'shared'
 export interface MiKindFieldDef {
   fieldName?: string
   isForeignKey?: boolean
+  /** 设计器列类型（{@code data_type}）：VARCHAR / TEXT / FILE / …。`FILE` 表示这一列存上传文件。 */
+  dataType?: string | null
   /** FK 指向的表 id（{@code dw_table_definitions.id}）。 */
   refTableId?: number | null
 }
@@ -51,6 +53,18 @@ export interface MiKindBindingLike {
   /** {@code dw_form_table_bindings.binding_link_mode}。 */
   bindingLinkMode?: string | null
   fieldDefinitions?: MiKindFieldDef[] | null
+}
+
+/**
+ * 设计器把这张表的某一列声明成了文件列（{@code data_type = 'FILE'}）。
+ *
+ * <p>这是「这张表装的是上传文件」的**权威判据**。曾经靠列名 `file` 或表名 `attachment` 猜 ——
+ * 前者会把普通 `file_path:VARCHAR` 列的表误判成附件表，后者改个表名就失效。
+ */
+export function bindingHasDesignerFileColumn(binding: MiKindBindingLike | null | undefined): boolean {
+  return (binding?.fieldDefinitions ?? []).some(
+    f => String(f?.dataType ?? '').trim().toUpperCase() === 'FILE',
+  )
 }
 
 /** 分类的上下文：谁是 collection、谁是主表。两者都来自配置。 */

@@ -5,12 +5,12 @@
 
 import {
   bindingDeclaresMiParticipantRow,
+  bindingHasDesignerFileColumn,
   resolveMiBindingKindFromConfig,
   type MiKindContext,
   type MiKindFieldDef,
 } from './miBindingKindFromConfig'
 import { SUB_TABLE_ROW_META_KEYS } from './internal'
-import { normalizeSubTableName } from './subTableCore'
 import { getActiveMiFieldNames } from './useMiConfig'
 
 /** Runtime / MI dashboard keys that must not become inferred sub-table columns or leak into non-MI bindings. */
@@ -152,21 +152,46 @@ export function isFileOnlySubTableBinding(binding: {
   return fields.length > 0 && fields.every(f => f === 'file')
 }
 
-export function isSharedAttachmentFileBinding(binding: {
-  bindingId?: number
-  tableId?: number | null
-  tableName?: string
-  physicalTableName?: string
-  foreignKeyField?: string | null
-  columns?: Array<{ field?: string }> | null
-}): boolean {
-  const tn = normalizeSubTableName(binding.tableName ?? binding.physicalTableName ?? '')
-  if (tn === 'attachment') return true
-  if (binding.tableId != null && Number(binding.tableId) === 74) return true
-  const fk = String(binding.foreignKeyField ?? '').trim().toLowerCase()
-  if (fk !== 'main_id') return false
-  const cols = binding.columns ?? []
-  return cols.some(c => String(c?.field ?? '').trim() === 'file')
+/**
+ * 「流程级共享的附件表」—— 全案共享一份文件，不属于任何 MI 参与者切片。
+ *
+ * <p><b>判据全部来自设计器配置</b>：
+ * <ol>
+ *   <li>表里有 {@code data_type = 'FILE'} 的列（{@link bindingHasDesignerFileColumn}）——
+ *       「这张表装的是上传文件」；</li>
+ *   <li>它不是 MI participant-child（字段级 FK 没有指向 collection）——
+ *       指向 collection 的附件表是**某个参与者自己的**附件，必须按参与者分片。</li>
+ * </ol>
+ *
+ * <p><b>删掉的猜法</b>（改名/换环境即失效，实测当前 demo FU 上只是碰巧对）：
+ * <ul>
+ *   <li>{@code tableName === 'attachment'} —— 改表名就坏；</li>
+ *   <li>{@code tableId === 74} —— 魔数，当前库里根本不存在这个 id；</li>
+ *   <li>{@code foreignKeyField === 'main_id'} + 列名叫 {@code file} ——
+ *       现场真实外键是 {@code main_idva}，这条分支其实早已失效；列名 {@code file} 也可能被改名，
+ *       而普通 {@code file_path:VARCHAR} 列（Documents 表）会被它误判成附件表。</li>
+ * </ul>
+ *
+ * <p><b>配置不足时返回 {@code false}</b>：调用方据此走「普通子表」路径（按 binding 自己的 slice
+ * 渲染），显示可能不完整但用户看得见；而误判成共享附件会跳过参与者分片，把**别人的附件**
+ * 显示/写进当前参与者 —— 返回 false 是安全的一侧。
+ */
+export function isSharedAttachmentFileBinding(
+  binding: {
+    bindingId?: number
+    tableId?: number | null
+    tableName?: string
+    physicalTableName?: string
+    foreignKeyField?: string | null
+    bindingLinkMode?: string | null
+    fieldDefinitions?: MiKindFieldDef[] | null
+    columns?: Array<{ field?: string }> | null
+  },
+  ctx?: MiKindContext | null,
+): boolean {
+  if (!bindingHasDesignerFileColumn(binding)) return false
+  // 指向 collection 的附件表是参与者私有的，不能当成全案共享。
+  return resolveMiBindingKindFromConfig(binding, ctx) !== 'participant-child'
 }
 
 const MI_ASSIGNEE_FIELD_KEYS = ['assignee', 'assignee_user_id', 'assignee_id'] as const
