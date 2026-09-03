@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
+import { ElSelect } from 'element-plus'
 import {
+  commitDesignerPanelEditsBeforePreview,
   flushDesignerValidatePanelToActiveRule,
   flushDesignerPropsPanelToActiveRule,
   installFcDesignerPreviewCapture,
@@ -7,6 +11,81 @@ import {
   prepareDesignerPreviewValidation,
   wrapFcDesignerOpenPreview,
 } from '../formDesignerPreviewValidation'
+
+/**
+ * Build a focused control inside the fc-designer right property panel (`._fc-r`).
+ * `expanded` mirrors Element Plus marking an open Select/Cascader/DatePicker trigger
+ * with aria-expanded="true" on the focused combobox input.
+ */
+function mountPanelControl(expanded: boolean): HTMLInputElement {
+  const panel = document.createElement('div')
+  panel.className = '_fc-r'
+  const input = document.createElement('input')
+  if (expanded) input.setAttribute('aria-expanded', 'true')
+  panel.appendChild(input)
+  document.body.appendChild(panel)
+  input.focus()
+  return input
+}
+
+describe('commitDesignerPanelEditsBeforePreview', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('blurs a plain focused control in the property panel so pending text edits commit', () => {
+    const input = mountPanelControl(false)
+    const blur = vi.spyOn(input, 'blur')
+    commitDesignerPanelEditsBeforePreview()
+    expect(blur).toHaveBeenCalled()
+  })
+
+  // Regression: the auto-save poll calls this on every tick. Blurring a control whose popper
+  // is open makes Element Plus set expanded=false, so every property-panel dropdown (Sub Table
+  // Binding, Lookup, Link Form ...) shut itself within one poll interval of opening and could
+  // not be used. Such controls commit on `change`, not on blur — skipping loses no edit.
+  it('leaves a control with an open popper focused so its dropdown stays open', () => {
+    const input = mountPanelControl(true)
+    const blur = vi.spyOn(input, 'blur')
+    commitDesignerPanelEditsBeforePreview()
+    expect(blur).not.toHaveBeenCalled()
+  })
+
+  it('ignores focus outside the designer panels', () => {
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    outside.focus()
+    const blur = vi.spyOn(outside, 'blur')
+    commitDesignerPanelEditsBeforePreview()
+    expect(blur).not.toHaveBeenCalled()
+  })
+
+  // The tests above assert against a hand-built aria-expanded input, i.e. against our own
+  // reading of the markup. This one drives a REAL ElSelect so the guard is pinned to Element
+  // Plus's actual DOM: if an upgrade stops marking the open trigger with aria-expanded, the
+  // guard silently stops working and only this test catches it.
+  it('leaves a real open ElSelect in the panel untouched', async () => {
+    const panel = document.createElement('div')
+    panel.className = '_fc-r'
+    document.body.appendChild(panel)
+
+    const select = mount(ElSelect, { attachTo: panel, props: { modelValue: null } })
+    await select.find('.el-select__wrapper').trigger('click')
+    await nextTick()
+
+    const inner = panel.querySelector('input') as HTMLInputElement
+    expect(inner).toBeTruthy()
+    inner.focus()
+    // Sanity: Element Plus really does mark the open trigger this way.
+    expect((document.activeElement as HTMLElement).closest('[aria-expanded="true"]')).toBeTruthy()
+
+    const blur = vi.spyOn(inner, 'blur')
+    commitDesignerPanelEditsBeforePreview()
+    expect(blur).not.toHaveBeenCalled()
+
+    select.unmount()
+  })
+})
 
 describe('formDesignerPreviewValidation', () => {
   it('mergePreviewValidateFormOption hides the built-in submit button and enables showMessage', () => {

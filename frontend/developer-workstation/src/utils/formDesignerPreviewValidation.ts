@@ -168,11 +168,34 @@ export function flushDesignerPropsPanelToActiveRule(
   }
 }
 
-/** Blur focused config-panel control so fc-designer commits pending validate/base edits. */
+/**
+ * A control with an OPEN popper (Select / Cascader / DatePicker / autocomplete) is
+ * mid-interaction: Element Plus `afterBlur()` sets `expanded = false`, so blurring it takes
+ * the list away before the author can pick anything. Its usual escape hatch does not apply
+ * here — the "focus merely moved inside my own wrapper" check reads `event.relatedTarget`,
+ * and a programmatic `.blur()` reports `null`, so the popper always closes.
+ *
+ * The auto-save poll calls the flush helpers on every tick, which made every config-panel
+ * dropdown (e.g. Sub Table Binding) shut itself within one poll interval of opening. Such
+ * controls commit on `change`, not on blur, so skipping them loses no pending edit — only
+ * free-text inputs need the blur to emit.
+ */
+function hasOpenPopperInteraction(active: HTMLElement): boolean {
+  // Element Plus marks the live trigger of an open popper with aria-expanded="true" — on the
+  // focused combobox input itself for Select, or on an ancestor tooltip/popper trigger for
+  // controls that do not focus an inner combobox.
+  return !!active.closest('[aria-expanded="true"]')
+}
+
+/**
+ * Blur focused config-panel control so fc-designer commits pending validate/base edits.
+ * Never blurs a control whose popper is open — see {@link hasOpenPopperInteraction}.
+ */
 export function commitDesignerPanelEditsBeforePreview(): void {
   const active = document.activeElement
   if (!(active instanceof HTMLElement)) return
   if (!active.closest('._fc-m-con, ._fc-r, ._fd-config, .form-editor-view')) return
+  if (hasOpenPopperInteraction(active)) return
   active.blur()
 }
 
