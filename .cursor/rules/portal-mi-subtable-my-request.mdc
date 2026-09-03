@@ -54,6 +54,37 @@ MI 的字段名由每个 FU 在 developer-workstation 的 **Sub-Task Config**（
 写死会让「PK 不叫 `id_idw` / 状态列不叫 `task_status` / 表不叫 `participants`」的 FU **静默失效**，
 且**只在那个 FU 上复现**——这是 MI 反复出问题的结构性根因。
 
+### Assignment Type 显示成 Direct Assignment —— 先查数据再改代码
+
+按角色分派的 MI 子任务应显示 **BU Role**。它依赖一条**四段链路**，任何一段断掉都退回
+"Direct Assignment"：
+
+```
+引擎 MultiInstanceTaskWriter.handleRoleModeAssignment
+  → wf_extended_task_info.extended_properties.assigneeMode = "role"
+  → 引擎 TaskInfoAssembler 透出 miAssigneeMode
+  → portal BuRolePoolTasks.isMiRoleAssignedTask
+```
+
+**排查顺序（先数据、后代码）**：
+
+```sql
+-- ① 这个实例到底有没有写入？（2026-09-03 实测：报障实例 0 行，其它实例都有）
+SELECT process_instance_id, count(*) FROM wf_extended_task_info GROUP BY 1;
+-- ② 有行的话，角色那条带 assigneeMode 了吗？
+SELECT task_id, assignment_type, extended_properties::text
+FROM wf_extended_task_info WHERE process_instance_id = '<pid>';
+```
+
+- **整个实例 0 行**（连按人分派的任务也没有）→ 写入器**根本没跑**，不是标签逻辑的问题。
+  多半是那次运行的一次性异常（引擎重启/重建时机等）。**新发起一个实例复验**：
+  新实例正常就不要改代码——2026-09-03 就是这个结论（新实例写入了
+  `assigneeMode:"role"` + `roleCodes`，标签正确）。
+- **有行但缺 `assigneeMode`** → 才轮到查 `roleField` 配置与 `handleRoleModeAssignment` 的早退分支。
+
+> 别只看 BPMN：报障实例与正常实例的 `assigneeMode` / `roleField` / `assigneeType`
+> 逐字段一致，配置不是原因。也别急着改判据——`aba30ec13` 的判据是对的。
+
 **配置缺失时 MUST 报错，不得猜列名。** 判据是「这个问题**只有配置**能回答，还是**平台自己**定义了答案」：
 
 | 情形 | 处理 | 入口 |
