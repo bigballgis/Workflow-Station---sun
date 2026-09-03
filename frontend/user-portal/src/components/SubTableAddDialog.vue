@@ -116,6 +116,7 @@
                     filterable
                     clearable
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: any) => onBuChange(v)"
                   />
@@ -130,6 +131,7 @@
                     :disabled="isColDisabled(col) || !formData[configuredBuField]"
                     filterable
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: string) => onRoleChange(v)"
                   >
@@ -191,6 +193,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -273,6 +276,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -371,6 +375,7 @@
                     v-model="formData[col.field]"
                     :show-alpha="col.props?.showAlpha || false"
                     :disabled="isColDisabled(col)"
+                    :teleported="true"
                     :popper-class="colorPopperClass"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -482,7 +487,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    :popper-class="datePopperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -537,6 +542,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -561,6 +567,7 @@
                     :disabled="isColDisabled(col)"
                     filterable
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -881,9 +888,9 @@ function highestOverlayZIndex(): number {
 }
 
 /**
- * Layer for THIS dialog's date / colour pickers.
+ * Layer for THIS dialog's teleported select / date / colour poppers.
  *
- * The pickers are teleported to body, so they cannot inherit the dialog's layer through the
+ * The poppers are teleported to body, so they cannot inherit the dialog's layer through the
  * DOM and are given it through a custom property instead. That property must be per-dialog,
  * not global: a nested sub-table's dialog opens while its parent dialog is still open, so a
  * single shared `:root` value would be overwritten by the nested dialog and leave the parent's
@@ -893,6 +900,7 @@ function highestOverlayZIndex(): number {
  * poppers via a stylesheet rule keyed on the instance id.
  */
 const popperClassSuffix = dialogInstanceId
+const overlayPopperClass = `sub-table-dialog-popper ${popperClassSuffix}`
 const datePopperClass = `sub-table-date-popper ${popperClassSuffix}`
 const colorPopperClass = `sub-table-color-popper ${popperClassSuffix}`
 
@@ -1345,7 +1353,8 @@ watch(
    soon as a nested sub-table dialog opened over its parent. This base value only applies
    before the first open. */
 .sub-table-date-popper,
-.sub-table-color-popper {
+.sub-table-color-popper,
+.sub-table-dialog-popper {
   z-index: 2050;
 }
 
