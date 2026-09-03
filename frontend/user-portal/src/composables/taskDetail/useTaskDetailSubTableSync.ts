@@ -24,6 +24,7 @@ import {
   bindingIdsPreferStrictSubTableLookup,
   subTableBindingMatches,
 } from './subTableRowUtils'
+import { resolveMiBindingKindFromConfig } from '@/composables/tasks/miBindingKindFromConfig'
 import type { TaskDetailCtx } from './context'
 
 export interface TaskDetailSyncFns {
@@ -352,7 +353,20 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
           )
         }
       }
-      if (fullSnap && isSharedAttachmentFileBinding(binding)) {
+      /**
+       * 共享附件表：把 MI 隔离前的全量快照并回来，避免某个子任务保存时丢掉别的行。
+       *
+       * <p><b>但并集表达不了「删除」。</b>{@link mergeSubTableRowsByRowId} 按主键取并集，
+       * 「在快照里、不在界面上」的行永远保留 —— 用户删掉一行点 Save，这里会把它原样填回去，
+       * 请求体仍是 3 行、数据库也仍是 3 行（2026-09-03 实测：uiRows=2 与 snapRows=3 合并回 3）。
+       *
+       * <p>全案共享表（FK 指向主表）**不按参与者分片**，当前用户界面上看到的就是全部行，
+       * 所以界面行集即权威结果，直接用它、不并快照。只有在判不出是不是全案共享时才保留并集
+       * （最多删不掉，不会跨参与者丢数据）—— 与 {@code useTaskDetailMiPersist} 的
+       * {@code bindingIsWholeRequestShared} 同一判据、同一理由。
+       */
+      if (fullSnap && isSharedAttachmentFileBinding(binding)
+          && resolveMiBindingKindFromConfig(binding as never, null) !== 'shared') {
         const snapRows = ctx.getSavedSubTableRows(fullSnap, binding) ?? []
         if (Array.isArray(snapRows) && snapRows.length > 0) {
           rows = cloneSubTableRows(

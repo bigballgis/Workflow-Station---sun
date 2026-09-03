@@ -123,4 +123,29 @@ describe('shared sub-table deletion survives Save', () => {
     } as never
     expect(resolveMiBindingKindFromConfig(unknown, null)).toBeNull()
   })
+
+  /**
+   * 第二个并集点（2026-09-03 实测漏网）：`patchFormDataSubTablesFromCurrentBindings` 里
+   * 对共享附件 binding 把「MI 隔离前的全量快照」并回 `binding.data`。
+   *
+   * <p>那段并集是为了避免某个子任务保存时丢掉别的行，但它同样表达不了删除：
+   * 实测埋点 `uiRows=2` 与 `snapRows=3` 合并后又变回 3，提交请求体里仍是 3 行。
+   * 全案共享表不按参与者分片，界面行集即权威 —— 该并集必须跳过。
+   */
+  it('shared binding: the pre-isolation snapshot merge must be skipped too', () => {
+    register()
+    const snapRows = [{ idfa: 'a' }, { idfa: 'b' }, { idfa: 'c' }]
+    const uiRows = [{ idfa: 'a' }, { idfa: 'b' }]
+
+    // patchFormDataSubTablesFromCurrentBindings 的等价判定
+    const skipSnapshotMerge =
+      resolveMiBindingKindFromConfig(attachmentBinding, null) === 'shared'
+    const out = skipSnapshotMerge
+      ? uiRows
+      : mergeSubTableRowsByRowId(snapRows, uiRows, ['idfa'])
+
+    expect(skipSnapshotMerge).toBe(true)
+    expect(out).toHaveLength(2)
+    expect(out.map((r) => r.idfa)).not.toContain('c')
+  })
 })
