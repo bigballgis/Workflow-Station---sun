@@ -1022,7 +1022,8 @@ defineExpose({
  * date poppers on form-below-table open under the table stacking context.
  */
 .form-renderer-popper {
-  z-index: 5000 !important;
+  /* Above the live Link Form / Add-Edit overlay (useSubTableDialogOverlay). */
+  z-index: var(--sub-table-dialog-popper-z, 6000) !important;
 }
 
 .form-renderer {

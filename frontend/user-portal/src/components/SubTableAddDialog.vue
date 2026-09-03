@@ -4,6 +4,7 @@
     <div
       v-if="visible"
       class="sub-table-backdrop"
+      :style="{ zIndex: backdropZIndex }"
       role="presentation"
       aria-hidden="true"
       @click="handleClose"
@@ -15,7 +16,7 @@
     :width="dialogWidth"
     :close-on-click-modal="false"
     :modal="false"
-    :z-index="2010"
+    :z-index="dialogZIndex"
     append-to-body
     @update:model-value="handleClose"
     @close="handleClose"
@@ -113,6 +114,7 @@
                     filterable
                     clearable
                     :teleported="true"
+                    :popper-class="popperClass"
                     style="width: 100%"
                     @change="(v: any) => onBuChange(v)"
                   />
@@ -127,6 +129,7 @@
                     :disabled="isColDisabled(col) || !formData[configuredBuField]"
                     filterable
                     :teleported="true"
+                    :popper-class="popperClass"
                     style="width: 100%"
                     @change="(v: string) => onRoleChange(v)"
                   >
@@ -188,6 +191,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="popperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -270,6 +274,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="popperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -368,6 +373,7 @@
                     v-model="formData[col.field]"
                     :show-alpha="col.props?.showAlpha || false"
                     :disabled="isColDisabled(col)"
+                    :teleported="true"
                     popper-class="sub-table-color-popper"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -534,6 +540,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="popperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -558,6 +565,7 @@
                     :disabled="isColDisabled(col)"
                     filterable
                     :teleported="true"
+                    :popper-class="popperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -683,6 +691,7 @@ import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useS
 import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubTableDialogUpload'
 import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
 import { useSubTableDialogComponentEvents } from '@/composables/subTableAddDialog/useSubTableDialogComponentEvents'
+import { useSubTableDialogOverlay } from '@/composables/subTableAddDialog/useSubTableDialogOverlay'
 import { useSubTableDialogSensitiveMask } from '@/composables/subTableAddDialog/useSubTableDialogSensitiveMask'
 import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
@@ -794,6 +803,10 @@ const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
   (e: 'save', rowData: Record<string, any>): void
 }>()
+
+const { dialogZIndex, backdropZIndex, popperClass } = useSubTableDialogOverlay(
+  toRef(props, 'visible'),
+)
 
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
@@ -1234,7 +1247,9 @@ watch(
 <style>
 @use '@/styles/form-readonly.scss';
 
-/* 遮罩经 Teleport 挂 body；z-index 2009 低于 dialog(2010)，picker 用 popper-class 抬到 2050 */
+/* Backdrop + dialog z-index come from useSubTableDialogOverlay (EP useZIndex).
+   Poppers teleport to body; without a z-index above the dialog, select/date
+   panels open behind it (Merchant Credit empty-looking, date calendar missing). */
 .sub-table-backdrop {
   position: fixed;
   top: 0;
@@ -1242,16 +1257,12 @@ watch(
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 2009;
 }
 
-/* Scoped popper styles using popper-class (Req 31) */
-.sub-table-date-popper {
-  z-index: 2050;
-}
-
-.sub-table-color-popper {
-  z-index: 2050;
+.sub-table-date-popper,
+.sub-table-color-popper,
+.sub-table-dialog-popper {
+  z-index: var(--sub-table-dialog-popper-z, 5000) !important;
 }
 
 /* Adjacent designer cards — same 10px gap as FormRenderer / DW Preview */

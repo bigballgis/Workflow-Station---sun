@@ -418,6 +418,7 @@
       <div
         v-if="linkFormDialogVisible"
         class="link-form-modal-overlay"
+        :style="{ zIndex: linkFormOverlayZ }"
       >
         <div
           ref="linkFormModalPanelRef"
@@ -585,6 +586,7 @@ import { formatAssigneeDisplayLabel, useSubTableAssignment } from '@/composables
 import { useSubTableAssigneeHydration } from '@/composables/subTableField/useSubTableAssigneeHydration'
 import { useSubTablePollingSync } from '@/composables/subTableField/useSubTablePollingSync'
 import { useSubTableRowDialog } from '@/composables/subTableField/useSubTableRowDialog'
+import { useSubTableDialogOverlay } from '@/composables/subTableAddDialog/useSubTableDialogOverlay'
 
 const { t } = useI18n()
 
@@ -950,6 +952,8 @@ const {
   handleLinkedSubTableUpdate
 } = linkFormDialog
 
+const { dialogZIndex: linkFormOverlayZ } = useSubTableDialogOverlay(linkFormDialogVisible)
+
 const { handleLinkFormClick } = useSubTableLinkFormOpen(props, linkFormDialog, linkFormScope)
 
 const { uploadNames, previewStoredFile, uploadCellLabel } = useSubTableFileDownload(t)
@@ -1299,7 +1303,6 @@ onBeforeUnmount(() => {
 .link-form-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 5000;
   display: flex;
   align-items: center;
   justify-content: center;

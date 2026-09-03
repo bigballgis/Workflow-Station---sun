@@ -82,6 +82,7 @@
         :disabled="isDisabled"
         clearable
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
         @blur="onBlur"
@@ -149,6 +150,7 @@
         :disabled="isDisabled"
         value-format="YYYY-MM-DD"
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />
@@ -163,6 +165,7 @@
         :disabled="isDisabled"
         value-format="YYYY-MM-DD HH:mm:ss"
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />
@@ -179,6 +182,7 @@
         :disabled="isDisabled"
         value-format="YYYY-MM-DD"
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />
@@ -192,6 +196,7 @@
         :disabled="isDisabled"
         value-format="HH:mm:ss"
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />
@@ -207,6 +212,7 @@
         :end-placeholder="(field as any).endPlaceholder || t('common.endDate')"
         :disabled="isDisabled"
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />
@@ -222,6 +228,7 @@
         :disabled="isDisabled"
         clearable
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
         @blur="onBlur"
@@ -240,6 +247,7 @@
         :remote-method="(query: string) => searchUsers(query, field)"
         clearable
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
         @blur="onBlur"
@@ -264,6 +272,7 @@
         check-strictly
         clearable
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
         @blur="onBlur"
@@ -281,6 +290,7 @@
         :disabled="isDisabled"
         clearable
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
         @blur="onBlur"
@@ -339,6 +349,8 @@
         v-else
         :model-value="modelValue"
         :disabled="isDisabled"
+        :teleported="true"
+        popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />
     </template>
@@ -567,6 +579,7 @@
         clearable
         filterable
         style="width: 100%"
+        :teleported="true"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
       />

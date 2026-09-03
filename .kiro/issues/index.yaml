@@ -3119,4 +3119,21 @@
     验证：formFieldMeta + useTableFieldRules.auditFields 单测通过；
     pnpm run build；compose rebuild developer-workstation-frontend。
 
+- id: "1589"
+  status: fixed
+  fixed_at: "2026-09-03"
+  severity: major
+  category: bug
+  summary: "Link Form Add ATM Transaction: Merchant Credit list and Temporary Refund Date calendar open behind the overlay"
+  file: "frontend/user-portal/src/composables/subTableAddDialog/useSubTableDialogOverlay.ts"
+  note: |
+    反例：ATM-DC-PW-000025 Transaction Investigation → ATM Transaction Link Form
+    「Add ATM Transaction」Financial adjustment 可编辑，Merchant Credit 下拉无选项、
+    Temporary Refund Date 点不出日历，手动输入仍可 Save。
+    根因：Link Form overlay 硬编码 z-index 5000，与 .form-renderer-popper 同层；
+    EP select/date popper teleport 到 body 后画在遮罩后面。输入框仍在 panel 内所以能打字。
+    修复：打开时 useZIndex().nextZIndex()，--sub-table-dialog-popper-z = overlay+50；
+    FieldRenderer teleported=true；Add/Edit 对话框同一套叠加。
+    验证：overlay 3008 / popper 3058；截图 merchant-credit-open_after-fix 可见 Y/N，
+    refund-date-open_after-fix 可见日历。
 
