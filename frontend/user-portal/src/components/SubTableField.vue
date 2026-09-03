@@ -467,6 +467,12 @@
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
                   :field-permissions="fieldPermissions"
                   :assignment-config="(selectedLinkBinding as any)?.assignmentConfig"
+                  :host-table-id="selectedLinkBinding.tableId ?? null"
+                  :host-field-definitions="(selectedLinkBinding as any)?.fieldDefinitions"
+                  :host-function-unit-id="functionUnitId"
+                  :host-task-id="taskId"
+                  :host-primary-form-data="primaryFormData"
+                  :host-primary-table-id="primaryTableId ?? null"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
                 />
               </el-row>

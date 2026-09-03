@@ -227,8 +227,58 @@ export function useSubTableRowDialog(
     emit('update:modelValue', [...rows.value])
   }
 
+  /**
+   * Layer for a confirm raised from this grid.
+   *
+   * Element Plus assigns MessageBox a z-index from its own global counter, which knows nothing
+   * about the hand-rolled overlays this app draws — the Link Form modal sits at 5000. A People
+   * grid inside that modal therefore raised its delete confirm UNDERNEATH it: the row never
+   * disappeared and the page looked frozen behind an invisible modal.
+   *
+   * Measure the overlays actually on screen and go above the highest, same rule
+   * SubTableAddDialog follows for itself.
+   */
+  function confirmZIndex(): number {
+    const selectors = '.el-overlay, .el-dialog__wrapper, .el-popper, .link-form-modal-overlay'
+    let highest = 0
+    for (const el of document.querySelectorAll<HTMLElement>(selectors)) {
+      if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') continue
+      const z = Number.parseInt(getComputedStyle(el).zIndex || '', 10)
+      if (Number.isFinite(z)) highest = Math.max(highest, z)
+    }
+    // 0 → nothing stacked; let Element Plus pick as before.
+    return highest > 0 ? highest + 2 : 0
+  }
+
+  /**
+   * Raise the confirm to `z`. `zIndex` is NOT part of ElMessageBoxOptions — it lives on the
+   * box's internal state and is ignored when passed in — so the layer is applied through a
+   * `customClass` plus a rule injected for it, and both are cleaned up once the box closes.
+   */
+  const CONFIRM_LAYER_CLASS = 'sub-table-confirm-above-modal'
+
+  function applyConfirmLayer(z: number): () => void {
+    const style = document.createElement('style')
+    // `customClass` lands on `.el-message-box`, but the element that actually forms the
+    // stacking context is its `.el-overlay.is-message-box` ancestor (with an
+    // `.el-overlay-message-box` wrapper in between). Raise that ancestor — styling only the
+    // box itself leaves the whole overlay behind the modal it was opened from.
+    style.textContent = `.el-overlay.is-message-box:has(.${CONFIRM_LAYER_CLASS}) { z-index: ${z} !important; }`
+    document.head.appendChild(style)
+    return () => style.remove()
+  }
+
   async function deleteRow(i: number) {
-    await ElMessageBox.confirm(t('subTable.deleteConfirm'), t('common.confirm'), { type: 'warning' })
+    const z = confirmZIndex()
+    const cleanup = z > 0 ? applyConfirmLayer(z) : null
+    try {
+      await ElMessageBox.confirm(t('subTable.deleteConfirm'), t('common.confirm'), {
+        type: 'warning',
+        ...(z > 0 ? { customClass: CONFIRM_LAYER_CLASS } : {}),
+      })
+    } finally {
+      cleanup?.()
+    }
     rows.value.splice(i, 1)
     emit('update:modelValue', [...rows.value])
   }

@@ -4,9 +4,10 @@
     <div
       v-if="visible"
       class="sub-table-backdrop"
-      :style="{ zIndex: backdropZIndex }"
       role="presentation"
       aria-hidden="true"
+      :data-sub-table-dialog="dialogInstanceId"
+      :style="{ zIndex: dialogZIndex - 1 }"
       @click="handleClose"
     />
   </Teleport>
@@ -17,6 +18,7 @@
     :close-on-click-modal="false"
     :modal="false"
     :z-index="dialogZIndex"
+    :data-sub-table-dialog="dialogInstanceId"
     append-to-body
     @update:model-value="handleClose"
     @close="handleClose"
@@ -114,7 +116,7 @@
                     filterable
                     clearable
                     :teleported="true"
-                    :popper-class="popperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: any) => onBuChange(v)"
                   />
@@ -129,7 +131,7 @@
                     :disabled="isColDisabled(col) || !formData[configuredBuField]"
                     filterable
                     :teleported="true"
-                    :popper-class="popperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: string) => onRoleChange(v)"
                   >
@@ -191,7 +193,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    :popper-class="popperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -258,7 +260,7 @@
                     :end-placeholder="col.props?.endPlaceholder || t('subTable.endTime')"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="datePopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -274,7 +276,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    :popper-class="popperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -311,7 +313,7 @@
                     :placeholder="col.placeholder || col.label"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="datePopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -325,7 +327,7 @@
                     :placeholder="col.placeholder || col.label"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="datePopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -374,7 +376,7 @@
                     :show-alpha="col.props?.showAlpha || false"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-color-popper"
+                    :popper-class="colorPopperClass"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
 
@@ -485,7 +487,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -540,7 +542,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    :popper-class="popperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -565,7 +567,7 @@
                     :disabled="isColDisabled(col)"
                     filterable
                     :teleported="true"
-                    :popper-class="popperClass"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -662,7 +664,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, inject, nextTick, ref, toRef, watch } from 'vue'
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
@@ -691,7 +693,6 @@ import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useS
 import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubTableDialogUpload'
 import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
 import { useSubTableDialogComponentEvents } from '@/composables/subTableAddDialog/useSubTableDialogComponentEvents'
-import { useSubTableDialogOverlay } from '@/composables/subTableAddDialog/useSubTableDialogOverlay'
 import { useSubTableDialogSensitiveMask } from '@/composables/subTableAddDialog/useSubTableDialogSensitiveMask'
 import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
@@ -804,10 +805,6 @@ const emit = defineEmits<{
   (e: 'save', rowData: Record<string, any>): void
 }>()
 
-const { dialogZIndex, backdropZIndex, popperClass } = useSubTableDialogOverlay(
-  toRef(props, 'visible'),
-)
-
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
 
@@ -846,6 +843,94 @@ const editingRowStableId = computed<string | null>(() =>
  */
 const dialogWidth = computed(() =>
   props.nestedSubTables?.length ? 'min(1100px, calc(100vw - 48px))' : '600px')
+
+/**
+ * Base layer when this dialog opens straight from a page (nothing stacked above it).
+ * Kept as the historical value so the ordinary case renders exactly as before.
+ */
+const BASE_DIALOG_Z = 2010
+
+/**
+ * The layer this dialog (and its own backdrop, 1 below) must sit on.
+ *
+ * This dialog opens from several depths: directly on a form, and also from inside the Link
+ * Form modal, which is a hand-rolled overlay at z-index 5000. A fixed 2010 put the dialog
+ * BEHIND that overlay — the "Add" button on a nested sub-table appeared to do nothing, while
+ * the dialog was actually rendered and unreachable underneath.
+ *
+ * So measure instead of guessing: take the highest z-index among the overlays currently on
+ * screen and go above it. Recomputed on each open (not once at mount) because the same
+ * component instance can be opened from different depths during its lifetime.
+ */
+const dialogZIndex = ref(BASE_DIALOG_Z)
+
+/** Marks this instance's own nodes so a reopen never stacks on top of itself. */
+const dialogInstanceId = `sub-table-dialog-${Math.random().toString(36).slice(2, 10)}`
+
+function highestOverlayZIndex(): number {
+  // Every stacking surface that can legitimately be above the page: Element Plus's own
+  // overlays/poppers plus this app's hand-rolled modal panels.
+  const selectors = '.el-overlay, .el-dialog__wrapper, .el-popper, .link-form-modal-overlay'
+  let highest = 0
+  for (const el of document.querySelectorAll<HTMLElement>(selectors)) {
+    // Skip this instance's own nodes: counting them would ratchet the layer upward on every
+    // reopen. Matched by instance id rather than by content, because a dialog's markup varies
+    // with the design it renders (elCard groups, assignment block, …) and would not always
+    // identify itself. Other SubTableAddDialogs are NOT skipped — a nested one must clear
+    // the one it opened from.
+    if (el.closest(`[data-sub-table-dialog="${dialogInstanceId}"]`)) continue
+    if (el.querySelector(`[data-sub-table-dialog="${dialogInstanceId}"]`)) continue
+    if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') continue
+    const z = Number.parseInt(getComputedStyle(el).zIndex || '', 10)
+    if (Number.isFinite(z)) highest = Math.max(highest, z)
+  }
+  return highest
+}
+
+/**
+ * Layer for THIS dialog's teleported select / date / colour poppers.
+ *
+ * The poppers are teleported to body, so they cannot inherit the dialog's layer through the
+ * DOM and are given it through a custom property instead. That property must be per-dialog,
+ * not global: a nested sub-table's dialog opens while its parent dialog is still open, so a
+ * single shared `:root` value would be overwritten by the nested dialog and leave the parent's
+ * pickers resolving against the wrong (higher) layer once the nested one closed.
+ *
+ * Element Plus lets each popper carry its own class, so scope the variable to this instance's
+ * poppers via a stylesheet rule keyed on the instance id.
+ */
+const popperClassSuffix = dialogInstanceId
+const overlayPopperClass = `sub-table-dialog-popper ${popperClassSuffix}`
+const datePopperClass = `sub-table-date-popper ${popperClassSuffix}`
+const colorPopperClass = `sub-table-color-popper ${popperClassSuffix}`
+
+let popperLayerStyleEl: HTMLStyleElement | null = null
+
+function publishPopperLayer(z: number): void {
+  if (!popperLayerStyleEl) {
+    popperLayerStyleEl = document.createElement('style')
+    popperLayerStyleEl.dataset.subTableDialogPopperLayer = dialogInstanceId
+    document.head.appendChild(popperLayerStyleEl)
+  }
+  // +40 keeps a picker clear of its own dialog without reaching the next modal above it.
+  popperLayerStyleEl.textContent = `.${popperClassSuffix} { z-index: ${z + 40} !important; }`
+}
+
+onBeforeUnmount(() => {
+  popperLayerStyleEl?.remove()
+  popperLayerStyleEl = null
+})
+
+watch(
+  () => props.visible,
+  (open) => {
+    if (!open) return
+    // +2 leaves the slot directly beneath for this dialog's own backdrop.
+    dialogZIndex.value = Math.max(BASE_DIALOG_Z, highestOverlayZIndex() + 2)
+    publishPopperLayer(dialogZIndex.value)
+  },
+  { immediate: true, flush: 'post' },
+)
 
 /** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
 function nestedRowsFor(nested: NestedSubTableDescriptor): Record<string, unknown>[] {
@@ -1247,9 +1332,10 @@ watch(
 <style>
 @use '@/styles/form-readonly.scss';
 
-/* Backdrop + dialog z-index come from useSubTableDialogOverlay (EP useZIndex).
-   Poppers teleport to body; without a z-index above the dialog, select/date
-   panels open behind it (Merchant Credit empty-looking, date calendar missing). */
+/* 遮罩经 Teleport 挂 body。层级不再写死：dialog 打开时按屏幕上最高的浮层算出 z-index
+   （见 dialogZIndex），遮罩取它 -1，picker 取它 +40。这里的数值只是兜底，实际由内联
+   style / --sub-table-dialog-z 覆盖 —— 因为本弹窗既可能直接开在页面上，也可能开在
+   z-index 5000 的 Link Form 浮层里。 */
 .sub-table-backdrop {
   position: fixed;
   top: 0;
@@ -1257,12 +1343,19 @@ watch(
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
+  z-index: 2009;
 }
 
+/* Scoped popper styles using popper-class (Req 31).
+   The z-index is NOT set here: poppers are teleported to body and must clear whichever layer
+   their own dialog landed on, which is only known at open time. Each dialog instance injects
+   a rule for its own poppers (see publishPopperLayer) — a shared value here would be wrong as
+   soon as a nested sub-table dialog opened over its parent. This base value only applies
+   before the first open. */
 .sub-table-date-popper,
 .sub-table-color-popper,
 .sub-table-dialog-popper {
-  z-index: var(--sub-table-dialog-popper-z, 5000) !important;
+  z-index: 2050;
 }
 
 /* Adjacent designer cards — same 10px gap as FormRenderer / DW Preview */
