@@ -45,7 +45,7 @@ export function isWholeFormLockedByFieldPermissions(
   })
 }
 
-/** Same form / node may place multiple sub-tables backed by identical relation-table metadata — never resolve {@code __subTables__} by display/physical/tableId keys then (everyone steals the same slice). */
+/** Same form / node may place multiple sub-tables backed by identical relation-table metadata — never resolve {@code __subTables__} by display/designer-name/tableId keys then (everyone steals the same slice). */
 export function bindingIdsPreferStrictSubTableLookup(
   bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; designerTableName?: string }>,
 ): Set<number> {
@@ -85,13 +85,13 @@ export function subTableBindingMatches(
   target: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null },
   source: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null }
 ): boolean {
-  const targetPhysicalName = normalizeSubTableName(target.designerTableName)
-  const sourcePhysicalName = normalizeSubTableName(source.designerTableName)
-  if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
+  const targetDesignerName = normalizeSubTableName(target.designerTableName)
+  const sourceDesignerName = normalizeSubTableName(source.designerTableName)
+  if (targetDesignerName && sourceDesignerName && targetDesignerName === sourceDesignerName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)
-  const samePhysicalTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
-  return target.bindingId === source.bindingId || samePhysicalTable || (!!targetName && targetName === sourceName)
+  const sameDesignerTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
+  return target.bindingId === source.bindingId || sameDesignerTable || (!!targetName && targetName === sourceName)
 }
 
 /** Recursively unwrap Vue Proxy at every level — returns a plain clone. */
