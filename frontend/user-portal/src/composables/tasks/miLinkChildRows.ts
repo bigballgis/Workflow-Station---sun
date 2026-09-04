@@ -100,7 +100,7 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
   T extends {
     bindingId: number
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     data: any[]
     foreignKeyField?: string | null
     bindingLinkMode?: string | null

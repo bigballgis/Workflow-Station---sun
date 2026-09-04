@@ -84,7 +84,7 @@ describe('miSubProcessScope', () => {
   it('bindingMatchesMiSubTableName matches physical and display labels', () => {
     expect(
       bindingMatchesMiSubTableName(
-        { physicalTableName: 'HMDC_Transaction', tableName: 'HMDC Transaction' },
+        { designerTableName: 'HMDC_Transaction', tableName: 'HMDC Transaction' },
         'HMDC_Transaction',
       ),
     ).toBe(true)
@@ -97,7 +97,7 @@ describe('miSubProcessScope', () => {
     const bindings = [
       {
         bindingId: 63,
-        physicalTableName: 'People',
+        designerTableName: 'People',
         tableName: 'People',
         foreignKeyField: 'sub_task_id',
         primaryKeyFields: ['id'],
@@ -121,7 +121,7 @@ describe('miSubProcessScope', () => {
     const bindings = [
       {
         bindingId: 285,
-        physicalTableName: 'HMDC_Transaction',
+        designerTableName: 'HMDC_Transaction',
         tableName: 'HMDC Transaction',
         primaryKeyFields: ['row_id'],
         data: [{ row_id: 232424, assignee_id: 'u1' }, { row_id: 57666, assignee_id: 'u2' }],
@@ -137,7 +137,7 @@ describe('miSubProcessScope', () => {
       userTaskName: 'Transaction Investigation',
     })!
     const binding = {
-      physicalTableName: 'HMDC_Transaction',
+      designerTableName: 'HMDC_Transaction',
       tableName: 'HMDC Transaction',
       primaryKeyFields: ['row_id'],
       data: [{ row_id: 232424, assignee_id: 'u1' }, { row_id: 57666, assignee_id: 'u2' }],
@@ -192,7 +192,7 @@ describe('miSubProcessScope', () => {
     const bindings = [
       {
         bindingId: 1,
-        physicalTableName: 'HMDC_Transaction',
+        designerTableName: 'HMDC_Transaction',
         tableName: 'HMDC Transaction',
         primaryKeyFields: ['tenant_id', 'line_no'],
         data: [

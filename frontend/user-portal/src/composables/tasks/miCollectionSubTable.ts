@@ -234,7 +234,7 @@ export function buildMiCollectionSliceKeySet(
   bindings: Array<{
     bindingId: number
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
     columns?: Array<{ field?: string }> | null
   }>,
@@ -256,11 +256,11 @@ export function buildMiCollectionSliceKeySet(
   for (const b of bindings) {
     const matchesName =
       wantName != null &&
-      [b.physicalTableName, b.tableName].some(c => c != null && normalizeSubTableName(String(c)) === wantName)
+      [b.designerTableName, b.tableName].some(c => c != null && normalizeSubTableName(String(c)) === wantName)
     if (!matchesName && !isMiDashboardSubTableBinding(b)) continue
     keys.add(String(b.bindingId))
     addName(b.tableName)
-    addName(b.physicalTableName)
+    addName(b.designerTableName)
     const tid = b.tableId != null ? Number(b.tableId) : bindingTableById.get(b.bindingId)
     if (tid != null && Number.isFinite(Number(tid))) collTids.add(Number(tid))
   }

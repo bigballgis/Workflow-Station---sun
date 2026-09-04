@@ -37,7 +37,7 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
   T extends {
     bindingId: number
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
     data: any[]
     primaryKeyFields?: string[] | null | undefined
@@ -117,7 +117,7 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
             {
               bindingId: child.bindingId,
               tableName: child.tableName ?? '',
-              physicalTableName: child.physicalTableName,
+              designerTableName: child.designerTableName,
               tableId: child.tableId ?? null,
             },
             Array.isArray(parent.data) ? parent.data : [],
@@ -145,7 +145,7 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
           {
             bindingId: child.bindingId,
             tableName: child.tableName ?? '',
-            physicalTableName: child.physicalTableName,
+            designerTableName: child.designerTableName,
             tableId: child.tableId ?? null,
           },
           [parentRow],

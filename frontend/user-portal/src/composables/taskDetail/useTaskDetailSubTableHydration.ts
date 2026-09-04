@@ -31,7 +31,7 @@ export interface TaskDetailHydrationFns {
     binding: {
       bindingId: number
       tableName: string
-      physicalTableName?: string
+      designerTableName?: string
       tableId?: number | null
       primaryKeyFields?: string[] | null
       columns?: Array<{ field?: string }> | null
@@ -77,7 +77,7 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
     binding: {
       bindingId: number
       tableName: string
-      physicalTableName?: string
+      designerTableName?: string
       tableId?: number | null
       primaryKeyFields?: string[] | null
       columns?: Array<{ field?: string }> | null

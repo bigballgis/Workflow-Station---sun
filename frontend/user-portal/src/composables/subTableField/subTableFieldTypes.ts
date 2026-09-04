@@ -26,7 +26,7 @@ export interface SubTableBinding {
   bindingLinkMode?: string | null
   foreignKeyField?: string | null
   tableName: string
-  physicalTableName?: string
+  designerTableName?: string
   tableType: string
   tableDescription: string
   columns: Column[]
@@ -59,7 +59,7 @@ export interface NestedSubTableDescriptor {
    */
   tableId?: number | null
   fieldDefinitions?: BindingFieldDefinition[]
-  physicalTableName?: string
+  designerTableName?: string
   /** EDITABLE / READONLY（Table Design 的读写开关）。 */
   bindingMode?: string
   /**

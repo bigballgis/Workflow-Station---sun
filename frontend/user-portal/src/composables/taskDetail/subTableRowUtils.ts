@@ -47,7 +47,7 @@ export function isWholeFormLockedByFieldPermissions(
 
 /** Same form / node may place multiple sub-tables backed by identical relation-table metadata — never resolve {@code __subTables__} by display/physical/tableId keys then (everyone steals the same slice). */
 export function bindingIdsPreferStrictSubTableLookup(
-  bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; physicalTableName?: string }>,
+  bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; designerTableName?: string }>,
 ): Set<number> {
   const ambiguous = new Set<number>()
   if (!Array.isArray(bindings) || bindings.length <= 1) return ambiguous
@@ -67,8 +67,8 @@ export function bindingIdsPreferStrictSubTableLookup(
   const buckets = new Map<string, Set<number>>()
   for (const b of bindings) {
     bump(buckets, b.tableName, b.bindingId)
-    if (typeof b.physicalTableName === 'string' && b.physicalTableName.trim())
-      bump(buckets, b.physicalTableName, b.bindingId)
+    if (typeof b.designerTableName === 'string' && b.designerTableName.trim())
+      bump(buckets, b.designerTableName, b.bindingId)
     if (b.tableId != null && Number.isFinite(Number(b.tableId))) {
       bump(buckets, `__rtid:${Number(b.tableId)}`, b.bindingId)
     }
@@ -82,11 +82,11 @@ export function bindingIdsPreferStrictSubTableLookup(
 }
 
 export function subTableBindingMatches(
-  target: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
-  source: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null }
+  target: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null },
+  source: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null }
 ): boolean {
-  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
-  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
+  const targetPhysicalName = normalizeSubTableName(target.designerTableName)
+  const sourcePhysicalName = normalizeSubTableName(source.designerTableName)
   if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)

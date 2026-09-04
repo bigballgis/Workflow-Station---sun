@@ -39,7 +39,7 @@ describe('subTableRowMetaFields predicates', () => {
         bindingId: 104,
         tableId: 74,
         tableName: 'attachment',
-        physicalTableName: 'attachment',
+        designerTableName: 'attachment',
         foreignKeyField: 'main_id',
         columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
         // 共享附件按设计器列类型认（data_type='FILE'）
@@ -340,7 +340,7 @@ describe('subTableRowMetaFields predicates', () => {
     // lose every row on task detail (Review-step "Shipment shows no data").
     const shipmentBinding = {
       tableName: 'Shipment',
-      physicalTableName: 'nst_shipment',
+      designerTableName: 'nst_shipment',
       columns: [{ field: 'shipment_name' }, { field: 'carrier' }],
     }
     const rows = [

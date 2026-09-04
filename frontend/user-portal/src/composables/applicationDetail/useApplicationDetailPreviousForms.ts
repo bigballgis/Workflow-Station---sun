@@ -56,7 +56,7 @@ export function createApplicationDetailPreviousForms(ctx: ApplicationDetailCtx):
         // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
         bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
         tableName: b.tableDisplayName || b.tableName,
-        physicalTableName: b.tableName,
+        designerTableName: b.tableName,
         // 规范 key 的命名空间靠这两个字段判定 DW / RT；不带上则 rt: 切片解析不到
         relationTableId: (b as { relationTableId?: number | null }).relationTableId ?? null,
         relationTableName: (b as { relationTableName?: string | null }).relationTableName ?? null,
@@ -108,7 +108,7 @@ export function createApplicationDetailPreviousForms(ctx: ApplicationDetailCtx):
           savedSubTables,
           {
             bindingId: binding.bindingId,
-            tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
+            tableName: raw?.tableName ?? (binding as { designerTableName?: string }).designerTableName,
             tableDisplayName: raw?.tableDisplayName ?? binding.tableName,
             relationTableId: raw?.relationTableId ?? (binding as { relationTableId?: number | null }).relationTableId,
             relationTableName: raw?.relationTableName ?? (binding as { relationTableName?: string | null }).relationTableName

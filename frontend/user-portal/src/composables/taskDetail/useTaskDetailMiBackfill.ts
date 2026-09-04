@@ -122,7 +122,7 @@ export function createTaskDetailMiBackfill(ctx: TaskDetailCtx): TaskDetailMiBack
             Number(tableIdRaw),
             rtMap,
             binding.tableName,
-            binding.physicalTableName,
+            binding.designerTableName,
           ),
         )
       } else {
@@ -182,7 +182,7 @@ export function createTaskDetailMiBackfill(ctx: TaskDetailCtx): TaskDetailMiBack
           Number(bindingTid),
           rtMap,
           binding.tableName,
-          binding.physicalTableName,
+          binding.designerTableName,
         )
       } else {
         candidates = ctx.getSavedSubTableRows(flat, binding) ?? []
@@ -222,7 +222,7 @@ export function createTaskDetailMiBackfill(ctx: TaskDetailCtx): TaskDetailMiBack
           Number(tableIdRaw),
           rtMap,
           binding.tableName,
-          binding.physicalTableName,
+          binding.designerTableName,
         )
       }
       if (candidates.length === 0) {

@@ -274,7 +274,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
             bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
             tableName: b.tableDisplayName || b.tableName,
-            physicalTableName: b.tableName,
+            designerTableName: b.tableName,
             tableType: b.tableType,
             tableDescription: b.tableDescription,
             columns,
@@ -316,7 +316,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
               savedSubTables,
               {
                 bindingId: binding.bindingId,
-                tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
+                tableName: raw?.tableName ?? (binding as { designerTableName?: string }).designerTableName,
                 tableDisplayName: raw?.tableDisplayName ?? binding.tableName,
                 // 规范 key 的命名空间由「绑的是 DW 还是 RT 表」决定，缺了就会去 dw: 里找 rt: 的数据
                 relationTableId: raw?.relationTableId ?? (binding as { relationTableId?: number | null }).relationTableId,

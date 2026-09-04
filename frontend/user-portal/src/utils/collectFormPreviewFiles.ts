@@ -19,7 +19,7 @@ import { extractFileLinks } from '@platform-shared/list/fileNames'
 export interface PreviewBindingSlice {
   bindingId: number
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   tableId?: number | null
   columns?: Array<{ field: string; type?: string; props?: Record<string, unknown> }>
   dialogColumns?: Array<{ field: string; type?: string; props?: Record<string, unknown> }>
@@ -183,7 +183,7 @@ function walkBinding(
         {
           bindingId: child.bindingId,
           tableName: child.tableName || '',
-          physicalTableName: child.physicalTableName,
+          designerTableName: child.designerTableName,
           tableId: child.tableId,
         },
         [raw],

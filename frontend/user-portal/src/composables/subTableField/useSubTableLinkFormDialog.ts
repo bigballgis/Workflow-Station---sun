@@ -64,13 +64,13 @@ export function useSubTableLinkFormDialog(
             bindingId: pid,
             tableName: boundNameStripped || boundNameRaw,
             tableId: null,
-            physicalTableName: undefined
+            designerTableName: undefined
           },
           {
             bindingId: item.bindingId,
             tableName: item.tableName,
             tableId: item.tableId ?? null,
-            physicalTableName: item.physicalTableName
+            designerTableName: item.designerTableName
           }
         )
       }

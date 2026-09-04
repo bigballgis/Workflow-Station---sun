@@ -22,7 +22,7 @@ function compactLinkFormTableKey(name: string): string {
  */
 function findNestedChildRowsInSto(
   sto: Record<string, unknown>,
-  child: { bindingId: number; tableName: string; physicalTableName?: string }
+  child: { bindingId: number; tableName: string; designerTableName?: string }
 ): any[] | null {
   const tn = (name?: string) => normalizeSubTableName(String(name || ''))
   const nameRaw = String(child.tableName || '').trim()
@@ -41,8 +41,8 @@ function findNestedChildRowsInSto(
   if (nameStripped !== nameRaw) {
     candidates.push(sto[nameStripped], sto[tn(nameStripped)])
   }
-  if (child.physicalTableName) {
-    const p = String(child.physicalTableName).trim()
+  if (child.designerTableName) {
+    const p = String(child.designerTableName).trim()
     candidates.push(sto[p], sto[tn(p)])
   }
   for (const v of candidates) {
@@ -57,8 +57,8 @@ function findNestedChildRowsInSto(
       if (Array.isArray(v) && v.length > 0) return v as any[]
     }
   }
-  if (child.physicalTableName) {
-    const wantPhys = compactLinkFormTableKey(String(child.physicalTableName))
+  if (child.designerTableName) {
+    const wantPhys = compactLinkFormTableKey(String(child.designerTableName))
     if (wantPhys) {
       for (const rk of Object.keys(sto)) {
         if (compactLinkFormTableKey(rk) !== wantPhys) continue
@@ -72,12 +72,12 @@ function findNestedChildRowsInSto(
 
 /**
  * Walk every top-level row in {@code savedSubTables} and collect distinct nested {@code row.__subTables__[key]}
- * arrays that match the binding (numeric id, table name, physical name). Used when child rows only exist under
+ * arrays that match the binding (numeric id, display name, designer table name). Used when child rows only exist under
  * parent rows while the top-level slice for the child binding is thin or missing.
  */
 export function collectNestedSlicesForBindingFromSubTablesWalk(
   savedSubTables: Record<string, unknown> | null | undefined,
-  binding: { bindingId: number; tableName: string; physicalTableName?: string },
+  binding: { bindingId: number; tableName: string; designerTableName?: string },
 ): unknown[][] {
   if (!savedSubTables || typeof savedSubTables !== 'object') return []
   const candidates: string[] = []
@@ -92,7 +92,7 @@ export function collectNestedSlicesForBindingFromSubTablesWalk(
   const bid = Number(binding.bindingId)
   if (Number.isFinite(bid)) add(String(bid))
   add(binding.tableName)
-  add(binding.physicalTableName)
+  add(binding.designerTableName)
 
   const out: unknown[][] = []
   const seen = new WeakSet<object>()
@@ -118,13 +118,13 @@ export function collectNestedSlicesForBindingFromSubTablesWalk(
 /** True when a `__subTables__` slice key addresses this binding (numeric id or table-name alias). */
 function subTableSliceKeyBelongsToBinding(
   key: string,
-  binding: { bindingId: number; tableName?: string; physicalTableName?: string },
+  binding: { bindingId: number; tableName?: string; designerTableName?: string },
 ): boolean {
   const k = String(key).trim()
   if (!k) return false
   if (k === String(binding.bindingId)) return true
   const norm = normalizeSubTableName(k)
-  for (const name of [binding.tableName, binding.physicalTableName]) {
+  for (const name of [binding.tableName, binding.designerTableName]) {
     if (!name) continue
     const raw = String(name).trim()
     if (!raw) continue
@@ -136,7 +136,7 @@ function subTableSliceKeyBelongsToBinding(
 }
 
 export function pullNestedRowsForBindingFromParentRows(
-  child: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
+  child: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null },
   parentRows: any[],
   bindingTableById?: Map<number, number | null>
 ): any[] {
@@ -180,7 +180,7 @@ export function collectNestedChildRowsFromPeerBindings<
   T extends {
     bindingId: number
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
     data: any[]
   },
@@ -218,7 +218,7 @@ export function hydrateChildSubTablesFromParentsNestedRows<
   T extends {
     bindingId: number
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
     data: any[]
     primaryKeyFields?: string[] | null | undefined

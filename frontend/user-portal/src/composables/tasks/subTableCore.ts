@@ -15,11 +15,11 @@ export function stripLinkFormDesignerTableLabel(raw?: string): string {
 }
 
 export function subTableBindingMatches(
-  target: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
-  source: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null }
+  target: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null },
+  source: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null }
 ): boolean {
-  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
-  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
+  const targetPhysicalName = normalizeSubTableName(target.designerTableName)
+  const sourcePhysicalName = normalizeSubTableName(source.designerTableName)
   if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)

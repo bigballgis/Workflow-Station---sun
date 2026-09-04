@@ -207,7 +207,7 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
       : nextRows
     const out = cloneSubTableRows(merged)
 
-    const sync = (binding: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null; data: any[] }) => {
+    const sync = (binding: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null; data: any[] }) => {
       if (subTableBindingMatches(binding, source)) {
         binding.data = binding === source ? out : cloneSubTableRows(out)
       }

@@ -64,7 +64,7 @@ describe('miAssignmentConfig', () => {
   it('attaches config by physical table name without a fixed-field fallback', () => {
     const bindings = [{
       tableName: 'Participants',
-      physicalTableName: 'mi_participants',
+      designerTableName: 'mi_participants',
     }]
     attachAssignmentConfigsToBindings(bindings, {
       mi_participants: genericBoth,

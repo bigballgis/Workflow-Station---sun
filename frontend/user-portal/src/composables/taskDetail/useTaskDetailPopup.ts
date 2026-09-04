@@ -99,7 +99,7 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
         bindingMode: b.bindingMode,
         foreignKeyField: b.foreignKeyField,
         tableName: b.tableDisplayName || b.tableName,
-        physicalTableName: b.tableName,
+        designerTableName: b.tableName,
         relationTableId: (b as any).relationTableId ?? null,
         relationTableName: (b as any).relationTableName ?? null,
         tableType: b.tableType,

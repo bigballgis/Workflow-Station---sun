@@ -15,14 +15,14 @@ export function linkFormTableMatchKey(name?: string): string {
 }
 
 export function subTableBindingMatches(
-  target?: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null } | null,
-  source?: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null } | null
+  target?: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null } | null,
+  source?: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null } | null
 ): boolean {
   if (!target || !source) return false
   if (target.bindingId === source.bindingId) return true
   if (target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)) return true
-  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
-  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
+  const targetPhysicalName = normalizeSubTableName(target.designerTableName)
+  const sourcePhysicalName = normalizeSubTableName(source.designerTableName)
   if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)
@@ -61,7 +61,7 @@ export function isLinkFormBoundToHostGrid(
   resolvedLinkBinding?: {
     bindingId: number
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
   } | null,
 ): boolean {

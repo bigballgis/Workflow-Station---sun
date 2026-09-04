@@ -231,9 +231,9 @@ export function buildViewDetailSubTableBindings(
     if (columns.length === 0) continue
     const tableName = String(b.tableDisplayName || b.tableName || '')
     // 展示名(tableName 变量)与设计器表名是两回事：前者进 UI，后者是 __subTables__ 的 key 来源。
-    const physicalTableName = typeof b.tableName === 'string' ? b.tableName : undefined
+    const designerTableName = typeof b.tableName === 'string' ? b.tableName : undefined
     const storeBinding: SubTableStoreBindingLike = {
-      physicalTableName,
+      designerTableName,
       relationTableId: b.relationTableId != null ? Number(b.relationTableId) : undefined,
       relationTableName: typeof b.relationTableName === 'string' ? b.relationTableName : undefined,
     }
@@ -247,7 +247,7 @@ export function buildViewDetailSubTableBindings(
       bindingType: String(b.bindingType || 'SUB'),
       bindingMode: String(b.bindingMode || 'READONLY'),
       tableName,
-      physicalTableName,
+      designerTableName,
       tableType: String(b.tableType || 'SUB'),
       tableDescription: String(b.tableDescription || ''),
       columns,

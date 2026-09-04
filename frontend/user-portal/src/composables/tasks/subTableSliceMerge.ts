@@ -21,7 +21,7 @@ export function mergeSubTableSlicesForRelationTableId(
   bindingTableById: Map<number, number | null>,
   pkFieldNames?: string[] | null,
   tableName?: string | null,
-  physicalTableName?: string | null,
+  designerTableName?: string | null,
 ): any[] {
   if (!savedSubTables || typeof savedSubTables !== 'object') return []
   if (!Number.isFinite(tableId)) return []
@@ -35,7 +35,7 @@ export function mergeSubTableSlicesForRelationTableId(
     merged = mergeSubTableRowsByRowId(merged, val as any[], pkFieldNames ?? null)
   }
 
-  for (const label of [tableName, physicalTableName]) {
+  for (const label of [tableName, designerTableName]) {
     if (label == null || String(label).trim() === '') continue
     const t = String(label).trim()
     ingest(savedSubTables[t])
@@ -69,7 +69,7 @@ export function collectSubTableSliceRowsForRelationTableId(
   tableId: number,
   bindingTableById: Map<number, number | null>,
   tableName?: string | null,
-  physicalTableName?: string | null,
+  designerTableName?: string | null,
 ): any[] {
   if (!savedSubTables || typeof savedSubTables !== 'object') return []
   if (!Number.isFinite(tableId)) return []
@@ -82,7 +82,7 @@ export function collectSubTableSliceRowsForRelationTableId(
     for (const r of val) out.push(r)
   }
 
-  for (const label of [tableName, physicalTableName]) {
+  for (const label of [tableName, designerTableName]) {
     if (label == null || String(label).trim() === '') continue
     const t = String(label).trim()
     ingest(savedSubTables[t])
@@ -107,7 +107,7 @@ export function collectSubTableSliceRowsForRelationTableId(
  */
 export function collectAllNestedSlicesForBindingDeep(
   savedSubTables: Record<string, unknown> | null | undefined,
-  binding: { bindingId: number; tableName: string; physicalTableName?: string },
+  binding: { bindingId: number; tableName: string; designerTableName?: string },
 ): unknown[][] {
   if (!savedSubTables || typeof savedSubTables !== 'object') return []
 
@@ -123,7 +123,7 @@ export function collectAllNestedSlicesForBindingDeep(
   const bid = Number(binding.bindingId)
   if (Number.isFinite(bid)) add(String(bid))
   add(binding.tableName)
-  add(binding.physicalTableName)
+  add(binding.designerTableName)
 
   const out: unknown[][] = []
   const seen = new WeakSet<object>()
@@ -163,7 +163,7 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
     bindingId: number
     tableId?: number | null
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     primaryKeyFields?: string[] | null
   },
   bindingTableById: Map<number, number | null>,
@@ -192,7 +192,7 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
         bindingTableById,
         pk,
         binding.tableName,
-        binding.physicalTableName,
+        binding.designerTableName,
       ),
     )
     for (const [bid, tid] of bindingTableById.entries()) {
@@ -202,7 +202,7 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
     }
   }
 
-  for (const label of [binding.tableName, binding.physicalTableName]) {
+  for (const label of [binding.tableName, binding.designerTableName]) {
     if (label == null || String(label).trim() === '') continue
     ingest(savedSubTables[String(label).trim()])
     ingest(savedSubTables[normalizeSubTableName(String(label))])
@@ -212,7 +212,7 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
     for (const chunk of collectAllNestedSlicesForBindingDeep(savedSubTables, {
       bindingId: binding.bindingId,
       tableName: binding.tableName ?? '',
-      physicalTableName: binding.physicalTableName,
+      designerTableName: binding.designerTableName,
     })) {
       ingest(chunk)
     }
@@ -223,7 +223,7 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
         for (const chunk of collectAllNestedSlicesForBindingDeep(savedSubTables, {
           bindingId: bid,
           tableName: binding.tableName ?? '',
-          physicalTableName: binding.physicalTableName,
+          designerTableName: binding.designerTableName,
         })) {
           ingest(chunk)
         }

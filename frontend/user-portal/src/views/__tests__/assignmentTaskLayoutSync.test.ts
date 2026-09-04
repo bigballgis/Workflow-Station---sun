@@ -78,7 +78,7 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
         bindingLinkMode: b.bindingLinkMode ?? null,
         fieldDefinitions: b.fieldDefinitions ?? null,
         tableName: b.tableDisplayName || b.tableName,
-        physicalTableName: b.tableName,
+        designerTableName: b.tableName,
         columns:
           cfg.subListViews?.[String(b.bindingId)]?.columns?.map((c: { fieldName: string; displayName?: string }) => ({
             field: c.fieldName,

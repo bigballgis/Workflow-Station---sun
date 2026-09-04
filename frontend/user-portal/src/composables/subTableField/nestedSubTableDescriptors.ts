@@ -34,7 +34,7 @@ export function buildNestedSubTableDescriptors(
       // and to seed the structural FK back to this binding's row.
       tableId: b.tableId ?? null,
       fieldDefinitions: (b as { fieldDefinitions?: BindingFieldDefinition[] }).fieldDefinitions,
-      physicalTableName: b.physicalTableName,
+      designerTableName: b.designerTableName,
       bindingMode: b.bindingMode,
       // Link Mode（structuralFk / miParticipantRow）—— 与 bindingMode 是两个字段。
       // 漏传会让嵌套子表拿不到 MI 声明，FK 播种与主键分配按普通子表处理。

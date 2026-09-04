@@ -18,7 +18,7 @@ export interface ProcessStartSubTableBinding {
   bindingType: string
   bindingMode: string
   tableName: string
-  physicalTableName?: string
+  designerTableName?: string
   tableType: string
   tableDescription: string
   /** Designer PK columns from tableBindings (admin-center); avoids hardcoding id/rowId. */

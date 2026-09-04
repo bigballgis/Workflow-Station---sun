@@ -938,7 +938,7 @@ function nestedRowsFor(nested: NestedSubTableDescriptor): Record<string, unknown
     {
       bindingId: nested.bindingId,
       tableName: nested.tableName,
-      physicalTableName: nested.physicalTableName,
+      designerTableName: nested.designerTableName,
       tableId: nested.tableId ?? null,
     },
     [formData.value],

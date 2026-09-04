@@ -1045,7 +1045,7 @@ function syncNestedSubTableBindings() {
       {
         bindingId: d.bindingId,
         tableName: d.tableName,
-        physicalTableName: d.physicalTableName,
+        designerTableName: d.designerTableName,
         tableId: d.tableId ?? null,
       },
       rows.value,

@@ -18,7 +18,7 @@ describe('PortalFormFields emits sub-table row changes upward', () => {
   const binding = {
     bindingId: 50547,
     tableName: 'people',
-    physicalTableName: 'people',
+    designerTableName: 'people',
     tableId: 50333,
     columns: [{ field: 'age', label: 'AGE' }],
     data: [] as unknown[],

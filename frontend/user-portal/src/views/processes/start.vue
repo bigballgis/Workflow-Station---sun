@@ -584,7 +584,7 @@ const loadFunctionUnitContent = async () => {
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           tableName: b.tableDisplayName || b.tableName,
-          physicalTableName: b.tableName,
+          designerTableName: b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           primaryKeyFields: resolveSubTablePrimaryKeyFields(

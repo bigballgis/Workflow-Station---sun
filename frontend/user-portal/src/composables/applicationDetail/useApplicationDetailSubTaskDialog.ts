@@ -125,7 +125,7 @@ export function createApplicationDetailSubTaskDialog(ctx: ApplicationDetailCtx):
         bindingMode: b.bindingMode,
         foreignKeyField: b.foreignKeyField,
         tableName: b.tableDisplayName || b.tableName,
-        physicalTableName: b.tableName,
+        designerTableName: b.tableName,
         tableType: b.tableType,
         tableDescription: b.tableDescription,
         columns,
@@ -155,7 +155,7 @@ export function createApplicationDetailSubTaskDialog(ctx: ApplicationDetailCtx):
           {
             bindingId: binding.bindingId,
             tableName: binding.tableName,
-            physicalTableName: binding.physicalTableName,
+            designerTableName: binding.designerTableName,
             tableId: binding.tableId ?? null,
           },
           [parentRow],

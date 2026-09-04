@@ -14,7 +14,7 @@ export interface SubTableBinding {
   bindingType: string
   bindingMode: string
   tableName: string
-  physicalTableName?: string
+  designerTableName?: string
   /** 关联表标识：决定 __subTables__ 走 rt: 还是 dw: 命名空间 */
   relationTableId?: number | null
   relationTableName?: string | null

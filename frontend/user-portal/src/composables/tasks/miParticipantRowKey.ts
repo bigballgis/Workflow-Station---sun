@@ -8,7 +8,7 @@ export type MiParticipantRowId = string | number
 export type SubTableBindingLike = {
   bindingId?: number | string
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   tableId?: number | null
   primaryKeyFields?: string[] | null
   columns?: Array<{ field?: string }> | null
@@ -45,7 +45,7 @@ export function hasConfiguredPrimaryKeyFields(primaryKeyFields?: string[] | null
 
 export function describeSubTableBindingLabel(binding: SubTableBindingLike): string {
   return (
-    binding.physicalTableName?.trim() ||
+    binding.designerTableName?.trim() ||
     binding.tableName?.trim() ||
     (binding.bindingId != null ? String(binding.bindingId) : '')
   )
@@ -59,7 +59,7 @@ export function bindingMatchesMiSubTableName(
   if (!subTableName || !String(subTableName).trim()) return false
   const want = compactTableKey(subTableName)
   if (!want) return false
-  const candidates = [binding.physicalTableName, binding.tableName].filter(Boolean) as string[]
+  const candidates = [binding.designerTableName, binding.tableName].filter(Boolean) as string[]
   return candidates.some(c => compactTableKey(c) === want)
 }
 

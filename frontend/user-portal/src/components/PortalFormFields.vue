@@ -38,7 +38,7 @@ const SubTableInlineForm = defineAsyncComponent(() => import('./SubTableInlineFo
 export interface PortalSubTableBindingLite {
   bindingId: number
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   tableId?: number | null
   columns: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
   /** Form-design canvas columns for the Add/Edit dialog. */
@@ -244,7 +244,7 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
       {
         bindingId: binding.bindingId,
         tableName: binding.tableName ?? '',
-        physicalTableName: binding.physicalTableName,
+        designerTableName: binding.designerTableName,
         tableId: binding.tableId ?? null,
       },
       [parent],
@@ -359,8 +359,8 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
     {
       bindingId: binding.bindingId,
       tableName: binding.tableName,
-      // 必须传 physical（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
-      physicalTableName: binding.physicalTableName,
+      // 必须传设计器表名（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
+      designerTableName: binding.designerTableName,
       relationTableName: (binding as { relationTableName?: string | null }).relationTableName,
       relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
     },
@@ -384,8 +384,8 @@ function onInlineSubFormRowUpdate(bindingId: number, rows: unknown[]) {
     {
       bindingId: binding.bindingId,
       tableName: binding.tableName,
-      // 必须传 physical（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
-      physicalTableName: binding.physicalTableName,
+      // 必须传设计器表名（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
+      designerTableName: binding.designerTableName,
       relationTableName: (binding as { relationTableName?: string | null }).relationTableName,
       relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
     },

@@ -34,7 +34,7 @@ function makeCtx(currentBindings: any[], previousFormBindings: any[]) {
     getSavedSubTableRows: (slices: any, binding: any) => {
       const key = binding?.relationTableId != null
         ? `rt:${String(binding.relationTableName ?? binding.tableName).toLowerCase()}`
-        : `dw:${String(binding?.physicalTableName ?? binding?.tableName ?? '').toLowerCase()}`
+        : `dw:${String(binding?.designerTableName ?? binding?.tableName ?? '').toLowerCase()}`
       return slices?.[key]
     },
     isCurrentMiCollectionSubTableBinding: () => false,
@@ -44,7 +44,7 @@ function makeCtx(currentBindings: any[], previousFormBindings: any[]) {
 }
 
 const participantsBinding = (data: any[]) => ({
-  bindingId: 50627, tableName: 'subtable', physicalTableName: 'subtable', tableId: 50331,
+  bindingId: 50627, tableName: 'subtable', designerTableName: 'subtable', tableId: 50331,
   primaryKeyFields: PK, columns: [{ field: 'task_status' }], data,
 })
 

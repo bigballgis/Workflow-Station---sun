@@ -38,7 +38,7 @@ function subTableSliceUnchanged(
 function stampBindingTableNameAliases(
   subTables: Record<string, any>,
   subTableData: Record<string, Array<Record<string, unknown>>>,
-  binding: { tableName?: string; physicalTableName?: string },
+  binding: { tableName?: string; designerTableName?: string },
   rows: unknown[],
 ) {
   // 规范 key：一张表一个 key。subTableData 是提交时的另一个字段（controller 会并进
