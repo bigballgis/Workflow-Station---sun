@@ -18,13 +18,13 @@ export function subTableBindingMatches(
   target: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null },
   source: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null }
 ): boolean {
-  const targetPhysicalName = normalizeSubTableName(target.designerTableName)
-  const sourcePhysicalName = normalizeSubTableName(source.designerTableName)
-  if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
+  const targetDesignerName = normalizeSubTableName(target.designerTableName)
+  const sourceDesignerName = normalizeSubTableName(source.designerTableName)
+  if (targetDesignerName && sourceDesignerName && targetDesignerName === sourceDesignerName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)
-  const samePhysicalTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
-  return target.bindingId === source.bindingId || samePhysicalTable || (!!targetName && targetName === sourceName)
+  const sameDesignerTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
+  return target.bindingId === source.bindingId || sameDesignerTable || (!!targetName && targetName === sourceName)
 }
 
 export function cloneSubTableRows(rows: any[]): any[] {
