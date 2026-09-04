@@ -240,9 +240,14 @@ export function enrichLookupColumnPropsFromSubFormRule(
         lookupProps[key] = col.props![key]
       }
     }
+    // List-view columnType is often "field" even when the sub-form control is a lookup
+    // (or an input that still carries lookupConfig). Without promoting type, SubTableField
+    // skips the lookup renderer and the object falls through to the user-object fallback.
+    const isLookup =
+      col.type === 'lookup' || rule?.type === 'lookup' || Boolean(rawCfg)
     return {
       ...col,
-      type: col.type === 'lookup' || rule?.type === 'lookup' ? 'lookup' : col.type,
+      type: isLookup ? 'lookup' : col.type,
       props: { ...(col.props || {}), ...lookupProps },
     }
   })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolveLookupCellTagText } from '@/components/subTableAddDialogHelpers/lookup'
 import {
   buildViewDetailSubTableBindings,
   resolveLookupDisplayValues,
@@ -206,6 +207,241 @@ describe('buildViewDetailSubTableBindings', () => {
       },
     )
     expect(bindings[0].data).toEqual([{ code: 'RT-1' }])
+  })
+
+  it('merges nested sub-form lookup config onto list-view columns typed as field', () => {
+    // Views list columns copy columnType "field" and drop lookupConfig. ATM Correspondence
+    // type/mode/channel cells are whole dictionary rows (no id/userId), so the user-object
+    // fallback would render "-". The designed display column lives on the nested sub-form.
+    const lookupRow = {
+      correspondence_id: 'hmdc-corr-type-ack',
+      objectives: 'Correspondence type',
+      standardizations: 'Acknowledgement',
+    }
+    const bindings = buildViewDetailSubTableBindings(
+      [
+        {
+          bindingId: 200,
+          bindingType: 'SUB',
+          tableName: 'atm_correspondence',
+          tableDisplayName: 'ATM Correspondence',
+          tableType: 'SUB',
+          fieldDefinitions: [
+            { fieldName: 'correspondence_id', displayName: 'Correspondence ID' },
+            { fieldName: 'correspondence_type', displayName: 'Correspondence type' },
+          ],
+        },
+      ],
+      {
+        subListViews: {
+          200: {
+            columns: [
+              { fieldName: 'correspondence_id', displayName: 'Correspondence ID', columnType: 'field' },
+              { fieldName: 'correspondence_type', displayName: 'Correspondence type', columnType: 'field' },
+            ],
+          },
+        },
+        subForms: {
+          200: {
+            rule: [
+              {
+                type: 'elCard',
+                children: [
+                  {
+                    type: 'lookup',
+                    field: 'correspondence_type',
+                    title: 'Correspondence type',
+                    props: {
+                      lookupConfig: JSON.stringify({
+                        tableId: 28,
+                        selectedDisplayField: 'standardizations',
+                        displayFields: ['standardizations'],
+                        searchFields: ['id'],
+                      }),
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        __subTables__: {
+          'dw:atm_correspondence': [{ correspondence_id: 'Corr-000037', correspondence_type: lookupRow }],
+        },
+      },
+    )
+    const typeCol = bindings[0].columns.find(c => c.field === 'correspondence_type')
+    expect(typeCol?.type).toBe('lookup')
+    expect(typeCol?.props?.selectedDisplayField).toBe('standardizations')
+    expect(resolveLookupCellTagText(typeCol?.props ?? null, lookupRow)).toBe('Acknowledgement')
+    const idCol = bindings[0].columns.find(c => c.field === 'correspondence_id')
+    expect(idCol?.type).not.toBe('lookup')
+  })
+
+  it('promotes a list column to lookup when the sub-form control is input but still has lookupConfig', () => {
+    const bindings = buildViewDetailSubTableBindings(
+      [
+        {
+          bindingId: 201,
+          bindingType: 'SUB',
+          tableName: 'atm_correspondence',
+          tableDisplayName: 'ATM Correspondence',
+          tableType: 'SUB',
+          fieldDefinitions: [{ fieldName: 'correspondence_type', displayName: 'Type' }],
+        },
+      ],
+      {
+        subListViews: {
+          201: {
+            columns: [
+              { fieldName: 'correspondence_type', displayName: 'Correspondence type', columnType: 'field' },
+            ],
+          },
+        },
+        subForms: {
+          201: {
+            rule: [
+              {
+                type: 'input',
+                field: 'correspondence_type',
+                props: {
+                  lookupConfig: JSON.stringify({
+                    selectedDisplayField: 'standardizations',
+                    displayFields: ['standardizations'],
+                  }),
+                },
+              },
+            ],
+          },
+        },
+      },
+      { __subTables__: { 'dw:atm_correspondence': [] } },
+    )
+    expect(bindings[0].columns[0].type).toBe('lookup')
+    expect(bindings[0].columns[0].props?.selectedDisplayField).toBe('standardizations')
+  })
+
+  it('overlays PROCESS sub-form lookup onto a DETAIL sub-form that stripped it to input', () => {
+    const lookupRow = {
+      correspondence_id: 'hmdc-corr-type-ack',
+      objectives: 'Correspondence type',
+      standardizations: 'Acknowledgement',
+    }
+    const bindings = buildViewDetailSubTableBindings(
+      [
+        {
+          bindingId: 50787,
+          bindingType: 'SUB',
+          tableName: 'atm_correspondence',
+          tableDisplayName: 'ATM Correspondence',
+          tableType: 'SUB',
+          fieldDefinitions: [{ fieldName: 'correspondence_type', displayName: 'Type' }],
+        },
+      ],
+      {
+        subListViews: {
+          50787: {
+            columns: [
+              { fieldName: 'correspondence_type', displayName: 'Correspondence type', columnType: 'field' },
+            ],
+          },
+        },
+        subForms: {
+          50787: {
+            rule: [{ type: 'input', field: 'correspondence_type', title: 'Correspondence type' }],
+          },
+        },
+      },
+      { __subTables__: { 'dw:atm_correspondence': [{ correspondence_type: lookupRow }] } },
+      [
+        {
+          formType: 'PROCESS',
+          tableBindings: [
+            {
+              bindingId: 1141,
+              bindingType: 'SUB',
+              tableName: 'atm_correspondence',
+            },
+          ],
+          config: {
+            subForms: {
+              1141: {
+                rule: [{
+                  type: 'lookup',
+                  field: 'correspondence_type',
+                  props: {
+                    lookupConfig: JSON.stringify({
+                      tableId: 28,
+                      selectedDisplayField: 'standardizations',
+                      displayFields: ['standardizations'],
+                      searchFields: ['standardizations'],
+                    }),
+                  },
+                }],
+              },
+            },
+          },
+        },
+      ],
+    )
+    const typeCol = bindings[0].columns[0]
+    expect(typeCol.type).toBe('lookup')
+    expect(typeCol.props?.selectedDisplayField).toBe('standardizations')
+    expect(resolveLookupCellTagText(typeCol.props ?? null, lookupRow)).toBe('Acknowledgement')
+  })
+
+  it('does not copy lookup config from a peer form bound to a different table', () => {
+    const bindings = buildViewDetailSubTableBindings(
+      [
+        {
+          bindingId: 50787,
+          bindingType: 'SUB',
+          tableName: 'atm_correspondence',
+          tableDisplayName: 'ATM Correspondence',
+          tableType: 'SUB',
+          fieldDefinitions: [{ fieldName: 'correspondence_type', displayName: 'Type' }],
+        },
+      ],
+      {
+        subListViews: {
+          50787: {
+            columns: [
+              { fieldName: 'correspondence_type', displayName: 'Correspondence type', columnType: 'field' },
+            ],
+          },
+        },
+        subForms: {
+          50787: {
+            rule: [{ type: 'input', field: 'correspondence_type' }],
+          },
+        },
+      },
+      { __subTables__: { 'dw:atm_correspondence': [] } },
+      [
+        {
+          formType: 'PROCESS',
+          tableBindings: [
+            { bindingId: 1135, bindingType: 'SUB', tableName: 'ATM_Transaction' },
+          ],
+          config: {
+            subForms: {
+              1135: {
+                rule: [{
+                  type: 'lookup',
+                  field: 'correspondence_type',
+                  props: {
+                    lookupConfig: JSON.stringify({ selectedDisplayField: 'standardizations' }),
+                  },
+                }],
+              },
+            },
+          },
+        },
+      ],
+    )
+    expect(bindings[0].columns[0].type).not.toBe('lookup')
   })
 
   it('normalises table-name case so a mixed-case designer table still resolves', () => {
