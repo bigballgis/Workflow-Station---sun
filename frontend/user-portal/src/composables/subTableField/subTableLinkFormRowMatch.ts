@@ -15,15 +15,15 @@ export function linkFormTableMatchKey(name?: string): string {
 }
 
 export function subTableBindingMatches(
-  target?: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null } | null,
-  source?: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null } | null
+  target?: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null } | null,
+  source?: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null } | null
 ): boolean {
   if (!target || !source) return false
   if (target.bindingId === source.bindingId) return true
   if (target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)) return true
-  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
-  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
-  if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
+  const targetDesignerName = normalizeSubTableName(target.designerTableName)
+  const sourceDesignerName = normalizeSubTableName(source.designerTableName)
+  if (targetDesignerName && sourceDesignerName && targetDesignerName === sourceDesignerName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)
   return !!targetName && targetName === sourceName
@@ -52,7 +52,7 @@ function hostGridBindingIdent(host: LinkFormHostGrid): {
 /**
  * Designer Link Form on a sub-table often binds to the same table as the grid
  * ({@code boundSubTableBindingId === host bindingId}, or a sibling MI binding of
- * the same physical table). Details must use the clicked row itself — there is
+ * the same designer table). Details must use the clicked row itself — there is
  * no nested {@code row.__subTables__[boundId]} child slice.
  */
 export function isLinkFormBoundToHostGrid(
@@ -61,7 +61,7 @@ export function isLinkFormBoundToHostGrid(
   resolvedLinkBinding?: {
     bindingId: number
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
   } | null,
 ): boolean {

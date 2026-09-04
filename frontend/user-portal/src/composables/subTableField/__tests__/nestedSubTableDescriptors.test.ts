@@ -14,9 +14,12 @@ function binding(id: number, name = 'package'): SubTableBinding {
     tableId: 5000 + id,
     bindingType: 'SUB',
     bindingMode: 'EDITABLE',
+    // Link Mode 与 bindingMode 是两个字段：前者 structuralFk / miParticipantRow，
+    // 后者 EDITABLE / READONLY。fixture 两个都给，接错任何一个都会被下面的断言抓住。
+    bindingLinkMode: 'structuralFk',
     foreignKeyField: 'shipment_id',
     tableName: name,
-    physicalTableName: name,
+    designerTableName: name,
     tableType: 'SUB',
     tableDescription: '',
     columns: [{ field: 'label', label: 'Label' }],
@@ -41,6 +44,8 @@ describe('buildNestedSubTableDescriptors', () => {
       foreignKeyField: 'shipment_id',
       primaryKeyFields: ['package_id'],
       bindingMode: 'EDITABLE',
+      // FK 播种与主键分配靠 Link Mode 识别 MI 参与者行 —— 漏传等于把配置藏起来。
+      bindingLinkMode: 'structuralFk',
     })
   })
 

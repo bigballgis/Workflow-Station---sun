@@ -20,7 +20,7 @@ import type { BindingFieldDefinition } from '../../utils/subTableRowRuntime'
 interface AggregateSourceBinding {
   bindingId?: number
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   data?: unknown[]
 }
 
@@ -64,7 +64,7 @@ export function useComputedFields(deps: ComputedFieldsDeps) {
   function loadedSubTableRows(): Record<string, Array<Record<string, unknown>>> {
     const rows: Record<string, Array<Record<string, unknown>>> = {}
     for (const binding of deps.subTableBindings() ?? []) {
-      const name = (binding.physicalTableName ?? binding.tableName ?? '').trim().toLowerCase()
+      const name = (binding.designerTableName ?? binding.tableName ?? '').trim().toLowerCase()
       if (!name) continue
       const pending = binding.bindingId != null
         ? pendingRowsByBinding.get(Number(binding.bindingId))

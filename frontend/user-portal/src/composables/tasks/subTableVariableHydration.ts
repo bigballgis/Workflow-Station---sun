@@ -50,7 +50,7 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
     primaryKeyFields?: string[] | null | undefined
     // 共享附件分类要读这几项配置；漏在类型里会逼调用点窄化，把配置藏起来 → 分类恒 false。
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     foreignKeyField?: string | null
     bindingLinkMode?: string | null
     fieldDefinitions?: MiKindFieldDef[] | null

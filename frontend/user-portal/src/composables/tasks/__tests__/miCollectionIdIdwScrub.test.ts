@@ -69,11 +69,11 @@ const RT_MAP = new Map<number, number | null>([
 ])
 const BINDINGS = [
   {
-    bindingId: 69, tableName: 'Sub Task', physicalTableName: 'subtable', tableId: 20,
+    bindingId: 69, tableName: 'Sub Task', designerTableName: 'subtable', tableId: 20,
     columns: [{ field: 'id_idw' }, { field: 'assignee' }, { field: 'task_status' }],
   },
   {
-    bindingId: 30, tableName: 'People', physicalTableName: 'people', tableId: 21,
+    bindingId: 30, tableName: 'People', designerTableName: 'people', tableId: 21,
     columns: [{ field: 'id' }, { field: 'sex' }, { field: 'age' }],
   },
 ]

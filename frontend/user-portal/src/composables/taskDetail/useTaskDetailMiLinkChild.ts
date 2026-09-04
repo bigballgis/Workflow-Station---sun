@@ -143,7 +143,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
         {
           bindingId: b.bindingId,
           tableName: b.tableName ?? '',
-          physicalTableName: b.physicalTableName,
+          designerTableName: b.designerTableName,
           tableId: b.tableId ?? null,
         },
         [parentRow],
@@ -340,7 +340,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
             Number(tableIdRaw),
             rtMap,
             binding.tableName,
-            binding.physicalTableName,
+            binding.designerTableName,
           ),
         )
       } else {

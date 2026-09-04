@@ -3124,6 +3124,59 @@
   fixed_at: "2026-09-03"
   severity: major
   category: bug
+  summary: "Link Form Add ATM Transaction: Merchant Credit list and Temporary Refund Date calendar open behind the overlay"
+  file: "frontend/user-portal/src/composables/subTableAddDialog/useSubTableDialogOverlay.ts"
+  note: |
+    反例：ATM-DC-PW-000025 Transaction Investigation → ATM Transaction Link Form
+    「Add ATM Transaction」Financial adjustment 可编辑，Merchant Credit 下拉无选项、
+    Temporary Refund Date 点不出日历，手动输入仍可 Save。
+    根因：Link Form overlay 硬编码 z-index 5000，与 .form-renderer-popper 同层；
+    EP select/date popper teleport 到 body 后画在遮罩后面。输入框仍在 panel 内所以能打字。
+    修复：打开时 useZIndex().nextZIndex()，--sub-table-dialog-popper-z = overlay+50；
+    FieldRenderer teleported=true；Add/Edit 对话框同一套叠加。
+    验证：overlay 3008 / popper 3058；截图 merchant-credit-open_after-fix 可见 Y/N，
+    refund-date-open_after-fix 可见日历。
+
+- id: "1590"
+  status: fixed
+  fixed_at: "2026-09-03"
+  severity: major
+  category: bug
+  summary: "Views ATM Transaction detail: list-only projection left DETAIL fields and Correspondence empty"
+  file: "backend/user-portal/src/main/java/com/portal/util/PortalMainTableViewDetailValues.java"
+  note: |
+    反例：view 318 ATM-DC-PW-TRANS-000031 详情 Merchant Credit / Merchant Credi Date /
+    Temporary Refund / Temporary Refund Date 为空，ATM Correspondence 为 No Data。
+    库内 merchant_credit=1、merchant_credi_date=2026-09-04，实例 dw:atm_correspondence
+    有 Corr-000032（FK related_transaction_id）。
+    根因：projectSubRow 只拷贝 View 可见列，stripInternalKeys 丢掉 __subTables__；
+    详情曾用 search=rowKey 或翻列表页拿投影，DETAIL 表单 50657 多出来的字段永远进不了 values。
+    修复：rowKey 精确匹配 pi.id+row_identity；详情 overlay 存库成员；strip 后挂
+    dw:<table> 嵌套 store，按 binding.foreign_key_field 过滤本行身份。
+    验证：PortalMainTableViewRowKeyTest / DetailValues / NestedSubTable + SubRowQuerySql；
+    vitest viewDetailForm/viewDetailQuery；compose rebuild；截图
+    2026-09-03_atm-trans-000031-view-detail.png 可见 Merchant Credit 1 与 Corr-000032。
+
+- id: "1591"
+  status: fixed
+  fixed_at: "2026-09-04"
+  severity: major
+  category: bug
+  summary: "DW Function Unit icon upload failed on a repeated filename because dw_icons.name was globally unique"
+  file: "backend/developer-workstation/src/main/java/com/developer/entity/Icon.java"
+  note: |
+    反例：第一次上传 sample.svg 成功；同一 FU 再传、或换一个 FU 再传同名文件失败；
+    改文件名后成功。根因：IconUploadField 用文件名去扩展名作为 name，
+    dw_icons.name UNIQUE + JPA unique=true，第二次 INSERT 被约束拒绝。
+    修复：去掉 name 唯一约束（身份是 id，FU 绑 icon_id）；AI 按名匹配改
+    findFirstByNameOrderByIdAsc。验证：IconLibraryComponentImplTest +
+    AiWriteServiceTest；本地库已 DROP dw_icons_name_key；DW 镜像已重建 healthy。
+
+- id: "1592"
+  status: fixed
+  fixed_at: "2026-09-03"
+  severity: major
+  category: bug
   summary: "Admin Audit lists lost table scrollbars after snug-row height overrode fill-viewport"
   file: "frontend/admin-center/src/views/audit/index.vue"
   note: |

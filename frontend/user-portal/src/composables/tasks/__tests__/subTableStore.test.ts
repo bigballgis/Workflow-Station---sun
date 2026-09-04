@@ -23,8 +23,8 @@ describe('subTableStoreKey — 命名空间与表名', () => {
       .toBe('dw:subtable')
   })
 
-  it('physicalTableName 优先于 tableName（部分接口只给前者）', () => {
-    expect(subTableStoreKey({ physicalTableName: 'subtable', tableName: 'Participants' }))
+  it('designerTableName 优先于 tableName（部分接口只给前者）', () => {
+    expect(subTableStoreKey({ designerTableName: 'subtable', tableName: 'Participants' }))
       .toBe('dw:subtable')
   })
 

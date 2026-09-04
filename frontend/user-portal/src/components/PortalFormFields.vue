@@ -19,6 +19,8 @@ import {
   hostRowIsMiParticipant,
   isMiParticipantScopedSubTableBinding,
   miChildFkConfigOfBinding,
+  mergeSubTableRowsByRowId,
+  resolveMiChildStructuralParentFk,
 } from '@/composables/tasks/shared'
 import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
@@ -26,7 +28,8 @@ import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineForm
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
 import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
-import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+import { isAssignmentConfigured, type AssignmentConfig } from '@/utils/miAssignmentConfig'
+import MiAssignmentModeBlock from './MiAssignmentModeBlock.vue'
 
 // Lazily required to avoid a module-load cycle: SubTableInlineForm imports PortalFormFields
 // itself (nested subTable widgets inside the inline form use PortalFormFields recursively).
@@ -35,7 +38,7 @@ const SubTableInlineForm = defineAsyncComponent(() => import('./SubTableInlineFo
 export interface PortalSubTableBindingLite {
   bindingId: number
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   tableId?: number | null
   columns: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
   /** Form-design canvas columns for the Add/Edit dialog. */
@@ -54,6 +57,12 @@ export interface PortalSubTableBindingLite {
   bindingType?: string | null
   /** EDITABLE / READONLY, from Table Design — gates whether the inline form can be edited at all. */
   bindingMode?: string | null
+  /**
+   * `structuralFk` / `miParticipantRow`, from the designer's Manage Table Bindings — a DIFFERENT
+   * field from {@link bindingMode} (which is only EDITABLE/READONLY). It tells a nested sub-table
+   * how to link a new row back to its parent, so PK allocation and FK seeding need it.
+   */
+  bindingLinkMode?: string | null
   /**
    * FK column linking a row back to its parent. Distinguishes a participant-scoped child table
    * (People.sub_task_id / FK `id` → the MI participant row) from a shared process-level one
@@ -114,6 +123,14 @@ const props = withDefaults(
      * Event-runtime required overlay. Unset → designer `field.required` only.
      */
     isFieldRequired?: (field: FormField) => boolean
+    /**
+     * BPMN-derived MI assignment contract for the sub-table this form edits; absent means no
+     * Assignment Mode behavior. Supplies the block's CONTENT (which modes, which fields) while
+     * the designer's `miAssignment` marker decides where it renders — same split as
+     * SubTableAddDialog, so the Link Form dialog and the Inline Form widget match the grid's
+     * Add/Edit dialog and DW Form Preview.
+     */
+    assignmentConfig?: AssignmentConfig
   }>(),
   {
     readonly: false,
@@ -129,6 +146,17 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:field', key: string, value: unknown): void
   (e: 'field-blur', key: string): void
+  /**
+   * 子表行集发生变化（增 / 改 / 删）。
+   *
+   * <p><b>为什么必须有这个 emit。</b>这个组件此前只把行集写进**宿主行的 `__subTables__`**，
+   * 从不通知外层，于是 `binding.data` 永远不会更新 —— 保存时读的是 `binding.data`，
+   * 用户在 inline 表格里的删除因此从未进入 payload（实测 task 9c46d613：删除写进了
+   * Participants row 0，而 `syncMainSubTableRows` 触发次数恒为 0）。
+   *
+   * <p>补上它之后两份数据由同一次事件同时更新，不再需要「哪一份是权威」的猜测。
+   */
+  (e: 'update:sub-table-data', bindingId: number, rows: unknown[]): void
 }>()
 
 defineOptions({ name: 'PortalFormFields' })
@@ -154,6 +182,23 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
   if (bindingId == null) return undefined
   const pools = [...(props.linkedSubTableBindings ?? []), ...(props.subTableBindings ?? [])]
   return pools.find(b => Number(b.bindingId) === Number(bindingId))
+}
+
+/**
+ * 宿主行的参与者标识 —— 取自 **MI collection 的设计器主键**（`collectionPrimaryKeyFields`），
+ * 不猜列名。解析不出返回 null，调用方据此放弃补行（保守侧）。
+ */
+function resolveMiHostParticipantKey(hostRow: Record<string, unknown> | null): string | null {
+  if (!hostRow) return null
+  for (const pk of miKindContext.value.collectionPrimaryKeyFields ?? []) {
+    const name = String(pk ?? '').trim()
+    if (!name) continue
+    const v = hostRow[name]
+    if (v == null) continue
+    const s = String(v).trim()
+    if (s !== '') return s
+  }
+  return null
 }
 
 /**
@@ -199,7 +244,7 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
       {
         bindingId: binding.bindingId,
         tableName: binding.tableName ?? '',
-        physicalTableName: binding.physicalTableName,
+        designerTableName: binding.designerTableName,
         tableId: binding.tableId ?? null,
       },
       [parent],
@@ -208,10 +253,37 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
       const scoped = scope(nested)
       // A nested slice that scopes to nothing held only sibling rows — keep looking rather than
       // reporting "this participant has rows" falsely.
-      if (scoped.length > 0) return scoped
+      if (scoped.length > 0) {
+        // 嵌套那份是**派生缓存**，只在宿主行往返（保存 / 重新加载）时更新；`binding.data` 才是
+        // 刚发生的编辑的第一现场。直接 return 嵌套会让"新增一行"在下一次渲染被打回原形 ——
+        // 实测 `binding.data` 已有 2 行、嵌套仍是 1 行，表格于是永远只画 1 行
+        //（ATM Correspondence 加不进第二条的直接原因）。
+        //
+        // **只补「明确属于本宿主行」的行**：判据是行上的结构外键实际指向当前宿主行，
+        // 不是"scope 过滤后还剩下"。两者不等价 ——
+        // scope 会保留尚未 seed 外键的行（新行还没 seed 时不能丢），而那种行同样可能是
+        // **兄弟参与者**刚加的、也还没 seed 的行，靠身份区分不开。放进来就会串参与者，
+        // 这正是 portalFormFieldsNestedSubTableMiScope 那两条用例锁定的行为。
+        const hostKey = resolveMiHostParticipantKey(hostRow)
+        const fkConfig = miChildFkConfigOfBinding(binding as never)
+        const owned = hostKey == null
+          ? []
+          : (Array.isArray(binding.data) ? binding.data : []).filter(
+              row =>
+                row != null
+                && typeof row === 'object'
+                && resolveMiChildStructuralParentFk(row as Record<string, unknown>, fkConfig) === hostKey,
+            )
+        if (owned.length > scoped.length) {
+          return mergeSubTableRowsByRowId(scoped, owned, binding.primaryKeyFields ?? null)
+        }
+        return scoped
+      }
     }
   }
-  // MI participant host: no fallback. Nothing nested means this participant owns no rows.
+  // MI 参与者宿主：**不走兜底**。`binding.data` 是跨参与者的池子，且里面尚未 seed 外键的行
+  // 与本参与者刚加的新行靠身份区分不开 —— 放行会把兄弟参与者的行显示进来。
+  // 新增行的可见性由上面「按结构外键补本宿主行的行」解决，那条路径要求外键明确指向本宿主行。
   if (participantScoped) return []
   return Array.isArray(binding.data) ? binding.data : []
 }
@@ -284,10 +356,19 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
   if (!binding) return
   const sto = mergeNestedSubTableRowsIntoSto(
     [props.parentRow, props.model],
-    { bindingId: binding.bindingId, tableName: binding.tableName },
+    {
+      bindingId: binding.bindingId,
+      tableName: binding.tableName,
+      // 必须传设计器表名（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
+      designerTableName: binding.designerTableName,
+      relationTableName: (binding as { relationTableName?: string | null }).relationTableName,
+      relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
+    },
     rows,
   )
   emit('update:field', '__subTables__', sto)
+  // 同一次编辑也要让外层更新 `binding.data`，否则保存时读到的是旧行集。
+  emit('update:sub-table-data', Number(binding.bindingId), rows)
 }
 
 /**
@@ -300,10 +381,18 @@ function onInlineSubFormRowUpdate(bindingId: number, rows: unknown[]) {
   if (!binding) return
   const sto = mergeNestedSubTableRowsIntoSto(
     [props.parentRow, props.model],
-    { bindingId: binding.bindingId, tableName: binding.tableName },
+    {
+      bindingId: binding.bindingId,
+      tableName: binding.tableName,
+      // 必须传设计器表名（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
+      designerTableName: binding.designerTableName,
+      relationTableName: (binding as { relationTableName?: string | null }).relationTableName,
+      relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
+    },
     rows,
   )
   emit('update:field', '__subTables__', sto)
+  emit('update:sub-table-data', Number(binding.bindingId), rows)
 }
 
 // PortalSubTableBindingLite and SubTableBinding are intentionally loose sibling types over the
@@ -341,6 +430,26 @@ const nestedParentTablesById = computed(() => {
   if (props.hostTableId == null || !props.hostFieldDefinitions?.length) return undefined
   return { [Number(props.hostTableId)]: { fieldDefinitions: props.hostFieldDefinitions } }
 })
+
+/**
+ * The designer's `miAssignment` marker owns the assignee / BU / role rules as its CHILDREN.
+ * Only render the block when BPMN actually configured the contract — an unconfigured marker
+ * must still render its children (flat, as before), never swallow them.
+ */
+const assignmentBlockConfigured = computed(() => isAssignmentConfigured(props.assignmentConfig))
+
+/**
+ * Switching mode blanks the other branch's values so a row never carries both a named
+ * assignee and a role pool. Mirrors SubTableAddDialog's onAssignModeChange.
+ */
+function onAssignmentClearFields(fields: string[]) {
+  for (const key of fields) onFieldUpdate(key, '')
+}
+
+/** Children the active mode hides — the marker's own subtree only. */
+function assignmentVisibleChildren(children: FormField[] | undefined, hidden: Set<string>): FormField[] {
+  return (children || []).filter(child => !hidden.has(child.key))
+}
 
 /**
  * Saving a nested row forces this row's auto PK to be allocated early (the child's FK needs it).
@@ -389,6 +498,10 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :field-definitions="resolveBinding(field._bindingId)?.fieldDefinitions"
         :function-unit-id="hostFunctionUnitId"
         :task-id="hostTaskId"
+        :binding-link-mode="resolveBinding(field._bindingId)?.bindingLinkMode"
+        :binding-foreign-key-field="resolveBinding(field._bindingId)?.foreignKeyField"
+        :binding-id="field._bindingId"
+        :field-permissions="fieldPermissions"
         :parent-row="model"
         :parent-table-id="hostTableId ?? null"
         :parent-tables-by-id="nestedParentTablesById"
@@ -425,6 +538,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :field-permissions="fieldPermissions"
         :form-options="resolveBinding(field._bindingId)!.formOptions"
         :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
+        :assignment-config="resolveBinding(field._bindingId)!.assignmentConfig"
         style="margin-bottom: 16px;"
         @update:row="(row: Record<string, any>) => inlineSubForm.handleInlineSubFormUpdate(field, row)"
       />
@@ -454,7 +568,9 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
             :is-field-required="isFieldRequired"
+            :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
             @field-blur="onFieldBlur"
           />
         </el-tab-pane>
@@ -491,8 +607,10 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :field-permissions="fieldPermissions"
           :is-field-visible="isFieldVisible"
           :is-field-required="isFieldRequired"
+          :assignment-config="assignmentConfig"
           row-columns
           @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
           @field-blur="onFieldBlur"
         />
       </el-row>
@@ -515,8 +633,10 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :field-permissions="fieldPermissions"
         :is-field-visible="isFieldVisible"
         :is-field-required="isFieldRequired"
+        :assignment-config="assignmentConfig"
         in-column
         @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
         @field-blur="onFieldBlur"
       />
     </el-col>
@@ -545,7 +665,9 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
             :is-field-required="isFieldRequired"
+            :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
             @field-blur="onFieldBlur"
           />
         </el-collapse-item>
@@ -580,11 +702,87 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :field-permissions="fieldPermissions"
             :is-field-visible="isFieldVisible"
             :is-field-required="isFieldRequired"
+            :assignment-config="assignmentConfig"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
             @field-blur="onFieldBlur"
           />
         </el-row>
       </el-card>
+    </el-col>
+    <!-- Assignment Mode block: routing this row to a named person or to a role pool.
+         The marker is a container whose children are the assignee / BU / role rules, so the
+         block renders them inside its own frame — without this branch the marker fell through
+         to the leaf renderer, drawing an empty label-less box while its children never
+         rendered at all. Kept in parity with SubTableAddDialog and DW Form Preview. -->
+    <el-col
+      v-else-if="field.type === 'miAssignment' && !field.hidden && assignmentBlockConfigured"
+      :span="24"
+    >
+      <MiAssignmentModeBlock
+        :config="assignmentConfig"
+        :row="model"
+        :readonly="readonly || field.readonly === true || !editable"
+        @clear-fields="onAssignmentClearFields"
+      >
+        <template #default="{ hiddenFields }">
+          <el-row :gutter="20">
+            <PortalFormFields
+              :fields="assignmentVisibleChildren(field.children, hiddenFields)"
+              :model="model"
+              :readonly="readonly || field.readonly === true"
+              :editable="editable && field.readonly !== true"
+              :sub-table-bindings="subTableBindings"
+              :linked-sub-table-bindings="linkedSubTableBindings"
+              :parent-row="parentRow"
+              :show-link-form-dialog-footer="showLinkFormDialogFooter"
+              :compact-lookup-cells="compactLookupCells"
+              :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+              :field-permissions="fieldPermissions"
+              :is-field-visible="isFieldVisible"
+              :is-field-required="isFieldRequired"
+              :assignment-config="assignmentConfig"
+              @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
+              @field-blur="onFieldBlur"
+            />
+          </el-row>
+        </template>
+      </MiAssignmentModeBlock>
+    </el-col>
+    <!-- Designer "Hide" toggle on the block — the whole thing goes, the fields it owns
+         included, matching dialogFormLayout's handling for the grid's Add/Edit dialog.
+         Rendering the children here instead would leak the very pickers Hide removes. -->
+    <template v-else-if="field.type === 'miAssignment' && field.hidden" />
+    <!-- Marker present but BPMN configured no assignment contract (or the FU predates it):
+         there is no block to draw, but the marker's children are ordinary fields and must
+         still render — flat, exactly where the designer placed the container. Rendering
+         nothing here is what made those fields vanish. -->
+    <el-col
+      v-else-if="field.type === 'miAssignment'"
+      :span="24"
+    >
+      <el-row :gutter="20">
+        <PortalFormFields
+          :fields="field.children || []"
+          :model="model"
+          :readonly="readonly || field.readonly === true"
+          :editable="editable && field.readonly !== true"
+          :sub-table-bindings="subTableBindings"
+          :linked-sub-table-bindings="linkedSubTableBindings"
+          :parent-row="parentRow"
+          :show-link-form-dialog-footer="showLinkFormDialogFooter"
+          :compact-lookup-cells="compactLookupCells"
+          :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+          :field-permissions="fieldPermissions"
+          :is-field-visible="isFieldVisible"
+          :is-field-required="isFieldRequired"
+          :assignment-config="assignmentConfig"
+          @update:field="(k, v) => onFieldUpdate(k, v)"
+            @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
+          @field-blur="onFieldBlur"
+        />
+      </el-row>
     </el-col>
     <el-col
       v-else-if="!inColumn && shouldRenderLeafField(field)"

@@ -216,7 +216,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
         savedSubTables as Record<string, any>,
         {
           bindingId: Number(b.bindingId ?? 0),
-          tableName: b.physicalTableName ?? b.tableName,
+          tableName: b.designerTableName ?? b.tableName,
           tableDisplayName: b.tableName,
           // 规范 key 的命名空间由「绑的是 DW 还是 RT 表」决定，缺了就会去 dw: 里找 rt: 的数据
           relationTableId: (b as { relationTableId?: number | null }).relationTableId,
@@ -305,7 +305,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
               columns?: Array<{ field?: string }> | null
               foreignKeyField?: string | null
               tableName?: string
-              physicalTableName?: string
+              designerTableName?: string
               tableId?: number | null
             },
           ),
@@ -334,7 +334,7 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
             columns?: Array<{ field?: string }> | null
             foreignKeyField?: string | null
             tableName?: string
-            physicalTableName?: string
+            designerTableName?: string
             tableId?: number | null
           },
         )

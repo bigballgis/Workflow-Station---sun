@@ -77,7 +77,8 @@ public class TaskFormController {
             request.getSubTableData().forEach(subTables::put);
             formData.put("__subTables__", subTables);
         }
-        taskFormComponent.submitTaskForm(taskId, userId, formData, request.getBaselineValues());
+        taskFormComponent.submitTaskForm(taskId, userId, formData, request.getBaselineValues(),
+                request.getEmptiedSubTableKeys());
         return ApiResponse.success(null);
     }
 

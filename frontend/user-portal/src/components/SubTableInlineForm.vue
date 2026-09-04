@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import PortalFormFields, { type PortalSubTableBindingLite } from './PortalFormFields.vue'
 import { flattenLeafFormFields, type FormField } from './formRendererHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 import {
   useSubTableDialogComponentEvents,
   type DialogColumnWithEvents,
@@ -74,6 +75,12 @@ interface Props {
    * `id_idw` 的表（实测 ATM_Transaction 是 `row_id`、subtable 是 `id_idwnn`）不能靠猜列名。
    */
   primaryKeyFields?: string[] | null
+  /**
+   * BPMN-derived MI assignment contract for the bound sub-table — passed straight to the inner
+   * PortalFormFields so an Assignment Mode block placed in this sub-form renders here exactly
+   * as it does in the grid's Add/Edit dialog. Absent means no Assignment Mode behavior.
+   */
+  assignmentConfig?: AssignmentConfig
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -91,6 +98,8 @@ const emit = defineEmits<{
   (e: 'update:row', row: Record<string, unknown>): void
   (e: 'change', key: string, value: unknown): void
   (e: 'save'): void
+  /** 透传内层 PortalFormFields 的子表行变化，让宿主同步 `binding.data`（见该 emit 的说明）。 */
+  (e: 'update:sub-table-data', bindingId: number, rows: unknown[]): void
 }>()
 
 const { t } = useI18n()
@@ -325,7 +334,9 @@ const cardTitle = computed(() =>
           :field-permissions="fieldPermissions"
           :is-field-visible="isDialogFieldVisible"
           :is-field-required="isInlineFieldRequired"
+          :assignment-config="assignmentConfig"
           @update:field="handleFieldUpdate"
+          @update:sub-table-data="(bid: number, rows: unknown[]) => emit('update:sub-table-data', bid, rows)"
           @field-blur="handleFieldBlur"
         />
       </el-row>

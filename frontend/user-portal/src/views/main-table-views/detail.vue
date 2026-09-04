@@ -54,7 +54,12 @@ import { ArrowLeft, Loading } from '@element-plus/icons-vue'
 import FormRenderer from '@/components/FormRenderer.vue'
 import type { FormField } from '@/components/formRendererHelpers/formRendererTypes'
 import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
-import { buildViewDetailSubTableBindings, toViewDetailFields } from '@/composables/mainTableView/viewDetailForm'
+import {
+  buildViewDetailSubTableBindings,
+  resolveLookupDisplayValues,
+  toViewDetailFields,
+} from '@/composables/mainTableView/viewDetailForm'
+import { viewDetailRowQuery } from '@/composables/mainTableView/viewDetailQuery'
 import { mainTableViewApi } from '@/api/mainTableView'
 import { processApi } from '@/api/process'
 import { relationTableApi } from '@/api/relationTable'
@@ -86,7 +91,7 @@ async function load() {
   formFields.value = []
   subTableBindings.value = []
   try {
-    if (!viewId.value || !functionUnitCode.value) return
+    if (!viewId.value || !functionUnitCode.value || !rowKey.value) return
 
     const viewsRes = await mainTableViewApi.listViews(functionUnitCode.value)
     const view = (viewsRes.data || []).find(v => v.id === viewId.value)
@@ -96,13 +101,11 @@ async function load() {
 
     // The row is fetched through the view's own data endpoint so that the view's
     // access rules and column projection apply here exactly as they do in the list.
-    const dataRes: any = await mainTableViewApi.queryData(viewId.value, {
-      page: 0,
-      size: 50,
-      search: rowKey.value,
-    })
+    // rowKey is the list identity, not a keyword — searching it with ILIKE cannot
+    // find a SUB row whose columns hold only the human id.
+    const dataRes: any = await mainTableViewApi.queryData(viewId.value, viewDetailRowQuery(rowKey.value))
     const rows: any[] = dataRes.data?.rows || dataRes.data?.records || []
-    const row = rows.find(r => matchesRowKey(r)) || null
+    const row = rows.find((r: any) => matchesRowKey(r)) || (rows.length === 1 ? rows[0] : null)
     if (!row) return
     rowValues.value = row.values || {}
 
@@ -129,6 +132,8 @@ async function load() {
         config && typeof config === 'object' ? config : {},
         rowValues.value,
       )
+      // lookup 列存的是被引用表的整行对象，只读渲染会变成 [object Object]，换成显示列的值。
+      rowValues.value = resolveLookupDisplayValues(formFields.value, rowValues.value)
       rowFound.value = true
     }
   } catch {

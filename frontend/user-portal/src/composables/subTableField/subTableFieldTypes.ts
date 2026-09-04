@@ -17,10 +17,16 @@ export interface SubTableBinding {
   bindingId: number
   tableId?: number | null
   bindingType: string
+  /** EDITABLE / READONLY（Table Design 的读写开关）。 */
   bindingMode: string
+  /**
+   * `structuralFk` / `miParticipantRow`（Manage Table Bindings 的 Link Mode）——
+   * 与 {@link bindingMode} 名字相近但语义无关，FK/PK 运行时靠它识别 MI 参与者行。
+   */
+  bindingLinkMode?: string | null
   foreignKeyField?: string | null
   tableName: string
-  physicalTableName?: string
+  designerTableName?: string
   tableType: string
   tableDescription: string
   columns: Column[]
@@ -53,8 +59,20 @@ export interface NestedSubTableDescriptor {
    */
   tableId?: number | null
   fieldDefinitions?: BindingFieldDefinition[]
-  physicalTableName?: string
+  designerTableName?: string
+  /** EDITABLE / READONLY（Table Design 的读写开关）。 */
   bindingMode?: string
+  /**
+   * `structuralFk` / `miParticipantRow`（Manage Table Bindings 的 Link Mode）——
+   * 与 {@link bindingMode} 是**两个不同的字段**，只是名字相近。
+   *
+   * <p>FK 播种与主键分配靠它判断「这张表是不是 MI 参与者行」
+   * （`filterStructuralFkMetasForBinding` / `applyMiParticipantRowSeedToInitialRow`
+   * 都只认 `=== 'miParticipantRow'`）。此前 SubTableAddDialog 把 `bindingMode`
+   * 接到了 `:binding-link-mode` 上，传下去的是 `EDITABLE`：恒不等于
+   * `miParticipantRow`，于是嵌套的 MI collection 会被静默当成普通子表处理。
+   */
+  bindingLinkMode?: string | null
   foreignKeyField?: string | null
   formFields?: FormField[]
   formOptions?: Record<string, unknown> | null

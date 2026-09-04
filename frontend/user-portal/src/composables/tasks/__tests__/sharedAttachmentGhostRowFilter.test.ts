@@ -21,7 +21,7 @@ const ATTACHMENT_BINDING = {
   bindingId: 50553,
   tableId: 50330,
   tableName: 'Attachment',
-  physicalTableName: 'attachment',
+  designerTableName: 'attachment',
   foreignKeyField: 'main_id',
   columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
   // 真实 binding payload 里 columns 常为 null，判据走设计器字段定义（data_type='FILE'）
@@ -103,7 +103,7 @@ describe('shared attachment grid — ghost rows carrying no attachment data are 
       bindingId: 51000,
       tableId: 51001,
       tableName: 'Remark',
-      physicalTableName: 'remark',
+      designerTableName: 'remark',
       foreignKeyField: 'main_id',
       columns: [{ field: 'id' }],
     }

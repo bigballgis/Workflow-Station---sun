@@ -40,7 +40,7 @@ export interface ApplicationDetailLinkBindingsFns {
       bindingMode: string
       foreignKeyField: string | null
       tableName: string
-      physicalTableName?: string
+      designerTableName?: string
       tableType: string
       tableDescription: string
       columns: Array<{ field: string; label: string; type?: string }>
@@ -194,7 +194,7 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
       bindingMode: string
       foreignKeyField: string | null
       tableName: string
-      physicalTableName?: string
+      designerTableName?: string
       tableType: string
       tableDescription: string
       columns: Array<{ field: string; label: string; type?: string }>
@@ -257,7 +257,7 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
             bindingMode: raw.bindingMode,
             foreignKeyField: raw.foreignKeyField,
             tableName: raw.tableDisplayName || raw.tableName,
-            physicalTableName: raw.tableName,
+            designerTableName: raw.tableName,
             tableType: raw.tableType,
             tableDescription: raw.tableDescription,
             columns,
@@ -296,7 +296,7 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
           bindingMode: 'EDITABLE',
           foreignKeyField: null as string | null,
           tableName: tableLabel,
-          physicalTableName: tableLabel,
+          designerTableName: tableLabel,
           tableType: '',
           tableDescription: ''
         }
@@ -309,7 +309,7 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
           bindingMode: synthetic.bindingMode,
           foreignKeyField: synthetic.foreignKeyField,
           tableName: tableLabel,
-          physicalTableName: synthetic.physicalTableName,
+          designerTableName: synthetic.designerTableName,
           tableType: synthetic.tableType,
           tableDescription: synthetic.tableDescription,
           columns,

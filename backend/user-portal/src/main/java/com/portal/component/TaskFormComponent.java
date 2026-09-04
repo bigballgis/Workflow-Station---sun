@@ -267,6 +267,31 @@ public class TaskFormComponent {
     }
 
     /**
+     * Normalizes the declared "deliberately emptied" store keys.
+     *
+     * <p>An empty slice is ambiguous by itself ("user deleted their last row" vs "this binding was
+     * never rendered"), so the frontend declares intent rather than the backend guessing. A missing
+     * or blank-only declaration yields an empty set — i.e. the previous behavior, where an empty
+     * slice always leaves the baseline untouched.
+     *
+     * <p>It arrives as its own request field rather than inside {@code formData}: the
+     * approve/complete path copies {@code formData} wholesale into process variables, so a marker
+     * carried there would be persisted as a business variable.
+     */
+    private static Set<String> normalizeEmptiedSubTableKeys(List<String> declared) {
+        if (declared == null || declared.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> keys = new LinkedHashSet<>();
+        for (String k : declared) {
+            if (k != null && !k.trim().isEmpty()) {
+                keys.add(k.trim());
+            }
+        }
+        return keys;
+    }
+
+    /**
      * Overlays THIS task's own MI loop variable ({@code _currentItem}) from the engine.
      *
      * <p>Flowable scopes {@code currentItem} to the MI sub-process execution, so each participant's
@@ -468,6 +493,19 @@ public class TaskFormComponent {
         if (hydratedVariables.containsKey("__subTables__")) {
             fieldValues.put("__subTables__", hydratedVariables.get("__subTables__"));
         }
+        // Same reasoning for the MI loop variable: `extractFieldSubset` keeps only DESIGNER form
+        // fields, and `_currentItem` is runtime state, not a form field — so the task-scoped value
+        // resolved just above by `applyTaskScopedMiCurrentItem` was filtered straight back out.
+        //
+        // Without it the whole MI row-isolation contract silently switches off for this form:
+        // `isMiSubTaskSubmission` sees no loop variable and treats the submission as non-MI (whole
+        // array replace), and the frontend cannot resolve `currentMiRowId`, so it can neither scope
+        // rows to this participant nor express a deletion. Measured on task 506809ee (Test-000009):
+        // People rows loaded from the server could not be deleted at all, while rows added in the
+        // same session could — the latter never needed the participant identity.
+        if (hydratedVariables.get("_currentItem") instanceof Map) {
+            fieldValues.put("_currentItem", hydratedVariables.get("_currentItem"));
+        }
         // Readonly Request ID synthetic field: render the same value as DW preview /
         // portal lists.
         applyRequestIdFieldValue(fieldValues, processInstance, hydratedVariables);
@@ -527,6 +565,18 @@ public class TaskFormComponent {
      */
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
             Map<String, Object> baselineValues) {
+        submitTaskForm(taskId, userId, formData, baselineValues, null);
+    }
+
+    /**
+     * @param emptiedSubTableKeys participant-scoped {@code __subTables__} store keys the frontend
+     *                            deliberately emptied (the user deleted the last row they owned).
+     *                            An empty slice cannot express that on its own — see the empty-slice
+     *                            branch in {@link MiSubTaskSubTableRowMerger}. {@code null}/empty
+     *                            keeps the previous behavior (baseline untouched).
+     */
+    public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
+            Map<String, Object> baselineValues, List<String> emptiedSubTableKeys) {
         log.info("Submitting task form for task: {}, user: {}", taskId, userId);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
@@ -578,6 +628,10 @@ public class TaskFormComponent {
             miSubTaskSubTableRowMerger().requireResolvedRowKey(resolvedMiCurrentRowKey);
         }
         final Map<String, Object> miCurrentRowKey = resolvedMiCurrentRowKey;
+        // Which participant-scoped sub-table slices the frontend deliberately emptied (the user
+        // deleted the last row they owned). An empty slice alone cannot say this — see the
+        // empty-slice branch in MiSubTaskSubTableRowMerger — so the intent is declared explicitly.
+        final Set<String> miEmptiedSubTableKeys = normalizeEmptiedSubTableKeys(emptiedSubTableKeys);
 
         taskFormWriteTx().executeWithoutResult(status -> {
             ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
@@ -620,7 +674,8 @@ public class TaskFormComponent {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> baselineSubTables = (Map<String, Object>) currentVariables.get("__subTables__");
                 inbound.put("__subTables__",
-                        miSubTaskSubTableRowMerger().mergeCurrentRowOnly(submittedSubTables, baselineSubTables, miCurrentRowKey));
+                        miSubTaskSubTableRowMerger().mergeCurrentRowOnly(
+                                submittedSubTables, baselineSubTables, miCurrentRowKey, miEmptiedSubTableKeys));
             }
 
             updatedVariables.putAll(inbound);
@@ -642,6 +697,10 @@ public class TaskFormComponent {
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
+            // Request ID is platform-derived: recompute it from the main-table config so a task
+            // that edits a contributing field cannot leave the persisted identifier stale, and a
+            // client-supplied value never survives.
+            requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
             // Prevent geometric __subTables__ bloat: drop deep nested copies before
             // persisting so each
             // task save stores the canonical one-level structure instead of compounding
@@ -942,6 +1001,9 @@ public class TaskFormComponent {
         Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey,
                 processInstanceId, merged);
         SubTableNestingSanitizer.stripDeepNestedSubTables(merged);
+        // The merge can pull a client-supplied Request ID in from completedVariables; re-derive it
+        // so a snapshot capture never rewrites the stored identifier with an unstamped value.
+        requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
 

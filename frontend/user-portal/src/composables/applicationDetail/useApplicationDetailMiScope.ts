@@ -22,7 +22,7 @@ import type { ApplicationDetailCtx } from './context'
 export interface ApplicationDetailMiScopeFns {
   warnMiMissingPrimaryKey: (binding: {
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     bindingId?: number | string
   }) => void
   alignMainSubTableBindingsOnly: () => void
@@ -56,7 +56,7 @@ export function createApplicationDetailMiScope(ctx: ApplicationDetailCtx): Appli
 
   function warnMiMissingPrimaryKey(binding: {
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     bindingId?: number | string
   }) {
     const label = describeSubTableBindingLabel(binding)

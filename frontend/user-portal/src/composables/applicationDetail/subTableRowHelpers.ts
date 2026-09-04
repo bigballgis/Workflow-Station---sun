@@ -70,7 +70,7 @@ export type SubTableBindingAlignable = {
   tableName: string
   data: any[]
   primaryKeyFields?: string[]
-  physicalTableName?: string
+  designerTableName?: string
   // binding 分类（共享附件 / participant-child / collection）**全部读这两项配置**。
   // 漏在类型里 = 调用点被迫 `as {...}` 窄化，把配置藏起来，分类静默降级。
   foreignKeyField?: string | null

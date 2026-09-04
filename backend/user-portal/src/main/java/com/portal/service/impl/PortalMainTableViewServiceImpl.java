@@ -4,6 +4,7 @@ import com.platform.common.list.ListColumnMeta;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.SubTableRowIdentity;
+import com.platform.common.subtable.SubTableStoreKeys;
 import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
@@ -13,6 +14,7 @@ import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.MainTableViewSubRowQueryComponent;
 import com.portal.component.OwnerFieldComponent;
 import com.portal.component.ProcessComponent;
+import com.portal.component.RequestIdEnricher;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewQueryRequest;
 import com.portal.util.MainTableViewColumnSpec;
@@ -32,8 +34,14 @@ import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalMainTableViewService;
 import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.PortalMainTableViewCsvUtils;
+import com.portal.util.PortalMainTableViewDetailValues;
+import com.portal.util.PortalMainTableViewNestedSubTables;
+import com.portal.util.PortalMainTableViewNestedSubTables.NestedBinding;
+import com.portal.util.PortalMainTableViewRowKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -65,6 +73,15 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private final ProcessComponent processComponent;
     private final ComputedFieldRecalculator computedFieldRecalculator;
     private final UserDisplayNameResolver userDisplayNameResolver;
+
+    /**
+     * Lazy: re-derives the readonly Request ID after a CSV import edits main-table fields.
+     * Field-injected (not a ctor arg) to keep the constructor arity stable for {@code new}-constructed
+     * tests; null there simply skips stamping.
+     */
+    @Lazy
+    @Autowired
+    private RequestIdEnricher requestIdEnricher;
 
     @Override
     @Transactional(readOnly = true)
@@ -166,7 +183,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     @Transactional(readOnly = true)
     public MainTableViewDataPage queryViewData(String userId, Long viewId,
                                                MainTableViewQueryRequest request) {
-        ViewDefinition view = loadPublishedView(viewId);
+        ViewDefinition view = loadPublishedView(viewId, request.rowKey() != null);
         assertFuAccess(userId, view.functionUnitCode());
         assertViewAccess(userId, view);
 
@@ -212,13 +229,14 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 subViewQuery(userId, view, request, request.page(), request.size()));
         Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
         Map<String, String> ownerCache = ownerDisplayCacheForSubRows(page.rows());
+        boolean detailRow = request.rowKey() != null;
         return MainTableViewDataPage.builder()
                 .columns(visibleColumns(view))
                 .rows(page.rows().stream()
                         .map(row -> MainTableViewDataRow.builder()
                                 .rowKey(row.instance().getId() + "|" + SubTableRowIdentity.identityOf(row.subRow()))
                                 .processInstanceId(row.instance().getId())
-                                .values(stripInternalKeys(projectSubRow(row, view, fkSource, ownerCache)))
+                                .values(subRowValues(row, view, fkSource, ownerCache, detailRow))
                                 .build())
                         .toList())
                 .total(page.total())
@@ -252,7 +270,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return new MainTableViewSubRowQueryComponent.Query(
                 view.id(),
                 view.functionUnitCode(),
-                view.subBindingKeys(),
+                view.subStoreKey(),
                 MainTableViewColumnSpec.sqlFor(fields, view.sortConfig(), source, "pi.id, pi.row_identity"),
                 designerAndDerived(view, fields, source, request),
                 MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
@@ -270,7 +288,9 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                                            MainTableViewColumnSpec.SqlSource source,
                                            MainTableViewQueryRequest request) {
         return designerFilter(view, fields, source)
-                .and(MainTableViewDerivedFilterSql.whereClause(request.filters(), fields, source));
+                .and(MainTableViewDerivedFilterSql.whereClause(request.filters(), fields, source))
+                .and(PortalMainTableViewRowKeys.exactMatch(
+                        request.rowKey(), !source.instanceIsTheRow()));
     }
 
     /**
@@ -447,6 +467,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             }
             if (changed) {
                 computedFieldRecalculator.recalculate(pi.getFunctionUnitCode(), vars);
+                // An import may edit a field that feeds the Request ID; re-derive it so the stored
+                // identifier keeps matching the row it names.
+                if (requestIdEnricher != null) {
+                    requestIdEnricher.stampRequestId(pi.getFunctionUnitCode(), vars);
+                }
                 pi.setVariables(vars);
                 processInstanceRepository.save(pi);
                 updated++;
@@ -1095,12 +1120,45 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return out;
     }
 
+    /**
+     * Detail (rowKey) needs stored members the list omitted, plus the nested store the DETAIL
+     * form's SUB grids read. List pages omit both. {@link #stripInternalKeys} would drop
+     * {@code __subTables__}, so that map is attached after.
+     */
+    private Map<String, Object> subRowValues(
+            MainTableViewSubRowQueryComponent.Row row,
+            ViewDefinition view,
+            Map<String, FkSourceMeta> fkSource,
+            Map<String, String> ownerCache,
+            boolean detailRow) {
+        Map<String, Object> projected = projectSubRow(row, view, fkSource, ownerCache);
+        if (detailRow) {
+            projected = PortalMainTableViewDetailValues.overlayStoredMembers(projected, row.subRow());
+        }
+        Map<String, Object> values = stripInternalKeys(projected);
+        if (!detailRow) {
+            return values;
+        }
+        Map<String, Object> nested = PortalMainTableViewNestedSubTables.forParentRow(
+                row.subRow(),
+                row.instance().getVariables(),
+                view.nestedSubBindings());
+        if (!nested.isEmpty()) {
+            values.put(PortalMainTableViewNestedSubTables.STORE_KEY, nested);
+        }
+        return values;
+    }
+
     private ViewDefinition loadPublishedView(Long viewId) {
+        return loadPublishedView(viewId, false);
+    }
+
+    private ViewDefinition loadPublishedView(Long viewId, boolean detailRow) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT v.id, v.view_name, v.sort_config::text AS sort_config,
                        v.filter_config::text AS filter_config, fu.code AS fu_code,
-                       v.main_table_id, td.table_type,
-                       v.restrict_to_involved_users
+                       v.main_table_id, td.table_type, td.table_name,
+                       v.restrict_to_involved_users, v.detail_form_id
                 FROM dw_main_table_view_configs v
                 INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
                 LEFT JOIN dw_table_definitions td ON td.id = v.main_table_id
@@ -1133,14 +1191,20 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         Long mainTableId = row.get("main_table_id") != null
                 ? ((Number) row.get("main_table_id")).longValue() : null;
         String tableType = stringVal(row.get("table_type"));
-        // SUB-table data is nested under variables.__subTables__, keyed by each binding id that maps
-        // this table into a form. Collect those binding keys so we can flatten the rows below.
-        List<String> subBindingKeys = new ArrayList<>();
-        if ("SUB".equalsIgnoreCase(tableType) && mainTableId != null) {
-            subBindingKeys = jdbcTemplate.queryForList(
-                    "SELECT id FROM dw_form_table_bindings WHERE table_id = ?",
-                    Long.class, mainTableId).stream().map(String::valueOf).toList();
+        // SUB-table data is nested under variables.__subTables__ under one canonical key per table
+        // (see SubTableStoreKeys). A view's main_table_id is a foreign key into dw_table_definitions,
+        // so the table is always a designer table and the key is always the dw: namespace.
+        String subStoreKey = null;
+        if ("SUB".equalsIgnoreCase(tableType)) {
+            subStoreKey = SubTableStoreKeys.dwKey(row.get("table_name"));
+            if (subStoreKey == null) {
+                throw new IllegalStateException("Sub-table view " + viewId + " resolves to table "
+                        + mainTableId + ", which has no name; its __subTables__ key cannot be derived.");
+            }
         }
+
+        Long detailFormId = row.get("detail_form_id") != null
+                ? ((Number) row.get("detail_form_id")).longValue() : null;
 
         return new ViewDefinition(
                 viewId,
@@ -1151,9 +1215,27 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 fields,
                 mainTableId,
                 tableType,
-                subBindingKeys,
+                subStoreKey,
                 Boolean.TRUE.equals(row.get("restrict_to_involved_users")),
-                loadAccessRules(viewId));
+                loadAccessRules(viewId),
+                loadNestedSubBindings(detailRow ? detailFormId : null));
+    }
+
+    private List<NestedBinding> loadNestedSubBindings(Long detailFormId) {
+        if (detailFormId == null) {
+            return List.of();
+        }
+        return jdbcTemplate.query("""
+                SELECT td.table_name, b.foreign_key_field
+                FROM dw_form_table_bindings b
+                INNER JOIN dw_table_definitions td ON td.id = b.table_id
+                WHERE b.form_id = ?
+                  AND b.binding_type = 'SUB'
+                """,
+                (rs, n) -> new NestedBinding(
+                        rs.getString("table_name"),
+                        rs.getString("foreign_key_field")),
+                detailFormId);
     }
 
     private List<AccessRule> loadAccessRules(Long viewId) {
@@ -1312,7 +1394,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             List<ViewFieldDef> fields,
             Long mainTableId,
             String tableType,
-            List<String> subBindingKeys,
+            String subStoreKey,
             boolean restrictToInvolvedUsers,
-            List<AccessRule> accessRules) {}
+            List<AccessRule> accessRules,
+            List<NestedBinding> nestedSubBindings) {}
 }

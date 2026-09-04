@@ -181,7 +181,7 @@ class AiWriteServiceTest {
                 .build();
 
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
-        when(iconRepository.findByName("existing-icon")).thenReturn(Optional.of(existingIcon));
+        when(iconRepository.findFirstByNameOrderByIdAsc("existing-icon")).thenReturn(Optional.of(existingIcon));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AiGeneratedData data = AiGeneratedData.builder()
@@ -205,7 +205,7 @@ class AiWriteServiceTest {
     @Test
     void handleIcon_newIcon_shouldCreate() {
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
-        when(iconRepository.findByName("brand-new-icon")).thenReturn(Optional.empty());
+        when(iconRepository.findFirstByNameOrderByIdAsc("brand-new-icon")).thenReturn(Optional.empty());
 
         Icon savedIcon = Icon.builder()
                 .id(20L)

@@ -208,7 +208,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         bindingId: 104,
         tableId: 74,
         tableName: 'attachment',
-        physicalTableName: 'attachment',
+        designerTableName: 'attachment',
         foreignKeyField: 'main_id',
         // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
         fieldDefinitions: [
@@ -255,7 +255,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         bindingId: 271,
         tableId: 112,
         tableName: 'HMDC Transaction',
-        physicalTableName: 'HMDC_Transaction',
+        designerTableName: 'HMDC_Transaction',
         columns: [{ field: 'row_id' }, { field: 'card_number' }],
         primaryKeyFields: ['row_id'],
         data: [...saved[271]!],
@@ -264,7 +264,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         bindingId: 273,
         tableId: 114,
         tableName: 'HMDC Attachment',
-        physicalTableName: 'HMDC_Attachment',
+        designerTableName: 'HMDC_Attachment',
         columns: [{ field: 'file' }],
         data: [...saved[273]!],
       },
@@ -335,7 +335,7 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
         bindingId: 30,
         tableId: 20,
         tableName: 'People',
-        physicalTableName: 'people',
+        designerTableName: 'people',
         foreignKeyField: 'sub_task_id',
         // 真实 binding 都带 fieldDefinitions；FK 列名从这里解析，不再猜列名。
         fieldDefinitions: [

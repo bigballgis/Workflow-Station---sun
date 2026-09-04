@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getTeamRequests, type TeamRequestItem } from '@/api/dashboard'
+import { getTeamRequests } from '@/api/dashboard'
 import { processApi, type ProcessInstance } from '@/api/process'
 
 /** 首页只做预览，明细各自去 My Requests / Team Requests 看。 */
@@ -30,7 +30,6 @@ export function useRequestsBoard() {
     completedCount: 0,
     withdrawnCount: 0
   })
-  const teamRecent = ref<TeamRequestItem[]>([])
 
   const loadRequestsBoard = async () => {
     loading.value = true
@@ -52,7 +51,7 @@ export function useRequestsBoard() {
 
     if (team.status === 'fulfilled') {
       const res = team.value as unknown as { data?: unknown }
-      const data = (res.data || res) as (TeamRequestSummary & { content?: TeamRequestItem[] }) | null
+      const data = (res.data || res) as TeamRequestSummary | null
       if (data) {
         teamSummary.value = {
           overallCount: data.overallCount ?? 0,
@@ -60,7 +59,6 @@ export function useRequestsBoard() {
           completedCount: data.completedCount ?? 0,
           withdrawnCount: data.withdrawnCount ?? 0
         }
-        teamRecent.value = data.content || []
       }
     } else {
       loadFailed.value = true
@@ -76,7 +74,6 @@ export function useRequestsBoard() {
     myRequests,
     myRequestsTotal,
     teamSummary,
-    teamRecent,
     loadRequestsBoard
   }
 }

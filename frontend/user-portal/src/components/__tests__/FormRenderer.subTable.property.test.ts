@@ -401,7 +401,7 @@ describe('resolveSubTableRowsForBinding — assignment sibling binding id', () =
     const binding = {
       bindingId: 66,
       tableName: 'Sub Task',
-      physicalTableName: 'subtable',
+      designerTableName: 'subtable',
       tableId: 20,
       columns: [{ field: 'assignee' }, { field: 'task_status' }],
     }
@@ -428,7 +428,7 @@ describe('resolveSubTableRowsForBinding — assignment sibling binding id', () =
     const binding = {
       bindingId: 66,
       tableName: 'Sub Task',
-      physicalTableName: 'subtable',
+      designerTableName: 'subtable',
       tableId: 20,
       columns: [{ field: 'assignee' }, { field: 'task_status' }],
     }

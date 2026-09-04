@@ -1,6 +1,13 @@
 // 统一设计系统（Inter 字体 / 红主色板 / 胶囊按钮 / 账册表格 / 软色标签）
 @use './ws-theme.scss';
 
+// MI Assignment Mode 的两张模式卡片：SubTableAddDialog（未 scoped）与
+// MiAssignmentModeBlock（scoped）都要用同一套样式。必须放全局入口而**不是**在两个
+// SFC 里各 @import 一次 —— 同一个文件被 scoped 与非 scoped 的 <style> 同时引入时，
+// 构建只会保留其中一份并给它打上 scoped 的 [data-v-xxx]，未 scoped 那侧就全部失配，
+// 卡片会退化成浏览器默认按钮。见 miAssignmentModeCard.scss 文件头。
+@use './miAssignmentModeCard.scss';
+
 // 汇丰主题变量
 :root {
   // 主色调

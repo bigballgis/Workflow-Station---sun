@@ -138,10 +138,14 @@ defineExpose({ mode: assignMode, hiddenFields })
 </template>
 
 <style scoped>
-/* Routing a row has two destinations — a named person, or a role pool in a BU. The modes
-   are cards rather than bare radios so each states what it will ask for, and the owned
-   pickers render inside the same box so the block closes itself.
-   Kept in parity with SubTableAddDialog and DW MiAssignmentPlaceholderWidget. */
+/* Mode-card presentation lives in styles/miAssignmentModeCard.scss, loaded once from
+   styles/index.scss — deliberately NOT imported here: pulling the same file into a
+   scoped block as well would scope the shared rules and break SubTableAddDialog's
+   unscoped copy (see that file's header).
+
+   This host's own FRAME: the owned pickers render inside the same box, so the block
+   closes itself (unlike SubTableAddDialog, whose flat column list must assemble a
+   frame out of sibling elements). */
 .mi-assignment-block {
   margin: 4px 0 18px;
   padding: 12px 14px;
@@ -188,119 +192,11 @@ defineExpose({ mode: assignMode, hiddenFields })
   padding: 0;
 }
 
-/* Mode card: the rail on the left is the only saturated element in the block. */
-.mi-assignment-mode-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  position: relative;
-  margin: 0;
-  padding: 10px 12px 10px 14px;
-  overflow: hidden;
-  font: inherit;
-  text-align: left;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: transparent;
-  transition: background-color 0.15s ease;
-}
-
-.mi-assignment-mode-card:hover {
-  border-color: #b6bcc4;
-}
-
-.mi-assignment-mode-card.is-selected {
-  border-color: #c8102e;
-  box-shadow: 0 1px 3px rgba(200, 16, 46, 0.12);
-}
-
-.mi-assignment-mode-card.is-selected::before {
-  background: #c8102e;
-}
-
-/* BPMN configured only one mode (or the form is read-only) — the card stays visible but
-   locked, so the reader sees the mode was deliberately fixed. */
-.mi-assignment-mode-card.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.mi-assignment-mode-card.is-disabled:hover {
-  border-color: #dcdfe6;
-}
-
-.mi-assignment-mode-card:focus-visible {
-  outline: 2px solid #c8102e;
-  outline-offset: 2px;
-}
-
-.mi-assignment-mode-card__dot {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
-  border: 1px solid #c0c4cc;
-  border-radius: 50%;
-  background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__dot {
-  border-color: #c8102e;
-  box-shadow: inset 0 0 0 3px #c8102e;
-}
-
-.mi-assignment-mode-card__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mi-assignment-mode-card__name {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.3;
-  color: #606266;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__name {
-  color: #1f2329;
-}
-
-.mi-assignment-mode-card__hint {
-  font-size: 11px;
-  line-height: 1.35;
-  color: #9aa0a8;
-  /* Wrap rather than clip — the hint is what tells you which picker you get. */
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-/* Narrow viewports (mobile): stack the modes rather than crushing the hint text. */
+/* Narrow viewports (mobile): stack the modes rather than crushing the hint text.
+   Host-owned: it targets this block's own modes container, whose class differs per host. */
 @media (max-width: 560px) {
   .mi-assignment-block__modes {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mi-assignment-mode-card,
-  .mi-assignment-mode-card::before,
-  .mi-assignment-mode-card__dot {
-    transition: none;
   }
 }
 </style>

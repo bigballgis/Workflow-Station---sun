@@ -51,7 +51,7 @@ export interface PreviousFormEntry {
     bindingMode: string
     foreignKeyField: string | null
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     /** 关联表标识：决定 __subTables__ 走 rt: 还是 dw: 命名空间 */
     relationTableId?: number | null
     relationTableName?: string | null
@@ -116,7 +116,7 @@ export function createTaskDetailState(options: { taskId: string }) {
     bindingMode: string
     foreignKeyField: string | null
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     /** 关联表标识：决定 __subTables__ 走 rt: 还是 dw: 命名空间 */
     relationTableId?: number | null
     relationTableName?: string | null

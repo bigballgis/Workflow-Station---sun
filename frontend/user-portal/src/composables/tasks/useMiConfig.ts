@@ -231,7 +231,7 @@ export function requireSubTablePrimaryKeyFields(
 /** 一个 binding 上足以判断「它是不是当前 FU 的 MI 子任务表」的字段。 */
 export interface MiSubTaskBindingLike {
   tableName?: string | null
-  physicalTableName?: string | null
+  designerTableName?: string | null
   primaryKeyFields?: string[] | null
 }
 
@@ -249,7 +249,7 @@ function compactName(v: unknown): string {
 export function isMiSubTaskCollectionBinding(binding: MiSubTaskBindingLike | null | undefined): boolean {
   const want = compactName(activeMiConfig?.subTableName)
   if (!want || !binding) return false
-  return [binding.physicalTableName, binding.tableName]
+  return [binding.designerTableName, binding.tableName]
     .filter(Boolean)
     .some(n => compactName(n) === want)
 }

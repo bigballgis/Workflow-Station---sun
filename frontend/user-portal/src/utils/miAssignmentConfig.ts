@@ -135,11 +135,11 @@ export function fieldsHiddenByMode(
 
 export function resolveAssignmentConfigForBinding(
   map: unknown,
-  binding: { tableName?: string; physicalTableName?: string },
+  binding: { tableName?: string; designerTableName?: string },
 ): AssignmentConfig | undefined {
   if (!map || typeof map !== 'object' || Array.isArray(map)) return undefined
   const assignments = map as Record<string, unknown>
-  const names = [binding.physicalTableName, binding.tableName]
+  const names = [binding.designerTableName, binding.tableName]
     .map(name => configuredField(name))
     .filter((name): name is string => !!name)
   for (const name of names) {
@@ -154,7 +154,7 @@ export function resolveAssignmentConfigForBinding(
 
 export function attachAssignmentConfigsToBindings<T extends {
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   assignmentConfig?: AssignmentConfig
 }>(bindings: T[], map: unknown): T[] {
   for (const binding of bindings) {
@@ -177,11 +177,11 @@ export function stampAssignmentConfigsOnForms(
     const typedBindings = bindings as Array<{
       tableName?: string
       tableDisplayName?: string
-      physicalTableName?: string
+      designerTableName?: string
       assignmentConfig?: AssignmentConfig
     }>
     for (const binding of typedBindings) {
-      if (!binding.physicalTableName) binding.physicalTableName = binding.tableName
+      if (!binding.designerTableName) binding.designerTableName = binding.tableName
       if (!binding.tableName && binding.tableDisplayName) binding.tableName = binding.tableDisplayName
     }
     attachAssignmentConfigsToBindings(typedBindings, map)

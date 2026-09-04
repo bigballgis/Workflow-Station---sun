@@ -4,6 +4,7 @@ import {
   resolveMiBindingKindFromConfig,
 } from '../miBindingKindFromConfig'
 import { mergeSubTableRowsByRowId } from '../shared'
+import { mergeSubTableRowsForMiSave } from '../miSubTableSaveMerge'
 import { clearActiveMiConfig } from '../useMiConfig'
 
 /**
@@ -100,17 +101,88 @@ describe('shared sub-table deletion survives Save', () => {
     expect(out.map((r: any) => r.idfa)).not.toContain('c')
   })
 
-  it('participant-scoped binding still merges, so a peer participant row is never dropped', () => {
+  /**
+   * participant-child 的正确规则是**按参与者分片替换**，不是整表并集：
+   * 「基线里不属于我的行 + 界面上我的全部行」。
+   *
+   * <p>这条断言以前写成「仍走并集、保住所有行」，用的是「每参与者一行」的 fixture ——
+   * 那把「保住 peer 的行」和「保住所有行」混为一谈了，恰好把 bug 锁成了预期行为。
+   * 一个参与者可以有**多行**（People 就是），此时并集会把我删掉的行也一并保住。
+   */
+  it('participant-child: my slice is replaced (delete sticks) while peers survive', () => {
     register()
-    // 界面上只有「我这一行」；别人的行必须保留
-    const saved = [{ idk: 'mine' }, { idk: 'peer' }]
-    const uiRows = [{ idk: 'mine' }]
+    const isOwn = (row: any) => row.sub_task_idqc === 'Test-000002'
+    // 我有两行、peer 一行；我删掉 mine-2
+    const saved = [
+      { idk: 'mine-1', sub_task_idqc: 'Test-000002' },
+      { idk: 'mine-2', sub_task_idqc: 'Test-000002' },
+      { idk: 'peer-1', sub_task_idqc: 'Test-000001' },
+    ]
+    const uiRows = [{ idk: 'mine-1', sub_task_idqc: 'Test-000002' }]
 
-    const isShared = resolveMiBindingKindFromConfig(peopleBinding, null) === 'shared'
-    const out = isShared ? uiRows : mergeSubTableRowsByRowId(saved, uiRows, ['idk'])
+    const out = mergeSubTableRowsForMiSave(peopleBinding, {
+      existing: saved,
+      uiRows,
+      primaryKeyFields: ['idk'],
+      isOwnRow: isOwn,
+    }) as any[]
 
-    expect(isShared).toBe(false)
-    expect(out.map((r: any) => r.idk).sort()).toEqual(['mine', 'peer'])
+    expect(resolveMiBindingKindFromConfig(peopleBinding, null)).toBe('participant-child')
+    // 删除生效
+    expect(out.map(r => r.idk)).not.toContain('mine-2')
+    // peer 的行原样保留
+    expect(out.map(r => r.idk).sort()).toEqual(['mine-1', 'peer-1'])
+  })
+
+  it('participant-child: without an ownership predicate it falls back to the union (safe side)', () => {
+    register()
+    const saved = [
+      { idk: 'mine-1', sub_task_idqc: 'Test-000002' },
+      { idk: 'peer-1', sub_task_idqc: 'Test-000001' },
+    ]
+    const uiRows = [{ idk: 'mine-1', sub_task_idqc: 'Test-000002' }]
+
+    const out = mergeSubTableRowsForMiSave(peopleBinding, {
+      existing: saved,
+      uiRows,
+      primaryKeyFields: ['idk'],
+      isOwnRow: null,
+    }) as any[]
+
+    // 判不出归属就不替换：最坏删不掉，绝不跨参与者丢数据
+    expect(out.map(r => r.idk).sort()).toEqual(['mine-1', 'peer-1'])
+  })
+
+  it('shared binding goes through the same helper and still replaces', () => {
+    register()
+    const out = mergeSubTableRowsForMiSave(attachmentBinding, {
+      existing: [{ idfa: 'a' }, { idfa: 'b' }, { idfa: 'c' }],
+      uiRows: [{ idfa: 'a' }, { idfa: 'b' }],
+      primaryKeyFields: ['idfa'],
+      isOwnRow: null,
+    }) as any[]
+
+    expect(out).toHaveLength(2)
+    expect(out.map(r => r.idfa)).not.toContain('c')
+  })
+
+  it('unclassifiable binding keeps the union even with a predicate available', () => {
+    register()
+    const mystery = {
+      bindingId: 99, tableId: 999, tableName: 'mystery',
+      bindingLinkMode: 'structuralFk', foreignKeyField: 'x',
+      fieldDefinitions: [{ fieldName: 'x', isForeignKey: true }],
+    } as never
+
+    const out = mergeSubTableRowsForMiSave(mystery, {
+      existing: [{ idk: 'a' }, { idk: 'b' }],
+      uiRows: [{ idk: 'a' }],
+      primaryKeyFields: ['idk'],
+      isOwnRow: () => true,
+    }) as any[]
+
+    expect(resolveMiBindingKindFromConfig(mystery, null)).toBeNull()
+    expect(out.map(r => r.idk).sort()).toEqual(['a', 'b'])
   })
 
   it('unclassifiable binding falls back to merge (safe side: cannot cross-participant drop)', () => {
@@ -147,5 +219,34 @@ describe('shared sub-table deletion survives Save', () => {
     expect(skipSnapshotMerge).toBe(true)
     expect(out).toHaveLength(2)
     expect(out.map((r) => r.idfa)).not.toContain('c')
+  })
+
+  /**
+   * 审计：Add / Edit / Delete 三个行内动作**走的是同一条链路**
+   * （SubTableField 的 emit('update:modelValue') → syncMainSubTableRows →
+   *  patchFormDataSubTablesFromCurrentBindings），所以那处快照并集对三者一视同仁。
+   *
+   * <p>并集是 **prefer-filled 的按主键并集**，因此受影响的是「减少信息」的两类操作：
+   * <ul>
+   *   <li><b>删除</b>：行整个消失 → 被快照带回；</li>
+   *   <li><b>清空字段</b>：值变成空 → 被快照旧值盖回；</li>
+   *   <li>新增 / 改成非空值：并集本来就保留，不受影响。</li>
+   * </ul>
+   */
+  it('shared binding: delete AND field-clear both survive (add/edit never regressed)', () => {
+    register()
+    const snap = [{ idfa: 'a', file: 'A.jpg' }, { idfa: 'b', file: 'B.jpg' }]
+    const isShared = resolveMiBindingKindFromConfig(attachmentBinding, null) === 'shared'
+    const patch = (uiRows) =>
+      isShared ? uiRows : mergeSubTableRowsByRowId(snap, uiRows, ['idfa'])
+
+    // 删除 b
+    expect(patch([{ idfa: 'a', file: 'A.jpg' }]).map((r) => r.idfa)).toEqual(['a'])
+    // 清空 a.file —— prefer-filled 并集会用旧值盖回，这里必须保持为空
+    expect(patch([{ idfa: 'a', file: '' }, { idfa: 'b', file: 'B.jpg' }])
+      .find((r) => r.idfa === 'a').file).toBe('')
+    // 新增 c：本来就不受影响
+    expect(patch([...snap, { idfa: 'c', file: 'C.jpg' }]).map((r) => r.idfa).sort())
+      .toEqual(['a', 'b', 'c'])
   })
 })

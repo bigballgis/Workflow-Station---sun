@@ -160,7 +160,7 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
             bindingMode: raw.bindingMode,
             foreignKeyField: raw.foreignKeyField,
             tableName: raw.tableDisplayName || raw.tableName,
-            physicalTableName: raw.tableName,
+            designerTableName: raw.tableName,
             relationTableId: (raw as any).relationTableId ?? null,
             relationTableName: (raw as any).relationTableName ?? null,
             tableType: raw.tableType,
@@ -200,7 +200,7 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
           bindingMode: 'EDITABLE',
           foreignKeyField: null as string | null,
           tableName: tableLabel,
-          physicalTableName: tableLabel,
+          designerTableName: tableLabel,
           tableType: '',
           tableDescription: ''
         }
@@ -213,7 +213,7 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
           bindingMode: synthetic.bindingMode,
           foreignKeyField: synthetic.foreignKeyField,
           tableName: tableLabel,
-          physicalTableName: synthetic.physicalTableName,
+          designerTableName: synthetic.designerTableName,
           tableType: synthetic.tableType,
           tableDescription: synthetic.tableDescription,
           columns,

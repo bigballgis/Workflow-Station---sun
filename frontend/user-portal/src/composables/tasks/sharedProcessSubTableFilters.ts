@@ -143,7 +143,7 @@ export function filterRowsForSharedProcessSubTableBinding(
     primaryKeyFields?: string[] | null
     fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
   },
 ): any[] {
@@ -221,7 +221,7 @@ export function finalizeSharedProcessSubTableBindingRows(
     primaryKeyFields?: string[] | null
     fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
   },
 ): any[] {

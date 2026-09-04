@@ -286,7 +286,7 @@
               link
               type="danger"
               size="small"
-              @click="deleteRowAndSyncNested(scope.$index)"
+              @click="deleteRowAndSyncNested(scope.$index, scope.row)"
             >
               {{ t('subTable.delete') }}
             </el-button>
@@ -418,6 +418,7 @@
       <div
         v-if="linkFormDialogVisible"
         class="link-form-modal-overlay"
+        :style="{ zIndex: linkFormOverlayZ }"
       >
         <div
           ref="linkFormModalPanelRef"
@@ -466,7 +467,14 @@
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
                   :field-permissions="fieldPermissions"
                   :assignment-config="(selectedLinkBinding as any)?.assignmentConfig"
+                  :host-table-id="selectedLinkBinding.tableId ?? null"
+                  :host-field-definitions="(selectedLinkBinding as any)?.fieldDefinitions"
+                  :host-function-unit-id="functionUnitId"
+                  :host-task-id="taskId"
+                  :host-primary-form-data="primaryFormData"
+                  :host-primary-table-id="primaryTableId ?? null"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
+                  @update:sub-table-data="() => syncNestedSubTableBindings()"
                 />
               </el-row>
             </el-form>
@@ -585,6 +593,7 @@ import { formatAssigneeDisplayLabel, useSubTableAssignment } from '@/composables
 import { useSubTableAssigneeHydration } from '@/composables/subTableField/useSubTableAssigneeHydration'
 import { useSubTablePollingSync } from '@/composables/subTableField/useSubTablePollingSync'
 import { useSubTableRowDialog } from '@/composables/subTableField/useSubTableRowDialog'
+import { useSubTableDialogOverlay } from '@/composables/subTableAddDialog/useSubTableDialogOverlay'
 
 const { t } = useI18n()
 
@@ -950,6 +959,8 @@ const {
   handleLinkedSubTableUpdate
 } = linkFormDialog
 
+const { dialogZIndex: linkFormOverlayZ } = useSubTableDialogOverlay(linkFormDialogVisible)
+
 const { handleLinkFormClick } = useSubTableLinkFormOpen(props, linkFormDialog, linkFormScope)
 
 const { uploadNames, previewStoredFile, uploadCellLabel } = useSubTableFileDownload(t)
@@ -1034,7 +1045,7 @@ function syncNestedSubTableBindings() {
       {
         bindingId: d.bindingId,
         tableName: d.tableName,
-        physicalTableName: d.physicalTableName,
+        designerTableName: d.designerTableName,
         tableId: d.tableId ?? null,
       },
       rows.value,
@@ -1048,8 +1059,10 @@ async function handleDialogSaveAndSyncNested(row: Record<string, unknown>) {
   syncNestedSubTableBindings()
 }
 
-async function deleteRowAndSyncNested(i: number) {
-  await deleteRow(i)
+async function deleteRowAndSyncNested(i: number, row?: Record<string, any>) {
+  // 传行对象而不是只传下标：下标来自 el-table 的渲染序号，一旦渲染顺序与底层数组不一致，
+  // splice(i,1) 删掉的就是**另一行**——表现为「删掉一个 kk，另一行的值变成了 u」。
+  await deleteRow(i, row)
   syncNestedSubTableBindings()
 }
 
@@ -1299,7 +1312,6 @@ onBeforeUnmount(() => {
 .link-form-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 5000;
   display: flex;
   align-items: center;
   justify-content: center;

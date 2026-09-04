@@ -22,7 +22,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Function unit content management: add/query content rows and assemble the full
@@ -205,6 +208,8 @@ public class FunctionUnitContentComponent {
             }
         }
 
+        appendDetailFormsMissingFromSnapshot(unit, forms);
+
         // Attach tableBindings to each form
         bindingLoader.attachTableBindings(forms);
 
@@ -236,6 +241,59 @@ public class FunctionUnitContentComponent {
         } catch (IllegalArgumentException e) {
             log.info("BPMN data is not Base64 encoded, using raw data");
             return data;
+        }
+    }
+
+    /**
+     * Adds the Function Unit's DETAIL forms that {@code sys_function_unit_contents} does not carry.
+     *
+     * <p>The content rows are written only at import/deploy time, so a form created in the designer
+     * afterwards is invisible here. That is tolerable for TASK/PROCESS forms, which a running
+     * process reaches through its BPMN, but not for DETAIL forms: a Main Table View stores its
+     * {@code detail_form_id} live in {@code dw_main_table_view_configs}, and the portal resolves
+     * that id against this list. When the id is not in it the record page has nothing to render and
+     * reports "This record could not be loaded" — for every view whose detail form post-dates the
+     * last deploy.
+     *
+     * <p>Scoped to DETAIL on purpose. These forms are addressed by id from live view config rather
+     * than by the deployed process, so the snapshot is the wrong authority for them; widening this
+     * to every form type would quietly change what a deployed version means.
+     *
+     * <p>Best-effort: any lookup failure leaves the assembled list untouched.
+     */
+    private void appendDetailFormsMissingFromSnapshot(FunctionUnit unit, List<FormContentDTO> forms) {
+        if (unit == null || unit.getCode() == null || unit.getCode().isBlank()) {
+            return;
+        }
+        // id 留空是对的：这些表单没有对应的 content 行，而下游一律按 sourceId 匹配。
+        Set<String> known = forms.stream()
+                .map(FormContentDTO::getSourceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                    SELECT f.id, f.form_name, f.config_json::text AS config_json, f.form_type, f.scene
+                    FROM dw_form_definitions f
+                    INNER JOIN dw_function_units d ON d.id = f.function_unit_id
+                    WHERE d.code = ? AND f.form_type = 'DETAIL'
+                    """, unit.getCode());
+            for (Map<String, Object> row : rows) {
+                String sourceId = String.valueOf(row.get("id"));
+                if (known.contains(sourceId)) {
+                    continue;
+                }
+                forms.add(FormContentDTO.builder()
+                        .name((String) row.get("form_name"))
+                        .sourceId(sourceId)
+                        .data((String) row.get("config_json"))
+                        .formType((String) row.get("form_type"))
+                        .scene((String) row.get("scene"))
+                        .type(ContentType.FORM.name())
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("Could not add live DETAIL forms for function unit {}: {}",
+                    unit.getCode(), e.getMessage());
         }
     }
 

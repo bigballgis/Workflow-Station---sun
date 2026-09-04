@@ -842,6 +842,10 @@ defineExpose({
   getFormData,
   setFieldValue,
   clearAutoSave,
+  // Lets the host patch this component's own model (the one getFormData/submit reads) and
+  // have derived fields such as __request_id recomputed — writing the parent v-model instead
+  // would be dropped, since that copy is only synced back on a throttle.
+  handlePrimaryFormDataPatch,
   // Exposed for testing (Req 10 property test)
   getSubFormRowFormulas,
   getSummaryColumns,
@@ -1018,7 +1022,8 @@ defineExpose({
  * date poppers on form-below-table open under the table stacking context.
  */
 .form-renderer-popper {
-  z-index: 5000 !important;
+  /* Above the live Link Form / Add-Edit overlay (useSubTableDialogOverlay). */
+  z-index: var(--sub-table-dialog-popper-z, 6000) !important;
 }
 
 .form-renderer {

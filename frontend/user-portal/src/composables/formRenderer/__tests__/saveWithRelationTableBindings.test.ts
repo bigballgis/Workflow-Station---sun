@@ -160,10 +160,10 @@ describe('resolveSubTablePrimaryKeyFields — 按表的种类决定要不要报�
     expect(resolveSubTablePrimaryKeyFields({ tableName: 'subtable', primaryKeyFields: null })).toBeNull()
   })
 
-  it('physicalTableName 也参与子任务表判定（展示名可能不同）', () => {
+  it('designerTableName 也参与子任务表判定（展示名可能不同）', () => {
     setActiveMiConfig(scope as any)
     expect(() => resolveSubTablePrimaryKeyFields(
-      { tableName: 'Participants', physicalTableName: 'subtable', primaryKeyFields: null },
+      { tableName: 'Participants', designerTableName: 'subtable', primaryKeyFields: null },
     )).toThrow(/MI_CONFIG_MISSING/)
   })
 })

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.util.MainTableViewColumnSpec;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
+import com.portal.util.PortalMainTableViewRowKeys;
 import com.portal.util.SqlFragment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,7 @@ class MainTableViewSubRowQuerySqlTest {
 
     private MainTableViewSubRowQueryComponent component;
     private final List<String> preparedSql = new ArrayList<>();
+    private final List<Object> boundParams = new ArrayList<>();
 
     private static final List<FieldSource> FIELDS = List.of(
             new FieldSource("line_amount", "Amount", false, "field", "DECIMAL"),
@@ -59,6 +61,10 @@ class MainTableViewSubRowQuerySqlTest {
 
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
+        org.mockito.Mockito.doAnswer(call -> {
+            boundParams.add(call.getArgument(1));
+            return null;
+        }).when(statement).setObject(org.mockito.ArgumentMatchers.anyInt(), any());
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
             preparedSql.add(call.getArgument(0));
             return statement;
@@ -75,7 +81,7 @@ class MainTableViewSubRowQuerySqlTest {
         return new MainTableViewSubRowQueryComponent.Query(
                 7L,
                 "fu-atm",
-                List.of("50522", "50527"),
+                "dw:atm_line",
                 MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
                         "pi.id, pi.row_identity"),
                 SqlFragment.EMPTY,
@@ -90,16 +96,31 @@ class MainTableViewSubRowQuerySqlTest {
     }
 
     @Test
-    void eachBindingContributesItsOwnExpansionAndTheRowIsDeduplicatedAcrossThemAll() {
+    void theTableIsReadFromItsOneCanonicalSliceAndTheRowIsStillDeduplicated() {
         component.query(query(List.of(), null));
 
         String sql = preparedSql.get(0);
         assertThat(sql).contains("jsonb_array_elements(pi.variables->'__subTables__'->?::text)");
-        assertThat(sql.split("jsonb_array_elements", -1)).as("one expansion per binding key").hasSize(3);
+        assertThat(sql.split("jsonb_array_elements", -1))
+                .as("one key per table means exactly one expansion, not one per binding")
+                .hasSize(2);
         assertThat(sql)
-                .as("binding a table into two forms stores the same row twice; keying the "
-                        + "de-duplication on the binding would show it twice")
+                .as("an instance can still carry the same row identity twice after a bad merge, "
+                        + "and it should be shown once")
                 .contains("DISTINCT ON (pi.id, COALESCE(expanded.elem->>'row_id'");
+    }
+
+    @Test
+    void theSliceIsLookedUpByTheCanonicalTableKeyNotByBindingIds() {
+        component.query(query(List.of(), null));
+
+        assertThat(boundParams)
+                .as("rows are stored under dw:<table name> (SubTableStoreKeys); looking the slice "
+                        + "up by binding id finds nothing and the view silently shows No Data")
+                .contains("dw:atm_line");
+        assertThat(boundParams.stream().filter(p -> p instanceof String s && s.matches("\\d+")).toList())
+                .as("a numeric binding id as a slice key is exactly the bug this pins")
+                .isEmpty();
     }
 
     @Test
@@ -133,16 +154,45 @@ class MainTableViewSubRowQuerySqlTest {
     }
 
     @Test
-    void aViewBoundToNoFormHasNowhereToReadItsRowsFromAndSaysSo() {
-        MainTableViewSubRowQueryComponent.Query unbound = new MainTableViewSubRowQueryComponent.Query(
-                7L, "fu-atm", List.of(),
+    void aRowKeyMatchIsAppliedAfterTheRowIsExpanded() {
+        SqlFragment rowKey = PortalMainTableViewRowKeys.exactMatch(
+                "inst-1|row_id=ATM-DC-PW-TRANS-000030", true);
+        MainTableViewSubRowQueryComponent.Query keyed = new MainTableViewSubRowQueryComponent.Query(
+                7L,
+                "fu-atm",
+                "dw:atm_line",
+                MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
+                        "pi.id, pi.row_identity"),
+                rowKey,
+                List.of(),
+                null,
+                null,
+                null,
+                List.of(),
+                null,
+                0,
+                20);
+        component.query(keyed);
+
+        String sql = preparedSql.get(0);
+        assertThat(sql.indexOf("pi.row_identity = ?"))
+                .as("row_identity exists only after expansion; matching it inside LATERAL would "
+                        + "not find the list rowKey")
+                .isGreaterThan(sql.indexOf("WHERE TRUE"));
+        assertThat(sql).doesNotContain("ILIKE");
+    }
+
+    @Test
+    void aViewWithNoResolvableSliceKeyHasNowhereToReadItsRowsFromAndSaysSo() {
+        MainTableViewSubRowQueryComponent.Query unkeyed = new MainTableViewSubRowQueryComponent.Query(
+                7L, "fu-atm", null,
                 MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
                         "pi.id, pi.row_identity"),
                 SqlFragment.EMPTY, List.of(), null, null, null, List.of(), null, 0, 20);
 
-        assertThatThrownBy(() -> component.query(unbound))
+        assertThatThrownBy(() -> component.query(unkeyed))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least one form");
+                .hasMessageContaining("__subTables__ key");
     }
 
     @Test
@@ -152,7 +202,7 @@ class MainTableViewSubRowQuerySqlTest {
         when(rs.next()).thenReturn(true, true, false);
         when(rs.getString("row_identity")).thenReturn(null);
         when(rs.getString("id")).thenReturn("proc-1");
-        when(rs.getString("slice_key")).thenReturn("50522");
+        when(rs.getString("slice_key")).thenReturn("dw:atm_line");
         when(rs.getLong("ord")).thenReturn(3L);
 
         when(jdbcTemplate.query(any(PreparedStatementCreator.class), any(ResultSetExtractor.class)))
@@ -162,6 +212,6 @@ class MainTableViewSubRowQuerySqlTest {
                 .as("DISTINCT ON treats two missing identities as the same row, so one of them "
                         + "would vanish and the total would be short by one")
                 .hasMessageContaining("proc-1")
-                .hasMessageContaining("50522");
+                .hasMessageContaining("dw:atm_line");
     }
 }

@@ -104,7 +104,7 @@ export function createTaskDetailPrevForms(ctx: TaskDetailCtx): TaskDetailPrevFor
           const subFormDesign = ctx.resolveSubFormDesign(b, prevSubForms)
           const binding = {
             bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
-            foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
+            foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, designerTableName: b.tableName,
             // 分类判据（MI collection / child / shared）只读这两项 —— 漏传就判不出 MI。
             bindingLinkMode: b.bindingLinkMode ?? null,
             fieldDefinitions: b.fieldDefinitions ?? null,

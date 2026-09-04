@@ -26,18 +26,19 @@ import java.util.Map;
  * Reads one page of a SUB Main Table View, where a row is a sub-table row rather than a process
  * instance.
  *
- * <p>The rows live in {@code variables -> '__subTables__' -> <bindingKey>}, so one instance
- * expands into many and the paging has to act on the expansion: the page is a LIMIT/OFFSET over
- * the expanded rows and the total counts them, not the instances they came from.
+ * <p>The rows live in {@code variables -> '__subTables__' -> <storeKey>}, under the one canonical
+ * key that identifies the table (see {@link com.platform.common.subtable.SubTableStoreKeys}), so one
+ * instance expands into many and the paging has to act on the expansion: the page is a LIMIT/OFFSET
+ * over the expanded rows and the total counts them, not the instances they came from.
  *
      * <p>The query is two layers, and cannot be one. The inner layer expands and de-duplicates,
      * which forces its ORDER BY to lead with the de-duplication key; the outer layer applies the
      * filters, the user's sort and the paging, whose order is whatever the user asked for.
      * Collapsing them would make those two orders fight.
  *
- * <p>De-duplication is by instance plus the row's own identity and deliberately not by which
- * binding the row was found under: binding a sub-table into several forms is normal, and the same
- * row then appears under each binding. Keying on the binding would show one row several times.
+ * <p>De-duplication is by instance plus the row's own identity. One key per table already rules out
+ * the copies the old per-binding keying produced, but an instance can still carry the same row
+ * identity twice after a bad merge, and showing it once is the right answer.
  */
 @Slf4j
 @Component
@@ -51,14 +52,14 @@ public class MainTableViewSubRowQueryComponent {
     private final ObjectMapper objectMapper;
 
     /**
-     * @param bindingKeys    {@code __subTables__} keys this view's table is bound under
+     * @param storeKey       canonical {@code __subTables__} key of this view's table
      * @param designerFilter the view's own filter, compiled against the expanded row
      * @param involvement    predicate restricting rows to the ones the user is involved in, or null
      */
     public record Query(
             Long viewId,
             String functionUnitCode,
-            List<String> bindingKeys,
+            String storeKey,
             ListFilterSql sql,
             SqlFragment designerFilter,
             List<ListColumnFilter> filters,
@@ -117,20 +118,14 @@ public class MainTableViewSubRowQueryComponent {
      * data and should fail loudly.
      */
     private String expandedRows(Query query, List<Object> outParams) {
-        if (query.bindingKeys().isEmpty()) {
-            throw new IllegalArgumentException("A sub-table view must be bound to at least one form");
+        if (query.storeKey() == null || query.storeKey().isBlank()) {
+            throw new IllegalArgumentException("A sub-table view must resolve to a __subTables__ key");
         }
-        StringBuilder lateral = new StringBuilder();
-        for (String bindingKey : query.bindingKeys()) {
-            if (!lateral.isEmpty()) {
-                lateral.append(" UNION ALL ");
-            }
-            lateral.append("SELECT ?::text AS slice_key, e.elem, e.ord")
-                    .append(" FROM jsonb_array_elements(pi.variables->'__subTables__'->?::text)")
-                    .append(" WITH ORDINALITY AS e(elem, ord)");
-            outParams.add(bindingKey);
-            outParams.add(bindingKey);
-        }
+        String lateral = "SELECT ?::text AS slice_key, e.elem, e.ord"
+                + " FROM jsonb_array_elements(pi.variables->'__subTables__'->?::text)"
+                + " WITH ORDINALITY AS e(elem, ord)";
+        outParams.add(query.storeKey());
+        outParams.add(query.storeKey());
         outParams.add(query.functionUnitCode());
 
         StringBuilder visible = new StringBuilder();

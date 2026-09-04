@@ -28,7 +28,7 @@ export interface TaskDetailMiScopeFns {
   miCollectionPrimaryKeyFields: () => string[] | undefined
   warnMiMissingPrimaryKey: (binding: {
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     bindingId?: number | string
   }) => void
   warnMiCollectionPrimaryKeyIfNeeded: () => void
@@ -39,7 +39,7 @@ export interface TaskDetailMiScopeFns {
   isMiSubTask: (taskData: any) => boolean
   isParticipantsBinding: (binding: {
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     bindingLinkMode?: string | null
   }) => boolean
   rowBelongsToCurrentMiScope: (
@@ -47,7 +47,7 @@ export interface TaskDetailMiScopeFns {
     myRowId: MiParticipantRowId,
     binding: {
       tableName: string
-      physicalTableName?: string
+      designerTableName?: string
       foreignKeyField?: string | null
       primaryKeyFields?: string[]
       columns?: Array<{ field?: string }>
@@ -61,7 +61,7 @@ export interface TaskDetailMiScopeFns {
       tableName: string
       foreignKeyField?: string
       primaryKeyFields?: string[]
-      physicalTableName?: string
+      designerTableName?: string
       bindingId?: number | string
       fieldDefinitions?: Array<{ fieldName: string; isPrimaryKey?: boolean; isForeignKey?: boolean }>
     },
@@ -69,7 +69,7 @@ export interface TaskDetailMiScopeFns {
   resolveMiCollectionBindingAcrossTaskForms: () => TaskDetailState['subTableBindings']['value'][0] | undefined
   isCurrentMiCollectionSubTableBinding: (binding: {
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
   }) => boolean
   resolveMiCollectionParticipantPkFields: () => string[] | null
@@ -111,7 +111,7 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
 
   function warnMiMissingPrimaryKey(binding: {
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     bindingId?: number | string
   }) {
     const label = describeSubTableBindingLabel(binding)
@@ -169,7 +169,7 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
    */
   function isParticipantsBinding(binding: {
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     bindingLinkMode?: string | null
   }): boolean {
     if (bindingDeclaresMiParticipantRow(binding)) return true
@@ -182,7 +182,7 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
     myRowId: MiParticipantRowId,
     binding: {
       tableName: string
-      physicalTableName?: string
+      designerTableName?: string
       foreignKeyField?: string | null
       primaryKeyFields?: string[]
       columns?: Array<{ field?: string }>
@@ -210,7 +210,7 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
       tableName: string
       foreignKeyField?: string
       primaryKeyFields?: string[]
-      physicalTableName?: string
+      designerTableName?: string
       bindingId?: number | string
       fieldDefinitions?: Array<{ fieldName: string; isPrimaryKey?: boolean; isForeignKey?: boolean }>
     },
@@ -293,7 +293,7 @@ export function createTaskDetailMiScope(ctx: TaskDetailCtx): TaskDetailMiScopeFn
 
   function isCurrentMiCollectionSubTableBinding(binding: {
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
   }): boolean {
     const scope = miSubProcessScope.value

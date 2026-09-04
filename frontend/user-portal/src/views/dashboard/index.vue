@@ -4,7 +4,7 @@
     <div class="command-bar">
       <button
         type="button"
-        class="command"
+        class="command command-primary"
         @click="router.push('/processes')"
       >
         <el-icon :size="16">
@@ -134,7 +134,7 @@
         <!-- 构成条：三段按真实占比，读作「在途 / 已结 / 已撤」 -->
         <div
           v-if="composition.length > 0"
-          class="ledger-foot"
+          class="ledger-foot is-stacked"
         >
           <span
             class="composition"
@@ -149,22 +149,19 @@
               :style="{ width: `${seg.percent}%` }"
             />
           </span>
-        </div>
-        <p
-          v-if="composition.length > 0"
-          class="composition-legend"
-        >
-          <span
-            v-for="seg in composition"
-            :key="seg.key"
-            class="legend-item"
-          >
+          <p class="composition-legend">
             <span
-              class="legend-dot"
-              :class="`is-${seg.key}`"
-            />{{ seg.label }}
-          </span>
-        </p>
+              v-for="seg in composition"
+              :key="seg.key"
+              class="legend-item"
+            >
+              <span
+                class="legend-dot"
+                :class="`is-${seg.key}`"
+              />{{ seg.label }}
+            </span>
+          </p>
+        </div>
       </div>
     </section>
 
@@ -263,98 +260,6 @@
         >
           {{ t('dashboard.startRequest') }}
         </router-link>
-      </div>
-    </section>
-
-    <!-- ============ 团队申请 ============ -->
-    <section class="block">
-      <header class="block-head">
-        <h2 class="block-title">
-          {{ t('dashboard.teamActivity') }}
-        </h2>
-        <button
-          type="button"
-          class="block-link"
-          @click="openTeamRequestsDialog"
-        >
-          {{ t('dashboard.viewAll') }} →
-        </button>
-      </header>
-
-      <el-skeleton
-        v-if="loading && teamRecent.length === 0"
-        :rows="4"
-        animated
-      />
-
-      <div
-        v-else-if="teamRecent.length > 0"
-        class="table-scroll"
-      >
-        <table
-          class="data-table"
-        >
-          <thead>
-            <tr>
-              <th scope="col">
-                {{ t('dashboard.colRequest') }}
-              </th>
-              <th scope="col">
-                {{ t('dashboard.initiator') }}
-              </th>
-              <th scope="col">
-                {{ t('application.currentStep') }}
-              </th>
-              <th scope="col">
-                {{ t('application.currentAssignee') }}
-              </th>
-              <th scope="col">
-                {{ t('application.status') }}
-              </th>
-              <th scope="col">
-                {{ t('application.startTime') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in teamRecent"
-              :key="row.id"
-            >
-              <td class="cell-strong">
-                {{ teamRequestLabel(row) }}
-              </td>
-              <td>{{ row.startUserName || '—' }}</td>
-              <td class="cell-muted">
-                {{ row.currentNode || '—' }}
-              </td>
-              <td class="cell-muted">
-                {{ row.currentAssignee || '—' }}
-              </td>
-              <td>
-                <span
-                  class="status"
-                  :class="statusClass(row.status)"
-                >
-                  <span class="status-dot" />
-                  {{ getTeamStatusLabel(row.status) }}
-                </span>
-              </td>
-              <td class="cell-muted">
-                {{ formatDate(row.startTime) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div
-        v-else
-        class="block-empty"
-      >
-        <p class="empty-text">
-          {{ t('dashboard.noTeamRequests') }}
-        </p>
       </div>
     </section>
 
@@ -552,7 +457,6 @@ const {
   loadFailed: boardFailed,
   myRequests,
   teamSummary,
-  teamRecent,
   loadRequestsBoard
 } = useRequestsBoard()
 
@@ -675,7 +579,7 @@ const statusClass = (status?: string) => `is-${(status || 'unknown').toLowerCase
 const requestLabel = (row: ProcessInstance) =>
   row.requestId || row.businessKey || row.processDefinitionName
 
-/** 团队那张表同理；两张表必须用同一套回退顺序，否则同一条申请在两处叫法不同。 */
+/** Team Requests 弹窗同理；两处必须用同一套回退顺序，否则同一条申请在两处叫法不同。 */
 const teamRequestLabel = (row: TeamRequestItem) =>
   row.requestId || row.businessKey || row.processDefinitionName
 
@@ -691,12 +595,61 @@ onMounted(() => {
 <style lang="scss" scoped>
 // 内容画布是主题灰，页面自己是一张白色卡面（沿用主题的卡片 token）
 .dashboard-page {
-  // 与 tasks / my-applications 一致：白卡铺满内容区，而不是留出右侧和下方的灰边
+  // 首屏改卡片编排：页面本身贴着主题画布，MY REQUESTS / MY TEAM / 最近申请各自是一张白卡
   min-height: 100%;
-  padding: 20px 24px 28px;
+  padding: 4px 4px 8px;
+  background: transparent;
+}
+
+// 三张卡共用的卡面：白底 + 细边 + 两层投影（近处一条压边，远处一团散开）
+// 分带靠内部的通栏细线，所以卡面必须裁切到圆角
+%surface-card {
   background: var(--ws-card-bg);
   border: 1px solid var(--ws-card-border);
   border-radius: var(--ws-radius-card);
+  box-shadow:
+    0 1px 2px rgba(22, 22, 22, 0.04),
+    0 14px 30px -20px rgba(22, 22, 22, 0.22);
+  overflow: hidden;
+}
+
+// 题头带：小型全大写标签 + 右侧入口，与卡身之间一条通栏细线
+%card-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 22px 13px;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+// 品牌红竖标：三张卡的题头共用同一枚记号，把这一组卡认成一套
+%card-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ws-text-secondary);
+
+  &::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 3px;
+    height: 13px;
+    border-radius: 1.5px;
+    background: var(--hsbc-red);
+  }
+}
+
+// 页脚带：比卡面低半档的浅灰，把度量条压在卡底
+%card-foot {
+  margin-top: auto;
+  padding: 13px 22px;
+  border-top: 1px solid var(--ws-line);
+  background: #f6f7f9;
 }
 
 // ==================== 命令栏 ====================
@@ -731,6 +684,24 @@ onMounted(() => {
   &:disabled {
     color: var(--ws-text-muted);
     cursor: default;
+  }
+}
+
+// New request 是这一屏唯一的主动作，用品牌色块把它从图标命令里提出来
+.command-primary {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--hsbc-red);
+  color: #fff;
+  font-weight: 600;
+
+  &:hover:not(:disabled) { background: var(--primary-light); }
+  &:active:not(:disabled) { background: var(--primary-dark); }
+
+  &:focus-visible {
+    outline: 2px solid var(--hsbc-red);
+    outline-offset: 2px;
   }
 }
 
@@ -793,38 +764,20 @@ onMounted(() => {
 .ledger {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  margin-top: 26px;
-  border-top: 1px solid var(--ws-line-strong);
-  border-bottom: 1px solid var(--ws-line-strong);
+  gap: 16px;
+  margin-top: 22px;
 }
 
 .ledger-half {
+  @extend %surface-card;
+
   display: flex;
   flex-direction: column;
-  padding: 22px 32px 24px 0;
-
-  & + & {
-    padding-right: 0;
-    padding-left: 32px;
-    border-left: 1px solid var(--ws-line);
-  }
 }
 
-.ledger-head {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  margin-bottom: 20px;
-}
+.ledger-head { @extend %card-head; }
 
-.ledger-title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ws-text-secondary);
-}
+.ledger-title { @extend %card-eyebrow; }
 
 .ledger-link {
   margin-left: auto;
@@ -842,32 +795,55 @@ onMounted(() => {
 
 // 大数字是这一屏的主角：字号拉开，标签退到底下当注脚
 .figures {
-  display: flex;
-  gap: 36px;
-  flex-wrap: wrap;
-  margin-bottom: 22px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex: 1;
+  padding: 18px 22px 20px;
 }
 
+// 格间细竖线：四个数字因此读作一排量表，而不是四段浮在留白里的文字
 .figure {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
+  padding: 2px 11px;
+  border-left: 1px solid var(--ws-line);
+
+  &:first-child {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  &:last-child { padding-right: 0; }
 }
 
 // 三个数字是进 My Applications 对应分页的入口
 .figure-link {
+  position: relative;
   color: inherit;
   text-decoration: none;
   cursor: pointer;
 
-  &:hover .figure-num { color: var(--hsbc-red); }
+  // 下划线是这四个数字「能点」的唯一线索——团队那侧的数字没有链接，也就没有下划线
+  .figure-num {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 6px;
+    text-decoration-color: var(--ws-text-muted);
+  }
+
+  &:hover .figure-num {
+    color: var(--hsbc-red);
+    text-decoration-color: var(--hsbc-red);
+  }
+
   &:hover .figure-label { color: var(--ws-text); }
 
   &:focus-visible {
     outline: 2px solid var(--hsbc-red);
-    outline-offset: 4px;
-    border-radius: 2px;
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 }
 
@@ -881,16 +857,25 @@ onMounted(() => {
 }
 
 .figure-label {
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.35;
+  white-space: nowrap;
   color: var(--ws-text-secondary);
 }
 
 .ledger-foot {
+  @extend %card-foot;
+
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: auto;
+
+  // 团队卡的页脚是「构成条 + 图例」两行，共用同一条底带
+  &.is-stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+  }
 }
 
 .foot-label {
@@ -945,7 +930,7 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  margin: 10px 0 0;
+  margin: 0;
   font-size: 12.5px;
   color: var(--ws-text-secondary);
 }
@@ -967,21 +952,15 @@ onMounted(() => {
 }
 
 // ==================== 区块 ====================
-.block { margin-top: 32px; }
+.block {
+  @extend %surface-card;
 
-.block-head {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  margin-bottom: 10px;
+  margin-top: 16px;
 }
 
-.block-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ws-text);
-}
+.block-head { @extend %card-head; }
+
+.block-title { @extend %card-eyebrow; }
 
 .block-link {
   margin-left: auto;
@@ -1000,6 +979,7 @@ onMounted(() => {
 // ==================== 数据表 ====================
 // 窄屏让表格自己横滚，页面本身不横滚
 .table-scroll {
+  padding: 4px 22px 8px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
@@ -1011,8 +991,8 @@ onMounted(() => {
   font-size: 13.5px;
 
   th {
-    padding: 0 12px 8px;
-    border-bottom: 1px solid var(--ws-line-strong);
+    padding: 12px 12px 9px;
+    border-bottom: 1px solid var(--ws-line);
     color: var(--ws-text-secondary);
     font-size: 12.5px;
     font-weight: 600;
@@ -1029,10 +1009,14 @@ onMounted(() => {
 
   th:first-child,
   td:first-child { padding-left: 0; }
+
+  // 卡片自带边界，最后一行不再需要收尾灰线
+  tbody tr:last-child td { border-bottom: none; }
 }
 
 .data-row {
   cursor: pointer;
+  transition: background 0.12s ease;
 
   &:hover { background: var(--background-light); }
 
@@ -1076,8 +1060,7 @@ onMounted(() => {
 .status.is-withdrawn .status-dot { background: var(--ws-text-muted); }
 
 .block-empty {
-  padding: 26px 0 30px;
-  border-top: 1px solid var(--ws-line-strong);
+  padding: 22px 22px 26px;
 
   .empty-text {
     margin: 0 0 12px;
@@ -1129,15 +1112,18 @@ onMounted(() => {
 @media (max-width: 900px) {
   .ledger { grid-template-columns: 1fr; }
 
-  .ledger-half {
-    padding: 20px 0;
-
-    & + & {
-      padding-left: 0;
-      border-left: none;
-      border-top: 1px solid var(--ws-line);
-    }
+  // 窄屏放不下四格量表，改两行两格；竖线只留在每行中间那道
+  .figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 18px;
   }
+
+  .figure:nth-child(odd) {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .figure:nth-child(even) { padding-right: 0; }
 
   .figures { gap: 24px; }
 

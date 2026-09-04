@@ -67,7 +67,7 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
         bindingMode: raw.bindingMode ?? 'EDITABLE',
         foreignKeyField: raw.foreignKeyField ?? null,
         tableName: raw.tableDisplayName || raw.tableName || `Sub Table ${bid}`,
-        physicalTableName: raw.tableName,
+        designerTableName: raw.tableName,
         relationTableId: (raw as any).relationTableId ?? null,
         relationTableName: (raw as any).relationTableName ?? null,
         tableType: raw.tableType ?? '',

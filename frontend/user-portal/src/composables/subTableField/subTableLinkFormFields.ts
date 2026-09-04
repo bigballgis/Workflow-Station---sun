@@ -306,7 +306,7 @@ export function linkFormBindingDef(binding: SubTableBinding) {
   return {
     bindingId: Number(binding.bindingId),
     tableName: String(binding.tableName ?? ''),
-    physicalTableName: (binding as { physicalTableName?: string }).physicalTableName,
+    designerTableName: (binding as { designerTableName?: string }).designerTableName,
     tableId: binding.tableId ?? null
   }
 }

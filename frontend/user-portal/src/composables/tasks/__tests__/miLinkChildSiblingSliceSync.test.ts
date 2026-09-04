@@ -94,7 +94,15 @@ describe('syncMiLinkChildEditedRowsIntoSiblingSlices (#1446)', () => {
     }
     const edited = [{ id_idw: 'Test-000074', id: PEOPLE_PK, age: '9999', sex: true }]
     const before = JSON.stringify(subTables)
-    syncMiLinkChildEditedRowsIntoSiblingSlices(subTables, participantKeyedBinding, edited, new Set())
+    // 「这个 binding 的主键就是参与者键」由 **MI collection 的设计器主键**判定（配置驱动），
+    // 不再靠"值长得像不像 UUID"——后者对 prefixedSequence 主键的表全盘失效。
+    syncMiLinkChildEditedRowsIntoSiblingSlices(
+      subTables,
+      participantKeyedBinding,
+      edited,
+      new Set(),
+      ['id_idw'],
+    )
     expect(JSON.stringify(subTables)).toBe(before)
   })
 

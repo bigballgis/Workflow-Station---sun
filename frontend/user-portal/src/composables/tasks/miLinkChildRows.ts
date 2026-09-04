@@ -4,7 +4,6 @@
  */
 
 import {
-  isAllocatedUuidPrimaryKey,
   normalizeMiLinkMatchId,
 } from './internal'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
@@ -27,18 +26,37 @@ import type { MiChildFkConfig } from './miLinkChildIdentity'
 /**
  * The row's own allocated primary key value, read through the DESIGNER's PK column.
  *
- * <p>Never `row.id` by default: People's designer PK is `idqc` in the Multi-Instance Subtask Demo,
- * and reading `id` there answered `undefined` for every row. `id` is kept only as the last resort
- * for callers with no config in scope (legacy payloads whose PK genuinely is `id`).
+ * <p><b>判据是「设计器主键列上有值」，不是「值长得像 UUID」。</b>主键怎么生成由设计器的
+ * {@code pk_generation_json.strategy} 决定，平台实际在用的至少有两种：
+ * <pre>
+ *   uuid              → 7692f137-0e2c-41ad-972e-9f842778d67c   （People 50333）
+ *   prefixedSequence  → Corr-000004 / ATM-DC-PW-TRANS-000004 / Test-000017
+ * </pre>
+ * 这里曾用 UUID 正则判"有没有已分配主键"，于是**所有 prefixedSequence 主键的表都被判成
+ * 「这行还没有主键」**（实测 5 个真实主键错判 4 个）。后果是
+ * {@link collapseMiLinkChildRowsToOnePerParticipant} 的守卫失效：同一参与者名下的多行被当成
+ * 「同一行被拆开的碎片」合并成一行 —— ACQ/ATM 的 Correspondence 加不进第二条，
+ * 而 UUID 主键的 People 表恰好正常，正是"只在某些 FU 复现"的典型形态。
+ *
+ * <p>主键列名同样只认配置：没有配置时**返回 undefined（判不出）**，不再退回字面量 `id`。
+ * 猜 `id` 在主键叫 {@code correspondence_id} / {@code idqc} 的表上永远取不到值，
+ * 却让调用方以为得到了确定答案；判不出时让调用方保守处理才是安全的一侧。
  */
 function linkChildRowAllocatedPk(
   row: Record<string, unknown>,
   config?: MiChildFkConfig | null,
 ): string | undefined {
-  const pkCols = resolveMiChildPrimaryKeyColumns(config)
-  for (const col of pkCols.length > 0 ? pkCols : ['id']) {
+  // 这一行指向父行的结构外键。主键列上如果放的就是它，那不是"这一行的身份"，
+  // 而是 participant key 被复制进了主键列（历史脏数据，实测 `id: 'Test-000058',
+  // sub_task_id: 'Test-000058'`）—— 那种行是同一行的碎片，必须继续参与合并。
+  const structuralFk = resolveMiChildStructuralParentFk(row, config)
+  for (const col of resolveMiChildPrimaryKeyColumns(config)) {
     const v = row[col]
-    if (v != null && isAllocatedUuidPrimaryKey(v)) return String(v).trim()
+    if (v == null) continue
+    const s = String(v).trim()
+    if (s === '') continue
+    if (structuralFk != null && s === structuralFk) continue
+    return s
   }
   return undefined
 }
@@ -82,7 +100,7 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
   T extends {
     bindingId: number
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     data: any[]
     foreignKeyField?: string | null
     bindingLinkMode?: string | null

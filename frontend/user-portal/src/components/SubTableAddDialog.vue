@@ -6,6 +6,8 @@
       class="sub-table-backdrop"
       role="presentation"
       aria-hidden="true"
+      :data-sub-table-dialog="dialogInstanceId"
+      :style="{ zIndex: dialogZIndex - 1 }"
       @click="handleClose"
     />
   </Teleport>
@@ -15,7 +17,8 @@
     :width="dialogWidth"
     :close-on-click-modal="false"
     :modal="false"
-    :z-index="2010"
+    :z-index="dialogZIndex"
+    :data-sub-table-dialog="dialogInstanceId"
     append-to-body
     @update:model-value="handleClose"
     @close="handleClose"
@@ -113,6 +116,7 @@
                     filterable
                     clearable
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: any) => onBuChange(v)"
                   />
@@ -127,6 +131,7 @@
                     :disabled="isColDisabled(col) || !formData[configuredBuField]"
                     filterable
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: string) => onRoleChange(v)"
                   >
@@ -188,6 +193,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -254,7 +260,7 @@
                     :end-placeholder="col.props?.endPlaceholder || t('subTable.endTime')"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="datePopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -270,6 +276,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -306,7 +313,7 @@
                     :placeholder="col.placeholder || col.label"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="datePopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -320,7 +327,7 @@
                     :placeholder="col.placeholder || col.label"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="datePopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -368,7 +375,8 @@
                     v-model="formData[col.field]"
                     :show-alpha="col.props?.showAlpha || false"
                     :disabled="isColDisabled(col)"
-                    popper-class="sub-table-color-popper"
+                    :teleported="true"
+                    :popper-class="colorPopperClass"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
 
@@ -479,7 +487,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
-                    popper-class="sub-table-date-popper"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -534,6 +542,7 @@
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   >
@@ -558,6 +567,7 @@
                     :disabled="isColDisabled(col)"
                     filterable
                     :teleported="true"
+                    :popper-class="overlayPopperClass"
                     style="width: 100%"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
@@ -602,7 +612,7 @@
         :field-definitions="nested.fieldDefinitions"
         :function-unit-id="hostFunctionUnitId"
         :task-id="hostTaskId"
-        :binding-link-mode="nested.bindingMode"
+        :binding-link-mode="nested.bindingLinkMode"
         :binding-foreign-key-field="nested.foreignKeyField"
         :parent-row="formData"
         :parent-table-id="hostTableId ?? null"
@@ -654,7 +664,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, inject, nextTick, ref, toRef, watch } from 'vue'
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import FormUploadDropZone from '@platform-shared/upload/FormUploadDropZone.vue'
@@ -834,13 +844,101 @@ const editingRowStableId = computed<string | null>(() =>
 const dialogWidth = computed(() =>
   props.nestedSubTables?.length ? 'min(1100px, calc(100vw - 48px))' : '600px')
 
+/**
+ * Base layer when this dialog opens straight from a page (nothing stacked above it).
+ * Kept as the historical value so the ordinary case renders exactly as before.
+ */
+const BASE_DIALOG_Z = 2010
+
+/**
+ * The layer this dialog (and its own backdrop, 1 below) must sit on.
+ *
+ * This dialog opens from several depths: directly on a form, and also from inside the Link
+ * Form modal, which is a hand-rolled overlay at z-index 5000. A fixed 2010 put the dialog
+ * BEHIND that overlay — the "Add" button on a nested sub-table appeared to do nothing, while
+ * the dialog was actually rendered and unreachable underneath.
+ *
+ * So measure instead of guessing: take the highest z-index among the overlays currently on
+ * screen and go above it. Recomputed on each open (not once at mount) because the same
+ * component instance can be opened from different depths during its lifetime.
+ */
+const dialogZIndex = ref(BASE_DIALOG_Z)
+
+/** Marks this instance's own nodes so a reopen never stacks on top of itself. */
+const dialogInstanceId = `sub-table-dialog-${Math.random().toString(36).slice(2, 10)}`
+
+function highestOverlayZIndex(): number {
+  // Every stacking surface that can legitimately be above the page: Element Plus's own
+  // overlays/poppers plus this app's hand-rolled modal panels.
+  const selectors = '.el-overlay, .el-dialog__wrapper, .el-popper, .link-form-modal-overlay'
+  let highest = 0
+  for (const el of document.querySelectorAll<HTMLElement>(selectors)) {
+    // Skip this instance's own nodes: counting them would ratchet the layer upward on every
+    // reopen. Matched by instance id rather than by content, because a dialog's markup varies
+    // with the design it renders (elCard groups, assignment block, …) and would not always
+    // identify itself. Other SubTableAddDialogs are NOT skipped — a nested one must clear
+    // the one it opened from.
+    if (el.closest(`[data-sub-table-dialog="${dialogInstanceId}"]`)) continue
+    if (el.querySelector(`[data-sub-table-dialog="${dialogInstanceId}"]`)) continue
+    if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') continue
+    const z = Number.parseInt(getComputedStyle(el).zIndex || '', 10)
+    if (Number.isFinite(z)) highest = Math.max(highest, z)
+  }
+  return highest
+}
+
+/**
+ * Layer for THIS dialog's teleported select / date / colour poppers.
+ *
+ * The poppers are teleported to body, so they cannot inherit the dialog's layer through the
+ * DOM and are given it through a custom property instead. That property must be per-dialog,
+ * not global: a nested sub-table's dialog opens while its parent dialog is still open, so a
+ * single shared `:root` value would be overwritten by the nested dialog and leave the parent's
+ * pickers resolving against the wrong (higher) layer once the nested one closed.
+ *
+ * Element Plus lets each popper carry its own class, so scope the variable to this instance's
+ * poppers via a stylesheet rule keyed on the instance id.
+ */
+const popperClassSuffix = dialogInstanceId
+const overlayPopperClass = `sub-table-dialog-popper ${popperClassSuffix}`
+const datePopperClass = `sub-table-date-popper ${popperClassSuffix}`
+const colorPopperClass = `sub-table-color-popper ${popperClassSuffix}`
+
+let popperLayerStyleEl: HTMLStyleElement | null = null
+
+function publishPopperLayer(z: number): void {
+  if (!popperLayerStyleEl) {
+    popperLayerStyleEl = document.createElement('style')
+    popperLayerStyleEl.dataset.subTableDialogPopperLayer = dialogInstanceId
+    document.head.appendChild(popperLayerStyleEl)
+  }
+  // +40 keeps a picker clear of its own dialog without reaching the next modal above it.
+  popperLayerStyleEl.textContent = `.${popperClassSuffix} { z-index: ${z + 40} !important; }`
+}
+
+onBeforeUnmount(() => {
+  popperLayerStyleEl?.remove()
+  popperLayerStyleEl = null
+})
+
+watch(
+  () => props.visible,
+  (open) => {
+    if (!open) return
+    // +2 leaves the slot directly beneath for this dialog's own backdrop.
+    dialogZIndex.value = Math.max(BASE_DIALOG_Z, highestOverlayZIndex() + 2)
+    publishPopperLayer(dialogZIndex.value)
+  },
+  { immediate: true, flush: 'post' },
+)
+
 /** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
 function nestedRowsFor(nested: NestedSubTableDescriptor): Record<string, unknown>[] {
   return pullNestedRowsForBindingFromParentRows(
     {
       bindingId: nested.bindingId,
       tableName: nested.tableName,
-      physicalTableName: nested.physicalTableName,
+      designerTableName: nested.designerTableName,
       tableId: nested.tableId ?? null,
     },
     [formData.value],
@@ -1234,7 +1332,10 @@ watch(
 <style>
 @use '@/styles/form-readonly.scss';
 
-/* 遮罩经 Teleport 挂 body；z-index 2009 低于 dialog(2010)，picker 用 popper-class 抬到 2050 */
+/* 遮罩经 Teleport 挂 body。层级不再写死：dialog 打开时按屏幕上最高的浮层算出 z-index
+   （见 dialogZIndex），遮罩取它 -1，picker 取它 +40。这里的数值只是兜底，实际由内联
+   style / --sub-table-dialog-z 覆盖 —— 因为本弹窗既可能直接开在页面上，也可能开在
+   z-index 5000 的 Link Form 浮层里。 */
 .sub-table-backdrop {
   position: fixed;
   top: 0;
@@ -1245,12 +1346,15 @@ watch(
   z-index: 2009;
 }
 
-/* Scoped popper styles using popper-class (Req 31) */
-.sub-table-date-popper {
-  z-index: 2050;
-}
-
-.sub-table-color-popper {
+/* Scoped popper styles using popper-class (Req 31).
+   The z-index is NOT set here: poppers are teleported to body and must clear whichever layer
+   their own dialog landed on, which is only known at open time. Each dialog instance injects
+   a rule for its own poppers (see publishPopperLayer) — a shared value here would be wrong as
+   soon as a nested sub-table dialog opened over its parent. This base value only applies
+   before the first open. */
+.sub-table-date-popper,
+.sub-table-color-popper,
+.sub-table-dialog-popper {
   z-index: 2050;
 }
 
@@ -1271,9 +1375,13 @@ watch(
    the picker the chosen mode needs sits directly beneath them — so the block
    always shows the consequence of the choice instead of an empty frame.
 
-   __head and the owned fields are siblings (the shared column branches below
-   can't be wrapped), so the frame is split across them: head draws top + sides,
-   fields continue the sides, and --last closes the bottom. */
+   The CARD presentation lives in styles/miAssignmentModeCard.scss, loaded once from
+   styles/index.scss — NOT imported here (see that file's header for why importing it
+   into both a scoped and an unscoped <style> silently breaks this dialog). Only the
+   FRAME below is local: __head and the owned fields are siblings here (the shared
+   column branches above can't be wrapped), so the frame is split across them — head
+   draws top + sides, fields continue the sides, and --last closes the bottom. */
+
 .mi-assignment-block__head {
   margin-top: 4px;
   padding: 12px 14px 4px;
@@ -1297,107 +1405,6 @@ watch(
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
-}
-
-/* Mode card: the rail on the left is the only saturated element in the block. */
-.mi-assignment-mode-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  position: relative;
-  margin: 0;
-  padding: 10px 12px 10px 14px;
-  overflow: hidden;
-  font: inherit;
-  text-align: left;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: transparent;
-  transition: background-color 0.15s ease;
-}
-
-.mi-assignment-mode-card:hover {
-  border-color: #b6bcc4;
-}
-
-.mi-assignment-mode-card.is-selected {
-  border-color: #c8102e;
-  box-shadow: 0 1px 3px rgba(200, 16, 46, 0.12);
-}
-
-.mi-assignment-mode-card.is-selected::before {
-  background: #c8102e;
-}
-
-/* BPMN configured only one mode — the other card stays visible but locked, so the
-   reader sees the mode was deliberately fixed rather than the block being narrower. */
-.mi-assignment-mode-card.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.mi-assignment-mode-card.is-disabled:hover {
-  border-color: #dcdfe6;
-}
-
-.mi-assignment-mode-card:focus-visible {
-  outline: 2px solid #c8102e;
-  outline-offset: 2px;
-}
-
-.mi-assignment-mode-card__dot {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
-  border: 1px solid #c0c4cc;
-  border-radius: 50%;
-  background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__dot {
-  border-color: #c8102e;
-  box-shadow: inset 0 0 0 3px #c8102e;
-}
-
-.mi-assignment-mode-card__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mi-assignment-mode-card__name {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.3;
-  color: #606266;
-}
-
-.mi-assignment-mode-card.is-selected .mi-assignment-mode-card__name {
-  color: #1f2329;
-}
-
-.mi-assignment-mode-card__hint {
-  font-size: 11px;
-  line-height: 1.35;
-  color: #9aa0a8;
-  /* Wrap rather than clip — the hint is what tells you which picker you get. */
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 
 /* Owned fields continue the box: side borders only, no top border. Only the
@@ -1429,18 +1436,12 @@ watch(
   box-sizing: border-box;
 }
 
-/* Narrow dialogs (mobile): stack the modes rather than crushing the hint text. */
+/* Narrow dialogs (mobile): stack the modes rather than crushing the hint text.
+   Host-owned: it targets this dialog's own modes container. The reduced-motion rule for
+   the cards themselves lives in the shared stylesheet imported above. */
 @media (max-width: 560px) {
   .mi-assignment-block__modes {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mi-assignment-mode-card,
-  .mi-assignment-mode-card::before,
-  .mi-assignment-mode-card__dot {
-    transition: none;
   }
 }
 

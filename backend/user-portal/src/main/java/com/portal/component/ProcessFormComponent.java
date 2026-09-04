@@ -287,6 +287,9 @@ public class ProcessFormComponent {
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
+            // Request ID is platform-derived: recompute it here too, so a resubmit that edits a
+            // contributing field cannot persist a stale or client-supplied identifier.
+            requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
 

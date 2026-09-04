@@ -21,7 +21,7 @@ public class FormContentDTO {
     private String sourceId;
     private String data;       // configJson 字符串
     private String type;       // "FORM"
-    /** DW form type: PROCESS / TASK / ACTION (from dw_form_definitions.form_type). */
+    /** DW form type: PROCESS / TASK / ACTION / DETAIL (from dw_form_definitions.form_type). */
     private String formType;
 
     /** TASK = To Do design, REQUEST = My Requests design. Null on legacy rows, read as TASK. */

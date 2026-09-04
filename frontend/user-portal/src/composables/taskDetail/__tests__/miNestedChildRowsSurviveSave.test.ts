@@ -53,7 +53,7 @@ describe('seedMiParticipantScopedBindingForeignKeys — 嵌套新增行不得被
     bindingId: 50547,
     tableId: 50333,
     tableName: 'people',
-    physicalTableName: 'people',
+    designerTableName: 'people',
     foreignKeyField: 'id',
     primaryKeyFields: ['id'],
     fieldDefinitions: [
@@ -70,7 +70,7 @@ describe('seedMiParticipantScopedBindingForeignKeys — 嵌套新增行不得被
     bindingId: 50544,
     tableId: 50331,
     tableName: 'subtable',
-    physicalTableName: 'subtable',
+    designerTableName: 'subtable',
     primaryKeyFields: ['id_idw'],
     fieldDefinitions: [{ fieldName: 'id_idw', primaryKey: true }],
     data: [

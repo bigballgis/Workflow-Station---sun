@@ -20,7 +20,7 @@ export type SharedAttachmentBindingLike = {
   bindingId?: number
   tableId?: number | null
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   foreignKeyField?: string | null
   columns?: Array<{ field?: string }> | null
   primaryKeyFields?: string[] | null
@@ -54,7 +54,7 @@ export function applySharedAttachmentFinalizeAndMaterialize<
           bindingId: number
           tableId?: number | null
           tableName?: string
-          physicalTableName?: string
+          designerTableName?: string
           primaryKeyFields?: string[] | null
         },
         rtMap,
@@ -63,7 +63,7 @@ export function applySharedAttachmentFinalizeAndMaterialize<
       if (canonical.length === 0) {
         const bid = binding.bindingId
         const keysToTry = new Set<string | number>()
-        for (const key of [bid, String(bid), binding.tableName, binding.physicalTableName, 'attachment']) {
+        for (const key of [bid, String(bid), binding.tableName, binding.designerTableName, 'attachment']) {
           if (key == null || String(key).trim() === '') continue
           keysToTry.add(key)
           keysToTry.add(normalizeSubTableName(String(key)))

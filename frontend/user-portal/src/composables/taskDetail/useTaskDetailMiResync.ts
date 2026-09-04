@@ -96,7 +96,7 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
                 Number(tableIdRaw),
                 lastBindingRelationTableMap.value,
                 current.tableName,
-                current.physicalTableName,
+                current.designerTableName,
               ),
             ]
           } else {
@@ -137,7 +137,7 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
               Number(tableIdRaw),
               lastBindingRelationTableMap.value,
               current.tableName,
-              current.physicalTableName,
+              current.designerTableName,
             )
             const scoped = slices
               .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId, fkConfig))
@@ -382,7 +382,7 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
                   Number(tableIdRaw),
                   rtMap,
                   binding.tableName,
-                  binding.physicalTableName,
+                  binding.designerTableName,
                 )
               : (ctx.getSavedSubTableRows(flattened, binding, ambiguous.has(binding.bindingId)) ?? [])
           : !participantScoped
@@ -395,7 +395,7 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
                   Number(tableIdRaw),
                   rtMap,
                   binding.tableName,
-                  binding.physicalTableName,
+                  binding.designerTableName,
                 )
               : mergeAllSubTableSlicesFromVariables(flattened, binding.primaryKeyFields ?? null)
       const candidateRows = isCollection ? [...byKey, ...siblingSlices] : [...byKey, ...siblingSlices]

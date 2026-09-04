@@ -88,7 +88,7 @@ function buildForm165Bindings() {
       bindingId: 285,
       tableId: 112,
       tableName: 'HMDC Transaction',
-      physicalTableName: 'HMDC_Transaction',
+      designerTableName: 'HMDC_Transaction',
       foreignKeyField: 'row_id',
       columns: [{ field: 'row_id' }, { field: 'card_number' }],
       primaryKeyFields: ['row_id'],
@@ -98,7 +98,7 @@ function buildForm165Bindings() {
       bindingId: 287,
       tableId: 114,
       tableName: 'HMDC Attachment',
-      physicalTableName: 'HMDC_Attachment',
+      designerTableName: 'HMDC_Attachment',
       foreignKeyField: 'row_id',
       columns: [{ field: 'file' }],
       primaryKeyFields: ['row_id'],
@@ -110,7 +110,7 @@ function buildForm165Bindings() {
   for (const b of bindings) {
     const rows = getSavedSubTableRowsFromVariables(saved, {
       bindingId: b.bindingId,
-      tableName: b.physicalTableName,
+      tableName: b.designerTableName,
       tableDisplayName: b.tableName,
     })
     if (rows) b.data = rows

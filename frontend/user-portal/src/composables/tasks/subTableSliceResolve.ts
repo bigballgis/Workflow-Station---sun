@@ -20,7 +20,7 @@ import { subTableStoreKey, type SubTableStoreBindingLike } from './subTableStore
 type ResolveSubTableRowsBinding = {
   bindingId: number
   tableName?: string
-  physicalTableName?: string
+  designerTableName?: string
   tableId?: number | null
   primaryKeyFields?: string[] | null
   columns?: Array<{ field?: string }> | null
@@ -276,7 +276,7 @@ export function getSavedSubTableRows(
   binding: {
     bindingId: number
     tableName: string
-    physicalTableName?: string
+    designerTableName?: string
     tableId?: number | null
     primaryKeyFields?: string[] | null
     columns?: Array<{ field?: string }> | null

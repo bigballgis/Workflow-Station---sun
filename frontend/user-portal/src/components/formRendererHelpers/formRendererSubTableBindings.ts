@@ -108,9 +108,22 @@ export function collectSubTableFieldsFromLayout(
  * uses, so `pullNestedRowsForBindingFromParentRows` resolves the slice on reload. `sources`
  * are merged in order (later wins) so the freshest local model overrides the stale parent row.
  */
+/**
+ * @param binding 必须带上 `designerTableName`（以及关联表的 `relationTableName`/`relationTableId`）。
+ *   {@link subTableStoreKey} 的取值顺序是 `designerTableName ?? tableName`，而 `tableName` 在很多
+ *   binding 上是**展示名**：漏传设计器表名时 `ATM Correspondence` 会算出 `dw:atm correspondence`，
+ *   与读取端用的 `dw:atm_correspondence` 分叉成两个 key —— 同一张表出现两份切片，
+ *   编辑/删除写进没人读的那一份（2026-09-03 实测：库里两个 key 各存 4 行和 6 行）。
+ */
 export function mergeNestedSubTableRowsIntoSto(
   sources: Array<Record<string, unknown> | null | undefined>,
-  binding: { bindingId: number | string; tableName?: string },
+  binding: {
+    bindingId: number | string
+    tableName?: string
+    designerTableName?: string
+    relationTableName?: string | null
+    relationTableId?: number | null
+  },
   rows: unknown[],
 ): Record<string, unknown> {
   const sto: Record<string, unknown> = {}
@@ -245,12 +258,12 @@ export function collectLinkFormTargetBindingIds(
   const targets = new Set<number>()
   const nameToId = new Map<string, number>()
   for (const b of bindings) {
-    const binding = b as SubTableBindingLinkRef & { tableName?: string; physicalTableName?: string }
+    const binding = b as SubTableBindingLinkRef & { tableName?: string; designerTableName?: string }
     if (binding.tableName) {
       nameToId.set(normalizeSubTableBindingName(binding.tableName), b.bindingId)
     }
-    if (binding.physicalTableName) {
-      nameToId.set(normalizeSubTableBindingName(binding.physicalTableName), b.bindingId)
+    if (binding.designerTableName) {
+      nameToId.set(normalizeSubTableBindingName(binding.designerTableName), b.bindingId)
     }
   }
   for (const b of bindings) {

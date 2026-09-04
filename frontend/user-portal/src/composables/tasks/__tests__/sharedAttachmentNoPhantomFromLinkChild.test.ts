@@ -18,7 +18,7 @@ const ATTACHMENT_BINDING = {
   bindingId: 50548,
   tableId: 50330,
   tableName: 'attachment',
-  physicalTableName: 'attachment',
+  designerTableName: 'attachment',
   foreignKeyField: 'main_id',
   primaryKeyFields: ['id'],
   columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],

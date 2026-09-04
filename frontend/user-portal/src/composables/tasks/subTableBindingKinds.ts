@@ -181,7 +181,7 @@ export function isSharedAttachmentFileBinding(
     bindingId?: number
     tableId?: number | null
     tableName?: string
-    physicalTableName?: string
+    designerTableName?: string
     foreignKeyField?: string | null
     bindingLinkMode?: string | null
     fieldDefinitions?: MiKindFieldDef[] | null

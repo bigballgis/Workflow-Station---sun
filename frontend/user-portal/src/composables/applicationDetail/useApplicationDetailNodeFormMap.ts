@@ -252,7 +252,7 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
               // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
               bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
               tableName: b.tableDisplayName || b.tableName,
-              physicalTableName: b.tableName,
+              designerTableName: b.tableName,
               // 规范 key 的命名空间靠这两个字段判定 DW / RT；不带上则 rt: 切片解析不到
               relationTableId: (b as { relationTableId?: number | null }).relationTableId ?? null,
               relationTableName: (b as { relationTableName?: string | null }).relationTableName ?? null,
@@ -291,7 +291,7 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
                 savedSubTables,
                 {
                   bindingId: binding.bindingId,
-                  tableName: (binding as { physicalTableName?: string }).physicalTableName,
+                  tableName: (binding as { designerTableName?: string }).designerTableName,
                   tableDisplayName: binding.tableName,
                   relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
                   relationTableName: (binding as { relationTableName?: string | null }).relationTableName

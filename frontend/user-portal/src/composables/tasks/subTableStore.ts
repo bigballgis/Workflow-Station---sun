@@ -34,7 +34,7 @@ export interface SubTableStoreBindingLike {
   /** 展示名（如 `Participants`）——**不可**用作 key，仅供 UI。 */
   tableDisplayName?: string | null
   /** 物理/设计器名的另一来源，部分接口用此字段。 */
-  physicalTableName?: string | null
+  designerTableName?: string | null
   /** RT 关联表名（含平台虚拟表 `sys_users`）。 */
   relationTableName?: string | null
   /** 仅用于判定命名空间：有 relationTableId 即为 RT binding。 */
@@ -64,9 +64,9 @@ export function subTableStoreKey(binding: SubTableStoreBindingLike | null | unde
     return rtName ? `${RT_PREFIX}${rtName}` : null
   }
 
-  // 注意取值顺序：physicalTableName / tableName 才是设计器表名；
+  // 注意取值顺序：designerTableName / tableName 才是设计器表名；
   // tableDisplayName 是展示名（`Participants`），多个 FU 可能重复，绝不能做 key。
-  const dwName = normalizeStoreTableName(binding.physicalTableName ?? binding.tableName)
+  const dwName = normalizeStoreTableName(binding.designerTableName ?? binding.tableName)
   return dwName ? `${DW_PREFIX}${dwName}` : null
 }
 
