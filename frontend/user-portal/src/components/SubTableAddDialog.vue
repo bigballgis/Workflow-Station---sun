@@ -612,7 +612,7 @@
         :field-definitions="nested.fieldDefinitions"
         :function-unit-id="hostFunctionUnitId"
         :task-id="hostTaskId"
-        :binding-link-mode="nested.bindingMode"
+        :binding-link-mode="nested.bindingLinkMode"
         :binding-foreign-key-field="nested.foreignKeyField"
         :parent-row="formData"
         :parent-table-id="hostTableId ?? null"
