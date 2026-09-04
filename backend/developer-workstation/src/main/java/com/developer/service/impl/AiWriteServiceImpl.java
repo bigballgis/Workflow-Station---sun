@@ -212,7 +212,7 @@ public class AiWriteServiceImpl implements AiWriteService {
         String name = (String) iconData.get("name");
         if (name == null || name.isBlank()) return;
 
-        Optional<Icon> existingIcon = iconRepository.findByName(name);
+        Optional<Icon> existingIcon = iconRepository.findFirstByNameOrderByIdAsc(name);
         if (existingIcon.isPresent()) {
             functionUnit.setIcon(existingIcon.get());
             log.info("Matched existing icon: {}", name);

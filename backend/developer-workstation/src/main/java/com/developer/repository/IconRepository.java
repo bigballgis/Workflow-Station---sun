@@ -23,5 +23,9 @@ public interface IconRepository extends JpaRepository<Icon, Long>, JpaSpecificat
     
     boolean existsByName(String name);
 
-    Optional<Icon> findByName(String name);
+    /**
+     * Name is a display label (often the uploaded filename) and is not unique.
+     * Callers that match by name take the oldest row when several share it.
+     */
+    Optional<Icon> findFirstByNameOrderByIdAsc(String name);
 }

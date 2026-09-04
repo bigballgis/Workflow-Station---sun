@@ -110,7 +110,7 @@ class AiTransactionAtomicityProperties {
 
     /** Minimal IconRepository stub */
     static class StubIconRepository implements IconRepository {
-        @Override public Optional<Icon> findByName(String name) { return Optional.empty(); }
+        @Override public Optional<Icon> findFirstByNameOrderByIdAsc(String name) { return Optional.empty(); }
         @Override public List<Icon> findByCategory(IconCategory category) { return List.of(); }
         @Override public org.springframework.data.domain.Page<Icon> findByCategory(IconCategory category, org.springframework.data.domain.Pageable pageable) { return org.springframework.data.domain.Page.empty(); }
         @Override public boolean existsByName(String name) { return false; }
