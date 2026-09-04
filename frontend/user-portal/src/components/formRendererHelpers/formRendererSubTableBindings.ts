@@ -108,9 +108,22 @@ export function collectSubTableFieldsFromLayout(
  * uses, so `pullNestedRowsForBindingFromParentRows` resolves the slice on reload. `sources`
  * are merged in order (later wins) so the freshest local model overrides the stale parent row.
  */
+/**
+ * @param binding 必须带上 `physicalTableName`（以及关联表的 `relationTableName`/`relationTableId`）。
+ *   {@link subTableStoreKey} 的取值顺序是 `physicalTableName ?? tableName`，而 `tableName` 在很多
+ *   binding 上是**展示名**：漏传 physical 时 `ATM Correspondence` 会算出 `dw:atm correspondence`，
+ *   与读取端用的 `dw:atm_correspondence` 分叉成两个 key —— 同一张表出现两份切片，
+ *   编辑/删除写进没人读的那一份（2026-09-03 实测：库里两个 key 各存 4 行和 6 行）。
+ */
 export function mergeNestedSubTableRowsIntoSto(
   sources: Array<Record<string, unknown> | null | undefined>,
-  binding: { bindingId: number | string; tableName?: string },
+  binding: {
+    bindingId: number | string
+    tableName?: string
+    physicalTableName?: string
+    relationTableName?: string | null
+    relationTableId?: number | null
+  },
   rows: unknown[],
 ): Record<string, unknown> {
   const sto: Record<string, unknown> = {}

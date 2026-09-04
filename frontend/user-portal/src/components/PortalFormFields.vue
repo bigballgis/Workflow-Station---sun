@@ -356,7 +356,14 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
   if (!binding) return
   const sto = mergeNestedSubTableRowsIntoSto(
     [props.parentRow, props.model],
-    { bindingId: binding.bindingId, tableName: binding.tableName },
+    {
+      bindingId: binding.bindingId,
+      tableName: binding.tableName,
+      // 必须传 physical（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
+      physicalTableName: binding.physicalTableName,
+      relationTableName: (binding as { relationTableName?: string | null }).relationTableName,
+      relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
+    },
     rows,
   )
   emit('update:field', '__subTables__', sto)
@@ -374,7 +381,14 @@ function onInlineSubFormRowUpdate(bindingId: number, rows: unknown[]) {
   if (!binding) return
   const sto = mergeNestedSubTableRowsIntoSto(
     [props.parentRow, props.model],
-    { bindingId: binding.bindingId, tableName: binding.tableName },
+    {
+      bindingId: binding.bindingId,
+      tableName: binding.tableName,
+      // 必须传 physical（以及关联表名），否则 key 会退化成展示名，和读取端分叉。
+      physicalTableName: binding.physicalTableName,
+      relationTableName: (binding as { relationTableName?: string | null }).relationTableName,
+      relationTableId: (binding as { relationTableId?: number | null }).relationTableId,
+    },
     rows,
   )
   emit('update:field', '__subTables__', sto)
