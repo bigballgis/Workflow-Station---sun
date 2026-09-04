@@ -362,5 +362,23 @@ describe('miAssignment container flattening', () => {
       expect(cols[0].props?.viewFields).toEqual([])
       expect(cols[0].props?.searchFields).toEqual(['new_field'])
     })
+
+    it('promotes a non-lookup list column to lookup when the rule carries lookupConfig', () => {
+      const cols = enrichLookupColumnPropsFromSubFormRule(
+        [{ field: 'correspondence_type', label: 'Type', type: 'text' }] as never,
+        [{
+          field: 'correspondence_type',
+          type: 'input',
+          props: {
+            lookupConfig: JSON.stringify({
+              selectedDisplayField: 'standardizations',
+              displayFields: ['standardizations'],
+            }),
+          },
+        }],
+      )
+      expect(cols[0].type).toBe('lookup')
+      expect(cols[0].props?.selectedDisplayField).toBe('standardizations')
+    })
   })
 })

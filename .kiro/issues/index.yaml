@@ -3172,3 +3172,22 @@
     findFirstByNameOrderByIdAsc。验证：IconLibraryComponentImplTest +
     AiWriteServiceTest；本地库已 DROP dw_icons_name_key；DW 镜像已重建 healthy。
 
+- id: "1592"
+  status: fixed
+  fixed_at: "2026-09-04"
+  severity: major
+  category: bug
+  summary: "Views ATM Correspondence lookup cells showed '-' because DETAIL sub-form dropped lookupConfig"
+  file: "frontend/user-portal/src/composables/mainTableView/viewDetailSubTableLookup.ts"
+  note: |
+    反例：view 318 ATM-DC-PW-TRANS-000036 详情 ATM Correspondence 的 Type/Mode/Channel/MDC
+    Status 显示 "-"。值是字典整行对象（有 standardizations / correspondence_id，无 id/userId），
+    List View 列 type=field 且 lookupConfig=null，走用户对象回退链全不中。
+    DETAIL 表单 50657 子表把 lookup 收成 input 且无 lookupConfig；真正的
+    selectedDisplayField=standardizations 在 PROCESS 表单同一张表的另一个 binding 上。
+    修复：List View 列合并子表单 lookup；DETAIL 缺配置时按表身份（dw:/rt: key）从
+    PROCESS/TASK 同表子表单按字段名叠加，不猜列名。
+    验证：vitest viewDetailForm + subFormCanvasColumns；portal build；截图
+    2026-09-04_atm-corr-000036-lookup-after.png 可见 Customer Notification / Outbound /
+    Email / Draft。
+

@@ -56,6 +56,7 @@ import type { FormField } from '@/components/formRendererHelpers/formRendererTyp
 import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
 import {
   buildViewDetailSubTableBindings,
+  peerFormsFromFuContent,
   resolveLookupDisplayValues,
   toViewDetailFields,
 } from '@/composables/mainTableView/viewDetailForm'
@@ -131,6 +132,7 @@ async function load() {
         form.tableBindings,
         config && typeof config === 'object' ? config : {},
         rowValues.value,
+        peerFormsFromFuContent(forms),
       )
       // lookup 列存的是被引用表的整行对象，只读渲染会变成 [object Object]，换成显示列的值。
       rowValues.value = resolveLookupDisplayValues(formFields.value, rowValues.value)

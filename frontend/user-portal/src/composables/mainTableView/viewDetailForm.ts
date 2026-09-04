@@ -5,7 +5,15 @@ import {
   subTableStoreKey,
   type SubTableStoreBindingLike,
 } from '@/composables/tasks/subTableStore'
+import type { DialogColumn } from '@/components/subTableAddDialogHelpers/types'
 import { resolveLookupCellTagText } from '@/components/subTableAddDialogHelpers/lookup'
+import {
+  columnsWithSubFormLookup,
+  type ViewDetailPeerForm,
+} from './viewDetailSubTableLookup'
+
+export type { ViewDetailPeerForm }
+export { peerFormsFromFuContent } from './viewDetailSubTableLookup'
 
 export type ViewDetailLookupDbConfig = {
   tableId: number
@@ -54,8 +62,13 @@ function columnsFromFieldDefinitions(binding: Record<string, unknown>): ViewDeta
 function columnsFromBinding(
   binding: Record<string, unknown>,
   subListViews: Record<string, { columns?: Array<Record<string, unknown>> }> | undefined,
-): ViewDetailColumn[] {
-  return columnsFromListView(binding, subListViews) ?? columnsFromFieldDefinitions(binding)
+): DialogColumn[] {
+  const cols = columnsFromListView(binding, subListViews) ?? columnsFromFieldDefinitions(binding)
+  return cols.map(c => ({
+    field: c.field,
+    label: c.label,
+    ...(c.type ? { type: c.type as DialogColumn['type'] } : {}),
+  }))
 }
 
 /**
@@ -219,6 +232,7 @@ export function buildViewDetailSubTableBindings(
   tableBindings: Array<Record<string, unknown>> | undefined,
   formConfig: Record<string, unknown>,
   rowValues: Record<string, unknown>,
+  peerForms?: ViewDetailPeerForm[],
 ): SubTableBinding[] {
   const subForms = (formConfig.subForms || {}) as Record<string, { rule?: unknown[] }>
   const subListViews = formConfig.subListViews as Record<string, { columns?: Array<Record<string, unknown>> }> | undefined
@@ -227,7 +241,9 @@ export function buildViewDetailSubTableBindings(
     if (String(b.bindingType || '') === 'PRIMARY') continue
     const bindingId = Number(b.bindingId)
     if (!Number.isFinite(bindingId)) continue
-    const columns = columnsFromBinding(b, subListViews)
+    const design = subForms[bindingId] ?? subForms[String(bindingId)] ?? {}
+    const subFormRule = Array.isArray(design.rule) ? design.rule : []
+    const columns = columnsWithSubFormLookup(columnsFromBinding(b, subListViews), b, subFormRule, peerForms)
     if (columns.length === 0) continue
     const tableName = String(b.tableDisplayName || b.tableName || '')
     // 展示名(tableName 变量)与设计器表名是两回事：前者进 UI，后者是 __subTables__ 的 key 来源。
@@ -237,8 +253,7 @@ export function buildViewDetailSubTableBindings(
       relationTableId: b.relationTableId != null ? Number(b.relationTableId) : undefined,
       relationTableName: typeof b.relationTableName === 'string' ? b.relationTableName : undefined,
     }
-    const design = subForms[bindingId] ?? subForms[String(bindingId)] ?? {}
-    const formFields = Array.isArray(design.rule) && design.rule.length > 0
+    const formFields = subFormRule.length > 0
       ? toViewDetailFields(design.rule as Record<string, unknown>[], {})
       : []
     out.push({
