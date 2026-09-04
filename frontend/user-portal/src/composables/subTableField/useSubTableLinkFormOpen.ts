@@ -67,6 +67,8 @@ export function useSubTableLinkFormOpen(
     linkedFormData.value = buildLinkedFormData(
       { ...(binding || ({} as SubTableBinding)), data: effectiveSavedRows },
       { readonly: !props.editable },
+      // 传入被点击的父行：只有 data[0] 确实是它时才继承嵌套切片（见 buildLinkedFormData）。
+      row ?? null,
     )
     if (row && binding?.formFields?.length && !skipParentBackfill) {
       backfillMiLinkFormModalFieldsFromParent(

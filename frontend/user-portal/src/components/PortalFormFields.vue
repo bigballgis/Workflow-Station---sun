@@ -185,12 +185,31 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
 }
 
 /**
- * 宿主行的参与者标识 —— 取自 **MI collection 的设计器主键**（`collectionPrimaryKeyFields`），
- * 不猜列名。解析不出返回 null，调用方据此放弃补行（保守侧）。
+ * 宿主行的标识 —— 子表行的结构外键要指向它，才算「属于这一行」。
+ *
+ * <p>候选标识依次是：
+ * <ol>
+ *   <li>MI collection 的主键（`collectionPrimaryKeyFields`）—— MI 参与者宿主走这条；</li>
+ *   <li>**宿主 binding 自己的 `primaryKeyFields`** —— 普通父子表走这条；</li>
+ *   <li>平台行标识 `row_id` —— 设计器**没有声明主键**的表（实测 `ATM_Transaction` 就没有）
+ *       靠它识别，而子表的结构外键存的正是这个值
+ *       （`related_transaction_id = 'ATM-DC-PW-TRANS-000007'` = 父行的 `row_id`）。</li>
+ * </ol>
+ *
+ * <p>缺了后两条，非 MI 的宿主永远解析不出标识，归属过滤整个失效、退回跨父行的全量池子：
+ * Link Form 里会看到**别的父行**的子表数据，删除被别人的行盖回来、新增看起来"其它行不见了"
+ * （实测 task a736e30f：TRANS-000007 的弹窗里出现 TRANS-000008 的 Corr-000041）。
+ *
+ * <p>解析不出返回 null，调用方据此放弃过滤（保守侧）。
  */
-function resolveMiHostParticipantKey(hostRow: Record<string, unknown> | null): string | null {
+function resolveHostRowKey(hostRow: Record<string, unknown> | null): string | null {
   if (!hostRow) return null
-  for (const pk of miKindContext.value.collectionPrimaryKeyFields ?? []) {
+  const candidates = [
+    ...(miKindContext.value.collectionPrimaryKeyFields ?? []),
+    ...(hostPrimaryKeyFields.value ?? []),
+    'row_id',
+  ]
+  for (const pk of candidates) {
     const name = String(pk ?? '').trim()
     if (!name) continue
     const v = hostRow[name]
@@ -200,6 +219,18 @@ function resolveMiHostParticipantKey(hostRow: Record<string, unknown> | null): s
   }
   return null
 }
+
+/**
+ * 宿主 binding 的设计器主键。宿主是「这个表单正在编辑的那张表」——
+ * 由 `hostTableId` 指认，再从可见 binding 池里取它的 `primaryKeyFields`。
+ */
+const hostPrimaryKeyFields = computed<string[]>(() => {
+  const tid = props.hostTableId
+  if (tid == null) return []
+  const pool = [...(props.linkedSubTableBindings ?? []), ...(props.subTableBindings ?? [])]
+  const host = pool.find(b => b.tableId != null && Number(b.tableId) === Number(tid))
+  return (host?.primaryKeyFields ?? []).filter(f => String(f ?? '').trim() !== '')
+})
 
 /**
  * Rows for a sub-table rendered inside this form.
@@ -223,6 +254,21 @@ function resolveMiHostParticipantKey(hostRow: Record<string, unknown> | null): s
  */
 function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
   const hostRow = (props.model && typeof props.model === 'object' ? props.model : props.parentRow) ?? null
+  /**
+   * 参与者过滤只在**这个 FU 真的有 MI collection** 时才成立。
+   *
+   * <p>`hostRowIsMiParticipant` 靠一张历史列名表（`id_idw` / `rowId` / `participant_id` …）
+   * 判断宿主行是不是参与者行。普通父子表的宿主行一旦在内存里带上其中任一个键，就会被误判
+   * 成 MI 宿主，于是对一张**根本不属于 MI** 的表做参与者过滤。
+   *
+   * <p>实测（task a736e30f / ATM Transaction → ATM Correspondence，该 FU 没有 MI 子流程）：
+   * 点 Add 前 `participantScoped=false`（2 条正常显示）；新增行让宿主行多出了列名表里的键，
+   * 下一次渲染 `participantScoped` 翻成 `true`，`scope()` 把两条已有行全滤掉 ——
+   * `nested=[53,60,65] → scoped=[65]`，界面只剩新增那条。
+   *
+   * <p>`miCollectionTableId` 来自设计器里 Link Mode = "MI Participant Row" 的 binding，
+   * 是「有没有 MI collection」的权威判据；没有就绝不做参与者过滤。
+   */
   const participantScoped =
     isMiParticipantScopedSubTableBinding(binding, miKindContext.value)
     && hostRowIsMiParticipant(hostRow, miKindContext.value.collectionPrimaryKeyFields)
@@ -264,7 +310,7 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
         // scope 会保留尚未 seed 外键的行（新行还没 seed 时不能丢），而那种行同样可能是
         // **兄弟参与者**刚加的、也还没 seed 的行，靠身份区分不开。放进来就会串参与者，
         // 这正是 portalFormFieldsNestedSubTableMiScope 那两条用例锁定的行为。
-        const hostKey = resolveMiHostParticipantKey(hostRow)
+        const hostKey = resolveHostRowKey(hostRow)
         const fkConfig = miChildFkConfigOfBinding(binding as never)
         const owned = hostKey == null
           ? []
@@ -285,7 +331,50 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
   // 与本参与者刚加的新行靠身份区分不开 —— 放行会把兄弟参与者的行显示进来。
   // 新增行的可见性由上面「按结构外键补本宿主行的行」解决，那条路径要求外键明确指向本宿主行。
   if (participantScoped) return []
-  return Array.isArray(binding.data) ? binding.data : []
+
+  const flat = Array.isArray(binding.data) ? binding.data : []
+  /**
+   * `binding.data` 是**跨父行**的池子。宿主行能解析出标识时，只显示外键指向它的那些行 ——
+   * 否则一个父行的 Link Form 会显示（并允许编辑、删除）**另一个父行**的子表数据。
+   *
+   * <p>实测（task a736e30f）：TRANS-000007 的 Details 弹窗里出现了 TRANS-000008 的
+   * `Corr-000041`，删 `Corr-000039` 被它盖回来；新增后又只剩新行。此前这里对非 MI 宿主
+   * 直接返回全量池子，因为归属判定只认 MI collection 主键，普通父子表永远解析不出宿主标识。
+   *
+   * <p>宿主标识解析不出、或这张表没有结构外键（例如流程级共享表 attachment.main_id，
+   * 本来就该所有人都看到）时，保持原样返回全量 —— 保守侧，不改既有行为。
+   */
+  /**
+   * 宿主标识要在 `model` 和 `parentRow` **两者**上找。
+   *
+   * <p>`hostRow` 取的是 `props.model ?? props.parentRow`，而 `model` 往往是**表单模型**
+   * （`ref_F6ag...` / `merchant_credit` 这类字段），身上没有 `row_id`；真正带行标识的是
+   * `parentRow`。只看 `hostRow` 就会恒为 null，归属过滤失效 → 返回跨父行的全量池子。
+   *
+   * <p>实测（task a736e30f）：探针显示同一次渲染里
+   * `pullNested(parents=[TRANS-000008]) → []`（正确，它用的是 parentRow），
+   * 但随后 `hostKey=null` 让兜底把 `Corr-000045`（属于 TRANS-000012）也显示了出来 ——
+   * 于是两个子任务都能看到同一条 correspondence。
+   */
+  const hostKey =
+    resolveHostRowKey(hostRow)
+    ?? resolveHostRowKey((props.parentRow ?? null) as Record<string, unknown> | null)
+    ?? resolveHostRowKey((props.model ?? null) as Record<string, unknown> | null)
+  if (hostKey == null || flat.length === 0) return flat
+  const fkConfig = miChildFkConfigOfBinding(binding as never)
+  let sawFk = false
+  const ownedByHost = flat.filter(row => {
+    if (row == null || typeof row !== 'object') return false
+    const fk = resolveMiChildStructuralParentFk(row as Record<string, unknown>, fkConfig)
+    // 外键还没 seed（刚 Add、尚未保存的新行）：**保留**。
+    // 它无法证明属于别的父行，而丢掉会让「新增一行后它立刻消失」——
+    // 正是本次要修的症状之一，不能用过滤再制造一遍。
+    if (fk == null) return true
+    sawFk = true
+    return fk === hostKey
+  })
+  // 一行外键都读不出 = 这张表不是按父行分片的（流程级共享表），别过滤。
+  return sawFk ? ownedByHost : flat
 }
 
 function isSubTableEditable(): boolean {

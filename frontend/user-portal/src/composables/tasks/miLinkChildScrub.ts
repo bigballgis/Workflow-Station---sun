@@ -188,6 +188,38 @@ function absorbNestedSubTablesIntoFlatRow(
   flat.__subTables__ = fSub
 }
 
+/**
+ * 父行的标识：平台行标识 `row_id` 优先，其次 `id_idw` / `id`。
+ *
+ * <p>子表的结构外键存的就是这个值（实测 `related_transaction_id = 'ATM-DC-PW-TRANS-000007'`
+ * 正是父行的 `row_id`）。设计器主键在这里拿不到（flatten 只看到裸 JSON、没有 binding），
+ * 所以用平台自己的行标识——它由平台写入，不是靠猜业务列名。
+ */
+function resolveFlattenParentKey(parentRow: Record<string, unknown>): string | null {
+  for (const k of ['row_id', 'id_idw', 'id']) {
+    const v = normalizeFkIdForMatchLocal(parentRow[k])
+    if (v != null) return v
+  }
+  return null
+}
+
+/**
+ * 顶层的这一行是不是挂在 `parentKey` 这个父行下。
+ *
+ * <p>扫该行的所有标量字段找与 `parentKey` 相等的值 —— 命中即认为是它的外键。
+ * 这里没有 binding 的 `fieldDefinitions` 可读，但判据仍是**值相等**而不是列名猜测：
+ * 父行标识是平台生成的唯一串（`ATM-DC-PW-TRANS-000007` / UUID），
+ * 不会与无关业务字段偶然相等。一个都对不上就返回 false（不动它）。
+ */
+function flattenRowBelongsToParent(row: unknown, parentKey: string): boolean {
+  if (!row || typeof row !== 'object') return false
+  for (const [k, v] of Object.entries(row as Record<string, unknown>)) {
+    if (k === '__subTables__' || k.startsWith('__')) continue
+    if (normalizeFkIdForMatchLocal(v) === parentKey) return true
+  }
+  return false
+}
+
 export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, unknown>, maxPasses = 8): void {
   for (let pass = 0; pass < maxPasses; pass++) {
     let touched = false
@@ -198,6 +230,31 @@ export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, u
         const nest = (row as Record<string, unknown>).__subTables__
         if (!nest || typeof nest !== 'object') continue
         for (const [childKey, childVal] of Object.entries(nest)) {
+          /**
+           * **删到空**：这个父行的嵌套切片被清空了，顶层里属于它的行必须一并删掉。
+           *
+           * <p>此前这里对空数组直接 `continue`，于是「这个父行已经没有子行了」这条信息
+           * 永远传不到顶层，顶层残留的旧行成了唯一真相 —— 用户在 Link Form 里删掉最后一行、
+           * 刷新后它又回来（实测 task a736e30f：`tx[0].__subTables__` 已是 `[]`，
+           * 顶层却仍有 `Corr-000039`）。删到只剩一行时不暴露，因为非空会走下面的合并。
+           *
+           * <p>只删**外键确实指向本父行**的行；父行标识解析不出、或顶层行没有可比外键时
+           * 一律不动（保守侧，避免误删别的父行的数据）。
+           */
+          if (Array.isArray(childVal) && childVal.length === 0) {
+            const prevTop = subTables[childKey]
+            if (!Array.isArray(prevTop) || prevTop.length === 0) continue
+            const parentKey = resolveFlattenParentKey(row as Record<string, unknown>)
+            if (parentKey == null) continue
+            const kept = (prevTop as any[]).filter(
+              r => !flattenRowBelongsToParent(r, parentKey),
+            )
+            if (kept.length !== prevTop.length) {
+              subTables[childKey] = kept
+              touched = true
+            }
+            continue
+          }
           if (!Array.isArray(childVal) || childVal.length === 0) continue
           const prev = subTables[childKey]
           const prevRows = Array.isArray(prev) ? [...(prev as any[])] : []

@@ -456,6 +456,20 @@
               label-position="left"
             >
               <el-row :gutter="20">
+                <!--
+                  这里**刻意不监听** `@update:sub-table-data`。
+
+                  Link Form 弹窗编辑的是 `linkedFormData`（那一行的副本），它要等
+                  `saveLinkedFormData` 在关闭时才写回 `rows.value` 对应的父行。
+                  嵌套表格的增删由 `@update:field('__subTables__')` 走
+                  `updateLinkedFormField` 存进 `linkedFormData.__subTables__`，
+                  随后被 `saveLinkedFormData` 一并带回父行 —— 这条链路本身是完整的。
+
+                  曾在此接过 `syncNestedSubTableBindings()`：它按 `rows.value` 跨**所有**父行
+                  重算并集，而此刻 `rows.value` 还没拿到本次编辑，于是用旧数据把删除盖了回去；
+                  多行场景下还会把另一父行的 correspondence 混进来
+                  （实测 task a736e30f：删 Corr-000039 无效，反而多出 TRANS-000008 的 Corr-000041）。
+                -->
                 <PortalFormFields
                   :fields="linkedFormFields"
                   :model="linkedFormData"
@@ -474,7 +488,6 @@
                   :host-primary-form-data="primaryFormData"
                   :host-primary-table-id="primaryTableId ?? null"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
-                  @update:sub-table-data="() => syncNestedSubTableBindings()"
                 />
               </el-row>
             </el-form>

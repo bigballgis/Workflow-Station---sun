@@ -178,22 +178,74 @@ export function useSubTableLinkFormDialog(
     return merged
   }
 
+  /**
+   * 行标识：平台行标识优先，其次设计器主键。取不到返回 null（= 判不出身份）。
+   */
+  function linkFormRowIdentity(row: Record<string, any> | null | undefined): string | null {
+    if (!row || typeof row !== 'object') return null
+    const pk = selectedLinkBinding.value?.primaryKeyFields ?? []
+    for (const k of ['row_id', 'id_idw', ...pk, 'id']) {
+      const name = String(k ?? '').trim()
+      if (!name) continue
+      const v = normalizeFkIdForMatch(row[name])
+      if (v != null) return v
+    }
+    return null
+  }
+
   function buildLinkedFormData(
     binding?: SubTableBinding,
     opts?: { readonly?: boolean },
+    /** 正在打开的那一行；用来判断 `binding.data[0]` 是不是它本人。 */
+    parentRowForSeed?: Record<string, any> | null,
   ): Record<string, any> {
-    const raw =
-      binding?.data?.[0] && typeof binding.data[0] === 'object'
-        ? (binding.data[0] as Record<string, any>)
-        : {}
+    /**
+     * 播种用的行：**只按身份挑正在打开的那一行；挑不到就用空行，绝不退回 `data[0]`。**
+     *
+     * <p>`data[0]` 是池子第一行 —— 新建的父行还没有自己的数据时，它就是**上一个父行**。
+     * 拿它播种等于「猜这一行是谁」：会把别人的字段值和 `__subTables__` 整份继承过来，
+     * 并被持久化。实测每新建一个 transaction 就多继承一份
+     * （`TRANS-000017 = TRANS-000016 的全部 + 自己的 50`）。
+     *
+     * <p>身份判不出时**宁可空**：空表单最多让用户重填，而猜错会把别人的数据写到这一行名下
+     * —— 后者是静默的数据污染，且会顺着保存一路扩散。
+     */
+    const rows = Array.isArray(binding?.data) ? (binding!.data as Record<string, any>[]) : []
+    const wantKey = linkFormRowIdentity(parentRowForSeed)
+    const matched = wantKey == null
+      ? undefined
+      : rows.find(r => r && typeof r === 'object' && linkFormRowIdentity(r) === wantKey)
+    const raw: Record<string, any> = matched ?? {}
     const next: Record<string, any> = {}
     const modalOpts = { readonly: opts?.readonly ?? !props.editable }
     if (binding?.formFields?.length) {
       // Descends through layout containers so a block's nested fields are seeded too
       // (an Assignment Mode block owns its pickers as children) — see the helper.
       Object.assign(next, seedLinkedFormDataFromFields(binding.formFields, raw, modalOpts))
-      // Keep the nested-child slice: PortalFormFields resolves nested sub-table rows from
-      // this model and writes edits back to it (grandchild persistence via saveLinkedFormData).
+      /**
+       * 带上嵌套切片，让 `PortalFormFields` 能读到孙行、`saveLinkedFormData` 能写回去。
+       *
+       * <p><b>但只有当 `raw` 就是正在打开的那一行时才可以带。</b>`raw` 取自
+       * `binding.data[0]`：新行还没有自己的数据时，`data[0]` 是**上一个父行** ——
+       * 无条件复制会把它的 `__subTables__` 整份继承过来。嵌套切片属于**某一行**，
+       * 不是这张表的公共属性。
+       *
+       * <p>实测（task a736e30f）每新建一个 transaction 就多继承一份：
+       * `TRANS-000017 = TRANS-000016 的全部 + 自己的 50`，且**被持久化进库**，
+       * 表现为「新增一条后其它的不见了、保存后又变 3 条」。
+       *
+       * <p>判据是行标识相等（`row_id` / 设计器主键）。判不出身份时**不带**——
+       * 宁可让新行从空开始（用户自己加的行不会丢），也不能继承别人的数据。
+       */
+      /**
+       * 只有当 `raw` **确实是**正在打开的那一行时才带上它的嵌套切片。
+       *
+       * <p>`raw` 只可能是「按身份挑中的本人」或空对象（见上），所以这里带上的一定是
+       * 这一行自己的切片。嵌套切片属于某一行，不是这张表的公共属性。
+       *
+       * <p>身份判不出（新行还没分配标识）时 `raw` 为空 → 不带：宁可从空开始，
+       * 用户自己加的行会通过 `onNestedRowsUpdate` 正常写进来。
+       */
       if (raw.__subTables__ && typeof raw.__subTables__ === 'object') {
         next.__subTables__ = raw.__subTables__
       }
@@ -277,6 +329,22 @@ export function useSubTableLinkFormDialog(
       if (boundName) {
         sub[boundName] = currentRows
         sub[String(boundName)] = currentRows
+      }
+      /**
+       * 弹窗里**嵌套子表**的增删，跟着 `linkedFormData.__subTables__` 一起回到父行。
+       *
+       * <p>上面只把 link form 自己的行写进 `boundId` / `boundName` 两个 key。嵌套那张表
+       * （ATM Transaction 的 Details 里那个 ATM Correspondence）用的是**规范 key**
+       * `dw:<设计器表名>`，读取端也只认这个 key —— 不带上它，弹窗里的删除/新增
+       * 在保存时被整个丢掉（实测 task a736e30f：删 Corr-000039 无效）。
+       *
+       * <p>逐 key 覆盖而不是整体替换：`base.__subTables__` 里可能还有本次没编辑的其它切片。
+       */
+      const lfdSto = (linkedFormData.value as Record<string, any>)?.__subTables__
+      if (lfdSto && typeof lfdSto === 'object' && !Array.isArray(lfdSto)) {
+        for (const [k, v] of Object.entries(lfdSto as Record<string, unknown>)) {
+          if (Array.isArray(v)) sub[k] = v
+        }
       }
       base.__subTables__ = sub
       return base
