@@ -3172,3 +3172,22 @@
     findFirstByNameOrderByIdAsc。验证：IconLibraryComponentImplTest +
     AiWriteServiceTest；本地库已 DROP dw_icons_name_key；DW 镜像已重建 healthy。
 
+- id: "1592"
+  status: fixed
+  fixed_at: "2026-09-03"
+  severity: major
+  category: bug
+  summary: "Admin Audit lists lost table scrollbars after snug-row height overrode fill-viewport"
+  file: "frontend/admin-center/src/views/audit/index.vue"
+  note: |
+    #1580 sized el-table to row sum and set .audit-list-page inner-wrapper
+    height:auto. Combined with admin-main overflow:hidden, Element Plus never
+    got a constrained body so neither axis showed a bar. Restored the shared
+    list fill (`gridTableHeight || '100%'`) like UserList; removed
+    useListTableFitHeight. Tests: auditListViewport.test.ts.
+    verify-admin-audit-list-viewport.mjs: pagination at viewport bottom +
+    el-table scrollbar. screenshots
+    2026-09-03_admin-audit-admin-center-viewport.png,
+    2026-09-03_admin-audit-user-portal-viewport.png.
+
+
