@@ -19,6 +19,8 @@ import {
   hostRowIsMiParticipant,
   isMiParticipantScopedSubTableBinding,
   miChildFkConfigOfBinding,
+  mergeSubTableRowsByRowId,
+  resolveMiChildStructuralParentFk,
 } from '@/composables/tasks/shared'
 import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
@@ -183,6 +185,23 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
 }
 
 /**
+ * 宿主行的参与者标识 —— 取自 **MI collection 的设计器主键**（`collectionPrimaryKeyFields`），
+ * 不猜列名。解析不出返回 null，调用方据此放弃补行（保守侧）。
+ */
+function resolveMiHostParticipantKey(hostRow: Record<string, unknown> | null): string | null {
+  if (!hostRow) return null
+  for (const pk of miKindContext.value.collectionPrimaryKeyFields ?? []) {
+    const name = String(pk ?? '').trim()
+    if (!name) continue
+    const v = hostRow[name]
+    if (v == null) continue
+    const s = String(v).trim()
+    if (s !== '') return s
+  }
+  return null
+}
+
+/**
  * Rows for a sub-table rendered inside this form.
  *
  * <p>Rows nested under the row this form edits (`__subTables__`) are authoritative. Failing that,
@@ -234,10 +253,37 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
       const scoped = scope(nested)
       // A nested slice that scopes to nothing held only sibling rows — keep looking rather than
       // reporting "this participant has rows" falsely.
-      if (scoped.length > 0) return scoped
+      if (scoped.length > 0) {
+        // 嵌套那份是**派生缓存**，只在宿主行往返（保存 / 重新加载）时更新；`binding.data` 才是
+        // 刚发生的编辑的第一现场。直接 return 嵌套会让"新增一行"在下一次渲染被打回原形 ——
+        // 实测 `binding.data` 已有 2 行、嵌套仍是 1 行，表格于是永远只画 1 行
+        //（ATM Correspondence 加不进第二条的直接原因）。
+        //
+        // **只补「明确属于本宿主行」的行**：判据是行上的结构外键实际指向当前宿主行，
+        // 不是"scope 过滤后还剩下"。两者不等价 ——
+        // scope 会保留尚未 seed 外键的行（新行还没 seed 时不能丢），而那种行同样可能是
+        // **兄弟参与者**刚加的、也还没 seed 的行，靠身份区分不开。放进来就会串参与者，
+        // 这正是 portalFormFieldsNestedSubTableMiScope 那两条用例锁定的行为。
+        const hostKey = resolveMiHostParticipantKey(hostRow)
+        const fkConfig = miChildFkConfigOfBinding(binding as never)
+        const owned = hostKey == null
+          ? []
+          : (Array.isArray(binding.data) ? binding.data : []).filter(
+              row =>
+                row != null
+                && typeof row === 'object'
+                && resolveMiChildStructuralParentFk(row as Record<string, unknown>, fkConfig) === hostKey,
+            )
+        if (owned.length > scoped.length) {
+          return mergeSubTableRowsByRowId(scoped, owned, binding.primaryKeyFields ?? null)
+        }
+        return scoped
+      }
     }
   }
-  // MI participant host: no fallback. Nothing nested means this participant owns no rows.
+  // MI 参与者宿主：**不走兜底**。`binding.data` 是跨参与者的池子，且里面尚未 seed 外键的行
+  // 与本参与者刚加的新行靠身份区分不开 —— 放行会把兄弟参与者的行显示进来。
+  // 新增行的可见性由上面「按结构外键补本宿主行的行」解决，那条路径要求外键明确指向本宿主行。
   if (participantScoped) return []
   return Array.isArray(binding.data) ? binding.data : []
 }

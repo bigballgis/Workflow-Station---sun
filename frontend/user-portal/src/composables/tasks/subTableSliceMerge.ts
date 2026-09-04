@@ -6,6 +6,10 @@
 import { normalizeSubTableName } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isFileOnlySubTableBinding, isMiDashboardSubTableBinding } from './subTableBindingKinds'
+import {
+  miChildFkConfigOfBinding,
+  resolveMiChildStructuralParentFk,
+} from './miLinkChildIdentity'
 
 /**
  * Merge {@code __subTables__} slices that belong to one relation table (by designer {@code tableId} / table name),
@@ -235,12 +239,11 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
  * slices of the same relation table (another node's binding id / table-name keys), matching by the
  * binding's row primary key only. Update-only: never appends rows, never touches MI collection
  * slices ({@code collectionSliceKeys}, preserving the 09be69f8 / #1442 leak guards), and ignores
- * MI dashboard / file-only source bindings entirely. Rows are matched only when the PK value is an
- * allocated UUID — participant keys like {@code id_idw: "Test-000074"} must never drive this sync,
- * or link-form payload would smear onto collection rows on nodes whose binding PK is the
- * participant key.
+ * MI dashboard / file-only source bindings entirely. Rows are matched on the DESIGNER primary key
+ * (no literal {@code id} fallback); a row whose PK value equals its own structural parent FK is
+ * skipped — that is a participant key copied into the PK column (e.g. {@code id_idw: "Test-000074"}),
+ * not the row identity, and letting it match would smear link-form payload onto collection rows.
  */
-const ALLOCATED_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function syncMiLinkChildEditedRowsIntoSiblingSlices(
   subTables: Record<string, any>,
@@ -252,28 +255,57 @@ export function syncMiLinkChildEditedRowsIntoSiblingSlices(
   },
   editedRows: unknown[] | undefined | null,
   collectionSliceKeys: Set<string>,
+  /**
+   * MI collection 的设计器主键列。传入时用于识别「这个 binding 的主键就是参与者键」——
+   * 那种 binding 的 PK 不是行身份，不能驱动同步（#1446）。省略则退回按行内 FK 判断。
+   */
+  collectionPrimaryKeyFields?: string[] | null,
 ): void {
   if (isMiDashboardSubTableBinding(binding) || isFileOnlySubTableBinding(binding)) return
   if (!Array.isArray(editedRows) || editedRows.length === 0) return
-  const pkCols = (Array.isArray(binding.primaryKeyFields) && binding.primaryKeyFields.length > 0
-    ? binding.primaryKeyFields
-    : ['id']
-  ).map(f => String(f).trim()).filter(Boolean)
+  // 主键列**只认设计器配置**。曾经退回字面量 ['id']：主键叫 correspondence_id / idqc 的表上
+  // 永远取不到值，却让下面的匹配以为拿到了确定答案。拿不到配置就直接不同步 —— 少同步一次只是
+  // 别的切片保持原样，而猜错主键会把一行的编辑抹到另一行上。
+  const pkCols = (Array.isArray(binding.primaryKeyFields) ? binding.primaryKeyFields : [])
+    .map(f => String(f).trim())
+    .filter(Boolean)
   if (pkCols.length === 0) return
+
+  const fkConfig = miChildFkConfigOfBinding(binding as never)
+  // 这个 binding 的主键列**就是 MI collection 的主键列** = 它的 PK 装的是参与者键而非行身份。
+  // 判据来自设计器配置（collection 的 primaryKeyFields），不是列名字面量。
+  const collectionPk = (collectionPrimaryKeyFields ?? [])
+    .map(f => String(f ?? '').trim())
+    .filter(Boolean)
+  if (collectionPk.length > 0 && pkCols.every(c => collectionPk.includes(c))) return
 
   const pkOf = (row: unknown): string | null => {
     if (!row || typeof row !== 'object') return null
+    const rec = row as Record<string, unknown>
     const parts: string[] = []
     for (const col of pkCols) {
-      const v = (row as Record<string, unknown>)[col]
+      const v = rec[col]
       if (v == null) return null
       const s = String(v).trim()
       if (!s) return null
-      // Allocated-UUID rows only: participant keys (Test-000074) and numeric ids never match.
-      if (!ALLOCATED_UUID_RE.test(s)) return null
       parts.push(s)
     }
-    return parts.join('')
+    const key = parts.join('')
+    // 主键值**恰好等于这一行指向父行的外键值**时不参与同步：那不是"这一行的身份"，
+    // 而是 participant key 被复制进了主键列（#1446 的原始事故 —— 一个
+    // `primaryKeyFields: ['id_idw']` 的 binding 会把 link-form 内容抹到每条 id_idw
+    // 相同的 collection 行上）。
+    //
+    // 判据由「值长得像 UUID」改为「主键 != 这一行自己的父外键」：前者假设主键一定是 uuid
+    // 策略，而设计器 pk_generation_json 还有 prefixedSequence（Corr-000004 /
+    // ATM-DC-PW-TRANS-000004），那些表的行会**全部**被判成"不是已分配主键"而永远同步不到
+    // 兄弟切片 —— 同一个硬编码假设，另一处表现。
+    //
+    // FK 读设计器配置；解析不出时不做这层判断（上面的 collection 主键比对已经挡住了
+    // 「主键就是参与者键」的 binding 这一主要风险）。
+    const structuralFk = resolveMiChildStructuralParentFk(rec, fkConfig)
+    if (structuralFk != null && key === structuralFk) return null
+    return key
   }
 
   const editedByPk = new Map<string, Record<string, unknown>>()

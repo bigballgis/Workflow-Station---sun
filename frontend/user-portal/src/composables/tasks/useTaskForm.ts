@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { subTableStoreKey } from './subTableStore'
+import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { submitTaskForm } from '@/api/processForm'
@@ -279,12 +280,18 @@ export function useTaskForm(options: {
         options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
         options.miSubProcessScopeName?.value,
       )
+      // MI collection 的设计器主键 —— 用来识别「主键就是参与者键」的 binding，
+      // 那种 binding 不能驱动兄弟切片同步（见被调函数说明）。读配置，不猜列名。
+      const miCollectionPk = options.subTableBindings.value
+        .filter(b => bindingDeclaresMiParticipantRow(b as never))
+        .flatMap(b => (b as { primaryKeyFields?: string[] | null }).primaryKeyFields ?? [])
       for (const binding of options.subTableBindings.value) {
         syncMiLinkChildEditedRowsIntoSiblingSlices(
           subTables,
           binding,
           subTables[String(binding.bindingId)],
           collectionSliceKeys,
+          miCollectionPk,
         )
       }
     }
