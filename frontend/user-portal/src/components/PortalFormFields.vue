@@ -204,10 +204,17 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
  */
 function resolveHostRowKey(hostRow: Record<string, unknown> | null): string | null {
   if (!hostRow) return null
+  // 主键列名**只来自设计器配置**。这里曾额外兜底一个字面量 `'row_id'`——
+  // 它是多余的：`row_id` 本身就是设计器主键（实测 ATM_Transaction 的
+  // `dw_field_definitions.is_primary_key` 就落在 `row_id` 上），配置读得出来。
+  //
+  // 而且它会**掩盖配置错误**：MI 子任务表缺主键是配置错误，平台的既定行为是抛
+  // `MiConfigMissingError`（见 useMiConfig 的 `requireSubTablePrimaryKeyFields`）,
+  // 让用户去设计器补配置。字面量兜底会让这种表悄悄"能用"，直到某个主键不叫
+  // row_id 的 FU 上再次静默失效——正是这轮一直在拔除的那类猜测。
   const candidates = [
     ...(miKindContext.value.collectionPrimaryKeyFields ?? []),
     ...(hostPrimaryKeyFields.value ?? []),
-    'row_id',
   ]
   for (const pk of candidates) {
     const name = String(pk ?? '').trim()
