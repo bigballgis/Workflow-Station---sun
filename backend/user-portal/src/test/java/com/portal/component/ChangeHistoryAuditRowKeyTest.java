@@ -20,8 +20,9 @@ class ChangeHistoryAuditRowKeyTest {
     }
 
     @Test
-    void missingPrimaryKeyFallsBackToRowId() {
-        Map<String, Object> row = Map.of("row_id", "f1109821");
+    void missingPrimaryKeyFallsBackToPlatformUuid() {
+        Map<String, Object> row = Map.of(
+                com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "f1109821");
         assertThat(ChangeHistoryAuditRowKey.derive(row, List.of("correspondence_id")))
                 .isEqualTo("f1109821");
     }

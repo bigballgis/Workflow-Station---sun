@@ -32,6 +32,44 @@ public class ChangeHistorySubmissionFilter {
     /** Row-identity field names preserved through any field-level filtering so row matching on
      *  subsequent saves keeps working even when the identity field itself is not user-editable. */
     public static final List<String> ROW_IDENTITY_FIELDS = SubTableRowIdentity.IDENTITY_FIELDS;
+    /**
+     * Row-identity field names for one binding, preserved through any field-level filtering so row
+     * matching on subsequent saves keeps working even when the identity field is not user-editable.
+     *
+     * <p>The platform key plus the binding's DESIGNER primary key columns. This used to be a
+     * constant list of likely names ({@code row_id}, {@code id}, {@code id_idw}, …), which both
+     * missed real keys — nothing in it can name {@code correspondence_id} — and matched business
+     * columns that merely happen to be called {@code id} or {@code row_id}.
+     *
+     * @param bindingId numeric binding id as it appears in {@code __subTables__}
+     */
+    public List<String> rowIdentityFieldsForBinding(String processInstanceId, String stageId,
+            String bindingId) {
+        List<String> designerPk = List.of();
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    """
+                            SELECT f.field_name
+                            FROM dw_form_table_bindings b
+                            JOIN dw_field_definitions f ON f.table_id = b.table_id
+                            WHERE b.id = ? AND COALESCE(f.is_primary_key, false) = true
+                            ORDER BY f.sort_order NULLS LAST, f.id
+                            """, Long.valueOf(bindingId));
+            List<String> names = new ArrayList<>();
+            for (Map<String, Object> row : rows) {
+                String name = stringValue(row.get("field_name"));
+                if (name != null)
+                    names.add(name);
+            }
+            designerPk = names;
+        } catch (RuntimeException ex) {
+            // Unresolvable configuration means "platform key only" — the same conservative answer
+            // as a table that declares no primary key. Never fall back to guessed column names.
+            log.warn("Could not resolve primary key for binding {}: {}", bindingId, ex.getMessage());
+        }
+        return SubTableRowIdentity.identityFieldsFor(designerPk);
+    }
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
@@ -170,21 +208,64 @@ public class ChangeHistorySubmissionFilter {
         return copyPayload(result);
     }
 
+    /** Read a Postgres {@code text[]} column (the primary-key subquery) as a list. */
+    private static List<String> textArrayValue(Object raw) {
+        if (raw instanceof java.sql.Array sqlArray) {
+            try {
+                Object value = sqlArray.getArray();
+                if (value instanceof Object[] items) {
+                    List<String> out = new ArrayList<>();
+                    for (Object item : items) {
+                        String text = stringValue(item);
+                        if (text != null)
+                            out.add(text);
+                    }
+                    return out;
+                }
+            } catch (java.sql.SQLException ignored) {
+                // Treated as "no configured primary key" — the caller then relies on the platform
+                // key alone, which is the same conservative path as a table that declares none.
+            }
+        }
+        if (raw instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object item : list) {
+                String text = stringValue(item);
+                if (text != null) {
+                    out.add(text);
+                }
+            }
+            return List.copyOf(out);
+        }
+        String text = stringValue(raw);
+        if (text == null) {
+            return List.of();
+        }
+        List<String> fields = new ArrayList<>();
+        for (String part : text.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                fields.add(trimmed);
+            }
+        }
+        return List.copyOf(fields);
+    }
+
     private ChangeHistoryBindingAliases resolveBindingContract(Map<String, Object> formDefinition,
             Set<String> topLevelEditable,
             Map<String, Set<String>> editableByBinding) {
         Map<String, String> aliasToBinding = new HashMap<>();
         Map<String, String> bindingToHistoryName = new HashMap<>();
         Map<String, Integer> aliasPriorities = new HashMap<>();
-        Map<String, List<String>> bindingToPrimaryKeyFields = new HashMap<>();
+        Map<String, List<String>> primaryKeyFieldsByBinding = new HashMap<>();
         editableByBinding.keySet().forEach(id -> {
             aliasToBinding.put(normalizeAlias(id), id);
             aliasPriorities.put(normalizeAlias(id), 0);
         });
         String formId = stringValue(formDefinition.get("formId"));
         if (formId == null)
-            return new ChangeHistoryBindingAliases(
-                    aliasToBinding, bindingToHistoryName, aliasPriorities, bindingToPrimaryKeyFields);
+            return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
+                    aliasPriorities, primaryKeyFieldsByBinding);
         try {
             List<Map<String, Object>> bindings = jdbcTemplate.queryForList(
                     """
@@ -193,16 +274,13 @@ public class ChangeHistorySubmissionFilter {
                                 COALESCE(td.table_display_name, rt.display_name) AS table_display_name,
                                 sibling.id AS sibling_id,
                                 binding.relation_table_id,
-                                COALESCE(
-                                    (SELECT string_agg(dwf.field_name, ',' ORDER BY dwf.field_name)
-                                        FROM dw_field_definitions dwf
-                                        WHERE dwf.table_id = binding.table_id
-                                            AND dwf.is_primary_key = true),
-                                    (SELECT string_agg(rtf.field_name, ',' ORDER BY rtf.field_name)
-                                        FROM rt_field_definitions rtf
-                                        WHERE rtf.table_id = binding.relation_table_id
-                                            AND rtf.is_primary_key = true)
-                                ) AS primary_key_fields
+                                -- The columns this table declares as its primary key. Row identity
+                                -- is configuration: a table keyed by `correspondence_id` matches no
+                                -- list of likely column names.
+                                (SELECT array_agg(pk.field_name ORDER BY pk.sort_order NULLS LAST, pk.id)
+                                   FROM dw_field_definitions pk
+                                  WHERE pk.table_id = binding.table_id
+                                    AND COALESCE(pk.is_primary_key, false) = true) AS primary_key_fields
                             FROM dw_form_definitions form
                             INNER JOIN dw_form_table_bindings binding ON binding.form_id = form.id
                             LEFT JOIN dw_table_definitions td ON td.id = binding.table_id
@@ -237,9 +315,9 @@ public class ChangeHistorySubmissionFilter {
                 String tableName = stringValue(binding.get("table_name"));
                 if (tableName != null)
                     bindingToHistoryName.putIfAbsent(bindingId, tableName);
-                List<String> primaryKeyFields = splitPrimaryKeyFields(binding.get("primary_key_fields"));
-                if (!primaryKeyFields.isEmpty())
-                    bindingToPrimaryKeyFields.putIfAbsent(bindingId, primaryKeyFields);
+                List<String> pkFields = textArrayValue(binding.get("primary_key_fields"));
+                if (!pkFields.isEmpty())
+                    primaryKeyFieldsByBinding.putIfAbsent(bindingId, pkFields);
                 // Portal persists __subTables__ under SubTableStoreKeys (dw:/rt:), not binding
                 // ids. Without this alias the audit payload drops every user-edited sub-table.
                 registerAlias(aliasToBinding, aliasPriorities, bindingId,
@@ -256,33 +334,8 @@ public class ChangeHistorySubmissionFilter {
             topLevelEditable.clear();
             editableByBinding.clear();
         }
-        return new ChangeHistoryBindingAliases(
-                aliasToBinding, bindingToHistoryName, aliasPriorities, bindingToPrimaryKeyFields);
-    }
-
-    static List<String> splitPrimaryKeyFields(Object raw) {
-        if (raw instanceof List<?> list) {
-            List<String> fields = new ArrayList<>();
-            for (Object item : list) {
-                String text = stringValue(item);
-                if (text != null) {
-                    fields.add(text);
-                }
-            }
-            return List.copyOf(fields);
-        }
-        String text = stringValue(raw);
-        if (text == null) {
-            return List.of();
-        }
-        List<String> fields = new ArrayList<>();
-        for (String part : text.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                fields.add(trimmed);
-            }
-        }
-        return List.copyOf(fields);
+        return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
+                aliasPriorities, primaryKeyFieldsByBinding);
     }
 
     private Set<String> collectEditableFields(Map<String, Object> config,

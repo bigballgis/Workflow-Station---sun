@@ -84,7 +84,8 @@ final class ChangeHistorySubTableAuditWalk {
                     ChangeHistoryFilterMaps.normalizeAlias(rawKey), rawKey);
             List<?> enrichedRows = findRows(enrichedTables, rawKey, bindingId, aliases);
             liftNestedSubmittedSubTables(submittedRows, enrichedRows, editableByBinding, aliases,
-                    lookupDisplayByBinding, rowsByTableAndIdentity, remainingLiftDepth);
+                    lookupDisplayByBinding, rowsByTableAndIdentity, remainingLiftDepth,
+                    aliases.primaryKeyFieldsByBinding().get(bindingId));
         }
     }
 
@@ -133,9 +134,10 @@ final class ChangeHistorySubTableAuditWalk {
         if (lookupDisplayByField == null) {
             lookupDisplayByField = Map.of();
         }
+        // 这张表配置的主键列——行身份按配置解析，而不是假设某个名字的列就是身份。
+        List<String> designerPk = aliases.primaryKeyFieldsByBinding().get(bindingId);
         List<Map<String, Object>> filteredRows = filterSubmittedRows(
-                submittedRows, enrichedRows, editableFields, lookupDisplayByField,
-                aliases.primaryKeyFields(bindingId));
+                submittedRows, enrichedRows, editableFields, lookupDisplayByField, designerPk);
         String outputKey = aliases.bindingToHistoryName().get(bindingId);
         if (outputKey == null) {
             outputKey = ChangeHistoryComponent.normalizeSubTableNameForHistory(rawKey);
@@ -161,15 +163,16 @@ final class ChangeHistorySubTableAuditWalk {
             List<?> enrichedRows,
             Set<String> editableFields,
             Map<String, String> lookupDisplayByField,
-            List<String> pkFields) {
+            List<String> designerPrimaryKeyFields) {
         List<Map<String, Object>> filteredRows = new ArrayList<>();
         for (int i = 0; i < submittedRows.size(); i++) {
             if (!(submittedRows.get(i) instanceof Map<?, ?> submittedRow)) {
                 continue;
             }
             Map<String, Object> filteredRow = copyIdentityAndEditableFields(
-                    submittedRow, findEnrichedRow(submittedRow, enrichedRows, i),
-                    editableFields, lookupDisplayByField, pkFields);
+                    submittedRow,
+                    findEnrichedRow(submittedRow, enrichedRows, i, designerPrimaryKeyFields),
+                    editableFields, lookupDisplayByField, designerPrimaryKeyFields);
             if (!filteredRow.isEmpty()) {
                 filteredRows.add(filteredRow);
             }
@@ -182,24 +185,16 @@ final class ChangeHistorySubTableAuditWalk {
             Map<?, ?> enrichedRow,
             Set<String> editableFields,
             Map<String, String> lookupDisplayByField,
-            List<String> pkFields) {
+            List<String> designerPrimaryKeyFields) {
         Map<String, Object> filteredRow = new LinkedHashMap<>();
-        for (String identityField : SubTableRowIdentity.IDENTITY_FIELDS) {
+        // 平台键 + **这张表配置的主键列**：身份字段必须原样保留，否则下次保存时行匹配不上。
+        // 只用 IDENTITY_FIELDS 会丢掉主键叫 correspondence_id / id 之类的表的身份列。
+        for (String identityField : SubTableRowIdentity.identityFieldsFor(designerPrimaryKeyFields)) {
             Object identity = enrichedRow.containsKey(identityField)
                     ? enrichedRow.get(identityField)
                     : submittedRow.get(identityField);
             if (identity != null) {
                 filteredRow.put(identityField, identity);
-            }
-        }
-        if (pkFields != null) {
-            for (String pkField : pkFields) {
-                Object pkValue = enrichedRow.containsKey(pkField)
-                        ? enrichedRow.get(pkField)
-                        : submittedRow.get(pkField);
-                if (pkValue != null && !ChangeHistorySubTableSliceMerger.isBlankAuditValue(pkValue)) {
-                    filteredRow.put(pkField, pkValue);
-                }
             }
         }
         for (String field : editableFields) {
@@ -208,7 +203,7 @@ final class ChangeHistorySubTableAuditWalk {
                         submittedRow.get(field), lookupDisplayByField.get(field)));
             }
         }
-        ChangeHistoryAuditRowKey.stamp(filteredRow, pkFields);
+        ChangeHistoryAuditRowKey.stamp(filteredRow, designerPrimaryKeyFields);
         return filteredRow;
     }
 
@@ -219,7 +214,8 @@ final class ChangeHistorySubTableAuditWalk {
             ChangeHistoryBindingAliases aliases,
             Map<String, Map<String, String>> lookupDisplayByBinding,
             Map<String, Map<String, Map<String, Object>>> rowsByTableAndIdentity,
-            int remainingLiftDepth) {
+            int remainingLiftDepth,
+            List<String> parentPrimaryKeyFields) {
         if (remainingLiftDepth <= 0) {
             return;
         }
@@ -231,7 +227,7 @@ final class ChangeHistorySubTableAuditWalk {
             if (!(nestedSubmitted instanceof Map<?, ?> nestedMap) || nestedMap.isEmpty()) {
                 continue;
             }
-            Map<?, ?> enrichedRow = findEnrichedRow(submittedRow, enrichedRows, i);
+            Map<?, ?> enrichedRow = findEnrichedRow(submittedRow, enrichedRows, i, parentPrimaryKeyFields);
             Object nestedEnrichedObj = enrichedRow.get("__subTables__");
             Map<?, ?> nestedEnriched = nestedEnrichedObj instanceof Map<?, ?> map ? map : Map.of();
             Map<String, Object> nestedFiltered = filter(
@@ -251,12 +247,14 @@ final class ChangeHistorySubTableAuditWalk {
                 ChangeHistoryFilterMaps.normalizeAlias(rawKey), Integer.MAX_VALUE);
     }
 
-    private static Map<?, ?> findEnrichedRow(Map<?, ?> submittedRow, List<?> enrichedRows, int fallbackIndex) {
-        Set<String> submittedIdentities = rowIdentities(submittedRow);
+    private static Map<?, ?> findEnrichedRow(Map<?, ?> submittedRow, List<?> enrichedRows,
+            int fallbackIndex, List<String> designerPrimaryKeyFields) {
+        Set<String> submittedIdentities = rowIdentities(submittedRow, designerPrimaryKeyFields);
         if (!submittedIdentities.isEmpty()) {
             for (Object candidate : enrichedRows) {
                 if (candidate instanceof Map<?, ?> row
-                        && !java.util.Collections.disjoint(submittedIdentities, rowIdentities(row))) {
+                        && !java.util.Collections.disjoint(submittedIdentities,
+                                rowIdentities(row, designerPrimaryKeyFields))) {
                     return row;
                 }
             }
@@ -267,8 +265,20 @@ final class ChangeHistorySubTableAuditWalk {
                 : Map.of();
     }
 
-    private static Set<String> rowIdentities(Map<?, ?> row) {
-        return SubTableRowIdentity.identityValuesOf(SubTableRowKeySupport.normalizeStringKeyMap(row));
+    /**
+     * Identity values of a row, for pairing a submitted row with its enriched counterpart.
+     *
+     * <p>The platform-generated key plus the columns this table DECLARES as its primary key,
+     * threaded down from {@link ChangeHistoryBindingAliases#primaryKeyFieldsByBinding()}. Without
+     * the configured key a table keyed by {@code correspondence_id} pairs on the platform key
+     * alone, which rows saved through other paths may not carry — the pairing then falls back to
+     * array position. Never a guessed column name: an unresolved key yields an empty set, and
+     * {@link #findEnrichedRow} falls back to index, which mis-pairs at worst rather than merging
+     * two genuinely different rows.
+     */
+    private static Set<String> rowIdentities(Map<?, ?> row, List<String> designerPrimaryKeyFields) {
+        return SubTableRowIdentity.identityValuesOf(
+                SubTableRowKeySupport.normalizeStringKeyMap(row), designerPrimaryKeyFields);
     }
 
     private static List<?> findRows(

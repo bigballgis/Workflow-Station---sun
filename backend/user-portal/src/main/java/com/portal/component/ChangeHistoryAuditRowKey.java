@@ -3,6 +3,7 @@ package com.portal.component;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,11 +15,11 @@ import java.util.Set;
  * <p>Preference order is deliberate. The designer's configured primary key
  * ({@code dw_field_definitions.is_primary_key}, e.g. {@code correspondence_id = Corr-000092})
  * is the only identity the platform itself allocates and never regenerates, so it wins over
- * {@code row_id}. Matching on the primary key means a re-issued {@code row_id} cannot split one
- * logical row into a phantom delete plus a duplicate add.
+ * {@code platformRowUuid}. Matching on the primary key means a re-issued platform key cannot
+ * split one logical row into a phantom delete plus a duplicate add.
  *
  * <p>When the primary key is not yet allocated (first persist of a new row), the row still
- * matches by {@code row_id} so a save that adds the PK is an update of the same row, not
+ * matches by {@code platformRowUuid} so a save that adds the PK is an update of the same row, not
  * delete-plus-add.
  *
  * <p>The resolved key is stamped onto the projected audit row under {@link #FIELD} so every
@@ -84,7 +85,8 @@ final class ChangeHistoryAuditRowKey {
 
     /**
      * Same logical row when the configured primary keys match, or when any persist-time
-     * identity value ({@code row_id} family) matches. Never compares business field values.
+     * identity value (platform key plus configured PK columns) matches. Never compares
+     * business field values.
      */
     static boolean sameLogicalRow(
             Map<String, Object> left, Map<String, Object> right, List<String> pkFields) {
@@ -96,8 +98,8 @@ final class ChangeHistoryAuditRowKey {
         if (pkLeft != null && pkLeft.equals(pkRight)) {
             return true;
         }
-        Set<String> leftIds = SubTableRowIdentity.identityValuesOf(left);
-        Set<String> rightIds = SubTableRowIdentity.identityValuesOf(right);
+        Set<String> leftIds = SubTableRowIdentity.identityValuesOf(left, pkFields);
+        Set<String> rightIds = SubTableRowIdentity.identityValuesOf(right, pkFields);
         if (leftIds.isEmpty() || rightIds.isEmpty()) {
             return false;
         }
@@ -113,20 +115,29 @@ final class ChangeHistoryAuditRowKey {
         if (row == null || pkFields == null || pkFields.isEmpty()) {
             return null;
         }
-        StringBuilder key = new StringBuilder();
-        for (int i = 0; i < pkFields.size(); i++) {
-            Object value = SubTableRowKeySupport.getRowValueIgnoreCase(row, pkFields.get(i));
+        List<String> filledNames = new ArrayList<>();
+        List<String> filledValues = new ArrayList<>();
+        for (String field : pkFields) {
+            Object value = SubTableRowKeySupport.getRowValueIgnoreCase(row, field);
             String text = value == null ? "" : String.valueOf(value).trim();
             if (text.isEmpty()) {
-                return null;
+                continue;
             }
+            filledNames.add(field);
+            filledValues.add(text);
+        }
+        if (filledValues.isEmpty()) {
+            return null;
+        }
+        if (filledValues.size() == 1) {
+            return filledValues.get(0);
+        }
+        StringBuilder key = new StringBuilder();
+        for (int i = 0; i < filledValues.size(); i++) {
             if (i > 0) {
                 key.append('|');
             }
-            if (pkFields.size() > 1) {
-                key.append(pkFields.get(i)).append('=');
-            }
-            key.append(text);
+            key.append(filledNames.get(i)).append('=').append(filledValues.get(i));
         }
         return key.toString();
     }

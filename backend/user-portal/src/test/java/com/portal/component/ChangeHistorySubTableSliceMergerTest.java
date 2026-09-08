@@ -60,6 +60,7 @@ class ChangeHistorySubTableSliceMergerTest {
                 "mdc_status", "Draft",
                 "date_to_cardholder", "2026-09-11")));
         Map<String, Object> thin = new LinkedHashMap<>();
+        thin.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "row-105");
         thin.put("row_id", "row-105");
         thin.put("correspondence_id", "Corr-000105");
         thin.put("mdc_status", null);
@@ -109,11 +110,11 @@ class ChangeHistorySubTableSliceMergerTest {
     @DisplayName("persist overlay does not mix another table's row that only shares id")
     void persistOverlayDoesNotMixAnotherTableOnSharedId() {
         Map<String, Object> items = new LinkedHashMap<>();
-        items.put("row_id", "item-1");
+        items.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "item-1");
         items.put("id", "1");
         items.put("sku", "X");
         Map<String, Object> people = new LinkedHashMap<>();
-        people.put("row_id", "people-1");
+        people.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "people-1");
         people.put("id", "1");
         people.put("name", "Alice");
         Map<String, Object> baseline = new LinkedHashMap<>();
@@ -121,7 +122,7 @@ class ChangeHistorySubTableSliceMergerTest {
         baseline.put("100", List.of(people));
 
         Map<String, Object> submittedPeople = new LinkedHashMap<>();
-        submittedPeople.put("row_id", "people-1");
+        submittedPeople.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "people-1");
         submittedPeople.put("id", "1");
         submittedPeople.put("name", null);
         Map<String, Object> submitted = new LinkedHashMap<>();
@@ -140,6 +141,7 @@ class ChangeHistorySubTableSliceMergerTest {
 
     private static Map<String, Object> row(String rowId, Object... fields) {
         Map<String, Object> row = new LinkedHashMap<>();
+        row.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, rowId);
         row.put("row_id", rowId);
         for (int i = 0; i < fields.length; i += 2) {
             row.put(String.valueOf(fields[i]), fields[i + 1]);

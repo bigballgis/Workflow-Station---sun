@@ -27,11 +27,19 @@ final class SubTableChangeHistoryDiff {
         return compute(oldRows, newRows, List.of());
     }
 
+    /**
+     * @param designerPrimaryKeyFields this table's configured primary key
+     *                                 ({@code dw_field_definitions.is_primary_key}). Rows are
+     *                                 paired by identity, and a table's key can be named anything
+     *                                 — {@code correspondence_id}, {@code case_number}, … — so it
+     *                                 has to come from configuration, not from a list of likely
+     *                                 column names.
+     */
     static List<SubTableChange> compute(
             List<Map<String, Object>> oldRows,
             List<Map<String, Object>> newRows,
-            List<String> pkFields) {
-        List<String> keys = pkFields == null ? List.of() : pkFields;
+            List<String> designerPrimaryKeyFields) {
+        List<String> keys = designerPrimaryKeyFields == null ? List.of() : designerPrimaryKeyFields;
         List<HeldRow> oldHeld = hold(collapseByIdentity(oldRows, keys), keys);
         List<HeldRow> newHeld = hold(collapseByIdentity(newRows, keys), keys);
         boolean[] pairedOld = new boolean[oldHeld.size()];
@@ -105,7 +113,7 @@ final class SubTableChangeHistoryDiff {
             if (pairedNew[n]) {
                 continue;
             }
-            Set<String> newIds = SubTableRowIdentity.identityValuesOf(newHeld.get(n).row);
+            Set<String> newIds = SubTableRowIdentity.identityValuesOf(newHeld.get(n).row, pkFields);
             if (newIds.isEmpty()) {
                 continue;
             }
@@ -113,7 +121,7 @@ final class SubTableChangeHistoryDiff {
                 if (pairedOld[o]) {
                     continue;
                 }
-                Set<String> oldIds = SubTableRowIdentity.identityValuesOf(oldHeld.get(o).row);
+                Set<String> oldIds = SubTableRowIdentity.identityValuesOf(oldHeld.get(o).row, pkFields);
                 if (oldIds.isEmpty() || Collections.disjoint(newIds, oldIds)) {
                     continue;
                 }

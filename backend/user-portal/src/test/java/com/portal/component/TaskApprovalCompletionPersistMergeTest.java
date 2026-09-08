@@ -77,8 +77,9 @@ class TaskApprovalCompletionPersistMergeTest {
                 .containsEntry("date_to_cardholder", "2026-10-02");
         List<SubTableChange> changes = TaskApprovalCompletionComponent.computeSubTableRowChanges(
                 List.of(copy(persisted105), copy(persisted106)),
-                rows);
-        assertThat(changes).extracting(SubTableChange::getRowIdentifier).containsExactly("row-106");
+                rows,
+                List.of("correspondence_id"));
+        assertThat(changes).extracting(SubTableChange::getRowIdentifier).containsExactly("Corr-000106");
         assertThat(changes.get(0).getNewValues())
                 .containsEntry("mdc_status", "Sent")
                 .containsEntry("date_to_cardholder", "2026-10-02");
@@ -133,6 +134,7 @@ class TaskApprovalCompletionPersistMergeTest {
     private static Map<String, Object> correspondence(
             String rowId, String correspondenceId, String channel, String status, String dateToCh) {
         Map<String, Object> row = new LinkedHashMap<>();
+        row.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, rowId);
         row.put("row_id", rowId);
         row.put("correspondence_id", correspondenceId);
         row.put("correspondence_channel", channel);

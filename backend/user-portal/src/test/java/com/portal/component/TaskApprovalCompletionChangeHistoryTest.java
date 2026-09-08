@@ -11,6 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 @DisplayName("Task approval sub-table change-history baselines")
 class TaskApprovalCompletionChangeHistoryTest {
+
+    /**
+     * The table's DESIGNER primary key, as production resolves and passes it per slice
+     * ({@code dw_field_definitions.is_primary_key}). Rows below are keyed by {@code row_id}, so
+     * that is this fixture's configured key — it identifies rows because the table declares it,
+     * not because the platform assumes columns of that name are identities.
+     */
+    private static final List<String> PK = List.of("row_id");
     @Test
     @DisplayName("uses the pre-completion process state")
     void usesPreSyncSubTables() {
@@ -21,7 +29,8 @@ class TaskApprovalCompletionChangeHistoryTest {
         assertSame(existingSubTables, resolved);
         assertEquals(List.of(), TaskApprovalCompletionComponent.computeSubTableRowChanges(
                 List.of(Map.of("row_id", "transaction-1", "amount", 100)),
-                List.of(Map.of("row_id", "transaction-1", "amount", 100))));
+                List.of(Map.of("row_id", "transaction-1", "amount", 100)),
+                PK));
     }
 
     @Test
@@ -49,7 +58,8 @@ class TaskApprovalCompletionChangeHistoryTest {
                         "amount", 100,
                         "task_current_node", "Mark Completed",
                         "sub_task_current_node", "Mark Completed",
-                        "task_status", "COMPLETED")));
+                        "task_status", "COMPLETED")),
+                PK);
         assertEquals(List.of(), changes);
     }
 
@@ -58,7 +68,8 @@ class TaskApprovalCompletionChangeHistoryTest {
     void sameRowIdWithChangedFieldIsUpdate() {
         List<SubTableChange> changes = TaskApprovalCompletionComponent.computeSubTableRowChanges(
                 List.of(Map.of("row_id", "corr-1", "channel", "Email", "assignee", "user-a")),
-                List.of(Map.of("row_id", "corr-1", "channel", "Email", "assignee", "user-b")));
+                List.of(Map.of("row_id", "corr-1", "channel", "Email", "assignee", "user-b")),
+                PK);
         assertEquals(1, changes.size());
         assertEquals("ROW_UPDATE", changes.get(0).getChangeType());
         assertEquals("corr-1", changes.get(0).getRowIdentifier());
@@ -97,7 +108,8 @@ class TaskApprovalCompletionChangeHistoryTest {
     void assigneeAutofillIsNotAUserOperation() {
         List<SubTableChange> changes = TaskApprovalCompletionComponent.computeSubTableRowChanges(
                 List.of(Map.of("row_id", "transaction-1", "amount", 100)),
-                List.of(Map.of("row_id", "transaction-1", "amount", 100, "assignee_id", "user-1")));
+                List.of(Map.of("row_id", "transaction-1", "amount", 100, "assignee_id", "user-1")),
+                PK);
         assertEquals(List.of(), changes);
     }
 
@@ -142,7 +154,8 @@ class TaskApprovalCompletionChangeHistoryTest {
                         "row_id", "5f9268dc",
                         "correspondence_type", "Customer Notification",
                         "correspondence_channel", "Email",
-                        "correspondence_mode", "Outbound")));
+                        "correspondence_mode", "Outbound")),
+                PK);
         assertEquals(1, changes.size());
         assertEquals("ROW_ADD", changes.get(0).getChangeType());
         assertEquals("5f9268dc", changes.get(0).getRowIdentifier());
@@ -156,15 +169,16 @@ class TaskApprovalCompletionChangeHistoryTest {
     @DisplayName("filling blanks on the same row_id after PK allocation keeps the PK as the anchor")
     void fillingBlanksAfterPrimaryKeyAllocationKeepsPkAnchor() {
         Map<String, Object> emptyOld = new LinkedHashMap<>();
-        emptyOld.put("row_id", "uuid-old");
+        emptyOld.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "uuid-old");
         emptyOld.put("correspondence_channel", "");
+        Map<String, Object> filled = new LinkedHashMap<>();
+        filled.put(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD, "uuid-old");
+        filled.put("correspondence_id", "Corr-000095");
+        filled.put("correspondence_channel", "Email");
+        filled.put("correspondence_mode", "Outbound");
         List<SubTableChange> changes = TaskApprovalCompletionComponent.computeSubTableRowChanges(
                 List.of(emptyOld),
-                List.of(Map.of(
-                        "row_id", "uuid-old",
-                        "correspondence_id", "Corr-000095",
-                        "correspondence_channel", "Email",
-                        "correspondence_mode", "Outbound")),
+                List.of(filled),
                 List.of("correspondence_id"));
         assertEquals(1, changes.size());
         assertEquals("ROW_ADD", changes.get(0).getChangeType());
@@ -182,7 +196,8 @@ class TaskApprovalCompletionChangeHistoryTest {
                 List.of(Map.of(
                         "row_id", "corr-1",
                         "correspondence_channel", "Letter",
-                        "mdc_status", "Sent")));
+                        "mdc_status", "Sent")),
+                PK);
         assertEquals(1, changes.size());
         assertEquals("ROW_UPDATE", changes.get(0).getChangeType());
         Map<String, Object> expectedOld = new LinkedHashMap<>();
@@ -266,7 +281,8 @@ class TaskApprovalCompletionChangeHistoryTest {
                         "correspondence_channel", "Email",
                         "correspondence_mode", "Outbound",
                         "mdc_status", "Draft")),
-                List.of(Map.of("row_id", "uuid-same")));
+                List.of(Map.of("row_id", "uuid-same")),
+                PK);
         assertEquals(List.of(), changes);
     }
 
@@ -283,7 +299,8 @@ class TaskApprovalCompletionChangeHistoryTest {
                         "row_id", "uuid-same",
                         "correspondence_channel", "",
                         "correspondence_mode", "",
-                        "mdc_status", "")));
+                        "mdc_status", "")),
+                PK);
         assertEquals(1, changes.size());
         assertEquals("ROW_UPDATE", changes.get(0).getChangeType());
         assertEquals(Map.of(
@@ -301,7 +318,8 @@ class TaskApprovalCompletionChangeHistoryTest {
     void recordsActualBusinessFieldChange() {
         List<SubTableChange> changes = TaskApprovalCompletionComponent.computeSubTableRowChanges(
                 List.of(Map.of("row_id", "transaction-1", "amount", 100)),
-                List.of(Map.of("row_id", "transaction-1", "amount", 125)));
+                List.of(Map.of("row_id", "transaction-1", "amount", 125)),
+                PK);
         assertEquals(1, changes.size());
         assertEquals("ROW_UPDATE", changes.get(0).getChangeType());
         assertEquals(Map.of("amount", 100), changes.get(0).getOldValues());
@@ -413,7 +431,8 @@ class TaskApprovalCompletionChangeHistoryTest {
                 List.of(
                         Map.of("row_id", "keep", "channel", "Email"),
                         Map.of("row_id", "gone", "channel", "Letter")),
-                List.of(Map.of("row_id", "keep", "channel", "Email")));
+                List.of(Map.of("row_id", "keep", "channel", "Email")),
+                PK);
         assertEquals(1, changes.size());
         assertEquals("ROW_DELETE", changes.get(0).getChangeType());
         assertEquals("gone", changes.get(0).getRowIdentifier());
