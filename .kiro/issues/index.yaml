@@ -3405,3 +3405,70 @@
     截图 To Do Claimed By、Help #leader、Admin 审计 Change Type 含 Claim/Reassign。
     本环境待办无 BU Role 池行，未点到 Reassign 弹窗。
 
+- id: "1604"
+  status: fixed
+  fixed_at: "2026-09-08"
+  severity: major
+  category: bug
+  summary: "Change History FIELD_UPDATE duplicates lookup JSON vs unchanged display scalar"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistoryValueEquality.java"
+  note: |
+    ATM 后续节点把 urge/status/stage 水合成 lookup JSON，表单仍提交展示文案（Open/Normal），
+    Objects.equals 当成变更，每阶段各写一条 FIELD_UPDATE。比较改为 lookup identity
+    （id/dropdown_name/status_name/stage_name 等），空→有值与 Open→Closed 仍记录。
+    查询侧同一比较隐藏已入库噪音，不改写 up_change_history。
+    验证：ChangeHistoryLookupFieldUpdateTest 红→绿；ATM bffe6db2 API
+    urge/status/stage FIELD_UPDATE 各 1 条（库内仍各 5 条）。
+
+- id: "1605"
+  status: fixed
+  fixed_at: "2026-09-08"
+  severity: major
+  category: bug
+  summary: "Sub-table blank fill-ins were recorded as ROW_UPDATE instead of ROW_ADD"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableChangeHistoryDiff.java"
+  note: |
+    ATM Correspondence 用户只 Add，Change History 出现 Sub Table Row Updated。
+    嵌套副本/空占位行被 pairRemainingRowsAsUpdates 配成 UPDATE；只补空未改已有内容。
+    修复：changed fields 全是空→有值时记 ROW_ADD；Email→Letter 或清空仍是 UPDATE。
+    存量 CH 不回写。验证：TaskApprovalCompletionChangeHistoryTest 红→绿后全绿；
+    user-portal 已重建 Started。
+
+- id: "1606"
+  status: fixed
+  fixed_at: "2026-09-08"
+  severity: major
+  category: bug
+  summary: "ATM Correspondence Change History recorded phantom SUB_TABLE_ROW_DELETE on UUID churn"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableChangeHistoryDiff.java"
+  note: |
+    反例：已办 6d7aacfa / process 3b995b83 ATM-DC-PW-000053 Transaction Approval。
+    用户未删行，却写出 c6ecc302 Phone/Outbound/Customer Notification 的 DELETE，
+    同时 0b36d851 以新 UUID ADD（Phone+日期+Acknowledged）。
+    根因：嵌套 link-child 换号后 leftover 旧 identity 无法配对，emitUnpaired 当删除。
+    修复：存在新 UUID 且新行都已配对时，不再把 leftover 旧行记成 DELETE。
+    真删除（新旧 identity 集合无新 UUID）仍记 ROW_DELETE。存量 CH 不回写。
+    验证：nestedUuidChurnDoesNotDeleteSiblingRow 红→绿；user-portal 已重建。
+
+- id: "1607"
+  status: fixed
+  fixed_at: "2026-09-08"
+  severity: major
+  category: bug
+  summary: "ATM Correspondence Change History writes duplicate ADD / phantom empty UPDATE because snapshots mix nested thin copies and PK vs row_id keys"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableChangeHistoryDiff.java"
+  note: |
+    反例：ATM-DC-PW-000054 process 74415be6。持久化 4 行 Correspondence 同时带稳定
+    row_id 与 correspondence_id（Corr-000092/93/94/95），不是 UUID churn。
+    根因：(1) 嵌套切片同一 identity 的薄副本覆盖厚副本，写出 Email→空；
+    (2) 匹配键与显示锚点不同源，只带 PK 的行 row_identifier 为空。
+    修复：两侧都取持久化 __subTables__；按设计器 PK 优先再 row_id 匹配；
+    合并非空优先；禁止按业务值 fingerprint 配对。存量 CH 不回写。
+    验证：laterThinCopyDoesNotClearEmail / stampedPrimaryKeySurvivesDiffWithoutPkFields
+    红→绿；ATM e2e process 7047069b Corr-000096 仅 1 次 Email ADD、无空 UPDATE、
+    identifier=Corr-000096；user-portal 已重建 Started。
+    续：Mark Completed 仍会把未改行的薄副本整表覆盖进 persist（aef2f60f
+    Corr-000105 Draft/日期被写成空）。Approval 删 Corr-000104 是用户真删。
+    persist 改为 overlaySubmittedOnBaseline（成员以提交为准，空白不覆盖已填）。
+    验证：thinSubmittedCopyDoesNotWipeUntouchedRow 红→绿；user-portal 已重建 Started。
+

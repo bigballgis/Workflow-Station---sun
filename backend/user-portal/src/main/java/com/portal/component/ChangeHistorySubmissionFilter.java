@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -175,13 +176,15 @@ public class ChangeHistorySubmissionFilter {
         Map<String, String> aliasToBinding = new HashMap<>();
         Map<String, String> bindingToHistoryName = new HashMap<>();
         Map<String, Integer> aliasPriorities = new HashMap<>();
+        Map<String, List<String>> bindingToPrimaryKeyFields = new HashMap<>();
         editableByBinding.keySet().forEach(id -> {
             aliasToBinding.put(normalizeAlias(id), id);
             aliasPriorities.put(normalizeAlias(id), 0);
         });
         String formId = stringValue(formDefinition.get("formId"));
         if (formId == null)
-            return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName, aliasPriorities);
+            return new ChangeHistoryBindingAliases(
+                    aliasToBinding, bindingToHistoryName, aliasPriorities, bindingToPrimaryKeyFields);
         try {
             List<Map<String, Object>> bindings = jdbcTemplate.queryForList(
                     """
@@ -189,7 +192,17 @@ public class ChangeHistorySubmissionFilter {
                                 COALESCE(td.table_name, rt.table_name) AS table_name,
                                 COALESCE(td.table_display_name, rt.display_name) AS table_display_name,
                                 sibling.id AS sibling_id,
-                                binding.relation_table_id
+                                binding.relation_table_id,
+                                COALESCE(
+                                    (SELECT string_agg(dwf.field_name, ',' ORDER BY dwf.field_name)
+                                        FROM dw_field_definitions dwf
+                                        WHERE dwf.table_id = binding.table_id
+                                            AND dwf.is_primary_key = true),
+                                    (SELECT string_agg(rtf.field_name, ',' ORDER BY rtf.field_name)
+                                        FROM rt_field_definitions rtf
+                                        WHERE rtf.table_id = binding.relation_table_id
+                                            AND rtf.is_primary_key = true)
+                                ) AS primary_key_fields
                             FROM dw_form_definitions form
                             INNER JOIN dw_form_table_bindings binding ON binding.form_id = form.id
                             LEFT JOIN dw_table_definitions td ON td.id = binding.table_id
@@ -224,6 +237,9 @@ public class ChangeHistorySubmissionFilter {
                 String tableName = stringValue(binding.get("table_name"));
                 if (tableName != null)
                     bindingToHistoryName.putIfAbsent(bindingId, tableName);
+                List<String> primaryKeyFields = splitPrimaryKeyFields(binding.get("primary_key_fields"));
+                if (!primaryKeyFields.isEmpty())
+                    bindingToPrimaryKeyFields.putIfAbsent(bindingId, primaryKeyFields);
                 // Portal persists __subTables__ under SubTableStoreKeys (dw:/rt:), not binding
                 // ids. Without this alias the audit payload drops every user-edited sub-table.
                 registerAlias(aliasToBinding, aliasPriorities, bindingId,
@@ -240,7 +256,33 @@ public class ChangeHistorySubmissionFilter {
             topLevelEditable.clear();
             editableByBinding.clear();
         }
-        return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName, aliasPriorities);
+        return new ChangeHistoryBindingAliases(
+                aliasToBinding, bindingToHistoryName, aliasPriorities, bindingToPrimaryKeyFields);
+    }
+
+    static List<String> splitPrimaryKeyFields(Object raw) {
+        if (raw instanceof List<?> list) {
+            List<String> fields = new ArrayList<>();
+            for (Object item : list) {
+                String text = stringValue(item);
+                if (text != null) {
+                    fields.add(text);
+                }
+            }
+            return List.copyOf(fields);
+        }
+        String text = stringValue(raw);
+        if (text == null) {
+            return List.of();
+        }
+        List<String> fields = new ArrayList<>();
+        for (String part : text.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                fields.add(trimmed);
+            }
+        }
+        return List.copyOf(fields);
     }
 
     private Set<String> collectEditableFields(Map<String, Object> config,

@@ -15,8 +15,6 @@ import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.common.audit.SystemAuditFields;
-import com.platform.common.jdbc.SubTableRowIdentity;
-import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -128,7 +126,7 @@ public class ChangeHistoryComponent {
             "id", "rowid", "rowkey", "ididw",
             "createdat", "createdby", "updatedat", "updatedby", "caserowid",
             "taskcurrentnode", "subtaskcurrentnode", "taskstatus", "subtaskstatus",
-            "subtables");
+            "subtables", "auditrowkey");
     /**
      * Read-only quarantine for records written by older MI implementations. New
      * writes are governed by
@@ -680,7 +678,7 @@ public class ChangeHistoryComponent {
 
     private boolean semanticallyEqual(String fieldName, Object oldValue, Object newValue) {
         if (!isAssigneeValueField(fieldName)) {
-            return Objects.equals(oldValue, newValue);
+            return ChangeHistoryValueEquality.equal(oldValue, newValue);
         }
         String oldUserId = extractAssigneeUserId(oldValue);
         String newUserId = extractAssigneeUserId(newValue);
@@ -1101,6 +1099,10 @@ public class ChangeHistoryComponent {
         if (value == null) {
             return null;
         }
+        String lookupLabel = ChangeHistoryValueEquality.displayLabel(value);
+        if (lookupLabel != null) {
+            return lookupLabel;
+        }
         if (value instanceof String s) {
             return s;
         }
@@ -1187,25 +1189,14 @@ public class ChangeHistoryComponent {
 
     /**
      * Resolves the stable row identifier from a sub-table row map.
-     * Delegates to {@link SubTableRowIdentity} so audit matching uses the same
-     * priority as persist-time identity ({@code row_id} before {@code id}).
-     * Rows with no identity return {@code null}; callers must not invent a key
-     * from business field values.
+     * Uses the stamped audit key when present (designer PK first), otherwise the
+     * persist-time {@code row_id} family. Never invents a key from business values.
      *
      * @param row the sub-table row map (never null)
      * @return a displayable row identifier, or {@code null}
      */
     public static String resolveRowIdentifier(Map<String, Object> row) {
-        String field = SubTableRowIdentity.identityFieldOf(row);
-        if (field == null) {
-            return null;
-        }
-        Object value = SubTableRowKeySupport.getRowValueIgnoreCase(row, field);
-        if (value == null) {
-            return null;
-        }
-        String text = String.valueOf(value).trim();
-        return text.isEmpty() ? null : text;
+        return ChangeHistoryAuditRowKey.resolve(row);
     }
 
     static boolean isSubTableRowMetadataField(String fieldName) {

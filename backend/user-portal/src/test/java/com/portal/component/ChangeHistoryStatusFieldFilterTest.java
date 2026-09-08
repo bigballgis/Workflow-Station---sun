@@ -89,7 +89,8 @@ class ChangeHistoryStatusFieldFilterTest {
         when(jdbc.queryForList(anyString(), eq(String.class), eq("a486076b")))
                 .thenReturn(List.of(encoded));
         when(jdbc.queryForList(
-                argThat(sql -> sql != null && sql.contains("form_type = 'TASK'")),
+                argThat(sql -> sql != null && sql.contains("fd.id = ?")
+                        && sql.contains("form_type IN ('TASK', 'PROCESS')")),
                 eq(50206L)))
                 .thenReturn(List.of(Map.of(
                         "form_id", 50206L,

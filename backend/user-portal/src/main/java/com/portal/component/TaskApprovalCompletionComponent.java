@@ -245,9 +245,14 @@ public class TaskApprovalCompletionComponent {
                         Object historyBaseline = resolveSubTableHistoryBaseline(preSyncVariablesRef.get());
                         Object filteredBaseline = taskFormComponent.filterTaskSubTableBaselineForChangeHistory(
                             chProcessId, task.getTaskDefinitionKey(), historyBaseline);
+                        Object persistedAfter = chInstance.getVariables() != null
+                                ? chInstance.getVariables().get("__subTables__") : null;
+                        Object filteredAfter = taskFormComponent.filterTaskSubTableBaselineForChangeHistory(
+                            chProcessId, task.getTaskDefinitionKey(), persistedAfter);
                         recordSubTableChangeHistory(chContext,
                             filteredBaseline,
-                                chNewSubTables);
+                                ChangeHistorySubTableSliceMerger.retainSubmittedTables(
+                                        filteredAfter, chNewSubTables));
                     } else if (chNewSubTables != null) {
                         log.debug("Skipping sub-table change history for task {}: data was merged internally, not submitted by the user",
                                 taskId);
@@ -547,13 +552,23 @@ public class TaskApprovalCompletionComponent {
         return SubTableChangeHistoryDiff.compute(oldRows, newRows);
     }
 
+    static List<SubTableChange> computeSubTableRowChanges(
+            List<Map<String, Object>> oldRows,
+            List<Map<String, Object>> newRows,
+            List<String> pkFields) {
+        return SubTableChangeHistoryDiff.compute(oldRows, newRows, pkFields);
+    }
+
     /**
      * Merges the portal's stored variables with this approval submission, then recomputes formula
      * columns on the full record.
      *
      * <p>Approval payloads are often incremental: recomputing on {@code submission} alone would treat
-     * fields not present in this form as blank and overwrite correct stored values. Flowable also
-     * needs authoritative computed values before gateway conditions run.
+     * fields not present in this form as blank and overwrite correct stored values. The same is true
+     * inside {@code __subTables__}: a complete payload may carry a thin copy of an untouched row
+     * (nested link-child slice). Overlay by identity so blanks cannot wipe filled persisted fields,
+     * while submitted membership still expresses real DELETE/ADD. Flowable also needs authoritative
+     * computed values before gateway conditions run.
      */
     private Map<String, Object> mergeApprovalVariables(String processInstanceId, Map<String, Object> submission) {
         Map<String, Object> merged = new HashMap<>();
@@ -564,8 +579,13 @@ public class TaskApprovalCompletionComponent {
                 merged.putAll(existing);
             }
         });
+        Object baselineSubTables = merged.get("__subTables__");
         if (submission != null) {
             merged.putAll(submission);
+            if (submission.containsKey("__subTables__")) {
+                merged.put("__subTables__", ChangeHistorySubTableSliceMerger.overlaySubmittedOnBaseline(
+                        baselineSubTables, submission.get("__subTables__")));
+            }
         }
         recalculateComputedFields(functionUnitCode, merged);
         return merged;

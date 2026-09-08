@@ -614,6 +614,7 @@ public class TaskFormComponent {
                 taskInfo.processInstanceId, taskInfo.taskDefinitionKey, submittedSnapshot, editableData);
         AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();
         AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
+        AtomicReference<Map<String, Object>> persistedAfterRef = new AtomicReference<>();
 
         // MI (multi-instance) sub-task detection: presence of the BPMN _currentItem/currentItem
         // loop variable in the submitted form data means this task owns exactly one row of a
@@ -676,6 +677,10 @@ public class TaskFormComponent {
                 inbound.put("__subTables__",
                         miSubTaskSubTableRowMerger().mergeCurrentRowOnly(
                                 submittedSubTables, baselineSubTables, miCurrentRowKey, miEmptiedSubTableKeys));
+            } else if (inbound.containsKey("__subTables__")) {
+                inbound.put("__subTables__",
+                        ChangeHistorySubTableSliceMerger.overlaySubmittedOnBaseline(
+                                currentVariables.get("__subTables__"), inbound.get("__subTables__")));
             }
 
             updatedVariables.putAll(inbound);
@@ -708,6 +713,7 @@ public class TaskFormComponent {
             SubTableNestingSanitizer.stripDeepNestedSubTables(updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
+            persistedAfterRef.set(updatedVariables);
 
             log.info("Process variables updated for task: {}, fields: {}", taskId, editableData.keySet());
         });
@@ -747,13 +753,20 @@ public class TaskFormComponent {
             // old+new pairs from duplicating when the final state equals the
             // last save).
             Object oldSubTables = snapshotOldVars.get("__subTables__");
-            Object newSubTables = userChanges.get("__subTables__");
-            if (newSubTables != null || oldSubTables != null) {
+            Object submittedTables = userChanges.get("__subTables__");
+            Map<String, Object> persistedAfter = persistedAfterRef.get();
+            Object newPersistedSubTables = persistedAfter != null ? persistedAfter.get("__subTables__") : null;
+            if (submittedTables != null || oldSubTables != null) {
                 Object filteredOldSubTables = changeHistorySubmissionFilter()
                         .filterTaskSubTableBaseline(taskInfo.processInstanceId,
                                 taskInfo.taskDefinitionKey, oldSubTables);
+                Object filteredNewSubTables = changeHistorySubmissionFilter()
+                        .filterTaskSubTableBaseline(taskInfo.processInstanceId,
+                                taskInfo.taskDefinitionKey, newPersistedSubTables);
                 subTableChangeRecorder().recordSubTableChangeHistory(
-                        context, filteredOldSubTables, newSubTables);
+                        context, filteredOldSubTables,
+                        ChangeHistorySubTableSliceMerger.retainSubmittedTables(
+                                filteredNewSubTables, submittedTables));
             }
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());

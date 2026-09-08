@@ -134,7 +134,8 @@ final class ChangeHistorySubTableAuditWalk {
             lookupDisplayByField = Map.of();
         }
         List<Map<String, Object>> filteredRows = filterSubmittedRows(
-                submittedRows, enrichedRows, editableFields, lookupDisplayByField);
+                submittedRows, enrichedRows, editableFields, lookupDisplayByField,
+                aliases.primaryKeyFields(bindingId));
         String outputKey = aliases.bindingToHistoryName().get(bindingId);
         if (outputKey == null) {
             outputKey = ChangeHistoryComponent.normalizeSubTableNameForHistory(rawKey);
@@ -151,14 +152,16 @@ final class ChangeHistorySubTableAuditWalk {
         if (submittedRows.isEmpty()) {
             return;
         }
-        ChangeHistorySubTableSliceMerger.mergeSliceRows(rowsByIdentity, filteredRows);
+        ChangeHistorySubTableSliceMerger.mergeSliceRows(
+                rowsByIdentity, filteredRows, aliases.primaryKeyFields(bindingId));
     }
 
     private static List<Map<String, Object>> filterSubmittedRows(
             List<?> submittedRows,
             List<?> enrichedRows,
             Set<String> editableFields,
-            Map<String, String> lookupDisplayByField) {
+            Map<String, String> lookupDisplayByField,
+            List<String> pkFields) {
         List<Map<String, Object>> filteredRows = new ArrayList<>();
         for (int i = 0; i < submittedRows.size(); i++) {
             if (!(submittedRows.get(i) instanceof Map<?, ?> submittedRow)) {
@@ -166,7 +169,7 @@ final class ChangeHistorySubTableAuditWalk {
             }
             Map<String, Object> filteredRow = copyIdentityAndEditableFields(
                     submittedRow, findEnrichedRow(submittedRow, enrichedRows, i),
-                    editableFields, lookupDisplayByField);
+                    editableFields, lookupDisplayByField, pkFields);
             if (!filteredRow.isEmpty()) {
                 filteredRows.add(filteredRow);
             }
@@ -178,7 +181,8 @@ final class ChangeHistorySubTableAuditWalk {
             Map<?, ?> submittedRow,
             Map<?, ?> enrichedRow,
             Set<String> editableFields,
-            Map<String, String> lookupDisplayByField) {
+            Map<String, String> lookupDisplayByField,
+            List<String> pkFields) {
         Map<String, Object> filteredRow = new LinkedHashMap<>();
         for (String identityField : SubTableRowIdentity.IDENTITY_FIELDS) {
             Object identity = enrichedRow.containsKey(identityField)
@@ -188,12 +192,23 @@ final class ChangeHistorySubTableAuditWalk {
                 filteredRow.put(identityField, identity);
             }
         }
+        if (pkFields != null) {
+            for (String pkField : pkFields) {
+                Object pkValue = enrichedRow.containsKey(pkField)
+                        ? enrichedRow.get(pkField)
+                        : submittedRow.get(pkField);
+                if (pkValue != null && !ChangeHistorySubTableSliceMerger.isBlankAuditValue(pkValue)) {
+                    filteredRow.put(pkField, pkValue);
+                }
+            }
+        }
         for (String field : editableFields) {
             if (submittedRow.containsKey(field)) {
                 filteredRow.put(field, ChangeHistoryLookupAuditValues.visibleAuditValue(
                         submittedRow.get(field), lookupDisplayByField.get(field)));
             }
         }
+        ChangeHistoryAuditRowKey.stamp(filteredRow, pkFields);
         return filteredRow;
     }
 
@@ -222,7 +237,8 @@ final class ChangeHistorySubTableAuditWalk {
             Map<String, Object> nestedFiltered = filter(
                     nestedMap, nestedEnriched, editableByBinding, aliases, lookupDisplayByBinding,
                     remainingLiftDepth - 1);
-            ChangeHistorySubTableSliceMerger.mergeFilteredTableRows(rowsByTableAndIdentity, nestedFiltered, true);
+            ChangeHistorySubTableSliceMerger.mergeFilteredTableRows(
+                    rowsByTableAndIdentity, nestedFiltered, aliases);
         }
     }
 

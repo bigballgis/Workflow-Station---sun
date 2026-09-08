@@ -275,8 +275,8 @@ class TaskFormComponentMiSubmitIntegrationTest {
         Map<String, Object> subTables = (Map<String, Object>) processInstance.getVariables().get("__subTables__");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) subTables.get("60001");
-        // Legacy putAll semantics: the whole submitted array replaces the baseline outright,
-        // R-1 is gone entirely — zero behavior change for non-MI submissions.
+        // Submitted membership still replaces the slice (R-1 gone). Same-identity
+        // blanks no longer wipe filled persisted fields — that is overlaySubmittedOnBaseline.
         assertThat(rows).extracting(r -> r.get("id_idw")).containsExactly("R-2");
     }
 

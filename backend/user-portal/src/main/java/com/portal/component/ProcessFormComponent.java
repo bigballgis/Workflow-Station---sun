@@ -256,6 +256,7 @@ public class ProcessFormComponent {
             gate.getFunctionUnitCode(), formData, formData);
 
         AtomicReference<Map<String, Object>> oldValuesRef = new AtomicReference<>();
+        AtomicReference<Map<String, Object>> persistedAfterRef = new AtomicReference<>();
 
         processFormWriteTx().executeWithoutResult(status -> {
             ProcessInstance processInstance = requireProcessInstance(processInstanceId);
@@ -292,6 +293,7 @@ public class ProcessFormComponent {
             requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
+            persistedAfterRef.set(updatedVariables);
 
             log.info("Process variables updated for process: {}", processInstanceId);
         });
@@ -312,9 +314,14 @@ public class ProcessFormComponent {
             changeHistoryComponent.recordFieldChanges(context, snapshotOldValues, userChanges);
                     Object filteredOldSubTables = changeHistorySubmissionFilter().filterProcessSubTableBaseline(
                         gate.getFunctionUnitCode(), snapshotOldValues.get("__subTables__"));
+            Map<String, Object> persistedAfter = persistedAfterRef.get();
+            Object filteredNewSubTables = changeHistorySubmissionFilter().filterProcessSubTableBaseline(
+                    gate.getFunctionUnitCode(),
+                    persistedAfter != null ? persistedAfter.get("__subTables__") : null);
             recordSubTableChangeHistory(context,
                         filteredOldSubTables,
-                    userChanges.get("__subTables__"));
+                    ChangeHistorySubTableSliceMerger.retainSubmittedTables(
+                            filteredNewSubTables, userChanges.get("__subTables__")));
         } catch (RuntimeException ex) {
             log.warn("process form change-history skipped for {}: {}", processInstanceId, ex.getMessage());
         }

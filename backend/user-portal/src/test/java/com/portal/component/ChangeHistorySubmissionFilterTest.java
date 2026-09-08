@@ -86,7 +86,7 @@ class ChangeHistorySubmissionFilterTest {
         Map<String, Object> tables = (Map<String, Object>) actual.get("__subTables__");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) tables.get("participants");
-        assertThat(rows).containsExactly(Map.of(
+        assertThat(auditRows(rows)).containsExactly(Map.of(
                 "id", "GENERATED-ROW-ID",
                 "participant_id", "BUSINESS-REFERENCE",
                 "notes", "user edit"));
@@ -239,7 +239,7 @@ class ChangeHistorySubmissionFilterTest {
         Map<String, Object> tables = (Map<String, Object>) actual.get("__subTables__");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) tables.get("transactions");
-        assertThat(rows).containsExactly(Map.of("row_id", "ROW-1", "assignee_id", "user-2"));
+        assertThat(auditRows(rows)).containsExactly(Map.of("row_id", "ROW-1", "assignee_id", "user-2"));
     }
 
     @Test
@@ -327,7 +327,7 @@ class ChangeHistorySubmissionFilterTest {
         assertThat(tables).containsOnlyKeys("ATM_Transaction");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) tables.get("ATM_Transaction");
-        assertThat(rows).containsExactly(Map.of(
+        assertThat(auditRows(rows)).containsExactly(Map.of(
                 "row_id", "ATM-DC-PW-TRANS-000039",
                 "card_number", "1",
                 "assignee_id", "user-1"));
@@ -370,7 +370,7 @@ class ChangeHistorySubmissionFilterTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> correspondenceRows =
                 (List<Map<String, Object>>) tables.get("atm_correspondence");
-        assertThat(correspondenceRows).containsExactly(Map.of(
+        assertThat(auditRows(correspondenceRows)).containsExactly(Map.of(
                 "row_id", "eefe5939-de38-4355-8aee-ca3fdd764278",
                 "correspondence_channel", "Email",
                 "correspondence_type", "Customer Notification"));
@@ -385,7 +385,8 @@ class ChangeHistorySubmissionFilterTest {
                 argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(321L)))
                 .thenReturn(List.of(
                         bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", 1144L),
-                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", 1149L)));
+                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence",
+                                1149L, "correspondence_id")));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "1144", Map.of("rule", List.of(rule("card_number", false))),
                 "1149", Map.of("rule", List.of(
@@ -394,6 +395,7 @@ class ChangeHistorySubmissionFilterTest {
         form.put("formId", "321");
         Map<String, Object> nestedRow = new java.util.LinkedHashMap<>();
         nestedRow.put("row_id", "nested-live");
+        nestedRow.put("correspondence_id", "Corr-000093");
         nestedRow.put("correspondence_channel", "Letter");
         nestedRow.put("correspondence_type", "Customer Notification");
         Map<String, Object> transactionRow = new java.util.LinkedHashMap<>();
@@ -402,6 +404,7 @@ class ChangeHistorySubmissionFilterTest {
         transactionRow.put("__subTables__", Map.of("dw:atm_correspondence", List.of(nestedRow)));
         Map<String, Object> topLevelShadow = new java.util.LinkedHashMap<>();
         topLevelShadow.put("row_id", "top-level-stale");
+        topLevelShadow.put("correspondence_id", "Corr-000093");
         topLevelShadow.put("correspondence_channel", "Email");
         topLevelShadow.put("correspondence_type", "Customer Notification");
         Map<String, Object> submitted = Map.of("__subTables__", Map.of(
@@ -414,8 +417,9 @@ class ChangeHistorySubmissionFilterTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> correspondenceRows =
                 (List<Map<String, Object>>) tables.get("atm_correspondence");
-        assertThat(correspondenceRows).containsExactly(Map.of(
+        assertThat(auditRows(correspondenceRows)).containsExactly(Map.of(
                 "row_id", "nested-live",
+                "correspondence_id", "Corr-000093",
                 "correspondence_channel", "Letter",
                 "correspondence_type", "Customer Notification"));
     }
@@ -457,7 +461,7 @@ class ChangeHistorySubmissionFilterTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> correspondenceRows =
                 (List<Map<String, Object>>) tables.get("atm_correspondence");
-        assertThat(correspondenceRows).containsExactly(
+        assertThat(auditRows(correspondenceRows)).containsExactly(
                 Map.of("row_id", "corr-1", "correspondence_channel", "Email",
                         "correspondence_type", "Customer Notification"),
                 Map.of("row_id", "corr-2", "correspondence_channel", "Letter",
@@ -521,7 +525,7 @@ class ChangeHistorySubmissionFilterTest {
         @SuppressWarnings("unchecked")
         Map<String, List<Map<String, Object>>> tables = (Map<String, List<Map<String, Object>>>) actual
                 .get("__subTables__");
-        assertThat(tables.get("participants")).containsExactly(
+        assertThat(auditRows(tables.get("participants"))).containsExactly(
                 Map.of("row_id", "ROW-2", "id", "PK-2", "name", "Second"),
                 Map.of("row_id", "ROW-1", "id", "PK-1", "name", "First"));
     }
@@ -546,7 +550,7 @@ class ChangeHistorySubmissionFilterTest {
         @SuppressWarnings("unchecked")
         Map<String, List<Map<String, Object>>> tables = (Map<String, List<Map<String, Object>>>) actual
                 .get("__subTables__");
-        assertThat(tables.get("subtable")).containsExactly(
+        assertThat(auditRows(tables.get("subtable"))).containsExactly(
                 Map.of("id", "PK-1", "row_id", "ROW-1", "name", "12"));
     }
 
@@ -571,7 +575,7 @@ class ChangeHistorySubmissionFilterTest {
         Map<String, Object> tables = (Map<String, Object>) actual.get("__subTables__");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) tables.get("participants");
-        assertThat(rows).containsExactly(Map.of("id", "ROW-1", "notes", "hello"));
+        assertThat(auditRows(rows)).containsExactly(Map.of("id", "ROW-1", "notes", "hello"));
         assertThat(rows.get(0)).doesNotContainKey("name");
     }
 
@@ -633,7 +637,7 @@ class ChangeHistorySubmissionFilterTest {
         Map<String, List<Map<String, Object>>> tables =
                 (Map<String, List<Map<String, Object>>>) actual.get("__subTables__");
         assertThat(tables).containsOnlyKeys("acq_correspondence");
-        assertThat(tables.get("acq_correspondence")).containsExactly(
+        assertThat(auditRows(tables.get("acq_correspondence"))).containsExactly(
                 Map.of("row_id", "uuid-A", "channel", "Email"));
     }
 
@@ -684,9 +688,9 @@ class ChangeHistorySubmissionFilterTest {
         Map<String, List<Map<String, Object>>> tables =
                 (Map<String, List<Map<String, Object>>>) actual.get("__subTables__");
         assertThat(tables).containsOnlyKeys("subtable", "attachment");
-        assertThat(tables.get("subtable")).containsExactly(Map.of(
+        assertThat(auditRows(tables.get("subtable"))).containsExactly(Map.of(
                 "id_idw", "Test-000004", "name", "1", "assignee", "liam"));
-        assertThat(tables.get("attachment")).containsExactly(Map.of("id", "file-1", "file", "/upload/a.jpg"));
+        assertThat(auditRows(tables.get("attachment"))).containsExactly(Map.of("id", "file-1", "file", "/upload/a.jpg"));
     }
 
     @Test
@@ -719,5 +723,34 @@ class ChangeHistorySubmissionFilterTest {
                 "table_name", tableName,
                 "table_display_name", displayName,
                 "sibling_id", siblingId);
+    }
+
+    private static Map<String, Object> bindingRow(long id, String type, String mode,
+            String tableName, String displayName, long siblingId, String primaryKeyFields) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>(bindingRow(
+                id, type, mode, tableName, displayName, siblingId));
+        row.put("primary_key_fields", primaryKeyFields);
+        return row;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> auditRows(Object rows) {
+        if (!(rows instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((key, value) -> {
+                if (!ChangeHistoryAuditRowKey.FIELD.equals(String.valueOf(key))) {
+                    copy.put(String.valueOf(key), value);
+                }
+            });
+            out.add(copy);
+        }
+        return out;
     }
 }
