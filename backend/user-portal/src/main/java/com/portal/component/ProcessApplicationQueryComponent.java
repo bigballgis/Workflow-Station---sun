@@ -5,6 +5,7 @@ import com.portal.component.MiOverlaySupport.MiRowProgress;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.util.ProcessVariableClearMarks;
 import com.portal.component.MainTableViewAccessResolver.AccessRule;
 import com.portal.exception.PortalException;
 import com.portal.service.ProcessAssigneeSnapshot;
@@ -375,14 +376,23 @@ public class ProcessApplicationQueryComponent {
     /**
      * Gap-fills scalar process variables a service task (e.g. an Activepieces node writing back
      * {@code output_text}) produced in the Flowable engine but that the portal's own
-     * {@code up_process_instance} store — written only by form submissions — still holds as
-     * {@code null} or misses entirely. Fill-only: any non-null portal value wins, so user input is
-     * never overwritten. {@code __subTables__} is excluded — {@link #hydrateEngineSubTablesIntoStore}
+     * {@code up_process_instance} store — written only by form submissions — never received.
+     * Fill-only: an existing portal value wins, so user input is never overwritten.
+     * {@code __subTables__} is excluded — {@link #hydrateEngineSubTablesIntoStore}
      * owns it with its own per-slice merge rules. Persists so later reads see the output. Best-effort.
      *
      * <p>Unlike the sub-table hydration this also runs for ended instances: a straight-through
      * automation (start → service task → end) leaves the store frozen at the submitted values, and
      * the engine serves history variables for ended instances.</p>
+     *
+     * <p><b>Only ABSENT keys are filled — a key present with a {@code null} value is left alone.</b>
+     * The portal writes an explicit {@code null} when a user clears an optional field, and the
+     * engine keeps its own copy of that variable which form submissions never update. Treating
+     * "present but null" as a gap made every clear silently revert: Save persisted {@code null}
+     * correctly, then the next page load hydrated the engine's stale value straight back over it
+     * and re-saved. Measured on process 52b70865 / {@code case_status} — the submit trace showed
+     * {@code finalVal=null}, and 13 seconds later the reload logged
+     * "hydrated engine-only variables [case_status]" and the old object was back.</p>
      */
     private void hydrateEngineScalarsIntoStore(String processId, ProcessInstance instance, ProcessInstanceInfo info) {
         if (workflowEngineClient == null || !workflowEngineClient.isAvailable()) {
@@ -395,13 +405,15 @@ public class ProcessApplicationQueryComponent {
             }
             Map<String, Object> vars = info.getVariables() != null
                     ? new HashMap<>(info.getVariables()) : new HashMap<>();
+            // Fields the user emptied on purpose: null there is the intended value, not a gap.
+            Set<String> clearedByUser = ProcessVariableClearMarks.readClearedFields(vars);
             List<String> filled = new ArrayList<>();
             for (Map.Entry<?, ?> e : engineVars.entrySet()) {
                 if (e.getKey() == null || e.getValue() == null) {
                     continue;
                 }
                 String key = String.valueOf(e.getKey());
-                if ("__subTables__".equals(key) || vars.get(key) != null) {
+                if ("__subTables__".equals(key) || vars.get(key) != null || clearedByUser.contains(key)) {
                     continue;
                 }
                 vars.put(key, e.getValue());
@@ -420,9 +432,14 @@ public class ProcessApplicationQueryComponent {
     }
 
     /**
-     * True when the store holds at least one {@code null} variable value — the shape a service-task
-     * output leaves behind (the submitted form writes the key with no value). Used to keep the engine
-     * round-trip off the common path where nothing could be gap-filled anyway.
+     * True when the store holds at least one {@code null} variable value. Used only to keep the
+     * engine round-trip off the common path — {@link #hydrateEngineScalarsIntoStore} decides what
+     * may actually be filled.
+     *
+     * <p>Kept as a cheap pre-check even though a present-null key is no longer fillable: an
+     * instance carrying nulls is still the shape where an engine-only key is most likely to be
+     * missing entirely, and widening the gate would put an engine call on every detail read.
+     * The gate can only cause a wasted round-trip, never a wrong value.</p>
      */
     private boolean hasNullVariableValue(ProcessInstanceInfo info) {
         Map<String, Object> vars = info.getVariables();

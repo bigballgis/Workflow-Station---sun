@@ -201,6 +201,37 @@ class ChangeHistorySubmissionFilterTest {
         assertThat(filter.snapshotFieldKeys(form)).containsExactly("case_number");
     }
 
+    /**
+     * Regression for the Task Form read path: with a real-world sparse (deny-list) permission map,
+     * the designed EDITABLE fields must still be resolvable.
+     *
+     * <p>{@code TaskFormComponent#getTaskFormData} used to subset the process variables by
+     * {@code fieldPermissions.keySet()}. On FU {@code atm-20260623-gaevus} form 321 that map holds
+     * 21 entries that are ALL READONLY, so the "subset" was exactly the read-only fields:
+     * {@code case_status} / {@code card_number} were never sent to the client, and the portal
+     * echoed the same gap back as {@code baselineValues}, disabling concurrent-edit detection for
+     * every field a user can actually change. The field list must come from the form config.
+     */
+    @Test
+    void snapshotFieldKeysCoverEditableFieldsWhenPermissionsAreAllReadonly() {
+        Map<String, Object> form = Map.of(
+                // Sparse deny-list exactly as the designer persists it: no "EDITABLE" value at all.
+                "fieldPermissions", Map.of(
+                        "case_number", "READONLY",
+                        "row_id", "READONLY"),
+                "configJson", Map.of("rule", List.of(Map.of(
+                        "type", "elCard",
+                        "children", List.of(
+                                Map.of("field", "case_number", "readonly", true),
+                                Map.of("field", "case_status"),
+                                Map.of("field", "card_number"))))),
+                "readOnly", false);
+
+        assertThat(filter.snapshotFieldKeys(form))
+                .contains("case_status", "card_number")
+                .contains("case_number");
+    }
+
     @Test
     void snapshotFieldKeysIgnoreCompositePermissionKeys() {
         Map<String, Object> form = Map.of(

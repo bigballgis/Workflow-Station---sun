@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Task Form 字段/快照纯函数工具协作类。
@@ -21,27 +20,53 @@ import java.util.stream.Collectors;
 public class TaskFormFieldMapper {
 
     /**
-     * Filters read-only fields, keeping EDITABLE fields only.
+     * Filters read-only fields, keeping editable fields only.
      * When fieldPermissions is empty, accepts all non-audit fields (backward compatible).
      * Platform audit columns are never accepted from the client.
      * {@code __subTables__} passes through unfiltered here — callers needing sub-table
      * field-level enforcement additionally apply {@link ChangeHistorySubmissionFilter}'s
      * binding-aware, alias-safe sub-table filtering (see {@code TaskFormComponent#submitTaskForm}).
+     *
+     * <p><b>An absent key means EDITABLE, not READONLY.</b> The Form Designer persists
+     * {@code field_permissions} sparsely: {@code applyTaskFieldPermissionsFromTableFields} writes a
+     * key only when {@code taskFieldPermissionForField} classifies the field as READONLY (audit
+     * column, read-only FK, auto PK, computed), and both the designer
+     * ({@code useFormSave.getFieldPermission}: {@code perms?.[key] || 'EDITABLE'}) and the portal
+     * renderer treat a missing key as editable. Requiring an exact {@code "EDITABLE"} match here
+     * inverted that contract and silently dropped every ordinary field.
+     *
+     * <p>The bug hid behind the empty-map short-circuit above: a form with NO read-only field saves
+     * a literal {@code {}} and passes everything, so only forms that configure at least one
+     * read-only field were affected — those have a non-empty map in which no key is ever the string
+     * {@code "EDITABLE"}, so every scalar was discarded. Measured on FU {@code atm-20260623-gaevus}
+     * form 321 ("Transaction Request Form - Transaction Assignment"): 21 permission entries, all
+     * READONLY, zero EDITABLE — {@code case_status} was absent and therefore never persisted, while
+     * the request still returned 200 and the UI reported success.
+     *
+     * <p>Explicit READONLY is still rejected, and audit keys are stripped unconditionally below, so
+     * this widens what is accepted only to fields the designer itself considers editable.
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
                                                     Map<String, String> fieldPermissions) {
         if (formData == null || formData.isEmpty()) {
             return new HashMap<>();
         }
-        Map<String, Object> accepted;
+        Map<String, Object> accepted = new HashMap<>();
         if (fieldPermissions == null || fieldPermissions.isEmpty()) {
-            accepted = new HashMap<>(formData);
+            accepted.putAll(formData);
         } else {
-            accepted = formData.entrySet().stream()
-                    .filter(entry -> "__subTables__".equals(entry.getKey())
-                            || "EDITABLE".equals(fieldPermissions.get(entry.getKey())))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                            (a, b) -> b, HashMap::new));
+            // Built with an explicit loop rather than Collectors.toMap: that collector routes
+            // through HashMap.merge, which throws NullPointerException on a null VALUE. Clearing
+            // an optional field in the UI submits exactly that (e.g. Case Status emptied ->
+            // {"case_status": null}), and such a field must be persisted as null, not rejected.
+            // The empty-permissions branch above never had this problem (HashMap's copy
+            // constructor accepts nulls), so the two branches used to disagree on null handling.
+            for (Map.Entry<String, Object> entry : formData.entrySet()) {
+                String key = entry.getKey();
+                if ("__subTables__".equals(key) || !"READONLY".equals(fieldPermissions.get(key))) {
+                    accepted.put(key, entry.getValue());
+                }
+            }
         }
         SystemAuditFieldFiller.stripClientAuditKeys(accepted);
         return accepted;

@@ -323,11 +323,40 @@ export function useTaskForm(options: {
     }
   }
 
+  /**
+   * 「清空」必须显式发出去：把本表单**自己的字段**里为 `undefined` 的键补成 `null`。
+   *
+   * <p>清空一个字段（例如把 Case Status 的 tag 叉掉）时控件写回的是 `undefined`，而
+   * `JSON.stringify` **会直接丢掉值为 undefined 的键** —— 请求体里那个字段根本不存在。
+   * 后端合并用的是 `updatedVariables.putAll(inbound)`，只能覆盖**出现过**的键，
+   * 于是「清空」在链路上完全无法表达：保存返回 200，刷新后旧值还在。
+   *
+   * <p>只补本表单渲染的字段（`getCurrentFormFieldKeys`），不遍历整个 formData —— 后者还混着
+   * 运行时状态和其他来源的键，无差别补 null 会把没在这张表单上出现过的字段清掉。
+   * 已经是 `null` 的值不动；子表走 `__subTables__` 自己的链路，不受影响。
+   */
+  function withClearedFieldsAsNull(data: Record<string, any>): Record<string, any> {
+    const out = { ...data }
+    const baseline = taskFormDTO.value?.fieldValues ?? {}
+    for (const key of getCurrentFormFieldKeys()) {
+      if (out[key] !== undefined) continue
+      // 判据是「加载时有值、现在没了」= 用户清空了它。只看 `out[key] === undefined` 不够：
+      // 控件可能把键设成 undefined，也可能整个键就没出现过（本来就空的字段即属此类），
+      // 两者形态相同但语义相反 —— 用 baseline 区分，避免把「一直是空」误报成「刚清空」而
+      // 平白多发一堆 null。
+      const had = baseline[key]
+      if (had !== undefined && had !== null && had !== '') {
+        out[key] = null
+      }
+    }
+    return out
+  }
+
   function buildCurrentTaskFormSubmitPayload() {
     const subTablePayload = buildSubTableSubmitPayload()
     return {
       formData: {
-        ...formData.value,
+        ...withClearedFieldsAsNull(formData.value),
         ...subTablePayload.formData
       },
       subTableData: subTablePayload.subTableData,
