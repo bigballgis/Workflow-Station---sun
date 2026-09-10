@@ -7,11 +7,18 @@ import { isAllocatedUuidPrimaryKey, MI_LINK_CHILD_SCALAR_KEYS, rowValueIsOwnAllo
 import { PLATFORM_ROW_UUID_FIELD } from '@/utils/subTableRowIdentity'
 import { subTableFieldValueKey } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
+import { dropAliasedStoreKeys, isWellFormedStoreKey, storeKeysAddressSameTable } from './subTableStore'
 import type { MiChildFkConfig } from './miLinkChildIdentity'
 import { stripForeignParticipantIdIdwFromLinkChildRow,
-  miChildFkConfigOfBinding,
   resolveMiChildPrimaryKeyColumns,
 } from './miLinkChildIdentity'
+import {
+  resolveChildFkColumnsPointingAtParent,
+  type FlattenParentLinkMaps,
+} from './flattenParentLink'
+
+export type { FlattenParentLinkMaps, FlattenBindingLike } from './flattenParentLink'
+export { flattenSliceMapsFromBindings, resolveChildFkColumnsPointingAtParent } from './flattenParentLink'
 
 /**
  * Link Form / 「表格下表单」在编辑态常把子表行只写在 {@code parentRow.__subTables__[childBindingId]}，而流程变量提交
@@ -175,14 +182,15 @@ function nestedCopyMatchesEnrichedFlatRow(
 function absorbNestedSubTablesIntoFlatRow(
   nested: Record<string, unknown>,
   flat: Record<string, unknown>
-): void {
+): boolean {
   const nSub = nested.__subTables__
-  if (!nSub || typeof nSub !== 'object' || Array.isArray(nSub)) return
+  if (!nSub || typeof nSub !== 'object' || Array.isArray(nSub)) return false
   const fSubRaw = flat.__subTables__
   const fSub =
     fSubRaw && typeof fSubRaw === 'object' && !Array.isArray(fSubRaw)
       ? (fSubRaw as Record<string, unknown>)
       : {}
+  let wrote = false
   for (const [k, arr] of Object.entries(nSub as Record<string, unknown>)) {
     if (!Array.isArray(arr) || arr.length === 0) continue
     const cur = fSub[k]
@@ -190,8 +198,11 @@ function absorbNestedSubTablesIntoFlatRow(
       Array.isArray(cur) && cur.length > 0
         ? mergeSubTableRowsByRowId(arr as any[], cur as any[], null)
         : [...(arr as any[])]
+    wrote = true
   }
+  if (!wrote) return false
   flat.__subTables__ = fSub
+  return true
 }
 
 /**
@@ -236,32 +247,122 @@ function resolveFlattenParentKey(
 /**
  * 顶层的这一行是不是挂在 `parentKey` 这个父行下。
  *
- * <p>扫该行的所有标量字段找与 `parentKey` 相等的值 —— 命中即认为是它的外键。
- * 这里没有 binding 的 `fieldDefinitions` 可读，但判据仍是**值相等**而不是列名猜测：
- * 父行标识是平台生成的唯一串（`ATM-DC-PW-TRANS-000007` / UUID），
- * 不会与无关业务字段偶然相等。一个都对不上就返回 false（不动它）。
+ * <p>只比对设计器标出的、指向该父表的结构外键列。扫全部标量会把 notes/memo
+ * 里碰巧等于父主键的行当成「属于这个父行」而丢掉。外键列未知时返回 false
+ * （调用方不得据此从顶层丢行）。
  */
-function flattenRowBelongsToParent(row: unknown, parentKey: string): boolean {
+function flattenRowBelongsToParent(
+  row: unknown,
+  parentKey: string,
+  fkColumns?: readonly string[] | null,
+): boolean {
   if (!row || typeof row !== 'object') return false
-  for (const [k, v] of Object.entries(row as Record<string, unknown>)) {
-    if (k === '__subTables__' || k.startsWith('__')) continue
-    if (normalizeFkIdForMatchLocal(v) === parentKey) return true
+  if (!fkColumns || fkColumns.length === 0) return false
+  const rec = row as Record<string, unknown>
+  for (const col of fkColumns) {
+    const name = String(col ?? '').trim()
+    if (!name) continue
+    if (normalizeFkIdForMatchLocal(rec[name]) === parentKey) return true
   }
   return false
+}
+
+function nestedSliceIsAliasOfCanonicalSibling(
+  nest: Record<string, unknown>,
+  childKey: string,
+): boolean {
+  if (isWellFormedStoreKey(childKey)) return false
+  for (const k of Object.keys(nest)) {
+    if (k === childKey) continue
+    if (isWellFormedStoreKey(k) && storeKeysAddressSameTable(k, childKey)) return true
+  }
+  return false
+}
+
+function dropEmptiedParentRowsFromTopLevel(
+  subTables: Record<string, unknown>,
+  childKey: string,
+  parentRow: Record<string, unknown>,
+  parentPkFields?: readonly string[] | null,
+  fkColumns?: readonly string[] | null,
+): boolean {
+  const prevTop = subTables[childKey]
+  if (!Array.isArray(prevTop) || prevTop.length === 0) return false
+  const parentKey = resolveFlattenParentKey(parentRow, parentPkFields)
+  if (parentKey == null) return false
+  if (!fkColumns || fkColumns.length === 0) return false
+  const kept = (prevTop as any[]).filter(r => !flattenRowBelongsToParent(r, parentKey, fkColumns))
+  if (kept.length === prevTop.length) return false
+  subTables[childKey] = kept
+  return true
+}
+
+/**
+ * Hoist a non-empty nested child slice. Nested membership is authoritative for
+ * THIS parent: top-level rows that belong to the parent but are not in the nested
+ * slice are dropped (partial Link Form delete). Other parents' top-level rows stay.
+ * Matching nested↔enriched flat copies still merge so PK/FK enrichment is kept (#1483 / #1443).
+ * If the parent key cannot be resolved, fall back to union (cannot safely drop).
+ */
+function hoistNonEmptyNestedChildSlice(
+  subTables: Record<string, unknown>,
+  childKey: string,
+  childVal: any[],
+  parentRow: Record<string, unknown>,
+  parentPkFields?: readonly string[] | null,
+  fkColumns?: readonly string[] | null,
+): boolean {
+  const prev = subTables[childKey]
+  const prevRows = Array.isArray(prev) ? [...(prev as any[])] : []
+  const claimed = new Set<number>()
+  let hoistRows = childVal
+  let absorbedNested = false
+  if (prevRows.length > 0) {
+    hoistRows = childVal.filter(r => {
+      if (!r || typeof r !== 'object') return true
+      const rec = r as Record<string, unknown>
+      const matchIdx = prevRows.findIndex((p, i) =>
+        !claimed.has(i)
+        && p && typeof p === 'object'
+        && nestedCopyMatchesEnrichedFlatRow(rec, p as Record<string, unknown>))
+      if (matchIdx < 0) return true
+      claimed.add(matchIdx)
+      if (absorbNestedSubTablesIntoFlatRow(rec, prevRows[matchIdx] as Record<string, unknown>)) {
+        absorbedNested = true
+      }
+      return false
+    })
+  }
+  const parentKey = resolveFlattenParentKey(parentRow, parentPkFields)
+  const remainingPrev = parentKey == null || !fkColumns?.length
+    ? prevRows
+    : prevRows.filter((p, i) => claimed.has(i) || !flattenRowBelongsToParent(p, parentKey, fkColumns))
+  const merged = remainingPrev.length > 0
+    ? mergeSubTableRowsByRowId(hoistRows, remainingPrev, null)
+    : mergeSubTableRowsByRowId(remainingPrev, hoistRows, null)
+  subTables[childKey] = merged
+  subTables[String(childKey)] = merged
+  // Extra flatten passes are only needed when membership changed, new nested
+  // rows were hoisted, or grandchildren were absorbed onto a matched flat row
+  // (Object.entries snapshots values, so the same pass cannot hoist them).
+  return remainingPrev.length !== prevRows.length || hoistRows.length > 0 || absorbedNested
 }
 
 /**
  * @param primaryKeyFieldsBySliceKey 每个 slice key 对应那张表**配置的主键列**。
  *        给了它，{@link resolveFlattenParentKey} 才能按配置解析父行标识，而不是猜
  *        `row_id` / `id_idw` / `id` 三个名字——主键叫 `correspondence_id`、`case_number`
- *        的表在猜名字下解析不出父行标识，「删到空」分支直接跳过，
- *        表现为**父行下最后一行删不掉、刷新后复活**。
+ *        的表在猜名字下解析不出父行标识，「删到空」和「部分删除」都会跳过，
+ *        表现为**父行下已删的行留在顶层、刷新后复活、Change History 无 DELETE**。
  *        不传时保持旧的猜名字行为（调用方手上没有 binding 时的退路）。
+ * @param parentLink 子表设计器字段定义 + 父表 tableId。flatten 用结构外键判断
+ *        「这一行属于这个父行」，不扫全部标量。不传则无法确认归属，不从顶层丢行。
  */
 export function flattenNestedSubTableRowsIntoPayload(
   subTables: Record<string, unknown>,
   maxPasses = 8,
   primaryKeyFieldsBySliceKey?: Readonly<Record<string, readonly string[] | null | undefined>> | null,
+  parentLink?: FlattenParentLinkMaps | null,
 ): void {
   for (let pass = 0; pass < maxPasses; pass++) {
     let touched = false
@@ -271,71 +372,53 @@ export function flattenNestedSubTableRowsIntoPayload(
         if (!row || typeof row !== 'object') continue
         const nest = (row as Record<string, unknown>).__subTables__
         if (!nest || typeof nest !== 'object') continue
-        for (const [childKey, childVal] of Object.entries(nest)) {
+        const nestMap = nest as Record<string, unknown>
+        for (const [childKey, childVal] of Object.entries(nestMap)) {
+          if (nestedSliceIsAliasOfCanonicalSibling(nestMap, childKey)) {
+            delete nestMap[childKey]
+            touched = true
+            continue
+          }
           /**
            * **删到空**：这个父行的嵌套切片被清空了，顶层里属于它的行必须一并删掉。
            *
            * <p>此前这里对空数组直接 `continue`，于是「这个父行已经没有子行了」这条信息
            * 永远传不到顶层，顶层残留的旧行成了唯一真相 —— 用户在 Link Form 里删掉最后一行、
            * 刷新后它又回来（实测 task a736e30f：`tx[0].__subTables__` 已是 `[]`，
-           * 顶层却仍有 `Corr-000039`）。删到只剩一行时不暴露，因为非空会走下面的合并。
+           * 顶层却仍有 `Corr-000039`）。部分删除（嵌套非空）同样必须按父行替换顶层，
+           * 见 {@link hoistNonEmptyNestedChildSlice}。
            *
            * <p>只删**外键确实指向本父行**的行；父行标识解析不出、或顶层行没有可比外键时
            * 一律不动（保守侧，避免误删别的父行的数据）。
            */
+          const fkColumns = resolveChildFkColumnsPointingAtParent(
+            childKey, parentSliceKey, parentLink,
+          )
           if (Array.isArray(childVal) && childVal.length === 0) {
-            const prevTop = subTables[childKey]
-            if (!Array.isArray(prevTop) || prevTop.length === 0) continue
-            const parentKey = resolveFlattenParentKey(
-              row as Record<string, unknown>,
+            if (dropEmptiedParentRowsFromTopLevel(
+              subTables, childKey, row as Record<string, unknown>,
               primaryKeyFieldsBySliceKey?.[parentSliceKey],
-            )
-            if (parentKey == null) continue
-            const kept = (prevTop as any[]).filter(
-              r => !flattenRowBelongsToParent(r, parentKey),
-            )
-            if (kept.length !== prevTop.length) {
-              subTables[childKey] = kept
+              fkColumns,
+            )) {
               touched = true
             }
             continue
           }
           if (!Array.isArray(childVal) || childVal.length === 0) continue
-          const prev = subTables[childKey]
-          const prevRows = Array.isArray(prev) ? [...(prev as any[])] : []
-          // A nested copy whose flat counterpart already went through PK enrichment must merge into
-          // it, not append next to it (see nestedCopyMatchesEnrichedFlatRow).
-          let hoistRows = childVal as any[]
-          if (prevRows.length > 0) {
-            hoistRows = hoistRows.filter(r => {
-              if (!r || typeof r !== 'object') return true
-              const rec = r as Record<string, unknown>
-              const enriched = prevRows.find(
-                p =>
-                  p &&
-                  typeof p === 'object' &&
-                  nestedCopyMatchesEnrichedFlatRow(rec, p as Record<string, unknown>)
-              )
-              if (!enriched) return true
-              absorbNestedSubTablesIntoFlatRow(rec, enriched as Record<string, unknown>)
-              return false
-            })
+          if (hoistNonEmptyNestedChildSlice(
+            subTables, childKey, childVal as any[],
+            row as Record<string, unknown>,
+            primaryKeyFieldsBySliceKey?.[parentSliceKey],
+            fkColumns,
+          )) {
+            touched = true
           }
-          // The existing top-level slice is the authoritative binding data; a nested copy is a
-          // derivative cache that may lag behind (e.g. a prior userTask's collection row still holds a
-          // stale link-child age while the current task already persisted a fresh one). Merge with the
-          // nested copy as the base so the authoritative top-level row's filled fields win, while
-          // nested-only rows are still hoisted and empty top-level fields are filled. (#1443)
-          const merged =
-            prevRows.length > 0
-              ? mergeSubTableRowsByRowId(hoistRows, prevRows, null)
-              : mergeSubTableRowsByRowId(prevRows, childVal as any[], null)
-          subTables[childKey] = merged
-          subTables[String(childKey)] = merged
-          touched = true
         }
       }
     }
     if (!touched) break
+  }
+  for (const k of Object.keys(subTables)) {
+    if (isWellFormedStoreKey(k)) dropAliasedStoreKeys(subTables, k)
   }
 }

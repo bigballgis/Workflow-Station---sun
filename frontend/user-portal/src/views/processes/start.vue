@@ -288,8 +288,6 @@ import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
 import { actionButtonStyle, isCustomButtonColor } from '@/utils/actionButtonColor'
 import {
   resolveSubTablePrimaryKeyFields,
-  flattenNestedSubTableRowsIntoPayload,
-  normalizeSubTableRowsForBinding,
 } from '@/composables/tasks/shared'
 import {
   buildRelationTableFieldIndexFromDataTables,
@@ -403,6 +401,7 @@ const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBindin
 const {
   resolveSubTableBindingColumnsForStart,
   buildStartFormSubTablesPayload,
+  hydrateStartFormBindingsFromDraftStore,
 } = createProcessStartSubTables({
   caches,
   subTableBindings,
@@ -685,13 +684,7 @@ const loadDraftData = async () => {
       // 注意：JSON 序列化后 key 变为 string，需同时用 number 和 string 查找
       if (__subTables__ && typeof __subTables__ === 'object') {
         const st = JSON.parse(JSON.stringify(__subTables__)) as Record<string, unknown>
-        flattenNestedSubTableRowsIntoPayload(st)
-        subTableBindings.value.forEach(binding => {
-          const saved = st[binding.bindingId] ?? st[String(binding.bindingId)]
-          if (Array.isArray(saved)) {
-            binding.data = normalizeSubTableRowsForBinding(saved)
-          }
-        })
+        hydrateStartFormBindingsFromDraftStore(st)
       }
       ElMessage.success(t('processStart.draftLoaded'))
     }

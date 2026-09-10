@@ -11,6 +11,7 @@ import {
   mergeSubTableRowsByRowId,
   getSavedSubTableRows,
   flattenNestedSubTableRowsIntoPayload,
+  flattenSliceMapsFromBindings,
   scrubMiCorruptLinkChildRowsForParent,
   buildMiCollectionSliceKeySet,
   collapseMiLinkChildRowsToOnePerParticipant,
@@ -150,14 +151,10 @@ export function useTaskForm(options: {
      *
      * <p>补上那个 emit 后两份数据由同一次事件同时更新，天然一致，不需要任何权威判定。
      */
-    // 每个 slice key 对应那张表配置的主键列——「删到空」分支要靠它解析父行标识，
-    // 否则主键不叫 row_id/id_idw/id 的表删不掉最后一行（刷新后复活）。
-    const pkBySliceKey: Record<string, readonly string[] | undefined> = {}
-    for (const b of options.subTableBindings.value) {
-      const key = subTableStoreKey(b)
-      if (key) pkBySliceKey[key] = b?.primaryKeyFields ?? undefined
-    }
-    flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>, 8, pkBySliceKey)
+    // 主键列 + 子表结构外键：flatten 按父行替换顶层子行时要靠它们解析归属。
+    const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
+      options.subTableBindings.value,
+    )
     let miParentIdIdw: string | number | null = null
     let miCollectionSliceKeys: Set<string> | null = null
     if (options.isMiSubTaskMode.value) {
@@ -300,6 +297,22 @@ export function useTaskForm(options: {
           collectionSliceKeys,
           miCollectionPk,
         )
+      }
+    }
+
+    // Flatten last so binding.data / sibling-slice stamps cannot resurrect rows the
+    // nested Link Form already deleted. subTableData is merged over __subTables__ on
+    // the server, so the same membership must be copied onto it.
+    flattenNestedSubTableRowsIntoPayload(
+      subTables as Record<string, unknown>,
+      8,
+      primaryKeyFieldsBySliceKey,
+      parentLink,
+    )
+    for (const key of Object.keys(subTableData)) {
+      const rows = subTables[key]
+      if (Array.isArray(rows)) {
+        subTableData[key] = rows as Array<Record<string, unknown>>
       }
     }
 

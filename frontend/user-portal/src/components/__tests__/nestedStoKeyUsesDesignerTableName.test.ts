@@ -60,4 +60,34 @@ describe('nested __subTables__ write uses the designer table name', () => {
     expect(sto['dw:other_table']).toEqual([{ id: 'keep-me' }])
     expect(sto['dw:atm_correspondence']).toEqual(rows)
   })
+
+  /**
+   * 实测 task c8aecf08：父行同时带着 `dw:atm_correspondence`（047,048）和展示名 key
+   * `dw:atm correspondence`（047,048,049）。写入只覆盖规范 key、原样保留别名后，
+   * 读取端再和 `binding.data` 并集，删掉的 048 从别名切片活回来。
+   */
+  it('drops the display-name alias of the same table, not a sibling table', () => {
+    const host = {
+      __subTables__: {
+        'dw:atm_correspondence': [
+          { correspondence_id: 'Corr-000047' },
+          { correspondence_id: 'Corr-000048' },
+        ],
+        'dw:atm correspondence': [
+          { correspondence_id: 'Corr-000047' },
+          { correspondence_id: 'Corr-000048' },
+          { correspondence_id: 'Corr-000049' },
+        ],
+        'dw:other_table': [{ id: 'keep-me' }],
+      },
+    }
+    const sto = mergeNestedSubTableRowsIntoSto(
+      [host],
+      { bindingId: 1133, tableName: 'ATM Correspondence', designerTableName: 'atm_correspondence' },
+      [{ correspondence_id: 'Corr-000047' }],
+    )
+    expect(sto['dw:atm_correspondence']).toEqual([{ correspondence_id: 'Corr-000047' }])
+    expect(sto['dw:atm correspondence']).toBeUndefined()
+    expect(sto['dw:other_table']).toEqual([{ id: 'keep-me' }])
+  })
 })

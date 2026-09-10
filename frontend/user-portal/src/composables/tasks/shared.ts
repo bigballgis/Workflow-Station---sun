@@ -104,6 +104,8 @@ export {
   scrubMiCorruptLinkChildRowsForParent,
   flattenNestedSubTableRowsIntoPayload,
 } from './miLinkChildScrub'
+export { flattenSliceMapsFromBindings } from './flattenParentLink'
+export type { FlattenParentLinkMaps } from './flattenParentLink'
 
 export {
   buildBindingIdToRelationTableIdMap,

@@ -1,10 +1,9 @@
 /**
- * 新增的子表行必须**立刻可见**：宿主行的嵌套 `__subTables__` 是派生缓存，只在保存 / 重新加载
- * 时更新，而 `binding.data` 是刚发生的编辑的第一现场。
+ * 嵌套切片是这一父行的成员名单。`onNestedSubTableRowsUpdate` 在 Add/Delete 的同一拍写入
+ * `__subTables__`，所以表格必须画嵌套那份，而不是和可能过期的 `binding.data` 并集。
  *
- * <p>回归背景：`PortalFormFields.resolveSubTableRows` 命中嵌套切片就直接 return，于是用户点 Add
- * 新增的行（已进 `binding.data`、还没回写嵌套）在**渲染层**被丢掉 —— 实测 `binding.data` 已有
- * 2 行、表格却只画 1 行，表现为「ATM Correspondence 加不进第二条」。
+ * <p>曾经「池子比嵌套多一行就并回去」是为了让 Add 立刻可见；同一规则把 Delete 刚拿掉的行
+ * 又填回来（task c8aecf08 / Corr-000048）。Add 的行现在已经在嵌套切片里。
  */
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -86,20 +85,36 @@ function renderedRows(wrapper: ReturnType<typeof mountFields>): any[] {
 }
 
 describe('新增行必须立刻出现在表格里', () => {
-  it('binding.data 比嵌套缓存多一行时，取并集（新增行可见）', () => {
+  it('a row written into the nested slice is visible even if the pool is still one behind', () => {
     const oldRow = { correspondence_id: 'Corr-000004', related_transaction_id: MY_TX }
     const newRow = { correspondence_id: 'Corr-000021', related_transaction_id: MY_TX }
-    const wrapper = mountFields([oldRow, newRow], [oldRow])
+    const wrapper = mountFields([oldRow], [oldRow, newRow])
 
     const ids = renderedRows(wrapper).map(r => r?.correspondence_id).sort()
     expect(ids).toEqual(['Corr-000004', 'Corr-000021'])
+  })
+
+  /**
+   * 实测（2026-09-10，task c8aecf08 / Corr-000048）：Link Form 不听
+   * `update:sub-table-data`，所以 `binding.data` 仍是删之前的池子。嵌套切片已经没有
+   * 048，但 `owned.length > scoped.length` 把池子并回来，点 Delete 行立刻复活。
+   * 嵌套切片是这一父行的成员名单；池子多出来的行是过期副本，不能并回去。
+   */
+  it('nested slice missing a pool row is a DELETE, not an add to union back', () => {
+    const kept = { correspondence_id: 'Corr-000047', related_transaction_id: MY_TX }
+    const deleted = { correspondence_id: 'Corr-000048', related_transaction_id: MY_TX }
+    const wrapper = mountFields([kept, deleted], [kept])
+
+    const ids = renderedRows(wrapper).map(r => r?.correspondence_id)
+    expect(ids).toEqual(['Corr-000047'])
+    expect(ids).not.toContain('Corr-000048')
   })
 
   it('别的参与者的行不会因为走了兜底而漏进来', () => {
     const mine = { correspondence_id: 'Corr-000004', related_transaction_id: MY_TX }
     const peer = { correspondence_id: 'Corr-000003', related_transaction_id: 'ATM-DC-PW-TRANS-000003' }
     const fresh = { correspondence_id: 'Corr-000021', related_transaction_id: MY_TX }
-    const wrapper = mountFields([mine, peer, fresh], [mine])
+    const wrapper = mountFields([mine, peer, fresh], [mine, fresh])
 
     const ids = renderedRows(wrapper).map(r => r?.correspondence_id).sort()
     expect(ids).toEqual(['Corr-000004', 'Corr-000021'])

@@ -1,7 +1,8 @@
 import type { Ref } from 'vue'
-import { writeSubTableRows, subTableStoreKey } from '@/composables/tasks/subTableStore'
+import { readSubTableRows, writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
   flattenNestedSubTableRowsIntoPayload,
+  flattenSliceMapsFromBindings,
   normalizeSubTableRowsForBinding,
 } from '@/composables/tasks/shared'
 import {
@@ -69,23 +70,42 @@ export function createProcessStartSubTables(deps: {
     return Array.isArray(columns) ? columns : []
   }
 
-  /** Match task detail / autosave: key __subTables__ by binding id and table display name so downstream forms with new bindingIds can resolve rows. */
+  /** Persist one slice per designer table (`dw:` / `rt:`), then flatten nested Link Form deletes. */
   function buildStartFormSubTablesPayload(): Record<string, unknown> {
     const subTables: Record<string, unknown> = {}
-    // 每个 slice key 对应那张表配置的主键列——flatten 的「删到空」分支要靠它解析父行标识。
-    const pkBySliceKey: Record<string, readonly string[] | undefined> = {}
+    const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
+      subTableBindings.value,
+    )
     for (const b of subTableBindings.value) {
       const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
       writeSubTableRows(subTables, b, rows)
-      const key = subTableStoreKey(b)
-      if (key) pkBySliceKey[key] = (b as { primaryKeyFields?: string[] }).primaryKeyFields ?? undefined
     }
-    flattenNestedSubTableRowsIntoPayload(subTables, 8, pkBySliceKey)
+    flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
     return subTables
+  }
+
+  /**
+   * Restore start-form bindings from a draft `__subTables__` bag.
+   * Canonical store keys are the write path; binding-id keys remain for older drafts.
+   */
+  function hydrateStartFormBindingsFromDraftStore(st: Record<string, unknown>): void {
+    const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
+      subTableBindings.value,
+    )
+    flattenNestedSubTableRowsIntoPayload(st, 8, primaryKeyFieldsBySliceKey, parentLink)
+    for (const binding of subTableBindings.value) {
+      const canonical = readSubTableRows(st, binding)
+      const legacy = st[binding.bindingId] ?? st[String(binding.bindingId)]
+      const saved = canonical ?? (Array.isArray(legacy) ? legacy : undefined)
+      if (Array.isArray(saved)) {
+        binding.data = normalizeSubTableRowsForBinding(saved)
+      }
+    }
   }
 
   return {
     resolveSubTableBindingColumnsForStart,
     buildStartFormSubTablesPayload,
+    hydrateStartFormBindingsFromDraftStore,
   }
 }

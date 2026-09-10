@@ -77,6 +77,18 @@ export function isCanonicalStoreKey(key: unknown): boolean {
 }
 
 /**
+ * A store key produced by {@link subTableStoreKey}: `dw:`/`rt:` plus a table name with
+ * no spaces. `dw:atm correspondence` has the prefix (so {@link isCanonicalStoreKey}
+ * is true) but it is the display-name fork, not a designer table name.
+ */
+export function isWellFormedStoreKey(key: unknown): boolean {
+  const k = String(key ?? '')
+  if (!isCanonicalStoreKey(k)) return false
+  const name = k.slice(DW_PREFIX.length)
+  return name.length > 0 && !/\s/.test(name)
+}
+
+/**
  * 写入：只写规范 key，绝不再扇出别名。
  *
  * <p>历史实现会同时写 `bindingId` / `String(bindingId)` / `tableName` /
@@ -91,6 +103,53 @@ export function writeSubTableRows(
   if (!key) return false
   store[key] = rows
   return true
+}
+
+/**
+ * Compact `dw:atm_correspondence` and `dw:atm correspondence` to the same token so a
+ * leftover display-name key is recognized as an alias of the canonical one — not a
+ * sibling table.
+ */
+export function compactStoreKey(key: unknown): string {
+  return String(key ?? '').trim().toLowerCase().replace(/[\s_]+/g, '')
+}
+
+export function storeKeysAddressSameTable(a: unknown, b: unknown): boolean {
+  const sa = String(a ?? '').trim()
+  const sb = String(b ?? '').trim()
+  if (!sa || !sb) return false
+  if (sa === sb) return true
+  // Two well-formed designer keys are distinct tables even if compacting
+  // spaces/`_` would make them look equal (`dw:foo_bar` vs `dw:foobar`).
+  if (isWellFormedStoreKey(sa) && isWellFormedStoreKey(sb)) return false
+  const ca = compactStoreKey(sa)
+  const cb = compactStoreKey(sb)
+  return ca.length > 0 && ca === cb
+}
+
+/**
+ * After writing the canonical key, drop the display-name / binding-id twins of the
+ * same table. Preserving them (the old "sibling slices stay" behaviour) left
+ * `dw:atm correspondence` holding deleted rows next to `dw:atm_correspondence`.
+ */
+export function dropAliasedStoreKeys(
+  store: Record<string, unknown>,
+  canonicalKey: string,
+  bindingId?: number | string | null,
+): void {
+  const bindingIdStr = bindingId == null || String(bindingId).trim() === ''
+    ? null
+    : String(bindingId)
+  for (const k of Object.keys(store)) {
+    if (k === canonicalKey) continue
+    if (bindingIdStr != null && k === bindingIdStr) {
+      delete store[k]
+      continue
+    }
+    if (storeKeysAddressSameTable(k, canonicalKey) && !isWellFormedStoreKey(k)) {
+      delete store[k]
+    }
+  }
 }
 
 /**

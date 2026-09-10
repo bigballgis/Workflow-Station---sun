@@ -4,7 +4,7 @@
  * My Request standalone-suppression filter (MI/FK-PK hot path).
  */
 
-import { writeSubTableRows } from '@/composables/tasks/subTableStore'
+import { dropAliasedStoreKeys, subTableStoreKey, writeSubTableRows } from '@/composables/tasks/subTableStore'
 import type {
   FormField,
   FormLayoutBuckets,
@@ -135,6 +135,10 @@ export function mergeNestedSubTableRowsIntoSto(
   }
   // 规范 key：一张表一个 key，避免再产生 bindingId / 表名两份副本。
   writeSubTableRows(sto, binding, rows)
+  const canonical = subTableStoreKey(binding)
+  if (canonical) {
+    dropAliasedStoreKeys(sto, canonical, binding.bindingId)
+  }
   return sto
 }
 

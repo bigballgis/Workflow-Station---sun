@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectCanonicalKeys,
+  dropAliasedStoreKeys,
   isCanonicalStoreKey,
+  isWellFormedStoreKey,
   normalizeStoreTableName,
   readSubTableRows,
+  storeKeysAddressSameTable,
   subTableStoreKey,
   writeSubTableRows,
 } from '../subTableStore'
@@ -83,6 +86,13 @@ describe('isCanonicalStoreKey', () => {
     expect(isCanonicalStoreKey('50539')).toBe(false)         // binding id
     expect(isCanonicalStoreKey('subtable')).toBe(false)      // 裸表名
     expect(isCanonicalStoreKey('Participants')).toBe(false)  // 展示名别名
+    expect(isWellFormedStoreKey('dw:atm_correspondence')).toBe(true)
+    expect(isWellFormedStoreKey('dw:atm correspondence')).toBe(false)
+  })
+
+  it('does not treat two well-formed designer keys as the same table', () => {
+    expect(storeKeysAddressSameTable('dw:foo_bar', 'dw:foobar')).toBe(false)
+    expect(storeKeysAddressSameTable('dw:atm_correspondence', 'dw:atm correspondence')).toBe(true)
   })
 })
 
@@ -116,6 +126,20 @@ describe('writeSubTableRows / readSubTableRows', () => {
     const store: Record<string, unknown> = {}
     expect(writeSubTableRows(store, {}, [{ a: 1 }])).toBe(false)
     expect(Object.keys(store)).toHaveLength(0)
+  })
+
+  it('dropAliasedStoreKeys removes the display-name twin of the canonical key', () => {
+    const store: Record<string, unknown> = {
+      'dw:atm_correspondence': [{ correspondence_id: 'Corr-000047' }],
+      'dw:atm correspondence': [{ correspondence_id: 'Corr-000048' }],
+      'dw:other_table': [{ id: 1 }],
+      '1133': [{ correspondence_id: 'Corr-000048' }],
+    }
+    dropAliasedStoreKeys(store, 'dw:atm_correspondence', 1133)
+    expect(store['dw:atm_correspondence']).toEqual([{ correspondence_id: 'Corr-000047' }])
+    expect(store['dw:atm correspondence']).toBeUndefined()
+    expect(store['1133']).toBeUndefined()
+    expect(store['dw:other_table']).toEqual([{ id: 1 }])
   })
 
   it('读取只认规范 key，不做名字兜底', () => {

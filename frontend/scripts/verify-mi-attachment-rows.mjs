@@ -7,7 +7,12 @@ import { loginViaPortalPassword } from './playwright-login.mjs'
 import {
   countSubTableRows,
   listMiCollectionTables,
-  openFirstTodoMatching,
+  listPortalApplications,
+  listPortalTodoTasks,
+  MI_PORTAL_ORIGIN,
+  openPortalTask,
+  preferMiApplications,
+  preferMiTasks,
   screenshotPath,
 } from './mi-regression-helpers.mjs'
 
@@ -20,13 +25,35 @@ const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 1400 } })).newPage()
 await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 
-// 取「确实带附件行」的那个 To Do：To Do 列表随时会多出新建的空任务，
-// 只取第一条会随机落到没有附件的任务上，把数据前置条件问题伪装成产品缺陷。
-const taskId = await openFirstTodoMatching(
-  page,
-  async (p) => (await countSubTableRows(p, 'attachment')).count > 0,
-  { prefer: /fu-20260422|subtask demo|attachment/i, limit: 6 },
-)
+/**
+ * Prefer a To Do that already has attachment rows. If every live To Do is an empty
+ * later node (common when attachments were added on start / My Request and the
+ * current assignee tasks have not reached that form), walk running My Requests.
+ */
+let taskId = null
+const todos = preferMiTasks(
+  await listPortalTodoTasks(page),
+  /fu-20260422|subtask demo/i,
+).slice(0, 8)
+for (const row of todos) {
+  await openPortalTask(page, row.taskId)
+  if ((await countSubTableRows(page, 'attachment')).count > 0) {
+    taskId = row.taskId
+    break
+  }
+}
+if (!taskId) {
+  const apps = preferMiApplications(await listPortalApplications(page, MI_PORTAL_ORIGIN))
+  for (const row of apps.slice(0, 8)) {
+    await page.goto(`${MI_PORTAL_ORIGIN}/portal/applications/${row.id}`, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(9000)
+    if ((await countSubTableRows(page, 'attachment')).count > 0) {
+      taskId = row.id
+      break
+    }
+  }
+}
+if (!taskId) fail('no To Do or My Request with attachment rows')
 console.log('[task]', taskId)
 
 const attachment = await countSubTableRows(page, 'attachment')
@@ -59,7 +86,7 @@ await page.locator('.sub-table-field').filter({ hasText: gridTitle || /participa
 })
 
 if (!attachment.found || attachment.count < 1) {
-  fail(`Attachment rows=${attachment.count} (expected at least 1 on this To Do)`)
+  fail(`Attachment rows=${attachment.count} (expected at least 1)`)
 }
 if (collectionFileLeaks > 0) {
   fail(`collection table has ${collectionFileLeaks} pure id+file leak row(s)`)

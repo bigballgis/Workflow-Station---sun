@@ -19,7 +19,6 @@ import {
   hostRowIsMiParticipant,
   isMiParticipantScopedSubTableBinding,
   miChildFkConfigOfBinding,
-  mergeSubTableRowsByRowId,
   resolveMiChildStructuralParentFk,
 } from '@/composables/tasks/shared'
 import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
@@ -307,29 +306,12 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
       // A nested slice that scopes to nothing held only sibling rows — keep looking rather than
       // reporting "this participant has rows" falsely.
       if (scoped.length > 0) {
-        // 嵌套那份是**派生缓存**，只在宿主行往返（保存 / 重新加载）时更新；`binding.data` 才是
-        // 刚发生的编辑的第一现场。直接 return 嵌套会让"新增一行"在下一次渲染被打回原形 ——
-        // 实测 `binding.data` 已有 2 行、嵌套仍是 1 行，表格于是永远只画 1 行
-        //（ATM Correspondence 加不进第二条的直接原因）。
-        //
-        // **只补「明确属于本宿主行」的行**：判据是行上的结构外键实际指向当前宿主行，
-        // 不是"scope 过滤后还剩下"。两者不等价 ——
-        // scope 会保留尚未 seed 外键的行（新行还没 seed 时不能丢），而那种行同样可能是
-        // **兄弟参与者**刚加的、也还没 seed 的行，靠身份区分不开。放进来就会串参与者，
-        // 这正是 portalFormFieldsNestedSubTableMiScope 那两条用例锁定的行为。
-        const hostKey = resolveHostRowKey(hostRow)
-        const fkConfig = miChildFkConfigOfBinding(binding as never)
-        const owned = hostKey == null
-          ? []
-          : (Array.isArray(binding.data) ? binding.data : []).filter(
-              row =>
-                row != null
-                && typeof row === 'object'
-                && resolveMiChildStructuralParentFk(row as Record<string, unknown>, fkConfig) === hostKey,
-            )
-        if (owned.length > scoped.length) {
-          return mergeSubTableRowsByRowId(scoped, owned, binding.primaryKeyFields ?? null)
-        }
+        // Nested membership is authoritative for THIS parent. `onNestedSubTableRowsUpdate`
+        // writes the new/remaining rows into `__subTables__` in the same tick as Add/Delete,
+        // so the grid must not union `binding.data` back in: that pool is the cross-parent
+        // copy and is often stale inside Link Form (the dialog does not listen to
+        // `update:sub-table-data`). Unioning "pool has more rows" made Add look like it
+        // worked and made Delete resurrect the row (task c8aecf08 / Corr-000048).
         return scoped
       }
     }

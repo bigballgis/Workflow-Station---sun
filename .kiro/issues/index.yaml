@@ -3701,3 +3701,29 @@
     user-portal-frontend; Playwright #tab-completed-snapshot .snapshot-sub-table count=2.
     screenshot 2026-09-09_completed-snapshot-canonical-keys.png.
 
+- id: "1619"
+  status: fixed
+  fixed_at: "2026-09-10"
+  severity: major
+  category: bug
+  summary: "Two-level Link Form nested delete union-merged deleted rows back into top-level __subTables__; Change History never recorded SUB_TABLE_ROW_DELETE"
+  file: "frontend/user-portal/src/composables/tasks/miLinkChildScrub.ts"
+  note: |
+    ATM Correspondence lives under ATM Transaction (nested Link Form) AND top-level
+    __subTables__['dw:atm_correspondence']. Delete updated nested only; flatten
+    mergeSubTableRowsByRowId unioned stale top-level rows back. Change History
+    compared identical old/new sets → 0 DELETE. Empty nested was already handled
+    (dropEmptiedParentRowsFromTopLevel); partial nested delete was not.
+    Fix: hoistNonEmptyNestedChildSlice treats nested membership as authoritative
+    for THIS parent (drop parent-owned top-level rows not in nested); flatten last
+    in useTaskForm so binding.data cannot resurrect deletes; copy into subTableData.
+    DB evidence process df871a10 (ADD 42, DELETE 0; live still had Corr-000041–046).
+    MI one-level deletes on fu-20260422-23tfag already recorded SUB_TABLE_ROW_DELETE.
+    Tests: linkFormNestedDeleteToEmpty.test.ts 5 pass (red-then-green for Corr-000042
+    / Corr-000039 replace). pnpm run build; compose rebuild user-portal-frontend.
+    Completed ATM instance will NOT retroactively gain DELETE rows — re-delete after deploy.
+    2026-09-10 follow-up task c8aecf08 / Corr-000048: click Delete still resurrected
+    the row in the Link Form because resolveSubTableRows unioned stale binding.data
+    (pool [047,048] vs nested [047]) and the parent row kept a display-name twin
+    `dw:atm correspondence`. Nested membership now wins; write drops the spaced alias.
+

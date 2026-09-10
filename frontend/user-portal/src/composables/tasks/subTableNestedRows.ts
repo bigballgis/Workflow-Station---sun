@@ -31,8 +31,13 @@ function findNestedChildRowsInSto(
   // 规范 key 优先（`dw:<name>` / `rt:<name>`）：一张表一个 key，写入侧已统一。
   // 其余候选保留，用于读取尚未经写入侧改写的历史嵌套结构。
   const canonicalKey = subTableStoreKey(child as SubTableStoreBindingLike)
+  // Canonical key present — even as [] — is membership for this parent. Falling through
+  // to a leftover `dw:atm correspondence` alias resurrected deleted rows.
+  if (canonicalKey && Object.prototype.hasOwnProperty.call(sto, canonicalKey)) {
+    const canonical = sto[canonicalKey]
+    if (Array.isArray(canonical)) return canonical as any[]
+  }
   const candidates: unknown[] = [
-    canonicalKey ? sto[canonicalKey] : undefined,
     sto[child.bindingId],
     sto[String(child.bindingId)],
     sto[nameRaw],
