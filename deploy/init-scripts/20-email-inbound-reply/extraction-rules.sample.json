@@ -1,0 +1,14 @@
+{
+  "fields": [
+    { "source": "FROM", "target": "sender_email", "type": "DIRECT", "required": true },
+    { "source": "TO", "target": "email_to", "type": "DIRECT", "required": false },
+    { "source": "SUBJECT", "target": "email_subject", "type": "DIRECT", "required": true },
+    { "source": "SUBJECT", "target": "reply_subject", "type": "DIRECT", "required": false },
+    { "source": "TEXT_AND_HTML", "target": "email_body", "type": "DIRECT", "required": false },
+    { "source": "TEXT_AND_HTML", "target": "reply_body", "type": "DIRECT", "required": false },
+    { "source": "MESSAGE_ID", "target": "message_id", "type": "DIRECT", "required": false },
+    { "source": "DATE", "target": "received_at", "type": "DIRECT", "required": false },
+    { "source": "ATTACHMENTS", "target": "inbound_attachment", "type": "DIRECT", "required": false }
+  ],
+  "subTables": []
+}
