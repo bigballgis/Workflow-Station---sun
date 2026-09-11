@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DW_SHOTS = resolve(__dirname, '../developer-workstation/verification-screenshots')
+const HELP_SHOTS = resolve(__dirname, '../help/verification-screenshots')
 mkdirSync(DW_SHOTS, { recursive: true })
+mkdirSync(HELP_SHOTS, { recursive: true })
 const DATE = new Date().toISOString().slice(0, 10)
 
 const results = []
@@ -100,10 +102,18 @@ try {
   await page.screenshot({ path: sendShot, fullPage: true })
   console.log(`screenshot ${sendShot}`)
 
+  const monitorErrors = []
+  const onMonitorPageError = (err) => monitorErrors.push(String(err))
+  page.on('pageerror', onMonitorPageError)
   await page.goto('http://localhost:3000/help/email-monitor', { waitUntil: 'domcontentloaded' })
   const monitorArticle = page.getByTestId('email-monitor-guide-page')
   await monitorArticle.waitFor({ state: 'visible', timeout: 15000 })
   rec('Email-monitor guideline is visible', await monitorArticle.isVisible())
+  rec(
+    'Email-monitor has no pageerror (vue-i18n braces)',
+    monitorErrors.length === 0,
+    monitorErrors.join(' | '),
+  )
   rec(
     'Email-monitor names Vendor quote to PR',
     (await monitorArticle.textContent())?.includes('Vendor quote to PR') === true,
@@ -117,6 +127,18 @@ try {
     (await monitorArticle.textContent())?.includes('Start process when email arrives') === true,
   )
   rec(
+    'Email-monitor shows literal JSON [{url,name}]',
+    (await monitorArticle.textContent())?.includes('JSON [{url,name}]') === true,
+  )
+  rec(
+    'Email-monitor shows literal {subject}.eml',
+    (await monitorArticle.textContent())?.includes('{subject}.eml') === true,
+  )
+  rec(
+    'Email-monitor shows literal imap-uid:{uid}',
+    (await monitorArticle.textContent())?.includes('imap-uid:{uid}') === true,
+  )
+  rec(
     'URL is /help/email-monitor',
     page.url().includes('/help/email-monitor'),
     page.url(),
@@ -124,6 +146,64 @@ try {
   const monitorShot = resolve(DW_SHOTS, `${DATE}_help-portal-email-monitor.png`)
   await page.screenshot({ path: monitorShot, fullPage: true })
   console.log(`screenshot ${monitorShot}`)
+
+  monitorErrors.length = 0
+  await page.getByTestId('help-locale-select').selectOption('zh-CN')
+  await monitorArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec(
+    'Email-monitor zh-CN has no pageerror (vue-i18n braces)',
+    monitorErrors.length === 0,
+    monitorErrors.join(' | '),
+  )
+  rec(
+    'Email-monitor zh-CN still visible',
+    await monitorArticle.isVisible(),
+  )
+  rec(
+    'Email-monitor zh-CN shows literal JSON [{url,name}]',
+    (await monitorArticle.textContent())?.includes('JSON [{url,name}]') === true,
+  )
+  rec(
+    'Email-monitor zh-CN shows literal {主题}.eml',
+    (await monitorArticle.textContent())?.includes('{主题}.eml') === true,
+  )
+  rec(
+    'Email-monitor zh-CN shows literal imap-uid:{uid}',
+    (await monitorArticle.textContent())?.includes('imap-uid:{uid}') === true,
+  )
+  const monitorZhShot = resolve(HELP_SHOTS, `${DATE}_help-email-monitor-zh-CN.png`)
+  await page.screenshot({ path: monitorZhShot, fullPage: true })
+  console.log(`screenshot ${monitorZhShot}`)
+
+  monitorErrors.length = 0
+  await page.getByTestId('help-locale-select').selectOption('zh-TW')
+  await monitorArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec(
+    'Email-monitor zh-TW has no pageerror (vue-i18n braces)',
+    monitorErrors.length === 0,
+    monitorErrors.join(' | '),
+  )
+  rec(
+    'Email-monitor zh-TW still visible',
+    await monitorArticle.isVisible(),
+  )
+  rec(
+    'Email-monitor zh-TW shows literal JSON [{url,name}]',
+    (await monitorArticle.textContent())?.includes('JSON [{url,name}]') === true,
+  )
+  rec(
+    'Email-monitor zh-TW shows literal {主旨}.eml',
+    (await monitorArticle.textContent())?.includes('{主旨}.eml') === true,
+  )
+  rec(
+    'Email-monitor zh-TW shows literal imap-uid:{uid}',
+    (await monitorArticle.textContent())?.includes('imap-uid:{uid}') === true,
+  )
+  const monitorTwShot = resolve(HELP_SHOTS, `${DATE}_help-email-monitor-zh-TW.png`)
+  await page.screenshot({ path: monitorTwShot, fullPage: true })
+  console.log(`screenshot ${monitorTwShot}`)
+  page.off('pageerror', onMonitorPageError)
+  await page.getByTestId('help-locale-select').selectOption('en')
 
   await page.getByRole('button', { name: 'User Portal' }).click()
   await page.getByRole('button', { name: 'Task' }).click()

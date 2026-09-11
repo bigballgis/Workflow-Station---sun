@@ -3847,3 +3847,20 @@
     （Create version snapshot 通过）。截图
     frontend/developer-workstation/verification-screenshots/2026-09-11_email-inbound-reply-deploy-success.png。
 
+- id: "1626"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "/help/email-monitor 正文空白：vue-i18n 把 JSON [{url,name}] / {主题}.eml 当插值编译失败"
+  file: "frontend/help/src/i18n/locales/zh-CN.ts"
+  note: |
+    复现：侧栏与面包屑正常，router-view 空；Console SyntaxError（message compiler parse）。
+    根因：GuideArticle t() 编译文案；[{url,name}] 非法 ICU，{主题} 非法 named 占位符。
+    同页 imap-uid:{uid} 合法但会吃掉占位符。
+    修复：三语改为 {'{'}…{'}'} 字面量（与发送邮件指南相同）；双引号字符串避免 JS 提前截断。
+    验证：pnpm build help；compose rebuild platform-help-frontend Started；
+    node scripts/verify-help-portal.mjs 56/56（en+zh-CN 无 pageerror，字面量可见）。
+    截图 frontend/help/verification-screenshots/2026-09-11_help-email-monitor-zh-CN.png
+    与 frontend/developer-workstation/verification-screenshots/2026-09-11_help-portal-email-monitor.png。
+

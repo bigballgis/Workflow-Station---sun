@@ -430,7 +430,7 @@ export default {
       'Example: map Source From (sender) → main-table sender_email; runtime stores the raw From header (display name + address).',
     extractAttachmentsTitle: 'Field Mapping — store email attachments',
     extractAttachmentsBody:
-      'Add a Field Mapping row with Source = Attachments. The target must be a main-table FILE column. One email’s attachments all land in that field (one file = URL; two or more = JSON [{url,name}]). Inline CID images stay in the HTML body and are not stored. Oversized files (over 50MB) or more than 10 files are skipped and recorded; if Required is checked and nothing remains, the email goes to manual review.',
+      "Add a Field Mapping row with Source = Attachments. The target must be a main-table FILE column. One email’s attachments all land in that field (one file = URL; two or more = JSON [{'{'}url,name{'}'}]). Inline CID images stay in the HTML body and are not stored. Oversized files (over 50MB) or more than 10 files are skipped and recorded; if Required is checked and nothing remains, the email goes to manual review.",
     extractAttachmentsCatalogLead: 'Field catalog — Attachments source on the Field Mapping tab.',
     fSourceAttachments:
       'Source group Attachments. Maps every non-inline attachment of the inbound email into one FILE field. Method is locked to Direct (whole value).',
@@ -444,7 +444,7 @@ export default {
       'Optional Sample Email field: comma-separated filenames for Preview only. Runtime uses the real attachments; this box never uploads files.',
     extractRawEmlTitle: 'Field Mapping — store the original email as .eml',
     extractRawEmlBody:
-      'Add a Field Mapping row with Source = Original email (.eml). The target must be a main-table FILE column (Direct only). Runtime uploads the captured RFC822 as one file named {subject}.eml (unsafe characters replaced; blank subject uses message.eml). Same FILE JSON as attachments: one file = URL. This is not mixed into the Attachments source. No mapping means the .eml is not stored. Over 50MB is skipped and recorded; if Required is checked and capture/upload fails, the email goes to manual review.',
+      "Add a Field Mapping row with Source = Original email (.eml). The target must be a main-table FILE column (Direct only). Runtime uploads the captured RFC822 as one file named {'{'}subject{'}'}.eml (unsafe characters replaced; blank subject uses message.eml). Same FILE JSON as attachments: one file = URL. This is not mixed into the Attachments source. No mapping means the .eml is not stored. Over 50MB is skipped and recorded; if Required is checked and capture/upload fails, the email goes to manual review.",
     extractRawEmlCatalogLead: 'Field catalog — Original email (.eml) source on the Field Mapping tab.',
     fSourceRawEml:
       'Source group Original email. Maps the inbound message’s original RFC822 (.eml) into one FILE field. Method is locked to Direct (whole value).',
@@ -504,7 +504,7 @@ export default {
     fSourceDate:
       'Email attribute — sent date/time from the mail provider (ISO-8601 instant when available). Method Direct. Map into text or date columns depending on your field type.',
     fSourceMessageId:
-      'Email attribute — Message-ID header, or imap-uid:{uid} when the header is missing. Method Direct. Use for trace/id columns; also stored on the process as business metadata.',
+      "Email attribute — Message-ID header, or imap-uid:{'{'}uid{'}'} when the header is missing. Method Direct. Use for trace/id columns; also stored on the process as business metadata.",
     fSourceTextAndHtml:
       'Body source — plain text plus HTML-derived text (recommended for forwarded/HTML-only mail). Use with LABEL, BETWEEN, or REGEX.',
     fSource:
