@@ -116,7 +116,9 @@ public class EmailMonitorPortalSyncComponent {
         if (StringUtils.hasText(processDefinitionKey)) {
             body.put("processDefinitionKey", processDefinitionKey);
         }
-        body.put("businessKey", businessKey);
+        if (StringUtils.hasText(businessKey)) {
+            body.put("businessKey", businessKey);
+        }
         body.put("variables", variables);
         Map<String, Object> response = restTemplate.postForObject(
                 url, new HttpEntity<>(body, headers), Map.class);

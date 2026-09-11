@@ -3890,6 +3890,23 @@
   status: fixed
   fixed_at: "2026-09-11"
   severity: major
+  category: bug
+  summary: "Email Monitor 建案 Process Title 显示 email:<Message-ID>，与 Portal 手动发起不一致"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    复现：My Request Email Inbound Reply（如 Email-000008）Title 为 email:<github Message-ID>。
+    根因：引擎 startPortalProcess 固定传 businessKey="email:"+messageId；列表 Title=businessKey||definitionName。
+    Portal New Request 不传 businessKey，Title 回退为 FU name。幂等键是 (ruleUid, messageId)，不是 businessKey。
+    修复：邮件建案改为不传 businessKey；postStart 仅在有文本时写入 JSON。
+    验证：EmailMonitorProcessorTest + EmailMonitorPortalSyncComponentTest 9/9；
+    InternalEmailProcessStartComponentTest 2/2；compose rebuild workflow-engine Started。
+    手测：新 inbound Email-000010（2026-09-11 15:50）待办 Review Inbound，
+    Process Name=Email Inbound Reply，Request ID 正常；旧实例 Title 不回写。
+
+- id: "1629"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
   category: deploy
   summary: "Dev Maven package failed testCompile: EmailMonitorSchedulerTest cannot find EncryptionService"
   file: "deploy/environments/dev/build-and-deploy.ps1"
@@ -3906,9 +3923,9 @@
     验证：删 stub 后 engine 重编 229+98 源文件；javap 构造器已是
     Lcom/platform/security/encryption/EncryptionService;；
     全量 -pl 八模块 package -DskipTests BUILD SUCCESS（53s）。
-    合并 common_0731_SELF_AP 时由本地 #1621 改号，避免与入站 IMAP RFC 2047 条目撞号。
+    合并 common 时两次改号：本地原 #1621 → #1628 → #1629。
 
-- id: "1629"
+- id: "1630"
   status: fixed
   fixed_at: "2026-09-11"
   severity: major
@@ -3930,9 +3947,9 @@
     copySubFormCanvasProps；Portal start 子表 Add 弹窗 input 无 multiple。
     截图 frontend/user-portal/verification-screenshots/2026-09-11_subtable-upload-single-dialog.png
     （gitignored）。本地 Playwright 脚本不入库。
-    合并 common_0731_SELF_AP 时由本地 #1622 改号。
+    合并 common 时两次改号：本地原 #1622 → #1629 → #1630。
 
-- id: "1630"
+- id: "1631"
   status: fixed
   fixed_at: "2026-09-11"
   severity: major
@@ -3953,5 +3970,5 @@
     下载判断抽到 shared uploadDownloadFlags。
     验证：useFilePreview.test / FormUploadFileDetails.test / uploadDownloadFlags.test
     先红后绿；portal+DW 相关 vitest。Guidelines runtimeBody 写明禁止下载时无 Callback URL。
-    合并 common_0731_SELF_AP 时由本地 #1623 改号。
+    合并 common 时两次改号：本地原 #1623 → #1630 → #1631。
 
