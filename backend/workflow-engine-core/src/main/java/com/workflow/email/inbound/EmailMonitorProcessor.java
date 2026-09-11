@@ -112,11 +112,13 @@ public class EmailMonitorProcessor {
 
         Map<String, Object> startVariables = buildStartVariables(
                 rule, email, extraction, functionUnitCode.get(), attachments);
+        // Same as Portal New Request: no businessKey, so Process Title falls back to
+        // processDefinitionName (Function Unit name). Idempotency is (ruleUid, messageId).
         ProcessInstanceResult result = portalSyncComponent.startPortalProcess(
                 rule.getProcessDefinitionKey(),
                 functionUnitCode.get(),
                 rule.getSystemInitiatorUserId(),
-                "email:" + email.messageId(),
+                null,
                 startVariables);
         if (result == null || !result.isSuccess()) {
             String msg = result != null ? result.getMessage() : "portal startProcess returned null";

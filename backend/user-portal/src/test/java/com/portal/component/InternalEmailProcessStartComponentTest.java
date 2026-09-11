@@ -35,7 +35,7 @@ class InternalEmailProcessStartComponentTest {
         request.setStartUserId("system");
         request.setFunctionUnitCode("FU-MCY");
         request.setProcessDefinitionKey("case_process");
-        request.setBusinessKey("email:m1");
+        request.setBusinessKey(null);
         request.setVariables(Map.of("title", "x"));
         when(processStartComponent.startProcessFromInternal(any(), any(), any()))
                 .thenReturn(ProcessInstanceInfo.builder().id("pi-1").build());
@@ -45,7 +45,7 @@ class InternalEmailProcessStartComponentTest {
         assertThat(started.getId()).isEqualTo("pi-1");
         ArgumentCaptor<ProcessStartRequest> captor = ArgumentCaptor.forClass(ProcessStartRequest.class);
         verify(processStartComponent).startProcessFromInternal(eq("system"), eq("FU-MCY"), captor.capture());
-        assertThat(captor.getValue().getBusinessKey()).isEqualTo("email:m1");
+        assertThat(captor.getValue().getBusinessKey()).isNull();
         assertThat(captor.getValue().getFormData()).containsEntry("title", "x");
     }
 

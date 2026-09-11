@@ -3886,3 +3886,20 @@
     截图 frontend/help/verification-screenshots/2026-09-11_help-email-monitor-zh-CN.png
     与 frontend/developer-workstation/verification-screenshots/2026-09-11_help-portal-email-monitor.png。
 
+- id: "1628"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "Email Monitor 建案 Process Title 显示 email:<Message-ID>，与 Portal 手动发起不一致"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    复现：My Request Email Inbound Reply（如 Email-000008）Title 为 email:<github Message-ID>。
+    根因：引擎 startPortalProcess 固定传 businessKey="email:"+messageId；列表 Title=businessKey||definitionName。
+    Portal New Request 不传 businessKey，Title 回退为 FU name。幂等键是 (ruleUid, messageId)，不是 businessKey。
+    修复：邮件建案改为不传 businessKey；postStart 仅在有文本时写入 JSON。
+    验证：EmailMonitorProcessorTest + EmailMonitorPortalSyncComponentTest 9/9；
+    InternalEmailProcessStartComponentTest 2/2；compose rebuild workflow-engine Started。
+    手测：新 inbound Email-000010（2026-09-11 15:50）待办 Review Inbound，
+    Process Name=Email Inbound Reply，Request ID 正常；旧实例 Title 不回写。
+
