@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.SubTableViewConfig;
@@ -104,9 +105,24 @@ public class FormTableBindingRestorer {
                         staleId, form.getId(), columnFields);
                 continue;
             }
-            String fkField = inferForeignKeyField(subTable, columnFields);
-            BindingLinkMode linkMode = "row_id".equals(fkField) ? BindingLinkMode.miParticipantRow
-                    : BindingLinkMode.structuralFk;
+            String fkField = resolveStructuralForeignKeyField(subTable);
+            if (fkField == null) {
+                // Every sub-table binding requires a foreign key — the Form Designer enforces this
+                // ("Sub-table binding requires a foreign key field"). A table with no field marked
+                // isForeignKey therefore violates that contract, and nothing here can invent the
+                // missing column: the previous code returned the literal `row_id`, producing a
+                // binding whose FK names a column that does not exist on 13 of 15 sub-tables
+                // measured in dev. Refusing to rebuild leaves a visible stale placeholder, which
+                // the designer can fix by marking the FK in Table Design — strictly better than a
+                // silently broken binding.
+                // Log the id/name only, never the entity: TableDefinition and FieldDefinition are
+                // both @Data with a bidirectional reference, so stringifying either recurses.
+                log.warn("Skipping stale binding {} on form {} — sub-table '{}' (id {}) has no field "
+                        + "marked as a foreign key; mark the parent-referencing column in Table Design",
+                        staleId, form.getId(), String.valueOf(subTable.getTableName()), subTable.getId());
+                continue;
+            }
+            BindingLinkMode linkMode = resolveBindingLinkMode(subTable);
             FormTableBinding subBinding = saveBinding(form, subTable, null, BindingType.SUB,
                     subBindingMode(form, subTable), fkField, linkMode, SubMode.FULL, sortOrder++);
             attachSubListView(subBinding, configJson, key);
@@ -370,14 +386,56 @@ public class FormTableBindingRestorer {
                 .anyMatch(f -> fieldName.equals(f.getFieldName()));
     }
 
-    private static String inferForeignKeyField(TableDefinition table, Set<String> columnFields) {
-        if (columnFields.contains("row_id") || hasField(table, "row_id")) {
-            return "row_id";
+    /**
+     * The column this sub-table uses to reference its parent, from Table Design.
+     *
+     * <p>Read from {@code isForeignKey} — the same metadata the Form Designer's "Structural FK
+     * Fields" row displays — never from a list of likely column names. The previous
+     * {@code row_id} / {@code case_id} guesses matched 2 of 15 sub-tables in dev and returned
+     * {@code row_id} for the rest, naming a column those tables do not have.
+     *
+     * @return the FK column, or {@code null} when the table declares none (a contract violation;
+     *         the caller must refuse to rebuild rather than invent one)
+     */
+    private static String resolveStructuralForeignKeyField(TableDefinition table) {
+        if (table == null || table.getFieldDefinitions() == null) {
+            return null;
         }
-        if (hasField(table, "case_id")) {
-            return "case_id";
+        return table.getFieldDefinitions().stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsForeignKey()))
+                .map(FieldDefinition::getFieldName)
+                .filter(name -> name != null && !name.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Whether this sub-table's rows are linked to MI participant rows or to the parent by a
+     * structural FK.
+     *
+     * <p>Reuses the link mode already recorded on another binding of the SAME physical table: only
+     * this form's binding rows were lost, so a sibling form still holds the designer's answer. Only
+     * bindings that actually carry an FK field are consulted — a SUB binding with a null FK is a
+     * different shape (measured in dev: {@code subtable} and {@code ATM_Transaction} each have one,
+     * and including them would make an unambiguous table look like it has two conflicting modes).
+     *
+     * <p>Falls back to {@code structuralFk}, which is a derivation rather than a default: every
+     * {@code miParticipantRow} table in dev declares an FK, and every table without one is
+     * structuralFk — so a table that reaches here at all is not an MI collection. Replacing the old
+     * test, which asked whether the FK column happened to be named {@code row_id} and so misread 7
+     * of 14 MI bindings as structuralFk, silently dropping participant isolation.
+     */
+    private BindingLinkMode resolveBindingLinkMode(TableDefinition table) {
+        if (table == null || table.getId() == null) {
+            return BindingLinkMode.structuralFk;
         }
-        return "row_id";
+        return formTableBindingRepository.findByTableId(table.getId()).stream()
+                .filter(b -> BindingType.SUB == b.getBindingType())
+                .filter(b -> b.getForeignKeyField() != null && !b.getForeignKeyField().isBlank())
+                .map(FormTableBinding::getBindingLinkMode)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(BindingLinkMode.structuralFk);
     }
 
     private static BindingMode primaryMode(FormDefinition form) {

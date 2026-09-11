@@ -448,8 +448,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
 
-        enforcePrimarySubBindingRules(form, request, table, isRelationTable);
-        
+        enforcePrimarySubBindingRules(form, request, table, isRelationTable, null);
+
         // Validate foreign-key field (SUB / local RELATED tables).
         if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && table != null) {
             validateForeignKeyField(table, request.getForeignKeyField());
@@ -522,7 +522,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         boolean isRelationTable = request.getBindingType() == BindingType.RELATED
                 && request.getRelationTableId() != null;
         TableDefinition tableForRules = binding.getTable();
-        enforcePrimarySubBindingRules(form, request, tableForRules, isRelationTable);
+        enforcePrimarySubBindingRules(form, request, tableForRules, isRelationTable,
+                binding.getForeignKeyField());
         
         // When upgrading to PRIMARY, enforce uniqueness.
         if (request.getBindingType() == BindingType.PRIMARY && binding.getBindingType() != BindingType.PRIMARY) {
@@ -595,6 +596,16 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
     }
 
+    /** True when {@code fieldName} is a column this table declares as a foreign key. */
+    private boolean isDeclaredForeignKey(TableDefinition table, String fieldName) {
+        if (table.getFieldDefinitions() == null || fieldName == null) {
+            return false;
+        }
+        return table.getFieldDefinitions().stream()
+                .anyMatch(f -> Boolean.TRUE.equals(f.getIsForeignKey())
+                        && fieldName.equalsIgnoreCase(f.getFieldName()));
+    }
+
     /**
      * PROCESS / TASK form binding rules:
      * <ul>
@@ -607,6 +618,26 @@ public class FormDesignComponentImpl implements FormDesignComponent {
      */
     private void enforcePrimarySubBindingRules(FormDefinition form, FormTableBindingRequest request,
             TableDefinition table, boolean isDeployedRelationTableBinding) {
+        enforcePrimarySubBindingRules(form, request, table, isDeployedRelationTableBinding, null);
+    }
+
+    /**
+     * @param existingForeignKeyField the FK this binding already had, or {@code null} when creating.
+     *                                The "FK must be declared" rule is enforced whenever the request
+     *                                SETS a different value — on create, and on any update that
+     *                                repoints the FK. It is skipped only when the request leaves the
+     *                                FK exactly as it was, so the 33 legacy bindings in dev that name
+     *                                an undeclared column can still have their other attributes
+     *                                edited without the designer being blocked by data they did not
+     *                                create. Keying on "creating" alone was wrong: an update may
+     *                                change {@code foreignKeyField}, so exempting all updates let a
+     *                                clean binding be repointed at an undeclared column — the exact
+     *                                state this rule exists to prevent (verified against a live
+     *                                binding before the fix).
+     */
+    private void enforcePrimarySubBindingRules(FormDefinition form, FormTableBindingRequest request,
+            TableDefinition table, boolean isDeployedRelationTableBinding,
+            String existingForeignKeyField) {
         FormType ft = form.getFormType();
         if (ft != FormType.PROCESS && ft != FormType.TASK) {
             return;
@@ -633,6 +664,25 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 throw new DeveloperBusinessException("SUB_REQUIRES_FOREIGN_KEY",
                         i18nService.getMessage("form.sub_binding_requires_foreign_key"),
                         i18nService.getMessage("form.specify_fk_to_main"));
+            }
+            // …and that column must actually be DECLARED a foreign key in Table Design. The check
+            // above only proves a name was supplied; a name that is not marked leaves the table
+            // looking like it has no parent reference, which is what the Form Designer renders as
+            // an empty "Structural FK Fields" row and what runtime MI classification reads to tell
+            // a participant-child sub-table from a shared one.
+            //
+            // Existing rows are deliberately NOT retro-validated (33 such bindings measured in dev):
+            // this guards new writes only, so a designer editing an unrelated attribute of a legacy
+            // binding is not blocked by data they did not create. `miParticipantRow` is exempt —
+            // there the field names the collection's own primary key, not a parent reference.
+            boolean miParticipantRow = request.getBindingLinkMode() == BindingLinkMode.miParticipantRow;
+            boolean foreignKeyUnchanged = existingForeignKeyField != null
+                    && existingForeignKeyField.equalsIgnoreCase(request.getForeignKeyField());
+            if (!foreignKeyUnchanged && !miParticipantRow && table != null
+                    && !isDeclaredForeignKey(table, request.getForeignKeyField())) {
+                throw new DeveloperBusinessException("SUB_FK_NOT_DECLARED",
+                        i18nService.getMessage("form.sub_binding_fk_not_declared"),
+                        i18nService.getMessage("form.mark_fk_in_table_design"));
             }
         }
         // RELATED bindings are allowed under PROCESS/TASK for Lookup lookups without PRIMARY/FK requirements.
@@ -736,6 +786,11 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     .bindingType(sourceBinding.getBindingType())
                     .bindingMode(sourceBinding.getBindingMode())
                     .foreignKeyField(sourceBinding.getForeignKeyField())
+                    // Same trap as FunctionUnitCloner: the entity declares
+                    // @Builder.Default bindingLinkMode = structuralFk, so omitting it here
+                    // substituted the default instead of copying the source value, turning
+                    // every copied MI participant binding into a structural-FK one.
+                    .bindingLinkMode(sourceBinding.getBindingLinkMode())
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -842,6 +897,11 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     .bindingType(sourceBinding.getBindingType())
                     .bindingMode(sourceBinding.getBindingMode())
                     .foreignKeyField(sourceBinding.getForeignKeyField())
+                    // Same trap as FunctionUnitCloner: the entity declares
+                    // @Builder.Default bindingLinkMode = structuralFk, so omitting it here
+                    // substituted the default instead of copying the source value, turning
+                    // every copied MI participant binding into a structural-FK one.
+                    .bindingLinkMode(sourceBinding.getBindingLinkMode())
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();

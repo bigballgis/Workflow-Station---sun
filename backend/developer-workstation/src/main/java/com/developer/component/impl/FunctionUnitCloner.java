@@ -432,6 +432,14 @@ class FunctionUnitCloner {
                     .bindingType(sourceBinding.getBindingType())
                     .bindingMode(sourceBinding.getBindingMode())
                     .foreignKeyField(sourceBinding.getForeignKeyField())
+                    // Must be copied explicitly: the entity declares
+                    // {@code @Builder.Default bindingLinkMode = structuralFk}, so omitting it here
+                    // did not clone the source value — it silently substituted the default. Every
+                    // cloned MI binding therefore came out as structuralFk, losing the participant
+                    // -row link that scopes each sub-task's rows to its own participant.
+                    // (subListViewId is deliberately NOT copied: it is re-pointed at the cloned
+                    // sub-table view config below, since the source id would dangle.)
+                    .bindingLinkMode(sourceBinding.getBindingLinkMode())
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();

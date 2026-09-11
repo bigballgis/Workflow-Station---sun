@@ -25,6 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -184,6 +185,66 @@ class FormTableBindingRestorerTest {
         verify(formTableBindingRepository, never()).save(any(FormTableBinding.class));
     }
 
+    /**
+     * A sub-table that declares no foreign key violates the binding contract the Form Designer
+     * enforces ("Sub-table binding requires a foreign key field"), and nothing here can invent the
+     * missing column. The previous code answered with the literal {@code row_id}, producing a
+     * binding whose FK named a column 13 of 15 dev sub-tables do not have; a visible stale
+     * placeholder the designer can fix is strictly better than a silently broken binding.
+     */
+    @Test
+    void repairFormIfMissingBindings_skipsSubTableThatDeclaresNoForeignKey() {
+        TableDefinition mainTable = table("meeting_main", TableType.MAIN, "title");
+        TableDefinition subNoFk = tableWithoutForeignKey("participants", "name", "assignee");
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(
+                Map.of("type", "input", "field", "title"),
+                Map.of("type", "subTable", "_bindingId", 902)
+        ));
+        // Columns live in the top-level `subListViews` map keyed by binding id — that is what
+        // collectColumnFieldNames reads to identify which sub-table the placeholder refers to.
+        config.put("subListViews", Map.of("902", Map.of("columns", List.of(
+                Map.of("fieldName", "name", "columnType", "field"),
+                Map.of("fieldName", "assignee", "columnType", "field")))));
+
+        FormDefinition form = FormDefinition.builder()
+                .id(50618L)
+                .formName("No FK Form")
+                .formType(FormType.PROCESS)
+                .configJson(config)
+                .build();
+
+        when(formTableBindingRepository.countByFormId(50618L)).thenReturn(0L);
+
+        restorer.repairFormIfMissingBindings(form, List.of(mainTable, subNoFk));
+
+        // The PRIMARY binding may still be created; what must NOT happen is a SUB binding built on
+        // a guessed foreign key.
+        verify(formTableBindingRepository, never()).save(argThat(
+                b -> b != null && BindingType.SUB == b.getBindingType()));
+    }
+
+    /** Same as {@link #table} but leaves every column unmarked, modelling the contract violation. */
+    private static TableDefinition tableWithoutForeignKey(String name, String... fields) {
+        TableDefinition table = TableDefinition.builder()
+                .id(name.hashCode() & 0xffffL)
+                .tableName(name)
+                .tableType(TableType.SUB)
+                .build();
+        int order = 0;
+        for (String fieldName : fields) {
+            table.getFieldDefinitions().add(FieldDefinition.builder()
+                    .fieldName(fieldName)
+                    .dataType(DataType.VARCHAR)
+                    .sortOrder(order++)
+                    .isForeignKey(false)
+                    .tableDefinition(table)
+                    .build());
+        }
+        return table;
+    }
+
     private static TableDefinition table(String name, TableType type, String... fields) {
         TableDefinition table = TableDefinition.builder()
                 .id(name.hashCode() & 0xffffL)
@@ -196,6 +257,11 @@ class FormTableBindingRestorerTest {
                     .fieldName(fieldName)
                     .dataType(DataType.VARCHAR)
                     .sortOrder(order++)
+                    // A SUB table's first column here is its parent reference, and it must be
+                    // DECLARED as such: the Form Designer refuses a sub-table binding without a
+                    // foreign key, so a fixture with none models a state the product does not
+                    // allow — and the restorer now (correctly) refuses to rebuild from it.
+                    .isForeignKey(type == TableType.SUB && order == 1)
                     .tableDefinition(table)
                     .build());
         }

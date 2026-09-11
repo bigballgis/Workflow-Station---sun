@@ -137,6 +137,71 @@ class FormConfigJsonTableProvisionerTest {
         assertThat(captor.getAllValues().get(1).getTableDisplayName()).isEqualTo("HMDC Transaction");
     }
 
+    /**
+     * A sub-table this code creates itself must have its parent-reference column DECLARED as a
+     * foreign key, not merely present. {@code isForeignKey} is what the Form Designer renders as
+     * "Structural FK Fields" and what runtime MI classification reads to tell a participant-child
+     * sub-table from a shared one; creating the column without the flag is how 8 of 15 dev
+     * sub-tables ended up looking like they have no parent reference at all.
+     */
+    @Test
+    void provision_marksTheAutoCreatedForeignKeyColumnAsAForeignKey() {
+        FormDefinition targetForm = FormDefinition.builder()
+                .id(11L).formName("paste-target").formType(FormType.PROCESS).build();
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(Map.of("type", "subTable", "_bindingId", 801, "props", Map.of())));
+        config.put("subListViews", Map.of("801", Map.of(
+                "columns", List.of(Map.of("fieldName", "remark")))));
+
+        when(formTableBindingRepository.findByFormIdWithTable(11L))
+                .thenReturn(new ArrayList<>())
+                .thenAnswer(inv -> new ArrayList<>(savedBindings));
+        when(tableDefinitionRepository.findByFunctionUnitIdWithFields(8L))
+                .thenReturn(new ArrayList<>())
+                .thenAnswer(inv -> new ArrayList<>(createdTables));
+        when(formTableBindingRepository.findByIdWithTable(801L)).thenReturn(Optional.empty());
+        when(tableDesignComponent.isTableNameAvailable(any(), isNull())).thenReturn(true);
+        when(tableDesignComponent.create(eq(8L), any(TableDefinitionRequest.class)))
+                .thenAnswer(inv -> {
+                    TableDefinitionRequest req = inv.getArgument(1);
+                    TableDefinition created = TableDefinition.builder()
+                            .id(nextId.getAndIncrement())
+                            .tableName(req.getTableName())
+                            .tableType(req.getTableType())
+                            .fieldDefinitions(new ArrayList<>())
+                            .build();
+                    createdTables.add(created);
+                    return created;
+                });
+        when(formTableBindingRepository.save(any(FormTableBinding.class))).thenAnswer(inv -> {
+            FormTableBinding b = inv.getArgument(0);
+            if (b.getId() == null) {
+                b.setId(nextId.getAndIncrement());
+            }
+            savedBindings.removeIf(x -> ObjectsEqualsId(x, b));
+            savedBindings.add(b);
+            return b;
+        });
+        when(formDefinitionRepository.save(any(FormDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        provisioner.provision(8L, targetForm, config);
+
+        ArgumentCaptor<TableDefinitionRequest> captor = ArgumentCaptor.forClass(TableDefinitionRequest.class);
+        org.mockito.Mockito.verify(tableDesignComponent, org.mockito.Mockito.atLeastOnce())
+                .create(eq(8L), captor.capture());
+        TableDefinitionRequest subRequest = captor.getAllValues().stream()
+                .filter(r -> r.getTableType() == TableType.SUB)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no SUB table was provisioned"));
+        assertThat(subRequest.getFields())
+                .filteredOn(f -> "main_id".equals(f.getFieldName()))
+                .singleElement()
+                .satisfies(fk -> assertThat(fk.getIsForeignKey())
+                        .as("auto-created FK column must be declared a foreign key")
+                        .isTrue());
+    }
+
     private final List<FormTableBinding> savedBindings = new ArrayList<>();
     private final List<TableDefinition> createdTables = new ArrayList<>();
 

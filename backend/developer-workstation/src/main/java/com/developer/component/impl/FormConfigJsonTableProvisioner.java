@@ -128,11 +128,27 @@ public class FormConfigJsonTableProvisioner {
 
             Set<String> fields = collectSubFields(configJson, key);
             TableDefinition sub = matchSubByFields(tables, fields);
-            String fk = sub != null ? resolveFkField(sub) : SUB_FK_FIELD;
-            if (sub == null || !hasField(sub, fk)) {
+            String fk;
+            if (sub == null) {
+                // Nothing local matches the pasted rule — materialise the sub-table (with its FK
+                // column, declared as such) so the pasted form has something to bind to.
                 sub = createSubTable(functionUnitId, form, fields, subIndex++, created, staleId);
                 tables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
                 fk = SUB_FK_FIELD;
+            } else {
+                fk = resolveFkField(sub);
+                if (!hasField(sub, fk)) {
+                    // A real table matched, but it declares no foreign key. This used to fall into
+                    // createSubTable and quietly produce a SECOND, near-duplicate table alongside
+                    // the one the user already has. Skip instead: the matched table is theirs, the
+                    // missing FK is a Table Design gap only they can resolve, and duplicating it
+                    // would leave two tables competing for the same rows.
+                    log.warn("Skip SUB provision for stale {} on form {} — matched sub-table '{}' "
+                            + "(id {}) declares no foreign key; mark the parent-referencing column "
+                            + "in Table Design",
+                            staleId, form.getId(), String.valueOf(sub.getTableName()), sub.getId());
+                    continue;
+                }
             }
             if (sub == null) {
                 continue;
@@ -224,6 +240,13 @@ public class FormConfigJsonTableProvisioner {
                     .nullable(true)
                     .displayName("Main Row Id")
                     .sortOrder(0)
+                    // Mark it as the foreign key, not just create the column. `isForeignKey` is
+                    // what the Form Designer shows as "Structural FK Fields" and what runtime MI
+                    // classification reads to tell a participant-child sub-table from a shared one;
+                    // a column created without it leaves the table looking like it has no parent
+                    // reference at all. Measured in dev: 8 of 15 sub-tables are in that state, so
+                    // the designer dialog shows them an empty FK row.
+                    .isForeignKey(true)
                     .build());
             for (int i = 1; i < fields.size(); i++) {
                 fields.get(i).setSortOrder(i);
@@ -319,15 +342,25 @@ public class FormConfigJsonTableProvisioner {
         return name != null && name.matches("^[a-zA-Z_][a-zA-Z0-9_]*$");
     }
 
+    /**
+     * The column this existing sub-table uses to reference its parent.
+     *
+     * <p>Read from Table Design ({@code isForeignKey}) — the same metadata the Form Designer shows
+     * as "Structural FK Fields". The {@code row_id} / {@code case_id} guesses that used to follow
+     * were wrong on almost every table: neither name appears as a foreign key anywhere in dev.
+     *
+     * <p>{@link #SUB_FK_FIELD} remains the last resort only because the caller creates the table
+     * (and that column, marked as the FK) when this returns something the table does not have —
+     * there it is this code's own convention, not a guess about someone else's schema.
+     */
     private static String resolveFkField(TableDefinition sub) {
-        if (hasField(sub, SUB_FK_FIELD)) {
-            return SUB_FK_FIELD;
-        }
-        if (hasField(sub, "row_id")) {
-            return "row_id";
-        }
-        if (hasField(sub, "case_id")) {
-            return "case_id";
+        if (sub != null && sub.getFieldDefinitions() != null) {
+            for (FieldDefinition field : sub.getFieldDefinitions()) {
+                if (Boolean.TRUE.equals(field.getIsForeignKey())
+                        && field.getFieldName() != null && !field.getFieldName().isBlank()) {
+                    return field.getFieldName();
+                }
+            }
         }
         return SUB_FK_FIELD;
     }
