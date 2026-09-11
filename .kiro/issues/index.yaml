@@ -3849,6 +3849,28 @@
 
 - id: "1626"
   status: fixed
+  fixed_at: "2026-09-10"
+  severity: major
+  category: bug
+  summary: "Admin 组织架构树拖拽一律 500：前端 POST /business-units/{id}/move，后端只收 PUT"
+  file: "frontend/admin-center/src/api/organization.ts"
+  note: |
+    复现：登录 developer 后 POST /api/v1/admin/business-units/{id}/move → 500 SYS_INTERNAL_ERROR，
+    admin-center 日志 HttpRequestMethodNotSupportedException: Request method 'POST' is not supported。
+    修复（前端）：move 改 PUT；el-tree 加 allow-drag（仅第二级及以下）/ allow-drop（不能落到第一级前后）；
+    node-drop 从 dropNode 一侧推算新父级 + 同级下标（draggingNode.parent 在 emit 时已过期），
+    换父级先 notifyConfirm，取消/失败一律 fetchTree 回滚本地挪动；树上加 dragHint（三语言）。
+    修复（后端 OrganizationManagerComponent）：树第一级固定按名称字母序、其余按 sortOrder+名称；
+    move 增 sortOrder 重排 ACTIVE 同级；子树按 parentId BFS 重算 level/path（不再 replace 旧 path 字符串）；
+    防环改沿 parentId 链上溯（种子数据 path 是 code 拼的，原 path.contains("/"+id) 判不出环）。
+    成员/准入角色/审批人均按 BU id 挂接，移动无需改写，随节点迁移。
+    验证：OrganizationManagerComponentTest 6/6；vitest useBusinessUnitDrag 8/8（全套 58/58）；
+    dev 实跑 PUT move hase-hmdc→HK→回、HASE(带子)→ASP→回，path/level 正确、权限行数 2/10/4 不变、
+    audit 有 UPDATE BUSINESS_UNIT；Playwright 真拖拽 4 张截图
+    frontend/admin-center/verification-screenshots/2026-09-10_org-tree-*.png。
+
+- id: "1627"
+  status: fixed
   fixed_at: "2026-09-11"
   severity: major
   category: bug
@@ -3860,7 +3882,7 @@
     同页 imap-uid:{uid} 合法但会吃掉占位符。
     修复：三语改为 {'{'}…{'}'} 字面量（与发送邮件指南相同）；双引号字符串避免 JS 提前截断。
     验证：pnpm build help；compose rebuild platform-help-frontend Started；
-    node scripts/verify-help-portal.mjs 56/56（en+zh-CN 无 pageerror，字面量可见）。
+    node scripts/verify-help-portal.mjs 61/61（en/zh-CN/zh-TW 无 pageerror，字面量可见）。
     截图 frontend/help/verification-screenshots/2026-09-11_help-email-monitor-zh-CN.png
     与 frontend/developer-workstation/verification-screenshots/2026-09-11_help-portal-email-monitor.png。
 

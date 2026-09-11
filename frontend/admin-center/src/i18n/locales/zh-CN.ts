@@ -478,7 +478,9 @@ export default {
     approvers: '审批人',
     addApprover: '添加审批人',
     noApprovers: '暂无审批人',
-    members: '业务单元成员'
+    members: '业务单元成员',
+    dragHint: '第一级按名称排序；拖拽第二级及以下的业务单元可调整归属，其下级、成员、角色与审批人一并迁移',
+    moveConfirm: '确定将「{name}」移动到「{target}」下吗？其全部下级业务单元、成员、准入角色与审批人会一并迁移。'
   },
   role: {
     roleName: '角色名称',
