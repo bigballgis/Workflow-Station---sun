@@ -442,6 +442,18 @@ export default {
       'When checked, an email with no usable attachments (none, all oversized, or all failed to store) goes to manual review instead of starting a process.',
     fSampleAttachments:
       'Optional Sample Email field: comma-separated filenames for Preview only. Runtime uses the real attachments; this box never uploads files.',
+    extractRawEmlTitle: 'Field Mapping — store the original email as .eml',
+    extractRawEmlBody:
+      'Add a Field Mapping row with Source = Original email (.eml). The target must be a main-table FILE column (Direct only). Runtime uploads the captured RFC822 as one file named {subject}.eml (unsafe characters replaced; blank subject uses message.eml). Same FILE JSON as attachments: one file = URL. This is not mixed into the Attachments source. No mapping means the .eml is not stored. Over 50MB is skipped and recorded; if Required is checked and capture/upload fails, the email goes to manual review.',
+    extractRawEmlCatalogLead: 'Field catalog — Original email (.eml) source on the Field Mapping tab.',
+    fSourceRawEml:
+      'Source group Original email. Maps the inbound message’s original RFC822 (.eml) into one FILE field. Method is locked to Direct (whole value).',
+    fRawEmlTarget:
+      'Target dropdown lists only FILE columns on the main table. Save rejects a non-FILE target. Empty list: add a FILE column in Table Design first. Use a different FILE column from Attachments if you also store attachments.',
+    fRawEmlMethod:
+      'Method is Direct (whole value). The whole original email is stored as one .eml; it is never added to the Attachments file list.',
+    fRawEmlRequired:
+      'When checked, an email whose original RFC822 could not be captured or stored (empty, over 50MB, or upload failed) goes to manual review instead of starting a process.',
     extractSubTableTitle: 'Sub-table (HTML table) tab',
     extractSubTableBody:
       'Optional third tab. Map one HTML <table> in the email to a form Sub-Table (one email row per record). Add a Sub-Table on the main process form first if the binding list is empty.',

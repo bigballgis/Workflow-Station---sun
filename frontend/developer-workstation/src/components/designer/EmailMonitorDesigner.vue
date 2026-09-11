@@ -266,7 +266,7 @@ async function handleSave() {
   }
   const attachmentErrors = wizardRef.value?.attachmentTargetErrors() ?? []
   if (attachmentErrors.length) {
-    ElMessage.warning(t('emailMonitor.wizard.attachmentsTargetMustBeFile', { field: attachmentErrors[0] }))
+    ElMessage.warning(t('emailMonitor.wizard.fileStoreTargetMustBeFile', { field: attachmentErrors[0] }))
     return
   }
   saving.value = true

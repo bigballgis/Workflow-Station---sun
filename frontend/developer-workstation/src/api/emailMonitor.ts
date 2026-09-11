@@ -15,6 +15,7 @@ export interface ExtractionFieldRule {
     | 'HTML'
     | 'TEXT_AND_HTML'
     | 'ATTACHMENTS'
+    | 'RAW_EML'
     | 'HEADER'
     | 'CONST'
   type: 'DIRECT' | 'CONST' | 'LABEL' | 'BETWEEN' | 'REGEX' | 'HEADER'

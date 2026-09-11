@@ -324,4 +324,34 @@ class EmailFieldExtractorTest {
         assertThat(result.getFields()).doesNotContainKey("quote_files");
         assertThat(result.hasMissingRequired()).isFalse();
     }
+
+    @Test
+    void rawEmlRequired_withoutBytes_marksMissing() {
+        FieldRule rule = field("raw_eml", Source.RAW_EML, RuleType.DIRECT);
+        rule.setRequired(true);
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(rule));
+
+        ExtractionResult result = EmailFieldExtractor.extract(
+                new EmailMessage("m-eml-0", "s", "a@b.com", "body", null, Map.of()), spec);
+
+        assertThat(result.getFields()).doesNotContainKey("raw_eml");
+        assertThat(result.getMissingRequired()).contains("raw_eml");
+    }
+
+    @Test
+    void rawEmlRequired_withBytes_doesNotMarkMissing() {
+        FieldRule rule = field("raw_eml", Source.RAW_EML, RuleType.DIRECT);
+        rule.setRequired(true);
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(rule));
+        EmailMessage email = new EmailMessage(
+                "m-eml-1", "s", "a@b.com", "body", null, Map.of(),
+                List.of(), "From: a@b.com\r\n\r\nbody".getBytes());
+
+        ExtractionResult result = EmailFieldExtractor.extract(email, spec);
+
+        assertThat(result.getFields()).doesNotContainKey("raw_eml");
+        assertThat(result.hasMissingRequired()).isFalse();
+    }
 }

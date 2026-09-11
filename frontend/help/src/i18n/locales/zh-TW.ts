@@ -405,6 +405,18 @@ export default {
       '勾選後，沒有可用附件（沒有附件、全部超限或全部儲存失敗）的郵件會進入人工審核，不會自動發起流程。',
     fSampleAttachments:
       '樣例郵件中的可選檔名（逗號分隔），僅用於預覽。執行時使用真實附件；此框不會上傳檔案。',
+    extractRawEmlTitle: '欄位對應 — 把原始郵件存成 .eml',
+    extractRawEmlBody:
+      '在欄位對應新增一列，來源選「原始郵件（.eml）」。目標必須是主表 FILE 欄（僅直接對應）。執行時把抓到的 RFC822 上傳為一個檔案，檔名為 {主旨}.eml（非法字元替換；主旨為空則用 message.eml）。FILE 存法與附件相同：1 個檔案=URL。不會混進「附件」來源。不對應則不儲存 .eml。超過 50MB 會略過並記錄；若勾選必填且擷取/上傳失敗，郵件進入人工審核。',
+    extractRawEmlCatalogLead: '欄位目錄 — 欄位對應頁籤上的「原始郵件（.eml）」來源。',
+    fSourceRawEml:
+      '來源分組「原始郵件」。把入站郵件的原始 RFC822（.eml）寫入一個 FILE 欄位。方式鎖定為直接對應（整值）。',
+    fRawEmlTarget:
+      '目標下拉只列出主表 FILE 欄。儲存會拒絕非 FILE 目標。清單為空時，請先在表設計中新增 FILE 欄。若同時儲存附件，請使用不同的 FILE 欄。',
+    fRawEmlMethod:
+      '方式為直接對應（整值）。整封原始郵件存成一個 .eml，不會加入「附件」檔案清單。',
+    fRawEmlRequired:
+      '勾選後，原始 RFC822 無法擷取或儲存（空、超過 50MB 或上傳失敗）的郵件會進入人工審核，不會自動發起流程。',
     extractSubTableTitle: '子表（HTML 表格）頁籤',
     extractSubTableBody:
       '可選第三個頁籤。把郵件裡的一張 HTML 表對應到表單子表（一列一筆紀錄）。若綁定清單為空，請先在主流程表單新增子表。',

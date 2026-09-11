@@ -57,6 +57,10 @@ public final class EmailFieldExtractor {
                 recordAttachmentsPresence(email, rule, result);
                 continue;
             }
+            if (rule.getSource() == EmailExtractionSpec.Source.RAW_EML) {
+                recordRawEmlPresence(email, rule, result);
+                continue;
+            }
             String value = applyPostProcess(extractFieldValue(email, rule), rule.getPostProcess());
             if (StringUtils.hasText(value)) {
                 result.getFields().put(rule.getTarget(), value);
@@ -71,6 +75,14 @@ public final class EmailFieldExtractor {
             EmailMessage email, FieldRule rule, ExtractionResult result) {
         boolean present = email.attachments() != null && !email.attachments().isEmpty();
         if (!present && rule.isRequired()) {
+            result.getMissingRequired().add(rule.getTarget());
+        }
+    }
+
+    /** RAW_EML values are uploaded later; this only gates {@code required} on captured RFC822 bytes. */
+    private static void recordRawEmlPresence(
+            EmailMessage email, FieldRule rule, ExtractionResult result) {
+        if (!email.hasRawRfc822() && rule.isRequired()) {
             result.getMissingRequired().add(rule.getTarget());
         }
     }
@@ -119,7 +131,7 @@ public final class EmailFieldExtractor {
             case DATE -> readHeader(email, "date");
             case MESSAGE_ID -> email.messageId();
             case SUBJECT -> email.subject();
-            case ATTACHMENTS, TEXT, HTML, TEXT_AND_HTML, HEADER, CONST -> null;
+            case ATTACHMENTS, RAW_EML, TEXT, HTML, TEXT_AND_HTML, HEADER, CONST -> null;
         };
     }
 
@@ -133,7 +145,7 @@ public final class EmailFieldExtractor {
             case HTML -> htmlToText(email.html());
             case TEXT -> plainOrHtml(email);
             case TEXT_AND_HTML -> combinedTextAndHtml(email);
-            case HEADER, CONST, ATTACHMENTS -> truncate(email.text());
+            case HEADER, CONST, ATTACHMENTS, RAW_EML -> truncate(email.text());
         };
     }
 

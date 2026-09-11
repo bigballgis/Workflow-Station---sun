@@ -9,6 +9,8 @@ export const BODY_SOURCES = ['TEXT_AND_HTML', 'TEXT', 'HTML', 'HEADER', 'CONST']
 
 export const ATTACHMENT_SOURCES = ['ATTACHMENTS'] as const
 
+export const RAW_EML_SOURCES = ['RAW_EML'] as const
+
 export const LOCKED_ATTRIBUTE_SOURCES = ['FROM', 'TO', 'CC', 'REPLY_TO', 'DATE', 'MESSAGE_ID'] as const
 
 const BODY_TYPES = ['LABEL', 'BETWEEN', 'REGEX', 'CONST', 'HEADER'] as const
@@ -18,17 +20,25 @@ export function isAttachmentsSource(source?: string): boolean {
   return source === 'ATTACHMENTS'
 }
 
+export function isRawEmlSource(source?: string): boolean {
+  return source === 'RAW_EML'
+}
+
+export function isFileStoreSource(source?: string): boolean {
+  return isAttachmentsSource(source) || isRawEmlSource(source)
+}
+
 export function isFileField(option: SubTableFieldOption): boolean {
   return String(option.dataType || '').toUpperCase() === 'FILE'
 }
 
 export function isLockedAttributeSource(source?: string): boolean {
   return LOCKED_ATTRIBUTE_SOURCES.includes(source as typeof LOCKED_ATTRIBUTE_SOURCES[number])
-    || isAttachmentsSource(source)
+    || isFileStoreSource(source)
 }
 
 export function typesForSource(source?: string): string[] {
-  if (isAttachmentsSource(source)) {
+  if (isFileStoreSource(source)) {
     return ['DIRECT']
   }
   if (source === 'SUBJECT') {
@@ -55,7 +65,7 @@ export function targetOptionsForRow(
   row: ExtractionFieldRule,
   mainFieldOptions: SubTableFieldOption[],
 ): SubTableFieldOption[] {
-  const base = isAttachmentsSource(row.source)
+  const base = isFileStoreSource(row.source)
     ? mainFieldOptions.filter(isFileField)
     : mainFieldOptions
   const trimmed = row.target?.trim()
@@ -77,7 +87,7 @@ export function invalidAttachmentTargets(
   )
   const invalid: string[] = []
   for (const row of fields) {
-    if (!isAttachmentsSource(row.source)) {
+    if (!isFileStoreSource(row.source)) {
       continue
     }
     const target = row.target?.trim()
@@ -94,4 +104,10 @@ export function previewAttachmentNames(sampleNames?: string): string {
     .map((n) => n.trim())
     .filter(Boolean)
   return names.length ? names.join(', ') : '—'
+}
+
+export function previewRawEmlFilename(subject?: string): string {
+  const base = (subject ?? '').trim() || 'message'
+  const cleaned = base.replace(/[\\/:*?"<>|\x00-\x1F]/g, '_').slice(0, 80).trim()
+  return `${cleaned || 'message'}.eml`
 }

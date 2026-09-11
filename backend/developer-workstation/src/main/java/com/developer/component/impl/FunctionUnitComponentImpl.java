@@ -434,6 +434,16 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit publish(Long id, String changeLog) {
+        return doPublish(id, changeLog);
+    }
+
+    @Override
+    @Transactional
+    public FunctionUnit publishForDeployment(Long id, String changeLog) {
+        return doPublish(id, changeLog);
+    }
+
+    private FunctionUnit doPublish(Long id, String changeLog) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         FunctionUnit functionUnit = getById(id);
 

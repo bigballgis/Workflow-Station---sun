@@ -105,7 +105,7 @@ class DeploymentComponentMultiInstanceValidationTest {
         
         when(functionUnitRepository.findById(FUNCTION_UNIT_ID))
             .thenReturn(Optional.of(functionUnit));
-        when(functionUnitComponent.publish(eq(FUNCTION_UNIT_ID), anyString()))
+        when(functionUnitComponent.publishForDeployment(eq(FUNCTION_UNIT_ID), anyString()))
             .thenReturn(functionUnit);
         when(processDesignComponent.getByFunctionUnitId(FUNCTION_UNIT_ID))
             .thenReturn(processDefinition);
@@ -146,7 +146,7 @@ class DeploymentComponentMultiInstanceValidationTest {
         
         when(functionUnitRepository.findById(FUNCTION_UNIT_ID))
             .thenReturn(Optional.of(functionUnit));
-        when(functionUnitComponent.publish(eq(FUNCTION_UNIT_ID), anyString()))
+        when(functionUnitComponent.publishForDeployment(eq(FUNCTION_UNIT_ID), anyString()))
             .thenReturn(functionUnit);
         when(processDesignComponent.getByFunctionUnitId(FUNCTION_UNIT_ID))
             .thenReturn(processDefinition);
@@ -182,7 +182,7 @@ class DeploymentComponentMultiInstanceValidationTest {
         
         when(functionUnitRepository.findById(FUNCTION_UNIT_ID))
             .thenReturn(Optional.of(functionUnit));
-        when(functionUnitComponent.publish(eq(FUNCTION_UNIT_ID), anyString()))
+        when(functionUnitComponent.publishForDeployment(eq(FUNCTION_UNIT_ID), anyString()))
             .thenReturn(functionUnit);
         when(processDesignComponent.getByFunctionUnitId(FUNCTION_UNIT_ID))
             .thenReturn(null);
@@ -215,7 +215,7 @@ class DeploymentComponentMultiInstanceValidationTest {
         
         when(functionUnitRepository.findById(FUNCTION_UNIT_ID))
             .thenReturn(Optional.of(functionUnit));
-        when(functionUnitComponent.publish(eq(FUNCTION_UNIT_ID), anyString()))
+        when(functionUnitComponent.publishForDeployment(eq(FUNCTION_UNIT_ID), anyString()))
             .thenReturn(functionUnit);
         when(processDesignComponent.getByFunctionUnitId(FUNCTION_UNIT_ID))
             .thenReturn(processDefinition);

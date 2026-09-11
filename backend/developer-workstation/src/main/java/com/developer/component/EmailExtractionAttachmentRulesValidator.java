@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Rejects Email Monitor Field Mapping rows that store attachments on a non-FILE column.
+ * Rejects Email Monitor Field Mapping rows that store attachments or original RFC822 on a non-FILE column.
  */
 @Component
 @RequiredArgsConstructor
@@ -39,7 +39,8 @@ public class EmailExtractionAttachmentRulesValidator {
             if (!(item instanceof Map<?, ?> row)) {
                 continue;
             }
-            if (!"ATTACHMENTS".equals(String.valueOf(row.get("source")))) {
+            String source = String.valueOf(row.get("source"));
+            if (!isFileStoreSource(source)) {
                 continue;
             }
             Object targetObj = row.get("target");
@@ -47,10 +48,23 @@ public class EmailExtractionAttachmentRulesValidator {
             if (!StringUtils.hasText(target) || fileFields.contains(target)) {
                 continue;
             }
-            throw new DeveloperBusinessException(
-                    "VALIDATION_ATTACHMENTS_TARGET_NOT_FILE",
-                    i18nService.getMessage("email.monitor.attachments_target_must_be_file", target));
+            throw fileStoreTargetException(source, target);
         }
+    }
+
+    private static boolean isFileStoreSource(String source) {
+        return "ATTACHMENTS".equals(source) || "RAW_EML".equals(source);
+    }
+
+    private DeveloperBusinessException fileStoreTargetException(String source, String target) {
+        if ("RAW_EML".equals(source)) {
+            return new DeveloperBusinessException(
+                    "VALIDATION_RAW_EML_TARGET_NOT_FILE",
+                    i18nService.getMessage("email.monitor.raw_eml_target_must_be_file", target));
+        }
+        return new DeveloperBusinessException(
+                "VALIDATION_ATTACHMENTS_TARGET_NOT_FILE",
+                i18nService.getMessage("email.monitor.attachments_target_must_be_file", target));
     }
 
     private Set<String> mainFileFieldNames(Long functionUnitId) {

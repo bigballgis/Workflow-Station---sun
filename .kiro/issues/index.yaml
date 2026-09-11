@@ -3829,3 +3829,21 @@
     DW vitest emailExtractionPreview 2/2；engine package + compose rebuild Started。
     旧案不回填；端到端需新发入站信（不要用 Portal Send Email 回环）。
 
+- id: "1625"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "DW 一键部署 Create version snapshot Access Denied（异步 SecurityContext + JWT hasAnyRole）"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+  note: |
+    复现：developer 部署 Email Inbound Reply，停在快照 5%，Access Denied。
+    层1：异步共享请求 SecurityContext 引用，请求结束后 Authentication 为空。
+    层2（拷贝后仍失败）：executeDeployment 调 publish() 的 JWT hasAnyRole，
+    与 HTTP FUNCTION_UNIT_PUBLISH 权限源不一致。
+    修复：copy Authentication；异步改调 publishForDeployment（无 PreAuthorize）。
+    验证：DeploymentComponentAsyncSecurityContextTest + MultiInstance 绿；
+    compose rebuild Started；UI Redeploy Email Inbound Reply → 1.0.10 100% 成功
+    （Create version snapshot 通过）。截图
+    frontend/developer-workstation/verification-screenshots/2026-09-11_email-inbound-reply-deploy-success.png。
+

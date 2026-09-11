@@ -1,6 +1,8 @@
 package com.workflow.email.inbound;
 
 import jakarta.activation.DataHandler;
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
@@ -14,6 +16,9 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 class ImapInboundMailClientExtractTest {
 
@@ -119,5 +124,68 @@ class ImapInboundMailClientExtractTest {
         assertThat(attachments).hasSize(1);
         assertThat(attachments.get(0).filename()).isEqualTo("quote.pdf");
         assertThat(attachments.get(0).content()).isEqualTo("pdf-bytes".getBytes());
+    }
+
+    @Test
+    void captureRawRfc822_writesOriginalMimeBytes() throws Exception {
+        Session session = Session.getInstance(new Properties());
+        MimeMessage message = new MimeMessage(session);
+        message.setSubject("Quote ABC");
+        message.setText("Please see attached");
+        message.saveChanges();
+
+        byte[] raw = ImapInboundMailClient.captureRawRfc822(message);
+
+        String rfc822 = new String(raw, java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(raw.length).isGreaterThan(0);
+        assertThat(rfc822).contains("Quote ABC");
+        assertThat(rfc822).contains("Please see attached");
+    }
+
+    @Test
+    void captureRawRfc822_whenWriteToFails_returnsEmpty() throws Exception {
+        Message message = mock(Message.class);
+        doThrow(new MessagingException("imap writeTo failed")).when(message).writeTo(any());
+
+        byte[] raw = ImapInboundMailClient.captureRawRfc822(message);
+
+        assertThat(raw).isEmpty();
+    }
+
+    @Test
+    void captureRawRfc822_thenExtractParts_stillReadsBodyAndAttachment() throws Exception {
+        MimeMessage message = mixedPlainAndPdf();
+
+        byte[] raw = ImapInboundMailClient.captureRawRfc822(message);
+        String rfc822 = new String(raw, java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(rfc822).contains("Please see attached");
+
+        StringBuilder plain = new StringBuilder();
+        StringBuilder html = new StringBuilder();
+        List<com.workflow.email.extract.EmailAttachment> attachments = new ArrayList<>();
+        new ImapInboundMailClient().extractParts(message, plain, html, attachments);
+
+        assertThat(plain.toString()).contains("Please see attached");
+        assertThat(attachments).hasSize(1);
+        assertThat(attachments.get(0).filename()).isEqualTo("quote.pdf");
+        assertThat(attachments.get(0).content()).isEqualTo("pdf-bytes".getBytes());
+    }
+
+    private static MimeMessage mixedPlainAndPdf() throws Exception {
+        Session session = Session.getInstance(new Properties());
+        MimeBodyPart text = new MimeBodyPart();
+        text.setText("Please see attached");
+        MimeBodyPart pdf = new MimeBodyPart();
+        pdf.setFileName("quote.pdf");
+        pdf.setDataHandler(new DataHandler(new ByteArrayDataSource("pdf-bytes".getBytes(), "application/pdf")));
+        pdf.setDisposition(MimeBodyPart.ATTACHMENT);
+        MimeMultipart mixed = new MimeMultipart("mixed");
+        mixed.addBodyPart(text);
+        mixed.addBodyPart(pdf);
+        MimeMessage message = new MimeMessage(session);
+        message.setSubject("Quote ABC");
+        message.setContent(mixed);
+        message.saveChanges();
+        return message;
     }
 }

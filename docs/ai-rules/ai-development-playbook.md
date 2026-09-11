@@ -57,9 +57,9 @@
 My Request 里 Sub Task 又变成 4 条了，应该 3 条。applicationId=abc123。按 playbook 整理。
 ```
 
-AI 回复任务整理 → 你看没问题 → 回复 **`确认`** → AI 才开始改代码。
+AI 回复任务整理（必须含【修改计划】：改哪些文件、具体怎么改）→ 你看没问题 → 回复 **`确认`** → AI 才开始改代码。
 
-**想改计划：** 回复 `改：模块用 dw` 或 `改：禁止动 shared.ts` → AI 更新任务整理 → 再次等你确认。
+**想改计划：** 回复 `改：模块用 dw`、`改：禁止动 shared.ts` 或 `改：不要动 PreAuthorize，只拷贝 SecurityContext` → AI 更新任务整理 → 再次等你确认。
 
 **跳过确认（仅当你信任描述已足够清楚时）：**
 ```text
@@ -91,6 +91,10 @@ AI 回复任务整理 → 你看没问题 → 回复 **`确认`** → AI 才开�
 【范围】
   - 允许：frontend/user-portal/src/...
   - 禁止：shared.ts 语义层 / platform-common / 其他模块
+【修改计划】
+  - 改哪些文件 / 函数
+  - 准备怎么改（具体做法）
+  - 不选的做法（如有）
 【验证】（预期命令，AI 完成后必须贴输出摘要）
   - npm run regression:mi / vitest … / mvn … / docker compose …
 ```
