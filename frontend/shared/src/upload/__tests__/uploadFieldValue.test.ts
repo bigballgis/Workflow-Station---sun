@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_UPLOAD_MAX_FILES,
+  NEW_UPLOAD_MAX_FILES,
   DEFAULT_UPLOAD_MAX_FILE_SIZE_MB,
   PLATFORM_UPLOAD_MAX_FILE_SIZE_MB,
   extractStoredUploadUrl,
@@ -9,6 +10,8 @@ import {
   joinTargetFileNames,
   persistFromUploadFileList,
   persistUploadValue,
+  maxFilesForUploadMulti,
+  newUploadCountProps,
   resolveUploadMaxFileSizeMb,
   resolveUploadMaxFiles,
   splitUploadFileList,
@@ -36,6 +39,29 @@ describe('resolveUploadMaxFiles', () => {
   it('honors an explicit designer limit that is not the legacy limit:1 leftover', () => {
     expect(resolveUploadMaxFiles({ multiple: false, limit: 4 })).toBe(4)
     expect(resolveUploadMaxFiles({ limit: 4 })).toBe(4)
+  })
+})
+
+describe('maxFilesForUploadMulti', () => {
+  it('forces a single file when Multi is off', () => {
+    expect(maxFilesForUploadMulti(false, 10)).toBe(NEW_UPLOAD_MAX_FILES)
+    expect(maxFilesForUploadMulti(false, 1)).toBe(NEW_UPLOAD_MAX_FILES)
+  })
+
+  it('keeps a multi count or defaults to 10 when turning Multi on', () => {
+    expect(maxFilesForUploadMulti(true, 4)).toBe(4)
+    expect(maxFilesForUploadMulti(true, 1)).toBe(DEFAULT_UPLOAD_MAX_FILES)
+    expect(maxFilesForUploadMulti(true, null)).toBe(DEFAULT_UPLOAD_MAX_FILES)
+  })
+})
+
+describe('newUploadCountProps', () => {
+  it('starts new Advanced Upload widgets in Single mode', () => {
+    expect(newUploadCountProps()).toEqual({
+      maxFiles: NEW_UPLOAD_MAX_FILES,
+      limit: NEW_UPLOAD_MAX_FILES,
+      multiple: false,
+    })
   })
 })
 

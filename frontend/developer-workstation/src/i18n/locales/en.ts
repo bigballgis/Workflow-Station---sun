@@ -812,8 +812,12 @@ export default {
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
     advancedUpload: 'Advanced Upload',
     uploadCannotDownload: 'Can not download',
+    uploadMultiple: 'Multi',
+    uploadSingle: 'Single',
+    uploadMulti: 'Multi',
+    uploadSingleHint: 'Off: this field accepts one file. Turn on Multi to set a file count.',
     uploadMaxFiles: 'Max files',
-    uploadMaxFilesHint: 'Default 10. Set 1 for a single file. At most 3 uploads run at once.',
+    uploadMaxFilesHint: 'How many files this field accepts. Default 10 when Multi is on. At most 3 uploads run at once.',
     uploadMaxFileSize: 'Max file size (MB)',
     uploadMaxFileSizeHint: 'Default 10MB. You may set 1–50. 50MB is the platform hard cap.',
     uploadGuideLinkAria: 'Open upload field guidelines',

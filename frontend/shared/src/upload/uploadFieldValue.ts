@@ -3,6 +3,9 @@ import { extractFileLinks, fileDisplayText, type FileLink } from '../list/fileNa
 /** Default max files when the designer has not set {@code maxFiles}. */
 export const DEFAULT_UPLOAD_MAX_FILES = 10
 
+/** New Advanced Upload widgets start in Single mode (one file). */
+export const NEW_UPLOAD_MAX_FILES = 1
+
 /** Hard cap for the designer number input. */
 export const ABSOLUTE_UPLOAD_MAX_FILES = 50
 
@@ -37,6 +40,24 @@ export function resolveUploadMaxFiles(props?: Record<string, unknown> | null): n
 
 export function isUploadMultiple(props?: Record<string, unknown> | null): boolean {
   return resolveUploadMaxFiles(props) > 1
+}
+
+/** Designer Multi switch: off → 1 file; on → keep current count or default 10. */
+export function maxFilesForUploadMulti(
+  multi: boolean,
+  currentMaxFiles?: number | null,
+): number {
+  if (!multi) return NEW_UPLOAD_MAX_FILES
+  if (isPositiveInt(currentMaxFiles) && currentMaxFiles > 1) return clampMaxFiles(currentMaxFiles)
+  return DEFAULT_UPLOAD_MAX_FILES
+}
+
+export function newUploadCountProps(): { maxFiles: number; limit: number; multiple: boolean } {
+  return {
+    maxFiles: NEW_UPLOAD_MAX_FILES,
+    limit: NEW_UPLOAD_MAX_FILES,
+    multiple: false,
+  }
 }
 
 /** Per-field max size in MB. Unconfigured fields stay at 10; designer may raise up to 50. */

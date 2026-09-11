@@ -856,8 +856,12 @@ export default {
     // 子表逐操作權限（右側屬性面板）：獨立控制 新增 / 編輯 / 刪除
     advancedUpload: '進階上傳',
     uploadCannotDownload: '禁止下載',
+    uploadMultiple: '多檔',
+    uploadSingle: '單檔',
+    uploadMulti: '多檔',
+    uploadSingleHint: '關閉時該欄位只能上傳一個檔案。打開後可設定檔案數量。',
     uploadMaxFiles: '最多檔案數',
-    uploadMaxFilesHint: '預設 10。設為 1 即單檔。同時最多 3 個上傳請求。',
+    uploadMaxFilesHint: '打開多檔後可設定數量。打開時預設 10。同時最多 3 個上傳請求。',
     uploadMaxFileSize: '單檔大小上限（MB）',
     uploadMaxFileSizeHint: '預設 10MB。可設 1–50。50MB 是平台硬上限。',
     uploadGuideLinkAria: '開啟上傳欄位說明',
