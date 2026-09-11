@@ -31,6 +31,7 @@ import {
   isAuditField,
   resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
+import { cannotDownloadFieldKeysFromForms } from '@/utils/applyUploadPropsFromRule'
 import { createFuContentCache } from './fuContentCache'
 import { stampMiCollectionFromBpmn } from './miCollectionStamp'
 import { registerMiKindTableIdsFromBindings } from '@/composables/tasks/miBindingKindFromConfig'
@@ -289,7 +290,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
           const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subForms, {
             lookupDbConfigs: lookupDbConfigs.value,
             relationViewConfigs: relationViewConfigs.value,
-          })
+          }, cannotDownloadFieldKeysFromForms(ctx.cachedContentForms))
           bindings.push({
             bindingId: b.bindingId,
             tableId: b.tableId ?? null,

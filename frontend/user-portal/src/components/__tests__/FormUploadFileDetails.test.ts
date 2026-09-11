@@ -53,4 +53,36 @@ describe('FormUploadFileDetails callback URL click', () => {
     expect(previewFile).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  it('hides the raw file URL when Can not download is on', async () => {
+    const previewFile = vi.fn()
+    const wrapper = mount(FormUploadFileDetails, {
+      props: { files, labels, previewFile, cannotDownload: true },
+      global: { stubs: { ElInput: true, ElTag: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.upload-file-details__link').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('/api/v1/upload/files/report.pdf')
+    await wrapper.get('[data-testid="upload-file-preview-name"]').trigger('click')
+    expect(previewFile).toHaveBeenCalledWith({
+      url: '/api/v1/upload/files/report.pdf',
+      name: 'report.pdf',
+    })
+    wrapper.unmount()
+  })
+
+  it('hides the URL and leaves the name as text when preview is not wired', async () => {
+    const wrapper = mount(FormUploadFileDetails, {
+      props: { files, labels, cannotDownload: true },
+      global: { stubs: { ElInput: true, ElTag: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.upload-file-details__link').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="upload-file-preview-name"]').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('/api/v1/upload/files/report.pdf')
+    expect(wrapper.text()).toContain('report.pdf')
+    wrapper.unmount()
+  })
 })

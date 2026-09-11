@@ -12,6 +12,7 @@ import {
 import {
   flattenSubFormRuleLayoutContainers,
   isDialogMappableSubFormRule,
+  copySubFormCanvasProps,
   mergeListViewFieldColumn,
   deriveColumnsFromRelationFieldDefinitions,
   resolveSubTableSchemaByTableId,
@@ -145,16 +146,7 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
           ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
           : undefined
 
-        // Pass through relevant props
-        const passProps: Record<string, any> = {}
-        const propKeys = [
-          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
-          'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-          'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
-        ]
-        for (const key of propKeys) {
-          if (rProps[key] !== undefined) passProps[key] = rProps[key]
-        }
+        const passProps: Record<string, any> = copySubFormCanvasProps(rProps)
         stampCannotDownloadProp(
           passProps,
           rProps,

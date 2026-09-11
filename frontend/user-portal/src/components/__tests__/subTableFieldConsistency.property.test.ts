@@ -7,6 +7,7 @@ vi.setConfig({ testTimeout: 30_000 })
 
 import {
   buildInitialRow,
+  copySubFormCanvasProps,
   resolveDisplayValue,
   resolveLookupCellTagText,
   unwrapSingleLookupModelValue,
@@ -14,8 +15,9 @@ import {
   type ColumnType,
 } from '../subTableAddDialogHelpers'
 
-// ─── Inline deriveColumnsFromBinding (mirrors the logic in the three view files) ──
-// This is a pure extraction of the mapping logic for testability.
+// ─── Inline deriveColumnsFromBinding ─────────────────────────────────────────
+// Type mapping stays local (select+multiple → checkbox) so Properties 1–2 keep
+// their original contract. Designer props go through copySubFormCanvasProps.
 type DerivedColumn = {
   field: string
   label: string
@@ -67,14 +69,7 @@ function deriveColumnsFromBinding(
       ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
       : undefined
 
-    const passProps: Record<string, any> = {}
-    const propKeys = [
-      'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
-      'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-    ]
-    for (const key of propKeys) {
-      if (rProps[key] !== undefined) passProps[key] = rProps[key]
-    }
+    const passProps: Record<string, any> = copySubFormCanvasProps(rProps)
 
     // Sync options into props.options
     if (options) passProps.options = options

@@ -114,6 +114,27 @@ export function isDialogMappableSubFormRule(rawRule: unknown): boolean {
   return typeof r.field === 'string' && r.field.length > 0
 }
 
+/**
+ * Designer props that must survive canvas → sub-table dialog columns.
+ * `maxFiles` / `limit` / `maxFileSizeMb` are required: dropping them made Single
+ * (`maxFiles:1`) look like the unconfigured default of 10 on the Add/Edit upload.
+ */
+export const SUB_FORM_CANVAS_COLUMN_PROP_KEYS = [
+  'action', 'accept', 'multiple', 'maxFiles', 'maxFileSizeMb', 'limit',
+  'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload', 'canNotDownload',
+  'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
+  'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
+  'boundSubTableBindingId', 'ownerConfig',
+] as const
+
+export function copySubFormCanvasProps(rProps: Record<string, unknown>): Record<string, unknown> {
+  const passProps: Record<string, unknown> = {}
+  for (const key of SUB_FORM_CANVAS_COLUMN_PROP_KEYS) {
+    if (rProps[key] !== undefined) passProps[key] = rProps[key]
+  }
+  return passProps
+}
+
 /** Map form-design canvas rule items to Add/Edit dialog columns (excludes list-view-only fields). */
 export function mapSubFormRuleToDialogColumns(
   subFormRule: unknown[],
@@ -181,16 +202,7 @@ export function mapSubFormRuleToDialogColumns(
         })))
       : undefined
 
-    const passProps: Record<string, unknown> = {}
-    const propKeys = [
-      'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
-      'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-      'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
-      'boundSubTableBindingId', 'ownerConfig',
-    ]
-    for (const key of propKeys) {
-      if (rProps[key] !== undefined) passProps[key] = rProps[key]
-    }
+    const passProps = copySubFormCanvasProps(rProps)
     stampCannotDownloadProp(passProps, rProps, String(r.field ?? ''), blockedFieldKeys, r)
     assignSensitiveMaskColumnProps(passProps, type, rProps)
     if (rProps.data !== undefined) passProps.treeData = rProps.data

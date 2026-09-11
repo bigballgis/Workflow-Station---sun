@@ -477,6 +477,7 @@
           :readonly="readonly || isDisabled"
           :labels="uploadDetailLabels"
           :preview-file="previewCurrentFile"
+          :cannot-download="!!field.cannotDownload"
         />
       </div>
     </template>
@@ -532,6 +533,7 @@
           :readonly="readonly || isDisabled"
           :labels="uploadDetailLabels"
           :preview-file="previewCurrentFile"
+          :cannot-download="!!field.cannotDownload"
         />
       </div>
     </template>

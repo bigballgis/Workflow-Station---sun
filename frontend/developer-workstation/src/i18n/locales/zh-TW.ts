@@ -856,6 +856,7 @@ export default {
     // 子表逐操作權限（右側屬性面板）：獨立控制 新增 / 編輯 / 刪除
     advancedUpload: '進階上傳',
     uploadCannotDownload: '禁止下載',
+    uploadDownloadBlocked: '此檔案已禁止下載。',
     uploadMultiple: '多檔',
     uploadSingle: '單檔',
     uploadMulti: '多檔',

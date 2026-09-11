@@ -812,6 +812,7 @@ export default {
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
     advancedUpload: 'Advanced Upload',
     uploadCannotDownload: 'Can not download',
+    uploadDownloadBlocked: 'Download is turned off for this file.',
     uploadMultiple: 'Multi',
     uploadSingle: 'Single',
     uploadMulti: 'Multi',

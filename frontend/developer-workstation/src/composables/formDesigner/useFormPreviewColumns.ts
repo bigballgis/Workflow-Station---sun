@@ -72,12 +72,15 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         const options = rawOptions ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))) : undefined
         const passProps: Record<string, any> = {}
         for (const key of [
-          'action', 'accept', 'multiple', 'maxFiles', 'maxFileSizeMb', 'precision', 'min', 'max',
-          'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
+          'action', 'accept', 'multiple', 'maxFiles', 'maxFileSizeMb', 'limit', 'precision', 'min', 'max',
+          'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload', 'canNotDownload',
           'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
           'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
         ]) {
           if (rProps[key] !== undefined) passProps[key] = rProps[key]
+        }
+        if (r.cannotDownload === true || r.canNotDownload === true || rProps.canNotDownload === true) {
+          passProps.cannotDownload = true
         }
         assignSensitiveMaskColumnProps(passProps, type, rProps)
         if (rProps.data !== undefined) passProps.treeData = rProps.data
@@ -337,7 +340,12 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
               ...(fieldRule?.props?.fileNameTargetField
                 ? { fileNameTargetField: fieldRule.props.fileNameTargetField }
                 : {}),
-              ...(fieldRule?.props?.cannotDownload === true ? { cannotDownload: true } : {}),
+              ...(fieldRule?.props?.cannotDownload === true
+                || fieldRule?.props?.canNotDownload === true
+                || fieldRule?.cannotDownload === true
+                || fieldRule?.canNotDownload === true
+                ? { cannotDownload: true }
+                : {}),
             }
           : null
         const passProps: Record<string, unknown> = { ...(uploadProps || {}) }
