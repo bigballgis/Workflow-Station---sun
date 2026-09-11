@@ -156,6 +156,40 @@ class EmailFieldExtractorTest {
     }
 
     @Test
+    void textAndHtmlDirect_doesNotDuplicatePlainAndHtmlAlternative() {
+        String plain = "hello all,\r\n\r\nthis is a test email";
+        String html = "<div>hello all,<br>this is a test email</div>";
+        EmailMessage email = new EmailMessage("m-alt", "回复：<Test>123456", "a@b.com",
+                plain, html, Map.of());
+
+        FieldRule rule = field("email_body", Source.TEXT_AND_HTML, RuleType.DIRECT);
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(rule));
+
+        ExtractionResult result = EmailFieldExtractor.extract(email, spec);
+
+        String body = String.valueOf(result.getFields().get("email_body"));
+        assertThat(body).isEqualTo("hello all,\r\n\r\nthis is a test email");
+        assertThat(body).doesNotContain("hello all, this is a test email");
+    }
+
+    @Test
+    void textDirect_keepsPlainWhenHtmlAlternativeAlsoPresent() {
+        EmailMessage email = new EmailMessage("m-text", "s", "a@b.com",
+                "hello all,\n\nthis is a test email",
+                "<p>hello all, this is a test email</p>",
+                Map.of());
+
+        FieldRule rule = field("email_body", Source.TEXT, RuleType.DIRECT);
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(rule));
+
+        ExtractionResult result = EmailFieldExtractor.extract(email, spec);
+
+        assertThat(result.getFields()).containsEntry("email_body", "hello all,\n\nthis is a test email");
+    }
+
+    @Test
     void extractsRegexFromHtmlOnlyBodyViaTextAndHtmlSource() {
         String html = "<html><body><p>您好，本次操作校验码为1233333。您正在使用邮箱注册帐号。</p></body></html>";
         EmailMessage email = new EmailMessage("m-html", "校验码", "a@b.com", null, html, Map.of());

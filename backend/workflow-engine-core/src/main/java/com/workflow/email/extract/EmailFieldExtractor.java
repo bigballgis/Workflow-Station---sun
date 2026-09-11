@@ -131,9 +131,19 @@ public final class EmailFieldExtractor {
             case SUBJECT -> email.subject();
             case FROM, TO, CC, REPLY_TO, DATE, MESSAGE_ID -> emailAttributeValue(email, source);
             case HTML -> htmlToText(email.html());
-            case TEXT, TEXT_AND_HTML -> combinedTextAndHtml(email);
+            case TEXT -> plainOrHtml(email);
+            case TEXT_AND_HTML -> combinedTextAndHtml(email);
             case HEADER, CONST, ATTACHMENTS -> truncate(email.text());
         };
+    }
+
+    /** Plain body when present; HTML-only mail still falls back to stripped HTML. */
+    static String plainOrHtml(EmailMessage email) {
+        String plain = truncate(email.text());
+        if (StringUtils.hasText(plain)) {
+            return plain;
+        }
+        return htmlToText(email.html());
     }
 
     /** Merges plain-text and HTML-derived text so forwarded/HTML-only messages still match. */
@@ -150,10 +160,40 @@ public final class EmailFieldExtractor {
         }
         String p = plain.trim();
         String h = html.trim();
-        if (p.equals(h) || p.contains(h) || h.contains(p)) {
-            return p.length() >= h.length() ? p : h;
+        if (sameNormalizedBody(p, h)) {
+            return preferLineBreaks(p, h);
         }
         return truncate(p + "\n" + h);
+    }
+
+    static boolean sameNormalizedBody(String left, String right) {
+        String a = normalizeBody(left);
+        String b = normalizeBody(right);
+        return a.equals(b) || a.contains(b) || b.contains(a);
+    }
+
+    static String normalizeBody(String text) {
+        return text.replace('\r', '\n').replaceAll("\\s+", " ").trim();
+    }
+
+    static String preferLineBreaks(String left, String right) {
+        int leftBreaks = countLineBreaks(left);
+        int rightBreaks = countLineBreaks(right);
+        if (leftBreaks != rightBreaks) {
+            return leftBreaks > rightBreaks ? left : right;
+        }
+        return left.length() >= right.length() ? left : right;
+    }
+
+    private static int countLineBreaks(String text) {
+        int count = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || c == '\r') {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static String readHeader(EmailMessage email, String header) {
@@ -321,7 +361,8 @@ public final class EmailFieldExtractor {
         if (!StringUtils.hasText(html)) {
             return null;
         }
-        return truncate(Jsoup.parse(html).text());
+        String withBreaks = html.replaceAll("(?i)<br\\s*/?>", "\n");
+        return truncate(Jsoup.parse(withBreaks).text());
     }
 
     private static String truncate(String text) {

@@ -2,6 +2,7 @@ package com.workflow.email.inbound;
 
 import jakarta.activation.DataHandler;
 import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
@@ -15,6 +16,36 @@ import java.util.Properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ImapInboundMailClientExtractTest {
+
+    @Test
+    void formatAddress_decodesMimeEncodedWordDisplayName() throws Exception {
+        InternetAddress encoded = new InternetAddress(
+                "inbound.user@example.com",
+                "=?utf-8?B?QWxpY2U=?=",
+                "utf-8");
+
+        assertThat(ImapInboundMailClient.formatAddress(encoded))
+                .isEqualTo("Alice <inbound.user@example.com>");
+    }
+
+    @Test
+    void formatAddresses_decodesMultipleRecipients() throws Exception {
+        InternetAddress first = new InternetAddress(
+                "inbound.user@example.com",
+                "=?utf-8?B?QWxpY2U=?=",
+                "utf-8");
+        InternetAddress second = new InternetAddress("ops@example.com", "Ops Team", "utf-8");
+
+        assertThat(ImapInboundMailClient.formatAddresses(new InternetAddress[] {first, second}))
+                .isEqualTo("Alice <inbound.user@example.com>, Ops Team <ops@example.com>");
+    }
+
+    @Test
+    void decodeAddressText_decodesRawEncodedWordHeaderFragment() throws Exception {
+        assertThat(ImapInboundMailClient.decodeAddressText(
+                "=?utf-8?B?QWxpY2U=?= <inbound.user@example.com>"))
+                .isEqualTo("Alice <inbound.user@example.com>");
+    }
 
     @Test
     void extractParts_recursesIntoNestedForwardedMessage() throws Exception {
