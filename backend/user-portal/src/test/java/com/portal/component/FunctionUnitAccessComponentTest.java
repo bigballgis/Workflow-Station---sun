@@ -143,6 +143,30 @@ class FunctionUnitAccessComponentTest {
     }
 
     @Test
+    void resolveAlignedWithActiveCatalog_usesEnabledPinWhenLatestIsNewerDisabled() {
+        String encoded = java.net.URLEncoder.encode(FU_CODE, StandardCharsets.UTF_8);
+        String enabledId = "d64105f6-3ff8-411e-b162-6e33056b02bd";
+        String newerDisabledId = "d3c59f31-fae0-4b01-ad75-27b881548601";
+        when(restTemplate.exchange(
+                contains("/function-units/by-process-key/" + encoded),
+                eq(HttpMethod.GET),
+                isNull(),
+                any(ParameterizedTypeReference.class)))
+                .thenThrow(new RuntimeException("not found"));
+        when(restTemplate.exchange(
+                contains("/function-units/code/" + encoded + "/latest"),
+                eq(HttpMethod.GET),
+                isNull(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Map.of("id", newerDisabledId)));
+
+        assertThat(component.resolveFunctionUnitId(FU_CODE)).isEqualTo(newerDisabledId);
+        assertThat(component.resolveFunctionUnitIdAlignedWithActiveCatalog(FU_CODE, enabledId))
+                .isEqualTo(enabledId);
+        assertThat(component.resolveFunctionUnitId(FU_CODE)).isEqualTo(enabledId);
+    }
+
+    @Test
     void resolveNewRequestRoleKeys_includesIdAndCodeForActiveRole() {
         mockPortalRoles(USER_ID, List.of(
                 Map.of("id", "role-x-id", "code", "ROLE_X"),
