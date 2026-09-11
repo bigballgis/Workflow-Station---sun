@@ -480,7 +480,9 @@ export default {
     approvers: '審批人',
     addApprover: '新增審批人',
     noApprovers: '暫無審批人',
-    members: '業務單元成員'
+    members: '業務單元成員',
+    dragHint: '第一級按名稱排序；拖曳第二級及以下的業務單元可調整歸屬，其下級、成員、角色與審批人一併遷移',
+    moveConfirm: '確定將「{name}」移動到「{target}」下嗎？其全部下級業務單元、成員、准入角色與審批人會一併遷移。'
   },
   role: {
     roleName: '角色名稱',

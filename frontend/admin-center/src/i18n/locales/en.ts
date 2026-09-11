@@ -482,7 +482,9 @@ export default {
     approvers: 'Approvers',
     addApprover: 'Add Approver',
     noApprovers: 'No approvers',
-    members: 'Business Unit Members'
+    members: 'Business Unit Members',
+    dragHint: 'Top level is sorted by name. Drag a second-level or deeper unit to re-parent it; its sub-units, members, roles and approvers move with it.',
+    moveConfirm: 'Move "{name}" under "{target}"? All of its sub-units, members, eligible roles and approvers move with it.'
   },
   role: {
     roleName: 'Role Name',

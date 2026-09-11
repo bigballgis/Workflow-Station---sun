@@ -43,7 +43,8 @@ export const organizationApi = {
   
   delete: (id: string) => del<void>(`/business-units/${id}`),
   
-  move: (id: string, data: MoveBusinessUnitRequest) => post<BusinessUnit>(`/business-units/${id}/move`, data),
+  // 后端是 PUT /business-units/{id}/move；此前误用 POST 导致拖拽一律 500（Request method POST not supported）
+  move: (id: string, data: MoveBusinessUnitRequest) => put<void>(`/business-units/${id}/move`, data),
   
   getMembers: (id: string, params?: { page?: number; size?: number }) => 
     get<any>(`/business-units/${id}/members`, { params }),

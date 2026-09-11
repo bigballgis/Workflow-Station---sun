@@ -116,50 +116,58 @@ public class OrganizationManagerComponent {
     }
     
     /**
-     * 调整业务单元层级 - 检测循环依赖
+     * 调整业务单元层级（不改同级顺序）
      */
     @Transactional
     public void moveBusinessUnit(String unitId, String newParentId) {
-        log.info("Moving business unit {} to parent {}", unitId, newParentId);
-        
+        moveBusinessUnit(unitId, newParentId, null);
+    }
+
+    /**
+     * 调整业务单元层级 - 检测循环依赖，连带整棵子树重算 level/path，可选在新父级下重排同级。
+     * <p>
+     * 成员（sys_user_business_units / sys_user_business_unit_roles）、准入角色（sys_business_unit_roles）、
+     * 审批人（sys_approvers）都按业务单元 ID 挂接，移动时无需改写，自然随节点一起迁移。
+     *
+     * @param sortOrder 在新父级 ACTIVE 同级中的位置（0 起）；null 表示不重排
+     */
+    @Transactional
+    public void moveBusinessUnit(String unitId, String newParentId, Integer sortOrder) {
+        String targetParentId = (newParentId == null || newParentId.isEmpty()) ? null : newParentId;
+        log.info("Moving business unit {} to parent {} (sortOrder={})", unitId, targetParentId, sortOrder);
+
         BusinessUnit businessUnit = businessUnitRepository.findById(unitId)
                 .orElseThrow(() -> new BusinessUnitNotFoundException(unitId));
-        
-        // 不能移动到自己
-        if (unitId.equals(newParentId)) {
-            throw new CircularDependencyException(unitId, newParentId);
+
+        // 不能移动到自己 / 自己的后代
+        if (unitId.equals(targetParentId) || wouldCreateCycle(unitId, targetParentId)) {
+            throw new CircularDependencyException(unitId, targetParentId);
         }
-        
-        // 检测循环依赖
-        if (wouldCreateCycle(unitId, newParentId)) {
-            throw new CircularDependencyException(unitId, newParentId);
-        }
-        
-        String oldPath = businessUnit.getPath();
-        int newLevel;
-        String newPath;
-        
-        if (newParentId == null || newParentId.isEmpty()) {
-            // 移动到根级别
-            newLevel = 1;
-            newPath = "/" + unitId;
-        } else {
-            BusinessUnit newParent = businessUnitRepository.findById(newParentId)
+
+        BusinessUnit newParent = null;
+        if (targetParentId != null) {
+            newParent = businessUnitRepository.findById(targetParentId)
                     .orElseThrow(() -> new BusinessUnitNotFoundException(newParentId));
-            newLevel = newParent.getLevel() + 1;
-            newPath = newParent.getPath() + "/" + unitId;
         }
-        
-        // 更新当前业务单元
-        businessUnit.setParentId(newParentId);
-        businessUnit.setLevel(newLevel);
-        businessUnit.setPath(newPath);
+
+        boolean parentChanged = !Objects.equals(businessUnit.getParentId(), targetParentId);
+        if (parentChanged) {
+            validateBusinessUnitNameUnique(businessUnit.getName(), targetParentId, unitId);
+        }
+
+        businessUnit.setParentId(targetParentId);
+        businessUnit.setLevel(newParent == null ? 1 : newParent.getLevel() + 1);
+        businessUnit.setPath((newParent == null ? "" : newParent.getPath()) + "/" + unitId);
         businessUnitRepository.save(businessUnit);
-        
-        // 更新所有子业务单元的路径和层级
-        updateDescendantPaths(unitId, oldPath, newPath, newLevel);
-        
-        log.info("Business unit moved successfully: {} to {}", unitId, newParentId);
+
+        // 整棵子树按 parentId 递归重算，不依赖旧 path 的字符串形态（种子数据的 path 可能是 code 而非 id）
+        relocateDescendants(businessUnit);
+
+        if (sortOrder != null) {
+            resequenceSiblings(businessUnit, targetParentId, sortOrder);
+        }
+
+        log.info("Business unit moved successfully: {} to {}", unitId, targetParentId);
     }
     
     /**
@@ -284,20 +292,22 @@ public class OrganizationManagerComponent {
         if (newParentId == null || newParentId.isEmpty()) {
             return false;
         }
-        
-        // 检查新父业务单元是否是当前业务单元的后代
-        BusinessUnit newParent = businessUnitRepository.findById(newParentId).orElse(null);
-        if (newParent == null) {
-            return false;
+
+        // 沿 parentId 链从新父级向上走：碰到自己即成环。
+        // 不用 path 字符串判断——种子数据的 path 可能是 code 拼成的，含不了 id。
+        Set<String> visited = new HashSet<>();
+        String cursor = newParentId;
+        while (cursor != null && !cursor.isEmpty() && visited.add(cursor)) {
+            if (cursor.equals(unitId)) {
+                return true;
+            }
+            BusinessUnit node = businessUnitRepository.findById(cursor).orElse(null);
+            if (node == null) {
+                return false;
+            }
+            cursor = node.getParentId();
         }
-        
-        BusinessUnit current = businessUnitRepository.findById(unitId).orElse(null);
-        if (current == null) {
-            return false;
-        }
-        
-        // 如果新父业务单元的路径包含当前业务单元的ID，则会造成循环
-        return newParent.getPath() != null && newParent.getPath().contains("/" + unitId);
+        return false;
     }
     
     /**
@@ -336,18 +346,61 @@ public class OrganizationManagerComponent {
     }
     
     /**
-     * 更新后代业务单元的路径和层级
+     * 按 parentId 逐层重算整棵子树的 level / path（子级、孙级……全部跟随）
      */
-    private void updateDescendantPaths(String unitId, String oldPath, String newPath, int parentLevel) {
-        List<BusinessUnit> descendants = businessUnitRepository.findByPathStartingWith(oldPath + "/");
-        
-        for (BusinessUnit descendant : descendants) {
-            String updatedPath = descendant.getPath().replace(oldPath, newPath);
-            int levelDiff = parentLevel - (descendant.getLevel() - 1);
-            
-            descendant.setPath(updatedPath);
-            descendant.setLevel(descendant.getLevel() + levelDiff);
-            businessUnitRepository.save(descendant);
+    private void relocateDescendants(BusinessUnit root) {
+        Deque<BusinessUnit> queue = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        queue.add(root);
+        visited.add(root.getId());
+
+        while (!queue.isEmpty()) {
+            BusinessUnit parent = queue.poll();
+            for (BusinessUnit child : businessUnitRepository.findByParentIdOrderBySortOrder(parent.getId())) {
+                if (!visited.add(child.getId())) {
+                    continue; // 脏数据成环保护
+                }
+                child.setLevel(parent.getLevel() + 1);
+                child.setPath(parent.getPath() + "/" + child.getId());
+                businessUnitRepository.save(child);
+                queue.add(child);
+            }
+        }
+    }
+
+    /**
+     * 在新父级下重排同级：把 unit 插到 ACTIVE 同级的第 position 位，其余顺序不变；INACTIVE 同级排在最后。
+     * 前端树只显示 ACTIVE 节点，拖拽给出的下标也只数 ACTIVE。
+     */
+    private void resequenceSiblings(BusinessUnit unit, String parentId, int position) {
+        List<BusinessUnit> siblings = parentId == null
+                ? businessUnitRepository.findRootBusinessUnits()
+                : businessUnitRepository.findByParentIdOrderBySortOrder(parentId);
+
+        String activeStatus = EntityTypeConverter.fromBusinessUnitStatus(BusinessUnitStatus.ACTIVE);
+        List<BusinessUnit> active = new ArrayList<>();
+        List<BusinessUnit> inactive = new ArrayList<>();
+        for (BusinessUnit sibling : siblings) {
+            if (unit.getId().equals(sibling.getId())) {
+                continue;
+            }
+            (activeStatus.equals(sibling.getStatus()) ? active : inactive).add(sibling);
+        }
+
+        int index = Math.max(0, Math.min(position, active.size()));
+        active.add(index, unit);
+        active.addAll(inactive);
+
+        List<BusinessUnit> changed = new ArrayList<>();
+        for (int i = 0; i < active.size(); i++) {
+            BusinessUnit sibling = active.get(i);
+            if (sibling.getSortOrder() == null || sibling.getSortOrder() != i) {
+                sibling.setSortOrder(i);
+                changed.add(sibling);
+            }
+        }
+        if (!changed.isEmpty()) {
+            businessUnitRepository.saveAll(changed);
         }
     }
     
@@ -393,12 +446,22 @@ public class OrganizationManagerComponent {
             }
         }
         
-        // 排序
-        roots.sort(Comparator.comparingInt(tree -> tree.getSortOrder() != null ? tree.getSortOrder() : 0));
+        // 排序：第一级固定按名称字母序（不受 sortOrder / 拖拽影响），其余层级按 sortOrder，同序再按名称
+        roots.sort(ROOT_ORDER);
         for (BusinessUnitTree tree : treeMap.values()) {
-            tree.getChildren().sort(Comparator.comparingInt(child -> child.getSortOrder() != null ? child.getSortOrder() : 0));
+            tree.getChildren().sort(CHILD_ORDER);
         }
-        
+
         return roots;
     }
+
+    private static final Comparator<BusinessUnitTree> BY_NAME = Comparator
+            .comparing((BusinessUnitTree t) -> t.getName() == null ? "" : t.getName(), String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(t -> t.getCode() == null ? "" : t.getCode(), String.CASE_INSENSITIVE_ORDER);
+
+    static final Comparator<BusinessUnitTree> ROOT_ORDER = BY_NAME;
+
+    static final Comparator<BusinessUnitTree> CHILD_ORDER = Comparator
+            .comparingInt((BusinessUnitTree t) -> t.getSortOrder() != null ? t.getSortOrder() : 0)
+            .thenComparing(BY_NAME);
 }
