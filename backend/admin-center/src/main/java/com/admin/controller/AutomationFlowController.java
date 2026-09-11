@@ -29,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -90,24 +91,33 @@ public class AutomationFlowController {
                 .body(file.content());
     }
 
+    /**
+     * 导入到指定 workspace（DW 开发组）；{@code workspaceId} 省略 = Public（共享/存量 workspace）。
+     * 目标团队的 AP project 还没建出时由本次导入顺带建出，无需运维预置。
+     */
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<Map<String, Object>>> importFlow(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(defaultValue = "true") boolean publish) throws IOException {
+            @RequestParam(defaultValue = "true") boolean publish,
+            @RequestParam(required = false) String workspaceId) throws IOException {
         if (!isSystemAdmin()) {
             return forbidden();
         }
         AutomationFlowService.FlowImportResult result =
-                automationFlowService.importFlow(file.getBytes(), publish);
-        log.info("Automation flow imported: {} (key={}, created={}, published={}) by {}",
-                result.flowId(), result.flowKey(), result.created(), result.published(),
+                automationFlowService.importFlow(file.getBytes(), publish, workspaceId);
+        log.info("Automation flow imported: {} (key={}, created={}, published={}, workspace={}) by {}",
+                result.flowId(), result.flowKey(), result.created(), result.published(), workspaceId,
                 SecurityContextUtils.getCurrentUsername());
-        return ResponseEntity.ok(ApiResponse.success(Map.of(
-                "flowId", result.flowId(),
-                "flowKey", result.flowKey(),
-                "displayName", result.displayName(),
-                "created", result.created(),
-                "published", result.published())));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("flowId", result.flowId());
+        body.put("flowKey", result.flowKey());
+        body.put("displayName", result.displayName());
+        body.put("created", result.created());
+        body.put("published", result.published());
+        // 解析后的目标 workspace：前端提示"导到了哪个团队"，同时随响应体进审计
+        body.put("workspaceId", result.workspaceId());
+        body.put("workspaceName", result.workspaceName());
+        return ResponseEntity.ok(ApiResponse.success(body));
     }
 
     /**
@@ -149,6 +159,32 @@ public class AutomationFlowController {
     }
 
     /**
+     * 转让到另一个 workspace（保留 flowId：已部署 BPMN 存的是解析后的 flowId）。
+     * 连接不随行（AP 连接 per-project），历史运行记录留在原 workspace。
+     */
+    @PostMapping("/{flowId}/transfer")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> transferFlow(
+            @PathVariable String flowId,
+            @RequestParam String workspaceId) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        AutomationFlowService.FlowTransferResult result =
+                automationFlowService.transferFlow(flowId, workspaceId);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("flowId", result.flowId());
+        body.put("flowKey", result.flowKey());
+        body.put("fromWorkspaceId", result.fromWorkspaceId());
+        body.put("fromWorkspaceName", result.fromWorkspaceName());
+        body.put("toWorkspaceId", result.toWorkspaceId());
+        body.put("toWorkspaceName", result.toWorkspaceName());
+        body.put("wasEnabled", result.wasEnabled());
+        // 重新启用失败时如实回传：归属已改，需要人工在目标 workspace 启用
+        body.put("reEnableFailure", result.reEnableFailure());
+        return ResponseEntity.ok(ApiResponse.success(body));
+    }
+
+    /**
      * connection 清单比对（导入前预检）:前端解析导出包的 connections 清单后调用,
      * 返回各 externalId 在目标 project 是否已存在。仅提示,不阻塞导入。
      */
@@ -160,10 +196,24 @@ public class AutomationFlowController {
         }
         List<String> ids = request != null && request.externalIds() != null
                 ? request.externalIds() : List.of();
-        return ResponseEntity.ok(ApiResponse.success(automationFlowService.checkConnections(ids)));
+        String workspaceId = request != null ? request.workspaceId() : null;
+        return ResponseEntity.ok(ApiResponse.success(
+                automationFlowService.checkConnections(ids, workspaceId)));
     }
 
-    public record ConnectionsCheckRequest(List<String> externalIds) {}
+    /** {@code workspaceId} 省略 = Public：connection 是 per-project 的，预检必须问对 workspace。 */
+    public record ConnectionsCheckRequest(List<String> externalIds, String workspaceId) {}
+
+    /**
+     * 可选 workspace 列表（Public + 全部 ACTIVE 团队组）：导入对话框的目标选择用。
+     */
+    @GetMapping("/workspaces")
+    public ResponseEntity<ApiResponse<List<AutomationFlowService.WorkspaceOption>>> listWorkspaces() {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        return ResponseEntity.ok(ApiResponse.success(automationFlowService.listWorkspaces()));
+    }
 
     /**
      * FU 导出随包携带 flow（DW 的 FunctionUnitExporter 调用）：按 BPMN 里的

@@ -171,7 +171,16 @@ export default {
     loadFailed: '流程列表加载失败',
     backToList: '返回自动化',
     flowMissing: '该流程（{id}）已不存在或不可访问。',
-    runsMovedHint: '执行记录已移至 Admin Center → 自动化运行记录。'
+    runsMovedHint: '执行记录已移至 Admin Center → 自动化运行记录。',
+    workspace: '工作区',
+    workspacePublic: 'Public（共享）',
+    workspaceReadOnly: '只读',
+    workspaceReadOnlyHint: 'Public 工作区承载共享与历史流程，仅系统管理员可修改；切换到你所属的团队即可创建自己的流程。',
+    workspaceMemberReadOnlyHint: '你能看到本团队的流程但不能修改：编辑需要 Tech Lead / Team Lead / Developer 角色。',
+    sessionWorkspaceForbidden: '你不是该工作区的成员。请在顶部切换到你所属的团队。',
+    keyTaken: '业务键「{key}」已被其他流程占用。业务键在所有工作区内必须唯一。',
+    viewFlow: '查看',
+    flowOtherWorkspace: '该流程属于其他工作区。请切换到对应团队后再打开。'
   },
   functionUnit: {
     automation: '自动化',
@@ -1538,6 +1547,8 @@ export default {
     apFlowKeyPlaceholder: '输入或从列表选择流程业务键',
     apFlowKeyTip: '流程的业务键（在自动化页创建时生成）；引擎在部署时按键解析到本环境的流程',
     apFlowKeyLoadFailed: '流程列表加载失败——仍可手动输入业务键',
+    apFlowKeyOtherWorkspace: '该业务键属于其他工作区的流程。部署期仍能解析，但你无法在此打开或修改它。',
+    apFlowKeyNotFound: '本环境没有任何流程持有该业务键——流程部署会失败，直到补上为止。',
     apFlowKeyLegacy: 'legacy 引用：该任务仍按流程 ID {id} 绑定。保存后将转为业务键属性（值不变，引擎仍可解析）。',
     apFlowKeyRequired: '自动化流程业务键不能为空',
     apContractTitle: '信封契约',

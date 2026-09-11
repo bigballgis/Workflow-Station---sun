@@ -171,7 +171,16 @@ export default {
     loadFailed: 'Failed to load flows',
     backToList: 'Back to Automation',
     flowMissing: 'This flow ({id}) no longer exists or is not accessible.',
-    runsMovedHint: 'Run history moved to Admin Center → Automation Runs.'
+    runsMovedHint: 'Run history moved to Admin Center → Automation Runs.',
+    workspace: 'Workspace',
+    workspacePublic: 'Public (shared)',
+    workspaceReadOnly: 'Read-only',
+    workspaceReadOnlyHint: 'The Public workspace holds shared and legacy flows. Only a System Administrator can change them; switch to your team to build your own.',
+    workspaceMemberReadOnlyHint: 'You can see this team\u2019s flows but not change them: editing needs a Tech Lead, Team Lead or Developer role.',
+    sessionWorkspaceForbidden: 'You are not a member of this workspace. Pick one of your teams in the header.',
+    keyTaken: 'Business key "{key}" is already used by another flow. Keys must be unique across all workspaces.',
+    viewFlow: 'View',
+    flowOtherWorkspace: 'This flow belongs to another workspace. Switch to that team to open it.'
   },
   functionUnit: {
     automation: 'Automation',
@@ -1543,6 +1552,8 @@ export default {
     apFlowKeyPlaceholder: 'Enter or pick the flow business key',
     apFlowKeyTip: 'The flow\'s business key (stamped at creation on the Automation page); the engine resolves it to the environment-local flow at deploy time',
     apFlowKeyLoadFailed: 'Could not load the flow list — you can still type the key manually',
+    apFlowKeyOtherWorkspace: 'This key belongs to a flow in another workspace. Deployment still resolves it, but you cannot open or edit that flow from here.',
+    apFlowKeyNotFound: 'No flow in this environment carries this business key — deploying the process will fail until one does.',
     apFlowKeyLegacy: 'Legacy binding: this task still references flow id {id}. Saving converts it to the business-key property (same value; the engine keeps resolving it).',
     apFlowKeyRequired: 'Automation flow key is required',
     apContractTitle: 'Envelope contract',

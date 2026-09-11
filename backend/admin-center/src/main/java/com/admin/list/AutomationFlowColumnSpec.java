@@ -1,5 +1,6 @@
 package com.admin.list;
 
+import com.admin.servicetask.ApWorkspaceSql;
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.list.ListFilterSql;
@@ -31,7 +32,7 @@ public final class AutomationFlowColumnSpec {
                 ListColumnMeta.of("displayName", "automationFlow.displayName", Kind.TEXT),
                 ListColumnMeta.of("id", "automationFlow.flowId", Kind.TEXT),
                 ListColumnMeta.withOptions("readiness", "automationFlow.state", Kind.ENUM, readinessOptions()),
-                ListColumnMeta.of("projectName", "automationFlow.project", Kind.TEXT),
+                ListColumnMeta.of("workspaceName", "automationFlow.workspace", Kind.TEXT),
                 ListColumnMeta.of("ownerName", "automationFlow.owner", Kind.TEXT),
                 ListColumnMeta.of("updated", "automationFlow.updated", Kind.DATETIME)
         );
@@ -50,7 +51,7 @@ public final class AutomationFlowColumnSpec {
             case "displayName" -> "fv.\"displayName\"";
             case "id" -> "f.id";
             case "readiness" -> READINESS_SQL;
-            case "projectName" -> "p.\"displayName\"";
+            case "workspaceName" -> ApWorkspaceSql.LABEL_SQL;
             case "ownerName" -> OWNER_SQL;
             case "updated" -> "fv.updated::text";
             default -> throw new IllegalArgumentException("Unknown automation-flow column: " + field);

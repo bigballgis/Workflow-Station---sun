@@ -4,8 +4,13 @@
   Flows themselves are designed on the standalone Automation page; webhook URL,
   timeout/retry and variable mappings are no longer BPMN concerns.
 
-  The picker lazy-loads the project's flows via the bridge session on first open;
+  The picker lazy-loads the WORKSPACE's flows via the bridge session on first open;
   a load failure only shows a hint — manual key entry is never blocked.
+
+  A key may legitimately point at another workspace's flow: deployment resolves keys
+  globally, so that still runs, but you cannot see or edit that flow from here. The panel
+  says which of the three cases applies (mine / another workspace / nothing holds it)
+  instead of silently showing an unmatched key.
 -->
 <template>
   <div class="ap-task-properties">
@@ -41,6 +46,18 @@
       >
         {{ t('properties.apFlowKeyLoadFailed') }}
       </div>
+      <div
+        v-else-if="keyStatus === 'other-workspace'"
+        class="form-tip"
+      >
+        {{ t('properties.apFlowKeyOtherWorkspace') }}
+      </div>
+      <div
+        v-else-if="keyStatus === 'unknown-key'"
+        class="form-tip form-tip--warning"
+      >
+        {{ t('properties.apFlowKeyNotFound') }}
+      </div>
     </el-form-item>
 
     <el-alert
@@ -74,7 +91,7 @@ import { reactive, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties, setExtensionProperty, removeExtensionProperty } from '@/utils/bpmnExtensions'
-import { fetchServiceTaskSession, listAutomationFlows } from '@/api/automation'
+import { checkAutomationFlowKey, fetchServiceTaskSession, listAutomationFlows } from '@/api/automation'
 import {
   LEGACY_AP_KEYS,
   serializeApConfig,
@@ -108,6 +125,32 @@ const flowOptions = ref<FlowOption[]>([])
 const loadingFlows = ref(false)
 const flowLoadFailed = ref(false)
 let flowsLoaded = false
+
+/**
+ * Where the configured key lives: '' (not checked / key empty), 'ok' (this workspace),
+ * 'other-workspace' (another team owns it — deploys fine, not editable here) or
+ * 'unknown-key' (nothing holds it — deployment will fail, FR-C12).
+ */
+const keyStatus = ref<'' | 'ok' | 'other-workspace' | 'unknown-key'>('')
+
+async function refreshKeyStatus() {
+  const key = apConfig.flowKey?.trim()
+  if (!key) {
+    keyStatus.value = ''
+    return
+  }
+  try {
+    const status = await checkAutomationFlowKey(key)
+    if (status.available) {
+      keyStatus.value = 'unknown-key'
+    } else {
+      keyStatus.value = status.inCurrentWorkspace ? 'ok' : 'other-workspace'
+    }
+  } catch {
+    // A hint is a nicety; never let its failure interfere with editing the key.
+    keyStatus.value = ''
+  }
+}
 
 async function onDropdownVisible(visible: boolean) {
   if (!visible || flowsLoaded || loadingFlows.value) return
@@ -150,6 +193,7 @@ function saveConfig() {
   if (apConfig.flowKey) {
     legacyFlowId.value = ''
   }
+  void refreshKeyStatus()
 }
 
 /** Load AP config from BPMN extension properties (legacy ap:flowId prefills the input). */
@@ -160,6 +204,7 @@ function loadConfig() {
   apConfig.flowKey = loaded.flowKey || loaded.legacyFlowId
   legacyFlowId.value = loaded.legacyFlowId
   validate()
+  void refreshKeyStatus()
 }
 
 /** Validate required fields - returns true if valid */

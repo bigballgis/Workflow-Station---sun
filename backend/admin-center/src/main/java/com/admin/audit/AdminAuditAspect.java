@@ -190,6 +190,7 @@ public class AdminAuditAspect {
             + "&& !execution(* *.listFlows(..)) "
             + "&& !execution(* *.queryFlows(..)) "
             + "&& !execution(* *.checkConnections(..)) "
+            + "&& !execution(* *.listWorkspaces(..)) "
             + "&& !execution(* *.resolveFlowRef(..))")
     public Object auditAutomationFlow(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "AUTOMATION_FLOW");
@@ -416,7 +417,7 @@ public class AdminAuditAspect {
      * the operation parameters are captured explicitly instead (a bare
      * {@code /status} request path does not say whether it enabled or disabled).
      * {@code importFlow} deliberately carries no detail: its response body
-     * (flowId / flowKey / created / published) is richer than the arguments.
+     * (flowId / flowKey / created / published / 目标 workspace) is richer than the arguments.
      */
     private AuditMeta resolveAutomationFlowMeta(String method, Object[] args) {
         String flowId = args.length > 0 && args[0] instanceof String s ? s : null;
@@ -426,6 +427,11 @@ public class AdminAuditAspect {
                     detailJson("flowId", flowId, "enabled", args.length > 1 ? args[1] : null));
             case "deleteFlow"    -> new AuditMeta(AuditAction.DELETE, "AUTOMATION_FLOW", flowId,
                     detailJson("flowId", flowId, "force", args.length > 1 ? args[1] : null));
+            // 转让改的是归属，前后镜像取不到（flow 在 AP 库），故显式记来源与目标：
+            // 事后追"这条 flow 什么时候归了哪个团队"只有这一条线索。
+            case "transferFlow"  -> new AuditMeta(AuditAction.UPDATE, "AUTOMATION_FLOW", flowId,
+                    detailJson("flowId", flowId,
+                            "targetWorkspaceId", args.length > 1 ? args[1] : null));
             // Export carries the flow definition (incl. connection references) out of
             // the environment — a read worth recording in an air-gapped deployment.
             case "exportFlow"    -> new AuditMeta(AuditAction.QUERY, "AUTOMATION_FLOW", flowId);

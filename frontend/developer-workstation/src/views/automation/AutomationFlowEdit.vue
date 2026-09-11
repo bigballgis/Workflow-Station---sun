@@ -3,6 +3,9 @@
   builder (lib-mode ESM + Shadow DOM via ServiceTaskBuilderCanvas, NOT an iframe)
   on one flow, full-height. Same wiring the old FU tab used: bridge session +
   Kong /api/ap prefix + DW-served bundle (/dev/service-task-builder).
+
+  The session is scoped to the current workspace's AP project, so a flow belonging to
+  another team resolves to 403 here — surfaced as such, not as a generic load failure.
 -->
 <template>
   <div
@@ -27,6 +30,15 @@
         :title="t('automation.colKey')"
       >{{ flowKeyLabel }}</code>
     </div>
+
+    <el-alert
+      v-if="session && !canWrite && !errorMessage"
+      class="automation-flow-edit__readonly"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="t('automation.workspaceReadOnlyHint')"
+    />
 
     <el-result
       v-if="errorMessage"
@@ -86,6 +98,8 @@ const loading = ref(false)
 const errorMessage = ref('')
 const flowName = ref('')
 const flowKeyLabel = ref('')
+/** Absent workspace metadata (older bridge) stays writable rather than locking the builder. */
+const canWrite = computed(() => session.value?.workspace?.canWrite !== false)
 /** Bump to remount the canvas after a session re-issue (401 recovery). */
 const sessionEpoch = ref(0)
 
@@ -109,10 +123,15 @@ async function load() {
     sessionEpoch.value += 1
   } catch (error) {
     const status = (error as { response?: { status?: number } })?.response?.status
-    errorMessage.value =
-      status !== undefined && status >= 400 && status < 500
-        ? t('automation.flowMissing', { id: flowId.value })
-        : t('automation.loadFailed')
+    if (status === 403) {
+      // Either the workspace itself was denied (bridge) or the flow lives in another
+      // workspace's project (AP). Both mean: this flow is not yours to open.
+      errorMessage.value = t('automation.flowOtherWorkspace')
+    } else if (status !== undefined && status >= 400 && status < 500) {
+      errorMessage.value = t('automation.flowMissing', { id: flowId.value })
+    } else {
+      errorMessage.value = t('automation.loadFailed')
+    }
     console.error('[AutomationFlowEdit] load failed', error)
   } finally {
     loading.value = false
@@ -158,6 +177,10 @@ onMounted(load)
     background: var(--el-fill-color-lighter);
     border-radius: 4px;
     padding: 2px 8px;
+  }
+
+  .automation-flow-edit__readonly {
+    flex-shrink: 0;
   }
 
   .automation-flow-edit__canvas {
