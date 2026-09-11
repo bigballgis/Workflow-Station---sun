@@ -17,6 +17,7 @@ import {
 } from '@/utils/formFieldMeta'
 import { inflateComponentEventsForDesigner } from '@/utils/formCreateDefaultEvents'
 import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
+import { newUploadCountProps } from '@platform-shared/upload/uploadFieldValue'
 import type { RequestIdConfig } from '@/api/functionUnit'
 import {
   nestAssignmentFieldsIntoContainer,
@@ -288,10 +289,8 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
           props: {
             action: '/api/v1/upload',
             accept: '',
-            maxFiles: 10,
+            ...newUploadCountProps(),
             maxFileSizeMb: 10,
-            limit: 10,
-            multiple: true,
             listType: 'text',
             uploadText: t('form.clickToUpload'),
             tip: t('form.fileUploadTip')

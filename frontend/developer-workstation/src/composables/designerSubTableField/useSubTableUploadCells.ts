@@ -9,6 +9,7 @@ import {
   resolveUploadCellUrl,
 } from '@/components/designer/uploadFieldUtils'
 import { formatUploadCellText } from '@platform-shared/upload/uploadFieldValue'
+import { uploadPropsBlockDownload } from '@platform-shared/upload/uploadDownloadFlags'
 import type { ColumnConfig } from './types'
 
 interface UseSubTableUploadCellsOptions {
@@ -99,12 +100,27 @@ export function useSubTableUploadCells(options: UseSubTableUploadCellsOptions) {
     return formatted.text
   }
 
+  function openUploadCell(
+    row: Record<string, unknown>,
+    col: ColumnConfig,
+    rowIndex: number,
+  ) {
+    const url = resolveRowUploadUrl(row, col)
+    if (!url) return
+    if (uploadPropsBlockDownload(col.props as Record<string, unknown> | undefined)) {
+      ElMessage.warning(t('form.uploadDownloadBlocked'))
+      return
+    }
+    downloadFile(url, uploadNames.value[`${rowIndex}_${col.field}`], rowIndex, col.field)
+  }
+
   return {
     downloadingKeys,
     sanitizeHtml,
     resolveRowUploadUrl,
     rememberUploadNamesForRow,
     downloadFile,
+    openUploadCell,
     uploadCellLabel,
   }
 }

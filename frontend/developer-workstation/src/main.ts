@@ -42,6 +42,7 @@ import FileNetAdvancedEditor from './components/designer/FileNetAdvancedEditor.v
 import FormUploadDrop from './components/designer/FormUploadDrop.vue'
 import unique from '@form-create/utils/lib/unique'
 import { DEFAULT_FILE_NET_CONFIG } from '@platform-shared/upload/fileNetConfig'
+import { newUploadCountProps } from '@platform-shared/upload/uploadFieldValue'
 import SensitiveMaskedInput from './components/designer/SensitiveMaskedInput.vue'
 import MiAssignmentPlaceholderWidget from './components/designer/MiAssignmentPlaceholderWidget.vue'
 import HermesValidate from './components/designer/HermesValidate.vue'
@@ -533,10 +534,8 @@ FcDesigner.addDragRule({
       title: String(i18n.global.t('form.advancedUpload')),
       props: {
         action: '/api/v1/upload',
-        maxFiles: 10,
+        ...newUploadCountProps(),
         maxFileSizeMb: 10,
-        limit: 10,
-        multiple: true,
         cannotDownload: false,
         fileNet: {
           ...DEFAULT_FILE_NET_CONFIG,
@@ -550,8 +549,8 @@ FcDesigner.addDragRule({
       {
         type: 'UploadMaxFilesEditor',
         field: 'maxFiles',
-        title: String(i18n.global.t('form.uploadMaxFiles')),
-        value: 10,
+        title: String(i18n.global.t('form.uploadMultiple')),
+        value: 1,
       },
       {
         type: 'UploadMaxFileSizeEditor',

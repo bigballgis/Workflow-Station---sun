@@ -74,6 +74,7 @@ export { resolveDisplayValue } from './subTableAddDialogHelpers/displayValue'
 export {
   flattenSubFormRuleLayoutContainers,
   isDialogMappableSubFormRule,
+  copySubFormCanvasProps,
   mapSubFormRuleToDialogColumns,
   resolveSubFormDialogColumnsForBinding,
   resolveSubFormRuleForBinding,

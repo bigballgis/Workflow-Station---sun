@@ -3903,3 +3903,72 @@
     手测：新 inbound Email-000010（2026-09-11 15:50）待办 Review Inbound，
     Process Name=Email Inbound Reply，Request ID 正常；旧实例 Title 不回写。
 
+- id: "1629"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: deploy
+  summary: "Dev Maven package failed testCompile: EmailMonitorSchedulerTest cannot find EncryptionService"
+  file: "deploy/environments/dev/build-and-deploy.ps1"
+  note: |
+    反例：build-and-deploy.ps1 在 workflow-engine-core testCompile 失败
+    EmailMonitorSchedulerTest.java:[53,21] 找不到符号 EncryptionService。
+    正例：同一命令 package -DskipTests 全模块 BUILD SUCCESS。
+    根因：IDE（Eclipse/ecj）在缺 classpath 时写出带
+    "Unresolved compilation problem" 的 .class，字段类型变成默认包
+    LEncryptionService; 且比 .java 新；Maven 增量编译跳过 javac，
+    测试按 com.platform.security.encryption.EncryptionService 去对构造器对不上。
+    本机曾扫到 admin-center 185 / user-portal 37 / engine 3 / DW 1 个 stub。
+    修复：部署前删除这类 stub 并清 maven-status，再强制 package。
+    验证：删 stub 后 engine 重编 229+98 源文件；javap 构造器已是
+    Lcom/platform/security/encryption/EncryptionService;；
+    全量 -pl 八模块 package -DskipTests BUILD SUCCESS（53s）。
+    合并 common 时两次改号：本地原 #1621 → #1628 → #1629。
+
+- id: "1630"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "Sub-table Add dialog ignored designer Single (maxFiles:1); main form did not"
+  file: "frontend/user-portal/src/components/subTableAddDialogHelpers/subFormCanvasColumns.ts"
+  note: |
+    反例：Form Design 子表 Advanced Upload 选 Single（JSON maxFiles:1），
+    Portal 子表 Add 弹窗仍可多选；主表同一控件正常。现场 Sub task binding 50548
+    file2 props.maxFiles=1。
+    正例：列映射后 resolveUploadMaxFiles(col.props)===1，弹窗 Advanced Upload
+    的 file input 无 multiple 属性。
+    根因：子表画布→列只透传 multiple，丢掉 maxFiles；运行时把 leftover
+    multiple:false+limit:1 当成未配置默认 10。主表走 applyUploadPropsFromRule
+    会读 maxFiles。
+    修复：copySubFormCanvasProps 统一拷贝 maxFiles/limit/maxFileSizeMb，
+    任务页/申请页/发起页共用。
+    验证：subFormCanvasUploadLimit.test.ts 先红后绿；属性测试改为调用
+    copySubFormCanvasProps；Portal start 子表 Add 弹窗 input 无 multiple。
+    截图 frontend/user-portal/verification-screenshots/2026-09-11_subtable-upload-single-dialog.png
+    （gitignored）。本地 Playwright 脚本不入库。
+    合并 common 时两次改号：本地原 #1622 → #1629 → #1630。
+
+- id: "1631"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "Sub-table Advanced Upload Can not download ignored on task dialog / preview playlist / file URL"
+  file: "frontend/user-portal/src/composables/filePreview/useFilePreview.ts"
+  note: |
+    反例：主表 Advanced Upload 打开 Can not download 后 File Preview 无 Download；
+    子表弹窗详情抽屉仍露出文件 URL（Ctrl+点击即下载），任务页 dialogColumns
+    不继承其它表单的 blockedKeys；playlist collect 缺 flag 时盖掉点击现场的 true。
+    正例：openFilePreviewFromList 在 playlist 漏 flag 时仍 cannotDownload=true；
+    FormUploadFileDetails cannotDownload 时 DOM 不含文件 URL。
+    根因：不是 maxFiles 那种漏拷贝（cannotDownload 早已在列映射里）；
+    任务/申请页 dialogColumns 未传 blockedKeys；playlist 用 collect 项覆盖
+    点击项；详情抽屉 <a href=文件URL> 始终可下。DW 子表网格点击无条件 downloadFile。
+    修复：task/application 弹窗列带上 cannotDownloadFieldKeysFromForms；
+    playlist OR 点击现场 flag；详情抽屉开关打开时隐藏 URL；DW 网格拦截下载；
+    下载判断抽到 shared uploadDownloadFlags。
+    验证：useFilePreview.test / FormUploadFileDetails.test / uploadDownloadFlags.test
+    先红后绿；portal+DW 相关 vitest。Guidelines runtimeBody 写明禁止下载时无 Callback URL。
+    合并 common 时两次改号：本地原 #1623 → #1630 → #1631。
+

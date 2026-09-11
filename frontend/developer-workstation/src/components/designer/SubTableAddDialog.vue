@@ -368,6 +368,7 @@
     :file="detailsFile"
     :readonly="detailsReadonly"
     :labels="uploadDetailLabels"
+    :cannot-download="!!detailsCol?.props?.cannotDownload || !!detailsCol?.props?.canNotDownload"
   />
 </template>
 

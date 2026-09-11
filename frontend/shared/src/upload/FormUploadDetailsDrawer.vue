@@ -16,6 +16,7 @@
       :readonly="readonly"
       :labels="labels"
       :preview-file="previewFile"
+      :cannot-download="cannotDownload"
     />
   </el-drawer>
 </template>
@@ -36,6 +37,7 @@ const props = defineProps<{
   readonly?: boolean
   labels: UploadDetailLabels
   previewFile?: (file: UploadDetailFile) => void
+  cannotDownload?: boolean
 }>()
 
 const emit = defineEmits<{

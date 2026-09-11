@@ -90,13 +90,20 @@ export function openFilePreview(payload: FilePreviewPayload): void {
 /** Open `current`, using `items` as prev/next playlist when it contains the file. */
 export function openFilePreviewFromList(current: FilePreviewItem, items: FilePreviewItem[]): void {
   if (!current.url) return
-  const list = items.filter((item) => !!item.url)
+  const list = items.filter((item) => !!item.url).map((item) => ({ ...item }))
   let index = list.findIndex((item) => item.url === current.url)
   if (index < 0) {
-    list.unshift(current)
+    list.unshift({ ...current })
     index = 0
+  } else {
+    const hit = list[index]
+    list[index] = {
+      ...hit,
+      ...current,
+      cannotDownload: current.cannotDownload === true || hit.cannotDownload === true,
+    }
   }
-  openFilePreview({ ...current, items: list, index })
+  openFilePreview({ ...list[index], items: list, index })
 }
 
 export function showFilePreviewAt(index: number): void {

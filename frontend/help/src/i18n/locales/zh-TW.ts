@@ -159,7 +159,7 @@ export default {
     },
     formUpload: {
       title: '表單設計 — 進階上傳',
-      summary: 'Extend 裡的進階上傳：最多檔案數、大小上限、FileNet。Basic 的 Upload 保持原生。',
+      summary: 'Extend 裡的進階上傳：多檔開關（預設單檔）、大小上限、FileNet。Basic 的 Upload 保持原生。',
     },
     formEvents: {
       title: '表單事件',
@@ -616,10 +616,10 @@ export default {
     pageTitle: '表單設計 — 進階上傳',
     crumb: '開發工作站 · 功能單元 · 表單設計 · Extend',
     intro:
-      '進階上傳在 Extend 調色盤。可以一次選多個檔案。預設最多 10 個、每個 10MB。平台單檔硬上限是 50MB；檔案需要超過 10MB 時，在欄位上設定「單檔大小上限」。需要單檔時，把「最多檔案數」設為 1。已儲存 JSON 裡若仍是「多選」關閉且「數量限制」為 1，那是當年產生器寫死的值，不是設計者選擇——在你改「最多檔案數」之前，它們同樣最多 10 個。屬性面板顯示「最多檔案數」、「單檔大小上限」、禁止下載、Readonly，以及 Advance（FileNet）。Basic 裡的 Upload 是 form-create 原生控制項，屬性保持原樣。',
+      '進階上傳在 Extend 調色盤。新建欄位預設單檔：表單上只能傳一個檔案，儲存值是 URL，方便 Activepieces 的 File / 發郵件步驟使用。打開「多檔」後才可設定數量（打開時預設 10）。預設單檔大小上限 10MB；平台硬上限 50MB。已儲存 JSON 裡若仍是「多選」關閉、「數量限制」為 1、且沒有最多檔案數，那是當年產生器寫死的值——在你改開關之前，它們同樣最多 10 個。屬性面板顯示「多檔」、「單檔大小上限」、禁止下載、Readonly，以及 Advance（FileNet）。Basic 裡的 Upload 是 form-create 原生控制項，屬性保持原樣。',
     flowTitle: '操作順序',
     flow1: '先在 Table Design 新增 FILE 欄；再在表單設計用「匯入表欄位」，或把進階上傳的 Field 改成該欄名',
-    flow2: '設定「最多檔案數」（預設 10；1 表示單檔）和「單檔大小上限」（預設 10MB，最高 50MB）',
+    flow2: '需要單檔就保持「多檔」關閉；需要多個檔案時打開開關並設定「最多檔案數」。再設定「單檔大小上限」（預設 10MB，最高 50MB）',
     flow3: '需要時打開 Advance，填寫 FileNet 請求頭與倉庫對應',
     flow4: '若 My Request、待辦或已辦也要顯示同一批檔案，開啟對應場景表單，點「從發起表單新增進階上傳」（把同一 Field 複製到主畫布和相同實體表的子表），再儲存',
     flow5: '在該表單的預覽或使用者入口核對',
@@ -627,21 +627,21 @@ export default {
     scenesBody:
       '發起、My Request、待辦各有一份表單設計。入口只渲染該畫布上放了的進階上傳，且元件的 Field 必須是 Table Design 裡的 FILE 欄名（和一般上傳一樣，例如 fileupload）。先在 Table Design 建 FILE 欄，再用匯入表欄位，或把元件 Field 改成該欄名。從 Extend 拖入不會往表裡加欄。在 My Request 或 Assign Task 上點「從發起表單新增進階上傳」，會複製這些 Field，發起時已上傳的檔案才能顯示。儲存該表單。',
     scenesSample: '進階上傳 Field 屬性裡填寫 Table Design 的 FILE 欄名',
-    maxTitle: '最多檔案數',
+    maxTitle: '多檔',
     maxBody:
-      '在上傳欄位屬性裡，「最多檔案數」就是個數上限。預設 10。設為 1 即單檔。同時最多 3 個上傳請求。屬性面板不再顯示「多選」和元件自帶的數量限制，只認「最多檔案數」。',
-    maxSample: '上傳屬性面板上的「最多檔案數」',
+      '在上傳欄位屬性裡，「多檔」預設關閉（單檔），此時表單只能傳一個檔案。打開後出現「最多檔案數」，可設 2 到 50（打開時預設 10）。同時最多 3 個上傳請求。屬性面板不再顯示元件自帶的數量限制，只認「多檔」開關和「最多檔案數」。只存一個檔案時是 URL；兩個及以上是帶 url 和 name 的 JSON 陣列。',
+    maxSample: '上傳屬性面板上的「多檔」開關',
     maxSizeTitle: '單檔大小上限',
     maxSizeBody:
       '「單檔大小上限」是每個檔案的 MB 上限。未設定的欄位仍是 10MB。可設 1 到 50。50MB 是平台硬上限（Spring、前端 nginx、上傳 API）。邊緣 nginx 已是 50M；Kong 允許 100m。超過欄位上限的檔案在上傳前就會被拒絕。Record Note 和管理中心上傳仍走各自的 10MB 限制。',
-    maxSizeSample: '「最多檔案數」旁邊的「單檔大小上限」',
+    maxSizeSample: '「多檔」下方的「單檔大小上限」',
     advanceTitle: 'Advance（FileNet）',
     advanceBody:
       'Advance 在上傳屬性最下方，預設關閉。打開後可保存 Header Info、Repository Detail 和文件屬性對應。Search Detail List、Retrieve Request Information、Order By 只是占位。權杖和主機位址不要寫在這個面板。Advance 不會隱藏執行時詳情抽屜。',
     advanceSample: '上傳屬性裡的 Advance 開關',
     runtimeTitle: '執行時別人看到什麼',
     runtimeBody:
-      '可以把多個檔案拖進虛線框，也可以點擊虛線框，在檔案總管裡一次選多個檔案（Ctrl 或 Shift 連選）。已上傳檔案以小卡片顯示在框內，按檔名排序。點擊卡片打開抽屜，裡面是 File Description、Callback URL、Auto Send to FileNet（接上 FileNet 歸檔前顯示 Completed）。左鍵 Callback URL 打開站內預覽；Ctrl 點擊或右鍵仍走原始檔案位址。子表新增/編輯對話框同樣用卡片和抽屜。子表列表格仍顯示第一個檔案名，其餘用 +N，例如 report.pdf +2。如果上傳欄位設定了配套檔名欄，會把原始檔名寫進去，多個檔案用分號加空白拼接。傳送郵件從 FILE 欄位取附件時會帶上每一個已存檔案。',
+      '「多檔」關閉時，拖入或點選一個檔案，儲存值是單個 URL。打開後可以把多個檔案拖進虛線框，也可以點擊虛線框，在檔案總管裡一次選多個檔案（Ctrl 或 Shift 連選）。已上傳檔案以小卡片顯示在框內，按檔名排序。點擊卡片打開抽屜，裡面是 File Description、Callback URL、Auto Send to FileNet（接上 FileNet 歸檔前顯示 Completed）。左鍵 Callback URL 打開站內預覽；Ctrl 點擊或右鍵仍走原始檔案位址。若打開「禁止下載」，抽屜不展示 Callback URL，無法點到原始位址；有站內預覽時點檔名即可預覽。子表新增/編輯對話框同樣用卡片和抽屜。子表列表格仍顯示第一個檔案名，其餘用 +N，例如 report.pdf +2。如果上傳欄位設定了配套檔名欄，會把原始檔名寫進去，多個檔案用分號加空白拼接。傳送郵件從 FILE 欄位取附件時會帶上每一個已存檔案。',
     runtimeSample: '子表儲存格上的 report.pdf +2',
     failTitle: '失敗時',
     failBody:

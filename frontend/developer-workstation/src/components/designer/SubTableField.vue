@@ -61,7 +61,7 @@
               v-if="uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field])"
               class="file-download-link"
               :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
-              @click.stop="downloadFile(resolveRowUploadUrl(scope.row, col)!, uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+              @click.stop="openUploadCell(scope.row, col, scope.$index)"
             >
               <el-icon
                 v-if="downloadingKeys[scope.$index + '_' + col.field]"
@@ -725,7 +725,7 @@ const {
   sanitizeHtml,
   resolveRowUploadUrl,
   rememberUploadNamesForRow,
-  downloadFile,
+  openUploadCell,
   uploadCellLabel,
 } = useSubTableUploadCells({ displayColumns, uploadNames, t })
 

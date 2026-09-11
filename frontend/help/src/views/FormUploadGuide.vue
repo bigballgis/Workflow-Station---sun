@@ -31,7 +31,7 @@ const sections: GuideSection[] = [
     anchor: 'max-files',
     titleKey: 'formUploadGuide.maxTitle',
     bodyKey: 'formUploadGuide.maxBody',
-    samples: [{ code: 'Max files = 10', hintKey: 'formUploadGuide.maxSample' }],
+    samples: [{ code: 'Multi = off', hintKey: 'formUploadGuide.maxSample' }],
   },
   {
     anchor: 'max-file-size',
