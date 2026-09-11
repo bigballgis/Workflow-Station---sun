@@ -3766,3 +3766,24 @@
     截图 frontend/admin-center/verification-screenshots/2026-09-10_admin-rt-fu-rail-structure-page.png
     与 2026-09-10_admin-rt-fu-rail-table-data-nav.png。
 
+- id: "1621"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: deploy
+  summary: "Dev Maven package failed testCompile: EmailMonitorSchedulerTest cannot find EncryptionService"
+  file: "deploy/environments/dev/build-and-deploy.ps1"
+  note: |
+    反例：build-and-deploy.ps1 在 workflow-engine-core testCompile 失败
+    EmailMonitorSchedulerTest.java:[53,21] 找不到符号 EncryptionService。
+    正例：同一命令 package -DskipTests 全模块 BUILD SUCCESS。
+    根因：IDE（Eclipse/ecj）在缺 classpath 时写出带
+    "Unresolved compilation problem" 的 .class，字段类型变成默认包
+    LEncryptionService; 且比 .java 新；Maven 增量编译跳过 javac，
+    测试按 com.platform.security.encryption.EncryptionService 去对构造器对不上。
+    本机曾扫到 admin-center 185 / user-portal 37 / engine 3 / DW 1 个 stub。
+    修复：部署前删除这类 stub 并清 maven-status，再强制 package。
+    验证：删 stub 后 engine 重编 229+98 源文件；javap 构造器已是
+    Lcom/platform/security/encryption/EncryptionService;；
+    全量 -pl 八模块 package -DskipTests BUILD SUCCESS（53s）。
+
