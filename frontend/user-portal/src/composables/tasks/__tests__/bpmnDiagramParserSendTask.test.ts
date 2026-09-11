@@ -38,4 +38,38 @@ describe('parseBpmnDiagram — sendTask status', () => {
     expect(r.completedNodeIds).toContain('SendTask_Email')
     expect(r.processNodes.find(n => n.id === 'UserTask_Assign')?.status).toBe('current')
   })
+
+  it('marks completed sendTask and taken end event green on a completed-task snapshot', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <process id="Process_EmailInboundReply">
+    <userTask id="Task_ConfirmSend" name="Confirm &amp; Send"/>
+    <exclusiveGateway id="Gateway_NeedReply" name="Need Reply?"/>
+    <sendTask id="Task_SendReply" name="Send Reply Email"/>
+    <endEvent id="EndEvent_Sent" name="Sent"/>
+    <endEvent id="EndEvent_Skipped" name="Skipped"/>
+    <sequenceFlow id="Flow_3" sourceRef="Task_ConfirmSend" targetRef="Gateway_NeedReply"/>
+    <sequenceFlow id="Flow_Send" sourceRef="Gateway_NeedReply" targetRef="Task_SendReply"/>
+    <sequenceFlow id="Flow_Skip" sourceRef="Gateway_NeedReply" targetRef="EndEvent_Skipped"/>
+    <sequenceFlow id="Flow_4" sourceRef="Task_SendReply" targetRef="EndEvent_Sent"/>
+  </process>
+</definitions>`
+    const r = parseBpmnDiagram(xml, {
+      taskInfo: { taskName: 'Confirm & Send', taskDefinitionKey: 'Task_ConfirmSend' },
+      historyRecords: [
+        { nodeId: 'Task_ConfirmSend', nodeName: 'Confirm & Send', status: 'completed', action: 'approve' },
+        { nodeId: 'Gateway_NeedReply', nodeName: 'Need Reply?', status: 'completed', action: 'approve' },
+        { nodeId: 'Task_SendReply', nodeName: 'Send Reply Email', status: 'completed', action: 'send' },
+        { nodeId: 'EndEvent_Sent', nodeName: 'Sent', status: 'completed' },
+      ],
+      isCompletedTask: true,
+      t,
+    })!
+
+    expect(r.processNodes.find(n => n.id === 'Task_SendReply')?.status).toBe('completed')
+    expect(r.processNodes.find(n => n.id === 'EndEvent_Sent')?.status).toBe('completed')
+    expect(r.processNodes.find(n => n.id === 'EndEvent_Skipped')?.status).toBe('pending')
+    expect(r.completedNodeIds).toContain('Task_SendReply')
+    expect(r.completedNodeIds).toContain('EndEvent_Sent')
+  })
 })

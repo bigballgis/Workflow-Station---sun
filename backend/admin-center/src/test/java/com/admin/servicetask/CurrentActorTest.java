@@ -2,6 +2,8 @@ package com.admin.servicetask;
 
 import com.admin.exception.ServiceTaskActorRequiredException;
 import com.admin.exception.ServiceTaskApiException;
+import com.admin.repository.VirtualGroupMemberRepository;
+import com.admin.repository.VirtualGroupRepository;
 import com.admin.servicetask.client.ServiceTaskApiClient;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.platform.common.dto.UserPrincipal;
@@ -34,7 +36,7 @@ class CurrentActorTest {
 
     @Test
     void failsLoudWhenNoAuthenticatedActor() {
-        ServiceTaskApiClient client = new ServiceTaskApiClient(restTemplate, configuredProperties());
+        ServiceTaskApiClient client = clientWith(configuredProperties());
 
         ServiceTaskActorRequiredException e =
                 assertThrows(ServiceTaskActorRequiredException.class, client::signInAsCurrentActor);
@@ -52,7 +54,7 @@ class CurrentActorTest {
     @Test
     void usesTheServiceCallActorAndNeverFallsBack() {
         authenticate("44027893", "zhangsan");
-        ServiceTaskApiClient client = new ServiceTaskApiClient(restTemplate, new ServiceTaskProperties());
+        ServiceTaskApiClient client = clientWith(new ServiceTaskProperties());
 
         ServiceTaskApiException e =
                 assertThrows(ServiceTaskApiException.class, client::signInAsCurrentActor);
@@ -60,6 +62,13 @@ class CurrentActorTest {
         assertTrue(e.getMessage().contains("managed provisioning not configured"),
                 "未配置签名密钥必须显式报错，实际: " + e.getMessage());
         verifyNoInteractions(restTemplate);
+    }
+
+    /** Public workspace 解析只碰配置与虚拟组仓库；这里给空仓库即可（组不存在 → 回落 "Public"）。 */
+    private ServiceTaskApiClient clientWith(ServiceTaskProperties properties) {
+        ApWorkspaceResolver resolver = new ApWorkspaceResolver(properties,
+                mock(VirtualGroupRepository.class), mock(VirtualGroupMemberRepository.class));
+        return new ServiceTaskApiClient(restTemplate, properties, resolver);
     }
 
     private static ServiceTaskProperties configuredProperties() {

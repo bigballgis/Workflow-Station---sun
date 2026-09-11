@@ -1,5 +1,6 @@
 package com.admin.servicetask.client;
 
+import com.admin.servicetask.ApWorkspaceResolver;
 import com.admin.servicetask.CurrentActor;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.admin.exception.ServiceTaskApiException;
@@ -42,11 +43,14 @@ public class ServiceTaskApiClient {
     /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
     private final ServiceTaskProperties properties;
+    private final ApWorkspaceResolver workspaceResolver;
 
     public ServiceTaskApiClient(@Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate,
-                                ServiceTaskProperties properties) {
+                                ServiceTaskProperties properties,
+                                ApWorkspaceResolver workspaceResolver) {
         this.restTemplate = restTemplate;
         this.properties = properties;
+        this.workspaceResolver = workspaceResolver;
     }
 
     /**
@@ -61,9 +65,15 @@ public class ServiceTaskApiClient {
      * <p>操作人从 {@code SecurityContext} 取（UI 的平台 JWT，或 C-3 服务令牌 + {@code X-User-Id}），
      * 取不到即 {@link com.admin.exception.ServiceTaskActorRequiredException} fail-loud，
      * 不回退任何共享身份（见 {@link CurrentActor}）。
+     *
+     * <p>落在 Public workspace，角色按操作人算（{@link ApWorkspaceResolver#defaultWorkspace()}）：
+     * 这些入口本就只对 SYS_ADMIN 开放，非管理员发起时宁可被 AP 拒写，也不能给他签一个
+     * 平台 ADMIN 会话——那会让该用户此后在所有 workspace 畅通无阻。
      */
     public ApSession signInAsCurrentActor() {
-        return signInManaged(CurrentActor.require());
+        ApWorkspaceResolver.ApWorkspace workspace = workspaceResolver.defaultWorkspace();
+        return signInManaged(CurrentActor.require(), workspace.externalProjectId(),
+                workspace.projectRole(), workspace.platformRole());
     }
 
     /**
@@ -78,18 +88,36 @@ public class ServiceTaskApiClient {
      * <p>这是<b>唯一</b>的 AP 身份来源（共享账号已移除）。未配置签名密钥时在此 fail-loud，
      * 而不是悄悄换一个别的身份继续。
      *
+     * <p>无 workspace 参数的这一版落在配置的共享 project（Public workspace）。按团队隔离时
+     * 请用 {@link #signInManaged(UserPrincipal, String, String, String)}。</p>
+     *
      * @param user 已认证的当前 DW 用户
      * @return {@link ApSession}（该用户专属 token + 共享 projectId）
      * @throws ServiceTaskApiException 未配置签名密钥、签名失败、AP 换取失败或超时
      */
     public ApSession signInManaged(UserPrincipal user) {
         ServiceTaskProperties.Managed managed = properties.getManaged();
+        return signInManaged(user, managed.getProjectExternalId(), managed.getProjectRole(),
+                managed.getPlatformRole());
+    }
+
+    /**
+     * 按<b>指定 workspace</b>换取 AP 会话：{@code externalProjectId} 决定落进哪个 AP project
+     * （DW 开发组 → project，见 {@link com.admin.servicetask.ApWorkspaceResolver}），
+     * {@code projectRole} 决定该会话在这个 project 里的读写能力，{@code platformRole} 必须随之
+     * 收紧——AP 对平台 {@code ADMIN} 直接授予全平台 project 的 Admin，会旁路 project 成员判定。
+     *
+     * <p>调用方必须先校验用户确实属于该 workspace——本方法只负责签发，不做成员校验。</p>
+     */
+    public ApSession signInManaged(UserPrincipal user, String externalProjectId,
+                                   String projectRole, String platformRole) {
+        ServiceTaskProperties.Managed managed = properties.getManaged();
         if (managed.getSigningKeyId() == null || managed.getSigningKeyId().isBlank()
                 || managed.getPrivateKey() == null || managed.getPrivateKey().isBlank()) {
             throw new ServiceTaskApiException("Activepieces managed provisioning not configured (signing key id / private key)");
         }
 
-        String externalToken = buildExternalToken(user);
+        String externalToken = buildExternalToken(user, externalProjectId, projectRole, platformRole);
 
         String base = properties.getInternalUrl();
         String url = (base.endsWith("/") ? base.substring(0, base.length() - 1) : base)
@@ -113,8 +141,9 @@ public class ServiceTaskApiClient {
                 Object projectId = response.getBody().get("projectId");
                 Object platformId = response.getBody().get("platformId");
                 if (token != null && !token.toString().isBlank()) {
-                    log.debug("Activepieces managed exchange successful (externalUserId={}, projectId={})",
-                            user.getUserId(), projectId);
+                    log.debug("Activepieces managed exchange successful (externalUserId={}, "
+                                    + "externalProjectId={}, projectId={}, projectRole={})",
+                            user.getUserId(), externalProjectId, projectId, projectRole);
                     return new ApSession(token.toString(),
                             projectId != null ? projectId.toString() : null,
                             platformId != null ? platformId.toString() : null);
@@ -138,11 +167,14 @@ public class ServiceTaskApiClient {
      * 因为这条链上永远只有一个签发方（见 DECISIONS.md D13 裁决 2）。
      * {@code kid} 走 header，AP 据此查 publicKey 验签。
      */
-    private String buildExternalToken(UserPrincipal user) {
+    private String buildExternalToken(UserPrincipal user, String externalProjectId,
+                                      String requestedRole, String requestedPlatformRole) {
         ServiceTaskProperties.Managed managed = properties.getManaged();
         // 空配置在这里就断掉，而不是发一个缺 claim 的 token 让 AP 去猜默认值。
-        String projectRole = requireConfigured(managed.getProjectRole(), "service-task.managed.project-role");
-        String platformRole = requireConfigured(managed.getPlatformRole(), "service-task.managed.platform-role");
+        String projectRole = requireConfigured(requestedRole, "service-task.managed.project-role");
+        String platformRole = requireConfigured(requestedPlatformRole, "service-task.managed.platform-role");
+        String projectExternalId = requireConfigured(externalProjectId,
+                "service-task.managed.project-external-id");
         String firstName = firstNonBlank(user.getDisplayName(), user.getUsername(), user.getUserId());
         String email = user.getEmail();
         Date now = new Date();
@@ -151,7 +183,7 @@ public class ServiceTaskApiClient {
             JwtBuilder builder = Jwts.builder()
                     .header().keyId(managed.getSigningKeyId()).and()
                     .claim("externalUserId", user.getUserId())
-                    .claim("externalProjectId", managed.getProjectExternalId())
+                    .claim("externalProjectId", projectExternalId)
                     .claim("firstName", firstName)
                     .claim("lastName", "")
                     // role = project_role.name（Admin/Editor/Viewer）；platformRole = AP 平台角色

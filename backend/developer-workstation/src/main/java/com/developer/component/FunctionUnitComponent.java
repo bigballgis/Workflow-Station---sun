@@ -62,6 +62,12 @@ public interface FunctionUnitComponent {
      * Publish a function unit
      */
     FunctionUnit publish(Long id, String changeLog);
+
+    /**
+     * Create the version snapshot used by one-click deploy. HTTP deploy already
+     * required {@code FUNCTION_UNIT_PUBLISH}; this must not use JWT {@code hasAnyRole}.
+     */
+    FunctionUnit publishForDeployment(Long id, String changeLog);
     
     /**
      * Clone a function unit

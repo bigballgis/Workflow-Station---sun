@@ -3,6 +3,10 @@ package com.admin.service.impl;
 import com.admin.exception.ServiceTaskApiException;
 import com.admin.service.AutomationFlowService;
 import com.admin.servicetask.client.ServiceTaskApiClient;
+import com.admin.repository.VirtualGroupMemberRepository;
+import com.admin.repository.VirtualGroupRepository;
+import com.admin.servicetask.ApWorkspaceResolver;
+import com.admin.servicetask.ApWorkspaceSql;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +42,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -62,7 +67,10 @@ class AutomationFlowRestoreTest {
         ServiceTaskProperties properties = new ServiceTaskProperties();
         properties.setInternalUrl("http://activepieces:80");
         service = new AutomationFlowServiceImpl(
-                jdbcTemplate, objectMapper, serviceTaskApiClient, properties, restTemplate);
+                jdbcTemplate, objectMapper, serviceTaskApiClient, properties, restTemplate,
+                new ApWorkspaceSql(properties),
+                new ApWorkspaceResolver(properties, mock(VirtualGroupRepository.class),
+                        mock(VirtualGroupMemberRepository.class)));
     }
 
     private JsonNode flowExport() {

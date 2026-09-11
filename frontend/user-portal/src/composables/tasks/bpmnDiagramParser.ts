@@ -15,6 +15,7 @@ import {
   buildSendTaskCompletedLookups,
   resolveSendTaskDiagramStatus,
 } from '@/utils/sendTaskDiagramStatus'
+import { resolveEndEventDiagramStatus } from '@/utils/endEventDiagramStatus'
 
 const ck = (s: unknown) => String(s ?? '').trim()
 const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
@@ -382,6 +383,21 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       const pos = positionMap.get(id)
       const status = resolveSendTaskDiagramStatus(inputs.historyRecords, id, name, sendTaskLookups)
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      if (status === 'completed' || status === 'rejected') completed.push(id)
+    })
+
+    doc.querySelectorAll('endEvent').forEach((event: Element, index: number) => {
+      const id = event.getAttribute('id') || `end_${index}`
+      const name = event.getAttribute('name') || inputs.t('task.endNode')
+      const pos = positionMap.get(id)
+      const parentSpId = getParentSubProcessId(event)
+      let status: ProcessNode['status'] = 'pending'
+      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
+        status = 'pending'
+      } else {
+        status = resolveEndEventDiagramStatus(inputs.historyRecords, id, name)
+      }
+      nodes.push({ id, name, type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (status === 'completed' || status === 'rejected') completed.push(id)
     })
 

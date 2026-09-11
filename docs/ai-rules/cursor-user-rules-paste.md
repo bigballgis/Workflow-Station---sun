@@ -17,7 +17,7 @@ Workflow Station：用户消息含「按 playbook」/「/playbook」时，必须
 ## 在本项目里怎么用（推荐）
 
 1. **不用配 User Rules** — 打开本仓库即可，规则已 always-on  
-2. **开任务时**只填 playbook §5 模板（模块/类型/验收/范围/验证）  
+2. **开任务时**只填 playbook §5 模板（模块/类型/验收/范围/修改计划/验证）  
 3. **提 PR** — GitHub 自动加载 `.github/pull_request_template.md`
 
 ## 验证规则已生效

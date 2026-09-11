@@ -110,12 +110,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Folder, Fold, Expand, Connection } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import { hasAnyRole } from '@/utils/permission'
+import { functionUnitApi } from '@/api/functionUnit'
 import { useSidebarState } from '@/composables/useSidebarState'
 import { useRecentFunctionUnits } from '@/composables/useRecentFunctionUnits'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -138,10 +139,11 @@ const activeMenu = computed(() => {
   return ''
 })
 
-// Automation 菜单可见性与路由 requiredRoles 一致（守卫对 /automation 不做工作区兜底）
-const canSeeAutomation = computed(() =>
-  hasAnyRole(['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])
-)
+// Automation 菜单可见性与路由守卫保持一致：能力角色，或（FR-B23）无能力角色但属于某个团队
+// ——后者只读进入。两处判据必须同源，否则会出现「菜单看不到但地址栏能进」的割裂。
+const hasAutomationRole = hasAnyRole(['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])
+const teamReadOnlyAccess = ref(false)
+const canSeeAutomation = computed(() => hasAutomationRole || teamReadOnlyAccess.value)
 
 /** 当前正在设计器里打开的 FU（用于把「最近打开」里对应的一条标为当前位置） */
 const openFunctionUnitId = computed(() => {
@@ -175,7 +177,17 @@ watch(
   { immediate: true }
 )
 
-onMounted(initSidebarState)
+onMounted(async () => {
+  initSidebarState()
+  // Only ask when the roles alone do not already answer it (one call, no capability role).
+  if (hasAutomationRole) return
+  try {
+    const res = await functionUnitApi.getWorkspaceAccess()
+    teamReadOnlyAccess.value = res?.data?.canView === true
+  } catch {
+    teamReadOnlyAccess.value = false
+  }
+})
 </script>
 
 <script lang="ts">

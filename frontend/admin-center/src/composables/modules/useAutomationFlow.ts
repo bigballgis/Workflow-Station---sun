@@ -7,6 +7,7 @@ import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import {
   automationFlowApi,
   type AutomationFlowSummary,
+  type AutomationWorkspaceOption,
   type ConnectionCheckItem,
   type FlowExportConnection,
 } from '@/api/automationFlow'
@@ -31,6 +32,16 @@ export function useAutomationFlow() {
   const importDialogVisible = ref(false)
   const importFile = ref<File | null>(null)
   const importPublish = ref(true)
+  /** 导入目标 workspace（DW 开发组 id）。默认 Public，选项加载后填入其真实组 id
+   *  ——空串会被 el-select 当成"未选择"而显示占位符。 */
+  const importWorkspaceId = ref('')
+  const workspaceOptions = ref<AutomationWorkspaceOption[]>([])
+  const publicWorkspaceId = ref('')
+  /** 转让对话框：目标 workspace 默认留空，必须显式选一个（转让是归属变更，不该有默认值） */
+  const transferDialogVisible = ref(false)
+  const transferFlowRow = ref<AutomationFlowSummary | null>(null)
+  const transferTargetId = ref('')
+  const transferring = ref(false)
   const importing = ref(false)
   const connectionChecks = ref<ConnectionCheckItem[]>([])
 
@@ -114,6 +125,10 @@ export function useAutomationFlow() {
     if (command === 'structure') {
       structureFlow.value = row
       structureDialogVisible.value = true
+    } else if (command === 'transfer') {
+      transferFlowRow.value = row
+      transferTargetId.value = ''
+      transferDialogVisible.value = true
     } else if (command === 'toggle') {
       void handleToggle(row)
     } else if (command === 'delete') {
@@ -183,7 +198,7 @@ export function useAutomationFlow() {
       const pkg = JSON.parse(await file.raw.text()) as { connections?: FlowExportConnection[] }
       const ids = (pkg.connections ?? []).map((c) => c.externalId).filter(Boolean)
       if (ids.length === 0) return
-      const res = await automationFlowApi.connectionsCheck(ids)
+      const res = await automationFlowApi.connectionsCheck(ids, importWorkspaceId.value || null)
       connectionChecks.value = res.data ?? []
     } catch {
       connectionChecks.value = []
@@ -193,18 +208,67 @@ export function useAutomationFlow() {
   const resetImportDialog = () => {
     importFile.value = null
     importPublish.value = true
+    importWorkspaceId.value = publicWorkspaceId.value
     connectionChecks.value = []
+  }
+
+  /** 目标 workspace 选项；'' = Public（后端把空值解析成 Public）。 */
+  const loadWorkspaces = async () => {
+    try {
+      const res = await automationFlowApi.listWorkspaces()
+      workspaceOptions.value = res.data ?? []
+      publicWorkspaceId.value = workspaceOptions.value.find((w) => w.publicWorkspace)?.id ?? ''
+      if (!importWorkspaceId.value) {
+        importWorkspaceId.value = publicWorkspaceId.value
+      }
+    } catch {
+      workspaceOptions.value = []
+    }
+  }
+
+  const handleTransfer = async () => {
+    const row = transferFlowRow.value
+    if (!row || !transferTargetId.value) return
+    transferring.value = true
+    try {
+      const res = await automationFlowApi.transferFlow(row.id, transferTargetId.value)
+      const info = res.data
+      ElMessage.success(t('automationFlow.transferDone', {
+        name: row.displayName,
+        from: info?.fromWorkspaceName ?? '',
+        to: info?.toWorkspaceName ?? '',
+      }))
+      // 归属改了但没能重新启用：说清楚要人工去目标 workspace 启用，不让它看起来一切正常
+      if (info?.reEnableFailure) {
+        ElMessage.warning(t('automationFlow.transferReEnableFailed', {
+          to: info.toWorkspaceName,
+          reason: info.reEnableFailure,
+        }))
+      }
+      transferDialogVisible.value = false
+      await loadFlows()
+    } catch {
+      // interceptor already notified
+    } finally {
+      transferring.value = false
+    }
   }
 
   const handleImport = async () => {
     if (!importFile.value) return
     importing.value = true
     try {
-      const res = await automationFlowApi.importFlow(importFile.value, importPublish.value)
+      const res = await automationFlowApi.importFlow(
+        importFile.value, importPublish.value, importWorkspaceId.value || null,
+      )
       const info = res.data
       ElMessage.success(t(
         info?.created ? 'automationFlow.importCreated' : 'automationFlow.importUpdated',
-        { name: info?.displayName ?? '', id: info?.flowId ?? '' },
+        {
+          name: info?.displayName ?? '',
+          id: info?.flowId ?? '',
+          workspace: info?.workspaceName ?? '',
+        },
       ))
       importDialogVisible.value = false
       await loadFlows()
@@ -215,8 +279,16 @@ export function useAutomationFlow() {
     }
   }
 
+  /** 换目标 workspace 要重跑 connection 预检：连接是 per-project 的，答案随目标而变。 */
+  const onImportWorkspaceChange = async () => {
+    if (importFile.value) {
+      await onImportFileChange({ raw: importFile.value } as UploadFile)
+    }
+  }
+
   onMounted(() => {
     window.addEventListener('resize', syncViewportWidth)
+    void loadWorkspaces()
   })
   onBeforeUnmount(() => window.removeEventListener('resize', syncViewportWidth))
 
@@ -230,6 +302,15 @@ export function useAutomationFlow() {
     importDialogVisible,
     importFile,
     importPublish,
+    importWorkspaceId,
+    workspaceOptions,
+    loadWorkspaces,
+    onImportWorkspaceChange,
+    transferDialogVisible,
+    transferFlowRow,
+    transferTargetId,
+    transferring,
+    handleTransfer,
     importing,
     connectionChecks,
     hasMissingConnections,

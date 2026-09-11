@@ -160,10 +160,14 @@ router.beforeEach(async (to, _from, next) => {
       // Members of a team (virtual group) that owns function units have no DW capability
       // role but may still enter the workspace read-only. The backend is the source of
       // truth (it knows team→FU ownership); ask it before denying access.
-      // FR-B15: the fallback covers ONLY the function-unit workspace — Automation (and
-      // any other role-gated page) requires a real capability role; no bypass.
+      // FR-B23 (supersedes FR-B15): Automation now joins the fallback. FR-B15 kept it out
+      // because flows were platform-wide — a team member would have seen every team's
+      // flows. Flows are workspace-scoped now, and the bridge signs a Viewer session for
+      // members without a capability role, so entering read-only shows their own team's
+      // flows only and AP itself refuses every write.
       const workspaceFallbackApplies =
         to.name === 'FunctionUnits' || to.name === 'FunctionUnitEdit'
+        || to.name === 'Automation' || to.name === 'AutomationFlowEdit'
       const canView = workspaceFallbackApplies && (await resolveWorkspaceAccess())
       if (!canView) {
         next('/403')

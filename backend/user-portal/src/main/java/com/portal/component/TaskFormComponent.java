@@ -5,6 +5,7 @@ import com.platform.common.audit.SystemAuditFields;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
+import com.portal.util.ProcessVariableClearMarks;
 import com.portal.util.SubTableNestingSanitizer;
 import com.portal.util.SystemAuditFieldFiller;
 import com.portal.service.UserDisplayNameResolver;
@@ -493,10 +494,43 @@ public class TaskFormComponent {
                 ? (Boolean) formDefinition.get("readOnly")
                 : false;
 
-        // Get field values from process variables (subset based on fieldPermissions
-        // keys)
+        // Which field values to send down: the form's DESIGNED fields, not the permission keys.
+        //
+        // `fieldPermissions` is a sparse DENY-LIST — the Form Designer persists an entry only when
+        // a field is toggled away from its EDITABLE default (see
+        // TaskFormFieldMapper#filterEditableFields and ChangeHistorySubmissionFilter's
+        // "Deny-list, not allow-list" note). So `fieldPermissions.keySet()` is, in the real-world
+        // shape, exactly the set of READ-ONLY fields: subsetting by it sent the read-only values
+        // and dropped every editable one. Measured on FU atm-20260623-gaevus form 321 (21 entries,
+        // all READONLY): fieldValues came back with only __subTables__ — no case_status, no
+        // card_number.
+        //
+        // That silently broke two things: editable fields opened blank, and — because the portal
+        // echoes this map back as `baselineValues` — detectConcurrentModifications had no baseline
+        // for any editable field, so concurrent-edit detection never fired for the very fields
+        // users actually change.
+        //
+        // snapshotFieldKeys is the authoritative list already used by the completed-task snapshot
+        // path: permission keys PLUS every `field` on the form config (readonly included), minus
+        // composite `bindingId:field` keys and audit columns. Using it here makes the live read
+        // path and the snapshot path agree on what "this form's fields" means.
+        Set<String> taskFormFieldKeys = new LinkedHashSet<>(
+                changeHistorySubmissionFilter().snapshotFieldKeys(formDefinition));
+        // snapshotFieldKeys drops audit columns (a snapshot re-derives them), but this is the LIVE
+        // read path and the form renders created_at/created_by/updated_at/updated_by as read-only
+        // fields — omitting them here would blank those cells. They are display-only: the submit
+        // path strips client-supplied audit keys unconditionally (SystemAuditFieldFiller), so
+        // sending them cannot let a client write them.
+        for (String key : fieldPermissions.keySet()) {
+            if (key != null && !key.contains(":")) {
+                taskFormFieldKeys.add(key);
+            }
+        }
+        // Empty means neither the form config nor the permission map exposed a resolvable field
+        // (e.g. an unparsable configJson). extractFieldSubset treats an empty set as "return
+        // everything", which preserves the previous behavior rather than emptying the form.
         Map<String, Object> fieldValues = fieldMapper().extractFieldSubset(hydratedVariables,
-                fieldPermissions.keySet());
+                taskFormFieldKeys);
         // Mirror persistTaskFormSnapshot: always attach live __subTables__ when present
         // so nested /
         // copied-task bindings hydrate even if fieldPermissions omits or carries a
@@ -600,11 +634,20 @@ public class TaskFormComponent {
 
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
 
-        // Filter: only accept EDITABLE fields
+        // Filter: reject fields the form marks READONLY (an absent key means editable)
         Map<String, Object> editableData = filterEditableFields(formData, fieldPermissions);
 
         if (editableData.isEmpty()) {
-            log.debug("No editable fields to update for task: {}", taskId);
+            // Warn, not debug: the caller submitted values and we are persisting none of them, yet
+            // this returns 200 and the portal reports success. When the payload was non-empty that
+            // combination is indistinguishable from silent data loss, so it must be visible in logs.
+            if (formData != null && !formData.isEmpty()) {
+                log.warn("Task {} submitted {} field(s) but none survived permission filtering; "
+                        + "nothing was persisted. Submitted keys: {}",
+                        taskId, formData.size(), formData.keySet());
+            } else {
+                log.debug("No editable fields to update for task: {}", taskId);
+            }
             return;
         }
 
@@ -690,6 +733,17 @@ public class TaskFormComponent {
             }
 
             updatedVariables.putAll(inbound);
+
+            // Record which fields THIS submit deliberately cleared, so the read path can tell a
+            // user-cleared field from a not-yet-filled one. Both look identical in the store (key
+            // present, value null), but they need opposite handling:
+            //   - never filled  -> hydrateEngineScalarsIntoStore SHOULD gap-fill it from the engine
+            //                      (an Activepieces service task writing back output_text)
+            //   - user cleared  -> it MUST NOT, or the engine's stale copy (which form submits
+            //                      never update) floods straight back on the next page load.
+            // Without this marker the clear silently reverted: Save persisted null, then the
+            // reload re-hydrated the old value and re-saved it (measured on case_status).
+            ProcessVariableClearMarks.recordClearedFields(updatedVariables, inbound);
 
             // Owner fields: Creator = actor at this Save; MAIN Case Handler is not
             // taken from the current-task assignee (MI inner people stay off MAIN).
@@ -1051,8 +1105,9 @@ public class TaskFormComponent {
     // ==================== Public utility methods for testing ====================
 
     /**
-     * Filters read-only fields, keeping EDITABLE fields only.
-     * When fieldPermissions is empty, accepts all fields (backward compatible).
+     * Rejects fields explicitly marked READONLY; an absent key means editable (the designer
+     * persists permissions sparsely). When fieldPermissions is empty, accepts all fields
+     * (backward compatible). See {@link TaskFormFieldMapper#filterEditableFields}.
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
             Map<String, String> fieldPermissions) {

@@ -33,6 +33,7 @@ const jumpLinks: GuideJump[] = [
   { anchor: 'extract-sample', titleKey: 'emailMonitorGuide.extractSampleTitle' },
   { anchor: 'extract-fields', titleKey: 'emailMonitorGuide.extractFieldMappingTitle' },
   { anchor: 'extract-attachments', titleKey: 'emailMonitorGuide.extractAttachmentsTitle' },
+  { anchor: 'extract-raw-eml', titleKey: 'emailMonitorGuide.extractRawEmlTitle' },
   { anchor: 'extract-subtable', titleKey: 'emailMonitorGuide.extractSubTableTitle' },
   { anchor: 'start-event', titleKey: 'emailMonitorGuide.startEventTitle' },
   { anchor: 'deploy', titleKey: 'emailMonitorGuide.deployTitle' },
@@ -161,6 +162,19 @@ const sections: GuideSection[] = [
       { code: 'Method · Direct (whole value)', hintKey: 'emailMonitorGuide.fAttachmentsMethod' },
       { code: 'Required', hintKey: 'emailMonitorGuide.fAttachmentsRequired' },
       { code: 'Attachment filenames (preview)', hintKey: 'emailMonitorGuide.fSampleAttachments' },
+    ],
+  },
+  {
+    anchor: 'extract-raw-eml',
+    titleKey: 'emailMonitorGuide.extractRawEmlTitle',
+    bodyKey: 'emailMonitorGuide.extractRawEmlBody',
+    bodyKeys: ['emailMonitorGuide.extractRawEmlCatalogLead'],
+    ...catalog,
+    samples: [
+      { code: 'Source · Original email (.eml)', hintKey: 'emailMonitorGuide.fSourceRawEml' },
+      { code: 'Target Field (FILE only)', hintKey: 'emailMonitorGuide.fRawEmlTarget' },
+      { code: 'Method · Direct (whole value)', hintKey: 'emailMonitorGuide.fRawEmlMethod' },
+      { code: 'Required', hintKey: 'emailMonitorGuide.fRawEmlRequired' },
     ],
   },
   {

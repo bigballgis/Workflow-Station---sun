@@ -108,4 +108,85 @@ class EmailInboundAttachmentBinderTest {
         assertThat(result.attachmentErrors()).isNotEmpty();
         verify(fileClient, never()).upload(any(), any(), any());
     }
+
+    private EmailExtractionSpec rawEmlSpec(boolean required) {
+        FieldRule rule = new FieldRule();
+        rule.setTarget("raw_eml");
+        rule.setSource(Source.RAW_EML);
+        rule.setType(RuleType.DIRECT);
+        rule.setRequired(required);
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(rule));
+        return spec;
+    }
+
+    @Test
+    void rawEml_uploadsRfc822AndDoesNotListAsAttachment() {
+        byte[] raw = "From: a@b.com\r\nSubject: Quote / A:B\r\n\r\nbody".getBytes();
+        when(fileClient.upload(eq("Quote _ A_B.eml"), eq("message/rfc822"), eq(raw)))
+                .thenReturn(Optional.of(new DeveloperWorkstationFileClient.UploadedFileRef(
+                        "/api/v1/upload/files/Quote _ A_B.eml", "Quote _ A_B.eml")));
+        EmailMessage email = new EmailMessage(
+                "m-eml", "Quote / A:B", "a@b.com", "body", null, Map.of(), List.of(), raw);
+
+        EmailInboundAttachmentBinder.BindResult result = binder.bind(email, rawEmlSpec(false));
+
+        assertThat(result.fields()).containsEntry("raw_eml", "/api/v1/upload/files/Quote _ A_B.eml");
+        assertThat(result.attachmentNames()).isEmpty();
+        assertThat(result.missingRequired()).isEmpty();
+    }
+
+    @Test
+    void rawEmlRequired_withoutBytes_marksMissing() {
+        EmailMessage email = new EmailMessage(
+                "m-eml-empty", "s", "a@b.com", "body", null, Map.of());
+
+        EmailInboundAttachmentBinder.BindResult result = binder.bind(email, rawEmlSpec(true));
+
+        assertThat(result.fields()).isEmpty();
+        assertThat(result.missingRequired()).contains("raw_eml");
+        assertThat(result.attachmentNames()).isEmpty();
+        verify(fileClient, never()).upload(any(), any(), any());
+    }
+
+    @Test
+    void attachmentsAndRawEml_uploadIndependently() {
+        byte[] raw = "From: a@b.com\r\n\r\nbody".getBytes();
+        when(fileClient.upload(eq("a.pdf"), any(), any()))
+                .thenReturn(Optional.of(new DeveloperWorkstationFileClient.UploadedFileRef(
+                        "/api/v1/upload/files/a.pdf", "a.pdf")));
+        when(fileClient.upload(eq("message.eml"), eq("message/rfc822"), eq(raw)))
+                .thenReturn(Optional.of(new DeveloperWorkstationFileClient.UploadedFileRef(
+                        "/api/v1/upload/files/message.eml", "message.eml")));
+        FieldRule att = new FieldRule();
+        att.setTarget("quote_files");
+        att.setSource(Source.ATTACHMENTS);
+        att.setType(RuleType.DIRECT);
+        FieldRule eml = new FieldRule();
+        eml.setTarget("raw_eml");
+        eml.setSource(Source.RAW_EML);
+        eml.setType(RuleType.DIRECT);
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(att, eml));
+        EmailMessage email = new EmailMessage(
+                "m-both", "", "a@b.com", "body", null, Map.of(),
+                List.of(new EmailAttachment("a.pdf", "application/pdf", "x".getBytes())),
+                raw);
+
+        EmailInboundAttachmentBinder.BindResult result = binder.bind(email, spec);
+
+        assertThat(result.fields()).containsEntry("quote_files", "/api/v1/upload/files/a.pdf");
+        assertThat(result.fields()).containsEntry("raw_eml", "/api/v1/upload/files/message.eml");
+        assertThat(result.attachmentNames()).containsExactly("a.pdf");
+    }
+
+    @Test
+    void emlFilename_sanitizesAndFallsBack() {
+        assertThat(EmailInboundAttachmentBinder.emlFilename("Re: Quote / A:B"))
+                .isEqualTo("Re_ Quote _ A_B.eml");
+        assertThat(EmailInboundAttachmentBinder.emlFilename("   ")).isEqualTo("message.eml");
+        assertThat(EmailInboundAttachmentBinder.emlFilename(null)).isEqualTo("message.eml");
+        String longName = "a".repeat(90);
+        assertThat(EmailInboundAttachmentBinder.emlFilename(longName)).isEqualTo("a".repeat(80) + ".eml");
+    }
 }

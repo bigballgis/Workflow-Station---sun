@@ -25,6 +25,12 @@
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
+          <p
+            v-if="!readOnly"
+            class="drag-hint"
+          >
+            {{ t('organization.dragHint') }}
+          </p>
           <el-scrollbar height="calc(100vh - 280px)">
             <el-tree
               ref="treeRef"
@@ -35,6 +41,8 @@
               default-expand-all
               highlight-current
               :draggable="!readOnly"
+              :allow-drag="allowDrag"
+              :allow-drop="allowDrop"
               :indent="24"
               @node-click="handleNodeClick"
               @node-drop="handleNodeDrop"
@@ -323,6 +331,8 @@ const {
   fetchMembers,
   fetchApprovers,
   handleNodeClick,
+  allowDrag,
+  allowDrop,
   handleNodeDrop,
   handleFormSuccess,
   handleDelete,
@@ -366,7 +376,15 @@ onMounted(() => {
 }
 
 .search-input {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.drag-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ws-text-muted);
   flex-shrink: 0;
 }
 

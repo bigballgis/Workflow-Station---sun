@@ -19,7 +19,9 @@ Do not ship the UI without the `?`. Do not invent a second docs site.
 ## How to write the article
 
 Follow skill **`extract-help-guideline`** (deep-documentation quality inside
-`/help/` only: layered article, exact UI, flow, cross-links, `llms.txt`).
+`/help/` only: layered article, exact UI, flow, cross-links, `llms.txt`,
+**subpages**: a palette/control NAV name is its own article, not a hash on a
+group dump).
 New articles: output the 提取清单, **wait for 确认**, then write
 `frontend/help`. User already asked to rewrite named pages: skip the清单.
 Hang the leaf under the **same menu** as the product (DW sidebar / Function Unit

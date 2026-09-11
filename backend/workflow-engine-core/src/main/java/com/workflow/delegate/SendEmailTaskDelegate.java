@@ -176,7 +176,7 @@ public class SendEmailTaskDelegate implements JavaDelegate {
             DeveloperWorkstationEmailTemplateClient.EmailTemplateContent tpl = templateOpt.get();
             String subject = EmailTemplateResolver.resolve(
                     tpl.subject() != null ? tpl.subject() : "", variables);
-            String body = EmailTemplateResolver.resolve(
+            String body = EmailTemplateResolver.resolveHtml(
                     tpl.bodyHtml() != null ? tpl.bodyHtml() : "", variables);
             if (!StringUtils.hasText(subject)) {
                 throw new BpmnError("EMAIL_CONFIG_INVALID",
@@ -194,7 +194,7 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         }
         return new ResolvedContent(
                 EmailTemplateResolver.resolve(emailSubject, variables),
-                EmailTemplateResolver.resolve(emailBody != null ? emailBody : "", variables));
+                EmailTemplateResolver.resolveHtml(emailBody != null ? emailBody : "", variables));
     }
 
     private record ResolvedContent(String subject, String body) {}

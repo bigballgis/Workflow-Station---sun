@@ -4,11 +4,6 @@
       <el-button size="small" type="primary" @click="emit('add-field')">
         {{ t('emailMonitor.wizard.addField') }}
       </el-button>
-      <DesignerHelpLink
-        path="/email-monitor#extract-attachments"
-        :aria-label="t('emailMonitor.wizard.attachmentsGuideLinkAria')"
-        test-id="email-field-mapping-attachments-guide-link"
-      />
       <span v-if="lastSelection" class="wizard-selection">
         {{ t('emailMonitor.wizard.selected') }}: "{{ lastSelection }}"
         <el-button size="small" link type="primary" @click="emit('bind-selection')">
@@ -61,6 +56,14 @@
             <el-option-group :label="t('emailMonitor.wizard.sourceGroupAttachments')">
               <el-option
                 v-for="s in ATTACHMENT_SOURCES"
+                :key="s"
+                :label="sourceLabel(s)"
+                :value="s"
+              />
+            </el-option-group>
+            <el-option-group :label="t('emailMonitor.wizard.sourceGroupRawEml')">
+              <el-option
+                v-for="s in RAW_EML_SOURCES"
                 :key="s"
                 :label="sourceLabel(s)"
                 :value="s"
@@ -122,17 +125,20 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { ExtractionFieldRule } from '@/api/emailMonitor'
 import type { SubTableFieldOption } from '@/composables/email/useProcessFormSubBindings'
 import {
   ATTRIBUTE_SOURCES,
   ATTACHMENT_SOURCES,
   BODY_SOURCES,
+  RAW_EML_SOURCES,
+  isFileStoreSource,
   isAttachmentsSource,
+  isRawEmlSource,
   isLockedAttributeSource,
   onSourceChange,
   previewAttachmentNames,
+  previewRawEmlFilename,
   targetOptionsForRow,
   typesForSource,
 } from '@/composables/email/emailExtractionFieldMapping'
@@ -142,6 +148,7 @@ const props = defineProps<{
   mainFieldOptions: SubTableFieldOption[]
   lastSelection?: string
   attachmentPreview?: string
+  sampleSubject?: string
   previewField: (row: ExtractionFieldRule) => string
 }>()
 
@@ -168,13 +175,13 @@ function fieldOptionLabel(f: SubTableFieldOption): string {
 }
 
 function targetPlaceholder(row: ExtractionFieldRule): string {
-  return isAttachmentsSource(row.source)
+  return isFileStoreSource(row.source)
     ? t('emailMonitor.wizard.attachmentsTargetPlaceholder')
     : t('emailMonitor.wizard.targetFieldPlaceholder')
 }
 
 function emptyTargetHint(row: ExtractionFieldRule): string {
-  if (isAttachmentsSource(row.source) && props.mainFieldOptions.every((f) => String(f.dataType || '').toUpperCase() !== 'FILE')) {
+  if (isFileStoreSource(row.source) && props.mainFieldOptions.every((f) => String(f.dataType || '').toUpperCase() !== 'FILE')) {
     return t('emailMonitor.wizard.attachmentsTargetEmpty')
   }
   if (props.mainFieldOptions.length === 0) {
@@ -186,6 +193,9 @@ function emptyTargetHint(row: ExtractionFieldRule): string {
 function previewFor(row: ExtractionFieldRule): string {
   if (isAttachmentsSource(row.source)) {
     return previewAttachmentNames(props.attachmentPreview)
+  }
+  if (isRawEmlSource(row.source)) {
+    return previewRawEmlFilename(props.sampleSubject)
   }
   return props.previewField(row)
 }

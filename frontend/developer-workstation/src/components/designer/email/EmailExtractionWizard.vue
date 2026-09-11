@@ -60,6 +60,7 @@
           :main-field-options="mainFieldOptions"
           :last-selection="lastSelection"
           :attachment-preview="sample.attachmentNames"
+          :sample-subject="sample.subject"
           :preview-field="previewField"
           @add-field="addFieldRule"
           @bind-selection="addRuleFromSelection"

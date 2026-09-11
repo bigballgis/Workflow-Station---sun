@@ -5,10 +5,14 @@ description: >-
   portal from product UI copy, validators, and business rules. Merges
   deep-documentation quality (layered pages, exact surfaces, diagrams,
   cross-links, llms.txt, same-task doc sync) without creating a second docs
-  site. Use when the user asks to 提取 guideline, generate /help/ articles,
-  extract-help-guideline, 给人看的指南, 重构 guideline, refresh help docs, or
-  turn designer behavior into a help page. Does not generate Cursor rules
-  or SKILL.md (except this skill's own maintenance).
+  site. Enforces a subpage tree: each palette/control NAV leaf is its own
+  how-to article, not a hash on a group dump. Enforces operational human copy:
+  strip AI template shells without turning articles into essays. Use when
+  the user asks to 提取 guideline, generate /help/ articles,
+  extract-help-guideline, 给人看的指南, 重构 guideline, refresh help docs,
+  去 AI 味, 控件怎么用, Basic 控件, or turn designer behavior into a help page.
+  Does not generate Cursor rules or SKILL.md (except this skill's own
+  maintenance).
 disable-model-invocation: true
 ---
 
@@ -29,8 +33,9 @@ those articles.
 
 ## When to use
 
-User names a topic (View 访问、计算字段、邮件模板) or says 提取 guideline /
-生成 help 文章 / 重构 guideline / refresh `/help/`.
+User names a topic (View 访问、计算字段、邮件模板、某个 Basic 控件) or says
+提取 guideline / 生成 help 文章 / 重构 guideline / refresh `/help/` /
+去 AI 味（help 文案）/ 控件怎么用.
 
 ## When not to use
 
@@ -38,15 +43,21 @@ User names a topic (View 访问、计算字段、邮件模板) or says 提取 gu
 - Code review, SAST, playbook, performance N+1
 - Inventing product behavior not present in UI or validators
 - Dumping Java class names, Docker, Kong, or playbooks into `/help/`
+- Pasting a third-party “AI humanizer” Role prompt, or rewriting `/help/` into essays
 
 ## Core rules (deep-documentation, scoped to /help/)
 
 - Ground every sentence in the real UI: i18n labels, dialogs, save blockers, `#ERR`.
 - Write operational copy: what to tick / type / save, and what fails. No marketing.
+  Strip model-organizing shells (see Human copy). Do not rewrite into essays.
 - Script **effect** methods: Intent → Before → Code → After (see Voice). Parameter
   lists stay reference. Do not write a JavaScript tutorial.
 - Layer each article: **overview → order of work → how-to with figures → field
   catalog (every control) → exact samples → failures → related articles**.
+- **Subpages:** a product object in `NAV_TREE` (palette type, named menu item)
+  gets its **own** `GUIDELINES` path. The page title matches the leaf. Hash is
+  only a section inside that same job (see Subpages). Group dumps with
+  `#checkbox` while the title stays “Basic 控件 — 事件” are a defect.
 - Cross-link related guidelines with `router-link` (Send email ↔ Email Monitor ↔
   Computed fields). Do not duplicate the other article.
 - Use a **flow** (`GuideArticle` `flow-keys`) for multi-step designer jobs.
@@ -97,6 +108,7 @@ Output this block, then **stop**. No Edit/Write until 确认 / 可以 / 执行.
 【将写入】
 - `frontend/help/src/guidelines.ts` id: `…` path: `/…`
 - `NAV_TREE` 挂到哪个门户菜单
+- 每个产品对象一个 path（调色板控件禁止共用一篇 + hash）
 - 源界面 `DesignerHelpLink`
 - view + i18n keys（en / zh-CN / zh-TW）
 - `frontend/help/public/llms.txt`（及可选 `llms-full.txt`）
@@ -129,6 +141,8 @@ Checklist:
 - [ ] New `id` kebab-case; `path` `/that-id`
 - [ ] Register in `GUIDELINES` (titleKey + summaryKey + lazy view)
 - [ ] `NAV_TREE` leaf under the **same menu** as the product. Empty menus stay grey.
+      Palette/control names get their **own** path (see Subpages). Hash only for
+      a section of that same article.
 - [ ] `DesignerHelpLink` on the source screen → `/help/<id>` (rule `help-guideline-link`)
 - [ ] `GuideArticle`: sections may set `anchor`, `figure`, `samples`, `intentKey` /
       `beforeKey` / `afterKey` / `noteKey`, `failKeys`, `jumpLinks`, `figureBeside`,
@@ -142,6 +156,7 @@ Checklist:
       strings (vue-i18n interpolates `{name}`). Literal braces: `{'{'}` / `{'}'}`.
       Tokens: `${'{'}fieldName{'}'}`
 - [ ] Voice: ticks / types / saves; **script methods** use Intent → Before → Code → After (see Voice)
+- [ ] Human copy: no lecture connectives / contrast shells / fake Q&A (see Human copy)
 - [ ] **Field catalog:** every visible control on the documented screens (see Field catalog)
 - [ ] Update `public/llms.txt` (and `llms-full.txt` if present)
 - [ ] Do not add Element Plus; styles already in `help.css`
@@ -214,14 +229,46 @@ One **job** per sample. Same field names in the sentence, the code, and the Afte
    the stored value; an ERROR banner does not block Save; `hidden` does not submit.
 
 Pair get/set or set/clear as Related one-liners, not a second tutorial.
-Control-type pages (Basic / Extend / Layout): one task sample with After, then
-link to `/form-events#…`. Do not repeat the hub signatures.
+Palette **control** articles use the Control article skeleton below; do not
+repeat hub signatures from `/form-events`.
 
 Failures = how the designer **sees** that it did not work (script error, missing
 Save then Ok, Preview has no Portal `user`, method on the wrong control type).
 No class names, Docker, or overlay internals.
 
 `llms-full.txt` may keep method names for retrieval. Human article stays intent-first.
+
+## Subpages (NAV leaf = document)
+
+Hierarchy model distilled from [La Suite Docs](https://github.com/suitenumerique/docs)
+(subpages + topic TOC). Do **not** copy that product (collab editor, AI rewrite,
+slides). Apply inside `frontend/help` only.
+
+| NAV leaf is… | `to` | Page |
+|---|---|---|
+| A product object (Input, Checkbox, Lookup, a named screen) | Own `GUIDELINES` path, e.g. `/form-ctl-checkbox` | Title = that object. How to **use** it. |
+| A chapter of one job (Connection inside Send email) | Hash on that job’s article, e.g. `/email-send#connection` | Parent title stays the job; section `anchor` matches the hash. |
+| A folder (Basic / Extend) | Group with **child leaves**; optional short **index** article | Index lists children. It is not a dump of every child’s body. |
+
+**Defect (do not repeat):** 21 Basic names → `/form-events-basic#input` … `#checkbox` while `pageTitle` is “Basic 控件 — 事件”. The reader clicks Checkbox and still reads a group events list.
+
+Many similar controls: **one shared Vue** + registry keyed by guideline id is allowed. Still **one GUIDELINES row and one `llms.txt` URL per control**. Do not invent 21 copy-paste SFCs.
+
+Old hashes (`/form-events-basic#checkbox`) must **redirect** to the new path when you split.
+
+### Control article skeleton
+
+One palette type = one designer job. Layers:
+
+1. **Overview** — what this control is; how it differs from the nearest sibling (Checkbox vs Radio / Select).
+2. **Order of work** — `flow-keys`: drag from that palette group → bind field → fill this type’s properties → save → Preview.
+3. **How-to** — ticks / types / saves on **this** control.
+4. **Field catalog** — every label on **this** control’s properties panel (read the panel; do not guess).
+5. **Events** — at most **one** primary sample (`intentKey` / Before / After). Full `api.*` stays on `/form-events`.
+6. **Failures** — what the designer sees when this control is misused.
+7. **Related** — `/form-events#…` plus sibling controls, not a paste of their pages.
+
+`form-events-basic` / `-extend` / `-layout` after a split: **index only** (what that palette group is + links). Event how-to lives on `/form-events` and on each control’s Events section.
 
 ## Readability gates (human articles)
 
@@ -239,11 +286,38 @@ flatten Intent / Before / After into one `bodyKey` paragraph.
 | Failures | `failKeys[]` list, not one `failBody` wall |
 | Task nav | Hub pages with > 8 task sections add `jumpLinks` before the first how-to |
 | Figures | One figure per distinct surface (Edit dialog, canvas, Form tab, Preview effect). Do **not** reuse the same PNG nine times with different captions |
-| Control-type pages | One primary sample per control; link to `/form-events#…` for api methods |
+| Palette control | Own article (Subpages). Title = control name. How-to + catalog first; one event sample; link `/form-events#…`. Never a group dump. |
 | Params / hooks | Reference only — short body + samples; not a second how-to tutorial |
+| Human copy | Operational facts stay; strip AI shells. Full pattern list: [reference.md](reference.md#human-copy-anti-ai-flavor) |
 
 Diátaxis genre names (how-to vs reference) stay in [reference.md](reference.md); do
 not paste them into `/help/` copy.
+
+## Human copy (anti-AI flavor)
+
+Locale strings in `en` / `zh-CN` / `zh-TW` must read as a person documenting this
+product, not as a model assembling an answer. Distill **pattern bans** from
+public AI-flavor writing notes; **do not** paste a third-party Role prompt, and
+**do not** run a “humanizer” that adds humor, first-person feelings, or fake
+reader Q&A. Help copy already has a Voice: ticks / types / saves.
+
+Keep: facts, exact UI labels, required/blank behavior, this portal’s three genres.
+Change only the **organizing shell** that makes the reader notice the writer is a
+model.
+
+| Ban | Examples | Write instead |
+|---|---|---|
+| Lecture connectives | 总的来说 / 值得注意的是 / 由此可见 / 不难看出；It’s important to note; In summary | State the rule. No wrap-up sentence. |
+| Contrast shells | 不是 A，而是 B；真正重要的是；本质上；核心在于 | Name the condition and the result. |
+| Assistant signposts | 下面我们来；接下来我会；Let’s walk through; In this article | Start at the control or the failure. |
+| Fake engagement | 你觉得呢？你现在卡在哪一步？Have you ever wondered | Failures list + related links. No questions to the reader. |
+| Uniform paragraphs | Every section = claim + explanation + recap | How-to narrates clicks; catalog is one row per control. |
+| Inflated openings | 这次只看；这个问题很简单；In today’s…; Whether you’re a beginner | One-sentence job: what this page is for. |
+
+Self-check: if you could swap the product name and the paragraph still works,
+rewrite it against the real labels. If a rewrite would add personality, jokes,
+or “show don’t tell” color, **stop** — that is the wrong kind of humanization
+for `/help/`.
 
 ## Invoke
 
@@ -255,3 +329,5 @@ not paste them into `/help/` copy.
 or: `按 extract-help-guideline 提取邮件模板 guideline`
 
 or: `按 extract-help-guideline 重构当前 guideline`
+
+or: `按 extract-help-guideline 提取 Checkbox 控件怎么用`

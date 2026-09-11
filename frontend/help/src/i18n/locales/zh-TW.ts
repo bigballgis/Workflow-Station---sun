@@ -393,7 +393,7 @@ export default {
       '示例：來源選「寄件人 (From)」→ 主表 sender_email；執行時寫入 IMAP 回傳的原始 From 字串（可含顯示名稱與地址）。',
     extractAttachmentsTitle: '欄位對應 — 儲存郵件附件',
     extractAttachmentsBody:
-      '在欄位對應新增一列，來源選「附件」。目標必須是主表 FILE 欄。一封郵件的全部附件寫入該欄（1 個檔案=URL；多個=JSON [{url,name}]）。內嵌 CID 圖片仍在 HTML 內文，不當附件儲存。超過 50MB 或超過 10 個的檔案會略過並記錄；若勾選必填且結果為空，郵件進入人工審核。',
+      "在欄位對應新增一列，來源選「附件」。目標必須是主表 FILE 欄。一封郵件的全部附件寫入該欄（1 個檔案=URL；多個=JSON [{'{'}url,name{'}'}]）。內嵌 CID 圖片仍在 HTML 內文，不當附件儲存。超過 50MB 或超過 10 個的檔案會略過並記錄；若勾選必填且結果為空，郵件進入人工審核。",
     extractAttachmentsCatalogLead: '欄位目錄 — 欄位對應頁籤上的「附件」來源。',
     fSourceAttachments:
       '來源分組「附件」。把入站郵件的全部非內嵌附件寫入同一個 FILE 欄位。方式鎖定為直接對應（整值）。',
@@ -405,6 +405,18 @@ export default {
       '勾選後，沒有可用附件（沒有附件、全部超限或全部儲存失敗）的郵件會進入人工審核，不會自動發起流程。',
     fSampleAttachments:
       '樣例郵件中的可選檔名（逗號分隔），僅用於預覽。執行時使用真實附件；此框不會上傳檔案。',
+    extractRawEmlTitle: '欄位對應 — 把原始郵件存成 .eml',
+    extractRawEmlBody:
+      "在欄位對應新增一列，來源選「原始郵件（.eml）」。目標必須是主表 FILE 欄（僅直接對應）。執行時把抓到的 RFC822 上傳為一個檔案，檔名為 {'{'}主旨{'}'}.eml（非法字元替換；主旨為空則用 message.eml）。FILE 存法與附件相同：1 個檔案=URL。不會混進「附件」來源。不對應則不儲存 .eml。超過 50MB 會略過並記錄；若勾選必填且擷取/上傳失敗，郵件進入人工審核。",
+    extractRawEmlCatalogLead: '欄位目錄 — 欄位對應頁籤上的「原始郵件（.eml）」來源。',
+    fSourceRawEml:
+      '來源分組「原始郵件」。把入站郵件的原始 RFC822（.eml）寫入一個 FILE 欄位。方式鎖定為直接對應（整值）。',
+    fRawEmlTarget:
+      '目標下拉只列出主表 FILE 欄。儲存會拒絕非 FILE 目標。清單為空時，請先在表設計中新增 FILE 欄。若同時儲存附件，請使用不同的 FILE 欄。',
+    fRawEmlMethod:
+      '方式為直接對應（整值）。整封原始郵件存成一個 .eml，不會加入「附件」檔案清單。',
+    fRawEmlRequired:
+      '勾選後，原始 RFC822 無法擷取或儲存（空、超過 50MB 或上傳失敗）的郵件會進入人工審核，不會自動發起流程。',
     extractSubTableTitle: '子表（HTML 表格）頁籤',
     extractSubTableBody:
       '可選第三個頁籤。把郵件裡的一張 HTML 表對應到表單子表（一列一筆紀錄）。若綁定清單為空，請先在主流程表單新增子表。',
@@ -452,7 +464,7 @@ export default {
     fSourceDate:
       '郵件屬性 — 郵件提供商記錄的寄送時間（可用時為 ISO-8601）。直接對應。依欄位型別對應到文字或日期欄。',
     fSourceMessageId:
-      '郵件屬性 — Message-ID 標頭；缺失時為 imap-uid:{uid}。直接對應。可用於追蹤/冪等欄；亦會寫入流程業務中繼資料。',
+      "郵件屬性 — Message-ID 標頭；缺失時為 imap-uid:{'{'}uid{'}'}。直接對應。可用於追蹤/冪等欄；亦會寫入流程業務中繼資料。",
     fSourceTextAndHtml:
       '內文來源 — 純文字加 HTML 推導文字（建議，適合轉寄/HTML-only 郵件）。配合 LABEL、BETWEEN 或 REGEX。',
     fSource:

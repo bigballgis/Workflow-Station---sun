@@ -160,7 +160,16 @@
 | FR-B06a | **修订（2026-08-31）**：「查看运行历史」不再在 DW。运行记录是生产运维视角，而 DW 只在 dev 存在（不进 `deploy/k8s/kustomization.yaml`），故与 piece 目录、flow 迁移一样迁到 Admin Center 的 `/automation-runs`；DW Automation 页只留设计期能力 | 必须 |
 | FR-B07 | 入口沿用 FU 的四角色（`SYS_ADMIN` / `TECH_LEAD` / `TEAM_LEAD` / `DEVELOPER`，[D-7](#d-7)），与 `FunctionUnits` 路由的 `requiredRoles` 保持一致 | 必须 |
 | FR-B15 | **DW 路由守卫的 `resolveWorkspaceAccess()` 兜底不适用于 Automation**：该兜底是给"无 DW 能力角色、但所属团队拥有 FU"的成员开的只读通道，其判定依据是 team→FU 归属；flow 已是平台级资源（FR-B02）、与 FU 解耦（[D-4](#d-4)），该依据不再成立。无四角色之一者一律 403，不得因团队拥有某个 FU 就看到全平台 flow | 必须 |
-| FR-B16 | flow **不做 BU/Role 级行数据可见性管控**（[D-7](#d-7)）：四角色是页面级准入，进入后可见全部 flow。若日后需要行级隔离，另立需求 | 必须 |
+| FR-B16 | ~~flow **不做 BU/Role 级行数据可见性管控**（[D-7](#d-7)）：四角色是页面级准入，进入后可见全部 flow。若日后需要行级隔离，另立需求~~ **已由 [D14](DECISIONS.md#d14) 取代（2026-09-08）**：本条自己留的「另立需求」口子已被兑现，见 FR-B17 ~ FR-B19。四角色仍是页面级准入，但进入后**只可见当前 workspace 的 flow** | 作废 |
+| FR-B17 | **flow 归属 workspace（DW 开发组）**：Public 组 → 历史共享 project（`hermes-main`，存量 flow 零迁移），团队组 `<id>` → `hermes-dg-<id>`（AP managed-authn 首见即自建）。登录桥按 `X-Dev-Group-Id` 签会话，**服务端校验成员资格**；非成员一律 **403**，不得回落 Public | 必须 |
+| FR-B18 | Public workspace 与 FU 的 Public 组同规则：**仅 `SYS_ADMIN` 可改**，其余人以 AP `Viewer` 角色签会话（AP 路由层据此真的拒写），前端同步收起写操作入口 | 必须 |
+| FR-B19 | 业务键（FR-C11）的唯一性范围明确为**全平台跨 workspace**：部署期解析按键全局查找，故创建 flow 前须校验键未被占用，重复键显式报错而不是静默创建 | 必须 |
+| FR-B20 | **Admin Center 运维视图按 workspace**：flows / runs 列表以 workspace（开发组名）成列，可排序、筛选、关键字命中；非 HERMES workspace 的 AP project 回落其 project 显示名 | 必须 |
+| FR-B21 | **flow 迁移导入选目标 workspace**：目标团队的 AP project 由该次导入顺带建出（无需运维预置）；connection 预检按<b>目标 workspace</b> 查（`app_connection` 是 per-project 的）；导入撞到其他 workspace 已占用的业务键时显式失败（FR-B19 的导入侧对应）| 必须 |
+| FR-B23 | **FR-B15 反转**（flow 已按 workspace 隔离，其排除理由消失）：无 DW 能力角色但属于某团队的成员可<b>只读</b>进入 Automation，只看得到本团队的 flow。只读必须由 AP 侧强制（会话签 {@code Viewer} 角色），不能只靠前端收按钮；侧边菜单可见性与路由守卫同源 | 必须 |
+| FR-B24 | **flow 可跨 workspace 转让且保留 flowId**（已部署 BPMN 存的是解析后的 flowId，换 id 会静默打断）。启用中的 flow 须「在原 project 停用 → 改归属 → 在目标 project 重新启用」，否则 `trigger_source` 会留在旧 project；重新启用失败须如实回传，不得静默留下"已转让但没跑"的 flow。连接不随行、历史运行记录留在原 workspace | 必须 |
+| FR-B25 | 管理面对<b>既有 flow</b> 的写操作（启停 / 删除 / 转让）须用<b>该 flow 所在 workspace</b> 的会话：AP 按 token 携带的 project 判归属，用 Public 会话动团队 flow 会被拒 | 必须 |
+| FR-B22 | Service Task 面板须区分业务键的三种归属：本 workspace 的 flow / 其他 workspace 的 flow（部署期仍解析，但此处不可见不可改）/ 无人持有（部署会失败），不得把后两者显示成同一种"找不到" | 应当 |
 | FR-B08 | 编辑形态 = **继续嵌入 AP builder**（[D-1](#d-1)）：沿用 lib-mode + Shadow DOM，挂载点从 Service Task tab 迁到左侧 Automation 页 | 必须 |
 | FR-B09 | L1 的 7 个 host-config 注入切点（storage / apiUrl / socketBaseUrl / socketPath / onUnauthorized / portalContainer / embedding）须在 0.88 上重建并验证——builder 增长 27% 且新增 `step-data/`，切点位置不保证仍成立 | 必须 |
 | FR-B10 | Shadow DOM 的三处 CSS 改写（`:root`→`:host`、`@property` 初始值回落、`100vh`→`100cqh`）须在 0.88 的样式表上重新验证；0.88 若改用新的主题变量或布局单位，须补充对应改写 | 必须 |
@@ -526,6 +535,8 @@ BPMN 存业务键，部署期解析成本环境真实 flowId。落到 FR-C01、F
 > **连带后果**：DW 路由守卫里的 `resolveWorkspaceAccess()` 只读兜底**不能**照搬——它按
 > team→FU 归属放行，而 flow 已与 FU 解耦，照搬会让"团队恰好拥有某个 FU"的无角色成员看到
 > **全平台 flow**（FR-B15）。另：四角色是**页面级**准入，本次不做 flow 的行级 BU/Role 隔离（FR-B16）。
+>
+> **后续修订（2026-09-08，[D14](DECISIONS.md#d14)）**：FR-B16 已作废——flow 改为按 workspace（DW 开发组）隔离，见 FR-B17 ~ FR-B19。隔离维度是 DW 的**团队**，不是 Portal 的 BU/Role；FR-B15 的只读兜底仍未反转。
 
 <a id="d-5"></a>
 **D-5　取消 input/output mapping，改用固定信封契约**

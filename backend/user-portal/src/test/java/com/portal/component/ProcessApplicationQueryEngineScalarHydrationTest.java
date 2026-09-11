@@ -109,6 +109,42 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
         verify(repository, never()).save(any(ProcessInstance.class));
     }
 
+    /**
+     * Regression: a field the USER cleared must not be re-filled from the engine.
+     *
+     * <p>The engine keeps its own copy of every process variable, and portal form submits never
+     * update it. Clearing Case Status persisted {@code null} correctly (verified in the DB) and
+     * then reverted on the next page load: this hydration saw "key present, value null", treated
+     * it as a not-yet-filled gap, copied the engine's stale object back in and re-saved it —
+     * measured on process 52b70865, 13 s after the submit wrote null.
+     *
+     * <p>A cleared field and a never-filled field are the same shape in the store, so the submit
+     * path marks the difference via {@code ProcessVariableClearMarks}.
+     */
+    @Test
+    @DisplayName("never re-fills a field the user deliberately cleared")
+    void doesNotRefillUserClearedField() {
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("case_status", null); // user emptied it and saved
+        stored.put("output_text", null); // never filled — still a legitimate gap
+        stored.put(com.portal.util.ProcessVariableClearMarks.CLEARED_FIELDS_KEY,
+                java.util.List.of("case_status"));
+        ProcessInstance instance = storedInstance("RUNNING", stored);
+
+        ProcessInstanceRepository repository = mock(ProcessInstanceRepository.class);
+        when(repository.findById(PID)).thenReturn(Optional.of(instance));
+        WorkflowEngineClient client = engineWith(Map.of(
+                "case_status", Map.of("status_name", "Open"), // stale engine copy
+                "output_text", "done"));
+
+        ProcessInstanceInfo info = newComponent(repository, client).getProcessDetail(PID);
+
+        assertNull(info.getVariables().get("case_status"),
+                "a user-cleared field must stay cleared, not be re-hydrated from the engine");
+        assertEquals("done", info.getVariables().get("output_text"),
+                "an unmarked null is still a genuine gap and must still be filled");
+    }
+
     @Test
     @DisplayName("leaves __subTables__ to the dedicated sub-table hydrator")
     void doesNotTouchSubTables() {

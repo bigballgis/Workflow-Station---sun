@@ -3,8 +3,10 @@ import type { ExtractionFieldRule } from '@/api/emailMonitor'
 import {
   invalidAttachmentTargets,
   isAttachmentsSource,
+  isRawEmlSource,
   onSourceChange,
   previewAttachmentNames,
+  previewRawEmlFilename,
   targetOptionsForRow,
   typesForSource,
 } from '../emailExtractionFieldMapping'
@@ -38,8 +40,33 @@ describe('emailExtractionFieldMapping', () => {
     )).toEqual([])
   })
 
+  it('locks RAW_EML to DIRECT and FILE targets', () => {
+    expect(isRawEmlSource('RAW_EML')).toBe(true)
+    expect(typesForSource('RAW_EML')).toEqual(['DIRECT'])
+    const row: ExtractionFieldRule = { target: '', source: 'RAW_EML', type: 'LABEL' }
+    onSourceChange(row)
+    expect(row.type).toBe('DIRECT')
+    expect(targetOptionsForRow(row, [fileField, textField]).map((f) => f.fieldName)).toEqual(['quote_files'])
+  })
+
+  it('rejects RAW_EML mapped to a non-FILE column', () => {
+    expect(invalidAttachmentTargets(
+      [{ target: 'title', source: 'RAW_EML', type: 'DIRECT' }],
+      [fileField, textField],
+    )).toEqual(['title'])
+    expect(invalidAttachmentTargets(
+      [{ target: 'quote_files', source: 'RAW_EML', type: 'DIRECT' }],
+      [fileField, textField],
+    )).toEqual([])
+  })
+
   it('previews sample attachment filenames', () => {
     expect(previewAttachmentNames('a.pdf, b.docx')).toBe('a.pdf, b.docx')
     expect(previewAttachmentNames('')).toBe('—')
+  })
+
+  it('previews original email filename from subject', () => {
+    expect(previewRawEmlFilename('Quote / A:B')).toBe('Quote _ A_B.eml')
+    expect(previewRawEmlFilename('')).toBe('message.eml')
   })
 })

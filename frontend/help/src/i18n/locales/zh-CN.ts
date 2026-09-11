@@ -393,7 +393,7 @@ export default {
       '示例：来源选「发件人 (From)」→ 主表 sender_email；运行时写入 IMAP 返回的原始 From 字符串（可含显示名与地址）。',
     extractAttachmentsTitle: '字段映射 — 存储邮件附件',
     extractAttachmentsBody:
-      '在字段映射增加一行，来源选「附件」。目标必须是主表 FILE 列。一封邮件的全部附件写入该字段（1 个文件=URL；多个=JSON [{url,name}]）。内嵌 CID 图片仍在 HTML 正文，不当附件存储。超过 50MB 或超过 10 个的文件会跳过并记录；若勾选必填且结果为空，邮件进入人工审核。',
+      "在字段映射增加一行，来源选「附件」。目标必须是主表 FILE 列。一封邮件的全部附件写入该字段（1 个文件=URL；多个=JSON [{'{'}url,name{'}'}]）。内嵌 CID 图片仍在 HTML 正文，不当附件存储。超过 50MB 或超过 10 个的文件会跳过并记录；若勾选必填且结果为空，邮件进入人工审核。",
     extractAttachmentsCatalogLead: '字段目录 — 字段映射页签上的「附件」来源。',
     fSourceAttachments:
       '来源分组「附件」。把入站邮件的全部非内嵌附件写入同一个 FILE 字段。方式锁定为直接映射（整值）。',
@@ -405,6 +405,18 @@ export default {
       '勾选后，没有可用附件（没有附件、全部超限或全部存储失败）的邮件会进入人工审核，不会自动发起流程。',
     fSampleAttachments:
       '样例邮件中的可选文件名（逗号分隔），仅用于预览。运行时使用真实附件；此框不会上传文件。',
+    extractRawEmlTitle: '字段映射 — 把原始邮件存为 .eml',
+    extractRawEmlBody:
+      "在字段映射增加一行，来源选「原始邮件（.eml）」。目标必须是主表 FILE 列（仅直接映射）。运行时把抓到的 RFC822 上传为一个文件，文件名为 {'{'}主题{'}'}.eml（非法字符替换；主题为空则用 message.eml）。FILE 存法与附件相同：1 个文件=URL。不会混进「附件」来源。不映射则不存储 .eml。超过 50MB 会跳过并记录；若勾选必填且抓取/上传失败，邮件进入人工审核。",
+    extractRawEmlCatalogLead: '字段目录 — 字段映射页签上的「原始邮件（.eml）」来源。',
+    fSourceRawEml:
+      '来源分组「原始邮件」。把入站邮件的原始 RFC822（.eml）写入一个 FILE 字段。方式锁定为直接映射（整值）。',
+    fRawEmlTarget:
+      '目标下拉只列出主表 FILE 列。保存会拒绝非 FILE 目标。列表为空时，请先在表设计中增加 FILE 列。若同时存储附件，请使用不同的 FILE 列。',
+    fRawEmlMethod:
+      '方式为直接映射（整值）。整封原始邮件存成一个 .eml，不会加入「附件」文件列表。',
+    fRawEmlRequired:
+      '勾选后，原始 RFC822 无法抓取或存储（空、超过 50MB 或上传失败）的邮件会进入人工审核，不会自动发起流程。',
     extractSubTableTitle: '子表（HTML 表格）页签',
     extractSubTableBody:
       '可选第三个页签。把邮件里的一张 HTML 表映射到表单子表（一行一条记录）。若绑定列表为空，请先在主流程表单添加子表。',
@@ -452,7 +464,7 @@ export default {
     fSourceDate:
       '邮件属性 — 邮件提供商记录的发送时间（可用时为 ISO-8601）。直接映射。按字段类型映射到文本或日期列。',
     fSourceMessageId:
-      '邮件属性 — Message-ID 头；缺失时为 imap-uid:{uid}。直接映射。可用于追踪/幂等列；也会写入流程业务元数据。',
+      "邮件属性 — Message-ID 头；缺失时为 imap-uid:{'{'}uid{'}'}。直接映射。可用于追踪/幂等列；也会写入流程业务元数据。",
     fSourceTextAndHtml:
       '正文来源 — 纯文本加 HTML 推导文本（推荐，适合转发/HTML-only 邮件）。配合 LABEL、BETWEEN 或 REGEX。',
     fSource:

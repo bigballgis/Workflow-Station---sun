@@ -28,7 +28,11 @@ public interface AutomationFlowService {
      * {@code metadata.hermesFlowKey == flowKey}），命中则更新草稿，否则新建；
      * {@code publish} 为 true 时随后发布并启用。
      */
-    FlowImportResult importFlow(byte[] json, boolean publish);
+    /**
+     * @param workspaceId 目标 workspace（DW 开发组 id）；空 = Public（共享/存量 workspace）。
+     *                    目标 project 不存在时由本次 managed 握手顺带建出（AP getOrCreate）。
+     */
+    FlowImportResult importFlow(byte[] json, boolean publish, String workspaceId);
 
     /**
      * 部署期解析（引擎调用）：ref 是 BPMN 里的 {@code ap:flowKey} 业务键或 legacy
@@ -43,6 +47,22 @@ public interface AutomationFlowService {
 
     /** {@link #resolveFlowRef} 的结果：本环境 flowId + 是否已有发布版本 */
     record FlowResolution(String flowId, boolean published) {}
+
+    /**
+     * 业务键占用查询（<b>跨 workspace 全局</b>）：返回持有该 {@code metadata.hermesFlowKey}
+     * 的 flow id。
+     *
+     * <p>引擎与 DW 的部署期解析都是按业务键<b>全局</b>查（{@code RESOLVE_BY_KEY_SQL} 不带
+     * projectId），所以 workspace 拆成多个 AP project 之后，键仍须全局唯一——两个团队各建一条
+     * 同键 flow 会让 BPMN 引用解析到"最近更新的那条"。创建前用本方法拒绝重复键。</p>
+     */
+    Optional<FlowKeyHolder> findFlowByKey(String flowKey);
+
+    /** 业务键的持有者：flow id + 它所在的 AP project（用于判断"是不是本 workspace 的"） */
+    record FlowKeyHolder(String flowId, String projectId) {}
+
+    /** workspace 的 AP {@code externalProjectId} → 本环境 project id；project 尚未建出时为空。 */
+    Optional<String> projectIdOfWorkspace(String externalProjectId);
 
     /**
      * 按 BPMN 引用导出（FU 导出包随带 flow 时由 DW 调用）：ref 是 {@code ap:flowId}，
@@ -76,7 +96,31 @@ public interface AutomationFlowService {
      * 同名 connection。connection 凭据不随导出包走（设计使然），缺失项须在本环境
      * 手工重建后 flow 才能运行——导入本身不被阻塞。
      */
-    List<ConnectionCheckItem> checkConnections(List<String> externalIds);
+    List<ConnectionCheckItem> checkConnections(List<String> externalIds, String workspaceId);
+
+    /**
+     * 把一条 flow 转让到另一个 workspace，<b>保留 flowId</b>（已部署的 BPMN 存的是解析后的 flowId，
+     * 换 id 会静默打断它们）。启用中的 flow 会先停用、改归属、再在目标 workspace 重新启用。
+     *
+     * <p>不随行的东西：AP 连接是 per-project 的（目标 workspace 需自建同名连接），
+     * 历史运行记录留在原 workspace（它们确实是在那里跑的）。</p>
+     */
+    FlowTransferResult transferFlow(String flowId, String targetWorkspaceId);
+
+    /**
+     * @param reEnableFailure 转让成功但在目标 workspace 重新启用失败时的原因；成功为 null
+     *                        （归属已改，需要人工在目标 workspace 启用——不静默）
+     */
+    record FlowTransferResult(String flowId, String flowKey,
+                              String fromWorkspaceId, String fromWorkspaceName,
+                              String toWorkspaceId, String toWorkspaceName,
+                              boolean wasEnabled, String reEnableFailure) {}
+
+    /** 管理面可选的 workspace（Public + 全部 ACTIVE 团队组）；导入选目标、列表筛选用。 */
+    List<WorkspaceOption> listWorkspaces();
+
+    /** 一个可选 workspace：{@code id} 是 DW 开发组 id（Public 为内置 public 组 id） */
+    record WorkspaceOption(String id, String name, boolean publicWorkspace) {}
 
     /**
      * 启停：prod 日常运维的主控制。可逆、保留执行历史、保留 flowId，
@@ -111,8 +155,14 @@ public interface AutomationFlowService {
     record ConnectionCheckItem(String externalId, boolean exists,
                                String displayName, String pieceName, String status) {}
 
+    /**
+     * {@code workspaceId} / {@code workspaceName} 是<b>解析后</b>的目标 workspace
+     * （请求省略时即 Public）：同一个包导进哪个团队结果完全不同，这条信息既回给前端展示，
+     * 也随响应体进审计日志。
+     */
     record FlowImportResult(String flowId, String flowKey, String displayName,
-                            boolean created, boolean published) {}
+                            boolean created, boolean published,
+                            String workspaceId, String workspaceName) {}
 
     record FlowRestoreResult(String flowKey, String displayName, String flowId,
                              FlowRestoreStatus status, String detail) {}

@@ -25,7 +25,8 @@ public class AutomationFlowSummary {
 
     private String projectId;
 
-    private String projectName;
+    /** workspace（DW 开发组）名；非 HERMES workspace 的 AP project 回落其显示名 */
+    private String workspaceName;
 
     /** AP flow 状态：ENABLED / DISABLED */
     private String status;

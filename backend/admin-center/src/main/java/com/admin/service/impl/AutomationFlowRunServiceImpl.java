@@ -4,6 +4,7 @@ import com.admin.config.RestTemplateConfig;
 import com.admin.dto.response.AutomationFlowRunSummary;
 import com.admin.exception.ServiceTaskApiException;
 import com.admin.service.AutomationFlowRunService;
+import com.admin.servicetask.ApWorkspaceSql;
 import com.admin.servicetask.client.ServiceTaskApiClient;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -44,9 +46,10 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
      * <p>不取 {@code triggeredBy}：Service Task 是引擎打 AP 的 webhook，AP 不给这类 run 记
      * 触发人，整列对本页可见的运行恒为空——列宽白占，还让人以为"查不到是谁触发的"。</p>
      */
-    private static final String ROW_SQL = """
+    private static final String ROW_HEAD = """
             SELECT r.id, r."flowId", r.status, r."startTime", r."finishTime",
-                   r."projectId", p."displayName" AS "projectName",
+                   r."projectId", """ + ApWorkspaceSql.LABEL_SQL + """
+                    AS "workspaceName",
                    f.metadata->>'hermesFlowKey' AS "flowKey",
                    fv."displayName" AS "flowDisplayName",
                    r."failedStep"->>'displayName' AS "failedStepName",
@@ -55,7 +58,6 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
             JOIN flow f ON f.id = r."flowId"
             JOIN flow_version fv ON fv.id = r."flowVersionId"
             JOIN project p ON p.id = r."projectId"
-            WHERE r.id IN (%s)
             """;
 
     /** AP id 是 21 位 nanoid；拼进 AP URL 前先卡形状，不让路径段带上任意字符 */
@@ -67,17 +69,20 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
     private final ServiceTaskProperties serviceTaskProperties;
     /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
+    private final ApWorkspaceSql workspaceSql;
 
     public AutomationFlowRunServiceImpl(JdbcTemplate jdbcTemplate,
                                         ObjectMapper objectMapper,
                                         ServiceTaskApiClient serviceTaskApiClient,
                                         ServiceTaskProperties serviceTaskProperties,
-                                        @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate) {
+                                        @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate,
+                                        ApWorkspaceSql workspaceSql) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.serviceTaskApiClient = serviceTaskApiClient;
         this.serviceTaskProperties = serviceTaskProperties;
         this.restTemplate = restTemplate;
+        this.workspaceSql = workspaceSql;
     }
 
     @Override
@@ -86,8 +91,11 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
             return List.of();
         }
         String placeholders = String.join(",", ids.stream().map(id -> "?").toList());
-        return jdbcTemplate.query(ROW_SQL.formatted(placeholders),
-                (rs, rowNum) -> mapRow(rs), ids.toArray());
+        String sql = ROW_HEAD + workspaceSql.joinClause() + " WHERE r.id IN (" + placeholders + ")";
+        // join 参数在前、id 在后，与 SQL 里 ? 的出现顺序一致
+        List<Object> args = new ArrayList<>(workspaceSql.joinParams());
+        args.addAll(ids);
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), args.toArray());
     }
 
     @Override
@@ -131,7 +139,7 @@ public class AutomationFlowRunServiceImpl implements AutomationFlowRunService {
                 .flowKey(rs.getString("flowKey"))
                 .flowDisplayName(rs.getString("flowDisplayName"))
                 .projectId(rs.getString("projectId"))
-                .projectName(rs.getString("projectName"))
+                .workspaceName(rs.getString("workspaceName"))
                 .status(rs.getString("status"))
                 .startTime(start)
                 .finishTime(finish)

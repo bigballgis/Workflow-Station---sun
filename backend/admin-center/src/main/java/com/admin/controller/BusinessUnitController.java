@@ -80,7 +80,7 @@ public class BusinessUnitController {
     public ResponseEntity<Void> moveBusinessUnit(
             @PathVariable String unitId,
             @RequestBody BusinessUnitMoveRequest request) {
-        organizationManager.moveBusinessUnit(unitId, request.getNewParentId());
+        organizationManager.moveBusinessUnit(unitId, request.getNewParentId(), request.getSortOrder());
         return ResponseEntity.ok().build();
     }
     
