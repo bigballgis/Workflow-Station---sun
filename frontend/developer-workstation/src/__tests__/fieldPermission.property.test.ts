@@ -96,7 +96,11 @@ describe('Property 5: Task Form field permission values are valid', () => {
           const trueExtras = extraKeys.filter(k => !formFieldSet.has(k))
           if (trueExtras.length === 0) return // skip if all happen to overlap
 
-          const permissions: Record<string, string> = {}
+          // Null-prototype map on purpose: on a plain `{}`, assigning the generated key
+          // `__proto__` sets the prototype instead of creating an own property, so
+          // Object.keys() never sees it and the fixture silently cannot express the very
+          // case it claims to test (fast-check finds that seed and fails the property).
+          const permissions: Record<string, string> = Object.create(null)
           for (const field of formFields) {
             permissions[field] = 'EDITABLE'
           }

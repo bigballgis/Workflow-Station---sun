@@ -31,6 +31,7 @@
       :file="detailsFile"
       :readonly="disabled"
       :labels="detailLabels"
+      :cannot-download="cannotDownload === true"
     />
   </div>
 </template>
@@ -64,6 +65,7 @@ const props = defineProps<{
   maxFiles?: number
   maxFileSizeMb?: number
   multiple?: boolean
+  cannotDownload?: boolean
   disabled?: boolean
   httpRequest?: (options: UploadRequestOptions) => XMLHttpRequest | Promise<unknown>
   onChange?: (_file: unknown, list?: LiveFile[]) => void

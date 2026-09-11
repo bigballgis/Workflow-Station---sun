@@ -21,6 +21,7 @@
 #   .\build-and-deploy.ps1 -SkipSuperset      # Skip Superset entirely (build/start/bootstrap); e.g. offline hosts that can't install psycopg2-binary
 #
 # Incremental strategy (default, without -Clean / -ForceBuild):
+#   - Drop IDE "Unresolved compilation problem" .class stubs, then Maven
 #   - Skip Maven when backend JARs are newer than sources/poms
 #   - Skip Vite when frontend dist is newer than sources/config
 #   - Skip Docker build when image is newer than Dockerfile + build inputs
@@ -428,6 +429,35 @@ function Get-BackendJarPath {
         Select-Object -First 1
     if ($jar) { return $jar.FullName }
     return $null
+}
+
+# VS Code/Eclipse Java writes .class files that throw
+# "Unresolved compilation problem" when a type is missing from the IDE classpath.
+# Those files are newer than the .java, so Maven incremental compile skips them
+# and testCompile/package then fail or ship broken bytecode.
+function Remove-IdeUnresolvedClassFiles {
+    $modulesTouched = 0
+    foreach ($mod in @(Get-ChildItem -Path (Join-Path $RootDir "backend") -Directory -ErrorAction SilentlyContinue)) {
+        $targetDir = Join-Path $mod.FullName "target"
+        if (-not (Test-Path -LiteralPath $targetDir)) { continue }
+        $removed = 0
+        foreach ($classFile in @(Get-ChildItem -Path $targetDir -Recurse -Filter *.class -ErrorAction SilentlyContinue)) {
+            $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($classFile.FullName))
+            if ($ascii.Contains("Unresolved compilation")) {
+                Remove-Item -LiteralPath $classFile.FullName -Force -ErrorAction SilentlyContinue
+                $removed++
+            }
+        }
+        if ($removed -gt 0) {
+            $statusDir = Join-Path $targetDir "maven-status"
+            if (Test-Path -LiteralPath $statusDir) {
+                Remove-Item -LiteralPath $statusDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $modulesTouched++
+            Write-Host "  Dropped $removed IDE stub class file(s) in $($mod.Name)" -ForegroundColor DarkYellow
+        }
+    }
+    return $modulesTouched
 }
 
 function Test-BackendJarsFresh {
@@ -927,7 +957,11 @@ $env:SUPERSET_PIP_CONF_FILE = Resolve-SupersetPipConfFile
 
 # Step 1: Maven build (incremental unless -Clean / -ForceBuild)
 if (-not $SkipMaven) {
-    $mavenFresh = (-not $Clean) -and (-not $ForceBuild) -and (Test-BackendJarsFresh)
+    $ideStubsRemoved = 0
+    if (-not $Clean) {
+        $ideStubsRemoved = Remove-IdeUnresolvedClassFiles
+    }
+    $mavenFresh = (-not $Clean) -and (-not $ForceBuild) -and ($ideStubsRemoved -eq 0) -and (Test-BackendJarsFresh)
     if ($mavenFresh) {
         Write-Host "`n[1/4] Skipping Maven (backend JARs are fresh)." -ForegroundColor DarkGray
     } else {

@@ -292,8 +292,16 @@ service-task:
   managed:
     signing-key-id: ${ACTIVEPIECES_MANAGED_SIGNING_KEY_ID:}
     private-key: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:}
+    # Public / 历史共享 workspace 的 AP externalProjectId。DW 的团队 workspace 各自映射到
+    # team-project-external-id-prefix + <虚拟组 id>，故此值只服务 Public（存量 flow 原地不动）。
     project-external-id: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:hermes-main}
     token-ttl-seconds: ${ACTIVEPIECES_MANAGED_TOKEN_TTL:120}
+    # Automation workspace 映射（DW 开发组 → AP project）。默认值与 DW 的 DevGroupConstants
+    # 及种子脚本一致，正常环境无需覆盖。
+    public-group-id: vg-dev-public
+    team-project-external-id-prefix: hermes-dg-
+    # Public workspace 里非 SYS_ADMIN 用的 AP 角色：Viewer 只有 READ_*，AP 路由层据此真的拒写。
+    read-only-project-role: Viewer
     # 影子用户角色：平台级 ADMIN|MEMBER，project 级 Admin|Editor|Viewer（逐字对应 project_role.name）。
     # 默认全权——从 admin center 进入的人要能用平台级页面；每次握手会同步既有影子用户的角色。
     platform-role: ${ACTIVEPIECES_MANAGED_PLATFORM_ROLE:ADMIN}

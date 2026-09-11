@@ -28,8 +28,28 @@ export function attributePreviewValue(
 
 export function stripHtml(html: string): string {
   if (!html) return ''
-  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const withBreaks = html.replace(/<br\s*\/?>/gi, '\n')
+  const doc = new DOMParser().parseFromString(withBreaks, 'text/html')
   return doc.body?.textContent ?? ''
+}
+
+export function normalizeBody(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
+}
+
+export function sameNormalizedBody(left: string, right: string): boolean {
+  const a = normalizeBody(left)
+  const b = normalizeBody(right)
+  return a === b || a.includes(b) || b.includes(a)
+}
+
+function preferLineBreaks(left: string, right: string): string {
+  const leftBreaks = (left.match(/\r|\n/g) ?? []).length
+  const rightBreaks = (right.match(/\r|\n/g) ?? []).length
+  if (leftBreaks !== rightBreaks) {
+    return leftBreaks > rightBreaks ? left : right
+  }
+  return left.length >= right.length ? left : right
 }
 
 export function combinedSampleTextAndHtml(sample: ExtractionSamplePreview): string {
@@ -37,8 +57,8 @@ export function combinedSampleTextAndHtml(sample: ExtractionSamplePreview): stri
   const html = stripHtml(sample.html)?.trim() ?? ''
   if (!plain) return html
   if (!html) return plain
-  if (plain.includes(html) || html.includes(plain)) {
-    return plain.length >= html.length ? plain : html
+  if (sameNormalizedBody(plain, html)) {
+    return preferLineBreaks(plain, html)
   }
   return `${plain}\n${html}`
 }
@@ -46,7 +66,11 @@ export function combinedSampleTextAndHtml(sample: ExtractionSamplePreview): stri
 export function sourceText(sample: ExtractionSamplePreview, source?: string): string {
   if (source === 'SUBJECT') return sample.subject
   if (source === 'HTML') return stripHtml(sample.html)
-  if (source === 'TEXT' || source === 'TEXT_AND_HTML') return combinedSampleTextAndHtml(sample)
+  if (source === 'TEXT') {
+    const plain = sample.text?.trim() ?? ''
+    return plain || stripHtml(sample.html)
+  }
+  if (source === 'TEXT_AND_HTML') return combinedSampleTextAndHtml(sample)
   return sample.text
 }
 

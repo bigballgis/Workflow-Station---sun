@@ -30,7 +30,8 @@ export interface AutomationFlowRunSummary {
   /** 执行时那个版本的名字(flow 改名后历史仍显示当时的名字) */
   flowDisplayName: string
   projectId: string
-  projectName: string
+  /** workspace（DW 开发组）名；非 HERMES workspace 的 AP project 回落其显示名 */
+  workspaceName: string
   status: AutomationRunStatus
   startTime: string | null
   finishTime: string | null

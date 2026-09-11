@@ -21,6 +21,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -97,7 +98,7 @@ class EmailMonitorProcessorTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> vars = ArgumentCaptor.forClass(Map.class);
         verify(portalSyncComponent).startPortalProcess(
-                eq("case_process"), eq("FU-MCY"), eq("system"), eq("email:m2"), vars.capture());
+                eq("case_process"), eq("FU-MCY"), eq("system"), isNull(), vars.capture());
         assertThat(vars.getValue()).containsEntry("case_number", "ABC-7");
         assertThat(vars.getValue()).containsEntry("initiator", "system");
         assertThat(vars.getValue()).containsEntry("functionUnitCode", "FU-MCY");

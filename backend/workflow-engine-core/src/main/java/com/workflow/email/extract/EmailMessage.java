@@ -16,6 +16,7 @@ import java.util.Map;
  * @param html         HTML body, may be {@code null}
  * @param headers      lower-cased header name -> value (e.g. {@code from}, {@code date})
  * @param attachments  non-inline parts (filename + bytes); empty when the mail has none
+ * @param rawRfc822    original RFC822 bytes ({@code writeTo}); empty when capture failed or tests omit it
  */
 public record EmailMessage(
         String messageId,
@@ -24,10 +25,24 @@ public record EmailMessage(
         String text,
         String html,
         Map<String, String> headers,
-        List<EmailAttachment> attachments
+        List<EmailAttachment> attachments,
+        byte[] rawRfc822
 ) {
     public EmailMessage {
         attachments = attachments == null ? List.of() : List.copyOf(attachments);
+        rawRfc822 = rawRfc822 == null ? new byte[0] : rawRfc822;
+    }
+
+    /** Compatibility constructor for tests and callers that do not carry raw RFC822. */
+    public EmailMessage(
+            String messageId,
+            String subject,
+            String from,
+            String text,
+            String html,
+            Map<String, String> headers,
+            List<EmailAttachment> attachments) {
+        this(messageId, subject, from, text, html, headers, attachments, new byte[0]);
     }
 
     /** Compatibility constructor for tests and callers that do not carry attachments. */
@@ -38,7 +53,11 @@ public record EmailMessage(
             String text,
             String html,
             Map<String, String> headers) {
-        this(messageId, subject, from, text, html, headers, List.of());
+        this(messageId, subject, from, text, html, headers, List.of(), new byte[0]);
+    }
+
+    public boolean hasRawRfc822() {
+        return rawRfc822.length > 0;
     }
 
     public List<String> attachmentNames() {

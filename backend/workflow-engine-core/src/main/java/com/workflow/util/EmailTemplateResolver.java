@@ -3,6 +3,7 @@ package com.workflow.util;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -38,6 +39,25 @@ public final class EmailTemplateResolver {
         String withLookupFields = replaceLookupFields(withSubFields, variables);
         String withTopLevel = BpmnExtensionUtils.resolveExpression(withLookupFields, variables);
         return resolveBareSubTableFields(withTopLevel, variables);
+    }
+
+    /** HTML bodies: escape scalar ${var} values so subject text like {@code <Test>} stays text. */
+    public static String resolveHtml(String template, Map<String, Object> variables) {
+        return resolve(template, htmlEscapedScalars(variables));
+    }
+
+    private static Map<String, Object> htmlEscapedScalars(Map<String, Object> variables) {
+        if (variables == null) {
+            return null;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>(variables);
+        for (Map.Entry<String, Object> entry : copy.entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof String text) {
+                copy.put(entry.getKey(), SubTableHtmlFormatter.escapeHtml(text));
+            }
+        }
+        return copy;
     }
 
     private static String replaceSubTableHtml(String template, Map<String, Object> variables) {

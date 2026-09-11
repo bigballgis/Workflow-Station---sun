@@ -3,6 +3,8 @@ package com.admin.component;
 import com.admin.dto.request.AutomationFlowListQueryRequest;
 import com.admin.service.AutomationFlowService;
 import com.platform.common.list.ListColumnFilter;
+import com.admin.servicetask.ApWorkspaceSql;
+import com.admin.servicetask.config.ServiceTaskProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +41,7 @@ class AutomationFlowListQuerySqlTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        component = new AutomationFlowListQueryComponent(jdbcTemplate, automationFlowService);
+        component = new AutomationFlowListQueryComponent(jdbcTemplate, automationFlowService, new ApWorkspaceSql(new ServiceTaskProperties()));
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
@@ -67,13 +69,14 @@ class AutomationFlowListQuerySqlTest {
     }
 
     @Test
-    void toolbarKeywordSearchesNameIdFlowKeyAndProject() {
+    void toolbarKeywordSearchesNameIdFlowKeyAndWorkspace() {
         component.query(request("invoice", List.of()));
 
         assertThat(preparedSql.get(0)).contains("fv.\"displayName\" ILIKE ?");
         assertThat(preparedSql.get(0)).contains("f.id ILIKE ?");
         assertThat(preparedSql.get(0)).contains("f.metadata->>'hermesFlowKey' ILIKE ?");
-        assertThat(preparedSql.get(0)).contains("p.\"displayName\" ILIKE ?");
+        // workspace 名（组名，回落 project 显示名）也在关键字命中范围内
+        assertThat(preparedSql.get(0)).contains(ApWorkspaceSql.LABEL_SQL + " ILIKE ?");
     }
 
     @Test

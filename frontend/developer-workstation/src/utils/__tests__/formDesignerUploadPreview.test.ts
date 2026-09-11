@@ -42,6 +42,20 @@ describe('injectPreviewUploadHandlers', () => {
     expect(rules[0].props.maxFileSizeMb).toBe(20)
   })
 
+  it('keeps a new Advanced Upload in Single mode', () => {
+    const formData = { value: {} as Record<string, unknown> }
+    const rules = [{
+      type: 'advancedUpload',
+      field: 'fileupload',
+      props: { maxFiles: 1, limit: 1, multiple: false },
+    }]
+    injectPreviewUploadHandlers(rules, formData)
+    expect(rules[0].type).toBe('formUploadDrop')
+    expect(rules[0].props.multiple).toBe(false)
+    expect(rules[0].props.limit).toBe(1)
+    expect(rules[0].props.maxFiles).toBe(1)
+  })
+
   it('does not clear in-flight files when the first upload succeeds', () => {
     const formData = { value: {} as Record<string, unknown> }
     const rules = [{ type: 'advancedUpload', field: 'fileupload', props: {} }]

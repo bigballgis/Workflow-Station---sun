@@ -36,8 +36,10 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -151,12 +153,12 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         // Snapshot for POST body separate from async work to avoid MVC serializing the same DeployResponse the worker mutates (corrupt JSON / Kong upstream error).
         DeployResponse responseBodyForClient = snapshotDeployResponseForClient(response);
 
-        SecurityContext securityContext = SecurityContextHolder.getContext();
+        SecurityContext workerSecurityContext = copySecurityContextForAsync();
         Locale currentLocale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         final String authHeader = outboundAuth.orElse(null);
 
         taskExecutor.execute(() -> {
-            SecurityContextHolder.setContext(securityContext);
+            SecurityContextHolder.setContext(workerSecurityContext);
             org.springframework.context.i18n.LocaleContextHolder.setLocale(currentLocale);
             try {
                 executeDeployment(functionUnitId, functionUnit, targetUrl, request, response, authHeader, adminUserId);
@@ -168,6 +170,16 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         });
 
         return responseBodyForClient;
+    }
+
+    /**
+     * Snapshot Authentication onto a new context. Sharing {@code SecurityContextHolder.getContext()}
+     * keeps a request-bound / deferred object; after the HTTP request ends, {@code getAuthentication()}
+     * is empty. The worker still needs the login for workspace access and publishedBy.
+     */
+    private static SecurityContext copySecurityContextForAsync() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return new SecurityContextImpl(authentication);
     }
 
     /**
@@ -210,7 +222,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         try {
             updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "RUNNING", null);
             response.setProgress(5);
-            FunctionUnit updatedUnit = functionUnitComponent.publish(functionUnitId, request.getChangeLog());
+            FunctionUnit updatedUnit = functionUnitComponent.publishForDeployment(functionUnitId, request.getChangeLog());
             response.setVersionNumber(updatedUnit.getCurrentVersion());
             response.setChangeLog(request.getChangeLog());
             updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "SUCCESS",

@@ -3766,3 +3766,209 @@
     截图 frontend/admin-center/verification-screenshots/2026-09-10_admin-rt-fu-rail-structure-page.png
     与 2026-09-10_admin-rt-fu-rail-table-data-nav.png。
 
+- id: "1621"
+  status: fixed
+  fixed_at: "2026-09-10"
+  severity: minor
+  category: bug
+  summary: "入站 IMAP 未解码 RFC 2047 地址，Portal To/From 显示 =?utf-8?B?...?="
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
+  note: |
+    根因：formatAddresses/from 使用 Address.toString()，QQ 等邮箱 To 显示名带 MIME encoded-word 原样入库。
+    修复：formatAddress 对 InternetAddress 解码 getPersonal()（MimeUtility.decodeText），
+    统一用于 From/To/Cc/Reply-To；decodeAddressText 兜底 raw 头片段。
+    验证：ImapInboundMailClientExtractTest 5/5；workflow-engine package + compose rebuild 已拉起。
+    端到端需新发 QQ 测试信（旧案 Email-000002 不回填）。
+
+- id: "1622"
+  status: fixed
+  fixed_at: "2026-09-10"
+  severity: minor
+  category: bug
+  summary: "Completed Task 快照截断历史，已执行的 Send Email / Sent 在 BPMN 上仍为白"
+  file: "frontend/user-portal/src/utils/completedTaskHistoryFilter.ts"
+  note: |
+    根因：Completed Tasks 用 snapshotTime（人工任务完成瞬间）过滤历史，Send Email
+    作为后续 serviceTask 晚几秒结束被丢掉；图上 sendTask 只认 SEND 历史。
+    修复：snapshot 之后仍保留 SEND/gateway/endEvent 等自动节点；后续人工任务仍截掉。
+    Task BPMN 解析按历史给 endEvent 上色（Sent 绿、Skipped 白）。
+    验证：vitest；portal build + user-portal-frontend rebuild。截图
+    frontend/user-portal/verification-screenshots/2026-09-11_completed-send-reply-email-green.png
+    （Sent 绿、Send Reply Email 绿、Checker Review 白）。
+
+- id: "1623"
+  status: fixed
+  fixed_at: "2026-09-10"
+  severity: major
+  category: bug
+  summary: "入站邮件已拉取但未建任务：active-for-start 与 /latest 目录版本不一致"
+  file: "backend/user-portal/src/main/java/com/portal/component/FunctionUnitAccessComponent.java"
+  note: |
+    复现：15:46 IMAP fetched=1 UID 3512；Portal start 500
+    Portal startable version mismatch。启用目录 1.0.4，/latest 仍返回已禁用 1.0.9。
+    该 messageId 已记 FAILED，游标已过，同一封不会重试。
+    修复：resolveFunctionUnitIdAlignedWithActiveCatalog 清 cache 后仍不一致则采用
+    Admin active-for-start pin。
+    验证：FunctionUnitAccessComponentTest 11/11；user-portal package + compose rebuild。
+    端到端需新发测试信（本封不会重建案）。
+
+- id: "1624"
+  status: fixed
+  fixed_at: "2026-09-10"
+  severity: major
+  category: bug
+  summary: "入站正文把纯文本和 HTML 各抽一遍再拼接，表单 Body 与发出的邮件对不上"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/extract/EmailFieldExtractor.java"
+  note: |
+    复现：Email-000001 Body 为 “hello all, / this is a test email” 后再跟一行无换行重复。
+    根因：TEXT/TEXT_AND_HTML 对 multipart/alternative 做 contains 比较时，
+    CRLF 与 Jsoup 空白折叠导致判定为两段不同正文。
+    修复：空白归一化后视为同一正文，保留换行更多的纯文本；TEXT 有纯文本时不再拼 HTML。
+    同改：Send 模板 HTML 对标量 ${var} 转义，避免主题里的 <Test> 被当成标签。
+    验证：EmailFieldExtractorTest + EmailTemplateResolverTest 33/33；
+    DW vitest emailExtractionPreview 2/2；engine package + compose rebuild Started。
+    旧案不回填；端到端需新发入站信（不要用 Portal Send Email 回环）。
+
+- id: "1625"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "DW 一键部署 Create version snapshot Access Denied（异步 SecurityContext + JWT hasAnyRole）"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+  note: |
+    复现：developer 部署 Email Inbound Reply，停在快照 5%，Access Denied。
+    层1：异步共享请求 SecurityContext 引用，请求结束后 Authentication 为空。
+    层2（拷贝后仍失败）：executeDeployment 调 publish() 的 JWT hasAnyRole，
+    与 HTTP FUNCTION_UNIT_PUBLISH 权限源不一致。
+    修复：copy Authentication；异步改调 publishForDeployment（无 PreAuthorize）。
+    验证：DeploymentComponentAsyncSecurityContextTest + MultiInstance 绿；
+    compose rebuild Started；UI Redeploy Email Inbound Reply → 1.0.10 100% 成功
+    （Create version snapshot 通过）。截图
+    frontend/developer-workstation/verification-screenshots/2026-09-11_email-inbound-reply-deploy-success.png。
+
+- id: "1626"
+  status: fixed
+  fixed_at: "2026-09-10"
+  severity: major
+  category: bug
+  summary: "Admin 组织架构树拖拽一律 500：前端 POST /business-units/{id}/move，后端只收 PUT"
+  file: "frontend/admin-center/src/api/organization.ts"
+  note: |
+    复现：登录 developer 后 POST /api/v1/admin/business-units/{id}/move → 500 SYS_INTERNAL_ERROR，
+    admin-center 日志 HttpRequestMethodNotSupportedException: Request method 'POST' is not supported。
+    修复（前端）：move 改 PUT；el-tree 加 allow-drag（仅第二级及以下）/ allow-drop（不能落到第一级前后）；
+    node-drop 从 dropNode 一侧推算新父级 + 同级下标（draggingNode.parent 在 emit 时已过期），
+    换父级先 notifyConfirm，取消/失败一律 fetchTree 回滚本地挪动；树上加 dragHint（三语言）。
+    修复（后端 OrganizationManagerComponent）：树第一级固定按名称字母序、其余按 sortOrder+名称；
+    move 增 sortOrder 重排 ACTIVE 同级；子树按 parentId BFS 重算 level/path（不再 replace 旧 path 字符串）；
+    防环改沿 parentId 链上溯（种子数据 path 是 code 拼的，原 path.contains("/"+id) 判不出环）。
+    成员/准入角色/审批人均按 BU id 挂接，移动无需改写，随节点迁移。
+    验证：OrganizationManagerComponentTest 6/6；vitest useBusinessUnitDrag 8/8（全套 58/58）；
+    dev 实跑 PUT move hase-hmdc→HK→回、HASE(带子)→ASP→回，path/level 正确、权限行数 2/10/4 不变、
+    audit 有 UPDATE BUSINESS_UNIT；Playwright 真拖拽 4 张截图
+    frontend/admin-center/verification-screenshots/2026-09-10_org-tree-*.png。
+
+- id: "1627"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "/help/email-monitor 正文空白：vue-i18n 把 JSON [{url,name}] / {主题}.eml 当插值编译失败"
+  file: "frontend/help/src/i18n/locales/zh-CN.ts"
+  note: |
+    复现：侧栏与面包屑正常，router-view 空；Console SyntaxError（message compiler parse）。
+    根因：GuideArticle t() 编译文案；[{url,name}] 非法 ICU，{主题} 非法 named 占位符。
+    同页 imap-uid:{uid} 合法但会吃掉占位符。
+    修复：三语改为 {'{'}…{'}'} 字面量（与发送邮件指南相同）；双引号字符串避免 JS 提前截断。
+    验证：pnpm build help；compose rebuild platform-help-frontend Started；
+    node scripts/verify-help-portal.mjs 61/61（en/zh-CN/zh-TW 无 pageerror，字面量可见）。
+    截图 frontend/help/verification-screenshots/2026-09-11_help-email-monitor-zh-CN.png
+    与 frontend/developer-workstation/verification-screenshots/2026-09-11_help-portal-email-monitor.png。
+
+- id: "1628"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "Email Monitor 建案 Process Title 显示 email:<Message-ID>，与 Portal 手动发起不一致"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    复现：My Request Email Inbound Reply（如 Email-000008）Title 为 email:<github Message-ID>。
+    根因：引擎 startPortalProcess 固定传 businessKey="email:"+messageId；列表 Title=businessKey||definitionName。
+    Portal New Request 不传 businessKey，Title 回退为 FU name。幂等键是 (ruleUid, messageId)，不是 businessKey。
+    修复：邮件建案改为不传 businessKey；postStart 仅在有文本时写入 JSON。
+    验证：EmailMonitorProcessorTest + EmailMonitorPortalSyncComponentTest 9/9；
+    InternalEmailProcessStartComponentTest 2/2；compose rebuild workflow-engine Started。
+    手测：新 inbound Email-000010（2026-09-11 15:50）待办 Review Inbound，
+    Process Name=Email Inbound Reply，Request ID 正常；旧实例 Title 不回写。
+
+- id: "1629"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: deploy
+  summary: "Dev Maven package failed testCompile: EmailMonitorSchedulerTest cannot find EncryptionService"
+  file: "deploy/environments/dev/build-and-deploy.ps1"
+  note: |
+    反例：build-and-deploy.ps1 在 workflow-engine-core testCompile 失败
+    EmailMonitorSchedulerTest.java:[53,21] 找不到符号 EncryptionService。
+    正例：同一命令 package -DskipTests 全模块 BUILD SUCCESS。
+    根因：IDE（Eclipse/ecj）在缺 classpath 时写出带
+    "Unresolved compilation problem" 的 .class，字段类型变成默认包
+    LEncryptionService; 且比 .java 新；Maven 增量编译跳过 javac，
+    测试按 com.platform.security.encryption.EncryptionService 去对构造器对不上。
+    本机曾扫到 admin-center 185 / user-portal 37 / engine 3 / DW 1 个 stub。
+    修复：部署前删除这类 stub 并清 maven-status，再强制 package。
+    验证：删 stub 后 engine 重编 229+98 源文件；javap 构造器已是
+    Lcom/platform/security/encryption/EncryptionService;；
+    全量 -pl 八模块 package -DskipTests BUILD SUCCESS（53s）。
+    合并 common 时两次改号：本地原 #1621 → #1628 → #1629。
+
+- id: "1630"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "Sub-table Add dialog ignored designer Single (maxFiles:1); main form did not"
+  file: "frontend/user-portal/src/components/subTableAddDialogHelpers/subFormCanvasColumns.ts"
+  note: |
+    反例：Form Design 子表 Advanced Upload 选 Single（JSON maxFiles:1），
+    Portal 子表 Add 弹窗仍可多选；主表同一控件正常。现场 Sub task binding 50548
+    file2 props.maxFiles=1。
+    正例：列映射后 resolveUploadMaxFiles(col.props)===1，弹窗 Advanced Upload
+    的 file input 无 multiple 属性。
+    根因：子表画布→列只透传 multiple，丢掉 maxFiles；运行时把 leftover
+    multiple:false+limit:1 当成未配置默认 10。主表走 applyUploadPropsFromRule
+    会读 maxFiles。
+    修复：copySubFormCanvasProps 统一拷贝 maxFiles/limit/maxFileSizeMb，
+    任务页/申请页/发起页共用。
+    验证：subFormCanvasUploadLimit.test.ts 先红后绿；属性测试改为调用
+    copySubFormCanvasProps；Portal start 子表 Add 弹窗 input 无 multiple。
+    截图 frontend/user-portal/verification-screenshots/2026-09-11_subtable-upload-single-dialog.png
+    （gitignored）。本地 Playwright 脚本不入库。
+    合并 common 时两次改号：本地原 #1622 → #1629 → #1630。
+
+- id: "1631"
+  status: fixed
+  fixed_at: "2026-09-11"
+  severity: major
+  category: bug
+  summary: "Sub-table Advanced Upload Can not download ignored on task dialog / preview playlist / file URL"
+  file: "frontend/user-portal/src/composables/filePreview/useFilePreview.ts"
+  note: |
+    反例：主表 Advanced Upload 打开 Can not download 后 File Preview 无 Download；
+    子表弹窗详情抽屉仍露出文件 URL（Ctrl+点击即下载），任务页 dialogColumns
+    不继承其它表单的 blockedKeys；playlist collect 缺 flag 时盖掉点击现场的 true。
+    正例：openFilePreviewFromList 在 playlist 漏 flag 时仍 cannotDownload=true；
+    FormUploadFileDetails cannotDownload 时 DOM 不含文件 URL。
+    根因：不是 maxFiles 那种漏拷贝（cannotDownload 早已在列映射里）；
+    任务/申请页 dialogColumns 未传 blockedKeys；playlist 用 collect 项覆盖
+    点击项；详情抽屉 <a href=文件URL> 始终可下。DW 子表网格点击无条件 downloadFile。
+    修复：task/application 弹窗列带上 cannotDownloadFieldKeysFromForms；
+    playlist OR 点击现场 flag；详情抽屉开关打开时隐藏 URL；DW 网格拦截下载；
+    下载判断抽到 shared uploadDownloadFlags。
+    验证：useFilePreview.test / FormUploadFileDetails.test / uploadDownloadFlags.test
+    先红后绿；portal+DW 相关 vitest。Guidelines runtimeBody 写明禁止下载时无 Callback URL。
+    合并 common 时两次改号：本地原 #1623 → #1630 → #1631。
+

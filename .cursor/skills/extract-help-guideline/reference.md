@@ -61,7 +61,8 @@ quote to PR.
 | Email send | `EmailTemplateDesigner.vue`, `EmailBodySplitEditor.vue`, `SendTaskProperties.vue`, `emailTemplate` / `connection` i18n |
 | Email monitor | `EmailMonitorDesigner.vue`, `StartEventEmailMonitorSection.vue`, `emailMonitor` i18n |
 | Form / sub-table | Form designer i18n — extract **how to bind**, not MI invariant I1–I7 |
-| Form events | Existing `/help/form-events` (+ basic/extend/layout); `HermesEventConfig.vue` / `HermesFnConfig.vue`; designer event i18n. Effect methods = how-to skeleton; `$inject` / Create lists = reference |
+| Form events | Hub `/help/form-events`; `HermesEventConfig.vue` / `HermesFnConfig.vue`. Effect methods = how-to skeleton. Per palette type: own article (SKILL.md Control article skeleton), not a group dump. |
+| Form controls (Basic / Extend / Layout) | Designer palette + that type’s properties panel; `formCreateDefaultEvents/constants.ts` for Create events; `main.ts` `addDragRule` for custom types |
 | Relation tables | Admin relation computed-field i18n (no MAIN/SUB) |
 
 When scanning: grep designer `*Guide*`, `dialogHint`, `placeholder`, and
@@ -91,5 +92,74 @@ Port / TLS are filled in Admin Center, still list that row.
 
 ## One article = one designer job
 
-If the topic would exceed ~12 sections, split into two `GUIDELINES` ids and say
-so in the 提取清单.
+A **palette control** (Input, Checkbox, Lookup) is one job → one `GUIDELINES`
+id (see SKILL.md **Subpages**). A folder (Basic) may have a short index plus
+child articles.
+
+If any **other** topic would exceed ~12 sections, split into two `GUIDELINES`
+ids and say so in the 提取清单. More than ~12 **product objects** on one page
+(21 Basic types behind `#hash`) is the same split trigger.
+
+## Subpages (NAV)
+
+Distilled from [La Suite Docs](https://github.com/suitenumerique/docs) knowledge
+tree. Do not import that editor.
+
+| Allowed hash | Forbidden |
+|---|---|
+| `/email-send#connection` — Connection is a chapter of Send email | `/form-events-basic#checkbox` — Checkbox is its own palette object |
+| `/form-events#required` — one method on the events hub | Pointing every Basic leaf at the same events dump |
+
+`NAV_TREE` leaf `titleKey` should match the article `pageTitle` when the leaf
+names a control. `llms.txt`: one URL per control, not one line for the whole
+palette.
+
+Form-events candidate: hub `/form-events`; per-control `/form-ctl-<type>`;
+group indexes `/form-events-basic` etc. after split. Read
+`formCreateDefaultEvents/constants.ts` + **the selected control’s properties
+panel** for catalogs.
+
+## Human copy (anti-AI flavor)
+
+Use from SKILL.md **Human copy**. This list is the shipping scan for locale
+strings. It is **not** a license to run a general AI-humanizer: no humor, no
+first-person feelings, no rhetorical questions, no padded word count.
+
+### Keep vs cut
+
+| Keep | Cut |
+|---|---|
+| Exact on-screen labels, required/blank, visible failures | Template sentence shells that work for any product |
+| Click-the-UI / script how-to / reference genres | “In this article we will cover…” / 下面分为三点 |
+| Short facts; one job per section | Claim + explanation + recap in every paragraph |
+| Cross-links to other `/help/` ids | Closing “hope this helps” / 希望这能帮到你 |
+
+### Banned shells (scan zh-CN / zh-TW / en)
+
+| Family | zh | en |
+|---|---|---|
+| Contrast | 不是…而是；不在于…而在于；与其说…不如说 | not X, but Y (as a thesis opener) |
+| Essence | 真正重要的是；真正决定…的是；本质上；核心在于 | The key is…; At its core; What really matters |
+| Sequence lecture | 首先 / 其次 / 最后；第一步…第二步（when not a real `flow-keys` step） | First,… Second,… Finally,… (in prose; `flow-keys` may still number real UI steps) |
+| Signpost | 下面我们来；接下来我会；我们可以看到 | Let’s dive in; Let’s walk through; We’ll explore |
+| Lecture wrap | 总的来说；值得注意的是；由此可见；不难看出；基于以上 | It’s worth noting; As we can see; Based on the above |
+| Fake Q&A | 你觉得呢？你有没有类似经历？你现在卡在哪一步？ | What do you think?; Have you ever…?; Sound familiar? |
+| Inflated open | 这次只看；这个问题很简单：；随着…的发展 | In today’s fast-paced…; Whether you’re a beginner or… |
+| Closing filler | 希望这能帮到你；如有疑问欢迎… | Hope this helps; Don’t hesitate to reach out |
+
+Designer **order of work** is allowed as `flow-keys` (Step 1 on the real screen).
+Do not repeat those steps again as 首先/其次 in the intro.
+
+### Rewrite examples (help voice)
+
+Bad: 真正重要的不是把公式写得很长，而是先勾选 Computed，再打开 Formula。
+Good: Tick **Computed**, open **Formula**, then save the table.
+
+Bad: 值得注意的是，BU 和 Role 都空时，只有系统管理员看得到该视图。
+Good: If BU and Role are both empty, only System Administrator sees the view.
+
+Bad: 接下来我们来看失败情况。你现在卡在哪一步？
+Good: (failures `failKeys` only) Save is blocked until both BU and Role are set.
+
+If a paragraph is already operational and names real controls, leave it. Do not
+“polish” it into warmer prose.

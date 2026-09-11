@@ -1,6 +1,5 @@
 import { computed, nextTick, type ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
-import dayjs from 'dayjs'
 import {
   getTaskHistory,
   type TaskHistoryInfo,
@@ -34,6 +33,7 @@ import {
   extractCompletedFormFromVariables,
   hasSnapshotFieldValues,
 } from '@/utils/completedTaskSnapshot'
+import { shouldKeepCompletedHistoryItem as keepCompletedHistoryItem } from '@/utils/completedTaskHistoryFilter'
 
 export type PrefetchedTaskForms = {
   pfData: ProcessFormData | null
@@ -123,19 +123,13 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
       : taskId
   ))
 
-  function isWithinCompletedSnapshot(itemTime?: string | null): boolean {
-    if (!isCompletedTask.value || !completedHistorySnapshotTime.value) return true
-    if (!itemTime) return true
-    const item = dayjs(itemTime)
-    const cutoff = dayjs(completedHistorySnapshotTime.value)
-    if (!item.isValid() || !cutoff.isValid()) return true
-    return item.valueOf() <= cutoff.valueOf()
-  }
-
   function shouldKeepCompletedHistoryItem(item: TaskHistoryInfo): boolean {
-    if (!isCompletedTask.value || !hasCompletedSnapshotRoute()) return true
-    if (completedHistoryTaskId.value && item.taskId === completedHistoryTaskId.value) return true
-    return isWithinCompletedSnapshot(item.operationTime)
+    return keepCompletedHistoryItem(item, {
+      isCompletedTask: isCompletedTask.value,
+      hasSnapshotRoute: hasCompletedSnapshotRoute(),
+      snapshotTaskId: completedHistoryTaskId.value,
+      snapshotTime: completedHistorySnapshotTime.value,
+    })
   }
 
   /** Mount heavy UI in frames so the shell paints before bpmn-js + FormRenderer block the main thread. */

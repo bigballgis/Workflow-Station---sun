@@ -57,4 +57,23 @@ class EmailExtractionAttachmentRulesValidatorTest {
                 DeveloperBusinessException.class, () -> validator.validate(8L, rules));
         assertEquals("VALIDATION_ATTACHMENTS_TARGET_NOT_FILE", ex.getErrorCode());
     }
+
+    @Test
+    void acceptsRawEmlMappedToFileColumn() {
+        Map<String, Object> rules = Map.of("fields", List.of(Map.of(
+                "target", "quote_files", "source", "RAW_EML", "type", "DIRECT")));
+        assertDoesNotThrow(() -> validator.validate(8L, rules));
+    }
+
+    @Test
+    void rejectsRawEmlMappedToNonFileColumn() {
+        when(i18nService.getMessage("email.monitor.raw_eml_target_must_be_file", "title"))
+                .thenReturn("must be FILE");
+        Map<String, Object> rules = Map.of("fields", List.of(Map.of(
+                "target", "title", "source", "RAW_EML", "type", "DIRECT")));
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class, () -> validator.validate(8L, rules));
+        assertEquals("VALIDATION_RAW_EML_TARGET_NOT_FILE", ex.getErrorCode());
+    }
 }

@@ -159,7 +159,7 @@ export default {
     },
     formUpload: {
       title: '表單設計 — 進階上傳',
-      summary: 'Extend 裡的進階上傳：最多檔案數、大小上限、FileNet。Basic 的 Upload 保持原生。',
+      summary: 'Extend 裡的進階上傳：多檔開關（預設單檔）、大小上限、FileNet。Basic 的 Upload 保持原生。',
     },
     formEvents: {
       title: '表單事件',
@@ -393,7 +393,7 @@ export default {
       '示例：來源選「寄件人 (From)」→ 主表 sender_email；執行時寫入 IMAP 回傳的原始 From 字串（可含顯示名稱與地址）。',
     extractAttachmentsTitle: '欄位對應 — 儲存郵件附件',
     extractAttachmentsBody:
-      '在欄位對應新增一列，來源選「附件」。目標必須是主表 FILE 欄。一封郵件的全部附件寫入該欄（1 個檔案=URL；多個=JSON [{url,name}]）。內嵌 CID 圖片仍在 HTML 內文，不當附件儲存。超過 50MB 或超過 10 個的檔案會略過並記錄；若勾選必填且結果為空，郵件進入人工審核。',
+      "在欄位對應新增一列，來源選「附件」。目標必須是主表 FILE 欄。一封郵件的全部附件寫入該欄（1 個檔案=URL；多個=JSON [{'{'}url,name{'}'}]）。內嵌 CID 圖片仍在 HTML 內文，不當附件儲存。超過 50MB 或超過 10 個的檔案會略過並記錄；若勾選必填且結果為空，郵件進入人工審核。",
     extractAttachmentsCatalogLead: '欄位目錄 — 欄位對應頁籤上的「附件」來源。',
     fSourceAttachments:
       '來源分組「附件」。把入站郵件的全部非內嵌附件寫入同一個 FILE 欄位。方式鎖定為直接對應（整值）。',
@@ -405,6 +405,18 @@ export default {
       '勾選後，沒有可用附件（沒有附件、全部超限或全部儲存失敗）的郵件會進入人工審核，不會自動發起流程。',
     fSampleAttachments:
       '樣例郵件中的可選檔名（逗號分隔），僅用於預覽。執行時使用真實附件；此框不會上傳檔案。',
+    extractRawEmlTitle: '欄位對應 — 把原始郵件存成 .eml',
+    extractRawEmlBody:
+      "在欄位對應新增一列，來源選「原始郵件（.eml）」。目標必須是主表 FILE 欄（僅直接對應）。執行時把抓到的 RFC822 上傳為一個檔案，檔名為 {'{'}主旨{'}'}.eml（非法字元替換；主旨為空則用 message.eml）。FILE 存法與附件相同：1 個檔案=URL。不會混進「附件」來源。不對應則不儲存 .eml。超過 50MB 會略過並記錄；若勾選必填且擷取/上傳失敗，郵件進入人工審核。",
+    extractRawEmlCatalogLead: '欄位目錄 — 欄位對應頁籤上的「原始郵件（.eml）」來源。',
+    fSourceRawEml:
+      '來源分組「原始郵件」。把入站郵件的原始 RFC822（.eml）寫入一個 FILE 欄位。方式鎖定為直接對應（整值）。',
+    fRawEmlTarget:
+      '目標下拉只列出主表 FILE 欄。儲存會拒絕非 FILE 目標。清單為空時，請先在表設計中新增 FILE 欄。若同時儲存附件，請使用不同的 FILE 欄。',
+    fRawEmlMethod:
+      '方式為直接對應（整值）。整封原始郵件存成一個 .eml，不會加入「附件」檔案清單。',
+    fRawEmlRequired:
+      '勾選後，原始 RFC822 無法擷取或儲存（空、超過 50MB 或上傳失敗）的郵件會進入人工審核，不會自動發起流程。',
     extractSubTableTitle: '子表（HTML 表格）頁籤',
     extractSubTableBody:
       '可選第三個頁籤。把郵件裡的一張 HTML 表對應到表單子表（一列一筆紀錄）。若綁定清單為空，請先在主流程表單新增子表。',
@@ -452,7 +464,7 @@ export default {
     fSourceDate:
       '郵件屬性 — 郵件提供商記錄的寄送時間（可用時為 ISO-8601）。直接對應。依欄位型別對應到文字或日期欄。',
     fSourceMessageId:
-      '郵件屬性 — Message-ID 標頭；缺失時為 imap-uid:{uid}。直接對應。可用於追蹤/冪等欄；亦會寫入流程業務中繼資料。',
+      "郵件屬性 — Message-ID 標頭；缺失時為 imap-uid:{'{'}uid{'}'}。直接對應。可用於追蹤/冪等欄；亦會寫入流程業務中繼資料。",
     fSourceTextAndHtml:
       '內文來源 — 純文字加 HTML 推導文字（建議，適合轉寄/HTML-only 郵件）。配合 LABEL、BETWEEN 或 REGEX。',
     fSource:
@@ -604,10 +616,10 @@ export default {
     pageTitle: '表單設計 — 進階上傳',
     crumb: '開發工作站 · 功能單元 · 表單設計 · Extend',
     intro:
-      '進階上傳在 Extend 調色盤。可以一次選多個檔案。預設最多 10 個、每個 10MB。平台單檔硬上限是 50MB；檔案需要超過 10MB 時，在欄位上設定「單檔大小上限」。需要單檔時，把「最多檔案數」設為 1。已儲存 JSON 裡若仍是「多選」關閉且「數量限制」為 1，那是當年產生器寫死的值，不是設計者選擇——在你改「最多檔案數」之前，它們同樣最多 10 個。屬性面板顯示「最多檔案數」、「單檔大小上限」、禁止下載、Readonly，以及 Advance（FileNet）。Basic 裡的 Upload 是 form-create 原生控制項，屬性保持原樣。',
+      '進階上傳在 Extend 調色盤。新建欄位預設單檔：表單上只能傳一個檔案，儲存值是 URL，方便 Activepieces 的 File / 發郵件步驟使用。打開「多檔」後才可設定數量（打開時預設 10）。預設單檔大小上限 10MB；平台硬上限 50MB。已儲存 JSON 裡若仍是「多選」關閉、「數量限制」為 1、且沒有最多檔案數，那是當年產生器寫死的值——在你改開關之前，它們同樣最多 10 個。屬性面板顯示「多檔」、「單檔大小上限」、禁止下載、Readonly，以及 Advance（FileNet）。Basic 裡的 Upload 是 form-create 原生控制項，屬性保持原樣。',
     flowTitle: '操作順序',
     flow1: '先在 Table Design 新增 FILE 欄；再在表單設計用「匯入表欄位」，或把進階上傳的 Field 改成該欄名',
-    flow2: '設定「最多檔案數」（預設 10；1 表示單檔）和「單檔大小上限」（預設 10MB，最高 50MB）',
+    flow2: '需要單檔就保持「多檔」關閉；需要多個檔案時打開開關並設定「最多檔案數」。再設定「單檔大小上限」（預設 10MB，最高 50MB）',
     flow3: '需要時打開 Advance，填寫 FileNet 請求頭與倉庫對應',
     flow4: '若 My Request、待辦或已辦也要顯示同一批檔案，開啟對應場景表單，點「從發起表單新增進階上傳」（把同一 Field 複製到主畫布和相同實體表的子表），再儲存',
     flow5: '在該表單的預覽或使用者入口核對',
@@ -615,21 +627,21 @@ export default {
     scenesBody:
       '發起、My Request、待辦各有一份表單設計。入口只渲染該畫布上放了的進階上傳，且元件的 Field 必須是 Table Design 裡的 FILE 欄名（和一般上傳一樣，例如 fileupload）。先在 Table Design 建 FILE 欄，再用匯入表欄位，或把元件 Field 改成該欄名。從 Extend 拖入不會往表裡加欄。在 My Request 或 Assign Task 上點「從發起表單新增進階上傳」，會複製這些 Field，發起時已上傳的檔案才能顯示。儲存該表單。',
     scenesSample: '進階上傳 Field 屬性裡填寫 Table Design 的 FILE 欄名',
-    maxTitle: '最多檔案數',
+    maxTitle: '多檔',
     maxBody:
-      '在上傳欄位屬性裡，「最多檔案數」就是個數上限。預設 10。設為 1 即單檔。同時最多 3 個上傳請求。屬性面板不再顯示「多選」和元件自帶的數量限制，只認「最多檔案數」。',
-    maxSample: '上傳屬性面板上的「最多檔案數」',
+      '在上傳欄位屬性裡，「多檔」預設關閉（單檔），此時表單只能傳一個檔案。打開後出現「最多檔案數」，可設 2 到 50（打開時預設 10）。同時最多 3 個上傳請求。屬性面板不再顯示元件自帶的數量限制，只認「多檔」開關和「最多檔案數」。只存一個檔案時是 URL；兩個及以上是帶 url 和 name 的 JSON 陣列。',
+    maxSample: '上傳屬性面板上的「多檔」開關',
     maxSizeTitle: '單檔大小上限',
     maxSizeBody:
       '「單檔大小上限」是每個檔案的 MB 上限。未設定的欄位仍是 10MB。可設 1 到 50。50MB 是平台硬上限（Spring、前端 nginx、上傳 API）。邊緣 nginx 已是 50M；Kong 允許 100m。超過欄位上限的檔案在上傳前就會被拒絕。Record Note 和管理中心上傳仍走各自的 10MB 限制。',
-    maxSizeSample: '「最多檔案數」旁邊的「單檔大小上限」',
+    maxSizeSample: '「多檔」下方的「單檔大小上限」',
     advanceTitle: 'Advance（FileNet）',
     advanceBody:
       'Advance 在上傳屬性最下方，預設關閉。打開後可保存 Header Info、Repository Detail 和文件屬性對應。Search Detail List、Retrieve Request Information、Order By 只是占位。權杖和主機位址不要寫在這個面板。Advance 不會隱藏執行時詳情抽屜。',
     advanceSample: '上傳屬性裡的 Advance 開關',
     runtimeTitle: '執行時別人看到什麼',
     runtimeBody:
-      '可以把多個檔案拖進虛線框，也可以點擊虛線框，在檔案總管裡一次選多個檔案（Ctrl 或 Shift 連選）。已上傳檔案以小卡片顯示在框內，按檔名排序。點擊卡片打開抽屜，裡面是 File Description、Callback URL、Auto Send to FileNet（接上 FileNet 歸檔前顯示 Completed）。左鍵 Callback URL 打開站內預覽；Ctrl 點擊或右鍵仍走原始檔案位址。子表新增/編輯對話框同樣用卡片和抽屜。子表列表格仍顯示第一個檔案名，其餘用 +N，例如 report.pdf +2。如果上傳欄位設定了配套檔名欄，會把原始檔名寫進去，多個檔案用分號加空白拼接。傳送郵件從 FILE 欄位取附件時會帶上每一個已存檔案。',
+      '「多檔」關閉時，拖入或點選一個檔案，儲存值是單個 URL。打開後可以把多個檔案拖進虛線框，也可以點擊虛線框，在檔案總管裡一次選多個檔案（Ctrl 或 Shift 連選）。已上傳檔案以小卡片顯示在框內，按檔名排序。點擊卡片打開抽屜，裡面是 File Description、Callback URL、Auto Send to FileNet（接上 FileNet 歸檔前顯示 Completed）。左鍵 Callback URL 打開站內預覽；Ctrl 點擊或右鍵仍走原始檔案位址。若打開「禁止下載」，抽屜不展示 Callback URL，無法點到原始位址；有站內預覽時點檔名即可預覽。子表新增/編輯對話框同樣用卡片和抽屜。子表列表格仍顯示第一個檔案名，其餘用 +N，例如 report.pdf +2。如果上傳欄位設定了配套檔名欄，會把原始檔名寫進去，多個檔案用分號加空白拼接。傳送郵件從 FILE 欄位取附件時會帶上每一個已存檔案。',
     runtimeSample: '子表儲存格上的 report.pdf +2',
     failTitle: '失敗時',
     failBody:

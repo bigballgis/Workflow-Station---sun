@@ -5,6 +5,7 @@ import {
   collectCannotDownloadFieldKeysFromForms,
   uploadSceneFlagsFromForms,
 } from '../applyUploadPropsFromRule'
+import { newUploadCountProps } from '@platform-shared/upload/uploadFieldValue'
 
 function field(): FormField {
   return { key: 'fileupload', label: 'Meeting Doc', type: 'upload' }
@@ -46,6 +47,13 @@ describe('applyUploadPropsFromRule', () => {
   it('honors explicit maxFiles:1', () => {
     const f = field()
     applyUploadPropsFromRule(f, { type: 'upload', props: { maxFiles: 1 } })
+    expect(f.advancedUpload).toBe(true)
+    expect(f.uploadLimit).toBe(1)
+  })
+
+  it('honors new Advanced Upload Single defaults as one file', () => {
+    const f = field()
+    applyUploadPropsFromRule(f, { type: 'advancedUpload', props: { ...newUploadCountProps() } })
     expect(f.advancedUpload).toBe(true)
     expect(f.uploadLimit).toBe(1)
   })

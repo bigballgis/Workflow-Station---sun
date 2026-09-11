@@ -13,6 +13,8 @@ import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import { useOrganizationStore } from '@/stores/organization'
 import { type BusinessUnit, organizationApi } from '@/api/organization'
 import { businessUnitApi, type Approver } from '@/api/businessUnit'
+import type Node from 'element-plus/es/components/tree/src/model/node'
+import type { AllowDropType } from 'element-plus/es/components/tree/src/tree.type'
 
 export function useBusinessUnit() {
   const { t } = useI18n()
@@ -76,10 +78,67 @@ export function useBusinessUnit() {
 
   // ==================== Drag & Drop ====================
 
-  const handleNodeDrop = async (draggingNode: any, dropNode: any, dropType: string) => {
-    const newParentId = dropType === 'inner' ? dropNode.data.id : dropNode.data.parentId
-    await orgStore.moveBusinessUnit(draggingNode.data.id, { newParentId })
-    notifySuccess(t('common.success'))
+  /** el-tree Node（level 1 = 第一级；level 0 = 隐藏根） */
+  type TreeNodeLike = Node
+
+  /** 第一级固定按名称排序、不可拖动；只有第二级及以下可以拖 */
+  const allowDrag = (node: TreeNodeLike) => node.level > 1
+
+  /**
+   * 放进任意节点内部都行（含第一级）；但不能放到第一级的前/后——那会把它变成新的第一级节点，
+   * 而第一级顺序由名称决定、不由拖拽决定。
+   */
+  const allowDrop = (_dragging: TreeNodeLike, drop: TreeNodeLike, type: AllowDropType) =>
+    type === 'inner' || drop.level > 1
+
+  /**
+   * 从 drop 落点推算新父级和新同级下标。
+   * el-tree 在 emit node-drop 前已经把 draggingNode 从旧位置 remove 并在新位置 insert 了一个新 Node，
+   * 所以 draggingNode.parent 是过期的，必须从 dropNode 一侧读。
+   */
+  const resolveDropTarget = (draggingNode: TreeNodeLike, dropNode: TreeNodeLike, dropType: string) => {
+    const parent = dropType === 'inner' ? dropNode : dropNode.parent
+    if (!parent) return null
+    const siblings = parent.childNodes ?? []
+    const sortOrder = siblings.findIndex((n) => n.data?.id === draggingNode.data.id)
+    return {
+      newParentId: parent.level > 0 ? parent.data.id : undefined,
+      parentName: parent.level > 0 ? parent.data.name : '',
+      sortOrder: sortOrder < 0 ? undefined : sortOrder,
+    }
+  }
+
+  const handleNodeDrop = async (draggingNode: TreeNodeLike, dropNode: TreeNodeLike, dropType: string) => {
+    if (dropType === 'none') return
+    const target = resolveDropTarget(draggingNode, dropNode, dropType)
+    if (!target || !target.newParentId) {
+      await orgStore.fetchTree()
+      return
+    }
+    // 同父级内仅换顺序不用确认；换父级会连带子级、成员、角色、审批人一起迁移，先确认
+    const parentChanged = target.newParentId !== draggingNode.data.parentId
+    if (parentChanged) {
+      try {
+        await notifyConfirm(
+          t('organization.moveConfirm', { name: draggingNode.data.name, target: target.parentName }),
+          t('common.confirm'),
+          { type: 'warning' },
+        )
+      } catch {
+        await orgStore.fetchTree() // 取消：el-tree 已本地挪动，回读服务端恢复
+        return
+      }
+    }
+    try {
+      await orgStore.moveBusinessUnit(draggingNode.data.id, {
+        newParentId: target.newParentId,
+        sortOrder: target.sortOrder,
+      })
+      notifySuccess(t('common.success'))
+      if (selectedBusinessUnit.value?.id === draggingNode.data.id) await refreshDetail()
+    } catch {
+      await orgStore.fetchTree() // 失败（成环 / 同名等，request 拦截器已弹错）：恢复服务端状态
+    }
   }
 
   // ==================== Dialog Actions ====================
@@ -175,6 +234,8 @@ export function useBusinessUnit() {
     fetchMembers,
     fetchApprovers,
     handleNodeClick,
+    allowDrag,
+    allowDrop,
     handleNodeDrop,
     handleFormSuccess,
     handleDelete,

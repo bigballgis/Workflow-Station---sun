@@ -250,6 +250,9 @@ else
   exit 1
 fi
 
+# 20-email-inbound-reply/init.sql is UAT-only. Do not load it here (DEV docker init).
+# UAT: apply deploy/init-scripts/20-email-inbound-reply/init.sql manually.
+
 # --- Step 5f: Post-seed alignment ---
 # Scripts under 90-post-seed/ run on every init, AFTER all seed packages above.
 # They are not DDL and not seed data -- they reconcile state introduced by the

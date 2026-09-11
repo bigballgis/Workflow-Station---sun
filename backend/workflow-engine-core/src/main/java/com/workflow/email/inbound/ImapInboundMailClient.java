@@ -12,6 +12,7 @@ import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.UIDFolder;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeUtility;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -129,9 +131,10 @@ public class ImapInboundMailClient implements InboundMailClient {
     }
 
     private EmailMessage toEmailMessage(Message message, long uid) throws Exception {
+        byte[] rawRfc822 = captureRawRfc822(message);
         String subject = message.getSubject();
         String from = (message.getFrom() != null && message.getFrom().length > 0)
-                ? message.getFrom()[0].toString() : null;
+                ? formatAddress(message.getFrom()[0]) : null;
         String messageId = resolveMessageId(message, uid);
 
         StringBuilder text = new StringBuilder();
@@ -158,13 +161,56 @@ public class ImapInboundMailClient implements InboundMailClient {
                 text.length() > 0 ? text.toString() : null,
                 html.length() > 0 ? html.toString() : null,
                 headers,
-                attachments);
+                attachments,
+                rawRfc822);
+    }
+
+    /**
+     * Best-effort RFC822 copy for optional RAW_EML storage. Capture failure must not
+     * abort body/attachment extraction.
+     */
+    static byte[] captureRawRfc822(Message message) {
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            message.writeTo(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            // FALLBACK(ux): RFC822 capture is optional; missing .eml must not abort
+            // body/attachment extract. RAW_EML required is gated later.
+            log.warn("Failed to capture RFC822; continuing without raw eml: {}", e.getMessage());
+            return new byte[0];
+        }
     }
 
     private static void putHeader(Map<String, String> headers, String name, String value) {
         if (StringUtils.hasText(value)) {
             headers.put(name, value);
         }
+    }
+
+    static String formatAddress(Address address) {
+        if (address == null) {
+            return null;
+        }
+        if (address instanceof InternetAddress internetAddress) {
+            try {
+                String email = internetAddress.getAddress();
+                String personal = internetAddress.getPersonal();
+                if (StringUtils.hasText(personal)) {
+                    personal = decodeAddressText(personal);
+                }
+                if (StringUtils.hasText(personal) && StringUtils.hasText(email)) {
+                    return personal + " <" + email + ">";
+                }
+                if (StringUtils.hasText(email)) {
+                    return email;
+                }
+            } catch (Exception e) {
+                // FALLBACK(ux): malformed InternetAddress still rendered via toString decode
+                log.debug("InternetAddress formatting fallback: {}", e.getMessage());
+            }
+        }
+        return decodeAddressText(address.toString());
     }
 
     static String formatAddresses(Address[] addresses) {
@@ -176,9 +222,21 @@ public class ImapInboundMailClient implements InboundMailClient {
             if (i > 0) {
                 builder.append(", ");
             }
-            builder.append(addresses[i].toString());
+            builder.append(formatAddress(addresses[i]));
         }
         return builder.toString();
+    }
+
+    static String decodeAddressText(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return raw;
+        }
+        try {
+            return MimeUtility.decodeText(raw);
+        } catch (Exception e) {
+            // FALLBACK(ux): undecodable RFC 2047 fragment kept as original header text
+            return raw;
+        }
     }
 
     private String resolveMessageId(Message message, long uid) throws Exception {

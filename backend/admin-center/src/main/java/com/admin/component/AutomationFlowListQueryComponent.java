@@ -7,6 +7,7 @@ import com.admin.list.AutomationFlowColumnSpec;
 
 import com.admin.list.ListQuerySupport;
 import com.admin.service.AutomationFlowService;
+import com.admin.servicetask.ApWorkspaceSql;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,11 +32,14 @@ public class AutomationFlowListQueryComponent {
 
     static final String LIST_KEY = "admin-automation-flows";
 
-    private static final String FROM_JOIN = """
+    private static final String FROM_HEAD = """
              FROM flow f
              JOIN LATERAL (SELECT "displayName", valid, updated FROM flow_version v
                            WHERE v."flowId" = f.id ORDER BY v.created DESC LIMIT 1) fv ON true
              JOIN project p ON p.id = f."projectId"
+            """;
+
+    private static final String FROM_TAIL = """
              LEFT JOIN "user" u ON u.id = f."ownerId"
              LEFT JOIN user_identity ui ON ui.id = u."identityId"
              WHERE 1=1
@@ -43,12 +47,16 @@ public class AutomationFlowListQueryComponent {
 
     private final JdbcTemplate jdbcTemplate;
     private final AutomationFlowService automationFlowService;
+    private final ApWorkspaceSql workspaceSql;
 
     public AdminListPage<AutomationFlowSummary> query(AutomationFlowListQueryRequest request) {
         long started = System.nanoTime();
         ListFilterSql filterSql = AutomationFlowColumnSpec.sql();
-        List<Object> params = new ArrayList<>();
-        StringBuilder where = new StringBuilder(FROM_JOIN);
+        // workspace join 的参数排在最前——join 在 where 之前，顺序错了就会串位。
+        List<Object> params = new ArrayList<>(workspaceSql.joinParams());
+        StringBuilder where = new StringBuilder(FROM_HEAD)
+                .append(workspaceSql.joinClause())
+                .append(FROM_TAIL);
         appendKeyword(where, params, request.keyword());
         where.append(filterSql.whereClause(request.filters(), params));
 
@@ -105,8 +113,10 @@ public class AutomationFlowListQueryComponent {
             return;
         }
         String like = "%" + ListFilterSql.escapeLike(keyword.trim()) + "%";
+        // workspace 名也要能被工具栏关键字命中——列表按 workspace 显示，搜的自然是它
         where.append(" AND (fv.\"displayName\" ILIKE ? OR f.id ILIKE ?")
-                .append(" OR f.metadata->>'hermesFlowKey' ILIKE ? OR p.\"displayName\" ILIKE ?)");
+                .append(" OR f.metadata->>'hermesFlowKey' ILIKE ? OR ")
+                .append(ApWorkspaceSql.LABEL_SQL).append(" ILIKE ?)");
         params.add(like);
         params.add(like);
         params.add(like);

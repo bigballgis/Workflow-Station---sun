@@ -58,6 +58,27 @@ describe('file preview playlist', () => {
     closeFilePreview()
   })
 
+  it('keeps cannotDownload from the clicked field when the playlist copy omitted it', () => {
+    openFilePreviewFromList(
+      { url: '/line.pdf', name: 'line.pdf', cannotDownload: true },
+      [{ url: '/line.pdf', name: 'line.pdf' }],
+    )
+    const state = useFilePreviewState()
+    expect(state.cannotDownload).toBe(true)
+    expect(state.items[0].cannotDownload).toBe(true)
+    closeFilePreview()
+  })
+
+  it('keeps cannotDownload when the playlist already blocked the same URL', () => {
+    openFilePreviewFromList(
+      { url: '/line.pdf', name: 'line.pdf' },
+      [{ url: '/line.pdf', name: 'line.pdf', cannotDownload: true }],
+    )
+    const state = useFilePreviewState()
+    expect(state.cannotDownload).toBe(true)
+    closeFilePreview()
+  })
+
   it('leaves the form uncovered when a preview window opens', () => {
     vi.mocked(window.open).mockReturnValue({ closed: false } as Window)
     openFilePreview({ url: '/a.pdf', name: 'a.pdf' })

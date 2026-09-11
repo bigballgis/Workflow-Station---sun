@@ -5,6 +5,11 @@
   carry (ap:flowKey), so it is shown as a first-class column with a copy action.
   Keys are stamped at creation and immutable afterwards (FR-C11): renames touch
   the display name only.
+
+  The list is the WORKSPACE's flows: the session is minted for the selected team's own
+  AP project, so nothing here can belong to another team. A read-only workspace (Public
+  for non-SYS_ADMIN) hides every write action — AP would reject those writes anyway, and
+  offering buttons that always fail is worse than not offering them.
 -->
 <template>
   <div class="flows-panel">
@@ -25,6 +30,7 @@
           <el-icon><Refresh /></el-icon>{{ t('common.refresh') }}
         </el-button>
         <el-button
+          v-if="props.canWrite"
           type="primary"
           @click="openCreateDialog"
         >
@@ -120,9 +126,10 @@
               size="small"
               @click="openDesigner(row)"
             >
-              {{ t('automation.design') }}
+              {{ props.canWrite ? t('automation.design') : t('automation.viewFlow') }}
             </el-button>
             <el-dropdown
+              v-if="props.canWrite"
               trigger="click"
               @command="(cmd: string) => handleRowCommand(cmd, row)"
             >
@@ -260,13 +267,17 @@ import {
   applyAutomationFlowOperation,
   createAutomationFlow,
   deleteAutomationFlow,
+  checkAutomationFlowKey,
   listAutomationFlows,
   type ApFlow,
   type ServiceTaskSession,
 } from '@/api/automation'
 import { formatDateTime, generateFlowKey } from '../automationUi'
 
-const props = defineProps<{ session: ServiceTaskSession }>()
+const props = withDefaults(
+  defineProps<{ session: ServiceTaskSession; canWrite?: boolean }>(),
+  { canWrite: true },
+)
 const emit = defineEmits<{ (e: 'session-expired'): void }>()
 
 const { t } = useI18n()
@@ -391,6 +402,14 @@ function syncGeneratedKey() {
 async function handleCreate() {
   creating.value = true
   try {
+    // Business keys resolve globally at deployment time, so a key already used in ANOTHER
+    // workspace would silently hijack this flow's service-task references. Refuse up front.
+    const key = createForm.flowKey.trim()
+    const availability = await checkAutomationFlowKey(key)
+    if (!availability.available) {
+      ElMessage.error(t('automation.keyTaken', { key }))
+      return
+    }
     const flow = await createAutomationFlow({
       token: props.session.token,
       projectId: props.session.projectId,

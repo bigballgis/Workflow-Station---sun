@@ -58,6 +58,19 @@ describe('process start cannotDownload (New Request)', () => {
     expect(col.props?.cannotDownload).toBe(true)
   })
 
+  it('stamps Advanced Upload columns from props.cannotDownload', () => {
+    const [col] = mapSubFormRuleToDialogColumns(
+      [{
+        type: 'advancedUpload',
+        field: 'file2',
+        title: 'Advanced Upload',
+        props: { action: '/api/v1/upload', cannotDownload: true },
+      }],
+      emptyLookup,
+    )
+    expect(col.props?.cannotDownload).toBe(true)
+  })
+
   it('stamps sub-form upload columns from other-form blocked keys', () => {
     const [col] = mapSubFormRuleToDialogColumns(
       [{ type: 'upload', field: 'line_file', title: 'Line File', props: {} }],

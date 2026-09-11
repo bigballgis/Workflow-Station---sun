@@ -159,7 +159,7 @@ export default {
     },
     formUpload: {
       title: '表单设计 — 高级上传',
-      summary: 'Extend 里的高级上传：最多文件数、大小上限、FileNet。Basic 的 Upload 保持原生。',
+      summary: 'Extend 里的高级上传：多文件开关（默认单文件）、大小上限、FileNet。Basic 的 Upload 保持原生。',
     },
     formEvents: {
       title: '表单事件',
@@ -393,7 +393,7 @@ export default {
       '示例：来源选「发件人 (From)」→ 主表 sender_email；运行时写入 IMAP 返回的原始 From 字符串（可含显示名与地址）。',
     extractAttachmentsTitle: '字段映射 — 存储邮件附件',
     extractAttachmentsBody:
-      '在字段映射增加一行，来源选「附件」。目标必须是主表 FILE 列。一封邮件的全部附件写入该字段（1 个文件=URL；多个=JSON [{url,name}]）。内嵌 CID 图片仍在 HTML 正文，不当附件存储。超过 50MB 或超过 10 个的文件会跳过并记录；若勾选必填且结果为空，邮件进入人工审核。',
+      "在字段映射增加一行，来源选「附件」。目标必须是主表 FILE 列。一封邮件的全部附件写入该字段（1 个文件=URL；多个=JSON [{'{'}url,name{'}'}]）。内嵌 CID 图片仍在 HTML 正文，不当附件存储。超过 50MB 或超过 10 个的文件会跳过并记录；若勾选必填且结果为空，邮件进入人工审核。",
     extractAttachmentsCatalogLead: '字段目录 — 字段映射页签上的「附件」来源。',
     fSourceAttachments:
       '来源分组「附件」。把入站邮件的全部非内嵌附件写入同一个 FILE 字段。方式锁定为直接映射（整值）。',
@@ -405,6 +405,18 @@ export default {
       '勾选后，没有可用附件（没有附件、全部超限或全部存储失败）的邮件会进入人工审核，不会自动发起流程。',
     fSampleAttachments:
       '样例邮件中的可选文件名（逗号分隔），仅用于预览。运行时使用真实附件；此框不会上传文件。',
+    extractRawEmlTitle: '字段映射 — 把原始邮件存为 .eml',
+    extractRawEmlBody:
+      "在字段映射增加一行，来源选「原始邮件（.eml）」。目标必须是主表 FILE 列（仅直接映射）。运行时把抓到的 RFC822 上传为一个文件，文件名为 {'{'}主题{'}'}.eml（非法字符替换；主题为空则用 message.eml）。FILE 存法与附件相同：1 个文件=URL。不会混进「附件」来源。不映射则不存储 .eml。超过 50MB 会跳过并记录；若勾选必填且抓取/上传失败，邮件进入人工审核。",
+    extractRawEmlCatalogLead: '字段目录 — 字段映射页签上的「原始邮件（.eml）」来源。',
+    fSourceRawEml:
+      '来源分组「原始邮件」。把入站邮件的原始 RFC822（.eml）写入一个 FILE 字段。方式锁定为直接映射（整值）。',
+    fRawEmlTarget:
+      '目标下拉只列出主表 FILE 列。保存会拒绝非 FILE 目标。列表为空时，请先在表设计中增加 FILE 列。若同时存储附件，请使用不同的 FILE 列。',
+    fRawEmlMethod:
+      '方式为直接映射（整值）。整封原始邮件存成一个 .eml，不会加入「附件」文件列表。',
+    fRawEmlRequired:
+      '勾选后，原始 RFC822 无法抓取或存储（空、超过 50MB 或上传失败）的邮件会进入人工审核，不会自动发起流程。',
     extractSubTableTitle: '子表（HTML 表格）页签',
     extractSubTableBody:
       '可选第三个页签。把邮件里的一张 HTML 表映射到表单子表（一行一条记录）。若绑定列表为空，请先在主流程表单添加子表。',
@@ -452,7 +464,7 @@ export default {
     fSourceDate:
       '邮件属性 — 邮件提供商记录的发送时间（可用时为 ISO-8601）。直接映射。按字段类型映射到文本或日期列。',
     fSourceMessageId:
-      '邮件属性 — Message-ID 头；缺失时为 imap-uid:{uid}。直接映射。可用于追踪/幂等列；也会写入流程业务元数据。',
+      "邮件属性 — Message-ID 头；缺失时为 imap-uid:{'{'}uid{'}'}。直接映射。可用于追踪/幂等列；也会写入流程业务元数据。",
     fSourceTextAndHtml:
       '正文来源 — 纯文本加 HTML 推导文本（推荐，适合转发/HTML-only 邮件）。配合 LABEL、BETWEEN 或 REGEX。',
     fSource:
@@ -604,10 +616,10 @@ export default {
     pageTitle: '表单设计 — 高级上传',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Extend',
     intro:
-      '高级上传在 Extend 调色板。可以一次选多个文件。默认最多 10 个、每个 10MB。平台单文件硬上限是 50MB；文件需要超过 10MB 时，在字段上设置「单文件大小上限」。需要单文件时，把「最多文件数」设为 1。已保存 JSON 里若仍是「多选」关闭且「数量限制」为 1，那是当年生成器写死的值，不是设计师选择——在你改「最多文件数」之前，它们同样最多 10 个。属性面板显示「最多文件数」、「单文件大小上限」、禁止下载、Readonly，以及 Advance（FileNet）。Basic 里的 Upload 是 form-create 原生控件，属性保持原样。',
+      '高级上传在 Extend 调色板。新建字段默认单文件：表单上只能传一个文件，保存值是 URL，方便 Activepieces 的 File / 发邮件步骤使用。打开「多文件」后才可设置数量（打开时默认 10）。默认单文件大小上限 10MB；平台硬上限 50MB。已保存 JSON 里若仍是「多选」关闭、「数量限制」为 1、且没有最多文件数，那是当年生成器写死的值——在你改开关之前，它们同样最多 10 个。属性面板显示「多文件」、「单文件大小上限」、禁止下载、Readonly，以及 Advance（FileNet）。Basic 里的 Upload 是 form-create 原生控件，属性保持原样。',
     flowTitle: '操作顺序',
     flow1: '先在 Table Design 增加 FILE 列；再在表单设计用「导入表字段」，或把高级上传的 Field 改成该列名',
-    flow2: '设置「最多文件数」（默认 10；1 表示单文件）和「单文件大小上限」（默认 10MB，最高 50MB）',
+    flow2: '需要单文件就保持「多文件」关闭；需要多个文件时打开开关并设置「最多文件数」。再设置「单文件大小上限」（默认 10MB，最高 50MB）',
     flow3: '需要时打开 Advance，填写 FileNet 请求头与仓库映射',
     flow4: '若 My Request、待办或已办也要显示同一批文件，打开对应场景表单，点「从发起表单添加高级上传」（把同一 Field 复制到主画布和相同物理表的子表），再保存',
     flow5: '在该表单的预览或用户门户里核对',
@@ -615,21 +627,21 @@ export default {
     scenesBody:
       '发起、My Request、待办各有一份表单设计。门户只渲染该画布上放了的高级上传，且控件的 Field 必须是 Table Design 里的 FILE 列名（和普通上传一样，例如 fileupload）。先在 Table Design 建 FILE 列，再用导入表字段，或把控件 Field 改成该列名。从 Extend 拖入不会往表里加列。在 My Request 或 Assign Task 上点「从发起表单添加高级上传」，会复制这些 Field，发起时已上传的文件才能显示。保存该表单。',
     scenesSample: '高级上传 Field 属性里填写 Table Design 的 FILE 列名',
-    maxTitle: '最多文件数',
+    maxTitle: '多文件',
     maxBody:
-      '在上传字段属性里，「最多文件数」就是个数上限。默认 10。设为 1 即单文件。同时最多 3 个上传请求。属性面板不再显示「多选」和组件自带的数量限制，只认「最多文件数」。',
-    maxSample: '上传属性面板上的「最多文件数」',
+      '在上传字段属性里，「多文件」默认关闭（单文件），此时表单只能传一个文件。打开后出现「最多文件数」，可设 2 到 50（打开时默认 10）。同时最多 3 个上传请求。属性面板不再显示组件自带的数量限制，只认「多文件」开关和「最多文件数」。只存一个文件时是 URL；两个及以上是带 url 和 name 的 JSON 数组。',
+    maxSample: '上传属性面板上的「多文件」开关',
     maxSizeTitle: '单文件大小上限',
     maxSizeBody:
       '「单文件大小上限」是每个文件的 MB 上限。未配置的字段仍是 10MB。可设 1 到 50。50MB 是平台硬上限（Spring、前端 nginx、上传 API）。边缘 nginx 已是 50M；Kong 允许 100m。超过字段上限的文件在上传前就会被拒绝。Record Note 和管理中心上传仍走各自的 10MB 限制。',
-    maxSizeSample: '「最多文件数」旁边的「单文件大小上限」',
+    maxSizeSample: '「多文件」下方的「单文件大小上限」',
     advanceTitle: 'Advance（FileNet）',
     advanceBody:
       'Advance 在上传属性最下方，默认关闭。打开后可保存 Header Info、Repository Detail 和文档属性映射。Search Detail List、Retrieve Request Information、Order By 只是占位。令牌和主机地址不要写在这个面板。Advance 不会隐藏运行时详情抽屉。',
     advanceSample: '上传属性里的 Advance 开关',
     runtimeTitle: '运行时别人看到什么',
     runtimeBody:
-      '可以把多个文件拖进虚线框，也可以点击虚线框，在资源管理器里一次选多个文件（Ctrl 或 Shift 连选）。已上传文件以小卡片显示在框内，按文件名排序。点击卡片打开抽屉，里面是 File Description、Callback URL、Auto Send to FileNet（在接上 FileNet 归档前显示 Completed）。左键 Callback URL 打开站内预览；Ctrl 点击或右键仍走原始文件地址。子表新增/编辑对话框同样用卡片和抽屉。子表列表格仍显示第一个文件名，其余用 +N，例如 report.pdf +2。如果上传字段配置了配套文件名列，会把原始文件名写进去，多个文件用分号加空格拼接。发送邮件从 FILE 字段取附件时会带上每一个已存文件。',
+      '「多文件」关闭时，拖入或点选一个文件，保存值是单个 URL。打开后可以把多个文件拖进虚线框，也可以点击虚线框，在资源管理器里一次选多个文件（Ctrl 或 Shift 连选）。已上传文件以小卡片显示在框内，按文件名排序。点击卡片打开抽屉，里面是 File Description、Callback URL、Auto Send to FileNet（在接上 FileNet 归档前显示 Completed）。左键 Callback URL 打开站内预览；Ctrl 点击或右键仍走原始文件地址。若打开「禁止下载」，抽屉不展示 Callback URL，无法点到原始地址；有站内预览时点文件名即可预览。子表新增/编辑对话框同样用卡片和抽屉。子表列表格仍显示第一个文件名，其余用 +N，例如 report.pdf +2。如果上传字段配置了配套文件名列，会把原始文件名写进去，多个文件用分号加空格拼接。发送邮件从 FILE 字段取附件时会带上每一个已存文件。',
     runtimeSample: '子表单元格上的 report.pdf +2',
     failTitle: '失败时',
     failBody:

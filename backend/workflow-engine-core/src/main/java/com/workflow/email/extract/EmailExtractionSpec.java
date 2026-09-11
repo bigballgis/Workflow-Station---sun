@@ -61,6 +61,11 @@ public class EmailExtractionSpec {
          * ({@link RuleType#DIRECT} only).
          */
         ATTACHMENTS,
+        /**
+         * Original RFC822 (.eml) of this email, stored into one FILE field
+         * ({@link RuleType#DIRECT} only).
+         */
+        RAW_EML,
         HEADER,
         CONST
     }

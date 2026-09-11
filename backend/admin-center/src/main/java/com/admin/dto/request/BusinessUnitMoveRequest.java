@@ -14,5 +14,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BusinessUnitMoveRequest {
     
+    /** 目标父业务单元 ID；null / 空串表示移动到根级 */
     private String newParentId;
+
+    /** 在新父级下的位置（0 起、只数 ACTIVE 同级）；null 表示保持原 sortOrder、不重排同级 */
+    private Integer sortOrder;
 }

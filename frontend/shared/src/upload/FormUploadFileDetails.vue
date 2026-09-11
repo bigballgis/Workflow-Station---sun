@@ -9,7 +9,18 @@
       :key="row.url"
       class="upload-file-details__row"
     >
-      <div class="upload-file-details__name">{{ row.name }}</div>
+      <div class="upload-file-details__name">
+        <button
+          v-if="cannotDownload && previewFile"
+          type="button"
+          class="upload-file-details__name-btn"
+          data-testid="upload-file-preview-name"
+          @click="previewFile({ url: row.url, name: row.name })"
+        >
+          {{ row.name }}
+        </button>
+        <template v-else>{{ row.name }}</template>
+      </div>
       <div class="upload-file-details__field">
         <label>{{ labels.description }}</label>
         <el-input
@@ -24,7 +35,10 @@
           class="upload-file-details__value"
         >{{ row.description || '—' }}</span>
       </div>
-      <div class="upload-file-details__field">
+      <div
+        v-if="!cannotDownload"
+        class="upload-file-details__field"
+      >
         <label>{{ labels.callbackUrl }}</label>
         <a
           class="upload-file-details__link"
@@ -76,6 +90,8 @@ const props = defineProps<{
   readonly?: boolean
   labels: UploadDetailLabels
   previewFile?: (file: UploadDetailFile) => void
+  /** Designer Advanced Upload "Can not download": hide the raw file URL. */
+  cannotDownload?: boolean
 }>()
 
 function onCallbackClick(event: MouseEvent, row: DetailRow): void {
@@ -166,6 +182,18 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+  word-break: break-all;
+}
+
+.upload-file-details__name-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  text-align: left;
+  cursor: pointer;
   word-break: break-all;
 }
 

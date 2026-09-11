@@ -385,7 +385,16 @@ public class FunctionUnitAccessComponent {
                 "Active catalog {} differs from resolved {}; invalidating process-key cache for [{}]",
                 activeCatalogId, resolved, processKey);
         clearProcessKeyCache(processKey);
-        return resolveFunctionUnitId(processKey);
+        resolved = resolveFunctionUnitId(processKey);
+        if (activeCatalogId != null && !activeCatalogId.equals(resolved)) {
+            // /latest is highest semver, including a newer DISABLED catalog. Email/portal start
+            // already fetched Admin active-for-start (deployed+enabled); that pin wins.
+            log.info("Using active-for-start catalog {} instead of latest-resolved {} for [{}]",
+                    activeCatalogId, resolved, processKey);
+            processKeyCache.put(processKey, new CachedData<>(activeCatalogId));
+            return activeCatalogId;
+        }
+        return resolved;
     }
     
     /**

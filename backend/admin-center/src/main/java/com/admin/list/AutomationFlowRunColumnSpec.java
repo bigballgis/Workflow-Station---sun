@@ -1,5 +1,6 @@
 package com.admin.list;
 
+import com.admin.servicetask.ApWorkspaceSql;
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.list.ListFilterSql;
@@ -38,7 +39,7 @@ public final class AutomationFlowRunColumnSpec {
                 ListColumnMeta.of("startTime", "automationRun.started", Kind.DATETIME),
                 ListColumnMeta.of("durationMs", "automationRun.duration", Kind.NUMBER),
                 ListColumnMeta.of("failedStepName", "automationRun.failedStep", Kind.TEXT),
-                ListColumnMeta.of("projectName", "automationRun.project", Kind.TEXT)
+                ListColumnMeta.of("workspaceName", "automationRun.workspace", Kind.TEXT)
         );
     }
 
@@ -60,7 +61,7 @@ public final class AutomationFlowRunColumnSpec {
             case "startTime" -> "r.\"startTime\"::text";
             case "durationMs" -> DURATION_SQL;
             case "failedStepName" -> FAILED_STEP_SQL;
-            case "projectName" -> "p.\"displayName\"";
+            case "workspaceName" -> ApWorkspaceSql.LABEL_SQL;
             default -> throw new IllegalArgumentException("Unknown automation-run column: " + field);
         };
     }

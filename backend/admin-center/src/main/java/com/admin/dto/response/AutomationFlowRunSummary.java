@@ -28,7 +28,8 @@ public class AutomationFlowRunSummary {
 
     private String projectId;
 
-    private String projectName;
+    /** workspace（DW 开发组）名；非 HERMES workspace 的 AP project 回落其显示名 */
+    private String workspaceName;
 
     /** AP 运行状态：SUCCEEDED / FAILED / RUNNING / PAUSED / ... */
     private String status;

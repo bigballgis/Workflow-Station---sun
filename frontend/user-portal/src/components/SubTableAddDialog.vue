@@ -685,6 +685,7 @@
     :readonly="detailsReadonly"
     :labels="uploadDetailLabels"
     :preview-file="previewDetailsFile"
+    :cannot-download="!!detailsCol && uploadPropsBlockDownload(detailsCol.props)"
   />
 </template>
 

@@ -81,16 +81,46 @@ public class ServiceTaskProperties {
         private int tokenTtlSeconds = 120;
 
         /**
-         * 影子用户的 AP 平台角色（{@code ADMIN} / {@code MEMBER}）。默认 {@code ADMIN}：
-         * 从 admin center 进入 AP 的人需要平台级页面（AI provider、piece 管理、签名密钥）。
-         * 收紧成 {@code MEMBER} 只需改配置——AP 侧每次握手会按此值同步既有影子用户。
+         * <b>SYS_ADMIN</b> 影子用户的 AP 平台角色（{@code ADMIN} / {@code MEMBER}）。默认
+         * {@code ADMIN}：平台级页面（AI provider、piece 管理、签名密钥）需要它，而这些入口在
+         * admin-center 侧本就只对 SYS_ADMIN 开放。
          */
         private String platformRole = "ADMIN";
 
         /**
-         * 影子用户在共享 project 里的角色，逐字对应 AP {@code project_role.name}
+         * 非 SYS_ADMIN 影子用户的 AP 平台角色。<b>必须是 {@code MEMBER}</b>：AP 的
+         * {@code projectMemberService.getRole} 对平台 {@code ADMIN} 直接返回全平台 project 的
+         * {@code Admin} 角色（{@code OPERATOR} 同理返回 {@code Editor}），会<b>整条旁路</b>
+         * workspace 隔离与 Public 只读——把每个人都签成平台 ADMIN 时，project 成员表形同虚设。
+         * {@code MEMBER} 才会落到 {@code project_member} 的实际角色上。
+         */
+        private String memberPlatformRole = "MEMBER";
+
+        /**
+         * 影子用户在其 workspace project 里的角色，逐字对应 AP {@code project_role.name}
          * （{@code Admin} / {@code Editor} / {@code Viewer}）。默认 {@code Admin}。
          */
         private String projectRole = "Admin";
+
+        /**
+         * 只读 workspace 使用的 AP project 角色（{@code project_role.name}）。默认 {@code Viewer}
+         * ——AP CE 的 rbac 在路由层按角色权限判定（{@code Viewer} 只有 READ_*），故这是
+         * <b>真实的写入边界</b>，不是前端遮罩：Public workspace 的非 SYS_ADMIN 用它签会话。
+         */
+        private String readOnlyProjectRole = "Viewer";
+
+        /**
+         * DW 内置 Public 开发组的虚拟组 id（与 DW {@code DevGroupConstants.PUBLIC_GROUP_ID}
+         * 同值，由种子脚本固定写入）。它映射到 {@link #projectExternalId}（历史共享 project），
+         * 因此存量 flow 无需迁移即成为「Public workspace」的内容。
+         */
+        private String publicGroupId = "vg-dev-public";
+
+        /**
+         * 团队 workspace 的 AP {@code externalProjectId} 前缀：团队虚拟组 {@code <id>} 映射到
+         * {@code <prefix><id>}。AP 的 managed-authn 首次见到该 externalId 时自建 TEAM project
+         * 并写入成员，故无需运维预建。
+         */
+        private String teamProjectExternalIdPrefix = "hermes-dg-";
     }
 }

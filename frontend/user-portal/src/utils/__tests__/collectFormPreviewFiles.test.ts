@@ -52,6 +52,22 @@ describe('collectFormPreviewFiles', () => {
     expect(files.map((f) => f.name)).toEqual(['a.pdf', 'b.pdf'])
   })
 
+  it('copies cannotDownload from sub-table column props', () => {
+    const files = collectFormPreviewFiles({
+      fields: [{ key: 'lines', label: 'Lines', type: 'subTable', _bindingId: 10 }],
+      formData: {},
+      bindings: [{
+        bindingId: 10,
+        tableName: 'lines',
+        dialogColumns: [{ field: 'file2', type: 'upload', props: { cannotDownload: true } }],
+        data: [{ file2: '/upload/files/a.pdf?originalName=a.pdf' }],
+      }],
+    })
+    expect(files).toEqual([
+      { url: '/upload/files/a.pdf?originalName=a.pdf', name: 'a.pdf', cannotDownload: true },
+    ])
+  })
+
   it('skips zip and empty urls', () => {
     const files = collectFormPreviewFiles({
       fields: [{ key: 'pack', label: 'Pack', type: 'upload' }],

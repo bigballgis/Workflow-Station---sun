@@ -24,7 +24,7 @@ alwaysApply: false
 1. 加载 skill [`.cursor/skills/feature-design-plan/SKILL.md`](../skills/feature-design-plan/SKILL.md)
 2. **只读探查**（Read / Grep / Glob）；禁止 Edit / Write / 改代码 Shell
 3. **必须**输出 skill §3 固定模板（`## 设计 Plan`）
-4. **等待用户确认**后再进入实现；实现仍走 playbook 任务整理（除非用户写「Plan 已确认，无需确认直接执行」）
+4. **等待用户确认**后再进入实现；实现仍走 playbook 任务整理（除非用户写「Plan 已确认，无需确认直接执行」）。playbook 整理若发现本 Plan 有缺陷，必须【设计缺陷提醒】，不得默默按坏设计改代码。
 
 ## 勿混用
 

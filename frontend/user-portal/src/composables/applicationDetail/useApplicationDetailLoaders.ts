@@ -5,6 +5,7 @@ import {
   isAuditField,
   resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
+import { cannotDownloadFieldKeysFromForms } from '@/utils/applyUploadPropsFromRule'
 import {
   resolveSubTablePrimaryKeyFields,
   hydrateChildSubTablesFromParentsNestedRows,
@@ -264,7 +265,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subFormsPayload, {
             lookupDbConfigs: ctx.lookupDbConfigs.value,
             relationViewConfigs: ctx.relationViewConfigs.value,
-          })
+          }, cannotDownloadFieldKeysFromForms(ctx.cachedContentForms))
           bindings.push({
             bindingId: b.bindingId,
             tableId: b.tableId != null ? Number(b.tableId) : null,
