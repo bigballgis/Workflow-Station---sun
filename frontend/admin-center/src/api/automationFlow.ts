@@ -15,7 +15,8 @@ export interface AutomationFlowSummary {
   flowKey: string | null
   displayName: string
   projectId: string
-  projectName: string
+  /** workspace（DW 开发组）名；非 HERMES workspace 的 AP project 回落其显示名 */
+  workspaceName: string
   status: 'ENABLED' | 'DISABLED'
   published: boolean
   valid: boolean
@@ -31,6 +32,28 @@ export interface FlowImportResult {
   displayName: string
   created: boolean
   published: boolean
+  /** 解析后的目标 workspace（请求省略 workspaceId 时即 Public） */
+  workspaceId: string | null
+  workspaceName: string | null
+}
+
+export interface FlowTransferResult {
+  flowId: string
+  flowKey: string | null
+  fromWorkspaceId: string
+  fromWorkspaceName: string
+  toWorkspaceId: string
+  toWorkspaceName: string
+  wasEnabled: boolean
+  /** 归属已改但重新启用失败时的原因；成功为 null（需人工在目标 workspace 启用） */
+  reEnableFailure: string | null
+}
+
+/** 导入目标 workspace 选项（Public + 全部 ACTIVE 团队组） */
+export interface AutomationWorkspaceOption {
+  id: string
+  name: string
+  publicWorkspace: boolean
 }
 
 /** 导出包内的 connection 清单项(源环境信息,凭据不随包走) */
@@ -82,20 +105,39 @@ export const automationFlowApi = {
     del<ApiEnvelope<unknown>>(`/automation/flows/${flowId}`, { params: { force } }),
 
   /** 导入前预检:导出包 connections 清单在本环境的存在性(仅提示,不阻塞导入) */
-  connectionsCheck: (externalIds: string[]) =>
-    post<ApiEnvelope<ConnectionCheckItem[]>>('/automation/flows/connections-check', { externalIds }),
+  connectionsCheck: (externalIds: string[], workspaceId?: string | null) =>
+    post<ApiEnvelope<ConnectionCheckItem[]>>('/automation/flows/connections-check', {
+      externalIds,
+      // connection 是 per-project 的：不带 workspace 问的是 Public，会给团队目标报假"已存在"
+      workspaceId,
+    }),
 
   /** 导入(按迁移键 upsert);publish=true 时随后发布并启用 */
-  importFlow: (file: File, publish: boolean) => {
+  importFlow: (file: File, publish: boolean, workspaceId?: string | null) => {
     const form = new FormData()
     form.append('file', file)
     return post<ApiEnvelope<FlowImportResult>>(
       '/automation/flows/import', form,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
-        params: { publish },
+        // workspaceId 省略 = 导进 Public（共享/存量 workspace）
+        params: { publish, ...(workspaceId ? { workspaceId } : {}) },
         timeout: 60000
       }
     )
-  }
+  },
+
+  /**
+   * 转让到另一个 workspace：保留 flowId（已部署 BPMN 存的是解析后的 flowId），
+   * 启用中的 flow 会自动 停用 → 改归属 → 在目标 workspace 重新启用。
+   */
+  transferFlow: (flowId: string, workspaceId: string) =>
+    post<ApiEnvelope<FlowTransferResult>>(`/automation/flows/${flowId}/transfer`, null, {
+      params: { workspaceId },
+      timeout: 60000,
+    }),
+
+  /** 导入目标可选的 workspace（Public + 全部 ACTIVE 团队组） */
+  listWorkspaces: () =>
+    get<ApiEnvelope<AutomationWorkspaceOption[]>>('/automation/flows/workspaces')
 }

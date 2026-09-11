@@ -66,12 +66,15 @@
         "AutomationFlowServiceImpl.RESOLVE_BY_ID_SQL",
         "AutomationFlowServiceImpl.RESOLVE_BY_KEY_SQL",
         "AutomationFlowServiceImpl.FLOW_METADATA_SQL",
-        "AutomationFlowServiceImpl.FLOW_REF_KEYS_SQL"
+        "AutomationFlowServiceImpl.FLOW_REF_KEYS_SQL",
+        "AutomationFlowServiceImpl.FLOW_LOCATION_SQL",
+        "AutomationFlowServiceImpl.transferFlow (UPDATE: projectId/folderId)"
       ],
       "columns": [
         "id",
         "status",
         "projectId",
+        "folderId",
         "publishedVersionId",
         "metadata",
         "updated"

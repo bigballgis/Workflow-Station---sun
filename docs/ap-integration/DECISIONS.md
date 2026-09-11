@@ -55,6 +55,7 @@
 | [D11](#d11) | **signing-key 是否自动供给** | **不自动化** — 只读检测 + fail-loud；私钥只返回一次、写 Secret 需 RBAC、重跑会轮换活密钥；且 k8s 尚未接 `ACTIVEPIECES_MANAGED_*` | 07-29 |
 | [D12](#d12) | **controlled fork 是否还成立** | **不成立，终止** → **硬分叉 + 深度裁剪**（取代 Q8、修订 Q1/D1）。VT-11 证明内网 FOSS Guard 隔离的正是上游 pin 的精确版本，"冻结基线"做不到；且 rebase 在 X-2/X-3 下不会发生。删功能面 = 消依赖，是 VT-12 的解法 | 07-30 |
 | [D13](#d13) | **D12 说了但没做的那部分** | **执行令**，非新方向：D12 的作废项逐条落地（删可重放脚本 / 删死配置 / 停止给新改动挂台账编号），并把同一原则**延伸到代码层**——不为上游契约保留 schema、默认值或分支。另**修订 D12 保留项 #1**：`activepieces/LICENSE` 已删，合规结论移交 [D4](#d4) | 08-07 |
+| [D14](#d14) | **Automation 是否按 workspace 隔离** | **隔离** —— DW 开发组（workspace）映射到各自的 AP project，会话按所选组签发；**取代 [REQUIREMENTS_0.88](REQUIREMENTS_0.88.md) 的 FR-B16**（该条自己写明「若日后需要行级隔离，另立需求」） | 09-08 |
 
 ---
 
@@ -688,6 +689,56 @@ X-7 与 D12 的裁剪判定标准不变；"改了什么"继续由
 `git diff de4f6469..HEAD -- activepieces/` 回答；`HERMES_PATCHES.md` 继续记动机与踩坑。
 
 ---
+
+### <a id="d14"></a>D14 — Automation 按 workspace（DW 开发组）隔离（2026-09-08，**取代 FR-B16**）
+
+**背景。** 0.88 改造时 [D-7](REQUIREMENTS_0.88.md) 判定 Automation 入口只做「四角色页面级准入」，
+flow 不做行级隔离（FR-B16），并留了口子：「若日后需要行级隔离，另立需求」。落地后的实际形态是
+**所有人共享一个 AP project**（`service-task.managed.project-external-id = hermes-main`）——
+任一 `DEVELOPER` 都能看见、改名、发布、删除其他团队的 flow，而 DW 的功能单元早已按
+「团队 scope × 能力角色」隔离。同一个工作台两套可见性规则，是本条要消除的不一致。
+
+**裁决。** flow 归属 **workspace = DW 开发组**，映射到 AP 自己的 project：
+
+| workspace | AP `externalProjectId` |
+|---|---|
+| Public（`vg-dev-public`） | `hermes-main`（沿用，**存量 flow 零迁移**） |
+| 团队组 `<id>`（CUSTOM / DEVELOPER） | `hermes-dg-<id>`（AP managed-authn 首见即自建 TEAM project） |
+
+登录桥读 `X-Dev-Group-Id`，**服务端**校验成员资格后才按该 project 签会话；非成员 **403**，
+不回落 Public（静默降级会让人以为看到的是那个团队的 flow）。Public 与 FU 的 Public 组同规则：
+仅 `SYS_ADMIN` 可改，其余人以 `Viewer` 角色签会话。
+
+**为什么隔离是真边界，不是前端过滤。** AP CE 侧保留了 project 归属与 rbac 判定
+（`core/security/v2/authz` + `managed-authn`）：路由层要求 principal 在目标 project 有成员角色，
+`entitiesMustBeOwnedByCurrentProject` 再拦一道返回体。因此伪造组 id 拿不到 token，
+拿着自己的 token 也访问不到他队 project 的 flow；`Viewer` 只有 `READ_*`，写操作在 AP 侧即被拒。
+**AP 源码零改动**——这条裁决完全建立在 vendored CE 已有的机制上。
+
+**连带约束。** 业务键（`metadata.hermesFlowKey`）的部署期解析是**跨 project 全局**查找，
+故键必须全局唯一：创建入口新增占用校验（`/internal/ap/flow-key-available`），
+否则两个团队各建一条同键 flow 会让 BPMN 引用落到「最近更新的那条」。
+
+**已知代价。** AP 的 `app_connection` 是 per-project 的：团队 workspace 里没有 Public 的连接，
+各团队需自建。存量 flow 留在 `hermes-main`，不受影响。
+
+**运维面同步（2026-09-09 补齐）。** Admin Center 的 flows/runs 列表按 workspace 展示与筛选
+（`project.externalId` 反查开发组名，Public 与非 HERMES project 回落 project 显示名）；
+flow 迁移导入选目标 workspace（目标团队的 AP project 由该次导入顺带建出）；
+connection 预检按目标 workspace 查（AP 的 `app_connection` 是 per-project 的，问错 project
+会给出"已存在"的假绿）；导入撞到别的 workspace 已占用的业务键时显式 400。
+
+**收尾（2026-09-10）。** 两项「另议」都已实施：
+① **FR-B15 反转**（FR-B23）——flow 既已按 workspace 隔离，当初把 Automation 排除在只读兜底之外的
+理由（会看到全平台 flow）不复存在；无能力角色的团队成员现在可只读进入，只读由 AP 侧的
+`Viewer` 角色强制（实测直接打 AP API 写入返回 403 PERMISSION_DENIED）。
+② **跨 workspace 转让**（FR-B24）——保留 flowId（已部署 BPMN 存的是解析后的 flowId）。AP 0.88 的
+`FlowOperationType` 没有跨 project 迁移，故归属字段直写 AP 表（唯一一处直写，已登记进
+`deploy/contracts/ap-schema-contract.json`），触发器仍走 AP API：停用 → 改归属 → 重新启用。
+顺带修掉一个连带缺口（FR-B25）：管理面的启停/删除原本一律用 Public 会话，对团队 workspace 的
+flow 会被 AP 拒。
+
+**仍未做。** 无。
 
 ## 3. Q 系列裁决（2026-07-22，正文见各条）
 

@@ -3,8 +3,12 @@ package com.admin.service.impl;
 import com.admin.dto.response.AutomationFlowSummary;
 import com.admin.exception.ServiceTaskApiException;
 import com.admin.service.AutomationFlowService;
+import com.admin.servicetask.ApWorkspaceResolver;
+import com.admin.servicetask.CurrentActor;
+import com.admin.servicetask.ApWorkspaceSql;
 import com.admin.servicetask.client.ServiceTaskApiClient;
 import com.admin.servicetask.config.ServiceTaskProperties;
+import com.platform.security.util.SecurityContextUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -50,20 +54,24 @@ import java.util.Optional;
 public class AutomationFlowServiceImpl implements AutomationFlowService {
 
     /** 每 flow 取最新版本做展示；发布态看 publishedVersionId */
-    private static final String LIST_SQL = """
+    /** 行投影：workspace 名由 {@link ApWorkspaceSql} 的 join 提供（project → DW 开发组反查） */
+    private static final String SELECT_HEAD = """
             SELECT f.id, f.status, f."projectId",
                    f."publishedVersionId" IS NOT NULL AS published,
                    f.metadata->>'hermesFlowKey' AS "flowKey",
                    fv."displayName", fv.valid, fv.updated,
-                   p."displayName" AS "projectName",
+                   """ + ApWorkspaceSql.LABEL_SQL + """
+                    AS "workspaceName",
                    ui."firstName" AS "ownerFirstName", ui."lastName" AS "ownerLastName"
             FROM flow f
             JOIN LATERAL (SELECT "displayName", valid, updated FROM flow_version v
                           WHERE v."flowId" = f.id ORDER BY v.created DESC LIMIT 1) fv ON true
             JOIN project p ON p.id = f."projectId"
+            """;
+
+    private static final String SELECT_TAIL = """
             LEFT JOIN "user" u ON u.id = f."ownerId"
             LEFT JOIN user_identity ui ON ui.id = u."identityId"
-            ORDER BY fv.updated DESC
             """;
 
     /** 导出取已发布版本，未发布过则最新草稿 */
@@ -95,6 +103,19 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             SELECT id, ("publishedVersionId" IS NOT NULL) AS published
             FROM flow WHERE metadata->>'hermesFlowKey' = ?
             ORDER BY updated DESC LIMIT 1
+            """;
+
+    /** 业务键占用查询：跨 project 全局（与部署期解析同一把尺，见 RESOLVE_BY_KEY_SQL） */
+    private static final String FIND_ID_BY_KEY_GLOBAL_SQL =
+            "SELECT id, \"projectId\" FROM flow WHERE metadata->>'hermesFlowKey' = ? "
+            + "ORDER BY updated DESC LIMIT 1";
+
+    /** flow 所在 project 与启停态：管理面对既有 flow 动作前必须先知道「它属于哪个 workspace」 */
+    private static final String FLOW_LOCATION_SQL = """
+            SELECT f."projectId", f.status, f."publishedVersionId" IS NOT NULL AS published,
+                   f.metadata->>'hermesFlowKey' AS "flowKey",
+                   p."externalId" AS "projectExternalId"
+            FROM flow f JOIN project p ON p.id = f."projectId" WHERE f.id = ?
             """;
 
     private static final String PROJECT_BY_EXTERNAL_ID_SQL =
@@ -142,22 +163,29 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     private final ServiceTaskProperties serviceTaskProperties;
     /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
+    private final ApWorkspaceSql workspaceSql;
+    private final ApWorkspaceResolver workspaceResolver;
 
     public AutomationFlowServiceImpl(JdbcTemplate jdbcTemplate,
                                           ObjectMapper objectMapper,
                                           ServiceTaskApiClient serviceTaskApiClient,
                                           ServiceTaskProperties serviceTaskProperties,
-                                          @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate) {
+                                          @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate,
+                                          ApWorkspaceSql workspaceSql,
+                                          ApWorkspaceResolver workspaceResolver) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.serviceTaskApiClient = serviceTaskApiClient;
         this.serviceTaskProperties = serviceTaskProperties;
         this.restTemplate = restTemplate;
+        this.workspaceSql = workspaceSql;
+        this.workspaceResolver = workspaceResolver;
     }
 
     @Override
     public List<AutomationFlowSummary> listFlows() {
-        return jdbcTemplate.query(LIST_SQL, (rs, rowNum) -> mapRow(rs));
+        String sql = SELECT_HEAD + workspaceSql.joinClause() + SELECT_TAIL + " ORDER BY fv.updated DESC";
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), workspaceSql.joinParams().toArray());
     }
 
     @Override
@@ -166,21 +194,12 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             return List.of();
         }
         String placeholders = String.join(",", ids.stream().map(n -> "?").toList());
-        String sql = """
-                SELECT f.id, f.status, f."projectId",
-                       f."publishedVersionId" IS NOT NULL AS published,
-                       f.metadata->>'hermesFlowKey' AS "flowKey",
-                       fv."displayName", fv.valid, fv.updated,
-                       p."displayName" AS "projectName",
-                       ui."firstName" AS "ownerFirstName", ui."lastName" AS "ownerLastName"
-                FROM flow f
-                JOIN LATERAL (SELECT "displayName", valid, updated FROM flow_version v
-                              WHERE v."flowId" = f.id ORDER BY v.created DESC LIMIT 1) fv ON true
-                JOIN project p ON p.id = f."projectId"
-                LEFT JOIN "user" u ON u.id = f."ownerId"
-                LEFT JOIN user_identity ui ON ui.id = u."identityId"
-                WHERE f.id IN (""" + placeholders + ")";
-        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), ids.toArray());
+        String sql = SELECT_HEAD + workspaceSql.joinClause() + SELECT_TAIL
+                + " WHERE f.id IN (" + placeholders + ")";
+        // join 参数在前、id 在后，与 SQL 里 ? 的出现顺序一致
+        List<Object> args = new ArrayList<>(workspaceSql.joinParams());
+        args.addAll(ids);
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), args.toArray());
     }
 
     private AutomationFlowSummary mapRow(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -195,7 +214,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
                 .flowKey(rs.getString("flowKey"))
                 .displayName(rs.getString("displayName"))
                 .projectId(rs.getString("projectId"))
-                .projectName(rs.getString("projectName"))
+                .workspaceName(rs.getString("workspaceName"))
                 .status(status)
                 .published(published)
                 .valid(rs.getBoolean("valid"))
@@ -249,8 +268,19 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     @Override
-    public FlowImportResult importFlow(byte[] json, boolean publish) {
-        return upsertFlow(serviceTaskApiClient.signInAsCurrentActor(), readExport(json), publish);
+    public FlowImportResult importFlow(byte[] json, boolean publish, String workspaceId) {
+        // 按目标 workspace 换会话：这一步顺带让 AP getOrCreate 出该团队的 project，
+        // 所以「往一个还没人进过的团队里导入」不需要运维预建 project。
+        ApWorkspaceResolver.ApWorkspace workspace = workspaceResolver.resolve(
+                SecurityContextUtils.getCurrentUserId().orElse(null), workspaceId);
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInManaged(
+                CurrentActor.require(), workspace.externalProjectId(),
+                workspace.projectRole(), workspace.platformRole());
+        String projectId = projectIdOf(workspace.externalProjectId())
+                .orElseGet(() -> requireSessionProject(session));
+        FlowImportResult result = upsertFlow(session, readExport(json), publish, projectId);
+        return new FlowImportResult(result.flowId(), result.flowKey(), result.displayName(),
+                result.created(), result.published(), workspace.groupId(), workspace.name());
     }
 
     @Override
@@ -278,7 +308,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             if (session == null) {
                 session = serviceTaskApiClient.signInAsCurrentActor();
             }
-            FlowImportResult drafted = upsertFlow(session, export, false);
+            FlowImportResult drafted = upsertFlow(session, export, false, resolveTargetProjectId(session));
             try {
                 publishFlow(session, drafted.flowId());
                 results.add(new FlowRestoreResult(flowKey, displayName, drafted.flowId(),
@@ -296,14 +326,22 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     private FlowImportResult upsertFlow(ServiceTaskApiClient.ApSession session,
-                                        JsonNode export, boolean publish) {
+                                        JsonNode export, boolean publish, String projectId) {
         String flowKey = export.path("flowKey").asText();
         String displayName = export.path("displayName").asText();
 
-        String projectId = resolveTargetProjectId(session);
-
         List<Map<String, Object>> matches =
                 jdbcTemplate.queryForList(FIND_BY_KEY_SQL, projectId, flowKey, flowKey);
+        if (matches.isEmpty()) {
+            // 业务键是全局的（部署期跨 workspace 按键解析），所以「本 workspace 没有、
+            // 别的 workspace 有」不是"新建"而是冲突：放行会让 BPMN 引用落到两条 flow 中
+            // 更新时间靠后的那条。显式失败，让人选对目标 workspace 或换键。
+            Optional<FlowKeyHolder> holder = findFlowByKey(flowKey);
+            if (holder.isPresent()) {
+                throw new IllegalArgumentException("业务键 '" + flowKey + "' 已被其他 workspace 的 flow "
+                        + holder.get().flowId() + " 占用；业务键在所有 workspace 内必须唯一");
+            }
+        }
         if (matches.size() > 1) {
             log.warn("Multiple flows match key '{}' in project {}; updating the most recent one",
                     flowKey, projectId);
@@ -331,7 +369,8 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         if (publish) {
             publishFlow(session, flowId);
         }
-        return new FlowImportResult(flowId, flowKey, displayName, created, publish);
+        // workspace 由调用方（importFlow）补全：upsert 只认目标 projectId
+        return new FlowImportResult(flowId, flowKey, displayName, created, publish, null, null);
     }
 
     private void publishFlow(ServiceTaskApiClient.ApSession session, String flowId) {
@@ -344,7 +383,8 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     public void setFlowEnabled(String flowId, boolean enabled) {
         ObjectNode request = objectMapper.createObjectNode();
         request.put("status", enabled ? "ENABLED" : "DISABLED");
-        applyFlowOperation(serviceTaskApiClient.signInAsCurrentActor(), flowId, "CHANGE_STATUS", request);
+        // 会话必须来自 flow 自己所在的 workspace，不能是 Public：AP 按 token 的 project 判归属。
+        applyFlowOperation(sessionForFlow(requireFlowLocation(flowId)), flowId, "CHANGE_STATUS", request);
     }
 
     @Override
@@ -355,7 +395,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
                 throw new FlowInUseException(flowId, units);
             }
         }
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
+        ServiceTaskApiClient.ApSession session = sessionForFlow(requireFlowLocation(flowId));
         // 不带 Content-Type：AP(Fastify) 对无 body 却声明 application/json 的请求直接 400
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(session.token());
@@ -455,14 +495,25 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     @Override
-    public List<ConnectionCheckItem> checkConnections(List<String> externalIds) {
+    public List<ConnectionCheckItem> checkConnections(List<String> externalIds, String workspaceId) {
         if (externalIds == null || externalIds.isEmpty()) {
             return List.of();
         }
         if (externalIds.size() > 200) {
             throw new IllegalArgumentException("connection 清单过大(>200)");
         }
-        String projectId = resolveTargetProjectIdLazily();
+        // AP 的 app_connection 是 per-project 的：预检必须按<b>导入目标 workspace</b> 查，
+        // 否则会拿 Public 的连接给团队 workspace 报"已存在"，导入后 flow 照样跑不起来。
+        ApWorkspaceResolver.ApWorkspace workspace = workspaceResolver.resolve(
+                SecurityContextUtils.getCurrentUserId().orElse(null), workspaceId);
+        Optional<String> target = projectIdOf(workspace.externalProjectId());
+        if (target.isEmpty()) {
+            // 目标 project 还没建（没人进过这个 workspace）⇒ 里面一条连接都没有
+            return externalIds.stream()
+                    .map(id -> new ConnectionCheckItem(id, false, null, null, null))
+                    .toList();
+        }
+        String projectId = target.get();
         String placeholders = String.join(",", Collections.nCopies(externalIds.size(), "?"));
         // 占位符数量随入参生成,值全部绑定——无标识符拼接
         String sql = "SELECT \"externalId\", \"displayName\", \"pieceName\", status "
@@ -488,6 +539,108 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         }).toList();
     }
 
+    /**
+     * flow 所在 project 的会话——管理面对<b>既有 flow</b> 的写操作（启停 / 删除 / 转让）必须用它。
+     *
+     * <p>AP 的 {@code entitiesMustBeOwnedByCurrentProject} 按 token 携带的 project 判定：拿 Public
+     * 会话去动团队 workspace 的 flow 会被拒。会话按<b>当前操作人</b>签（审计到人不变），能不能
+     * 进那个 workspace 仍由 {@link ApWorkspaceResolver} 判。</p>
+     */
+    private ServiceTaskApiClient.ApSession sessionForFlow(FlowLocation location) {
+        ApWorkspaceResolver.ApWorkspace workspace = workspaceResolver.resolveByExternalProjectId(
+                SecurityContextUtils.getCurrentUserId().orElse(null), location.projectExternalId());
+        return serviceTaskApiClient.signInManaged(CurrentActor.require(),
+                workspace.externalProjectId(), workspace.projectRole(), workspace.platformRole());
+    }
+
+    private FlowLocation requireFlowLocation(String flowId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(FLOW_LOCATION_SQL, flowId);
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("flow '" + flowId + "' does not exist in this environment");
+        }
+        Map<String, Object> row = rows.get(0);
+        return new FlowLocation((String) row.get("projectId"), (String) row.get("projectExternalId"),
+                (String) row.get("status"), Boolean.TRUE.equals(row.get("published")),
+                (String) row.get("flowKey"));
+    }
+
+    private record FlowLocation(String projectId, String projectExternalId, String status,
+                                boolean published, String flowKey) {
+        boolean enabled() {
+            return "ENABLED".equals(status);
+        }
+    }
+
+    @Override
+    public FlowTransferResult transferFlow(String flowId, String targetWorkspaceId) {
+        FlowLocation location = requireFlowLocation(flowId);
+        String userId = SecurityContextUtils.getCurrentUserId().orElse(null);
+        ApWorkspaceResolver.ApWorkspace source =
+                workspaceResolver.resolveByExternalProjectId(userId, location.projectExternalId());
+        ApWorkspaceResolver.ApWorkspace target = workspaceResolver.resolve(userId, targetWorkspaceId);
+        if (source.externalProjectId().equals(target.externalProjectId())) {
+            throw new IllegalArgumentException(
+                    "flow '" + flowId + "' is already in workspace '" + target.name() + "'");
+        }
+
+        // 目标会话先签：AP 顺带把该团队的 project 建出来（首个成员进入前它并不存在），
+        // 同时这也是转让后重新启用要用的那个会话。
+        ServiceTaskApiClient.ApSession targetSession = serviceTaskApiClient.signInManaged(
+                CurrentActor.require(), target.externalProjectId(),
+                target.projectRole(), target.platformRole());
+        String targetProjectId = projectIdOf(target.externalProjectId())
+                .orElseGet(() -> requireSessionProject(targetSession));
+
+        // 启用中的 flow 必须先在<b>原</b> project 停用：trigger_source 带 projectId，
+        // 直接改 flow.projectId 会留下一条挂在旧 project 上的触发器（flow 显示"运行中"、
+        // 实际由旧 workspace 的记录在触发）。停用→改归属→在新 project 重新启用，让 AP
+        // 自己按新 project 重建触发器。
+        boolean wasEnabled = location.enabled();
+        if (wasEnabled) {
+            ServiceTaskApiClient.ApSession sourceSession = sessionForFlow(location);
+            ObjectNode disable = objectMapper.createObjectNode().put("status", "DISABLED");
+            applyFlowOperation(sourceSession, flowId, "CHANGE_STATUS", disable);
+        }
+
+        // AP 没有跨 project 的迁移操作（FlowOperationType 里只有 CHANGE_FOLDER），而"保住 flowId"
+        // 正是转让的意义所在——已部署的 BPMN 存的是解析后的 flowId，导出+导入+删除会换 id 而静默
+        // 打断它们。故此处直写归属字段（唯一一处直写 AP 表，两侧的触发器仍走 AP API）。
+        // folderId 属于原 project，一并清空，否则新 project 会引用一个它看不见的目录。
+        int updated = jdbcTemplate.update(
+                "UPDATE flow SET \"projectId\" = ?, \"folderId\" = NULL, updated = now() WHERE id = ?",
+                targetProjectId, flowId);
+        if (updated != 1) {
+            throw new ServiceTaskApiException("flow transfer touched " + updated + " rows for flow " + flowId);
+        }
+
+        String enableFailure = null;
+        if (wasEnabled) {
+            try {
+                ObjectNode enable = objectMapper.createObjectNode().put("status", "ENABLED");
+                applyFlowOperation(targetSession, flowId, "CHANGE_STATUS", enable);
+            } catch (RuntimeException e) {
+                // 归属已经改成功了：这里吞掉异常会让 flow 停在"已转让但没启用"的状态而无人知晓。
+                // 不回滚（回滚同样可能失败），而是把失败原因随结果回传，让运维在目标 workspace 手动启用。
+                log.warn("Flow {} transferred to {} but re-enabling failed: {}",
+                        flowId, target.name(), e.getMessage());
+                enableFailure = e.getMessage();
+            }
+        }
+
+        log.info("Automation flow {} transferred from workspace {} to {} (wasEnabled={}) by {}",
+                flowId, source.name(), target.name(), wasEnabled,
+                SecurityContextUtils.getCurrentUsername());
+        return new FlowTransferResult(flowId, location.flowKey(), source.groupId(), source.name(),
+                target.groupId(), target.name(), wasEnabled, enableFailure);
+    }
+
+    @Override
+    public List<WorkspaceOption> listWorkspaces() {
+        return workspaceResolver.listSelectableWorkspaces().stream()
+                .map(w -> new WorkspaceOption(w.groupId(), w.name(), w.publicWorkspace()))
+                .toList();
+    }
+
     @Override
     public Optional<FlowResolution> resolveFlowRef(String ref) {
         List<Map<String, Object>> direct = jdbcTemplate.queryForList(RESOLVE_BY_ID_SQL, ref);
@@ -497,6 +650,16 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         return jdbcTemplate.queryForList(RESOLVE_BY_KEY_SQL, ref).stream()
                 .findFirst()
                 .map(this::toFlowResolution);
+    }
+
+    @Override
+    public Optional<FlowKeyHolder> findFlowByKey(String flowKey) {
+        if (flowKey == null || flowKey.isBlank()) {
+            return Optional.empty();
+        }
+        return jdbcTemplate.queryForList(FIND_ID_BY_KEY_GLOBAL_SQL, flowKey).stream()
+                .findFirst()
+                .map(row -> new FlowKeyHolder((String) row.get("id"), (String) row.get("projectId")));
     }
 
     private FlowResolution toFlowResolution(Map<String, Object> row) {
@@ -630,36 +793,37 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         }
     }
 
-    /** 同 {@link #resolveTargetProjectId} 但按需才换 AP 会话（比对预检命中 externalId 时不必换会话） */
-    private String resolveTargetProjectIdLazily() {
-        String externalId = serviceTaskProperties.getManaged().getProjectExternalId();
-        if (externalId != null && !externalId.isBlank()) {
-            List<String> ids = jdbcTemplate.queryForList(
-                    PROJECT_BY_EXTERNAL_ID_SQL, String.class, externalId);
-            if (!ids.isEmpty()) {
-                return ids.get(0);
-            }
-        }
-        return resolveTargetProjectId(serviceTaskApiClient.signInAsCurrentActor());
+    @Override
+    public Optional<String> projectIdOfWorkspace(String externalProjectId) {
+        return projectIdOf(externalProjectId);
     }
 
-    /**
-     * 导入目标 project：managed（审计到人）配置的共享 project 优先，
-     * 未配置或未建时回退当前操作人会话自带的 project。
-     */
-    private String resolveTargetProjectId(ServiceTaskApiClient.ApSession session) {
-        String externalId = serviceTaskProperties.getManaged().getProjectExternalId();
-        if (externalId != null && !externalId.isBlank()) {
-            List<String> ids = jdbcTemplate.queryForList(
-                    PROJECT_BY_EXTERNAL_ID_SQL, String.class, externalId);
-            if (!ids.isEmpty()) {
-                return ids.get(0);
-            }
+    /** externalId → 本环境 project id；project 尚未建出时为空。 */
+    private Optional<String> projectIdOf(String externalId) {
+        if (externalId == null || externalId.isBlank()) {
+            return Optional.empty();
         }
+        return jdbcTemplate.queryForList(PROJECT_BY_EXTERNAL_ID_SQL, String.class, externalId)
+                .stream().findFirst();
+    }
+
+    private String requireSessionProject(ServiceTaskApiClient.ApSession session) {
         if (session.projectId() == null) {
             throw new ServiceTaskApiException("Cannot determine target AP project for flow import");
         }
         return session.projectId();
+    }
+
+    /**
+     * 服务间还原（FU 包随带 flow）的目标 project：Public（配置的共享 project）优先，
+     * 未配置或未建时回退当前操作人会话自带的 project。
+     *
+     * <p>不按 workspace 分流：这条路径没有"目标团队"的输入，落 Public 与既有行为一致。
+     * 需要指定 workspace 的是管理面的手工导入（{@link #importFlow}）。</p>
+     */
+    private String resolveTargetProjectId(ServiceTaskApiClient.ApSession session) {
+        return projectIdOf(serviceTaskProperties.getManaged().getProjectExternalId())
+                .orElseGet(() -> requireSessionProject(session));
     }
 
     private JsonNode readExport(byte[] json) {

@@ -3,6 +3,8 @@ package com.admin.component;
 import com.admin.dto.request.AutomationFlowRunListQueryRequest;
 import com.admin.service.AutomationFlowRunService;
 import com.platform.common.list.ListColumnFilter;
+import com.admin.servicetask.ApWorkspaceSql;
+import com.admin.servicetask.config.ServiceTaskProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +41,7 @@ class AutomationFlowRunListQuerySqlTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        component = new AutomationFlowRunListQueryComponent(jdbcTemplate, automationFlowRunService);
+        component = new AutomationFlowRunListQueryComponent(jdbcTemplate, automationFlowRunService, new ApWorkspaceSql(new ServiceTaskProperties()));
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {

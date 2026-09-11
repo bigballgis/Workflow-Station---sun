@@ -1,5 +1,7 @@
 package com.admin.servicetask.controller;
 
+import com.admin.service.AutomationFlowService;
+import com.admin.servicetask.ApWorkspaceResolver;
 import com.admin.servicetask.client.ServiceTaskApiClient;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.admin.servicetask.service.ServiceTaskBridgeNonceStore;
@@ -15,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +42,10 @@ import java.util.Optional;
  *       走 {@link SecurityContextUtils} 校验——与历史行为一致，不回归。</li>
  * </ol>
  *
+ * <p><b>workspace（DW 开发组）</b>：两条路径都读 {@code X-Dev-Group-Id}，经
+ * {@link ApWorkspaceResolver} 校验成员资格后决定落进哪个 AP project——非成员 403，
+ * 不回落 Public。隔离由 AP 自身的 project 成员/角色判定兜底，前端伪造头无效。
+ *
  * <p>安全模型：换 AP token 必经"已认证的 admin 域 {@code /launch}"或"同源带 cookie 的 {@code /token}"；
  * nonce 不可猜、单次、短时效；AP token 从不进入 URL。外部 token 的签名私钥仅服务端持有。
  * 生产 runtime 不开 UI（{@code activepieces.bridge.enabled=false}）→ 端点恒 404。
@@ -50,9 +57,14 @@ import java.util.Optional;
 @Tag(name = "Activepieces Login Bridge", description = "Per-user login bridge endpoints for the AP gateway")
 public class ServiceTaskTokenController {
 
+    /** DW 前端传递「当前所选开发组」的请求头（与 DW 功能单元列表同一个头）。 */
+    private static final String DEV_GROUP_HEADER = "X-Dev-Group-Id";
+
     private final ServiceTaskProperties properties;
     private final ServiceTaskApiClient apiClient;
     private final ServiceTaskBridgeNonceStore nonceStore;
+    private final ApWorkspaceResolver workspaceResolver;
+    private final AutomationFlowService automationFlowService;
 
     /** Bridge HTML, loaded once from the classpath. */
     private volatile String bridgeHtml;
@@ -70,7 +82,8 @@ public class ServiceTaskTokenController {
             description = "Validates the platform JWT (cookie on the admin origin), exchanges a per-user "
                     + "managed external token for an AP session, issues a one-time nonce, and returns the AP "
                     + "bridge URL carrying it. The AP domain then needs no platform cookie.")
-    public ResponseEntity<ApiResponse<Map<String, String>>> launch() {
+    public ResponseEntity<ApiResponse<Map<String, String>>> launch(
+            @RequestHeader(value = DEV_GROUP_HEADER, required = false) String devGroupId) {
         if (!properties.getBridge().isEnabled()) {
             return ResponseEntity.notFound().build();
         }
@@ -88,13 +101,56 @@ public class ServiceTaskTokenController {
         String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
         // 谁进去就是谁：按当前平台用户换取其专属 AP token（AP 侧 externalId=平台 userId）。
         // 没有回退分支——共享账号已移除，未配置签名密钥时 signInManaged 直接 fail-loud。
-        ServiceTaskApiClient.ApSession session = apiClient.signInManaged(user);
+        ApWorkspaceResolver.ApWorkspace workspace = workspaceResolver.resolve(user.getUserId(), devGroupId);
+        ServiceTaskApiClient.ApSession session = apiClient.signInManaged(
+                user, workspace.externalProjectId(), workspace.projectRole(), workspace.platformRole());
         String nonce = nonceStore.issue(session, properties.getBridge().getNonceTtlSeconds());
         log.debug("Issued AP bridge launch nonce for platform user {}", login);
 
         String bridgeUrl = publicUrl + "#nonce=" + URLEncoder.encode(nonce, StandardCharsets.UTF_8);
         Map<String, String> data = new HashMap<>();
         data.put("bridgeUrl", bridgeUrl);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    /**
+     * 业务键可用性检查（DW 创建 flow 前调用）。
+     *
+     * <p>业务键是 BPMN service task 的唯一引用，且部署期解析<b>跨 workspace 全局</b>按键查找，
+     * 所以键必须全局唯一。workspace 拆成多个 AP project 之后，两个团队各建一条同键 flow
+     * 会让引用解析到"最近更新的那条"——因此在创建入口就拒绝重复键，而不是等运行期错乱。</p>
+     *
+     * <p>鉴权：与本控制器其余端点一致，平台 JWT（登录用户）即可；不返回他队 flow 的任何内容，
+     * 只回答"这个键是否已被占用"。桥关闭时 404。</p>
+     */
+    @GetMapping("/flow-key-available")
+    @Operation(summary = "Check whether an automation flow business key is free",
+            description = "Business keys are resolved globally across workspaces, so they must be unique "
+                    + "platform-wide. Returns {available, flowId?} for the signed-in user.")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> flowKeyAvailable(
+            @RequestParam("key") String key,
+            @RequestHeader(value = DEV_GROUP_HEADER, required = false) String devGroupId) {
+        if (!properties.getBridge().isEnabled()) {
+            return ResponseEntity.notFound().build();
+        }
+        Optional<UserPrincipal> user = SecurityContextUtils.getCurrentUser();
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).build();
+        }
+        Optional<AutomationFlowService.FlowKeyHolder> holder = automationFlowService.findFlowByKey(key);
+        Map<String, Object> data = new HashMap<>();
+        data.put("available", holder.isEmpty());
+        holder.ifPresent(h -> {
+            data.put("flowId", h.flowId());
+            // 「被占用」还不够：Service Task 面板要区分「本工作区的 flow」与「别人团队的 flow」
+            // ——后者部署期仍能按业务键解析，但在这里既看不到也改不了，得说清楚而不是显示成缺失。
+            ApWorkspaceResolver.ApWorkspace workspace =
+                    workspaceResolver.resolve(user.get().getUserId(), devGroupId);
+            data.put("inCurrentWorkspace",
+                    automationFlowService.projectIdOfWorkspace(workspace.externalProjectId())
+                            .map(projectId -> projectId.equals(h.projectId()))
+                            .orElse(false));
+        });
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -161,12 +217,14 @@ public class ServiceTaskTokenController {
             description = "With ?nonce= consumes the one-time session minted by /launch (no platform cookie "
                     + "needed). Without nonce, validates the platform JWT and mints that user's own AP session.")
     public ResponseEntity<ApiResponse<Map<String, String>>> token(
-            @RequestParam(value = "nonce", required = false) String nonce) {
+            @RequestParam(value = "nonce", required = false) String nonce,
+            @RequestHeader(value = DEV_GROUP_HEADER, required = false) String devGroupId) {
         if (!properties.getBridge().isEnabled()) {
             return ResponseEntity.notFound().build();
         }
 
         ServiceTaskApiClient.ApSession session;
+        ApWorkspaceResolver.ApWorkspace workspace = null;
         if (nonce != null && !nonce.isBlank()) {
             // 跨域路径：用一次性 nonce 兑换，AP 域无平台 cookie 也可。
             Optional<ServiceTaskApiClient.ApSession> resolved = nonceStore.consume(nonce);
@@ -183,8 +241,13 @@ public class ServiceTaskTokenController {
             }
             UserPrincipal user = userOpt.get();
             String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
-            session = apiClient.signInManaged(user);
-            log.debug("Issued AP session (same-origin) for platform user {}", login);
+            // 会话按<b>所选 workspace</b>（DW 开发组）换取：project 决定可见的 flow 集合，
+            // 角色决定能否写。非成员在这里 403（ApWorkspaceAccessDeniedException），不回落 Public。
+            workspace = workspaceResolver.resolve(user.getUserId(), devGroupId);
+            session = apiClient.signInManaged(user, workspace.externalProjectId(),
+                    workspace.projectRole(), workspace.platformRole());
+            log.debug("Issued AP session (same-origin) for platform user {} in workspace {}",
+                    login, workspace.externalProjectId());
         }
 
         // A complete AP session is token + projectId (AP clears both on logout). Returning
@@ -193,6 +256,13 @@ public class ServiceTaskTokenController {
         data.put("token", session.token());
         if (session.projectId() != null) {
             data.put("projectId", session.projectId());
+        }
+        if (workspace != null) {
+            // 前端据此显示「当前 workspace」并收起写操作入口（真实写边界仍在 AP 的角色上）。
+            data.put("workspaceId", workspace.groupId());
+            data.put("workspaceName", workspace.name());
+            data.put("workspaceCanWrite", String.valueOf(workspace.canWrite()));
+            data.put("workspacePublic", String.valueOf(workspace.publicWorkspace()));
         }
         return ResponseEntity.ok(ApiResponse.success(data));
     }

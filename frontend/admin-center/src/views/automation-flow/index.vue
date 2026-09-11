@@ -169,6 +169,9 @@
                         >
                           {{ row.status === 'ENABLED' ? t('automationFlow.disable') : t('automationFlow.enable') }}
                         </el-dropdown-item>
+                        <el-dropdown-item command="transfer">
+                          {{ t('automationFlow.transfer') }}
+                        </el-dropdown-item>
                         <el-dropdown-item
                           command="delete"
                           divided
@@ -201,6 +204,50 @@
     />
 
     <el-dialog
+      v-model="transferDialogVisible"
+      :title="t('automationFlow.transferTitle')"
+      width="520px"
+    >
+      <el-form label-width="auto">
+        <el-form-item :label="t('automationFlow.displayName')">
+          <span>{{ transferFlowRow?.displayName }}</span>
+        </el-form-item>
+        <el-form-item :label="t('automationFlow.workspace')">
+          <span>{{ transferFlowRow?.workspaceName }}</span>
+        </el-form-item>
+        <el-form-item :label="t('automationFlow.transferTarget')">
+          <el-select
+            v-model="transferTargetId"
+            style="width: 100%"
+            :placeholder="t('automationFlow.transferTargetPlaceholder')"
+          >
+            <el-option
+              v-for="ws in workspaceOptions"
+              :key="ws.id"
+              :label="ws.publicWorkspace ? t('automationFlow.workspacePublic') : ws.name"
+              :value="ws.id"
+              :disabled="ws.name === transferFlowRow?.workspaceName"
+            />
+          </el-select>
+          <div class="import-hint">
+            {{ t('automationFlow.transferHint') }}
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="transferDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="transferring"
+          :disabled="!transferTargetId"
+          @click="handleTransfer"
+        >
+          {{ t('automationFlow.transferConfirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="importDialogVisible"
       :title="t('automationFlow.importTitle')"
       width="520px"
@@ -218,6 +265,21 @@
           >
             <el-button>{{ t('automationFlow.chooseFile') }}</el-button>
           </el-upload>
+        </el-form-item>
+        <el-form-item :label="t('automationFlow.importWorkspace')">
+          <el-select
+            v-model="importWorkspaceId"
+            style="width: 100%"
+            @change="onImportWorkspaceChange"
+          >
+            <el-option
+              v-for="ws in workspaceOptions"
+              :key="ws.id"
+              :label="ws.publicWorkspace ? t('automationFlow.workspacePublic') : ws.name"
+              :value="ws.id"
+            />
+          </el-select>
+          <span class="import-hint">{{ t('automationFlow.importWorkspaceHint') }}</span>
         </el-form-item>
         <el-form-item :label="t('automationFlow.publishLabel')">
           <el-switch v-model="importPublish" />
@@ -303,6 +365,14 @@ const {
   importDialogVisible,
   importFile,
   importPublish,
+  importWorkspaceId,
+  workspaceOptions,
+  onImportWorkspaceChange,
+  transferDialogVisible,
+  transferFlowRow,
+  transferTargetId,
+  transferring,
+  handleTransfer,
   importing,
   connectionChecks,
   hasMissingConnections,

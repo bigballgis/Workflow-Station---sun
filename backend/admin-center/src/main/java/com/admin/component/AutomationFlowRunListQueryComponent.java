@@ -6,6 +6,7 @@ import com.admin.dto.response.AutomationFlowRunSummary;
 import com.admin.list.AutomationFlowRunColumnSpec;
 import com.admin.list.ListQuerySupport;
 import com.admin.service.AutomationFlowRunService;
+import com.admin.servicetask.ApWorkspaceSql;
 import com.platform.common.list.ListFilterSql;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,22 +34,29 @@ public class AutomationFlowRunListQueryComponent {
 
     static final String LIST_KEY = "admin-automation-runs";
 
-    private static final String FROM_JOIN = """
+    private static final String FROM_HEAD = """
              FROM flow_run r
              JOIN flow f ON f.id = r."flowId"
              JOIN flow_version fv ON fv.id = r."flowVersionId"
              JOIN project p ON p.id = r."projectId"
+            """;
+
+    private static final String FROM_TAIL = """
              WHERE r.environment = 'PRODUCTION' AND r."archivedAt" IS NULL
             """;
 
     private final JdbcTemplate jdbcTemplate;
     private final AutomationFlowRunService automationFlowRunService;
+    private final ApWorkspaceSql workspaceSql;
 
     public AdminListPage<AutomationFlowRunSummary> query(AutomationFlowRunListQueryRequest request) {
         long started = System.nanoTime();
         ListFilterSql filterSql = AutomationFlowRunColumnSpec.sql();
-        List<Object> params = new ArrayList<>();
-        StringBuilder where = new StringBuilder(FROM_JOIN);
+        // workspace join 的参数排在最前——join 在 where 之前，顺序错了就会串位。
+        List<Object> params = new ArrayList<>(workspaceSql.joinParams());
+        StringBuilder where = new StringBuilder(FROM_HEAD)
+                .append(workspaceSql.joinClause())
+                .append(FROM_TAIL);
         appendKeyword(where, params, request.keyword());
         where.append(filterSql.whereClause(request.filters(), params));
 
@@ -103,8 +111,11 @@ public class AutomationFlowRunListQueryComponent {
             return;
         }
         String like = "%" + ListFilterSql.escapeLike(keyword.trim()) + "%";
+        // workspace 名也可被关键字命中（列表按 workspace 展示，运维搜的就是它）
         where.append(" AND (fv.\"displayName\" ILIKE ? OR r.id ILIKE ? OR f.id ILIKE ?")
-                .append(" OR f.metadata->>'hermesFlowKey' ILIKE ?)");
+                .append(" OR f.metadata->>'hermesFlowKey' ILIKE ? OR ")
+                .append(ApWorkspaceSql.LABEL_SQL).append(" ILIKE ?)");
+        params.add(like);
         params.add(like);
         params.add(like);
         params.add(like);

@@ -20,7 +20,7 @@ class AutomationFlowRunColumnSpecTest {
     void declaredColumnsAndTheirOrder() {
         assertThat(AutomationFlowRunColumnSpec.columns().stream().map(ListColumnMeta::field))
                 .containsExactly("flowDisplayName", "status", "startTime", "durationMs",
-                        "failedStepName", "projectName");
+                        "failedStepName", "workspaceName");
     }
 
     @Test
