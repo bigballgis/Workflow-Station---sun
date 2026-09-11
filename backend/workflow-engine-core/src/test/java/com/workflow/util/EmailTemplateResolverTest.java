@@ -18,6 +18,15 @@ class EmailTemplateResolverTest {
     }
 
     @Test
+    void resolveHtml_escapesAngleBracketsInSubjectSoTagsStayText() {
+        Map<String, Object> vars = Map.of("email_subject", "回复：<Test>123456");
+        String result = EmailTemplateResolver.resolveHtml(
+                "<p>主题：<strong>${email_subject}</strong></p>", vars);
+        assertThat(result).isEqualTo("<p>主题：<strong>回复：&lt;Test&gt;123456</strong></p>");
+        assertThat(result).doesNotContain("<Test>");
+    }
+
+    @Test
     void resolve_replacesSubTableHtmlWithRows() {
         Map<String, Object> vars = Map.of(
                 "__subTables__", Map.of(
