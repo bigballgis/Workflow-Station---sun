@@ -4144,7 +4144,7 @@
     worktree 证实同样 15+1）；compose 重建后 `GET /function-units/48/forms/161/bindings`
     返回 filterFkFieldId=6748/6754，与库内一致（ddl-auto=none，故此为映射的运行时证据）；
     `pnpm run regression:mi` 6 场景全 PASS。
-    Batch 2 读侧已落地（2026-09-16，未提交）——分类改读声明，#1636 因写侧仍
+    Batch 2 读侧已提交 `1caec95e1`（2026-09-16）——分类改读声明，#1636 因写侧仍
     table-keyed 保持 open：
     Admin `TableBindingDTO` + `FormTableBindingLoader` LEFT JOIN 下发
     `filterFkRefTableId` / `filterFkFieldName`（`FormTableBindingLoaderFilterFkTest`）。
