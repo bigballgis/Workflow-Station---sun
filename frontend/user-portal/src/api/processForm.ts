@@ -67,6 +67,16 @@ export interface TaskFormSubmitRequest {
    * 当成业务变量写进流程实例（那正是它曾经泄漏的方式）。
    */
   emptiedSubTableKeys?: string[]
+  /**
+   * Per-binding write claims. Transport metadata — not a form field.
+   * Omitted/empty keeps the V1 table-keyed path.
+   */
+  subTableBindingScopes?: Array<{
+    bindingId: string
+    storeKey: string
+    rowKeys: Array<Record<string, unknown>>
+    emptied: boolean
+  }>
 }
 
 export interface ChangeHistoryRecord {

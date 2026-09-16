@@ -36,4 +36,9 @@ public class TaskFormSubmitRequest {
      * 灌进流程变量，放进去就会被当成业务变量持久化。这是传输元数据，不是表单字段。
      */
     private List<String> emptiedSubTableKeys;
+    /**
+     * Per-binding write claims for table-keyed {@code __subTables__}. Null/empty keeps V1.
+     * Transport metadata — not a form field.
+     */
+    private List<SubTableBindingScope> subTableBindingScopes;
 }

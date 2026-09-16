@@ -30,13 +30,17 @@ final class ChangeHistoryBpmnFormResolver {
                     LIMIT 1
                     """, String.class, processInstanceId.trim());
             if (definitions.isEmpty()) return null;
-            return resolveTaskFormId(decodeBpmnXml(definitions.get(0)), stageId);
+            return resolveTaskFormIdFromStored(definitions.get(0), stageId);
         } catch (RuntimeException ex) {
             log.debug("Could not resolve BPMN task form for process {}, stage {}: {}",
                     processInstanceId, stageId, ex.getMessage());
             return null;
         }
     }
+    static Long resolveTaskFormIdFromStored(String storedXml, String stageId) {
+        return resolveTaskFormId(decodeBpmnXml(storedXml), stageId);
+    }
+
     static Long resolveTaskFormId(String bpmnXml, String stageId) {
         if (bpmnXml == null || bpmnXml.isBlank() || stageId == null || stageId.isBlank()) return null;
         int searchFrom = 0;

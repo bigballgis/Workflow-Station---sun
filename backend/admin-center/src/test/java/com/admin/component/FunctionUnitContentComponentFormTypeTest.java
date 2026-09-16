@@ -77,6 +77,7 @@ class FunctionUnitContentComponentFormTypeTest {
                     when(rs.next()).thenReturn(true);
                     when(rs.getString("config_json")).thenReturn("{\"rule\":[]}");
                     when(rs.getString("form_type")).thenReturn("PROCESS");
+                    when(rs.getString("scene")).thenReturn("TASK");
                     return extractor.extractData(rs);
                 });
 
@@ -85,7 +86,48 @@ class FunctionUnitContentComponentFormTypeTest {
         assertThat(response.getForms()).hasSize(1);
         FormContentDTO form = response.getForms().get(0);
         assertThat(form.getFormType()).isEqualTo("PROCESS");
-        assertThat(form.getData()).isEqualTo("{\"rule\":[]}");
+        assertThat(form.getData())
+                .as("PROCESS/TASK form JSON stays the catalog snapshot, not live DW config_json")
+                .isEqualTo("{\"stale\":true}");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void assembleIgnoresLiveDwConfigForNonDetailForms() throws Exception {
+        FunctionUnit unit = FunctionUnit.builder()
+                .id("fu-1")
+                .name("Mask FU")
+                .code("mask-fu")
+                .version("1.0.0")
+                .status(FunctionUnitStatus.DEPLOYED)
+                .build();
+        FunctionUnitContent formContent = FunctionUnitContent.builder()
+                .id("content-1")
+                .functionUnit(unit)
+                .contentType(ContentType.FORM)
+                .contentName("task-form")
+                .contentData("{\"snapshot\":true}")
+                .sourceId("42")
+                .build();
+
+        when(functionUnitLookup.getById("fu-1")).thenReturn(unit);
+        when(contentRepository.findByFunctionUnitId("fu-1")).thenReturn(List.of(formContent));
+        doNothing().when(bindingLoader).attachTableBindings(anyList());
+        when(jdbcTemplate.query(contains("form_type"), any(ResultSetExtractor.class), anyLong()))
+                .thenAnswer(invocation -> {
+                    ResultSetExtractor<Object> extractor = invocation.getArgument(1);
+                    ResultSet rs = org.mockito.Mockito.mock(ResultSet.class);
+                    when(rs.next()).thenReturn(true);
+                    when(rs.getString("config_json")).thenReturn("{\"live\":true}");
+                    when(rs.getString("form_type")).thenReturn("TASK");
+                    when(rs.getString("scene")).thenReturn("TASK");
+                    return extractor.extractData(rs);
+                });
+
+        FormContentDTO form = component.assembleFunctionUnitContent("fu-1").getForms().get(0);
+        assertThat(form.getFormType()).isEqualTo("TASK");
+        assertThat(form.getScene()).isEqualTo("TASK");
+        assertThat(form.getData()).isEqualTo("{\"snapshot\":true}");
     }
 
     /**
@@ -140,7 +182,7 @@ class FunctionUnitContentComponentFormTypeTest {
                 .functionUnit(unit)
                 .contentType(ContentType.FORM)
                 .contentName("Test_meeting")
-                .contentData("{\"rule\":[]}")
+                .contentData("{\"stale\":true}")
                 .sourceId("50613")
                 .build();
 
@@ -152,15 +194,16 @@ class FunctionUnitContentComponentFormTypeTest {
                     ResultSetExtractor<Object> extractor = invocation.getArgument(1);
                     ResultSet rs = org.mockito.Mockito.mock(ResultSet.class);
                     when(rs.next()).thenReturn(true);
-                    when(rs.getString("config_json")).thenReturn("{\"rule\":[]}");
+                    when(rs.getString("config_json")).thenReturn("{\"liveDetail\":true}");
                     when(rs.getString("form_type")).thenReturn("DETAIL");
+                    when(rs.getString("scene")).thenReturn("TASK");
                     return extractor.extractData(rs);
                 });
         when(jdbcTemplate.queryForList(contains("form_type = 'DETAIL'"), any(Object[].class)))
                 .thenReturn(List.of(java.util.Map.of(
                         "id", 50613L,
                         "form_name", "Test_meeting",
-                        "config_json", "{\"rule\":[]}",
+                        "config_json", "{\"liveDetail\":true}",
                         "form_type", "DETAIL",
                         "scene", "TASK")));
 
@@ -170,6 +213,9 @@ class FunctionUnitContentComponentFormTypeTest {
                 .as("the snapshot row and the live row are the same form")
                 .hasSize(1);
         assertThat(response.getForms().get(0).getSourceId()).isEqualTo("50613");
+        assertThat(response.getForms().get(0).getData())
+                .as("DETAIL in the snapshot still uses live DW config (Main Table View)")
+                .isEqualTo("{\"liveDetail\":true}");
     }
 
     /** A failed live lookup must not break the whole content payload. */

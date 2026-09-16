@@ -12,6 +12,12 @@ import {
 } from '@/composables/tasks/shared'
 import { mergeSubTableRowsForMiSave } from '@/composables/tasks/miSubTableSaveMerge'
 import {
+  buildBindingScope,
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+  type SubTableBindingScope,
+} from '@/composables/tasks/subTableCanonicalStamp'
+import {
   bindingMatchesMiSubTableName,
 } from '@/composables/tasks/miSubProcessScope'
 import {
@@ -232,6 +238,8 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     // 本次提交里被主动删空的参与者切片 —— 与 buildSubTableSubmitPayload 同一套条件，
     // 否则「在这个弹窗里删掉自己最后一行」仍然会被后端按「切片没渲染」保住基线。
     const emptiedSubTableKeys: string[] = []
+    const sharedKeys = storeKeysSharedByMultipleBindings(miFillSubTableBindings.value)
+    const subTableBindingScopes: SubTableBindingScope[] = []
 
     for (const binding of miFillSubTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
@@ -248,10 +256,8 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
       )
       const key = subTableStoreKey(binding)
       if (key) {
-        subTables[key] = out
-        subTableData[key] = out
-        // 判据是「界面上属于我的行数为 0」，不是「切片为空」——切片里始终还有其他参与者的行。
-        // 且必须「原本有我的行」，否则那不是删除。与 buildSubTableSubmitPayload 同一套条件。
+        stampCanonicalStoreRows(subTables, subTableData, binding, out, sharedKeys)
+        let emptiedThisBinding = false
         if (
           isMiSubTaskMode.value
           && isOwnRow != null
@@ -259,7 +265,12 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
           && !out.some((row: unknown) => isOwnRow(row))
           && (Array.isArray(existing) ? existing.some((row: unknown) => isOwnRow(row)) : false)
         ) {
+          emptiedThisBinding = true
           emptiedSubTableKeys.push(key)
+        }
+        if (sharedKeys.has(key)) {
+          const scope = buildBindingScope(binding, out, emptiedThisBinding)
+          if (scope) subTableBindingScopes.push(scope)
         }
       }
     }
@@ -273,6 +284,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
         subTableData,
         baselineValues: taskFormDTO.value?.fieldValues || {},
         emptiedSubTableKeys,
+        subTableBindingScopes,
       })
       formData.value = nextFormData
       miFilled.value = true

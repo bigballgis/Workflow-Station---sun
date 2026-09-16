@@ -22,6 +22,12 @@ import {
   sameSubTableRow,
 } from './shared'
 import { mergeSubTableRowsForMiSave } from './miSubTableSaveMerge'
+import {
+  buildBindingScope,
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+  type SubTableBindingScope,
+} from './subTableCanonicalStamp'
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -39,16 +45,11 @@ function subTableSliceUnchanged(
 function stampBindingTableNameAliases(
   subTables: Record<string, any>,
   subTableData: Record<string, Array<Record<string, unknown>>>,
-  binding: { tableName?: string; designerTableName?: string },
+  binding: { tableName?: string; designerTableName?: string; primaryKeyFields?: string[] | null },
   rows: unknown[],
+  sharedKeys: Set<string>,
 ) {
-  // 规范 key：一张表一个 key。subTableData 是提交时的另一个字段（controller 会并进
-  // __subTables__），用同一个 key 规则，避免两边再度分叉。
-  const key = subTableStoreKey(binding)
-  if (key) {
-    subTables[key] = rows
-    subTableData[key] = rows as Array<Record<string, unknown>>
-  }
+  stampCanonicalStoreRows(subTables, subTableData, binding, rows, sharedKeys)
 }
 
 export function useTaskForm(options: {
@@ -183,6 +184,8 @@ export function useTaskForm(options: {
      * 见 `MiSubTaskSubTableRowMerger` 的 empty-slice 分支。
      */
     const emptiedSubTableKeys: string[] = []
+    const subTableBindingScopes: SubTableBindingScope[] = []
+    const sharedKeys = storeKeysSharedByMultipleBindings(options.subTableBindings.value)
 
     for (const binding of options.subTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
@@ -243,24 +246,25 @@ export function useTaskForm(options: {
        * </ul>
        * 三条都满足才发这个 key，后端也只对声明过的 key 清「我的」行 —— 其余情况一律保持基线。
        */
+      let emptiedThisBinding = false
       if (
         options.isMiSubTaskMode.value
         && ownRowPredicate != null
         && isMiParticipantScopedSubTableBinding(binding)
         && !(out as unknown[]).some(row => ownRowPredicate(row))
-        // 只有「原本有我的行、现在没了」才算删除。基线里本来就没有我的行时不发声明 ——
-        // 那不是删除，是这张表我还没有行；发出去只是让后端对零行做一次空转。
         && (Array.isArray(existing) ? existing.some(row => ownRowPredicate(row)) : false)
       ) {
+        emptiedThisBinding = true
         const emptiedKey = subTableStoreKey(binding)
         if (emptiedKey) emptiedSubTableKeys.push(emptiedKey)
       }
-      // One canonical key per designer table. The previous code also wrote the bindingId key and
-      // then arbitrated, via `nameMissing` / `subTableSliceUnchanged`, which binding got to be the
-      // last writer of the shared table-name alias — an arbitration only needed because several
-      // bindings each held their own copy. With a single key there is no second copy to lose to,
-      // so an unchanged list-only binding writing the same rows is a no-op rather than a clobber.
-      stampBindingTableNameAliases(subTables, subTableData, binding, out)
+      // Shared store keys union-merge so a later binding cannot drop another binding's rows.
+      stampBindingTableNameAliases(subTables, subTableData, binding, out, sharedKeys)
+      const storeKey = subTableStoreKey(binding)
+      if (storeKey && sharedKeys.has(storeKey)) {
+        const scope = buildBindingScope(binding, out, emptiedThisBinding)
+        if (scope) subTableBindingScopes.push(scope)
+      }
     }
 
     if (!options.isMiSubTaskMode.value) {
@@ -273,7 +277,7 @@ export function useTaskForm(options: {
         if (!Array.isArray(binding.formFields) || binding.formFields.length === 0) continue
         const live = subTables[String(binding.bindingId)]
         if (!Array.isArray(live) || live.length === 0) continue
-        stampBindingTableNameAliases(subTables, subTableData, binding, live)
+        stampBindingTableNameAliases(subTables, subTableData, binding, live, sharedKeys)
       }
     } else {
       // #1446: link-form (People) edits must also reach the same relation table's stale sibling
@@ -320,6 +324,7 @@ export function useTaskForm(options: {
       formData: { __subTables__: subTables },
       subTableData,
       emptiedSubTableKeys,
+      subTableBindingScopes,
     }
   }
 
@@ -364,6 +369,7 @@ export function useTaskForm(options: {
       // 传输元数据，**刻意放在 formData 之外**：approve/complete 链路会把 formData 整体
       // 灌进流程变量（Object.assign(variables, formData)），放进去就会被当成业务变量持久化。
       emptiedSubTableKeys: subTablePayload.emptiedSubTableKeys,
+      subTableBindingScopes: subTablePayload.subTableBindingScopes,
     }
   }
 

@@ -1,5 +1,9 @@
 import type { Ref } from 'vue'
-import { readSubTableRows, writeSubTableRows } from '@/composables/tasks/subTableStore'
+import { readSubTableRows } from '@/composables/tasks/subTableStore'
+import {
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+} from '@/composables/tasks/subTableCanonicalStamp'
 import {
   flattenNestedSubTableRowsIntoPayload,
   flattenSliceMapsFromBindings,
@@ -76,9 +80,11 @@ export function createProcessStartSubTables(deps: {
     const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
       subTableBindings.value,
     )
+    const sharedKeys = storeKeysSharedByMultipleBindings(subTableBindings.value)
+    const stamped: Record<string, Array<Record<string, unknown>>> = {}
     for (const b of subTableBindings.value) {
       const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
-      writeSubTableRows(subTables, b, rows)
+      stampCanonicalStoreRows(subTables, stamped, b, rows, sharedKeys)
     }
     flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
     return subTables

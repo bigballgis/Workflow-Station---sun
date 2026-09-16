@@ -181,6 +181,19 @@ public class TaskFormComponent {
         return m;
     }
 
+    @Lazy
+    @Autowired
+    private SubTableBindingScopeGuard subTableBindingScopeGuard;
+
+    private SubTableBindingScopeGuard subTableBindingScopeGuard() {
+        SubTableBindingScopeGuard g = subTableBindingScopeGuard;
+        if (g == null) {
+            g = new SubTableBindingScopeGuard(jdbcTemplate);
+            subTableBindingScopeGuard = g;
+        }
+        return g;
+    }
+
     private void recalculateComputedFields(String functionUnitCode, Map<String, Object> variables) {
         ComputedFieldRecalculator recalculator = computedFieldRecalculator;
         if (recalculator == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
@@ -622,6 +635,12 @@ public class TaskFormComponent {
      */
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
             Map<String, Object> baselineValues, List<String> emptiedSubTableKeys) {
+        submitTaskForm(taskId, userId, formData, baselineValues, emptiedSubTableKeys, null);
+    }
+
+    public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
+            Map<String, Object> baselineValues, List<String> emptiedSubTableKeys,
+            List<SubTableBindingScope> subTableBindingScopes) {
         log.info("Submitting task form for task: {}, user: {}", taskId, userId);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
@@ -686,6 +705,8 @@ public class TaskFormComponent {
         // deleted the last row they owned). An empty slice alone cannot say this — see the
         // empty-slice branch in MiSubTaskSubTableRowMerger — so the intent is declared explicitly.
         final Set<String> miEmptiedSubTableKeys = normalizeEmptiedSubTableKeys(emptiedSubTableKeys);
+        final List<SubTableBindingScope> bindingScopes =
+                subTableBindingScopes == null ? List.of() : List.copyOf(subTableBindingScopes);
 
         taskFormWriteTx().executeWithoutResult(status -> {
             ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
@@ -731,6 +752,9 @@ public class TaskFormComponent {
                         miSubTaskSubTableRowMerger().mergeCurrentRowOnly(
                                 submittedSubTables, baselineSubTables, miCurrentRowKey, miEmptiedSubTableKeys));
             }
+
+            applyBindingScopes(bindingScopes, processInstance.getFunctionUnitCode(), formData,
+                    inbound, currentVariables);
 
             updatedVariables.putAll(inbound);
 
@@ -840,6 +864,25 @@ public class TaskFormComponent {
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyBindingScopes(List<SubTableBindingScope> scopes, String functionUnitCode,
+                                    Map<String, Object> formData, Map<String, Object> inbound,
+                                    Map<String, Object> currentVariables) {
+        if (scopes == null || scopes.isEmpty()) {
+            return;
+        }
+        Object submittedRaw = inbound.get("__subTables__");
+        if (!(submittedRaw instanceof Map<?, ?>)) {
+            return;
+        }
+        Map<String, Object> submitted = (Map<String, Object>) submittedRaw;
+        Object baselineRaw = currentVariables.get("__subTables__");
+        Map<String, Object> baseline = baselineRaw instanceof Map<?, ?>
+                ? (Map<String, Object>) baselineRaw : Map.of();
+        subTableBindingScopeGuard().assertAndApply(scopes, functionUnitCode, formData, submitted, baseline);
+        inbound.put("__subTables__", submitted);
     }
 
     /**

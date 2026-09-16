@@ -1,5 +1,9 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
-import { writeSubTableRows, subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
+import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
+import {
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+} from './subTableCanonicalStamp'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -215,8 +219,10 @@ export function useTaskActions(options: {
     // re-stamp that binding's own key after the loop, and it identified the table by the literal
     // name `participants`, which is not how the MI collection table is configured (Sub-Task Config
     // names it) and misses any table called something else.
+    const sharedKeys = storeKeysSharedByMultipleBindings(options.subTableBindings.value)
+    const stamped: Record<string, Array<Record<string, unknown>>> = {}
     for (const b of options.subTableBindings.value) {
-      writeSubTableRows(mergedSub, b, Array.isArray(b.data) ? b.data : [])
+      stampCanonicalStoreRows(mergedSub, stamped, b, Array.isArray(b.data) ? b.data : [], sharedKeys)
     }
     currentFormData.__subTables__ = mergedSub
     return currentFormData

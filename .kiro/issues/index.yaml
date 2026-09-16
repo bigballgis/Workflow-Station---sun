@@ -4157,9 +4157,17 @@
     compose 重建 admin-center / user-portal / developer-workstation；
     `pnpm -C frontend/user-portal run build`；`pnpm -C frontend run regression:mi`
     23 files / 203 tests + 6 Playwright 场景全 PASS。
-    剩余：submit payload 仍 `dw:<table_name>`，binding 身份在序列化时擦掉，
-    真正的 per-binding 写隔离要等设计文档 §6 / §12。3 份「按列名找字段 id」
-    谓词不同，等 #1637 修好后再抽（本批未强行收敛）。
+    剩余：submit 规范 key 仍是 `dw:<table_name>`（方案 A 刻意保留），但
+    Task Form 提交已另带 `subTableBindingScopes`（bindingId/storeKey/rowKeys/emptied），
+    服务端 `SubTableBindingScopeGuard` 按声明 filter FK + `_currentItem` 校验，
+    未认领变更 403，scoped 路径 `_wsRowVersion` 冲突 409。单 binding 省略 scopes = V1。
+    merger 仍按表分类；`BINDING_EXISTS` 未开。#1636 保持 open。
+    本地双 binding 样本（2026-09-16）：种子 `deploy/init-scripts/21-dual-binding-p0/`
+    建 FU `p0-dual-binding-test`（id=50008），独立表名 `p0_dual_file` 两条 SUB
+    （filter `case_id`→MAIN vs `party_id`→party），不改 Demo `attachment`。
+    验证：Guard 8 tests；canonical stamp 4；DW API 两条 binding 50701/50702；
+    截图 Form Design / Manage Table Bindings / Form Preview；Demo `attachment`
+    仍 n_fk=1。未编入 00-init-all，未写入 sys_function_units。
 
 - id: "1637"
   status: open
