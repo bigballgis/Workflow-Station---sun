@@ -128,6 +128,8 @@ export function isMiParticipantScopedSubTableBinding(
     foreignKeyField?: string | null
     bindingLinkMode?: string | null
     fieldDefinitions?: MiKindFieldDef[] | null
+    filterFkRefTableId?: number | null
+    filterFkFieldName?: string | null
   },
   ctx?: MiKindContext | null,
 ): boolean {
@@ -185,6 +187,8 @@ export function isSharedAttachmentFileBinding(
     foreignKeyField?: string | null
     bindingLinkMode?: string | null
     fieldDefinitions?: MiKindFieldDef[] | null
+    filterFkRefTableId?: number | null
+    filterFkFieldName?: string | null
     columns?: Array<{ field?: string }> | null
   },
   ctx?: MiKindContext | null,

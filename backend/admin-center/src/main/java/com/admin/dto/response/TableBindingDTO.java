@@ -56,6 +56,17 @@ public class TableBindingDTO {
      */
     private String bindingLinkMode;
     /**
+     * Column name of the declared foreign key this SUB binding filters rows by
+     * ({@code dw_field_definitions.field_name} for {@code filter_fk_field_id}).
+     * {@code null} = not declared; runtime falls back to scanning the table's foreign keys.
+     */
+    private String filterFkFieldName;
+    /**
+     * Target table of that declared filter FK ({@code dw_field_definitions.ref_table_id}).
+     * This is what distinguishes two SUB bindings of the same physical table.
+     */
+    private Long filterFkRefTableId;
+    /**
      * Table field metadata (FK/PK) for Portal / Preview row-add runtime (PRD S5).
      */
     private List<TableFieldDefinitionDTO> fieldDefinitions;

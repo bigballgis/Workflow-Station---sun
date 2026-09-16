@@ -34,7 +34,7 @@ import {
 import { cannotDownloadFieldKeysFromForms } from '@/utils/applyUploadPropsFromRule'
 import { createFuContentCache } from './fuContentCache'
 import { stampMiCollectionFromBpmn } from './miCollectionStamp'
-import { registerMiKindTableIdsFromBindings } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFilterFkFields, registerMiKindTableIdsFromBindings } from '@/composables/tasks/miBindingKindFromConfig'
 import {
   cloneSubTableRows,
   cloneAndFlattenSubTablesMap,
@@ -314,6 +314,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             ),
             fieldDefinitions: b.fieldDefinitions ?? [],
             bindingLinkMode: b.bindingLinkMode,
+            ...declaredFilterFkFields(b),
             data: []
           })
         }

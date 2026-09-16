@@ -64,6 +64,7 @@ public class FormTableBindingLoader {
                 String sql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.binding_link_mode, ftb.sort_order, " +
+                        "       ffk.field_name AS filter_fk_field_name, ffk.ref_table_id AS filter_fk_ref_table_id, " +
                         "       COALESCE(td.id, rt.id) as table_id, " +
                         "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
                         "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
@@ -76,6 +77,7 @@ public class FormTableBindingLoader {
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
                         "LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id " +
                         "LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id " +
+                        "LEFT JOIN dw_field_definitions ffk ON ffk.id = ftb.filter_fk_field_id " +
                         "WHERE fd.id::text IN (" + placeholders + ") " +
                         "ORDER BY fd.id, ftb.sort_order";
                 jdbcTemplate.query(sql, rs -> {
@@ -89,6 +91,7 @@ public class FormTableBindingLoader {
                 String sql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.binding_link_mode, ftb.sort_order, " +
+                        "       ffk.field_name AS filter_fk_field_name, ffk.ref_table_id AS filter_fk_ref_table_id, " +
                         "       COALESCE(td.id, rt.id) as table_id, " +
                         "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
                         "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
@@ -102,6 +105,7 @@ public class FormTableBindingLoader {
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
                         "LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id " +
                         "LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id " +
+                        "LEFT JOIN dw_field_definitions ffk ON ffk.id = ftb.filter_fk_field_id " +
                         "ORDER BY latest.form_name, ftb.sort_order";
                 jdbcTemplate.query(sql, rs -> {
                     String formName = rs.getString("form_name");
@@ -144,6 +148,8 @@ public class FormTableBindingLoader {
                 .subMode(rs.getString("sub_mode"))
                 .foreignKeyField(rs.getString("foreign_key_field"))
                 .bindingLinkMode(rs.getString("binding_link_mode"))
+                .filterFkFieldName(rs.getString("filter_fk_field_name"))
+                .filterFkRefTableId(readNullableLong(rs, "filter_fk_ref_table_id"))
                 .sortOrder(rs.getInt("sort_order"))
                 .tableName(rs.getString("table_name"))
                 .tableDisplayName(rs.getString("table_display_name"))

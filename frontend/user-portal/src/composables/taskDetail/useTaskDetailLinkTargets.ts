@@ -1,6 +1,7 @@
 import {
   resolveSubTablePrimaryKeyFields,
 } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
 import {
   resolveSubTableSchemaByTableId,
 } from '@/components/subTableAddDialogHelpers'
@@ -176,6 +177,7 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
             ),
             fieldDefinitions: raw.fieldDefinitions ?? [],
             bindingLinkMode: raw.bindingLinkMode,
+            ...declaredFilterFkFields(raw),
             data: []
           })
           known.add(Number(raw.bindingId))

@@ -4056,7 +4056,7 @@
   status: open
   severity: major
   category: bug
-  summary: "MI binding 分类无 per-binding 判据：给子表加一个指向 collection 的 FK 列会让存量 shared binding 静默翻成 participant-child"
+  summary: "MI binding 写侧仍无 binding 身份：读侧已按 filterFkRefTableId 分类，submit 仍按 dw:<table_name> 擦除 per-binding 角色"
   file: "frontend/user-portal/src/composables/tasks/miBindingKindFromConfig.ts"
   note: |
     静态分析发现（未运行时复现，需实测确认）。
@@ -4144,20 +4144,22 @@
     worktree 证实同样 15+1）；compose 重建后 `GET /function-units/48/forms/161/bindings`
     返回 filterFkFieldId=6748/6754，与库内一致（ddl-auto=none，故此为映射的运行时证据）；
     `pnpm run regression:mi` 6 场景全 PASS。
-    Batch 2 仍待做：TableBindingDTO 暴露解析后的过滤 FK、前端
-    resolveMiBindingKindFromConfig 与后端 MiSubTaskSubTableRowMerger 改读 per-binding
-    判据、以及提交侧 payload 擦除 binding 身份这层更深的阻塞。
-    Batch 1 自审留下的两个尾巴（均不影响本批正确性，Batch 2 一并收）：
-    (a) 生产建 binding 的点共 4 处，本批只接了 3 处 —— `AiWriteServiceImpl` 从 LLM
-        输出建 binding（bindingType 由 LLM 给，可为 SUB）时不写 filter_fk_field_id，
-        留 null 落回表级扫描（= 现状行为，非回归）；该路径也不走
-        enforcePrimarySubBindingRules，其 foreignKeyField 未必是已声明 FK，故解析多半
-        本就为 null。第 4 处 `RelationTableBindingServiceImpl` 只建 RELATED
-        （table_id 为 null），不适用。
-    (b) 「按列名找字段 id」现有 3 份近似实现（FormDesignComponentImpl 要求
-        isForeignKey+ref_table_id、Provisioner 只要求 isForeignKey 因其自建列无
-        ref_table_id 见 #1637、ImportWriter 走 repository 且只按名），谓词与数据源
-        各不相同，故本批未强行抽公共方法；Batch 2 会重塑这批读写，届时一并收敛。
+    Batch 2 读侧已落地（2026-09-16，未提交）——分类改读声明，#1636 因写侧仍
+    table-keyed 保持 open：
+    Admin `TableBindingDTO` + `FormTableBindingLoader` LEFT JOIN 下发
+    `filterFkRefTableId` / `filterFkFieldName`（`FormTableBindingLoaderFilterFkTest`）。
+    前端 `resolveMiBindingKindFromConfig` 已声明则只认该目标，不再扫表上其它 FK；
+    拷贝点经 `declaredFilterFkFields` 透传。后端 `foreignKeyTargetsMainTable` 先
+    DISTINCT 已声明 filter_fk 的 ref type，空则回落表扫描，混合 MAIN+非 MAIN 返回
+    null（既有 fail-loud 守卫仍开）。`AiWriteServiceImpl` 建 SUB 时写 filterFkFieldId。
+    验证：portal vitest miBindingKindFromConfig；Maven
+    FormTableBindingLoaderFilterFkTest + MiSubTaskSubTableRowMergerTest；
+    compose 重建 admin-center / user-portal / developer-workstation；
+    `pnpm -C frontend/user-portal run build`；`pnpm -C frontend run regression:mi`
+    23 files / 203 tests + 6 Playwright 场景全 PASS。
+    剩余：submit payload 仍 `dw:<table_name>`，binding 身份在序列化时擦掉，
+    真正的 per-binding 写隔离要等设计文档 §6 / §12。3 份「按列名找字段 id」
+    谓词不同，等 #1637 修好后再抽（本批未强行收敛）。
 
 - id: "1637"
   status: open

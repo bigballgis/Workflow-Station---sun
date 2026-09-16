@@ -24,6 +24,8 @@ export interface SubTableBinding {
    * 与 {@link bindingMode} 名字相近但语义无关，FK/PK 运行时靠它识别 MI 参与者行。
    */
   bindingLinkMode?: string | null
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   foreignKeyField?: string | null
   tableName: string
   designerTableName?: string
@@ -73,6 +75,8 @@ export interface NestedSubTableDescriptor {
    * `miParticipantRow`，于是嵌套的 MI collection 会被静默当成普通子表处理。
    */
   bindingLinkMode?: string | null
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   foreignKeyField?: string | null
   formFields?: FormField[]
   formOptions?: Record<string, unknown> | null

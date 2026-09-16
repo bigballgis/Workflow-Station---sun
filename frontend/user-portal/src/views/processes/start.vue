@@ -289,6 +289,7 @@ import { actionButtonStyle, isCustomButtonColor } from '@/utils/actionButtonColo
 import {
   resolveSubTablePrimaryKeyFields,
 } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
 import {
   buildRelationTableFieldIndexFromDataTables,
   resolveBindingFieldDefinitions,
@@ -600,6 +601,7 @@ const loadFunctionUnitContent = async () => {
           ...(subFormOptions ? { formOptions: subFormOptions } : {}),
           fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
+          ...declaredFilterFkFields(b as { filterFkRefTableId?: number | null; filterFkFieldName?: string | null }),
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []
         })

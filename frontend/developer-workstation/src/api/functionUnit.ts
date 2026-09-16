@@ -244,6 +244,7 @@ export interface TableBinding {
   bindingMode: BindingMode
   foreignKeyField?: string
   bindingLinkMode?: BindingLinkMode
+  filterFkFieldId?: number
   sortOrder: number
   subListViewId?: number
   subMode?: SubBindingMode
@@ -257,6 +258,7 @@ export interface TableBindingRequest {
   bindingMode?: BindingMode
   foreignKeyField?: string
   bindingLinkMode?: BindingLinkMode
+  filterFkFieldId?: number
   sortOrder?: number
   subMode?: SubBindingMode
 }

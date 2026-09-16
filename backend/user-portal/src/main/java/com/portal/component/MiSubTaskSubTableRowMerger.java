@@ -353,12 +353,18 @@ class MiSubTaskSubTableRowMerger {
     }
 
     /**
-     * Does this table's designer-declared foreign key point at the MAIN table?
+     * Does this table's designer-declared filter foreign key point at the MAIN table?
      *
      * <p>That is the structural definition of "shared by the whole request": an attachment or an
      * action table FK'd to the request itself, as opposed to a link-child FK'd to the MI collection.
-     * Column names cannot tell these apart — only the FK's target can — which is why the old
-     * {@code main_id}/{@code process_id} literal list broke the moment the demo FU renamed its keys.
+     * Prefers {@code dw_form_table_bindings.filter_fk_field_id} — the per-binding declaration —
+     * over scanning every FK of the physical table. Scanning is only unambiguous while a table
+     * declares exactly one key; two bindings of the same table each filtering by a different key
+     * would otherwise collapse to one answer.
+     *
+     * <p>When the declared keys on this table disagree (some MAIN, some not), this returns
+     * {@code null}: a table-keyed payload cannot say which binding the rows belong to, and picking
+     * either side is a guess. The caller keeps the participant guard on.
      *
      * @return {@code null} when the table or its FK target cannot be resolved (caller keeps the
      *         participant guard on rather than guessing)
@@ -368,17 +374,32 @@ class MiSubTaskSubTableRowMerger {
             return null;
         }
         String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
-        List<String> refTypes = jdbcTemplate.queryForList("""
-                SELECT ref.table_type
-                FROM dw_field_definitions f
-                JOIN dw_table_definitions t ON t.id = f.table_id
+        List<String> declaredRefTypes = jdbcTemplate.queryForList("""
+                SELECT DISTINCT ref.table_type
+                FROM dw_form_table_bindings b
+                JOIN dw_table_definitions t ON t.id = b.table_id
+                JOIN dw_field_definitions f ON f.id = b.filter_fk_field_id
                 JOIN dw_table_definitions ref ON ref.id = f.ref_table_id
-                WHERE lower(t.table_name) = lower(?) AND f.is_foreign_key = true
+                WHERE lower(t.table_name) = lower(?)
                 """, String.class, tableName);
+        List<String> refTypes = declaredRefTypes.isEmpty()
+                ? jdbcTemplate.queryForList("""
+                        SELECT ref.table_type
+                        FROM dw_field_definitions f
+                        JOIN dw_table_definitions t ON t.id = f.table_id
+                        JOIN dw_table_definitions ref ON ref.id = f.ref_table_id
+                        WHERE lower(t.table_name) = lower(?) AND f.is_foreign_key = true
+                        """, String.class, tableName)
+                : declaredRefTypes;
         if (refTypes.isEmpty()) {
             return null;
         }
-        return refTypes.stream().anyMatch("MAIN"::equalsIgnoreCase);
+        boolean anyMain = refTypes.stream().anyMatch("MAIN"::equalsIgnoreCase);
+        boolean anyNonMain = refTypes.stream().anyMatch(t -> t != null && !"MAIN".equalsIgnoreCase(t));
+        if (anyMain && anyNonMain) {
+            return null;
+        }
+        return anyMain;
     }
 
     /**

@@ -524,6 +524,10 @@ public class AiWriteServiceImpl implements AiWriteService {
                             .bindingType(bindingType)
                             .bindingMode(bindingMode)
                             .foreignKeyField((String) bindingData.get("foreignKeyField"))
+                            .filterFkFieldId(bindingType == BindingType.SUB
+                                    ? resolveDeclaredFkFieldId(boundTable,
+                                    (String) bindingData.get("foreignKeyField"))
+                                    : null)
                             .sortOrder(toInteger(bindingData.get("sortOrder")))
                             .build();
 
@@ -979,6 +983,25 @@ public class AiWriteServiceImpl implements AiWriteService {
 
     private boolean containsIgnoreCase(String text, String token) {
         return text.toLowerCase(Locale.ROOT).contains(token.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * The {@code dw_field_definitions.id} of a named column that is a declared FK with a target,
+     * or {@code null} when that cannot be resolved. LLM output often names an undeclared column;
+     * leaving the binding undeclared then matches the documented fallback, it does not guess.
+     */
+    private static Long resolveDeclaredFkFieldId(TableDefinition table, String fieldName) {
+        if (table == null || table.getFieldDefinitions() == null || fieldName == null) {
+            return null;
+        }
+        return table.getFieldDefinitions().stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsForeignKey())
+                        && f.getRefTableId() != null
+                        && fieldName.equalsIgnoreCase(f.getFieldName()))
+                .map(FieldDefinition::getId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private Integer toInteger(Object value) {

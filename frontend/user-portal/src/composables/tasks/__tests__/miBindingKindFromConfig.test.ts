@@ -135,6 +135,52 @@ describe('resolveMiBindingKindFromConfig —— FU 50005 现场配置', () => {
   })
 })
 
+describe('resolveMiBindingKindFromConfig —— 同表两条 binding 各绑不同 FK', () => {
+  /**
+   * 这是 Batch 2 的正例：同一张 Attachment 表同时声明指向主表的 FK 和指向 collection 的 FK。
+   * 表级扫描（hasFieldFkTo collection 优先）会把两条 binding 都判成 participant-child。
+   * 读 per-binding filterFkRefTableId 才能分开。
+   */
+  const twoFkFieldDefs = [
+    { fieldName: 'meeting_id', isForeignKey: true, refTableId: MAIN_TID },
+    { fieldName: 'participant_id', isForeignKey: true, refTableId: COLLECTION_TID },
+  ]
+
+  it('同表：声明过滤 FK 指向主表 => shared；指向 collection => participant-child', () => {
+    const meetingAttachment = {
+      tableId: 50330,
+      bindingLinkMode: 'structuralFk',
+      filterFkRefTableId: MAIN_TID,
+      filterFkFieldName: 'meeting_id',
+      fieldDefinitions: twoFkFieldDefs,
+    }
+    const participantAttachment = {
+      tableId: 50330,
+      bindingLinkMode: 'structuralFk',
+      filterFkRefTableId: COLLECTION_TID,
+      filterFkFieldName: 'participant_id',
+      fieldDefinitions: twoFkFieldDefs,
+    }
+    expect(resolveMiBindingKindFromConfig(meetingAttachment, CTX)).toBe('shared')
+    expect(resolveMiBindingKindFromConfig(participantAttachment, CTX)).toBe('participant-child')
+  })
+
+  it('已声明时不再扫表上其它 FK —— 即使 fieldDefinitions 里还有指向 collection 的列', () => {
+    const sharedDespiteCollectionColumn = {
+      tableId: 50330,
+      bindingLinkMode: 'structuralFk',
+      filterFkRefTableId: MAIN_TID,
+      fieldDefinitions: twoFkFieldDefs,
+    }
+    expect(resolveMiBindingKindFromConfig(sharedDespiteCollectionColumn, CTX)).toBe('shared')
+  })
+
+  it('未声明时仍回落表级扫描（存量单 FK 表行为不变）', () => {
+    expect(resolveMiBindingKindFromConfig(attachmentBinding, CTX)).toBe('shared')
+    expect(resolveMiBindingKindFromConfig(peopleBinding, CTX)).toBe('participant-child')
+  })
+})
+
 describe('谓词接上配置判据后的行为', () => {
   it('Participants 被认成 MI dashboard（靠 linkMode，不靠列名/表名）', () => {
     expect(isMiDashboardSubTableBinding(collectionBinding)).toBe(true)

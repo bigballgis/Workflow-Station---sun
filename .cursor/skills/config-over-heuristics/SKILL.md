@@ -365,13 +365,20 @@ const structuralFkFieldNames = computed(() =>
 （实测 33 个 SUB binding 存着一个未被标记为 FK 的列名，弹窗里那栏是空的）。
 → 真源永远是 Table Design 的 `isForeignKey`。
 
+**E. 同表多 binding 的过滤关系** = `filter_fk_field_id`，不是扫整张表的 FK
+
+`dw_form_table_bindings.filter_fk_field_id` 存的是 `dw_field_definitions.id`（列名会被改）。
+运行时契约下发解析后的 `filterFkRefTableId` / `filterFkFieldName`。
+`hasFieldFkTo` / `foreignKeyTargetsMainTable` 那种「该表任一 FK 命中即算」只在每张表恰好 1 个已声明 FK 时无歧义；同表两条 binding 各绑不同 FK 时必须读这条声明。
+未声明时才允许回落表级扫描。**禁止**拿 `foreignKeyField` 当过滤关系 —— 43 条存量 SUB binding 上它是自己的主键，不是父引用。
+
 ### 10.2 判不出来时怎么办 —— 按"错了会怎样"分别处理
 
 | 场景 | 做法 | 理由 |
 |---|---|---|
 | 行身份判不出 | 返回 `null` / 空集 | 下游按位置配对，最差配错一行；猜列名会把两行**不同的行合并** |
 | 子表没有 FK 标记 | **跳过重建** + 可操作日志 | 建出来的本来就是坏 binding；stale 占位符看得见，用户能修 |
-| link mode 判不出 | 读同表其它 binding；再不行 `structuralFk` | 契约 C：能推导 |
+| link mode 判不出 | 存活兄弟必须**一致**才采用；互相矛盾 → **跳过重建** | 同表两个角色时「取第一个兄弟」就是猜；猜成 `miParticipantRow` 会丢掉参与者隔离 |
 | 授予访问权的判据 | 保持 fail-closed | 看不见自己的数据 ≪ 别人看见你的数据 |
 
 日志要写**用户能执行的下一步**，不是 "resolve failed"：
@@ -418,8 +425,8 @@ private BindingLinkMode bindingLinkMode = BindingLinkMode.structuralFk;
 | `miLinkChildIdentity.scoreMiLinkChildRowQuality` | **内联**一份同样的正则 | grep 函数名漏掉；真主键行只得 40 分 |
 | `SubTableRowIdentity.IDENTITY_FIELDS` | `['row_id','rowId','id_idw','id',…]` | `id` 在 13 张表是业务列且无一是主键 |
 | 前端 `subTableRowIdentity.ts` | 同名单 + 写 `row_id` | 后端改名后两端静默分叉，编辑被读成删+增 |
-| `FormTableBindingRestorer.inferForeignKeyField` | 猜 `row_id`→`case_id`→兜底 | 15 张子表猜对 2 张，其余 FK 指向不存在的列 |
-| `FormTableBindingRestorer` link mode | `"row_id".equals(fk) ? MI : structuralFk` | 14 个 MI binding 里 7 个被还原成 structuralFk |
+| `FormTableBindingRestorer.inferForeignKeyField` | 猜 `row_id`→`case_id`→兜底 | 15 张子表猜对 2 张，其余 FK 指向不存在的列；已改为「恰好 1 个已声明 FK 才重建，否则跳过」 |
+| `FormTableBindingRestorer` link mode | `"row_id".equals(fk) ? MI : structuralFk`，后又 `findFirst` 兄弟 | 14 个 MI binding 里 7 个被还原成 structuralFk；已改为兄弟互相矛盾则拒绝重建 |
 | `FunctionUnitCloner` / `copyTaskForm` / `copyProcessToTaskForm` | 漏写 `.bindingLinkMode(...)` | 见 §10.3 |
 | `FormConfigJsonTableProvisioner` 自动建表 | 建了 FK 列但不打 `isForeignKey` | **8 张无标记表的出生方式**（曾在持续生产） |
 | 同上，匹配到无 FK 的已有表 | 落进 createSubTable | 静默新建一张近似重复的表 |
@@ -433,6 +440,7 @@ private BindingLinkMode bindingLinkMode = BindingLinkMode.structuralFk;
 - [ ] 判断"这一行是谁"用的是配置主键，不是列名白名单、**不是值的形状**
 - [ ] 判断"哪列指向父表"读 `isForeignKey`，不是 `row_id`/`main_id`/`case_id`
 - [ ] 判断"是不是 MI"读 `bindingLinkMode` 或契约 C，不是 FK 叫什么名字
+- [ ] 判断「这条 binding 按哪个 FK 过滤」读 `filterFkRefTableId`（来自 `filter_fk_field_id`），不是扫 `fieldDefinitions` 里任意 FK，也不是 `foreignKeyField`
 - [ ] 从实体拷贝时**逐字段**核对过 builder（§10.3）
 - [ ] grep 过同一调用形态的**全部**位置，不是只改先看到的那个
 - [ ] 判不出时返回 null / 跳过，并给了可执行的日志——没有发明默认值

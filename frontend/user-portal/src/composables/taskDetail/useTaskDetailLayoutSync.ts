@@ -9,6 +9,7 @@ import {
   isMiDashboardSubTableBinding,
   finalizeMiCollectionSubTableBindingRows,
 } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
@@ -79,6 +80,7 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
         primaryKeyFields: resolveSubTablePrimaryKeyFields(raw.primaryKeyFields, bid, cfg),
         fieldDefinitions: raw.fieldDefinitions ?? [],
         bindingLinkMode: raw.bindingLinkMode,
+        ...declaredFilterFkFields(raw),
         data: [],
       } as any)
       have.add(bid)
