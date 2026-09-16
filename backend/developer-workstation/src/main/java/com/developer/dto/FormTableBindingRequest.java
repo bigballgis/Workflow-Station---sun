@@ -49,6 +49,12 @@ public class FormTableBindingRequest {
     private BindingLinkMode bindingLinkMode;
 
     /**
+     * 本 binding 按哪个已声明外键过滤行（{@code dw_field_definitions.id}）。
+     * null = 未声明，运行时退回扫描该表全部外键。
+     */
+    private Long filterFkFieldId;
+
+    /**
      * 排序顺序
      */
     private Integer sortOrder;

@@ -34,6 +34,7 @@ import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailTemplateRepository;
+import com.developer.repository.FieldDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.LinkFormComponentRepository;
@@ -53,6 +54,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -66,6 +68,7 @@ import java.util.UUID;
 public class FunctionUnitImportWriter {
 
     private final TableDefinitionRepository tableDefinitionRepository;
+    private final FieldDefinitionRepository fieldDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
@@ -404,6 +407,8 @@ public class FunctionUnitImportWriter {
                     .foreignKeyField((String) bindingData.get("foreignKeyField"))
                     .sortOrder(sortOrder)
                     .bindingLinkMode(bindingLinkMode)
+                    .filterFkFieldId(resolveFilterFkFieldId(
+                            table, (String) bindingData.get("filterFkFieldName")))
                     .subMode(subMode);
             FormTableBinding savedBinding = formTableBindingRepository.save(bindingBuilder.build());
 
@@ -414,6 +419,28 @@ public class FunctionUnitImportWriter {
             }
         }
         return bindingIdMapping;
+    }
+
+    /**
+     * Resolve the exported {@code filterFkFieldName} back to a {@code dw_field_definitions.id} of
+     * the table this binding was just pointed at.
+     *
+     * <p>The package carries the column NAME because ids are environment-local; the id is what gets
+     * persisted because names get renamed. Returns {@code null} when the package declared none, the
+     * table could not be resolved, or the named column is absent from it — all of which leave the
+     * binding in the documented "not declared" state rather than pointing it at some other field.
+     */
+    private Long resolveFilterFkFieldId(TableDefinition table, String filterFkFieldName) {
+        if (table == null || filterFkFieldName == null || filterFkFieldName.isBlank()) {
+            return null;
+        }
+        return fieldDefinitionRepository
+                .findByTableDefinitionIdOrderBySortOrderAsc(table.getId()).stream()
+                .filter(f -> filterFkFieldName.equalsIgnoreCase(f.getFieldName()))
+                .map(FieldDefinition::getId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**

@@ -60,6 +60,7 @@ class EmailPortabilityTest {
     void setUp() {
         importWriter = new FunctionUnitImportWriter(
                 mock(TableDefinitionRepository.class),
+                mock(com.developer.repository.FieldDefinitionRepository.class),
                 mock(FormDefinitionRepository.class),
                 mock(ActionDefinitionRepository.class),
                 mock(DecisionDefinitionRepository.class),

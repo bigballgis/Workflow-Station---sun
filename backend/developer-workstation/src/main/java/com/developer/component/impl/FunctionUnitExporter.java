@@ -623,6 +623,13 @@ public class FunctionUnitExporter {
         if (binding.getBindingLinkMode() != null) {
             map.put("bindingLinkMode", binding.getBindingLinkMode().name());
         }
+        // filterFkFieldId is a dw_field_definitions id, which means nothing in the target
+        // environment — export the field NAME instead and let the import resolve it back against
+        // the freshly written fields of this binding's own table (already exported as `tableName`).
+        String filterFkFieldName = resolveFilterFkFieldName(binding);
+        if (filterFkFieldName != null) {
+            map.put("filterFkFieldName", filterFkFieldName);
+        }
         if (binding.getSubMode() != null) {
             map.put("subMode", binding.getSubMode().name());
         }
@@ -632,6 +639,25 @@ public class FunctionUnitExporter {
                     .ifPresent(config -> map.put("subTableViewConfig", serializeSubTableViewConfig(config)));
         }
         return map;
+    }
+
+    /**
+     * The column name behind a binding's {@code filterFkFieldId}, or {@code null} when it declares
+     * none / the id no longer matches a field of its bound table (the column carries no FK
+     * constraint, matching {@code ref_table_id}, so a dangling id is possible on old data).
+     * Omitting it then is accurate: the import lands in the documented "not declared" state.
+     */
+    private String resolveFilterFkFieldName(FormTableBinding binding) {
+        Long fieldId = binding.getFilterFkFieldId();
+        if (fieldId == null || binding.getTable() == null
+                || binding.getTable().getFieldDefinitions() == null) {
+            return null;
+        }
+        return binding.getTable().getFieldDefinitions().stream()
+                .filter(f -> fieldId.equals(f.getId()))
+                .map(FieldDefinition::getFieldName)
+                .findFirst()
+                .orElse(null);
     }
 
     private Map<String, Object> serializeSubTableViewConfig(SubTableViewConfig config) {

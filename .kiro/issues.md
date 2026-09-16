@@ -3,13 +3,13 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-09-15)
+## 统计 (截至 2026-09-16)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **17** | `index.yaml` |
+| 🔓 Open | **19** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
-| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521、#1523–#1530、#1532–#1539、#1541–#1635 等） |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1635 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
@@ -26,12 +26,14 @@
 | 1407 | minor | quality | 动作测试仍为占位实现（流程 simulate 已接入 BpmnProcessSimulator） |
 | 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
 | 1501 | major | bug | Main Table View / Relation Tables 列表未应用 Input 敏感打码 |
-| 1522 | major | deploy | dev 库流程实例数据全空，regression:mi 截图门禁全部无法执行（环境 fixture 缺口） |
 | 1531 | minor | quality | Form Business Rules 未交付脚手架（DW 无入口 / Portal 无传参 / 库内 0 数据）— 技术债，非线上缺陷 |
 | 1599 | minor | bug | FU 部署新 catalog 版本后 Portal 发起 403 version mismatch，最长持续 5 分钟（processKeyCache 未失效） |
 | 1540 | minor | quality | Views CSV export：FE 注释称不分页但 body 仍带 size；BE 用 maxRows 覆盖 — 契约需澄清 |
 | 1616 | major | bug | Meeting Assign Participants：引擎 SubTableDataInjector 查物理表 participants.main_record_id |
 | 1617 | major | bug | Showcase Submit Application：部署缺少 DMN showcase_amount_tier |
+| 1636 | major | bug | MI binding 分类无 per-binding 判据：给子表加一个指向 collection 的 FK 列会让存量 shared binding 静默翻成 participant-child（前端表级 `hasFieldFkTo`；后端按表名查库、`isParticipantScopedBinding` 只收 store key）— Batch 1（`filter_fk_field_id` 列 + 回填 + 写入侧/可移植性/拒绝重建）已落地，运行时判据待 Batch 2 |
+| 1637 | major | bug | FormConfigJsonTableProvisioner 建子表时 FK 列标 `isForeignKey=true` 但不写 `ref_table_id`，运行时消费者（按 ref_table_id 关联）读不到目标 |
+| 1638 | minor | quality | developer-workstation 基线红：MemberControllerTest 15 个 403、AuditorReadOnlyControllerContractTest 1 个 upload 端点缺 `@RequireDeveloperPermission`（已在 HEAD worktree 证实非新引入） |
 
 ### Wontfix
 

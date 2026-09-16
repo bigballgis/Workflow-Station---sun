@@ -169,6 +169,18 @@ public class FormConfigJsonTableProvisioner {
             FormTableBinding subBinding = existingSub != null ? existingSub
                     : saveBinding(form, subFinal, null, BindingType.SUB, subMode(form),
                     fkFinal, BindingLinkMode.structuralFk, SubMode.FULL, nextSort(currentBindings));
+            if (existingSub == null) {
+                // Record which FK this new binding filters by, as an id. The lookup is by the exact
+                // column name chosen above, which identifies one field — unlike the runtime's
+                // table-level scan, which only has one answer while the table declares one key.
+                // Existing bindings are left alone: their declaration is the backfill's business,
+                // not this provisioning pass's.
+                Long filterFkFieldId = declaredFkFieldIdByName(subFinal, fkFinal);
+                if (filterFkFieldId != null) {
+                    subBinding.setFilterFkFieldId(filterFkFieldId);
+                    subBinding = formTableBindingRepository.save(subBinding);
+                }
+            }
             bindingMap.put(staleId, subBinding.getId());
             bindings = formTableBindingRepository.findByFormIdWithTable(form.getId());
         }
@@ -364,6 +376,30 @@ public class FormConfigJsonTableProvisioner {
             }
         }
         return SUB_FK_FIELD;
+    }
+
+    /**
+     * The {@code dw_field_definitions.id} of one named column that is marked as a foreign key, or
+     * {@code null} if absent.
+     *
+     * <p>{@code isForeignKey} is required so a plain column can never be recorded as a binding's
+     * filter relation. Both branches feeding this already satisfy it — {@link #resolveFkField}
+     * returns a flagged column, and {@link #createSubTable} flags the one it creates — so this is a
+     * guard rather than a behaviour change. It deliberately does NOT require {@code refTableId}:
+     * {@code createSubTable} flags its column without a target (tracked separately), and demanding
+     * one here would silently leave every table this provisioner creates undeclared.
+     */
+    private static Long declaredFkFieldIdByName(TableDefinition table, String fieldName) {
+        if (table == null || table.getFieldDefinitions() == null || fieldName == null) {
+            return null;
+        }
+        return table.getFieldDefinitions().stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsForeignKey()))
+                .filter(f -> fieldName.equalsIgnoreCase(f.getFieldName()))
+                .map(FieldDefinition::getId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private static boolean hasField(TableDefinition table, String fieldName) {
