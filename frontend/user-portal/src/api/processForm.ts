@@ -11,6 +11,13 @@ export interface SubTableBindingData {
   bindingMode: string
   columns: Array<Record<string, unknown>>
   data: Array<Record<string, unknown>>
+  tableId?: number | null
+  tableDisplayName?: string
+  relationTableId?: number | null
+  relationTableName?: string | null
+  primaryKeyFields?: string[]
+  filterFkFieldName?: string | null
+  filterFkRefTableId?: number | null
   /** MI assignment contract (allowUser/allowRole/assigneeField/roleField/buField) parsed from BPMN. */
   assignmentConfig?: Record<string, unknown>
 }
@@ -107,6 +114,8 @@ export function getProcessFormData(processInstanceId: string) {
 }
 
 export function submitProcessFormUpdate(processInstanceId: string, data: Record<string, unknown>) {
+  // emptiedSubTableKeys / subTableBindingScopes may sit beside form fields.
+  // The server strips them before putAll into process variables.
   return request.put<{ data: void }>(`/processes/${processInstanceId}/form`, data)
 }
 

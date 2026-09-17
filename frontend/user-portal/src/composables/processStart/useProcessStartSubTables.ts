@@ -1,5 +1,4 @@
 import type { Ref } from 'vue'
-import { readSubTableRows, subTableStoreKey } from '@/composables/tasks/subTableStore'
 import {
   flattenNestedSubTableRowsIntoPayload,
   flattenSliceMapsFromBindings,
@@ -14,19 +13,13 @@ import {
   type DialogColumn,
 } from '@/components/subTableAddDialogHelpers'
 import type { ProcessStartSubTableBinding } from './useProcessStartState'
+import { readSubTableRows } from '@/composables/tasks/subTableStore'
 import {
-  buildBindingScope,
-  stampCanonicalStoreRows,
-  storeKeysSharedByMultipleBindings,
-  type SubTableBindingScope,
-} from '@/composables/tasks/subTableCanonicalStamp'
-import { projectSavedRowsForBinding } from '@/composables/tasks/subTableFilterProjection'
+  assembleScopedSubTablesSubmit,
+  type ScopedSubTablesSubmit,
+} from '@/composables/tasks/assembleScopedSubTables'
 
-export interface StartSubTablesSubmit {
-  subTables: Record<string, unknown>
-  emptiedSubTableKeys: string[]
-  subTableBindingScopes: SubTableBindingScope[]
-}
+export type StartSubTablesSubmit = ScopedSubTablesSubmit
 
 /**
  * Sub-table column resolution + draft/submit payload assembly for the start form.
@@ -91,39 +84,13 @@ export function createProcessStartSubTables(deps: {
 
   /** Persist one slice per designer table (`dw:` / `rt:`), then flatten nested Link Form deletes. */
   function assembleStartSubTables(): StartSubTablesSubmit {
-    const subTables: Record<string, unknown> = {}
-    const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
-      subTableBindings.value,
-    )
-    const sharedKeys = storeKeysSharedByMultipleBindings(subTableBindings.value)
-    const stamped: Record<string, Array<Record<string, unknown>>> = {}
-    for (const b of subTableBindings.value) {
-      const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
-      stampCanonicalStoreRows(subTables, stamped, b, rows, sharedKeys)
-    }
-    flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
-    const emptiedSubTableKeys: string[] = []
-    const subTableBindingScopes: SubTableBindingScope[] = []
     const primary = primaryTableBinding?.value
-    for (const binding of subTableBindings.value) {
-      const storeKey = subTableStoreKey(binding)
-      if (!storeKey || !sharedKeys.has(storeKey)) continue
-      const rows = readSubTableRows(subTables, binding) ?? []
-      const scoped = projectSavedRowsForBinding(
-        rows,
-        binding,
-        subTableBindings.value,
-        {
-          formData: formData?.value ?? {},
-          primaryTableId: primary?.tableId ?? null,
-          primaryPkFields: primary?.primaryKeyFields ?? null,
-          primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
-        },
-      ) ?? rows
-      const scope = buildBindingScope(binding, scoped, false)
-      if (scope) subTableBindingScopes.push(scope)
-    }
-    return { subTables, emptiedSubTableKeys, subTableBindingScopes }
+    return assembleScopedSubTablesSubmit(subTableBindings.value, {
+      formData: formData?.value ?? {},
+      primaryTableId: primary?.tableId ?? null,
+      primaryPkFields: primary?.primaryKeyFields ?? null,
+      primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
+    })
   }
 
   function buildStartFormSubTablesPayload(): Record<string, unknown> {

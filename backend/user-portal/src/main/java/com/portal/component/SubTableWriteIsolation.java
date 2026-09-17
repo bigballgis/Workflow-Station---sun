@@ -12,11 +12,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Shared write isolation for Task Save, Task Complete, and Process Start.
+ * Shared write isolation for Task Save, Task Complete, Process Start, and
+ * Return_To_Requester Process Form updates.
  *
  * <p>Storage stays table-keyed. MI submissions merge only the current row into the
  * persisted baseline; binding scopes then run {@link SubTableBindingScopeGuard}.
  * Empty scopes keep the V1 table-keyed path. Start uses an empty baseline.
+ * Process Form updates use the process instance variables as baseline.
  */
 @Component
 @RequiredArgsConstructor
@@ -24,6 +26,17 @@ class SubTableWriteIsolation {
 
     private final MiSubTaskSubTableRowMerger merger;
     private final SubTableBindingScopeGuard guard;
+
+    static final String EMPTIED_KEYS_FIELD = "emptiedSubTableKeys";
+    static final String SCOPES_FIELD = "subTableBindingScopes";
+
+    static void stripTransportMetadata(Map<String, Object> variables) {
+        if (variables == null) {
+            return;
+        }
+        variables.remove(EMPTIED_KEYS_FIELD);
+        variables.remove(SCOPES_FIELD);
+    }
 
     static Set<String> normalizeEmptiedKeys(List<String> declared) {
         if (declared == null || declared.isEmpty()) {

@@ -133,11 +133,7 @@ public class ProcessStartComponent {
      * Transport metadata stays off {@code formData}/engine variables.
      */
     static void stripSubTableTransportMetadata(Map<String, Object> variables) {
-        if (variables == null) {
-            return;
-        }
-        variables.remove("emptiedSubTableKeys");
-        variables.remove("subTableBindingScopes");
+        SubTableWriteIsolation.stripTransportMetadata(variables);
     }
 
     void isolateStartSubTables(Map<String, Object> variables, ProcessStartRequest request, String functionUnitCode) {

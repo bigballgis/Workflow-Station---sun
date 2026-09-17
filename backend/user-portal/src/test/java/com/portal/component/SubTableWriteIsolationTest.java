@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.ProcessStartRequest;
 import com.portal.dto.SubTableBindingScope;
 import com.portal.dto.TaskCompleteRequest;
@@ -188,6 +189,49 @@ class SubTableWriteIsolationTest {
         variables.put("subTableBindingScopes", List.of());
         ProcessStartComponent.stripSubTableTransportMetadata(variables);
         assertThat(variables).containsOnlyKeys("title");
+    }
+
+    @Test
+    void isolateProcessFormSubTables_usesProcessBaselineAndStripsNothingFromCallerCopy() {
+        SubTableBindingScopeGuard guard = mock(SubTableBindingScopeGuard.class);
+        SubTableWriteIsolation isolation = new SubTableWriteIsolation(
+                new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class)), guard);
+        ProcessFormComponent form = new ProcessFormComponent(
+                null, null, null, new ObjectMapper(), null,
+                com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
+        ReflectionTestUtils.setField(form, "subTableWriteIsolation", isolation);
+
+        Map<String, Object> ours = file("att-2", "Meeting-1", "Test-000002", "mine.pdf");
+        Map<String, Object> sibling = file("att-3", "Meeting-1", "Test-000001", "theirs.pdf");
+        Map<String, Object> inbound = new HashMap<>();
+        inbound.put("__subTables__", new LinkedHashMap<>(Map.of(STORE, new ArrayList<>(List.of(ours)))));
+        Map<String, Object> baselineVars = Map.of(
+                "__subTables__", Map.of(STORE, new ArrayList<>(List.of(sibling))));
+        List<SubTableBindingScope> scopes = List.of(
+                scope("101", List.of(), false),
+                scope("202", List.of(Map.of("idfa", "att-2")), false));
+
+        form.isolateProcessFormSubTables(inbound, List.of(), scopes, baselineVars, FU);
+
+        verify(guard).assertAndApply(eq(scopes), eq(FU), eq(inbound), any(), any());
+    }
+
+    @Test
+    void takeBindingScopes_readsAndRemovesTransportKey() {
+        ProcessFormComponent form = new ProcessFormComponent(
+                null, null, null, new ObjectMapper(), null,
+                com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
+        Map<String, Object> inbound = new HashMap<>();
+        inbound.put("title", "keep");
+        inbound.put("subTableBindingScopes", List.of(Map.of(
+                "bindingId", "101",
+                "storeKey", STORE,
+                "rowKeys", List.of(),
+                "emptied", false)));
+        List<SubTableBindingScope> scopes = form.takeBindingScopes(inbound);
+        assertThat(scopes).hasSize(1);
+        assertThat(scopes.get(0).getBindingId()).isEqualTo("101");
+        assertThat(inbound).containsOnlyKeys("title");
     }
 
     private static ProcessStartComponent newStartFacade() {

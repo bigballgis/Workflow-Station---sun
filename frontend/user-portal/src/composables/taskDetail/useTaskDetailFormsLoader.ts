@@ -28,6 +28,7 @@ import {
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
+import { buildProcessFormUpdateBody } from '@/composables/tasks/assembleScopedSubTables'
 import {
   emptyProcessFormRef,
   extractCompletedFormFromVariables,
@@ -77,6 +78,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     isCompletedTask,
     isReturnToRequester,
     subTableBindings,
+    primaryTableBinding,
   } = ctx
   const { formReadOnly, currentFormName } = ctx.taskForm
   const { getHistoryStatus, getHistoryAction } = ctx.display
@@ -361,16 +363,16 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
       const subFormDesign = ctx.resolveSubFormDesign({ bindingId: b.bindingId } as any, subForms)
       bindings.push({
         bindingId: b.bindingId,
-        tableId: null,
+        tableId: b.tableId ?? null,
         bindingType: b.bindingType,
         bindingMode: b.bindingMode,
         foreignKeyField: null,
-        tableName: (b as any).tableDisplayName || b.tableName,
+        tableName: (b as { tableDisplayName?: string }).tableDisplayName || b.tableName,
         designerTableName: b.tableName,
         // 关联表必须落 rt: 命名空间；缺这两个字段会被当成设计器子表存进 dw:，
         // 进而被 MI 行隔离当成某个参与者的行，导致 Save 被拒。
-        relationTableId: (b as any).relationTableId ?? null,
-        relationTableName: (b as any).relationTableName ?? null,
+        relationTableId: b.relationTableId ?? null,
+        relationTableName: b.relationTableName ?? null,
         tableType: '',
         tableDescription: '',
         columns: Array.isArray(b.columns) ? (b.columns as any[]) : [],
@@ -378,6 +380,8 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         formOptions: subFormDesign.formOptions,
         assignmentConfig: b.assignmentConfig,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, b.bindingId, cfg),
+        filterFkFieldName: b.filterFkFieldName ?? null,
+        filterFkRefTableId: b.filterFkRefTableId ?? null,
         data: Array.isArray(b.data) ? (b.data as any[]) : [],
       } as any)
       const bid = Number(b.bindingId)
@@ -410,9 +414,19 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     if (!taskInfo.value.processInstanceId) return
     submitting.value = true
     try {
-      await submitProcessFormUpdate(taskInfo.value.processInstanceId, processFormValues.value)
+      const primary = primaryTableBinding.value
+      const payload = buildProcessFormUpdateBody(
+        processFormValues.value as Record<string, unknown>,
+        processFormSubTableBindings.value,
+        {
+          formData: processFormValues.value as Record<string, unknown>,
+          primaryTableId: primary?.tableId ?? null,
+          primaryPkFields: primary?.primaryKeyFields ?? null,
+          primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
+        },
+      )
+      await submitProcessFormUpdate(taskInfo.value.processInstanceId, payload)
       ElMessage.success(t('task.operationSuccess'))
-      // Refresh page data
       await ctx.loadTaskDetail()
     } catch (e: any) {
       if (e.response?.status === 403) {

@@ -106,4 +106,22 @@ describe('assembleStartSubTables', () => {
     expect(assembled.subTableBindingScopes).toEqual([])
     expect(Object.keys(assembled.subTables)).toEqual(['dw:p0_dual_file'])
   })
+
+  it('omits scopes when shared-table bindings do not declare distinct filter FKs', () => {
+    const a = fileBinding({ bindingId: 1, data: [{ id: 'X', case_id: 'C1' }] })
+    const b = fileBinding({
+      bindingId: 2,
+      filterFkRefTableId: undefined,
+      filterFkFieldName: undefined,
+      data: [{ id: 'Y', party_id: 'P-A' }],
+    })
+    const { assembleStartSubTables } = createProcessStartSubTables({
+      caches: { cachedContentForms: [], cachedRelationTableFieldIndex: new Map() },
+      subTableBindings: ref([a, b]),
+      formData: ref({ id: 'C1' }),
+      primaryTableBinding: ref({ tableId: 50100, primaryKeyFields: ['id'] }),
+      deriveColumnsFromBinding: () => [],
+    })
+    expect(assembleStartSubTables().subTableBindingScopes).toEqual([])
+  })
 })
