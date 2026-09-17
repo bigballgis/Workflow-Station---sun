@@ -55,6 +55,23 @@ class FunctionUnitPackageParserFailClosedTest {
     }
 
     @Test
+    void formJsonKeepsTableBindingsInCatalogContent() throws Exception {
+        String form = """
+                {"formId":11,"formName":"Start","formType":"PROCESS","configJson":{"rule":[]},
+                 "tableBindings":[{"bindingId":50729,"bindingType":"SUB","tableName":"p3_mi_file",
+                 "filterFkFieldName":"case_id"}]}
+                """;
+        byte[] zip = zipWithEntry("forms/form_0.json", form.getBytes(StandardCharsets.UTF_8));
+        FunctionUnitPackageParser.ParsedImportPackage parsed = parser.parseZipBytes(zip);
+        assertThat(parsed.getForms()).hasSize(1);
+        String data = parsed.getForms().get(0).getContentData();
+        assertThat(data).contains("tableBindings");
+        assertThat(data).contains("p3_mi_file");
+        assertThat(data).contains("configJson");
+        assertThat(data).contains("\"formName\":\"Start\"");
+    }
+
+    @Test
     void invalidTableJson_throws() throws Exception {
         byte[] zip = zipWithEntry("tables/table_0.json", "{not-json".getBytes(StandardCharsets.UTF_8));
         assertThatThrownBy(() -> parser.parseZipBytes(zip))

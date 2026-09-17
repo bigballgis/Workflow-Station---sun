@@ -33,12 +33,41 @@ public class FormTableBindingLoader {
     private final ObjectMapper objectMapper;
 
     /**
-     * Attach tableBindings to each form DTO by querying dw_form_table_bindings.
-     * Prefers sourceId match; falls back to form_name match for forms without sourceId.
+     * Attach tableBindings to each form DTO.
+     *
+     * <p>Forms that already have {@code tableBindings != null} came from a catalog FORM snapshot
+     * (PROCESS/TASK/ACTION freeze). Those lists are kept; live {@code dw_form_table_bindings} is
+     * not queried for them. Field definitions and missing table ids are still resolved from live
+     * DW by stable table name. Legacy / DETAIL forms ({@code tableBindings == null}) load live.
      */
     public void attachTableBindings(List<FormContentDTO> forms) {
-        if (forms.isEmpty()) return;
+        if (forms.isEmpty()) {
+            return;
+        }
+        List<FormContentDTO> live = new ArrayList<>();
+        List<FormContentDTO> frozen = new ArrayList<>();
+        for (FormContentDTO form : forms) {
+            if (form.getTableBindings() != null) {
+                frozen.add(form);
+            } else {
+                live.add(form);
+            }
+        }
+        if (!live.isEmpty()) {
+            attachLiveBindings(live);
+        }
+        for (FormContentDTO form : frozen) {
+            try {
+                new CatalogFormBindingEnricher(jdbcTemplate, this::enrichBindingsWithFieldDefinitions)
+                        .enrich(form.getTableBindings());
+            } catch (Exception e) {
+                // FALLBACK(ux): keep the frozen binding list; live name/field lookup is enrichment only.
+                log.warn("Failed to enrich catalog snapshot tableBindings: {}", e.getMessage());
+            }
+        }
+    }
 
+    private void attachLiveBindings(List<FormContentDTO> forms) {
         try {
             List<String> formSourceIds = forms.stream()
                     .map(FormContentDTO::getSourceId)
@@ -209,7 +238,7 @@ public class FormTableBindingLoader {
         return List.of(generated);
     }
 
-    private void enrichBindingsWithFieldDefinitions(List<TableBindingDTO> bindings) {
+    void enrichBindingsWithFieldDefinitions(List<TableBindingDTO> bindings) {
         if (bindings == null || bindings.isEmpty()) {
             return;
         }

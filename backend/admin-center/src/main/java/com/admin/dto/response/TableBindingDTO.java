@@ -67,6 +67,12 @@ public class TableBindingDTO {
      */
     private Long filterFkRefTableId;
     /**
+     * Portable name of that filter FK's target table (ZIP / catalog snapshot). Runtime resolves
+     * {@link #filterFkRefTableId} from live {@code dw_table_definitions} by this name when the
+     * snapshot does not carry a Long id.
+     */
+    private String filterFkRefTableName;
+    /**
      * Table field metadata (FK/PK) for Portal / Preview row-add runtime (PRD S5).
      */
     private List<TableFieldDefinitionDTO> fieldDefinitions;

@@ -5,6 +5,7 @@ import com.admin.dto.response.FormContentDTO;
 import com.admin.dto.response.FunctionUnitContentItemDTO;
 import com.admin.dto.response.FunctionUnitContentResponse;
 import com.admin.dto.response.ProcessContentDTO;
+import com.admin.dto.response.TableBindingDTO;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.FunctionUnitContent;
 import com.admin.enums.ContentType;
@@ -12,6 +13,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.util.ChecksumUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,6 +42,7 @@ public class FunctionUnitContentComponent {
     private final JdbcTemplate jdbcTemplate;
     private final FunctionUnitLookup functionUnitLookup;
     private final FormTableBindingLoader bindingLoader;
+    private final ObjectMapper objectMapper;
 
     /**
      * In-memory cache for assembled function unit content (forms + bindings + BPMN + data tables).
@@ -152,7 +155,9 @@ public class FunctionUnitContentComponent {
      * <p>FORM {@code data} is the catalog {@code content_data} snapshot. Live
      * {@code dw_form_definitions} supplies {@code form_type}/{@code scene} only, except DETAIL
      * (Main Table View addresses those forms by live id — see
-     * {@link #appendDetailFormsMissingFromSnapshot}). Table bindings are attached afterwards.
+     * {@link #appendDetailFormsMissingFromSnapshot}). PROCESS/TASK/ACTION tableBindings come from
+     * the catalog snapshot when present; live {@code dw_form_table_bindings} is only attached for
+     * DETAIL and legacy configJson-only rows.
      *
      * <p><b>Validates: Requirements 6.1, 6.2, 6.3</b>
      */
@@ -188,17 +193,7 @@ public class FunctionUnitContentComponent {
                                 : processKey)
                         .build());
             } else if (content.getContentType() == ContentType.FORM) {
-                FormDefinitionSnapshot snapshot = formSnapshotWithLiveMeta(content, data);
-                forms.add(FormContentDTO.builder()
-                        .id(content.getId())
-                        .name(content.getContentName())
-                        .sourceId(content.getSourceId())
-                        .data(snapshot.configJson())
-                        .formType(snapshot.formType())
-                        // Lets the portal tell a node's To Do design from its My Requests one.
-                        .scene(snapshot.scene())
-                        .type(ContentType.FORM.name())
-                        .build());
+                forms.add(assembleFormContent(content, data));
             } else if (content.getContentType() == ContentType.DATA_TABLE) {
                 dataTables.add(DataTableContentDTO.builder()
                         .id(content.getId())
@@ -297,6 +292,27 @@ public class FunctionUnitContentComponent {
             log.warn("Could not add live DETAIL forms for function unit {}: {}",
                     unit.getCode(), e.getMessage());
         }
+    }
+
+    private FormContentDTO assembleFormContent(FunctionUnitContent content, String data) {
+        CatalogFormSnapshot.Payload payload = CatalogFormSnapshot.unwrap(objectMapper, data);
+        FormDefinitionSnapshot snapshot = formSnapshotWithLiveMeta(content, payload.configJson());
+        FormContentDTO form = FormContentDTO.builder()
+                .id(content.getId())
+                .name(content.getContentName())
+                .sourceId(content.getSourceId())
+                .data(snapshot.configJson())
+                .formType(snapshot.formType())
+                // Lets the portal tell a node's To Do design from its My Requests one.
+                .scene(snapshot.scene())
+                .type(ContentType.FORM.name())
+                .build();
+        boolean detail = "DETAIL".equals(snapshot.formType());
+        if (payload.freezeBindings() && !detail) {
+            List<TableBindingDTO> frozen = payload.tableBindings();
+            form.setTableBindings(frozen != null ? frozen : List.of());
+        }
+        return form;
     }
 
     private record FormDefinitionSnapshot(String configJson, String formType, String scene) {}
