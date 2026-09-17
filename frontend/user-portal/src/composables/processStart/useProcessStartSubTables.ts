@@ -1,9 +1,5 @@
 import type { Ref } from 'vue'
-import { readSubTableRows } from '@/composables/tasks/subTableStore'
-import {
-  stampCanonicalStoreRows,
-  storeKeysSharedByMultipleBindings,
-} from '@/composables/tasks/subTableCanonicalStamp'
+import { readSubTableRows, subTableStoreKey } from '@/composables/tasks/subTableStore'
 import {
   flattenNestedSubTableRowsIntoPayload,
   flattenSliceMapsFromBindings,
@@ -18,6 +14,19 @@ import {
   type DialogColumn,
 } from '@/components/subTableAddDialogHelpers'
 import type { ProcessStartSubTableBinding } from './useProcessStartState'
+import {
+  buildBindingScope,
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+  type SubTableBindingScope,
+} from '@/composables/tasks/subTableCanonicalStamp'
+import { projectSavedRowsForBinding } from '@/composables/tasks/subTableFilterProjection'
+
+export interface StartSubTablesSubmit {
+  subTables: Record<string, unknown>
+  emptiedSubTableKeys: string[]
+  subTableBindingScopes: SubTableBindingScope[]
+}
 
 /**
  * Sub-table column resolution + draft/submit payload assembly for the start form.
@@ -29,6 +38,12 @@ export function createProcessStartSubTables(deps: {
     cachedRelationTableFieldIndex: Map<number, RelationFieldDef[]>
   }
   subTableBindings: Ref<ProcessStartSubTableBinding[]>
+  formData?: Ref<Record<string, unknown>>
+  primaryTableBinding?: Ref<{
+    tableId?: number | null
+    primaryKeyFields?: string[]
+    fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }>
+  } | null>
   /** From the form-parsing composable — sub-table display column derivation. */
   deriveColumnsFromBinding: (
     binding: any,
@@ -36,7 +51,7 @@ export function createProcessStartSubTables(deps: {
     formConfig?: Record<string, any>,
   ) => DialogColumn[]
 }) {
-  const { caches, subTableBindings, deriveColumnsFromBinding } = deps
+  const { caches, subTableBindings, formData, primaryTableBinding, deriveColumnsFromBinding } = deps
 
   function resolveSubTableBindingColumnsForStart(
     b: {
@@ -75,7 +90,7 @@ export function createProcessStartSubTables(deps: {
   }
 
   /** Persist one slice per designer table (`dw:` / `rt:`), then flatten nested Link Form deletes. */
-  function buildStartFormSubTablesPayload(): Record<string, unknown> {
+  function assembleStartSubTables(): StartSubTablesSubmit {
     const subTables: Record<string, unknown> = {}
     const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
       subTableBindings.value,
@@ -87,7 +102,32 @@ export function createProcessStartSubTables(deps: {
       stampCanonicalStoreRows(subTables, stamped, b, rows, sharedKeys)
     }
     flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
-    return subTables
+    const emptiedSubTableKeys: string[] = []
+    const subTableBindingScopes: SubTableBindingScope[] = []
+    const primary = primaryTableBinding?.value
+    for (const binding of subTableBindings.value) {
+      const storeKey = subTableStoreKey(binding)
+      if (!storeKey || !sharedKeys.has(storeKey)) continue
+      const rows = readSubTableRows(subTables, binding) ?? []
+      const scoped = projectSavedRowsForBinding(
+        rows,
+        binding,
+        subTableBindings.value,
+        {
+          formData: formData?.value ?? {},
+          primaryTableId: primary?.tableId ?? null,
+          primaryPkFields: primary?.primaryKeyFields ?? null,
+          primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
+        },
+      ) ?? rows
+      const scope = buildBindingScope(binding, scoped, false)
+      if (scope) subTableBindingScopes.push(scope)
+    }
+    return { subTables, emptiedSubTableKeys, subTableBindingScopes }
+  }
+
+  function buildStartFormSubTablesPayload(): Record<string, unknown> {
+    return assembleStartSubTables().subTables
   }
 
   /**
@@ -111,6 +151,7 @@ export function createProcessStartSubTables(deps: {
 
   return {
     resolveSubTableBindingColumnsForStart,
+    assembleStartSubTables,
     buildStartFormSubTablesPayload,
     hydrateStartFormBindingsFromDraftStore,
   }

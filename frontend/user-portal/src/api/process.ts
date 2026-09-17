@@ -60,6 +60,17 @@ export interface ProcessStartRequest {
   priority?: string
   /** @deprecated 服务端已忽略；流程变量由 JWT 工作台上下文写入，勿在 formData 中传同名键 */
   activeBusinessUnitId?: string
+  /**
+   * Transport metadata — not a form field. Same contract as Task Save/Complete.
+   * Omitted/empty keeps the V1 table-keyed start path.
+   */
+  emptiedSubTableKeys?: string[]
+  subTableBindingScopes?: Array<{
+    bindingId: string
+    storeKey: string
+    rowKeys: Array<Record<string, unknown>>
+    emptied: boolean
+  }>
 }
 
 /** A function unit the current user may review. */

@@ -401,11 +401,14 @@ const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBindin
 // 子表列解析 + 草稿/提交载荷
 const {
   resolveSubTableBindingColumnsForStart,
+  assembleStartSubTables,
   buildStartFormSubTablesPayload,
   hydrateStartFormBindingsFromDraftStore,
 } = createProcessStartSubTables({
   caches,
   subTableBindings,
+  formData,
+  primaryTableBinding,
   deriveColumnsFromBinding,
 })
 
@@ -875,12 +878,15 @@ const handleSubmit = async () => {
     const liveFormData = (formRendererRef.value as { getFormData?: () => Record<string, unknown> } | null)
       ?.getFormData?.() ?? formData.value
     formData.value = { ...liveFormData }
+    const assembled = assembleStartSubTables()
     const startResponse: any = await processApi.startProcess(procKey, {
       processDefinitionKey: procKey,
       formData: {
         ...liveFormData,
-        __subTables__: buildStartFormSubTablesPayload()
+        __subTables__: assembled.subTables,
       },
+      emptiedSubTableKeys: assembled.emptiedSubTableKeys,
+      subTableBindingScopes: assembled.subTableBindingScopes,
       priority: 'NORMAL'
     })
 

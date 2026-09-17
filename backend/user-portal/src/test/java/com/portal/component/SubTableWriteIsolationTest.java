@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.dto.ProcessStartRequest;
 import com.portal.dto.SubTableBindingScope;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
@@ -135,6 +136,63 @@ class SubTableWriteIsolationTest {
 
         List<Object> out = (List<Object>) ((Map<String, Object>) variables.get("__subTables__")).get(STORE);
         assertThat(out).containsExactlyInAnyOrder(ours, sibling);
+    }
+
+    @Test
+    void isolateStartSubTables_stripsTransportKeysAndGuardsAgainstEmptyBaseline() {
+        SubTableBindingScopeGuard guard = mock(SubTableBindingScopeGuard.class);
+        SubTableWriteIsolation isolation = new SubTableWriteIsolation(
+                new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class)), guard);
+        ProcessStartComponent start = newStartFacade();
+        ReflectionTestUtils.setField(start, "subTableWriteIsolation", isolation);
+
+        Map<String, Object> ours = file("att-2", "Meeting-1", "Test-000002", "mine.pdf");
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("__subTables__", new LinkedHashMap<>(Map.of(STORE, new ArrayList<>(List.of(ours)))));
+        variables.put("emptiedSubTableKeys", List.of("dw:leak"));
+        variables.put("subTableBindingScopes", List.of("leak"));
+        List<SubTableBindingScope> scopes = List.of(scope("101", List.of(Map.of("idfa", "att-2")), false));
+        ProcessStartRequest request = ProcessStartRequest.builder()
+                .subTableBindingScopes(scopes)
+                .build();
+
+        start.isolateStartSubTables(variables, request, FU);
+
+        assertThat(variables).doesNotContainKeys("emptiedSubTableKeys", "subTableBindingScopes");
+        verify(guard).assertAndApply(eq(scopes), eq(FU), eq(variables), any(), eq(Map.of()));
+    }
+
+    @Test
+    void isolateStartSubTables_withoutScopesKeepsV1Path() {
+        SubTableBindingScopeGuard guard = mock(SubTableBindingScopeGuard.class);
+        SubTableWriteIsolation isolation = new SubTableWriteIsolation(
+                new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class)), guard);
+        ProcessStartComponent start = newStartFacade();
+        ReflectionTestUtils.setField(start, "subTableWriteIsolation", isolation);
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("__subTables__", new LinkedHashMap<>(Map.of(STORE, new ArrayList<>(List.of(
+                file("att-2", "Meeting-1", "Test-000002", "mine.pdf"))))));
+
+        start.isolateStartSubTables(variables, ProcessStartRequest.builder().build(), FU);
+
+        verify(guard, never()).assertAndApply(any(), any(), any(), any(), any());
+        assertThat(variables.get("__subTables__")).isInstanceOf(Map.class);
+    }
+
+    @Test
+    void stripSubTableTransportMetadata_removesLeakedKeys() {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("title", "keep");
+        variables.put("emptiedSubTableKeys", List.of("dw:x"));
+        variables.put("subTableBindingScopes", List.of());
+        ProcessStartComponent.stripSubTableTransportMetadata(variables);
+        assertThat(variables).containsOnlyKeys("title");
+    }
+
+    private static ProcessStartComponent newStartFacade() {
+        return new ProcessStartComponent(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     private static Map<String, Object> miForm() {

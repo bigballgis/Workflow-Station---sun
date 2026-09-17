@@ -12,11 +12,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Shared write isolation for Task Save and Task Complete.
+ * Shared write isolation for Task Save, Task Complete, and Process Start.
  *
  * <p>Storage stays table-keyed. MI submissions merge only the current row into the
  * persisted baseline; binding scopes then run {@link SubTableBindingScopeGuard}.
- * Empty scopes keep the V1 table-keyed path.
+ * Empty scopes keep the V1 table-keyed path. Start uses an empty baseline.
  */
 @Component
 @RequiredArgsConstructor

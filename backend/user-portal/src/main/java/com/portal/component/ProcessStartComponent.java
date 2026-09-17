@@ -83,6 +83,11 @@ public class ProcessStartComponent {
     @Autowired
     private MiOuterStepResolver miOuterStepResolver;
 
+    /** Lazy: start writes share Save/Complete isolation; null in {@code new}-constructed tests. */
+    @Lazy
+    @Autowired
+    private SubTableWriteIsolation subTableWriteIsolation;
+
     private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
         ChangeHistorySubmissionFilter filter = changeHistorySubmissionFilter;
         if (filter == null) {
@@ -121,6 +126,37 @@ public class ProcessStartComponent {
             txTemplate = t;
         }
         return t;
+    }
+
+    /**
+     * Binding-scoped start writes use the same isolation as Task Save/Complete.
+     * Transport metadata stays off {@code formData}/engine variables.
+     */
+    static void stripSubTableTransportMetadata(Map<String, Object> variables) {
+        if (variables == null) {
+            return;
+        }
+        variables.remove("emptiedSubTableKeys");
+        variables.remove("subTableBindingScopes");
+    }
+
+    void isolateStartSubTables(Map<String, Object> variables, ProcessStartRequest request, String functionUnitCode) {
+        stripSubTableTransportMetadata(variables);
+        SubTableWriteIsolation isolation = subTableWriteIsolation;
+        if (isolation == null) {
+            // Null in {@code new}-constructed tests keeps the previous unscoped start write.
+            return;
+        }
+        if (variables == null || request == null) {
+            return;
+        }
+        isolation.apply(new SubTableWriteIsolation.Request(
+                variables,
+                variables,
+                Map.of(),
+                request.getEmptiedSubTableKeys(),
+                request.getSubTableBindingScopes(),
+                functionUnitCode));
     }
 
     /**
@@ -218,6 +254,7 @@ public class ProcessStartComponent {
             applyWorkspaceContextVariables(userId, variables);
         }
         processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables);
+        isolateStartSubTables(variables, request, pin.code());
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
