@@ -12,7 +12,7 @@ export default {
     flow5: 'Save. On a MAIN table, configure Request ID first',
     whatTitle: 'What Table Design is',
     whatBody:
-      'Function Unit tab Table Design. Table Type is Main Table, Sub Table, Action Table, or Relation Table. Field Name must start with a letter. Form Design Import Table Fields reads these columns. Views in [[/view-design]] need a Main Table first.',
+      'Function Unit tab Table Design. Table Type is Main Table, Sub Table, Action Table, or Relation Table. Field Name must start with a letter. Form Design Import Table Fields reads these columns. Attach tables to a form in [[/table-bindings]]. Views in [[/view-design]] need a Main Table first.',
     fieldsTitle: 'Fields',
     fieldsBody:
       'Open a table. Each row is a column. Data Type choices are VARCHAR, INTEGER, BIGINT, DECIMAL, BOOLEAN, DATE, TIMESTAMP, TEXT, FILE. VARCHAR uses Length. DECIMAL uses Precision and Scale.',

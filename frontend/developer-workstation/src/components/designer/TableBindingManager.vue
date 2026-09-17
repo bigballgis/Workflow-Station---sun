@@ -15,7 +15,7 @@
         <div class="binding-header-start">
           <span class="title">{{ t('tableBinding.title') }}</span>
           <DesignerHelpLink
-            path="/form-ctl-sub-table"
+            path="/table-bindings"
             :aria-label="t('tableBinding.guideLinkAria')"
             test-id="table-binding-guide-link"
           />

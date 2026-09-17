@@ -87,6 +87,13 @@ export const GUIDELINES: Guideline[] = [
     load: () => import('@/views/TaskDelegateGuide.vue'),
   },
   {
+    id: 'table-bindings',
+    path: '/table-bindings',
+    titleKey: 'guides.tableBindings.title',
+    summaryKey: 'guides.tableBindings.summary',
+    load: () => import('@/views/TableBindingsGuide.vue'),
+  },
+  {
     id: 'form-upload',
     path: '/form-upload',
     titleKey: 'guides.formUpload.title',
@@ -151,6 +158,7 @@ const FORM_DESIGN_NAV: NavGroup = {
   id: 'dw-form-design',
   titleKey: 'nav.formDesign',
   children: [
+    { kind: 'leaf', id: 'dw-form-table-bindings', titleKey: 'guides.tableBindings.title', to: '/table-bindings' },
     { kind: 'leaf', id: 'dw-form-upload', titleKey: 'guides.formUpload.title', to: '/form-upload' },
     {
       kind: 'group',
@@ -457,6 +465,8 @@ export function navGroupIdsForArticle(
 /** Screenshot paths under /help/guides — keep in sync with public/llms.txt ## Figures */
 export const HELP_GUIDE_FIGURE_PATHS: readonly string[] = [
   '/help/guides/dw-table-design.png',
+  '/help/guides/dw-table-bindings-list.png',
+  '/help/guides/dw-table-bindings-add-dialog.png',
   '/help/guides/dw-view-design.png',
   '/help/guides/dw-connections.png',
   '/help/guides/dw-connections-inbound.png',

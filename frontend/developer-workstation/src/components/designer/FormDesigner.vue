@@ -89,6 +89,11 @@
           <el-button @click="handleManageBindings(selectedForm)">
             {{ t('form.manageBindings') }}
           </el-button>
+          <DesignerHelpLink
+            path="/table-bindings"
+            :aria-label="t('tableBinding.guideLinkAria')"
+            test-id="manage-table-bindings-guide-link"
+          />
           <el-button
             :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
             @click="handleImportFieldsToDesigner"

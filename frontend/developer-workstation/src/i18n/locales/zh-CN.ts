@@ -1845,7 +1845,7 @@ export default {
     fkFillKindPrimary: '主表单',
     fkFillKindAncestor: '指定祖先绑定',
     fkFillSelectAncestor: '请选择祖先绑定',
-    guideLinkAria: '打开子表绑定说明'
+    guideLinkAria: '打开管理表绑定指南'
   },
   subTable: {
     defaultTitle: '数据',

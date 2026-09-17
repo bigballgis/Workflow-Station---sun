@@ -1851,7 +1851,7 @@ export default {
     fkFillKindPrimary: 'Primary form',
     fkFillKindAncestor: 'Named ancestor binding',
     fkFillSelectAncestor: 'Select ancestor binding',
-    guideLinkAria: 'Open sub-table binding guidelines'
+    guideLinkAria: 'Open Manage Table Bindings guidelines'
   },
   user: {
     username: 'Username',

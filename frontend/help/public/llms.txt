@@ -9,6 +9,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
 - /help/table-design — Tables, fields, PK and FK (Function Unit Table Design; formulas stay on /help/computed-fields)
+- /help/table-bindings — Manage Table Bindings (Form Design toolbar; attach MAIN/SUB/ACTION/RELATION; Filter foreign key; Foreign-key fill source). Sub-Table grid is /help/form-ctl-sub-table
 - /help/view-design — View Design lists and Access control (Business Units + Roles; empty = System Administrator only; #access)
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task; field catalog for every control)
 - /help/email-monitor — Email Monitor (inbound connection, monitor template, extraction wizard, attachments → FILE #extract-attachments, original email .eml → FILE #extract-raw-eml, Start Event #start-event; field catalog for every control)
@@ -38,7 +39,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/form-ctl-tree-select — TreeSelect
 - /help/form-ctl-transfer — Transfer (Hermes Left Title / Right Title)
 - /help/form-ctl-editor — Editor (Hermes Rows, Placeholder, Max Length)
-- /help/form-ctl-sub-table — Sub-Table (bound SUB grid; help_pr_line; Allow Add/Edit/Delete; List View)
+- /help/form-ctl-sub-table — Sub-Table (bound SUB grid; help_pr_line; Allow Add/Edit/Delete; List View). Attach the table first in /help/table-bindings
 - /help/form-ctl-lookup — Lookup (Relation Table, Search / Display fields, Fixed Filters, cascade, Backfill; setLookupFilter)
 - /help/form-events-extend — Extend and MI event index (Inline Form, Link Form, Owner, Record Note, Assignment Mode). Sub-Table and Lookup have their own articles.
 - /help/form-events-layout — Layout and Auxiliary control events (click, Tabs extras)
@@ -50,6 +51,8 @@ Main table: help_pr. Sub-table: help_pr_line.
 Emails in figures are redacted to user@example.com.
 
 - /help/guides/dw-table-design.png
+- /help/guides/dw-table-bindings-list.png
+- /help/guides/dw-table-bindings-add-dialog.png
 - /help/guides/dw-view-design.png
 - /help/guides/dw-connections.png
 - /help/guides/dw-connections-inbound.png
