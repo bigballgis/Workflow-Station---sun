@@ -28,6 +28,7 @@ import {
   storeKeysSharedByMultipleBindings,
   type SubTableBindingScope,
 } from './subTableCanonicalStamp'
+import { projectSavedRowsForBinding } from './subTableFilterProjection'
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -74,6 +75,11 @@ export function useTaskForm(options: {
     binding: unknown,
   ) => ((row: unknown) => boolean) | null
   onFormReadOnlyChange?: (readonly: boolean) => void
+  primaryTableBinding?: Ref<{
+    tableId?: number | null
+    primaryKeyFields?: string[] | null
+    fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }> | null
+  } | null>
 }) {
   const { t } = useI18n()
 
@@ -262,7 +268,18 @@ export function useTaskForm(options: {
       stampBindingTableNameAliases(subTables, subTableData, binding, out, sharedKeys)
       const storeKey = subTableStoreKey(binding)
       if (storeKey && sharedKeys.has(storeKey)) {
-        const scope = buildBindingScope(binding, out, emptiedThisBinding)
+        const scoped = projectSavedRowsForBinding(
+          out,
+          binding,
+          options.subTableBindings.value,
+          {
+            formData: formData.value as Record<string, unknown>,
+            primaryTableId: options.primaryTableBinding?.value?.tableId ?? null,
+            primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields ?? null,
+            primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions ?? null,
+          },
+        ) ?? out
+        const scope = buildBindingScope(binding, scoped, emptiedThisBinding)
         if (scope) subTableBindingScopes.push(scope)
       }
     }

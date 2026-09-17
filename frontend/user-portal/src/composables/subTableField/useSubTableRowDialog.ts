@@ -87,14 +87,37 @@ export function useSubTableRowDialog(
     }
   }
 
-  async function openAddRowDialog() {
-    if (!props.editable) return
-    const rowAddContext = buildRowAddContext(
+  function currentBindingForAdd(): {
+    bindingId?: number | string
+    tableId?: number | null
+    filterFkRefTableId?: number | null
+  } {
+    const list = (props.subTableBindingsForContext ?? props.linkedSubTableBindings ?? []) as Array<{
+      bindingId?: number | string
+      tableId?: number | null
+      filterFkRefTableId?: number | null
+    }>
+    const hit = list.find(b => props.bindingId != null && Number(b.bindingId) === Number(props.bindingId))
+    return {
+      bindingId: props.bindingId ?? undefined,
+      tableId: props.tableId ?? hit?.tableId ?? null,
+      filterFkRefTableId: props.filterFkRefTableId ?? hit?.filterFkRefTableId ?? null,
+    }
+  }
+
+  function rowAddContextNow() {
+    return buildRowAddContext(
       props.primaryFormData ?? {},
       props.subTableBindingsForContext ?? props.linkedSubTableBindings,
       props.parentRow,
       props.parentTableId,
+      currentBindingForAdd(),
     )
+  }
+
+  async function openAddRowDialog() {
+    if (!props.editable) return
+    const rowAddContext = rowAddContextNow()
     try {
       const result = await prepareSubTableAddRow({
         columns: editableColumns.value,
@@ -182,12 +205,7 @@ export function useSubTableRowDialog(
     if (dialogMode.value === 'add') {
       const allocate = createAllocatePrimaryKeysFn()
       if (allocate && props.tableId != null && props.fieldDefinitions?.length) {
-        const rowAddContext = buildRowAddContext(
-          props.primaryFormData ?? {},
-          props.subTableBindingsForContext ?? props.linkedSubTableBindings,
-          props.parentRow,
-          props.parentTableId,
-        )
+        const rowAddContext = rowAddContextNow()
         const result = await finalizeSubTableRowOnSave({
           row: savedRow,
           fieldDefinitions: props.fieldDefinitions,

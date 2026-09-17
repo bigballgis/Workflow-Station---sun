@@ -148,10 +148,13 @@ export interface SubTableFieldProps {
   functionUnitId?: string
   primaryFormData?: Record<string, unknown>
   subTableBindingsForContext?: Array<{
+    bindingId?: number | string
     tableId?: number | null
     bindingType?: string
     tableName?: string
     tableDisplayName?: string
+    filterFkRefTableId?: number | null
+    data?: unknown[]
   }>
   parentRow?: Record<string, unknown> | null
   parentTableId?: number | null
@@ -161,6 +164,8 @@ export interface SubTableFieldProps {
   /** PRD S6: structural FK vs MI participant row link. */
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  /** Declared filter FK parent table — unique sibling row of that table is the nested parent. */
+  filterFkRefTableId?: number | null
   /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null

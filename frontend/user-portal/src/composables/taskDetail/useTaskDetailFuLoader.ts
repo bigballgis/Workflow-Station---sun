@@ -234,6 +234,9 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
           primaryTableBinding.value = {
             tableId: primaryBinding.tableId ?? null,
             tableName: primaryBinding.tableDisplayName || primaryBinding.tableName,
+            primaryKeyFields: Array.isArray(primaryBinding.primaryKeyFields)
+              ? primaryBinding.primaryKeyFields
+              : undefined,
             fieldDefinitions: primaryBinding.fieldDefinitions ?? [],
           }
           const names = new Set<string>()

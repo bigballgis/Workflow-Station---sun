@@ -255,6 +255,7 @@ export function createTaskDetailState(options: { taskId: string }) {
   const primaryTableBinding = ref<{
     tableId?: number | null
     tableName?: string
+    primaryKeyFields?: string[]
     fieldDefinitions?: BindingFieldDefinition[]
   } | null>(null)
   /** PRIMARY table field names — MI isolate/save must not treat collection-row keys as main-record scalars. */

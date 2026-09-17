@@ -557,6 +557,9 @@ const loadFunctionUnitContent = async () => {
           primaryBindingMeta = {
             tableId: (b as { tableId?: number | null }).tableId ?? null,
             tableName: b.tableDisplayName || b.tableName,
+            primaryKeyFields: Array.isArray((b as { primaryKeyFields?: string[] }).primaryKeyFields)
+              ? (b as { primaryKeyFields?: string[] }).primaryKeyFields
+              : undefined,
             fieldDefinitions: resolveBindingFieldDefinitions(
               { tableId: (b as { tableId?: number | null }).tableId, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
               caches.cachedRelationTableFieldIndex,

@@ -681,10 +681,13 @@ const props = withDefaults(defineProps<{
   functionUnitId?: string
   primaryFormData?: Record<string, unknown>
   subTableBindingsForContext?: Array<{
+    bindingId?: number | string
     tableId?: number | null
     bindingType?: string
     tableName?: string
     tableDisplayName?: string
+    filterFkRefTableId?: number | null
+    data?: unknown[]
   }>
   parentRow?: Record<string, unknown> | null
   parentTableId?: number | null
@@ -694,6 +697,7 @@ const props = withDefaults(defineProps<{
   /** PRD S6: structural FK vs MI participant row link. */
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  filterFkRefTableId?: number | null
   /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null

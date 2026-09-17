@@ -60,6 +60,28 @@ export function encodeCompositePrimaryKey(
   return parts.length === ordered.length ? parts.join(UNIT_SEP) : null
 }
 
+function ancestorRowForFk(
+  meta: FieldFkMeta,
+  ctx: RowAddContext,
+): Record<string, unknown> | null {
+  const ancestors = ctx.ancestorRowsByTableId
+  if (ancestors && Object.keys(ancestors).length > 0) {
+    if (!ancestorHasTable(ancestors, meta.refTableId)) return null
+    const hit = ancestors[meta.refTableId as number]
+    return hit && typeof hit === 'object' && !Array.isArray(hit) ? hit : null
+  }
+  return ctx.primaryFormData ?? null
+}
+
+function ancestorHasTable(
+  ancestors: Record<number, Record<string, unknown>>,
+  refTableId: number | undefined,
+): boolean {
+  if (refTableId == null) return false
+  return Object.prototype.hasOwnProperty.call(ancestors, refTableId)
+    || Object.prototype.hasOwnProperty.call(ancestors, String(refTableId))
+}
+
 export function resolveForeignKeyValues(
   fkMetas: FieldFkMeta[],
   ctx: RowAddContext,
@@ -68,7 +90,8 @@ export function resolveForeignKeyValues(
   if (!fkMetas?.length || !ctx) return out
   for (const meta of fkMetas) {
     if (!meta?.isForeignKey || !meta.fieldName || !meta.refTableId) continue
-    const parentRow = ctx.ancestorRowsByTableId?.[meta.refTableId] ?? ctx.primaryFormData
+    const parentRow = ancestorRowForFk(meta, ctx)
+    if (!parentRow) continue
     const encoded = encodeCompositePrimaryKey(meta.refPrimaryKeyFields || [], parentRow)
     if (encoded != null) out[meta.fieldName] = encoded
   }
@@ -81,9 +104,12 @@ export function guardBeforeChildRowAdd(
 ): string[] {
   const missing: string[] = []
   if (!fkMetas?.length) return missing
+  const ancestors = ctx.ancestorRowsByTableId
+  const scoped = ancestors != null && Object.keys(ancestors).length > 0
   for (const meta of fkMetas) {
     if (!meta?.isForeignKey || !meta.refTableId) continue
-    const parentRow = ctx.ancestorRowsByTableId?.[meta.refTableId] ?? ctx.primaryFormData
+    if (scoped && !ancestorHasTable(ancestors, meta.refTableId)) continue
+    const parentRow = ancestorRowForFk(meta, ctx)
     if (!parentRow || Object.keys(parentRow).length === 0) {
       missing.push(meta.fieldName)
       continue

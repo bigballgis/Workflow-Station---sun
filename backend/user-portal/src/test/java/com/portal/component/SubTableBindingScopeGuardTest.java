@@ -142,9 +142,10 @@ class SubTableBindingScopeGuardTest {
         submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(
                 fileRow("X", "C1", null),
                 fileRow("Y", "C1", "P-A"))));
-        Map<String, Object> baseline = Map.of("dw:p0_dual_file", List.of(
-                fileRow("X", "C1", null),
-                fileRow("Y", "C1", "P-A")));
+        submitted.put("dw:p0_dual_party", List.of(Map.of("id", "P-A")));
+        Map<String, Object> baseline = Map.of(
+                "dw:p0_dual_file", List.of(fileRow("X", "C1", null), fileRow("Y", "C1", "P-A")),
+                "dw:p0_dual_party", List.of(Map.of("id", "P-A")));
         SubTableBindingScope caseScope = scope("101", "dw:p0_dual_file", List.of(Map.of("id", "X")), false);
         SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Y")), false);
 
@@ -158,6 +159,33 @@ class SubTableBindingScopeGuardTest {
     }
 
     @Test
+    void processFormPartyBindingRejectsWhenParentRowsAreMissing() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(fileRow("Y", "C1", "P-A"))));
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Y")), false);
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(partyScope), FU, Map.of(), submitted, Map.of()))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("not allowed to write");
+    }
+
+    @Test
+    void processFormPartyBindingCannotClaimACaseFileRow() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(fileRow("X", "C1", null))));
+        submitted.put("dw:p0_dual_party", List.of(Map.of("id", "P-A")));
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(Map.of("id", "X")), false);
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(partyScope), FU, Map.of(), submitted, Map.of()))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("not allowed to write");
+    }
+
+    @Test
     void unreadableCurrentItemStillFailsLoud() {
         JdbcTemplate jdbc = stubBinding(202L, "attachment", "participant_id", "SUB", List.of("id"));
         Map<String, Object> submitted = new HashMap<>();
@@ -168,6 +196,30 @@ class SubTableBindingScopeGuardTest {
                 List.of(scope), FU, Map.of("_currentItem", Map.of()), submitted, Map.of()))
                 .isInstanceOf(PortalException.class)
                 .hasMessageContaining("current row context");
+    }
+
+    @Test
+    void processFormMainBindingCannotClaimARowForAnotherMainRecord() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(fileRow("Z", "C2", null))));
+        SubTableBindingScope caseScope = scope("101", "dw:p0_dual_file", List.of(Map.of("id", "Z")), false);
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(caseScope), FU, Map.of("id", "C1"), submitted, Map.of()))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("not allowed to write");
+    }
+
+    @Test
+    void processFormMainBindingMayClaimRowsMatchingTheMainRecord() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(fileRow("X", "C1", null))));
+        SubTableBindingScope caseScope = scope("101", "dw:p0_dual_file", List.of(Map.of("id", "X")), false);
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(caseScope), FU, Map.of("id", "C1"), submitted, Map.of());
     }
 
     @Test
@@ -218,35 +270,26 @@ class SubTableBindingScopeGuardTest {
         return Map.of("_currentItem", Map.of("rowKey", Map.of("id", participantId), "rowId", participantId));
     }
 
-    @SuppressWarnings("unchecked")
     private JdbcTemplate stubBinding(long bindingId, String tableName, String filterField,
                                      String filterRefType, List<String> pkColumns) {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(contains("dw_form_table_bindings b"), any(RowMapper.class), eq(bindingId), eq(FU)))
-                .thenAnswer(invocation -> {
-                    RowMapper<Object> mapper = invocation.getArgument(1);
-                    java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
-                    when(rs.getLong("id")).thenReturn(bindingId);
-                    when(rs.getString("table_name")).thenReturn(tableName);
-                    when(rs.getString("filter_field")).thenReturn(filterField);
-                    when(rs.getString("filter_ref_type")).thenReturn(filterRefType);
-                    return List.of(mapper.mapRow(rs, 0));
-                });
-        when(jdbc.queryForList(contains("is_primary_key"), eq(String.class), eq(bindingId)))
-                .thenReturn(pkColumns);
+        stubOneBinding(jdbc, bindingId, tableName, filterField, filterRefType, pkColumns, null, null);
         return jdbc;
     }
 
     private JdbcTemplate stubTwoBindings() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        stubOneBinding(jdbc, 101L, "p0_dual_file", "case_id", "MAIN", List.of("id"));
-        stubOneBinding(jdbc, 202L, "p0_dual_file", "party_id", "SUB", List.of("id"));
+        stubOneBinding(jdbc, 101L, "p0_dual_file", "case_id", "MAIN", List.of("id"),
+                "p0_dual_case", 11L);
+        stubOneBinding(jdbc, 202L, "p0_dual_file", "party_id", "SUB", List.of("id"),
+                "p0_dual_party", 22L);
         return jdbc;
     }
 
     @SuppressWarnings("unchecked")
     private void stubOneBinding(JdbcTemplate jdbc, long bindingId, String tableName, String filterField,
-                                String filterRefType, List<String> pkColumns) {
+                                String filterRefType, List<String> pkColumns,
+                                String filterRefTableName, Long filterRefTableId) {
         when(jdbc.query(contains("dw_form_table_bindings b"), any(RowMapper.class), eq(bindingId), eq(FU)))
                 .thenAnswer(invocation -> {
                     RowMapper<Object> mapper = invocation.getArgument(1);
@@ -255,9 +298,17 @@ class SubTableBindingScopeGuardTest {
                     when(rs.getString("table_name")).thenReturn(tableName);
                     when(rs.getString("filter_field")).thenReturn(filterField);
                     when(rs.getString("filter_ref_type")).thenReturn(filterRefType);
+                    when(rs.getString("filter_ref_table_name")).thenReturn(filterRefTableName);
+                    when(rs.getLong("filter_ref_table_id"))
+                            .thenReturn(filterRefTableId == null ? 0L : filterRefTableId);
+                    when(rs.wasNull()).thenReturn(filterRefTableId == null);
                     return List.of(mapper.mapRow(rs, 0));
                 });
-        when(jdbc.queryForList(contains("is_primary_key"), eq(String.class), eq(bindingId)))
+        when(jdbc.queryForList(contains("JOIN dw_form_table_bindings"), eq(String.class), eq(bindingId)))
                 .thenReturn(pkColumns);
+        if (filterRefTableId != null) {
+            when(jdbc.queryForList(contains("f.table_id ="), eq(String.class), eq(filterRefTableId)))
+                    .thenReturn(List.of("id"));
+        }
     }
 }

@@ -4169,8 +4169,21 @@
     运行时：`node scripts/verify-p0-dual-binding-fu.mjs` 两条 `p0_dual_file`
     SUB（50705/50706）+ 同 filter 重复 POST 得 `BINDING_EXISTS`；截图
     `frontend/developer-workstation/verification-screenshots/2026-09-16_p0-dual-binding-*.png`。
-    未改：Portal hydrate 仍未按 filter 切片（两 widget 都认领两行）；嵌套父行
-    解析属 P2。未开始 P2。
+    P2 hydrate 已落地并实测（2026-09-17）：同表双 SUB 才按声明 filter FK **显示**切片
+    （交集，非互斥）。`binding.data` 保持 canonical store，widget 只投影；
+    写回把 slice merge 进同表 sibling。MAIN 主键列读不到则跳过切片。
+    加行不再把 MAIN pk 盖到未在祖先上下文里的 nested FK；唯一 sibling 父行
+    可盖 party_id。`initFormData` 保留非画布 MAIN pk，提交 `formData.id`
+    与子行 `case_id` 对齐。Task Save scopes 按投影行认领；Guard MAIN-filter
+    在主表 PK 可读时校验 `case_id`。
+    实测 `SKIP_DEPLOY=1 node frontend/scripts/verify-p0-dual-binding-portal.mjs`：
+    start `id=Case-000027`，两文件 `case_id` 同值，party-doc `party_id=Party-000007`；
+    task widget0=case-doc+party-doc，widget1=仅 party-doc；Save store 仍 2 行，
+    scopes 50705 两行 / 50706 一行 HTTP 200。截图
+    `frontend/user-portal/verification-screenshots/2026-09-17_p0-dual-binding-portal-task-hydrate.png`。
+    MI unit 24 files / 210 PASS。`pnpm run regression:mi` Playwright：
+    #1441/#1440 PASS；#1438 因环境无 attachment 行失败（与本 diff 无关）。
+    未开始 P3（merger 仍按表）。
     本地双 binding 样本（2026-09-16）：种子 `deploy/init-scripts/21-dual-binding-p0/`
     建 FU `p0-dual-binding-test`（现 dw id=50009），独立表名 `p0_dual_file` 两条 SUB
     （filter `case_id`→MAIN vs `party_id`→party），不改 Demo `attachment`。

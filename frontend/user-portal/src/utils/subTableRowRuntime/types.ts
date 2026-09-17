@@ -61,9 +61,20 @@ export function filterStructuralFkMetasForBinding(
 
 export function buildRowAddContext(
   primaryFormData: Record<string, unknown>,
-  subTableBindings?: Array<{ tableId?: number | null; bindingType?: string }> | null,
+  subTableBindings?: Array<{
+    bindingId?: number | string
+    tableId?: number | null
+    bindingType?: string
+    filterFkRefTableId?: number | null
+    data?: unknown[]
+  }> | null,
   parentRow?: Record<string, unknown> | null,
   parentTableId?: number | null,
+  currentBinding?: {
+    bindingId?: number | string
+    tableId?: number | null
+    filterFkRefTableId?: number | null
+  } | null,
 ): RowAddContext {
   const ancestorRowsByTableId: Record<number, Record<string, unknown>> = {}
   for (const b of subTableBindings ?? []) {
@@ -74,7 +85,38 @@ export function buildRowAddContext(
   if (parentRow && parentTableId != null) {
     ancestorRowsByTableId[Number(parentTableId)] = parentRow
   }
+  attachUniqueFilterParent(ancestorRowsByTableId, subTableBindings, currentBinding)
   return { primaryFormData, ancestorRowsByTableId }
+}
+
+function attachUniqueFilterParent(
+  ancestorRowsByTableId: Record<number, Record<string, unknown>>,
+  subTableBindings: Array<{
+    bindingId?: number | string
+    tableId?: number | null
+    data?: unknown[]
+  }> | null | undefined,
+  currentBinding: {
+    bindingId?: number | string
+    tableId?: number | null
+    filterFkRefTableId?: number | null
+  } | null | undefined,
+): void {
+  const refTid = currentBinding?.filterFkRefTableId
+  if (refTid == null || !Number.isFinite(Number(refTid))) return
+  if (ancestorRowsByTableId[Number(refTid)]) return
+  const currentId = currentBinding?.bindingId
+  const rows: Record<string, unknown>[] = []
+  for (const sibling of subTableBindings ?? []) {
+    if (currentId != null && String(sibling.bindingId) === String(currentId)) continue
+    if (Number(sibling.tableId) !== Number(refTid)) continue
+    for (const raw of Array.isArray(sibling.data) ? sibling.data : []) {
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        rows.push(raw as Record<string, unknown>)
+      }
+    }
+  }
+  if (rows.length === 1) ancestorRowsByTableId[Number(refTid)] = rows[0]
 }
 
 /** True when binding.foreignKeyField names the child row's own PK (e.g. People.id), not the MI parent link. */

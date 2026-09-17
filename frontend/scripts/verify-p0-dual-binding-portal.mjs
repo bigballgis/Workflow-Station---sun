@@ -121,6 +121,22 @@ async function runPortalWrite(browser) {
   const files = Array.isArray(sub['dw:p0_dual_file']) ? sub['dw:p0_dual_file'] : []
   const parties = Array.isArray(sub['dw:p0_dual_party']) ? sub['dw:p0_dual_party'] : []
   console.log(`[start] party rows=${parties.length} file rows=${files.length} names=${files.map((r) => r.file_name).join(',')}`)
+  console.log(`[start] formData.id=${JSON.stringify(payload.formData?.id ?? payload.id ?? null)}`)
+  console.log(`[start] files=${JSON.stringify(files).slice(0, 1500)}`)
+  console.log(`[start] parties=${JSON.stringify(parties).slice(0, 800)}`)
+  const mainId = payload.formData?.id ?? payload.id
+  if (mainId == null || String(mainId).trim() === '') {
+    throw new Error('start payload missing MAIN id after PK preserve')
+  }
+  const fileCaseIds = files.map((r) => String(r.case_id ?? ''))
+  if (fileCaseIds.some((id) => id !== String(mainId))) {
+    throw new Error(`start file case_id must match MAIN id ${mainId}, got ${fileCaseIds.join(',')}`)
+  }
+  const aliceId = parties[0]?.id
+  const partyDoc = files.find((r) => String(r.file_name) === 'party-doc')
+  if (aliceId && partyDoc && String(partyDoc.party_id ?? '') !== String(aliceId)) {
+    throw new Error(`party-doc party_id expected ${aliceId}, got ${partyDoc.party_id}`)
+  }
   if (files.length < 2) {
     throw new Error(`start payload dw:p0_dual_file expected 2 union-merged rows, got ${JSON.stringify(files).slice(0, 500)}`)
   }
@@ -167,6 +183,44 @@ async function runPortalWrite(browser) {
   }
   const taskId = task.taskId ?? task.id
   console.log(`[task] opening ${taskId}`)
+  portalPage.on('response', async (res) => {
+    const url = res.url()
+    if (!/\/api\//.test(url) || res.status() >= 400) return
+    const ct = String(res.headers()['content-type'] ?? '')
+    if (!ct.includes('json')) return
+    const body = await res.json().catch(() => null)
+    if (!body) return
+    const text = JSON.stringify(body)
+    if (!/p0_dual_file|__subTables__|filterFk/.test(text)) return
+    const slice = text.includes('p0_dual_file')
+      ? text.slice(Math.max(0, text.indexOf('p0_dual_file') - 80), text.indexOf('p0_dual_file') + 700)
+      : text.slice(0, 400)
+    console.log(`[api] ${res.status()} ${url} … ${slice}`)
+  })
+  await portalPage.goto(`${ORIGIN}/portal/tasks/${taskId}`, { waitUntil: 'domcontentloaded' })
+  await portalPage.waitForTimeout(8000)
+  const fileCards = portalPage.locator('.sub-table-field').filter({ hasText: /P0 Dual File/i })
+  const fileCardCount = await fileCards.count()
+  if (fileCardCount < 2) {
+    throw new Error(`P2 hydrate: expected 2 file widgets, got ${fileCardCount}`)
+  }
+  const widgetTexts = []
+  for (let i = 0; i < fileCardCount; i++) {
+    const text = String(await fileCards.nth(i).innerText()).replace(/\s+/g, ' ').slice(0, 500)
+    widgetTexts.push(text)
+    console.log(`[task] file widget ${i}/${fileCardCount}: ${text}`)
+  }
+  const widget0 = widgetTexts[0] ?? ''
+  const widget1 = widgetTexts[1] ?? ''
+  if (!/\bcase-doc\b/.test(widget0) || !/\bparty-doc\b/.test(widget0)) {
+    throw new Error(`P2 display: MAIN-filter widget must show intersection (case-doc + party-doc), got ${widget0}`)
+  }
+  if (!/\bparty-doc\b/.test(widget1) || /\bcase-doc\b/.test(widget1)) {
+    throw new Error(`P2 display: party-filter widget must show only party-doc, got ${widget1}`)
+  }
+  const hydrateShot = join(PORTAL_SHOTS, `${DATE}_p0-dual-binding-portal-task-hydrate.png`)
+  await portalPage.screenshot({ path: hydrateShot, fullPage: true })
+  console.log(`shot: ${hydrateShot}`)
   const submitWait = portalPage.waitForRequest(
     (r) => r.method() === 'POST' && r.url().includes(`/tasks/${taskId}/submit`),
     { timeout: 30000 },
@@ -175,8 +229,6 @@ async function runPortalWrite(browser) {
     (r) => r.request().method() === 'POST' && r.url().includes(`/tasks/${taskId}/submit`),
     { timeout: 30000 },
   )
-  await portalPage.goto(`${ORIGIN}/portal/tasks/${taskId}`, { waitUntil: 'domcontentloaded' })
-  await portalPage.waitForTimeout(8000)
   const saveBtn = portalPage.getByRole('button', { name: /^(Save|保存|儲存)$/ }).first()
   if ((await saveBtn.count()) === 0) {
     throw new Error('task detail has no Save button')
@@ -184,6 +236,10 @@ async function runPortalWrite(browser) {
   await saveBtn.click()
   const submitReq = await submitWait
   const submitPayload = submitReq.postDataJSON() ?? {}
+  const savedFiles = submitPayload.formData?.__subTables__?.['dw:p0_dual_file']
+  if (!Array.isArray(savedFiles) || savedFiles.length < 2) {
+    throw new Error(`task submit store must keep both file rows, got ${JSON.stringify(savedFiles).slice(0, 500)}`)
+  }
   const scopes = submitPayload.subTableBindingScopes
   console.log(`[task] scopes=${JSON.stringify(scopes)}`)
   if (!Array.isArray(scopes) || scopes.length < 2) {

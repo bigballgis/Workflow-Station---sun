@@ -17,6 +17,7 @@ import {
   storeKeysSharedByMultipleBindings,
   type SubTableBindingScope,
 } from '@/composables/tasks/subTableCanonicalStamp'
+import { projectSavedRowsForBinding } from '@/composables/tasks/subTableFilterProjection'
 import {
   bindingMatchesMiSubTableName,
 } from '@/composables/tasks/miSubProcessScope'
@@ -269,7 +270,18 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
           emptiedSubTableKeys.push(key)
         }
         if (sharedKeys.has(key)) {
-          const scope = buildBindingScope(binding, out, emptiedThisBinding)
+          const scoped = projectSavedRowsForBinding(
+            out,
+            binding,
+            miFillSubTableBindings.value,
+            {
+              formData: { ...formData.value, ...miFillDialogData.value } as Record<string, unknown>,
+              primaryTableId: ctx.primaryTableBinding.value?.tableId ?? null,
+              primaryPkFields: ctx.primaryTableBinding.value?.primaryKeyFields ?? null,
+              primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions ?? null,
+            },
+          ) ?? out
+          const scope = buildBindingScope(binding, scoped, emptiedThisBinding)
           if (scope) subTableBindingScopes.push(scope)
         }
       }

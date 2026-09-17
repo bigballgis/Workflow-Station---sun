@@ -43,7 +43,9 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
       formTabs.value,
       formFieldsAfterTabs.value,
     )
-    if (placed.size === 0) return
+    if (placed.size === 0) {
+      return
+    }
     const have = new Set(bindings.map(b => Number(b.bindingId)))
     const subForms = (formConfig?.subForms ?? {}) as Record<string, any>
 

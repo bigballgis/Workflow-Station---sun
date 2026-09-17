@@ -239,6 +239,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             primaryTableBinding.value = {
               tableId: b.tableId != null ? Number(b.tableId) : null,
               tableName: b.tableDisplayName || b.tableName,
+              primaryKeyFields: Array.isArray(b.primaryKeyFields) ? b.primaryKeyFields : undefined,
               fieldDefinitions: b.fieldDefinitions ?? [],
             }
             continue

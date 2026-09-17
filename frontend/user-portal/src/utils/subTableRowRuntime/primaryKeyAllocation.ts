@@ -212,6 +212,10 @@ export async function ensureParentRowsForChildAdd(options: {
   ]
 
   for (const refTableId of refTableIds) {
+    const inAncestors = ancestorRowsByTableId[refTableId] != null
+      || ancestorRowsByTableId[Number(refTableId)] != null
+    const isPrimary = options.primaryTableId != null && refTableId === Number(options.primaryTableId)
+    if (!inAncestors && !isPrimary) continue
     const tableMeta = options.parentTablesById[refTableId]
     if (!tableMeta?.fieldDefinitions?.length) continue
 

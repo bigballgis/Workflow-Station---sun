@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,7 +57,7 @@ class SubTableBindingScopeGuard {
         BindingMeta meta = loadBinding(scope, functionUnitCode);
         pkByStoreKey.put(meta.storeKey(), meta.pkColumns());
         List<Map<String, Object>> claimed = scope.getRowKeys() != null ? scope.getRowKeys() : List.of();
-        Object expected = expectedFilterValue(meta, formData);
+        Object expected = expectedFilterValue(meta, formData, submitted, baseline);
         List<Object> submittedRows = rowsOf(submitted, meta.storeKey());
         List<Object> baselineRows = rowsOf(baseline, meta.storeKey());
         for (Map<String, Object> rowKey : claimed) {
@@ -135,7 +136,9 @@ class SubTableBindingScopeGuard {
         List<BindingMeta> rows = jdbcTemplate.query(
                 """
                         SELECT b.id, lower(t.table_name) AS table_name, ffk.field_name AS filter_field,
-                               ref.table_type AS filter_ref_type
+                               ref.table_type AS filter_ref_type,
+                               lower(ref.table_name) AS filter_ref_table_name,
+                               ref.id AS filter_ref_table_id
                         FROM dw_form_table_bindings b
                         JOIN dw_form_definitions fd ON fd.id = b.form_id
                         JOIN dw_function_units fu ON fu.id = fd.function_unit_id
@@ -144,12 +147,18 @@ class SubTableBindingScopeGuard {
                         LEFT JOIN dw_table_definitions ref ON ref.id = ffk.ref_table_id
                         WHERE b.id = ? AND fu.code = ?
                         """,
-                (rs, n) -> new BindingMeta(
-                        rs.getLong("id"),
-                        "dw:" + rs.getString("table_name"),
-                        rs.getString("filter_field"),
-                        rs.getString("filter_ref_type"),
-                        pkColumns(bindingId)),
+                (rs, n) -> {
+                    long refRaw = rs.getLong("filter_ref_table_id");
+                    Long refTableId = rs.wasNull() ? null : refRaw;
+                    return new BindingMeta(
+                            rs.getLong("id"),
+                            "dw:" + rs.getString("table_name"),
+                            rs.getString("filter_field"),
+                            rs.getString("filter_ref_type"),
+                            rs.getString("filter_ref_table_name"),
+                            refTableId,
+                            pkColumns(bindingId));
+                },
                 bindingId, functionUnitCode);
         if (rows.isEmpty()) {
             throw new PortalException("403", "Binding is not part of this function unit");
@@ -174,12 +183,13 @@ class SubTableBindingScopeGuard {
                 String.class, bindingId);
     }
 
-    private Object expectedFilterValue(BindingMeta meta, Map<String, Object> formData) {
+    private Object expectedFilterValue(BindingMeta meta, Map<String, Object> formData,
+                                       Map<String, Object> submitted, Map<String, Object> baseline) {
         if (!StringUtils.hasText(meta.filterField())) {
             return null;
         }
         if (meta.filterRefType() != null && "MAIN".equalsIgnoreCase(meta.filterRefType())) {
-            return null;
+            return mainRecordFilterKeys(meta, formData);
         }
         Object fromCurrent = singleCurrentItemValue(formData);
         if (fromCurrent != null) {
@@ -189,8 +199,70 @@ class SubTableBindingScopeGuard {
             throw new PortalException("403",
                     "Cannot authorize a binding-scoped write without the current row context");
         }
-        // PROCESS form: no nested current row. Parent-row resolution is P2.
-        return null;
+        return siblingParentKeys(meta, submitted, baseline);
+    }
+
+    private Object mainRecordFilterKeys(BindingMeta meta, Map<String, Object> formData) {
+        if (formData == null || meta.filterRefTableId() == null) {
+            return null;
+        }
+        List<String> pk = pkColumnsOfTable(meta.filterRefTableId());
+        if (pk.isEmpty()) {
+            return null;
+        }
+        List<Object> keys = new ArrayList<>();
+        for (String col : pk) {
+            Object value = formData.get(col);
+            if (value == null) {
+                value = ignoreCase(formData, col);
+            }
+            if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                keys.add(value);
+            }
+        }
+        return keys.isEmpty() ? null : keys;
+    }
+
+    private List<Object> siblingParentKeys(BindingMeta meta, Map<String, Object> submitted,
+                                           Map<String, Object> baseline) {
+        if (!StringUtils.hasText(meta.filterRefTableName()) || meta.filterRefTableId() == null) {
+            return List.of();
+        }
+        String parentKey = "dw:" + meta.filterRefTableName();
+        List<Object> parentRows = rowsOf(submitted, parentKey);
+        if (parentRows.isEmpty()) {
+            parentRows = rowsOf(baseline, parentKey);
+        }
+        List<String> pk = pkColumnsOfTable(meta.filterRefTableId());
+        List<Object> keys = new ArrayList<>();
+        for (Object raw : parentRows) {
+            if (!(raw instanceof Map<?, ?>)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> row = (Map<String, Object>) raw;
+            for (String col : pk) {
+                Object value = row.get(col);
+                if (value == null) {
+                    value = ignoreCase(row, col);
+                }
+                if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                    keys.add(value);
+                }
+            }
+        }
+        return keys;
+    }
+
+    private List<String> pkColumnsOfTable(long tableId) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT f.field_name
+                        FROM dw_field_definitions f
+                        WHERE f.table_id = ? AND COALESCE(f.is_primary_key, false) = true
+                        ORDER BY f.sort_order NULLS LAST, f.id
+                        """,
+                String.class, tableId);
     }
 
     private void assertRowMatchesFilter(BindingMeta meta, Object expected, Map<String, Object> row) {
@@ -201,7 +273,7 @@ class SubTableBindingScopeGuard {
         if (actual == null) {
             actual = ignoreCase(row, meta.filterField());
         }
-        if (!sameValue(expected, actual)) {
+        if (!valueMatchesExpected(expected, actual)) {
             throw new PortalException("403", "Binding is not allowed to write this sub-table row");
         }
     }
@@ -252,6 +324,7 @@ class SubTableBindingScopeGuard {
     }
 
     private record BindingMeta(long id, String storeKey, String filterField, String filterRefType,
+                               String filterRefTableName, Long filterRefTableId,
                                List<String> pkColumns) {}
 
     @SuppressWarnings("unchecked")
@@ -277,7 +350,7 @@ class SubTableBindingScopeGuard {
             if (actual == null) {
                 actual = ignoreCase(m, filterField);
             }
-            if (!sameValue(expected, actual)) {
+            if (!valueMatchesExpected(expected, actual)) {
                 kept.add(raw);
             }
         }
@@ -363,6 +436,18 @@ class SubTableBindingScopeGuard {
         Map<String, Object> copy = new LinkedHashMap<>(row);
         copy.remove(ROW_VERSION_FIELD);
         return copy;
+    }
+
+    private static boolean valueMatchesExpected(Object expected, Object actual) {
+        if (expected instanceof Collection<?> col) {
+            for (Object one : col) {
+                if (sameValue(one, actual)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return sameValue(expected, actual);
     }
 
     private static boolean hasCurrentItemObject(Map<String, Object> formData) {
