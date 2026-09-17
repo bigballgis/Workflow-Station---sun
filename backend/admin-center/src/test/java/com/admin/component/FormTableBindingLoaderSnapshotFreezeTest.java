@@ -92,6 +92,42 @@ class FormTableBindingLoaderSnapshotFreezeTest {
         assertThat(queriedLiveFormBindings()).isFalse();
     }
 
+    @Test
+    void liveNonDetailBindingsDropFillSources() {
+        FormContentDTO form = FormContentDTO.builder()
+                .formType("TASK")
+                .tableBindings(List.of(TableBindingDTO.builder()
+                        .bindingId(1L)
+                        .fkFillSources(List.of(com.admin.dto.response.FkFillSourceDTO.builder()
+                                .fieldName("party_id")
+                                .kind("PARENT")
+                                .build()))
+                        .build()))
+                .build();
+
+        loader.omitUndeclaredFillSources(List.of(form));
+
+        assertThat(form.getTableBindings().get(0).getFkFillSources()).isNull();
+    }
+
+    @Test
+    void liveDetailBindingsKeepFillSources() {
+        FormContentDTO form = FormContentDTO.builder()
+                .formType("DETAIL")
+                .tableBindings(List.of(TableBindingDTO.builder()
+                        .bindingId(1L)
+                        .fkFillSources(List.of(com.admin.dto.response.FkFillSourceDTO.builder()
+                                .fieldName("party_id")
+                                .kind("PARENT")
+                                .build()))
+                        .build()))
+                .build();
+
+        loader.omitUndeclaredFillSources(List.of(form));
+
+        assertThat(form.getTableBindings().get(0).getFkFillSources()).hasSize(1);
+    }
+
     private boolean queriedLiveFormBindings() {
         return mockingDetails(jdbcTemplate).getInvocations().stream()
                 .anyMatch(invocation -> invocation.getMethod().getName().equals("query")

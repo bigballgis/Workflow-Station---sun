@@ -58,6 +58,7 @@ public class FormTableBindingLoader {
         }
         if (!live.isEmpty()) {
             attachLiveBindings(live);
+            omitUndeclaredFillSources(live);
         }
         for (FormContentDTO form : frozen) {
             try {
@@ -173,6 +174,28 @@ public class FormTableBindingLoader {
             log.warn("Failed to load tableBindings: {}", e.getMessage());
             for (FormContentDTO form : forms) {
                 form.setTableBindings(Collections.emptyList());
+            }
+        }
+    }
+
+    /**
+     * Legacy PROCESS/TASK/ACTION snapshots never declared fill sources. Live attach would otherwise
+     * copy current DW {@code fk_fill_sources} onto old catalog packages (D05). DETAIL stays live.
+     */
+    void omitUndeclaredFillSources(List<FormContentDTO> forms) {
+        if (forms == null || forms.isEmpty()) {
+            return;
+        }
+        for (FormContentDTO form : forms) {
+            if ("DETAIL".equals(form.getFormType())) {
+                continue;
+            }
+            List<TableBindingDTO> bindings = form.getTableBindings();
+            if (bindings == null) {
+                continue;
+            }
+            for (TableBindingDTO binding : bindings) {
+                binding.setFkFillSources(null);
             }
         }
     }

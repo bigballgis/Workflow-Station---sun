@@ -44,6 +44,34 @@ class CatalogPinnedTaskFormLoaderTest {
     }
 
     @Test
+    void fullFormWrapperUnwrapsInnerConfigJsonAndKeepsTableBindings() {
+        Map<String, Object> form = new java.util.HashMap<>();
+        form.put("formName", "P3 MI Subtask Form");
+        CatalogPinnedTaskFormLoader.applyContentData(form, objectMapper, """
+                {"formName":"P3 MI Subtask Form","formType":"TASK","configJson":{"rule":[{"type":"input"}]},
+                 "tableBindings":[{"bindingId":1,"tableName":"p3_mi_file",
+                   "fkFillSources":[{"fieldName":"party_id","kind":"PARENT"}]}]}
+                """);
+
+        Object config = form.get("configJson");
+        assertThat(config).isInstanceOf(Map.class);
+        assertThat(((Map<?, ?>) config).containsKey("rule")).isTrue();
+        assertThat(form.get("tableBindings")).isInstanceOf(java.util.List.class);
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> bindings = (java.util.List<Map<String, Object>>) form.get("tableBindings");
+        assertThat(bindings).hasSize(1);
+        assertThat(bindings.get(0).get("tableName")).isEqualTo("p3_mi_file");
+    }
+
+    @Test
+    void legacyBareConfigJsonStaysTheFormLayout() {
+        Map<String, Object> form = new java.util.HashMap<>();
+        CatalogPinnedTaskFormLoader.applyContentData(form, objectMapper, "{\"rule\":[]}");
+        assertThat(form.get("configJson")).isEqualTo(Map.of("rule", java.util.List.of()));
+        assertThat(form).doesNotContainKey("tableBindings");
+    }
+
+    @Test
     void missingProcessContentIsADefinitiveMiss() {
         when(jdbcTemplate.queryForList(argThat(sql -> sql != null && sql.contains("content_type = 'PROCESS'")),
                 eq(String.class), eq(CATALOG)))

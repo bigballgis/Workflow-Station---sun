@@ -4256,3 +4256,21 @@
     注意：跑这两个模块时必须带 `-am`，否则 platform-common 从 ~/.m2 解析到旧 jar，
     会额外冒出 58 个 `NoClassDefFoundError: ComputedFieldValidationException` 假阳性。
 
+- id: "1639"
+  status: fixed
+  fixed_at: "2026-09-17"
+  severity: major
+  category: bug
+  summary: "钉住禁用 catalog 的旧实例 Task/My Request 会读到 latest enabled 的 fill sources"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  note: |
+    根因：前端按 processDefinitionKey 拉 FU content，resolve 偏好 enabled catalog
+    （p0/p3 1.0.2）；禁用 pin UUID 被 requireEnabledFunctionUnit 403；
+    CatalogPinnedTaskFormLoader 把 1.0.2 full-form wrapper 整包塞进 configJson；
+    legacy live attach 把当前 DW fk_fill_sources 抄到 1.0.1 PROCESS/TASK。
+    修复：TaskInfo.functionUnitCatalogId；pinnedCatalogContentRef；pin+taskId/
+    processInstanceId 跳过 enabled 门；unwrap wrapper；live 非 DETAIL 清 fill sources。
+    运行时 verify-catalog-pin-coexistence.mjs：1.0.1 实例 625add90 无 fill sources，
+    1.0.2 仍 PRIMARY,PARENT。DETAIL 仍 live overlay。Long 列不可变包未做。
+    残余：customActionFormPopup 无 resolver 时仍按 process key 拉包。
+

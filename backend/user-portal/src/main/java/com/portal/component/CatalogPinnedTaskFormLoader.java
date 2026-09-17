@@ -83,10 +83,47 @@ final class CatalogPinnedTaskFormLoader {
             throws SQLException {
         Map<String, Object> form = new HashMap<>();
         form.put("formName", rs.getString("content_name"));
-        form.put("configJson", parseObjectMap(objectMapper, rs.getString("content_data")));
         form.put("fieldPermissions", Collections.emptyMap());
         form.put("readOnly", false);
+        applyContentData(form, objectMapper, rs.getString("content_data"));
         return form;
+    }
+
+    /**
+     * Catalog FORM {@code content_data} is either legacy bare configJson or the full DW form
+     * wrapper ({@code configJson} + optional {@code tableBindings}). Task layout must use the
+     * inner config, not the wrapper.
+     */
+    static void applyContentData(Map<String, Object> form, ObjectMapper objectMapper, String raw) {
+        Map<String, Object> parsed = parseObjectMap(objectMapper, raw);
+        if (!isFullFormWrapper(parsed)) {
+            form.put("configJson", parsed);
+            return;
+        }
+        form.put("configJson", nestedConfigJson(objectMapper, parsed.get("configJson")));
+        if (parsed.containsKey("tableBindings")) {
+            form.put("tableBindings", parsed.get("tableBindings"));
+        }
+    }
+
+    private static boolean isFullFormWrapper(Map<String, Object> parsed) {
+        if (parsed == null || !parsed.containsKey("configJson")) {
+            return false;
+        }
+        return parsed.containsKey("formName")
+                || parsed.containsKey("formId")
+                || parsed.containsKey("formType");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> nestedConfigJson(ObjectMapper objectMapper, Object inner) {
+        if (inner instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (inner instanceof String s) {
+            return parseObjectMap(objectMapper, s);
+        }
+        throw new IllegalStateException("Catalog form is missing configJson");
     }
 
     private static Map<String, Object> parseObjectMap(ObjectMapper objectMapper, String raw) {

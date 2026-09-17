@@ -226,10 +226,14 @@ export const processApi = {
   
   // 获取功能单元完整内容（BPMN、表单等）
   // taskId：任务参与人（处理人/候选人/发起人）凭任务放行，无需持有该功能单元的可发起角色
-  getFunctionUnitContent(functionUnitId: string, taskId?: string) {
+  // processInstanceId：My Request 凭已授权的流程实例读取钉住的 catalog 包（含已禁用的旧版本）
+  getFunctionUnitContent(functionUnitId: string, taskId?: string, processInstanceId?: string) {
+    const params: Record<string, string> = {}
+    if (taskId) params.taskId = taskId
+    if (processInstanceId) params.processInstanceId = processInstanceId
     return request.get<FunctionUnitContent>(
       `/processes/function-units/${functionUnitId}/content`,
-      taskId ? { params: { taskId } } : undefined,
+      Object.keys(params).length > 0 ? { params } : undefined,
     )
   },
   

@@ -185,6 +185,7 @@ public class RequestIdEnricher {
             }
             String code = pi.getFunctionUnitCode();
             task.setFunctionUnitCode(code);
+            task.setFunctionUnitCatalogId(pi.getFunctionUnitCatalogId());
             if (code != null && !code.isBlank()) {
                 String name = names.get(code);
                 task.setFunctionUnitName(name != null && !name.isBlank() ? name : null);
