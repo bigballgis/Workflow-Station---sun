@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.common.subtable.SubTableStoreKeys;
+import com.portal.dto.SubTableBindingScope;
 import com.portal.exception.PortalException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -157,7 +158,7 @@ class MiSubTaskSubTableRowMerger {
             Map<String, Object> submittedSubTables,
             Map<String, Object> baselineSubTables,
             Map<String, Object> rowKey) {
-        return mergeCurrentRowOnly(submittedSubTables, baselineSubTables, rowKey, Set.of());
+        return mergeCurrentRowOnly(submittedSubTables, baselineSubTables, rowKey, Set.of(), List.of());
     }
 
     /**
@@ -173,6 +174,33 @@ class MiSubTaskSubTableRowMerger {
             Map<String, Object> baselineSubTables,
             Map<String, Object> rowKey,
             Set<String> explicitlyEmptiedKeys) {
+        return mergeCurrentRowOnly(
+                submittedSubTables, baselineSubTables, rowKey, explicitlyEmptiedKeys, List.of());
+    }
+
+    /**
+     * @param bindingScopes per-binding write claims from the request. Empty keeps the table-keyed
+     *                      classifier. When present, this form's bindings decide shared vs
+     *                      participant vs mixed — not every binding that exists on the table.
+     */
+    Map<String, Object> mergeCurrentRowOnly(
+            Map<String, Object> submittedSubTables,
+            Map<String, Object> baselineSubTables,
+            Map<String, Object> rowKey,
+            Set<String> explicitlyEmptiedKeys,
+            List<SubTableBindingScope> bindingScopes) {
+        return mergeCurrentRowOnly(
+                submittedSubTables, baselineSubTables, rowKey, explicitlyEmptiedKeys, bindingScopes, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> mergeCurrentRowOnly(
+            Map<String, Object> submittedSubTables,
+            Map<String, Object> baselineSubTables,
+            Map<String, Object> rowKey,
+            Set<String> explicitlyEmptiedKeys,
+            List<SubTableBindingScope> bindingScopes,
+            String functionUnitCode) {
         Set<String> emptied = explicitlyEmptiedKeys != null ? explicitlyEmptiedKeys : Set.<String>of();
         List<String> pkCols = List.copyOf(rowKey.keySet());
         Map<String, Object> merged = new LinkedHashMap<>();
@@ -180,6 +208,8 @@ class MiSubTaskSubTableRowMerger {
             return merged;
         }
         Map<String, Object> baseline = baselineSubTables != null ? baselineSubTables : Map.of();
+        Map<String, List<SubTableBindingScope>> scopesByKey =
+                MiSubTableScopeAwareMerge.indexByStoreKey(bindingScopes);
         for (Map.Entry<String, Object> entry : submittedSubTables.entrySet()) {
             String key = entry.getKey();
             Object submittedValue = entry.getValue();
@@ -187,6 +217,20 @@ class MiSubTaskSubTableRowMerger {
                 // Nested/non-array shapes (e.g. a row's own __subTables__) are not this MI
                 // collection's row array — pass through unchanged, same as legacy putAll did.
                 merged.put(key, submittedValue);
+                continue;
+            }
+            Object baselineValue = baseline.get(key);
+            List<Object> baselineRows = baselineValue instanceof List<?> l
+                    ? new ArrayList<>((List<Object>) l)
+                    : new ArrayList<>();
+            List<Object> submittedRowsList = (List<Object>) submittedRows;
+            List<SubTableBindingScope> keyScopes = scopesByKey.getOrDefault(key, List.of());
+            if (!keyScopes.isEmpty()) {
+                merged.put(key, MiSubTableScopeAwareMerge.apply(
+                        jdbcTemplate, key, submittedRowsList, baselineRows, rowKey, keyScopes,
+                        emptied.contains(key), functionUnitCode,
+                        (fk, explEmptied) -> mergeRowsKeepingBaselineExceptCurrent(
+                                baselineRows, submittedRowsList, pkCols, rowKey, fk, explEmptied)));
                 continue;
             }
             if (!isParticipantScopedBinding(key)) {
@@ -197,11 +241,6 @@ class MiSubTaskSubTableRowMerger {
                 merged.put(key, submittedValue);
                 continue;
             }
-            Object baselineValue = baseline.get(key);
-            List<Object> baselineRows = baselineValue instanceof List<?> l
-                    ? new ArrayList<>((List<Object>) l)
-                    : new ArrayList<>();
-            List<Object> submittedRowsList = (List<Object>) submittedRows;
             merged.put(key, mergeRowsKeepingBaselineExceptCurrent(
                     baselineRows, submittedRowsList, pkCols, rowKey,
                     lookupForeignKeyColumnsByStoreKey(key), emptied.contains(key)));

@@ -750,7 +750,9 @@ public class TaskFormComponent {
                 Map<String, Object> baselineSubTables = (Map<String, Object>) currentVariables.get("__subTables__");
                 inbound.put("__subTables__",
                         miSubTaskSubTableRowMerger().mergeCurrentRowOnly(
-                                submittedSubTables, baselineSubTables, miCurrentRowKey, miEmptiedSubTableKeys));
+                                submittedSubTables, baselineSubTables, miCurrentRowKey,
+                                miEmptiedSubTableKeys, bindingScopes,
+                                processInstance.getFunctionUnitCode()));
             }
 
             applyBindingScopes(bindingScopes, processInstance.getFunctionUnitCode(), formData,

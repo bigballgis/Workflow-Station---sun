@@ -4056,7 +4056,7 @@
   status: open
   severity: major
   category: bug
-  summary: "MI binding 写侧仍无 binding 身份：读侧已按 filterFkRefTableId 分类，submit 仍按 dw:<table_name> 擦除 per-binding 角色"
+  summary: "MI binding 写侧 P3 进行中：merger 已按 scopes 分类，尚无 MI Demo 端到端"
   file: "frontend/user-portal/src/composables/tasks/miBindingKindFromConfig.ts"
   note: |
     静态分析发现（未运行时复现，需实测确认）。
@@ -4183,7 +4183,12 @@
     `frontend/user-portal/verification-screenshots/2026-09-17_p0-dual-binding-portal-task-hydrate.png`。
     MI unit 24 files / 210 PASS。`pnpm run regression:mi` Playwright：
     #1441/#1440 PASS；#1438 因环境无 attachment 行失败（与本 diff 无关）。
-    未开始 P3（merger 仍按表）。
+    P3 已开始（2026-09-17）：`mergeCurrentRowOnly` 接收 scopes；本表单 binding
+    的声明 filter 分类 SHARED / PARTICIPANT / MIXED；混合时兄弟参与者 nested
+    行留 baseline。无 scopes 仍表级 fail-loud。单测
+    `MiSubTableScopeAwareMergeTest` + 既有 merger/Guard 61 绿。
+    未完成：MI Demo 双 binding 端到端、不可变 catalog 包、独立帮助文。
+    #1636 保持 open。
     本地双 binding 样本（2026-09-16）：种子 `deploy/init-scripts/21-dual-binding-p0/`
     建 FU `p0-dual-binding-test`（现 dw id=50009），独立表名 `p0_dual_file` 两条 SUB
     （filter `case_id`→MAIN vs `party_id`→party），不改 Demo `attachment`。
