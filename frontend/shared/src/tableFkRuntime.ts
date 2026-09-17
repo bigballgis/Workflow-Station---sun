@@ -29,11 +29,12 @@ import {
   framesMatchingTable,
   rowFieldValue,
   uniqueAncestorRow,
+  type ContextFrame,
   type RowAddContext,
 } from './tableFkContext'
 
-export type { FieldFkMeta } from './tableFkMeta'
-export { isFkHidden, isFkReadonly } from './tableFkMeta'
+export type { FieldFkMeta, FkFillKind, FkFillSourceConfig } from './tableFkMeta'
+export { applyFkFillSources, declaredFkFillSources, isFkHidden, isFkReadonly } from './tableFkMeta'
 
 export interface PkGenerationConfig {
   strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence' | 'dailyDateSequence' | 'monthlyDateSequence' | 'customFormat' | 'datePrefixedSequence'
@@ -69,10 +70,65 @@ function ancestorRowForFk(
   meta: FieldFkMeta,
   ctx: RowAddContext,
 ): Record<string, unknown> | null {
+  const kind = meta.fkFillKind
+  if (kind === 'PRIMARY') {
+    return primaryRowForFk(meta, ctx)
+  }
+  if (kind === 'PARENT') {
+    return parentRowForFk(meta, ctx)
+  }
+  if (kind === 'ANCESTOR') {
+    return ancestorBindingRowForFk(meta, ctx)
+  }
   const unique = uniqueAncestorRow(ctx, meta.refTableId)
   if (unique) return unique
   if (contextHasScopedAncestors(ctx)) return null
   return ctx.primaryFormData ?? null
+}
+
+function primaryRowForFk(
+  meta: FieldFkMeta,
+  ctx: RowAddContext,
+): Record<string, unknown> | null {
+  const frames = (ctx.contextFrames ?? []).filter(f => f.role === 'PRIMARY')
+  if (frames.length === 1) return frames[0].row
+  if (meta.refTableId != null) {
+    const matched = frames.filter(f => Number(f.tableId) === Number(meta.refTableId))
+    if (matched.length === 1) return matched[0].row
+  }
+  return ctx.primaryFormData ?? null
+}
+
+function parentRowForFk(
+  meta: FieldFkMeta,
+  ctx: RowAddContext,
+): Record<string, unknown> | null {
+  const parentFrames = (ctx.contextFrames ?? []).filter(f => f.role === 'PARENT')
+  if (meta.refTableId != null) {
+    const matched = parentFrames.filter(f => Number(f.tableId) === Number(meta.refTableId))
+    if (matched.length === 1) return matched[0].row
+    if (matched.length > 1) return null
+  }
+  if (parentFrames.length === 1) return parentFrames[0].row
+  return null
+}
+
+function ancestorBindingRowForFk(
+  meta: FieldFkMeta,
+  ctx: RowAddContext,
+): Record<string, unknown> | null {
+  const frames = framesForDeclaredAncestor(meta, ctx)
+  if (frames.length !== 1) return null
+  if (meta.refTableId != null && Number(frames[0].tableId) !== Number(meta.refTableId)) return null
+  return frames[0].row
+}
+
+function framesForDeclaredAncestor(meta: FieldFkMeta, ctx: RowAddContext): ContextFrame[] {
+  const frames = ctx.contextFrames ?? []
+  if (meta.ancestorBindingId != null && String(meta.ancestorBindingId).trim() !== '') {
+    return frames.filter(f => f.bindingId != null && String(f.bindingId) === String(meta.ancestorBindingId))
+  }
+  return []
 }
 
 export function resolveForeignKeyValues(
@@ -101,7 +157,8 @@ export function guardBeforeChildRowAdd(
   for (const meta of fkMetas) {
     if (!meta?.isForeignKey || !meta.refTableId) continue
     if (scoped && uniqueAncestorRow(ctx, meta.refTableId) == null
-      && framesMatchingTable(ctx, Number(meta.refTableId)).length === 0) {
+      && framesMatchingTable(ctx, Number(meta.refTableId)).length === 0
+      && meta.fkFillKind == null) {
       continue
     }
     const parentRow = ancestorRowForFk(meta, ctx)

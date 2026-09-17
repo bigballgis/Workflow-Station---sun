@@ -99,6 +99,18 @@ export function useTableBindingSubmit(options: UseTableBindingSubmitOptions) {
       if (
         requestData.bindingType === 'SUB'
         && requestData.bindingLinkMode !== 'miParticipantRow'
+      ) {
+        requestData.fkFillSources = requestData.fkFillSources ?? []
+        if (requestData.fkFillSources.some(
+          s => s.kind === 'ANCESTOR' && s.ancestorBindingId == null,
+        )) {
+          ElMessage.warning(t('tableBinding.fkFillSelectAncestor'))
+          return
+        }
+      }
+      if (
+        requestData.bindingType === 'SUB'
+        && requestData.bindingLinkMode !== 'miParticipantRow'
         && !requestData.foreignKeyField
         && structuralFkFieldNames.value.length > 0
       ) {

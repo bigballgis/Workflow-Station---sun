@@ -6,9 +6,11 @@ import type { DialogColumn } from '../../components/subTableAddDialogHelpers'
 import { buildInitialRow } from '../../components/subTableAddDialogHelpers'
 import {
   type RowAddContext,
+  applyFkFillSources,
   applyFkToInitialRow,
   guardBeforeChildRowAdd,
   resolveForeignKeyValues,
+  type FkFillSourceConfig,
 } from '../tableFkRuntime'
 import { applyFkPresentationToDialogColumns } from './columnPresentation'
 import { ensureRowIdentity } from '../subTableRowIdentity'
@@ -143,6 +145,7 @@ export async function prepareSubTableAddRow(options: {
   deferChildPkAllocationUntilSave?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
+  fkFillSources?: FkFillSourceConfig[] | null
   primaryKeyFields?: string[] | null
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -166,10 +169,13 @@ export async function prepareSubTableAddRow(options: {
 
   let rowAddContext = initialRowAddContext
 
-  const fkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
-    bindingLinkMode: options.bindingLinkMode,
-    bindingForeignKeyField: options.bindingForeignKeyField,
-  })
+  const fkMetas = applyFkFillSources(
+    filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+    }),
+    options.fkFillSources,
+  )
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
 
@@ -273,6 +279,7 @@ export async function finalizeSubTableRowOnSave(options: {
   autoEnsurePrimaryRecord?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
+  fkFillSources?: FkFillSourceConfig[] | null
   primaryKeyFields?: string[] | null
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -305,10 +312,13 @@ export async function finalizeSubTableRowOnSave(options: {
   } = options
 
   let rowAddContext = options.rowAddContext
-  const fkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
-    bindingLinkMode: options.bindingLinkMode,
-    bindingForeignKeyField: options.bindingForeignKeyField,
-  })
+  const fkMetas = applyFkFillSources(
+    filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+    }),
+    options.fkFillSources,
+  )
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
   let parentRowPatch: Record<string, unknown> | undefined

@@ -1844,6 +1844,13 @@ export default {
     structuralFkRequired: 'Configure at least one FK field in Table Designer, or choose MI participant row mode.',
     participantRowField: 'Participant Row Field',
     miParticipantRowTip: 'Field that identifies the MI participant row (usually the sub-table primary key, e.g. row_id).',
+    fkFillSources: 'Foreign-key fill source',
+    fkFillSourcesTip: 'Each declared foreign key can take its value from the host row, the primary form, or a named ancestor binding. Auto keeps unique-table fallback.',
+    fkFillKindAuto: 'Auto (unique table only)',
+    fkFillKindParent: 'Host / parent row',
+    fkFillKindPrimary: 'Primary form',
+    fkFillKindAncestor: 'Named ancestor binding',
+    fkFillSelectAncestor: 'Select ancestor binding',
     guideLinkAria: 'Open sub-table binding guidelines'
   },
   user: {

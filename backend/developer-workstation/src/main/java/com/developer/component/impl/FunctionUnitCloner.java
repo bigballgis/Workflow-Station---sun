@@ -38,6 +38,7 @@ import com.developer.service.MainTableViewService;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
+import com.developer.util.FkFillSourcesSupport;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -486,6 +487,8 @@ class FunctionUnitCloner {
                     // sub-table view config below, since the source id would dangle.)
                     .bindingLinkMode(sourceBinding.getBindingLinkMode())
                     .filterFkFieldId(remapFilterFkFieldId(sourceBinding, fieldIdMapping))
+                    .fkFillSources(FkFillSourcesSupport.remapFieldIds(
+                            sourceBinding.getFkFillSources(), fieldIdMapping))
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -493,6 +496,13 @@ class FunctionUnitCloner {
             formBindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
             bindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
             cloneSubTableViewConfigIfPresent(sourceBinding, savedBinding);
+        }
+        for (Long newId : formBindingIdMapping.values()) {
+            formTableBindingRepository.findById(newId).ifPresent(binding -> {
+                binding.setFkFillSources(FkFillSourcesSupport.remapAncestorBindingIds(
+                        binding.getFkFillSources(), formBindingIdMapping));
+                formTableBindingRepository.save(binding);
+            });
         }
 
         for (FormStageBinding sourceStage : formStageBindingRepository.findByFormId(source.getId())) {

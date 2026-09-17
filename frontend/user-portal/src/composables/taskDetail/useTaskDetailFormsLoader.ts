@@ -13,6 +13,7 @@ import {
   type TaskFormData as TaskFormDataDTO,
   type CompletedTaskFormData,
 } from '@/api/processForm'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import {
   findTabsRule,
@@ -382,6 +383,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, b.bindingId, cfg),
         filterFkFieldName: b.filterFkFieldName ?? null,
         filterFkRefTableId: b.filterFkRefTableId ?? null,
+        ...declaredFkFillSources(b),
         data: Array.isArray(b.data) ? (b.data as any[]) : [],
       } as any)
       const bid = Number(b.bindingId)

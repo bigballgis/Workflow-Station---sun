@@ -27,6 +27,7 @@ import {
   stampAssignmentConfigsOnForms,
 } from '@/utils/miAssignmentConfig'
 import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 
 export interface ApplicationDetailLoadersFns {
   loadProcessDetail: () => Promise<void>
@@ -277,6 +278,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
             bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
             ...declaredFilterFkFields(b),
+            ...declaredFkFillSources(b),
             tableName: b.tableDisplayName || b.tableName,
             designerTableName: b.tableName,
             tableType: b.tableType,

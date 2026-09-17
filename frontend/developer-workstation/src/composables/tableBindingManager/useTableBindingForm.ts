@@ -51,7 +51,8 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
       bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
       foreignKeyField: undefined,
       bindingLinkMode: defaultType === 'SUB' ? 'structuralFk' : undefined,
-      subMode: defaultType === 'SUB' ? 'FULL' : undefined
+      subMode: defaultType === 'SUB' ? 'FULL' : undefined,
+      fkFillSources: undefined,
     }
   }
 
@@ -225,6 +226,7 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     } else {
       bindingForm.value.subMode = undefined
       bindingForm.value.bindingLinkMode = undefined
+      bindingForm.value.fkFillSources = undefined
     }
     // RELATED type must be READONLY
     if (bindingForm.value.bindingType === 'RELATED') {
@@ -283,7 +285,8 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
       foreignKeyField: binding.foreignKeyField,
       bindingLinkMode: binding.bindingType === 'SUB' ? (binding.bindingLinkMode || 'structuralFk') : undefined,
       sortOrder: binding.sortOrder,
-      subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined
+      subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined,
+      fkFillSources: binding.fkFillSources ? [...binding.fkFillSources] : undefined,
     }
     showAddDialog.value = true
   }

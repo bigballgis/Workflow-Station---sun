@@ -103,6 +103,12 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
       const rowAddContext = buildRowAddContext(
         props.primaryFormData ?? {},
         props.previewTableBindings,
+        null,
+        null,
+        {
+          bindingId: props.config.bindingId,
+          tableId: props.config.tableId,
+        },
       )
       try {
         const result = await prepareSubTableAddRow({
@@ -118,6 +124,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
           autoEnsurePrimaryRecord: props.primaryFormData != null,
           bindingLinkMode: props.config.bindingLinkMode,
           bindingForeignKeyField: props.config.bindingForeignKeyField,
+          fkFillSources: props.config.fkFillSources,
           allocatePrimaryKeys:
             props.functionUnitId != null && props.config.tableId != null
               ? async (payload) => {

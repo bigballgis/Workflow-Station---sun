@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyFkFillSources,
   applyFkToInitialRow,
   buildRowAddContext,
   guardBeforeChildRowAdd,
@@ -64,6 +65,35 @@ describe('context frames — unique ancestor rows', () => {
     }
     expect(uniqueAncestorRow(ctx, PARTY)?.id).toBe('Party-1')
     expect(applyFkToInitialRow({}, fileFks, ctx).party_id).toBe('Party-1')
+  })
+
+  it('fills a named ancestor binding when two same-table rows exist', () => {
+    const ctx = buildRowAddContext(
+      { id: 'Case-1' },
+      [
+        { tableId: MAIN, bindingType: 'PRIMARY' },
+        { bindingId: 11, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-A' }] },
+        { bindingId: 12, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-B' }] },
+        { bindingId: 20, tableId: FILE, bindingType: 'SUB', data: [] },
+      ],
+      { id: 'Party-A' },
+      PARTY,
+      { bindingId: 20, tableId: FILE, filterFkRefTableId: PARTY },
+      11,
+    )
+    expect(uniqueAncestorRow(ctx, PARTY)).toBeNull()
+    const undeclared = applyFkToInitialRow({}, fileFks, ctx)
+    expect(undeclared.party_id).toBeUndefined()
+    const declared = applyFkToInitialRow({}, applyFkFillSources(fileFks, [
+      { fieldName: 'case_id', kind: 'PRIMARY' },
+      { fieldName: 'party_id', kind: 'ANCESTOR', ancestorBindingId: 12 },
+    ]), ctx)
+    expect(declared.case_id).toBe('Case-1')
+    expect(declared.party_id).toBe('Party-B')
+    const fromParent = applyFkToInitialRow({}, applyFkFillSources(fileFks, [
+      { fieldName: 'party_id', kind: 'PARENT' },
+    ]), ctx)
+    expect(fromParent.party_id).toBe('Party-A')
   })
 
   it('omits an ambiguous table from ancestorRowsByTableId', () => {

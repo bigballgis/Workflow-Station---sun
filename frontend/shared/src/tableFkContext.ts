@@ -1,6 +1,7 @@
 /**
  * Add-row ancestor context: ordered frames instead of one slot per table.
- * Duplicate same-table rows are not guessed (F2). Fill-source UI is a later knife.
+ * Duplicate same-table rows are not guessed (F2). Declared fill sources pick PARENT /
+ * PRIMARY / a named ancestor binding instead of unique-table fallback.
  */
 export type ContextFrameRole = 'PRIMARY' | 'PARENT' | 'FILTER_SIBLING'
 
@@ -135,7 +136,7 @@ export function contextHasScopedAncestors(ctx: RowAddContext): boolean {
   return ancestors != null && Object.keys(ancestors).length > 0
 }
 
-function attachUniqueFilterParent(
+function attachFilterSiblingFrames(
   frames: ContextFrame[],
   subTableBindings: BindingContextInput[] | null | undefined,
   currentBinding: {
@@ -144,27 +145,24 @@ function attachUniqueFilterParent(
     filterFkRefTableId?: number | null
   } | null | undefined,
 ): void {
-  const refTid = currentBinding?.filterFkRefTableId
-  if (refTid == null || !Number.isFinite(Number(refTid))) return
-  const tableId = Number(refTid)
   const currentId = currentBinding?.bindingId
-  const rows: Array<{ row: Record<string, unknown>; bindingId?: number | string }> = []
   for (const sibling of subTableBindings ?? []) {
     if (currentId != null && String(sibling.bindingId) === String(currentId)) continue
-    if (Number(sibling.tableId) !== tableId) continue
+    if (sibling.tableId == null || !Number.isFinite(Number(sibling.tableId))) continue
+    const rows: Record<string, unknown>[] = []
     for (const raw of Array.isArray(sibling.data) ? sibling.data : []) {
       if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-        rows.push({ row: raw as Record<string, unknown>, bindingId: sibling.bindingId })
+        rows.push(raw as Record<string, unknown>)
       }
     }
+    if (rows.length !== 1) continue
+    frames.push({
+      tableId: Number(sibling.tableId),
+      row: rows[0],
+      role: 'FILTER_SIBLING',
+      bindingId: sibling.bindingId,
+    })
   }
-  if (rows.length !== 1) return
-  frames.push({
-    tableId,
-    row: rows[0].row,
-    role: 'FILTER_SIBLING',
-    bindingId: rows[0].bindingId,
-  })
 }
 
 export function buildRowAddContext(
@@ -177,6 +175,7 @@ export function buildRowAddContext(
     tableId?: number | null
     filterFkRefTableId?: number | null
   } | null,
+  parentBindingId?: number | string | null,
 ): RowAddContext {
   const contextFrames: ContextFrame[] = []
   for (const b of subTableBindings ?? []) {
@@ -194,9 +193,10 @@ export function buildRowAddContext(
       tableId: Number(parentTableId),
       row: parentRow,
       role: 'PARENT',
+      bindingId: parentBindingId ?? undefined,
     })
   }
-  attachUniqueFilterParent(contextFrames, subTableBindings, currentBinding)
+  attachFilterSiblingFrames(contextFrames, subTableBindings, currentBinding)
   return {
     primaryFormData,
     contextFrames,

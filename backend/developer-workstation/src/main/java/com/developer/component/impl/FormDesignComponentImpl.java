@@ -32,6 +32,7 @@ import com.developer.service.SubTableViewService;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
 import com.developer.util.FormConfigJsonPasteBindingMapper;
+import com.developer.util.FkFillSourcesSupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -477,6 +478,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .bindingLinkMode(request.getBindingLinkMode() != null
                         ? request.getBindingLinkMode() : BindingLinkMode.structuralFk)
                 .filterFkFieldId(resolvedFilterFk)
+                .fkFillSources(FkFillSourcesSupport.stampFieldNames(request.getFkFillSources(), table))
                 .sortOrder(sortOrder)
                 .build();
 
@@ -560,6 +562,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
         if (request.getSubMode() != null) {
             binding.setSubMode(request.getSubMode());
+        }
+        if (request.getFkFillSources() != null) {
+            binding.setFkFillSources(FkFillSourcesSupport.stampFieldNames(
+                    request.getFkFillSources(), binding.getTable()));
         }
 
         binding = formTableBindingRepository.save(binding);
@@ -841,6 +847,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     // (FunctionUnitCloner differs — it clones the tables, so there the id must be
                     // remapped through the cloned fields.)
                     .filterFkFieldId(sourceBinding.getFilterFkFieldId())
+                    .fkFillSources(FkFillSourcesSupport.copy(sourceBinding.getFkFillSources()))
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -885,6 +892,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
+        remapCopiedFkFillAncestors(bindingIdMapping);
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         savedCopy.setConfigJson(copiedConfig);
@@ -958,6 +966,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     // (FunctionUnitCloner differs — it clones the tables, so there the id must be
                     // remapped through the cloned fields.)
                     .filterFkFieldId(sourceBinding.getFilterFkFieldId())
+                    .fkFillSources(FkFillSourcesSupport.copy(sourceBinding.getFkFillSources()))
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -1002,6 +1011,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
+        remapCopiedFkFillAncestors(bindingIdMapping);
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         savedCopy.setConfigJson(copiedConfig);
@@ -1150,5 +1160,15 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .applied(applied)
                 .createdTableNames(createdTables)
                 .build();
+    }
+
+    private void remapCopiedFkFillAncestors(Map<Long, Long> bindingIdMapping) {
+        for (Long newId : bindingIdMapping.values()) {
+            formTableBindingRepository.findById(newId).ifPresent(binding -> {
+                binding.setFkFillSources(FkFillSourcesSupport.remapAncestorBindingIds(
+                        binding.getFkFillSources(), bindingIdMapping));
+                formTableBindingRepository.save(binding);
+            });
+        }
     }
 }

@@ -105,6 +105,16 @@ export function useSubTableRowDialog(
     }
   }
 
+  function currentFillSources() {
+    if (props.fkFillSources?.length) return props.fkFillSources
+    const list = (props.subTableBindingsForContext ?? props.linkedSubTableBindings ?? []) as Array<{
+      bindingId?: number | string
+      fkFillSources?: SubTableFieldProps['fkFillSources']
+    }>
+    return list.find(b => props.bindingId != null && Number(b.bindingId) === Number(props.bindingId))
+      ?.fkFillSources
+  }
+
   function rowAddContextNow() {
     return buildRowAddContext(
       props.primaryFormData ?? {},
@@ -112,6 +122,7 @@ export function useSubTableRowDialog(
       props.parentRow,
       props.parentTableId,
       currentBindingForAdd(),
+      props.parentBindingId,
     )
   }
 
@@ -133,6 +144,7 @@ export function useSubTableRowDialog(
         deferPkAllocationUntilSave: true,
         bindingLinkMode: props.bindingLinkMode,
         bindingForeignKeyField: props.bindingForeignKeyField,
+        fkFillSources: currentFillSources(),
         primaryKeyFields: props.primaryKeyFields,
         miParticipantRowId: props.miParticipantRowId,
         miParentParticipantRow: props.miParentParticipantRow,
@@ -220,6 +232,7 @@ export function useSubTableRowDialog(
           autoEnsurePrimaryRecord: props.primaryFormData != null,
           bindingLinkMode: props.bindingLinkMode,
           bindingForeignKeyField: props.bindingForeignKeyField,
+          fkFillSources: currentFillSources(),
           primaryKeyFields: props.primaryKeyFields,
           miParticipantRowId: props.miParticipantRowId,
           miParentParticipantRow: props.miParentParticipantRow,

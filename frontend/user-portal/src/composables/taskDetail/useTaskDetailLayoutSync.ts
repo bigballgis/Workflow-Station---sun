@@ -10,6 +10,7 @@ import {
   finalizeMiCollectionSubTableBindingRows,
 } from '@/composables/tasks/shared'
 import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
@@ -83,6 +84,7 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
         fieldDefinitions: raw.fieldDefinitions ?? [],
         bindingLinkMode: raw.bindingLinkMode,
         ...declaredFilterFkFields(raw),
+        ...declaredFkFillSources(raw),
         data: [],
       } as any)
       have.add(bid)

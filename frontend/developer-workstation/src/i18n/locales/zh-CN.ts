@@ -1838,6 +1838,13 @@ export default {
     structuralFkRequired: '请先在表设计器配置外键字段，或选择 MI 参与者行模式。',
     participantRowField: '参与者行字段',
     miParticipantRowTip: '标识 MI 参与者行的字段（通常为子表主键，如 row_id）。',
+    fkFillSources: '外键填充来源',
+    fkFillSourcesTip: '每条已声明外键可分别取自宿主行、主表单，或指定的祖先绑定。自动则仅在同表唯一一行时回填。',
+    fkFillKindAuto: '自动（仅同表唯一行）',
+    fkFillKindParent: '宿主 / 父行',
+    fkFillKindPrimary: '主表单',
+    fkFillKindAncestor: '指定祖先绑定',
+    fkFillSelectAncestor: '请选择祖先绑定',
     guideLinkAria: '打开子表绑定说明'
   },
   subTable: {

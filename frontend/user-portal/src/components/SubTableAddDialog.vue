@@ -633,6 +633,8 @@
         :binding-foreign-key-field="nested.foreignKeyField"
         :parent-row="formData"
         :parent-table-id="hostTableId ?? null"
+        :parent-binding-id="bindingId ?? null"
+        :fk-fill-sources="nested.fkFillSources"
         :parent-tables-by-id="nestedParentTablesById"
         :primary-form-data="hostPrimaryFormData"
         :primary-table-id="hostPrimaryTableId ?? null"

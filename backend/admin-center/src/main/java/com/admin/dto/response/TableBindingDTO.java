@@ -73,6 +73,10 @@ public class TableBindingDTO {
      */
     private String filterFkRefTableName;
     /**
+     * Per-FK fill source (PARENT / PRIMARY / ANCESTOR). Null = unique-table fallback.
+     */
+    private java.util.List<FkFillSourceDTO> fkFillSources;
+    /**
      * Table field metadata (FK/PK) for Portal / Preview row-add runtime (PRD S5).
      */
     private List<TableFieldDefinitionDTO> fieldDefinitions;

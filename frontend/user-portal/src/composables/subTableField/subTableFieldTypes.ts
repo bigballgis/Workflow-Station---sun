@@ -27,6 +27,7 @@ export interface SubTableBinding {
   filterFkRefTableId?: number | null
   filterFkFieldName?: string | null
   foreignKeyField?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   tableName: string
   designerTableName?: string
   tableType: string
@@ -78,6 +79,7 @@ export interface NestedSubTableDescriptor {
   filterFkRefTableId?: number | null
   filterFkFieldName?: string | null
   foreignKeyField?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   formFields?: FormField[]
   formOptions?: Record<string, unknown> | null
   assignmentConfig?: AssignmentConfig
@@ -158,6 +160,8 @@ export interface SubTableFieldProps {
   }>
   parentRow?: Record<string, unknown> | null
   parentTableId?: number | null
+  parentBindingId?: number | string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>

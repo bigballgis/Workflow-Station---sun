@@ -290,6 +290,7 @@ import {
   resolveSubTablePrimaryKeyFields,
 } from '@/composables/tasks/shared'
 import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import {
   buildRelationTableFieldIndexFromDataTables,
   resolveBindingFieldDefinitions,
@@ -608,6 +609,7 @@ const loadFunctionUnitContent = async () => {
           fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
           ...declaredFilterFkFields(b as { filterFkRefTableId?: number | null; filterFkFieldName?: string | null }),
+          ...declaredFkFillSources(b as { fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] }),
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []
         })

@@ -104,12 +104,40 @@ final class CatalogFormSnapshot {
                 .filterFkFieldName(asString(m.get("filterFkFieldName")))
                 .filterFkRefTableName(asString(m.get("filterFkRefTableName")))
                 .filterFkRefTableId(asLong(m.get("filterFkRefTableId")))
+                .fkFillSources(mapFillSources(m.get("fkFillSources")))
                 .sortOrder(asInt(m.get("sortOrder")))
                 .tableName(asString(m.get("tableName")))
                 .tableDisplayName(asString(m.get("tableDisplayName")))
                 .tableType(asString(m.get("tableType")))
                 .tableDescription(asString(m.get("tableDescription")))
                 .build();
+    }
+
+    private static java.util.List<com.admin.dto.response.FkFillSourceDTO> mapFillSources(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return null;
+        }
+        java.util.List<com.admin.dto.response.FkFillSourceDTO> out = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
+            String kind = asString(map.get("kind"));
+            String fieldName = asString(map.get("fieldName"));
+            Long fieldId = asLong(map.get("fieldId"));
+            if (kind == null || (fieldName == null && fieldId == null)) {
+                continue;
+            }
+            out.add(com.admin.dto.response.FkFillSourceDTO.builder()
+                    .fieldId(asLong(map.get("fieldId")))
+                    .fieldName(fieldName)
+                    .kind(kind)
+                    .ancestorBindingId(asLong(map.get("ancestorBindingId")))
+                    .ancestorTableName(asString(map.get("ancestorTableName")))
+                    .ancestorFilterFkFieldName(asString(map.get("ancestorFilterFkFieldName")))
+                    .build());
+        }
+        return out.isEmpty() ? null : out;
     }
 
     private static String asString(Object value) {

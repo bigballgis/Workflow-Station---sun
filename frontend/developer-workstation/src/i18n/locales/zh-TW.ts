@@ -1839,6 +1839,13 @@ export default {
     structuralFkRequired: '請先在表設計器設定外鍵欄位，或選擇 MI 參與者行模式。',
     participantRowField: '參與者行欄位',
     miParticipantRowTip: '識別 MI 參與者行的欄位（通常為子表主鍵，如 row_id）。',
+    fkFillSources: '外鍵填入來源',
+    fkFillSourcesTip: '每條已宣告外鍵可分別取自宿主列、主表單，或指定的祖先繫結。自動則僅在同表唯一一列時回填。',
+    fkFillKindAuto: '自動（僅同表唯一列）',
+    fkFillKindParent: '宿主 / 父列',
+    fkFillKindPrimary: '主表單',
+    fkFillKindAncestor: '指定祖先繫結',
+    fkFillSelectAncestor: '請選擇祖先繫結',
     guideLinkAria: '開啟子表繫結說明'
   },
   subTable: {

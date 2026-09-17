@@ -83,6 +83,15 @@ public class FormTableBinding {
     private Long filterFkFieldId;
 
     /**
+     * Per declared FK: PARENT / PRIMARY / ANCESTOR. Null = runtime unique-table fallback.
+     * No {@code @Builder.Default}: omitting it on Clone/Copy must not invent an empty list
+     * that looks like an explicit "clear".
+     */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "fk_fill_sources", columnDefinition = "jsonb")
+    private java.util.List<com.developer.dto.FkFillSource> fkFillSources;
+
+    /**
      * 排序顺序
      */
     @Column(name = "sort_order")

@@ -162,6 +162,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     (selectedForm.value?.tableBindings ?? []).map((b: TableBinding) => ({
       tableId: b.tableId,
       bindingType: b.bindingType,
+      bindingId: b.id,
+      data: b.id != null ? previewTableRows.value[b.id] : undefined,
     })),
   )
 
@@ -326,6 +328,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
         fieldDefinitions: (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || [],
         bindingLinkMode: b.bindingLinkMode,
         bindingForeignKeyField: b.foreignKeyField,
+        fkFillSources: b.fkFillSources,
         // Only a design that actually placed the Assignment Mode component gets the
         // block. The BPMN contract supplies its content, not its existence — passing
         // the config unconditionally made every MI-configured sub-table render an

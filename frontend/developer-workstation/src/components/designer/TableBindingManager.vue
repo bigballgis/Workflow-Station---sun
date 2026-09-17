@@ -161,7 +161,7 @@
     <el-dialog 
       v-model="showAddDialog" 
       :title="editingBinding ? t('tableBinding.editBinding') : t('tableBinding.addBinding')" 
-      width="500px"
+      width="640px"
       @close="resetForm"
     >
       <el-form
@@ -359,6 +359,61 @@
             {{ t('tableBinding.miParticipantRowTip') }}
           </div>
         </el-form-item>
+
+        <template
+          v-if="bindingForm.bindingType === 'SUB' && bindingForm.bindingLinkMode === 'structuralFk' && structuralFkSelectFields.length"
+        >
+          <div class="fk-fill-sources">
+            <div class="fk-fill-sources-title">
+              {{ t('tableBinding.fkFillSources') }}
+            </div>
+            <p class="form-item-tip">
+              {{ t('tableBinding.fkFillSourcesTip') }}
+            </p>
+            <el-form-item
+              v-for="field in structuralFkSelectFields"
+              :key="field.fieldName"
+              :label="field.displayName ? `${field.fieldName} (${field.displayName})` : field.fieldName"
+            >
+              <el-select
+                :model-value="kindOfField(bindingForm.fkFillSources, field.id ?? -1)"
+                style="width: 100%"
+                @change="(kind: string) => onFillKindChange(field, kind)"
+              >
+                <el-option
+                  :label="t('tableBinding.fkFillKindAuto')"
+                  value="AUTO"
+                />
+                <el-option
+                  :label="t('tableBinding.fkFillKindParent')"
+                  value="PARENT"
+                />
+                <el-option
+                  :label="t('tableBinding.fkFillKindPrimary')"
+                  value="PRIMARY"
+                />
+                <el-option
+                  :label="t('tableBinding.fkFillKindAncestor')"
+                  value="ANCESTOR"
+                />
+              </el-select>
+              <el-select
+                v-if="kindOfField(bindingForm.fkFillSources, field.id ?? -1) === 'ANCESTOR'"
+                :model-value="ancestorIdOfField(bindingForm.fkFillSources, field.id ?? -1)"
+                :placeholder="t('tableBinding.fkFillSelectAncestor')"
+                style="width: 100%; margin-top: 8px;"
+                @change="(id: number) => onFillAncestorChange(field, id)"
+              >
+                <el-option
+                  v-for="opt in ancestorOptions"
+                  :key="opt.id"
+                  :label="opt.label"
+                  :value="opt.id"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+        </template>
       </el-form>
       
       <template #footer>
@@ -381,10 +436,16 @@
 import { computed, watch, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { type TableDefinition } from '@/api/functionUnit'
+import { type FieldDefinition, type TableDefinition } from '@/api/functionUnit'
 import { useTableBindingList } from '@/composables/tableBindingManager/useTableBindingList'
 import { useTableBindingForm } from '@/composables/tableBindingManager/useTableBindingForm'
 import { useTableBindingSubmit } from '@/composables/tableBindingManager/useTableBindingSubmit'
+import {
+  ancestorBindingOptions,
+  ancestorIdOfField,
+  kindOfField,
+  setFieldFillKind,
+} from '@/composables/tableBindingManager/fkFillSources'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 
 const { t } = useI18n()
@@ -469,6 +530,31 @@ const {
   t,
 })
 
+const ancestorOptions = computed(() =>
+  ancestorBindingOptions(bindings.value, editingBinding.value?.id, props.tables, t),
+)
+
+function onFillKindChange(field: FieldDefinition, kind: string) {
+  const nextKind = kind === 'PARENT' || kind === 'PRIMARY' || kind === 'ANCESTOR' || kind === 'AUTO'
+    ? kind
+    : 'AUTO'
+  bindingForm.value.fkFillSources = setFieldFillKind(
+    bindingForm.value.fkFillSources,
+    field,
+    nextKind,
+    ancestorIdOfField(bindingForm.value.fkFillSources, field.id ?? -1),
+  )
+}
+
+function onFillAncestorChange(field: FieldDefinition, ancestorBindingId: number) {
+  bindingForm.value.fkFillSources = setFieldFillKind(
+    bindingForm.value.fkFillSources,
+    field,
+    'ANCESTOR',
+    ancestorBindingId,
+  )
+}
+
 // 提交与后端错误映射
 const { handleSubmit } = useTableBindingSubmit({
   functionUnitId: props.functionUnitId,
@@ -539,6 +625,18 @@ defineExpose({
 
   .binding-constraint-alert {
     margin-bottom: 12px;
+  }
+
+  .fk-fill-sources {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+
+  .fk-fill-sources-title {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
   }
 }
 </style>

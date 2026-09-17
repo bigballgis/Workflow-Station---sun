@@ -43,6 +43,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
+import com.developer.util.FkFillSourcesSupport;
 import com.developer.validation.DmnXmlParser;
 import com.platform.common.mail.EmailConnectionPortability;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +52,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -369,6 +371,7 @@ public class FunctionUnitImportWriter {
         if (!(bindingsObj instanceof List<?> bindingsList)) {
             return bindingIdMapping;
         }
+        List<ImportedBinding> imported = new ArrayList<>();
         for (Object bindingObj : bindingsList) {
             if (!(bindingObj instanceof Map<?, ?> bindingMapRaw)) {
                 continue;
@@ -417,8 +420,39 @@ public class FunctionUnitImportWriter {
             if (bindingData.get("bindingId") instanceof Number sourceBindingId) {
                 bindingIdMapping.put(sourceBindingId.longValue(), savedBinding.getId());
             }
+            imported.add(new ImportedBinding(savedBinding, bindingData, table));
         }
+        applyImportedFkFillSources(imported);
         return bindingIdMapping;
+    }
+
+    private record ImportedBinding(
+            FormTableBinding saved, Map<String, Object> data, TableDefinition table) {
+    }
+
+    private void applyImportedFkFillSources(List<ImportedBinding> imported) {
+        Map<String, Long> ancestorKeys = new HashMap<>();
+        for (ImportedBinding item : imported) {
+            hydrateImportedTableFields(item.table());
+            String key = FkFillSourcesSupport.ancestorKey(item.saved());
+            if (key != null) {
+                ancestorKeys.put(key, item.saved().getId());
+            }
+        }
+        for (ImportedBinding item : imported) {
+            hydrateImportedTableFields(item.table());
+            item.saved().setFkFillSources(FkFillSourcesSupport.fromPortable(
+                    item.data().get("fkFillSources"), item.table(), ancestorKeys));
+            formTableBindingRepository.save(item.saved());
+        }
+    }
+
+    private void hydrateImportedTableFields(TableDefinition table) {
+        if (table == null || table.getFieldDefinitions() != null && !table.getFieldDefinitions().isEmpty()) {
+            return;
+        }
+        table.setFieldDefinitions(fieldDefinitionRepository
+                .findByTableDefinitionIdOrderBySortOrderAsc(table.getId()));
     }
 
     /**

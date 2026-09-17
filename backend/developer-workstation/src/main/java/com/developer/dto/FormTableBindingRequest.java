@@ -55,6 +55,11 @@ public class FormTableBindingRequest {
     private Long filterFkFieldId;
 
     /**
+     * Per declared FK fill source. Null = leave existing (update) or undeclared (create).
+     */
+    private java.util.List<FkFillSource> fkFillSources;
+
+    /**
      * 排序顺序
      */
     private Integer sortOrder;

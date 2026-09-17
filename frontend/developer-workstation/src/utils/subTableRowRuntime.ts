@@ -15,6 +15,7 @@ import {
   type FieldFkMeta,
   type PkGenerationConfig,
   type RowAddContext,
+  applyFkFillSources,
   applyFkToInitialRow,
   buildRowAddContext,
   guardBeforeChildRowAdd,
@@ -244,6 +245,7 @@ export async function prepareSubTableAddRow(options: {
   autoEnsurePrimaryRecord?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
+  fkFillSources?: import('./tableFkRuntime').FkFillSourceConfig[] | null
   t?: (key: string, params?: Record<string, unknown>) => string
 }): Promise<
   | { ok: true; initialRow: Record<string, unknown>; dialogColumns: DialogColumn[]; primaryFormDataPatch?: Record<string, unknown> }
@@ -263,10 +265,13 @@ export async function prepareSubTableAddRow(options: {
 
   let rowAddContext = initialRowAddContext
 
-  const fkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
-    bindingLinkMode: options.bindingLinkMode,
-    bindingForeignKeyField: options.bindingForeignKeyField,
-  })
+  const fkMetas = applyFkFillSources(
+    filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+    }),
+    options.fkFillSources,
+  )
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
 

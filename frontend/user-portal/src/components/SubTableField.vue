@@ -691,6 +691,8 @@ const props = withDefaults(defineProps<{
   }>
   parentRow?: Record<string, unknown> | null
   parentTableId?: number | null
+  parentBindingId?: number | string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>

@@ -33,6 +33,7 @@ public class FormTableBindingResponse {
     private BindingLinkMode bindingLinkMode;
     /** {@code dw_field_definitions.id} of the declared FK this binding filters rows by; null = not declared. */
     private Long filterFkFieldId;
+    private java.util.List<FkFillSource> fkFillSources;
     private Integer sortOrder;
     private Instant createdAt;
     private Instant updatedAt;
@@ -75,6 +76,7 @@ public class FormTableBindingResponse {
                 .foreignKeyField(binding.getForeignKeyField())
                 .bindingLinkMode(binding.getBindingLinkMode())
                 .filterFkFieldId(binding.getFilterFkFieldId())
+                .fkFillSources(binding.getFkFillSources())
                 .sortOrder(binding.getSortOrder())
                 .createdAt(binding.getCreatedAt())
                 .updatedAt(binding.getUpdatedAt())
@@ -120,6 +122,7 @@ public class FormTableBindingResponse {
                 .foreignKeyField(binding.getForeignKeyField())
                 .bindingLinkMode(binding.getBindingLinkMode())
                 .filterFkFieldId(binding.getFilterFkFieldId())
+                .fkFillSources(binding.getFkFillSources())
                 .sortOrder(binding.getSortOrder())
                 .createdAt(binding.getCreatedAt())
                 .updatedAt(binding.getUpdatedAt())

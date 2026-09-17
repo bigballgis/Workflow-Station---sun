@@ -9,6 +9,7 @@ import {
   finalizeMiCollectionSubTableBindingRows,
 } from '@/composables/tasks/shared'
 import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
@@ -109,6 +110,7 @@ export function createTaskDetailPrevForms(ctx: TaskDetailCtx): TaskDetailPrevFor
             // 分类判据（MI collection / child / shared）只读这两项 —— 漏传就判不出 MI。
             bindingLinkMode: b.bindingLinkMode ?? null,
             ...declaredFilterFkFields(b),
+            ...declaredFkFillSources(b),
             fieldDefinitions: b.fieldDefinitions ?? null,
             tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
             formFields: subFormDesign.formFields,

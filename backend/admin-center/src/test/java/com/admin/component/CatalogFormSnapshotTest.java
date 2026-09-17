@@ -51,6 +51,29 @@ class CatalogFormSnapshotTest {
     }
 
     @Test
+    void fullFormWithFkFillSourcesKeepsPortableSources() {
+        String json = """
+                {"formName":"Task","formType":"TASK","configJson":{},
+                 "tableBindings":[
+                   {"bindingId":20,"bindingType":"SUB","tableName":"p3_mi_file",
+                    "fkFillSources":[
+                      {"fieldName":"party_id","kind":"ANCESTOR",
+                       "ancestorTableName":"p3_mi_party","ancestorFilterFkFieldName":"case_id"}
+                    ]}
+                 ]}
+                """;
+        CatalogFormSnapshot.Payload payload = CatalogFormSnapshot.unwrap(objectMapper, json);
+        assertThat(payload.tableBindings()).hasSize(1);
+        assertThat(payload.tableBindings().get(0).getFkFillSources()).hasSize(1);
+        assertThat(payload.tableBindings().get(0).getFkFillSources().get(0).getFieldName())
+                .isEqualTo("party_id");
+        assertThat(payload.tableBindings().get(0).getFkFillSources().get(0).getKind())
+                .isEqualTo("ANCESTOR");
+        assertThat(payload.tableBindings().get(0).getFkFillSources().get(0).getAncestorTableName())
+                .isEqualTo("p3_mi_party");
+    }
+
+    @Test
     void emptyTableBindingsArrayStillFreezes() {
         String json = """
                 {"formName":"Start","formType":"PROCESS","configJson":{},"tableBindings":[]}

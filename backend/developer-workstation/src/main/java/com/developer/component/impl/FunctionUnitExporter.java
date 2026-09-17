@@ -36,6 +36,7 @@ import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.XmlEncodingUtil;
+import com.developer.util.FkFillSourcesSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -605,7 +606,7 @@ public class FunctionUnitExporter {
         map.put("configJson", form.getConfigJson());
         List<FormTableBinding> bindings = form.getTableBindings() == null ? List.of() : form.getTableBindings();
         map.put("tableBindings", bindings.stream()
-                .map(binding -> serializeFormTableBinding(binding, tableIdToName))
+                .map(binding -> serializeFormTableBinding(binding, bindings, tableIdToName))
                 .toList());
         if (stageBindings != null && !stageBindings.isEmpty()) {
             map.put("stageBindings", stageBindings.stream().map(this::serializeFormStageBinding).toList());
@@ -614,7 +615,9 @@ public class FunctionUnitExporter {
     }
 
     private Map<String, Object> serializeFormTableBinding(
-            FormTableBinding binding, Map<Long, String> tableIdToName) {
+            FormTableBinding binding,
+            List<FormTableBinding> formBindings,
+            Map<Long, String> tableIdToName) {
         Map<String, Object> map = new HashMap<>();
         map.put("bindingId", binding.getId());
         map.put("bindingType", binding.getBindingType().name());
@@ -647,6 +650,11 @@ public class FunctionUnitExporter {
                     map.put("filterFkRefTableName", refTableName);
                 }
             }
+        }
+        List<Map<String, Object>> fillSources = FkFillSourcesSupport.toPortable(
+                binding, formBindings, tableIdToName);
+        if (!fillSources.isEmpty()) {
+            map.put("fkFillSources", fillSources);
         }
         if (binding.getSubMode() != null) {
             map.put("subMode", binding.getSubMode().name());
