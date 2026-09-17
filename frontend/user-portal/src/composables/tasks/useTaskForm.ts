@@ -383,8 +383,8 @@ export function useTaskForm(options: {
       },
       subTableData: subTablePayload.subTableData,
       baselineValues: taskFormDTO.value?.fieldValues || {},
-      // 传输元数据，**刻意放在 formData 之外**：approve/complete 链路会把 formData 整体
-      // 灌进流程变量（Object.assign(variables, formData)），放进去就会被当成业务变量持久化。
+      // 传输元数据，**刻意放在 formData 之外**：approve/complete 会把 formData 灌进
+      // 流程变量。Complete 请求在顶层携带这两项，由 `SubTableWriteIsolation` 消费。
       emptiedSubTableKeys: subTablePayload.emptiedSubTableKeys,
       subTableBindingScopes: subTablePayload.subTableBindingScopes,
     }

@@ -4053,10 +4053,11 @@
     which origin already used for To Do Current Assignee.
 
 - id: "1636"
-  status: open
+  status: fixed
+  fixed_at: "2026-09-17"
   severity: major
   category: bug
-  summary: "MI binding 写侧 P3 进行中：merger 已按 scopes 分类，尚无 MI Demo 端到端"
+  summary: "MI 同表双 binding Complete：scopes 分类 + isolation，独立 FU e2e 保住兄弟行"
   file: "frontend/user-portal/src/composables/tasks/miBindingKindFromConfig.ts"
   note: |
     静态分析发现（未运行时复现，需实测确认）。
@@ -4187,8 +4188,21 @@
     的声明 filter 分类 SHARED / PARTICIPANT / MIXED；混合时兄弟参与者 nested
     行留 baseline。无 scopes 仍表级 fail-loud。单测
     `MiSubTableScopeAwareMergeTest` + 既有 merger/Guard 61 绿。
-    未完成：MI Demo 双 binding 端到端、不可变 catalog 包、独立帮助文。
-    #1636 保持 open。
+    P3 第二刀（2026-09-17）：Complete/Approve 与 Save 共用
+    `SubTableWriteIsolation`（MI merger + Guard）。`TaskCompleteRequest`
+    接收 `emptiedSubTableKeys` / `subTableBindingScopes`（不进 formData）。
+    前端 `buildFormPayloadForComplete` 回传 Save envelope；Approve 原
+    `putAll` 不再用 thin stub 盖兄弟行。单测 `SubTableWriteIsolationTest`。
+    P3 MI Complete e2e（2026-09-17）：独立 FU `p3-mi-dual-binding-test`
+    （种子 `deploy/init-scripts/22-dual-binding-mi/`，表 `p3_mi_file` 两条 SUB，
+    不改 Demo `attachment`）。Alice UI Complete 带 scopes：case-file binding
+    认领三行、party-file binding 只认领 alice-doc；HTTP 200；Bob 待办
+    `__subTables__.dw:p3_mi_file` 仍含 bob-doc。脚本
+    `frontend/scripts/verify-p3-mi-dual-binding-complete.mjs`。
+    Release 节点 catalog Task Form 查找 formName=null（PROCESS 表单绑在
+    Approve 节点上），e2e 用 start payload API Approve 作注入 setup；
+    隔离验收走 MI 子任务 UI Complete。不可变 catalog 包与帮助文另做。
+    #1636 关闭。
     本地双 binding 样本（2026-09-16）：种子 `deploy/init-scripts/21-dual-binding-p0/`
     建 FU `p0-dual-binding-test`（现 dw id=50009），独立表名 `p0_dual_file` 两条 SUB
     （filter `case_id`→MAIN vs `party_id`→party），不改 Demo `attachment`。

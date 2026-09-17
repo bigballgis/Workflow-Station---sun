@@ -194,6 +194,20 @@ public class TaskFormComponent {
         return g;
     }
 
+    @Lazy
+    @Autowired
+    private SubTableWriteIsolation subTableWriteIsolation;
+
+    private SubTableWriteIsolation subTableWriteIsolation() {
+        SubTableWriteIsolation isolation = subTableWriteIsolation;
+        if (isolation == null) {
+            isolation = new SubTableWriteIsolation(
+                    miSubTaskSubTableRowMerger(), subTableBindingScopeGuard());
+            subTableWriteIsolation = isolation;
+        }
+        return isolation;
+    }
+
     private void recalculateComputedFields(String functionUnitCode, Map<String, Object> variables) {
         ComputedFieldRecalculator recalculator = computedFieldRecalculator;
         if (recalculator == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
@@ -303,19 +317,6 @@ public class TaskFormComponent {
      * approve/complete path copies {@code formData} wholesale into process variables, so a marker
      * carried there would be persisted as a business variable.
      */
-    private static Set<String> normalizeEmptiedSubTableKeys(List<String> declared) {
-        if (declared == null || declared.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> keys = new LinkedHashSet<>();
-        for (String k : declared) {
-            if (k != null && !k.trim().isEmpty()) {
-                keys.add(k.trim());
-            }
-        }
-        return keys;
-    }
-
     /**
      * Overlays THIS task's own MI loop variable ({@code _currentItem}) from the engine.
      *
@@ -688,25 +689,15 @@ public class TaskFormComponent {
         AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();
         AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
 
-        // MI (multi-instance) sub-task detection: presence of the BPMN _currentItem/currentItem
-        // loop variable in the submitted form data means this task owns exactly one row of a
-        // shared __subTables__ collection. Resolved once, outside the transaction, since it only
-        // depends on the submitted payload — not on the process instance's persisted state.
-        // An MI submission whose row key can't be resolved fails outright, before any DB access,
-        // rather than silently falling back to a whole-array replace that could overwrite other
-        // participants' data.
-        Map<String, Object> resolvedMiCurrentRowKey = null;
+        // Fail loud before the write txn when this is an MI submit whose row key cannot be
+        // resolved — same contract as SubTableWriteIsolation, so a broken loop variable
+        // never opens a write that could overwrite sibling rows.
         if (editableData.containsKey("__subTables__") && miSubTaskSubTableRowMerger().isMiSubTaskSubmission(formData)) {
-            resolvedMiCurrentRowKey = miSubTaskSubTableRowMerger().resolveCurrentItemRowKey(formData);
-            miSubTaskSubTableRowMerger().requireResolvedRowKey(resolvedMiCurrentRowKey);
+            miSubTaskSubTableRowMerger().requireResolvedRowKey(
+                    miSubTaskSubTableRowMerger().resolveCurrentItemRowKey(formData));
         }
-        final Map<String, Object> miCurrentRowKey = resolvedMiCurrentRowKey;
-        // Which participant-scoped sub-table slices the frontend deliberately emptied (the user
-        // deleted the last row they owned). An empty slice alone cannot say this — see the
-        // empty-slice branch in MiSubTaskSubTableRowMerger — so the intent is declared explicitly.
-        final Set<String> miEmptiedSubTableKeys = normalizeEmptiedSubTableKeys(emptiedSubTableKeys);
-        final List<SubTableBindingScope> bindingScopes =
-                subTableBindingScopes == null ? List.of() : List.copyOf(subTableBindingScopes);
+        final List<String> emptiedKeys = emptiedSubTableKeys;
+        final List<SubTableBindingScope> bindingScopes = subTableBindingScopes;
 
         taskFormWriteTx().executeWithoutResult(status -> {
             ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
@@ -739,24 +730,11 @@ public class TaskFormComponent {
             inbound.remove("_currentItem");
             inbound.remove("currentItem");
 
-            if (miCurrentRowKey != null) {
-                // Row-level isolation: merge only this MI sub-task's own row into whatever is
-                // already persisted for every __subTables__ alias key, so another participant's
-                // sub-task saving concurrently (or earlier) never gets its data overwritten by
-                // this submission's necessarily-thin view of sibling rows.
-                @SuppressWarnings("unchecked")
-                Map<String, Object> submittedSubTables = (Map<String, Object>) inbound.get("__subTables__");
-                @SuppressWarnings("unchecked")
-                Map<String, Object> baselineSubTables = (Map<String, Object>) currentVariables.get("__subTables__");
-                inbound.put("__subTables__",
-                        miSubTaskSubTableRowMerger().mergeCurrentRowOnly(
-                                submittedSubTables, baselineSubTables, miCurrentRowKey,
-                                miEmptiedSubTableKeys, bindingScopes,
-                                processInstance.getFunctionUnitCode()));
-            }
-
-            applyBindingScopes(bindingScopes, processInstance.getFunctionUnitCode(), formData,
-                    inbound, currentVariables);
+            // Row-level isolation + binding Guard — same helper as Task Complete so a thin
+            // MI payload cannot overwrite sibling rows on either writer.
+            subTableWriteIsolation().apply(new SubTableWriteIsolation.Request(
+                    formData, inbound, currentVariables, emptiedKeys, bindingScopes,
+                    processInstance.getFunctionUnitCode()));
 
             updatedVariables.putAll(inbound);
 
@@ -866,25 +844,6 @@ public class TaskFormComponent {
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void applyBindingScopes(List<SubTableBindingScope> scopes, String functionUnitCode,
-                                    Map<String, Object> formData, Map<String, Object> inbound,
-                                    Map<String, Object> currentVariables) {
-        if (scopes == null || scopes.isEmpty()) {
-            return;
-        }
-        Object submittedRaw = inbound.get("__subTables__");
-        if (!(submittedRaw instanceof Map<?, ?>)) {
-            return;
-        }
-        Map<String, Object> submitted = (Map<String, Object>) submittedRaw;
-        Object baselineRaw = currentVariables.get("__subTables__");
-        Map<String, Object> baseline = baselineRaw instanceof Map<?, ?>
-                ? (Map<String, Object>) baselineRaw : Map.of();
-        subTableBindingScopeGuard().assertAndApply(scopes, functionUnitCode, formData, submitted, baseline);
-        inbound.put("__subTables__", submitted);
     }
 
     /**

@@ -145,6 +145,15 @@ export interface TaskCompleteRequest {
   variables?: Record<string, any>
   targetUserId?: string
   returnActivityId?: string
+  /** Transport metadata — not a form field. Same as Task Form submit. */
+  emptiedSubTableKeys?: string[]
+  /** Per-binding write claims. Transport metadata — not a form field. */
+  subTableBindingScopes?: Array<{
+    bindingId: string
+    storeKey: string
+    rowKeys: Array<Record<string, unknown>>
+    emptied: boolean
+  }>
 }
 
 /** Historic user-task node that the current task may be returned to (engine uses taskId = activityId). */

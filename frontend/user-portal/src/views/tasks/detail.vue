@@ -836,7 +836,7 @@ const taskActions = useTaskActions({
     if (isMiSubTaskMode.value) {
       protectMainRecordScalarsInSubmitPayload(payload)
     }
-    return payload.formData
+    return payload
   },
 })
 const {

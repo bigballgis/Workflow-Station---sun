@@ -7,7 +7,7 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **19** | `index.yaml` |
+| 🔓 Open | **18** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1635 等） |
 
@@ -31,7 +31,6 @@
 | 1540 | minor | quality | Views CSV export：FE 注释称不分页但 body 仍带 size；BE 用 maxRows 覆盖 — 契约需澄清 |
 | 1616 | major | bug | Meeting Assign Participants：引擎 SubTableDataInjector 查物理表 participants.main_record_id |
 | 1617 | major | bug | Showcase Submit Application：部署缺少 DMN showcase_amount_tier |
-| 1636 | major | bug | MI binding 写侧 P3 进行中：merger 已接收 scopes（混合 MAIN+nested 留兄弟行）；尚无 MI Demo 端到端 |
 | 1637 | major | bug | FormConfigJsonTableProvisioner 建子表时 FK 列标 `isForeignKey=true` 但不写 `ref_table_id`，运行时消费者（按 ref_table_id 关联）读不到目标 |
 | 1638 | minor | quality | developer-workstation 基线红：MemberControllerTest 15 个 403、AuditorReadOnlyControllerContractTest 1 个 upload 端点缺 `@RequireDeveloperPermission`（已在 HEAD worktree 证实非新引入） |
 

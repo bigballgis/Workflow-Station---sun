@@ -7,7 +7,7 @@ import {
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { completeTask, delegateTask, transferTask, urgeTask, type TaskActionInfo } from '@/api/task'
+import { completeTask, delegateTask, transferTask, urgeTask, type TaskActionInfo, type TaskCompleteRequest } from '@/api/task'
 import {
   actionRequiresComment,
   tryParseActionConfigJson,
@@ -23,6 +23,28 @@ import {
 } from '@/utils/miAssignmentConfig'
 import { ensureSubTableMapIdentities } from '@/utils/subTableRowIdentity'
 import { warnIfUploadsBlocking } from '@platform-shared/upload/uploadSubmitGate'
+function unwrapCompleteFormPayload(built: Record<string, any>): {
+  formData: Record<string, any>
+  emptiedSubTableKeys?: string[]
+  subTableBindingScopes?: TaskCompleteRequest['subTableBindingScopes']
+} {
+  if (
+    built != null
+    && typeof built === 'object'
+    && 'formData' in built
+    && 'emptiedSubTableKeys' in built
+    && built.formData != null
+    && typeof built.formData === 'object'
+    && !Array.isArray(built.formData)
+  ) {
+    return {
+      formData: built.formData as Record<string, any>,
+      emptiedSubTableKeys: built.emptiedSubTableKeys,
+      subTableBindingScopes: built.subTableBindingScopes,
+    }
+  }
+  return { formData: built }
+}
 function resolveProcessTaskId(source: MaybeRef<string>): string {
   const v = unref(source)
   return typeof v === 'string' ? v.trim() : ''
@@ -279,9 +301,11 @@ export function useTaskActions(options: {
       if (options.approveForm.comment) {
         variables.approval_comment = options.approveForm.comment
       }
-      const built = options.buildFormPayloadForComplete
+      const rawBuilt = options.buildFormPayloadForComplete
         ? options.buildFormPayloadForComplete()
         : buildLegacyCompleteFormData()
+      const { formData: built, emptiedSubTableKeys, subTableBindingScopes } =
+        unwrapCompleteFormPayload(rawBuilt)
       const engineFormData: Record<string, any> = { ...built }
       engineFormData.__subTables__ = canonicalizeSubTablesForSubmit(
         (built.__subTables__ as Record<string, any>) || {},
@@ -299,7 +323,9 @@ export function useTaskActions(options: {
         action: options.currentApproveAction.value,
         comment: options.approveForm.comment,
         variables,
-        formData: submittedFormData
+        formData: submittedFormData,
+        emptiedSubTableKeys,
+        subTableBindingScopes,
       })
       ElMessage.success(t('task.operationSuccess'))
       options.approveDialogVisible.value = false
