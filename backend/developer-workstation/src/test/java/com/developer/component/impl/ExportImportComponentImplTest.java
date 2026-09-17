@@ -522,6 +522,7 @@ class ExportImportComponentImplTest {
      * means nothing in the target environment. Import must resolve that name against the fields it
      * just wrote and persist the local id — dropping it would leave the binding relying on the
      * table-level FK scan, which only has one answer while a table declares one key.
+     * Portable {@code fkFillSources} must likewise resolve {@code fieldName} to the local field id.
      */
     @Test
     void importFunctionUnit_resolvesFilterFkFieldNameToLocalFieldId() throws Exception {
@@ -601,6 +602,7 @@ class ExportImportComponentImplTest {
                       "tableName": "Main",
                       "foreignKeyField": "main_id",
                       "filterFkFieldName": "main_id",
+                      "fkFillSources": [{"fieldName": "main_id", "kind": "PRIMARY"}],
                       "sortOrder": 1,
                       "subMode": "FULL"
                     }
@@ -630,11 +632,18 @@ class ExportImportComponentImplTest {
         org.mockito.ArgumentCaptor<com.developer.entity.FormTableBinding> bindingCaptor =
                 org.mockito.ArgumentCaptor.forClass(com.developer.entity.FormTableBinding.class);
         verify(formTableBindingRepository, atLeastOnce()).save(bindingCaptor.capture());
-        assertEquals(777L, bindingCaptor.getAllValues().stream()
+        var imported = bindingCaptor.getAllValues().stream()
                 .filter(b -> com.developer.enums.BindingType.SUB == b.getBindingType())
+                .toList();
+        assertFalse(imported.isEmpty());
+        assertEquals(777L, imported.get(0).getFilterFkFieldId());
+        var withFill = imported.stream()
+                .filter(b -> b.getFkFillSources() != null && !b.getFkFillSources().isEmpty())
                 .findFirst()
-                .orElseThrow()
-                .getFilterFkFieldId());
+                .orElseThrow();
+        assertEquals(1, withFill.getFkFillSources().size());
+        assertEquals(777L, withFill.getFkFillSources().get(0).getFieldId());
+        assertEquals("PRIMARY", withFill.getFkFillSources().get(0).getKind());
     }
 
     private static byte[] zipSingleEntry(String entryName, String utf8Content) throws Exception {
