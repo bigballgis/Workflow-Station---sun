@@ -566,4 +566,20 @@ describe('dual-binding FK parent context', () => {
     expect(allocate.mock.calls.every(c => c[0].tableId !== PARTY)).toBe(true)
     expect(ensured.rowAddContext.ancestorRowsByTableId?.[PARTY]).toBeUndefined()
   })
+
+  it('does not stamp a party FK when two distinct party ancestors are in context', () => {
+    const ctx = buildRowAddContext(
+      { id: 'Case-1' },
+      [{ tableId: MAIN, bindingType: 'PRIMARY' }],
+      { id: 'Party-A' },
+      PARTY,
+    )
+    ctx.contextFrames = [
+      ...(ctx.contextFrames ?? []),
+      { tableId: PARTY, row: { id: 'Party-B' }, role: 'FILTER_SIBLING' },
+    ]
+    const row = applyFkToInitialRow({}, fileFks, ctx)
+    expect(row.case_id).toBe('Case-1')
+    expect(row.party_id).toBeUndefined()
+  })
 })

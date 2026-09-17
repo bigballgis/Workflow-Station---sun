@@ -16,10 +16,16 @@ import {
   type PkGenerationConfig,
   type RowAddContext,
   applyFkToInitialRow,
+  buildRowAddContext,
   guardBeforeChildRowAdd,
   isFkHidden,
   isFkReadonly,
+  hasAmbiguousAncestorTable,
+  replaceAncestorRow,
+  uniqueAncestorRow,
 } from './tableFkRuntime'
+
+export { buildRowAddContext }
 
 export interface BindingFieldDefinition {
   fieldName: string
@@ -66,24 +72,6 @@ export function filterStructuralFkMetasForBinding(
   const legacy = options.bindingForeignKeyField?.trim()
   if (!legacy) return fkMetas
   return fkMetas.filter(m => m.fieldName !== legacy)
-}
-
-export function buildRowAddContext(
-  primaryFormData: Record<string, unknown>,
-  subTableBindings?: Array<{ tableId?: number | null; bindingType?: string }> | null,
-  parentRow?: Record<string, unknown> | null,
-  parentTableId?: number | null,
-): RowAddContext {
-  const ancestorRowsByTableId: Record<number, Record<string, unknown>> = {}
-  for (const b of subTableBindings ?? []) {
-    if (b.tableId != null && b.bindingType === 'PRIMARY') {
-      ancestorRowsByTableId[Number(b.tableId)] = primaryFormData
-    }
-  }
-  if (parentRow && parentTableId != null) {
-    ancestorRowsByTableId[Number(parentTableId)] = parentRow
-  }
-  return { primaryFormData, ancestorRowsByTableId }
 }
 
 export function applyFkPresentationToDialogColumns(
@@ -187,8 +175,12 @@ export async function ensureParentRowsForChildAdd(options: {
   functionUnitId?: string
   primaryTableId?: number | null
 }): Promise<{ rowAddContext: RowAddContext; primaryFormDataPatch?: Record<string, unknown> }> {
-  let primaryFormData = { ...options.rowAddContext.primaryFormData }
-  let ancestorRowsByTableId = { ...(options.rowAddContext.ancestorRowsByTableId ?? {}) }
+  let ctx: RowAddContext = {
+    ...options.rowAddContext,
+    primaryFormData: { ...options.rowAddContext.primaryFormData },
+    ancestorRowsByTableId: { ...(options.rowAddContext.ancestorRowsByTableId ?? {}) },
+    contextFrames: [...(options.rowAddContext.contextFrames ?? [])],
+  }
   let primaryFormDataPatch: Record<string, unknown> | undefined
 
   const refTableIds = [
@@ -200,16 +192,17 @@ export async function ensureParentRowsForChildAdd(options: {
   ]
 
   for (const refTableId of refTableIds) {
+    const unique = uniqueAncestorRow(ctx, refTableId)
+    const isPrimary = options.primaryTableId != null && refTableId === Number(options.primaryTableId)
+    if (hasAmbiguousAncestorTable(ctx, refTableId)) continue
+    if (unique == null && !isPrimary) continue
     const tableMeta = options.parentTablesById[refTableId]
     if (!tableMeta?.fieldDefinitions?.length) continue
 
     const fkMeta = options.fkMetas.find(m => Number(m.refTableId) === refTableId)
     const pkFields = fkMeta?.refPrimaryKeyFields || []
 
-    const existingRow =
-      ancestorRowsByTableId[refTableId] != null
-        ? { ...(ancestorRowsByTableId[refTableId] as Record<string, unknown>) }
-        : { ...primaryFormData }
+    const existingRow = unique != null ? { ...unique } : { ...ctx.primaryFormData }
 
     if (parentRowHasRequiredPk(existingRow, pkFields)) continue
 
@@ -223,15 +216,15 @@ export async function ensureParentRowsForChildAdd(options: {
 
     if (!parentRowHasRequiredPk(nextRow, pkFields)) continue
 
-    ancestorRowsByTableId[refTableId] = nextRow
-    if (options.primaryTableId != null && refTableId === Number(options.primaryTableId)) {
-      primaryFormData = nextRow
+    ctx = replaceAncestorRow(ctx, refTableId, nextRow)
+    if (isPrimary) {
+      ctx = { ...ctx, primaryFormData: nextRow }
       primaryFormDataPatch = { ...nextRow }
     }
   }
 
   return {
-    rowAddContext: { primaryFormData, ancestorRowsByTableId },
+    rowAddContext: ctx,
     ...(primaryFormDataPatch ? { primaryFormDataPatch } : {}),
   }
 }

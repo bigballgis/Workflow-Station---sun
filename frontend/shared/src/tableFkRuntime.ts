@@ -6,14 +6,34 @@
  * shims at src/utils/tableFkRuntime.ts so existing import paths stay stable.
  * Backend row-key semantics live in platform-common SubTableRowKeySupport.
  */
+export type {
+  BindingContextInput,
+  ContextFrame,
+  ContextFrameRole,
+  RowAddContext,
+} from './tableFkContext'
+export {
+  ancestorMapFromUniqueFrames,
+  buildRowAddContext,
+  contextHasScopedAncestors,
+  framesMatchingTable,
+  hasAmbiguousAncestorTable,
+  replaceAncestorRow,
+  sameAncestorRow,
+  uniqueAncestorRow,
+} from './tableFkContext'
 
-export interface FieldFkMeta {
-  fieldName: string
-  isForeignKey?: boolean
-  refTableId?: number
-  refPrimaryKeyFields?: string[]
-  fkDisplayMode?: 'readonly' | 'hidden'
-}
+import type { FieldFkMeta } from './tableFkMeta'
+import {
+  contextHasScopedAncestors,
+  framesMatchingTable,
+  rowFieldValue,
+  uniqueAncestorRow,
+  type RowAddContext,
+} from './tableFkContext'
+
+export type { FieldFkMeta } from './tableFkMeta'
+export { isFkHidden, isFkReadonly } from './tableFkMeta'
 
 export interface PkGenerationConfig {
   strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence' | 'dailyDateSequence' | 'monthlyDateSequence' | 'customFormat' | 'datePrefixedSequence'
@@ -26,22 +46,7 @@ export interface PkGenerationConfig {
   format?: string
 }
 
-export interface RowAddContext {
-  primaryFormData: Record<string, unknown>
-  ancestorRowsByTableId?: Record<number, Record<string, unknown>>
-}
-
 const UNIT_SEP = '\u001f'
-
-function rowVal(row: Record<string, unknown>, key: string): unknown {
-  if (!row || !key) return undefined
-  if (key in row) return row[key]
-  const lower = key.toLowerCase()
-  for (const k of Object.keys(row)) {
-    if (k.toLowerCase() === lower) return row[k]
-  }
-  return undefined
-}
 
 export function encodeCompositePrimaryKey(
   refPkFields: string[],
@@ -50,11 +55,11 @@ export function encodeCompositePrimaryKey(
   if (!refPkFields?.length || !parentRow) return null
   const ordered = [...refPkFields].sort()
   if (ordered.length === 1) {
-    const v = rowVal(parentRow, ordered[0])
+    const v = rowFieldValue(parentRow, ordered[0])
     return v != null ? String(v) : null
   }
   const parts = ordered.map(k => {
-    const v = rowVal(parentRow, k)
+    const v = rowFieldValue(parentRow, k)
     return v != null ? `${k}=${String(v)}` : null
   }).filter(Boolean)
   return parts.length === ordered.length ? parts.join(UNIT_SEP) : null
@@ -64,22 +69,10 @@ function ancestorRowForFk(
   meta: FieldFkMeta,
   ctx: RowAddContext,
 ): Record<string, unknown> | null {
-  const ancestors = ctx.ancestorRowsByTableId
-  if (ancestors && Object.keys(ancestors).length > 0) {
-    if (!ancestorHasTable(ancestors, meta.refTableId)) return null
-    const hit = ancestors[meta.refTableId as number]
-    return hit && typeof hit === 'object' && !Array.isArray(hit) ? hit : null
-  }
+  const unique = uniqueAncestorRow(ctx, meta.refTableId)
+  if (unique) return unique
+  if (contextHasScopedAncestors(ctx)) return null
   return ctx.primaryFormData ?? null
-}
-
-function ancestorHasTable(
-  ancestors: Record<number, Record<string, unknown>>,
-  refTableId: number | undefined,
-): boolean {
-  if (refTableId == null) return false
-  return Object.prototype.hasOwnProperty.call(ancestors, refTableId)
-    || Object.prototype.hasOwnProperty.call(ancestors, String(refTableId))
 }
 
 export function resolveForeignKeyValues(
@@ -104,11 +97,13 @@ export function guardBeforeChildRowAdd(
 ): string[] {
   const missing: string[] = []
   if (!fkMetas?.length) return missing
-  const ancestors = ctx.ancestorRowsByTableId
-  const scoped = ancestors != null && Object.keys(ancestors).length > 0
+  const scoped = contextHasScopedAncestors(ctx)
   for (const meta of fkMetas) {
     if (!meta?.isForeignKey || !meta.refTableId) continue
-    if (scoped && !ancestorHasTable(ancestors, meta.refTableId)) continue
+    if (scoped && uniqueAncestorRow(ctx, meta.refTableId) == null
+      && framesMatchingTable(ctx, Number(meta.refTableId)).length === 0) {
+      continue
+    }
     const parentRow = ancestorRowForFk(meta, ctx)
     if (!parentRow || Object.keys(parentRow).length === 0) {
       missing.push(meta.fieldName)
@@ -116,7 +111,7 @@ export function guardBeforeChildRowAdd(
     }
     const pkFields = meta.refPrimaryKeyFields || []
     for (const pk of pkFields) {
-      const v = rowVal(parentRow, pk)
+      const v = rowFieldValue(parentRow, pk)
       if (v == null || String(v).trim() === '') {
         missing.push(meta.fieldName)
         break
@@ -133,12 +128,4 @@ export function applyFkToInitialRow(
 ): Record<string, unknown> {
   const fkValues = resolveForeignKeyValues(fkMetas, ctx)
   return { ...row, ...fkValues }
-}
-
-export function isFkReadonly(meta: FieldFkMeta): boolean {
-  return !!meta.isForeignKey && (meta.fkDisplayMode == null || meta.fkDisplayMode === 'readonly')
-}
-
-export function isFkHidden(meta: FieldFkMeta): boolean {
-  return !!meta.isForeignKey && meta.fkDisplayMode === 'hidden'
 }
