@@ -1821,7 +1821,7 @@ export default {
     noRelationTableAvailable: '目前功能單元和管理中心都沒有可用的關聯表。',
     selectBindingTypeFirst: '請先選擇綁定類型。',
     primaryBindingExists: '目前表單已經存在一條主表綁定，每個表單只能有一張主表。',
-    bindingExists: '這張表已經綁定到目前表單。',
+    bindingExists: '該表單上已存在衝突的表繫結。同一張子表的多條繫結必須使用不同的已宣告外鍵。',
     primaryRequiresMainTable: '主表綁定必須選擇 MAIN 類型的實體表。',
     subBindingRequiresSubTable: '子表綁定必須選擇 SUB 類型的實體表。',
     invalidForeignKey: '選擇的外鍵欄位在所選表中不存在。',
@@ -1832,10 +1832,14 @@ export default {
     linkModeTip: '結構外鍵依表設計自動回填主表鍵；MI 參與者行用於多實例子表列關聯（如 row_id）。',
     structuralFkFields: '結構外鍵欄位',
     structuralFkTip: '在表設計器中設定外鍵，執行時將自動回填。',
+    structuralFkFilterField: '過濾外鍵',
+    structuralFkFilterTip: '同一表單上同一張表的每條繫結必須使用不同的已宣告外鍵。',
+    structuralFkFilterRequired: '請選擇本條繫結依哪個已宣告外鍵過濾。',
     noStructuralFkFields: '此表尚未設定結構外鍵欄位。',
     structuralFkRequired: '請先在表設計器設定外鍵欄位，或選擇 MI 參與者行模式。',
     participantRowField: '參與者行欄位',
-    miParticipantRowTip: '識別 MI 參與者行的欄位（通常為子表主鍵，如 row_id）。'
+    miParticipantRowTip: '識別 MI 參與者行的欄位（通常為子表主鍵，如 row_id）。',
+    guideLinkAria: '開啟子表繫結說明'
   },
   subTable: {
     defaultTitle: '資料',

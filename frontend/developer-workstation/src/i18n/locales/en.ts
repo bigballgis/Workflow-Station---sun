@@ -1826,7 +1826,7 @@ export default {
     noRelationTableAvailable: 'No RELATION table available in this function unit or admin center.',
     selectBindingTypeFirst: 'Select a binding type first.',
     primaryBindingExists: 'A primary binding already exists for this form. Each form can only have one primary table.',
-    bindingExists: 'This table is already bound to the form.',
+    bindingExists: 'A conflicting table binding already exists. Sub-table bindings on the same table must use different declared foreign keys.',
     primaryRequiresMainTable: 'Primary binding must point to a MAIN physical table.',
     subBindingRequiresSubTable: 'Sub binding must point to a SUB physical table.',
     invalidForeignKey: 'The selected foreign key field does not exist in the chosen table.',
@@ -1837,10 +1837,14 @@ export default {
     linkModeTip: 'Structural FK auto-fills parent keys from table design; MI participant row links sub-table rows to multi-instance elements (e.g. row_id).',
     structuralFkFields: 'Structural FK Fields',
     structuralFkTip: 'Configure foreign keys in Table Designer; they are auto-filled at runtime.',
+    structuralFkFilterField: 'Filter foreign key',
+    structuralFkFilterTip: 'Each binding of the same table on this form must use a different declared foreign key.',
+    structuralFkFilterRequired: 'Select which declared foreign key this binding filters by.',
     noStructuralFkFields: 'No structural FK fields on this table yet.',
     structuralFkRequired: 'Configure at least one FK field in Table Designer, or choose MI participant row mode.',
     participantRowField: 'Participant Row Field',
-    miParticipantRowTip: 'Field that identifies the MI participant row (usually the sub-table primary key, e.g. row_id).'
+    miParticipantRowTip: 'Field that identifies the MI participant row (usually the sub-table primary key, e.g. row_id).',
+    guideLinkAria: 'Open sub-table binding guidelines'
   },
   user: {
     username: 'Username',

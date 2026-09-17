@@ -4161,13 +4161,28 @@
     Task Form 提交已另带 `subTableBindingScopes`（bindingId/storeKey/rowKeys/emptied），
     服务端 `SubTableBindingScopeGuard` 按声明 filter FK + `_currentItem` 校验，
     未认领变更 403，scoped 路径 `_wsRowVersion` 冲突 409。单 binding 省略 scopes = V1。
-    merger 仍按表分类；`BINDING_EXISTS` 未开。#1636 保持 open。
+    merger 仍按表分类。#1636 保持 open。
+    P1 设计器唯一性已开（2026-09-16）——同表 SUB 只要 `filterFkFieldId` 不同即可
+    并存；同表 + 同 filter FK（含双方均为 null）仍 `BINDING_EXISTS` HTTP 409。
+    PRIMARY/RELATED 仍一表一条。`FormTableBindingUniquenessGuard` + 设计器
+    `isTableBound` 走未占用声明 FK；结构 FK 为 select（已占用项 disabled）。
+    运行时：`node scripts/verify-p0-dual-binding-fu.mjs` 两条 `p0_dual_file`
+    SUB（50705/50706）+ 同 filter 重复 POST 得 `BINDING_EXISTS`；截图
+    `frontend/developer-workstation/verification-screenshots/2026-09-16_p0-dual-binding-*.png`。
+    未改：Portal hydrate 仍未按 filter 切片（两 widget 都认领两行）；嵌套父行
+    解析属 P2。未开始 P2。
     本地双 binding 样本（2026-09-16）：种子 `deploy/init-scripts/21-dual-binding-p0/`
-    建 FU `p0-dual-binding-test`（id=50008），独立表名 `p0_dual_file` 两条 SUB
+    建 FU `p0-dual-binding-test`（现 dw id=50009），独立表名 `p0_dual_file` 两条 SUB
     （filter `case_id`→MAIN vs `party_id`→party），不改 Demo `attachment`。
-    验证：Guard 8 tests；canonical stamp 4；DW API 两条 binding 50701/50702；
-    截图 Form Design / Manage Table Bindings / Form Preview；Demo `attachment`
-    仍 n_fk=1。未编入 00-init-all，未写入 sys_function_units。
+    BPMN 两步 INITIATOR（Fill 自动办结、Review 留待办）。Catalog 经 DW Deploy
+    `p0-dual-binding-test` 1.0.1。
+    写侧实测：start union-merge 2 行 `dw:p0_dual_file`（无 scopes，设计如此）；
+    Review Save 带 binding 50705+50706 scopes。第一次 Save 被 Guard 403
+    （SUB filter 无 `_currentItem` 当 MI 拒）——PROCESS 表单无当前行；
+    Guard 改为：有 current-item 对象但解析不出仍 403；没有 current-item 则跳过
+    FK 匹配（嵌套父行解析属 P2）。重建 user-portal 后同一脚本 submit HTTP 200。
+    两 widget 仍把同一 store 的两行都认领（hydrate 未按 filter 切片）。
+    种子未编入 00-init-all。
 
 - id: "1637"
   status: open

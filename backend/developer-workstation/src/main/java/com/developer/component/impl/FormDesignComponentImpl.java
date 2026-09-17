@@ -83,6 +83,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final I18nService i18nService;
     private final JdbcTemplate jdbcTemplate;
     private final SubTableViewService subTableViewService;
+    private final FormTableBindingUniquenessGuard formTableBindingUniquenessGuard;
     
     /**
      * Suffix that distinguishes the My Requests row of a scene pair. Form names are unique per
@@ -423,20 +424,6 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (!isRelationTable) {
             table = tableDefinitionRepository.findById(request.getTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
-            
-            // Reject duplicate binding to the same TableDefinition.
-            if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
-                throw new DeveloperBusinessException("BINDING_EXISTS", 
-                        i18nService.getMessage("form.binding_exists"),
-                        i18nService.getMessage("form.no_duplicate_binding"));
-            }
-        } else {
-            // Reject duplicate binding to the same deployed Relation Table.
-            if (formTableBindingRepository.existsByFormIdAndRelationTableId(formId, request.getRelationTableId())) {
-                throw new DeveloperBusinessException("BINDING_EXISTS", 
-                        i18nService.getMessage("form.binding_exists"),
-                        i18nService.getMessage("form.no_duplicate_binding"));
-            }
         }
         
         // PRIMARY binding must be unique per form.
@@ -454,6 +441,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && table != null) {
             validateForeignKeyField(table, request.getForeignKeyField());
         }
+
+        Long resolvedFilterFk = request.getFilterFkFieldId() != null
+                ? request.getFilterFkFieldId()
+                : resolveFilterFkFieldId(table, request.getForeignKeyField());
+        formTableBindingUniquenessGuard.assertCreate(
+                formId, request, isRelationTable, resolvedFilterFk);
         
         // Default binding mode when omitted.
         BindingMode bindingMode = request.getBindingMode();
@@ -483,9 +476,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .foreignKeyField(request.getForeignKeyField())
                 .bindingLinkMode(request.getBindingLinkMode() != null
                         ? request.getBindingLinkMode() : BindingLinkMode.structuralFk)
-                .filterFkFieldId(request.getFilterFkFieldId() != null
-                        ? request.getFilterFkFieldId()
-                        : resolveFilterFkFieldId(table, request.getForeignKeyField()))
+                .filterFkFieldId(resolvedFilterFk)
                 .sortOrder(sortOrder)
                 .build();
 
@@ -559,6 +550,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         Long resolvedFilterFk = request.getFilterFkFieldId() != null
                 ? request.getFilterFkFieldId()
                 : resolveFilterFkFieldId(binding.getTable(), request.getForeignKeyField());
+        Long nextFilterFk = resolvedFilterFk != null ? resolvedFilterFk : binding.getFilterFkFieldId();
+        formTableBindingUniquenessGuard.assertUpdate(binding, request, nextFilterFk);
         if (resolvedFilterFk != null) {
             binding.setFilterFkFieldId(resolvedFilterFk);
         }

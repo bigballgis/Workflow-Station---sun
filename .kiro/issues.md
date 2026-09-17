@@ -31,7 +31,7 @@
 | 1540 | minor | quality | Views CSV export：FE 注释称不分页但 body 仍带 size；BE 用 maxRows 覆盖 — 契约需澄清 |
 | 1616 | major | bug | Meeting Assign Participants：引擎 SubTableDataInjector 查物理表 participants.main_record_id |
 | 1617 | major | bug | Showcase Submit Application：部署缺少 DMN showcase_amount_tier |
-| 1636 | major | bug | MI binding 分类：读侧 Batch 2 已优先 `filterFkRefTableId`（未声明才扫表）；写侧仍 table-keyed `dw:<table_name>`，同表双绑定无法在 submit 上隔离 — 保持 open |
+| 1636 | major | bug | MI binding 分类：读侧已按 `filterFkRefTableId`；写侧 store 仍 table-keyed（Task Save 已带 scopes，Review Save HTTP 200）。P1 设计器唯一性已开：同表 SUB 不同 filter FK 允许，同 filter 仍 BINDING_EXISTS。hydrate 未按 filter 切片 — 保持 open |
 | 1637 | major | bug | FormConfigJsonTableProvisioner 建子表时 FK 列标 `isForeignKey=true` 但不写 `ref_table_id`，运行时消费者（按 ref_table_id 关联）读不到目标 |
 | 1638 | minor | quality | developer-workstation 基线红：MemberControllerTest 15 个 403、AuditorReadOnlyControllerContractTest 1 个 upload 端点缺 `@RequireDeveloperPermission`（已在 HEAD worktree 证实非新引入） |
 

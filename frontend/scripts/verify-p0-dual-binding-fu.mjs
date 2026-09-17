@@ -3,7 +3,8 @@
  * Screenshot the local P0 dual-binding Function Unit in Developer Workstation.
  *
  * Proves Form Design has two subTable widgets on the same physical table
- * (Case files / Party files) without opening BINDING_EXISTS in the designer.
+ * (Case files / Party files). Designer now allows a second SUB binding when the
+ * filter FK differs.
  *
  * Usage (from frontend/):
  *   node scripts/verify-p0-dual-binding-fu.mjs
@@ -16,7 +17,6 @@ import { loginViaDwPassword } from './playwright-login.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ORIGIN = process.env.ORIGIN ?? 'http://localhost:3000'
-const FU_ID = process.env.FU_ID ?? '50008'
 const FU_CODE = process.env.FU_CODE ?? 'p0-dual-binding-test'
 const DATE = new Date().toISOString().slice(0, 10)
 const OUT_DIR = join(__dirname, '..', 'developer-workstation', 'verification-screenshots')
@@ -32,15 +32,26 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1200 } })
   try {
     await loginViaDwPassword(page, { loginOrigin: ORIGIN })
-
-    const detailRes = await page.request.get(`${ORIGIN}/api/v1/function-units/${FU_ID}`)
-    const detailBody = await detailRes.json().catch(() => ({}))
-    const fu = detailBody.data ?? detailBody
+    const fuId = process.env.FU_ID
+    let fu
+    if (fuId) {
+      const detailRes = await page.request.get(`${ORIGIN}/api/v1/function-units/${fuId}`)
+      const detailBody = await detailRes.json().catch(() => ({}))
+      fu = detailBody.data ?? detailBody
+    } else {
+      const listed = await page.request.get(`${ORIGIN}/api/v1/function-units`, {
+        params: { name: 'P0 Dual Binding Test', page: 0, size: 20 },
+      })
+      const listedBody = await listed.json().catch(() => ({}))
+      const data = listedBody.data ?? listedBody
+      const rows = data.content ?? data.records ?? (Array.isArray(data) ? data : [])
+      fu = (Array.isArray(rows) ? rows : []).find((row) => row.code === FU_CODE)
+    }
     if (!fu?.id) {
-      fail(`Function unit ${FU_CODE} id=${FU_ID} not readable via DW API (HTTP ${detailRes.status()})`)
+      fail(`Function unit ${FU_CODE} not readable via DW API`)
     }
     if (fu.code && fu.code !== FU_CODE) {
-      fail(`Expected code ${FU_CODE} at id=${FU_ID}, got ${fu.code}`)
+      fail(`Expected code ${FU_CODE}, got ${fu.code}`)
     }
 
     const formsRes = await page.request.get(`${ORIGIN}/api/v1/function-units/${fu.id}/forms`)
@@ -60,6 +71,26 @@ async function main() {
       fail(`Expected 2 SUB bindings on p0_dual_file, got ${fileBinds.length}`)
     }
     console.log(`API  two p0_dual_file SUB bindings: ${fileBinds.map((b) => b.id).join(', ')}`)
+
+    const dupRes = await page.request.post(
+      `${ORIGIN}/api/v1/function-units/${fu.id}/forms/${form.id}/bindings`,
+      {
+        data: {
+          tableId: fileBinds[0].tableId,
+          bindingType: 'SUB',
+          bindingMode: 'EDITABLE',
+          foreignKeyField: fileBinds[0].foreignKeyField,
+          bindingLinkMode: 'structuralFk',
+          subMode: 'FULL',
+        },
+      },
+    )
+    const dupBody = await dupRes.json().catch(() => ({}))
+    const dupCode = dupBody.code ?? dupBody.error?.code ?? dupBody.errorCode
+    if (dupRes.ok() || dupCode !== 'BINDING_EXISTS') {
+      fail(`duplicate same-filter binding expected BINDING_EXISTS, got HTTP ${dupRes.status()} code=${dupCode} ${JSON.stringify(dupBody).slice(0, 400)}`)
+    }
+    console.log(`API  duplicate same-filter binding rejected (${dupCode})`)
 
     await page.goto(`${ORIGIN}/dev/function-units/${fu.id}`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2500)
@@ -91,6 +122,16 @@ async function main() {
       const bindPath = join(OUT_DIR, `${DATE}_p0-dual-binding-table-bindings.png`)
       await page.screenshot({ path: bindPath, fullPage: true })
       console.log(`shot: ${bindPath}`)
+      const addBtn = page.getByRole('button', { name: /Add Binding|添加绑定|新增繫結|新增绑定/ }).first()
+      if ((await addBtn.count()) > 0) {
+        await addBtn.click()
+        await page.waitForTimeout(1000)
+        const addPath = join(OUT_DIR, `${DATE}_p0-dual-binding-add-binding.png`)
+        await page.screenshot({ path: addPath, fullPage: true })
+        console.log(`shot: ${addPath}`)
+        await page.keyboard.press('Escape')
+        await page.waitForTimeout(300)
+      }
       await page.keyboard.press('Escape')
       await page.waitForTimeout(400)
     }

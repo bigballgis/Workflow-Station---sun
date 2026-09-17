@@ -136,6 +136,41 @@ class SubTableBindingScopeGuardTest {
     }
 
     @Test
+    void processFormSubFilterDoesNotRequireCurrentItem() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(
+                fileRow("X", "C1", null),
+                fileRow("Y", "C1", "P-A"))));
+        Map<String, Object> baseline = Map.of("dw:p0_dual_file", List.of(
+                fileRow("X", "C1", null),
+                fileRow("Y", "C1", "P-A")));
+        SubTableBindingScope caseScope = scope("101", "dw:p0_dual_file", List.of(Map.of("id", "X")), false);
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Y")), false);
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(caseScope, partyScope), FU, Map.of(), submitted, baseline);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) submitted.get("dw:p0_dual_file");
+        assertThat(rows).extracting(r -> r.get("id")).containsExactly("X", "Y");
+        assertThat(rows).extracting(r -> r.get("_wsRowVersion")).containsExactly(1, 1);
+    }
+
+    @Test
+    void unreadableCurrentItemStillFailsLoud() {
+        JdbcTemplate jdbc = stubBinding(202L, "attachment", "participant_id", "SUB", List.of("id"));
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:attachment", List.of(row("Y", "P-A")));
+        SubTableBindingScope scope = scope("202", "dw:attachment", List.of(Map.of("id", "Y")), false);
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, Map.of("_currentItem", Map.of()), submitted, Map.of()))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("current row context");
+    }
+
+    @Test
     void partyBindingCannotClaimACaseFileRowOnTheSharedStore() {
         JdbcTemplate jdbc = stubTwoBindings();
         Map<String, Object> submitted = new HashMap<>();

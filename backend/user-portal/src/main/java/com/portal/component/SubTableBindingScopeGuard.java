@@ -182,11 +182,15 @@ class SubTableBindingScopeGuard {
             return null;
         }
         Object fromCurrent = singleCurrentItemValue(formData);
-        if (fromCurrent == null) {
+        if (fromCurrent != null) {
+            return fromCurrent;
+        }
+        if (hasCurrentItemObject(formData)) {
             throw new PortalException("403",
                     "Cannot authorize a binding-scoped write without the current row context");
         }
-        return fromCurrent;
+        // PROCESS form: no nested current row. Parent-row resolution is P2.
+        return null;
     }
 
     private void assertRowMatchesFilter(BindingMeta meta, Object expected, Map<String, Object> row) {
@@ -359,6 +363,17 @@ class SubTableBindingScopeGuard {
         Map<String, Object> copy = new LinkedHashMap<>(row);
         copy.remove(ROW_VERSION_FIELD);
         return copy;
+    }
+
+    private static boolean hasCurrentItemObject(Map<String, Object> formData) {
+        if (formData == null) {
+            return false;
+        }
+        Object raw = formData.get("_currentItem");
+        if (!(raw instanceof Map)) {
+            raw = formData.get("currentItem");
+        }
+        return raw instanceof Map;
     }
 
     @SuppressWarnings("unchecked")

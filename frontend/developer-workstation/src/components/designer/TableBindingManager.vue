@@ -12,7 +12,14 @@
     <!-- Binding list -->
     <div class="binding-list">
       <div class="binding-header">
-        <span class="title">{{ t('tableBinding.title') }}</span>
+        <div class="binding-header-start">
+          <span class="title">{{ t('tableBinding.title') }}</span>
+          <DesignerHelpLink
+            path="/form-ctl-sub-table"
+            :aria-label="t('tableBinding.guideLinkAria')"
+            test-id="table-binding-guide-link"
+          />
+        </div>
         <el-button
           type="primary"
           size="small"
@@ -304,24 +311,29 @@
 
         <el-form-item
           v-if="(bindingForm.bindingType === 'SUB' || bindingForm.bindingType === 'ACTION') && bindingForm.bindingLinkMode === 'structuralFk'"
-          :label="t('tableBinding.structuralFkFields')"
+          :label="t('tableBinding.structuralFkFilterField')"
+          prop="foreignKeyField"
         >
-          <div v-if="structuralFkFieldNames.length">
-            <el-tag
-              v-for="name in structuralFkFieldNames"
-              :key="name"
-              size="small"
-              style="margin-right: 6px;"
-            >
-              {{ name }}
-            </el-tag>
-          </div>
+          <el-select
+            v-if="structuralFkFieldNames.length"
+            v-model="bindingForm.foreignKeyField"
+            :placeholder="t('tableBinding.selectForeignKey')"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="field in structuralFkSelectFields"
+              :key="field.fieldName"
+              :label="field.displayName ? `${field.fieldName} (${field.displayName})` : field.fieldName"
+              :value="field.fieldName"
+              :disabled="isStructuralFkUsed(field.fieldName)"
+            />
+          </el-select>
           <span
             v-else
             class="text-muted"
           >{{ t('tableBinding.noStructuralFkFields') }}</span>
           <div class="form-item-tip">
-            {{ t('tableBinding.structuralFkTip') }}
+            {{ t('tableBinding.structuralFkFilterTip') }}
           </div>
         </el-form-item>
         
@@ -373,6 +385,7 @@ import { type TableDefinition } from '@/api/functionUnit'
 import { useTableBindingList } from '@/composables/tableBindingManager/useTableBindingList'
 import { useTableBindingForm } from '@/composables/tableBindingManager/useTableBindingForm'
 import { useTableBindingSubmit } from '@/composables/tableBindingManager/useTableBindingSubmit'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 
 const { t } = useI18n()
 
@@ -437,9 +450,11 @@ const {
   emptyTableListHint,
   selectedTableFields,
   structuralFkFieldNames,
+  structuralFkSelectFields,
   toRelationTableOptionId,
   bindingLinkModeLabel,
   isTableBound,
+  isStructuralFkUsed,
   handleBindingTypeChange,
   handleBindingLinkModeChange,
   handleTableSelect,
@@ -503,6 +518,12 @@ defineExpose({
     .title {
       font-weight: 500;
       font-size: 14px;
+    }
+
+    .binding-header-start {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
   }
   

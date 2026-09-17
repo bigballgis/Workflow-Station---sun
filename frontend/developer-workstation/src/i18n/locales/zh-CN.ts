@@ -1820,7 +1820,7 @@ export default {
     noRelationTableAvailable: '当前功能单元和管理中心都没有可用的关联表。',
     selectBindingTypeFirst: '请先选择绑定类型。',
     primaryBindingExists: '当前表单已经存在一条主表绑定，每个表单只能有一张主表。',
-    bindingExists: '这张表已经被绑定到当前表单。',
+    bindingExists: '该表单上已存在冲突的表绑定。同一张子表的多条绑定必须使用不同的已声明外键。',
     primaryRequiresMainTable: '主表绑定必须选择 MAIN 类型的物理表。',
     subBindingRequiresSubTable: '子表绑定必须选择 SUB 类型的物理表。',
     invalidForeignKey: '选择的外键字段在所选表中不存在。',
@@ -1831,10 +1831,14 @@ export default {
     linkModeTip: '结构外键按表设计自动回填主表键；MI 参与者行用于多实例子表行关联（如 row_id）。',
     structuralFkFields: '结构外键字段',
     structuralFkTip: '在表设计器中配置外键，运行时将自动回填。',
+    structuralFkFilterField: '过滤外键',
+    structuralFkFilterTip: '同一表单上同一张表的每条绑定必须使用不同的已声明外键。',
+    structuralFkFilterRequired: '请选择本条绑定按哪个已声明外键过滤。',
     noStructuralFkFields: '此表尚未配置结构外键字段。',
     structuralFkRequired: '请先在表设计器配置外键字段，或选择 MI 参与者行模式。',
     participantRowField: '参与者行字段',
-    miParticipantRowTip: '标识 MI 参与者行的字段（通常为子表主键，如 row_id）。'
+    miParticipantRowTip: '标识 MI 参与者行的字段（通常为子表主键，如 row_id）。',
+    guideLinkAria: '打开子表绑定说明'
   },
   subTable: {
     defaultTitle: '数据',
