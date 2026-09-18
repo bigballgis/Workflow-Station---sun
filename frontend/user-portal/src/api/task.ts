@@ -97,6 +97,8 @@ export interface TaskInfo {
   requestId?: string | null
   /** Function Unit code pinned at process start. */
   functionUnitCode?: string | null
+  /** Catalog package UUID pinned at process start; runtime form/binding freeze. */
+  functionUnitCatalogId?: string | null
   /** Catalog display name; cell shows name || code. */
   functionUnitName?: string | null
   variables?: Record<string, any>
