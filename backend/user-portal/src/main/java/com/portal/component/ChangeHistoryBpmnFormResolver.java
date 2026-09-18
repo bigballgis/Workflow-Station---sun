@@ -7,7 +7,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
-/** Resolves a Task Form binding embedded in the deployed BPMN definition. */
+/**
+ * Resolves a Task Form id embedded in deployed BPMN.
+ *
+ * <p>Prefers {@code up_process_instance.function_unit_version_id} as a join onto
+ * {@code dw_process_definitions}. That Long is the live Designer row, not the catalog freeze;
+ * Task Form JSON for pinned instances is loaded from {@code sys_function_unit_contents}.
+ */
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class ChangeHistoryBpmnFormResolver {

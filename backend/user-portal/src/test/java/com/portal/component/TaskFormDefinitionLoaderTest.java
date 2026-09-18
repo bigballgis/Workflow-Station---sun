@@ -102,6 +102,7 @@ class TaskFormDefinitionLoaderTest {
                 eq(Map.class));
     }
 
+    /** Unpinned Task Form lookup joins live DW by code, never {@code function_unit_version_id}. */
     @Test
     void scopedLookupDoesNotReadInstanceFunctionUnitVersionId() {
         stubFunctionUnitCode(PROCESS_INSTANCE, "fu-leave");

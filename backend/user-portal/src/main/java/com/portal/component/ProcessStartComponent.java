@@ -567,6 +567,7 @@ public class ProcessStartComponent {
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
+                // Live DW id for BPMN join only; catalog UUID above is the form/binding freeze.
                 .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
         processInstanceRepository.save(processInstance);
