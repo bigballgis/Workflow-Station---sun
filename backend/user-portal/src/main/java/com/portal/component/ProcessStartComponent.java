@@ -137,6 +137,11 @@ public class ProcessStartComponent {
     }
 
     void isolateStartSubTables(Map<String, Object> variables, ProcessStartRequest request, String functionUnitCode) {
+        isolateStartSubTables(variables, request, functionUnitCode, null);
+    }
+
+    void isolateStartSubTables(Map<String, Object> variables, ProcessStartRequest request,
+                              String functionUnitCode, String catalogId) {
         stripSubTableTransportMetadata(variables);
         SubTableWriteIsolation isolation = subTableWriteIsolation;
         if (isolation == null) {
@@ -152,7 +157,7 @@ public class ProcessStartComponent {
                 Map.of(),
                 request.getEmptiedSubTableKeys(),
                 request.getSubTableBindingScopes(),
-                functionUnitCode));
+                functionUnitCode, catalogId, null));
     }
 
     /**
@@ -250,7 +255,7 @@ public class ProcessStartComponent {
             applyWorkspaceContextVariables(userId, variables);
         }
         processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables);
-        isolateStartSubTables(variables, request, pin.code());
+        isolateStartSubTables(variables, request, pin.code(), pin.catalogId());
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);

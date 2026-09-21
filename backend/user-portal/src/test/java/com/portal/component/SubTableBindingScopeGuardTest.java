@@ -69,6 +69,7 @@ class SubTableBindingScopeGuardTest {
         Map<String, Object> baseline = Map.of("dw:attachment",
                 List.of(row("X", null), row("Y", "P-A"), row("Z", "P-B")));
         SubTableBindingScope scope = scope("202", "dw:attachment", List.of(), true);
+        scope.setDeletedRows(List.of(Map.of("id", "Y", "_wsRowVersion", 0)));
 
         new SubTableBindingScopeGuard(jdbc).assertAndApply(
                 List.of(scope), FU, currentItem("P-A"), submitted, baseline);
@@ -245,6 +246,23 @@ class SubTableBindingScopeGuardTest {
         return s;
     }
 
+    @Test
+    void overlappingBindingsValidateOriginalVersionAndIncrementOnce() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> row = fileRow("Y", "C1", "P-A");
+        row.put("_wsRowVersion", 7);
+        Map<String, Object> baseline = Map.of("dw:p0_dual_file", List.of(new HashMap<>(row)));
+        Map<String, Object> submitted = new HashMap<>(Map.of("dw:p0_dual_file", List.of(row)));
+        List<Map<String, Object>> keys = List.of(Map.of("id", "Y"));
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(List.of(
+                scope("101", "dw:p0_dual_file", keys, false),
+                scope("202", "dw:p0_dual_file", keys, false)), FU,
+                Map.of("id", "C1", "_currentItem", Map.of("rowId", "P-A")), submitted, baseline);
+        assertThat((List<?>) submitted.get("dw:p0_dual_file"))
+                .singleElement().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("_wsRowVersion", 8);
+    }
+
     private static Map<String, Object> row(String id, String participantId) {
         Map<String, Object> r = new HashMap<>();
         r.put("id", id);
@@ -252,6 +270,51 @@ class SubTableBindingScopeGuardTest {
             r.put("participant_id", participantId);
         }
         return r;
+    }
+
+    @Test
+    void removingRowsRequiresExplicitVersionedDeletion() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> row = fileRow("Y", "C1", "P-A");
+        row.put("_wsRowVersion", 7);
+        Map<String, Object> baseline = Map.of("dw:p0_dual_file", List.of(row));
+        Map<String, Object> submitted = new HashMap<>(Map.of("dw:p0_dual_file", List.of()));
+        SubTableBindingScope scope = scope("202", "dw:p0_dual_file", List.of(), false);
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, currentItem("P-A"), submitted, baseline))
+                .isInstanceOf(PortalException.class).hasMessageContaining("deletion");
+    }
+
+    @Test
+    void nullRowKeysCannotBypassExplicitDeletionClaim() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> row = fileRow("Y", "C1", "P-A");
+        row.put("_wsRowVersion", 7);
+        Map<String, Object> baseline = Map.of("dw:p0_dual_file", List.of(row));
+        Map<String, Object> submitted = new HashMap<>(Map.of("dw:p0_dual_file", List.of()));
+        SubTableBindingScope scope = scope("202", "dw:p0_dual_file", null, false);
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, currentItem("P-A"), submitted, baseline))
+                .isInstanceOf(PortalException.class).hasMessageContaining("deletion");
+    }
+
+    @Test
+    void staleDeletionIsRejectedAndCurrentDeletionSucceeds() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> row = fileRow("Y", "C1", "P-A");
+        row.put("_wsRowVersion", 7);
+        Map<String, Object> baseline = Map.of("dw:p0_dual_file", List.of(row));
+        Map<String, Object> submitted = new HashMap<>(Map.of("dw:p0_dual_file", List.of()));
+        SubTableBindingScope scope = scope("202", "dw:p0_dual_file", List.of(), false);
+        scope.setDeletedRows(List.of(Map.of("id", "Y", "_wsRowVersion", 6)));
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, currentItem("P-A"), submitted, baseline))
+                .isInstanceOf(PortalException.class).hasMessageContaining("modified by another save");
+        scope.setDeletedRows(List.of(Map.of("id", "Y", "_wsRowVersion", 7)));
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, currentItem("P-A"), submitted, baseline);
+        assertThat((List<?>) submitted.get("dw:p0_dual_file")).isEmpty();
     }
 
     private static Map<String, Object> fileRow(String id, String caseId, String partyId) {
@@ -264,6 +327,20 @@ class SubTableBindingScopeGuardTest {
             r.put("party_id", partyId);
         }
         return r;
+    }
+
+    @Test
+    void pinnedWriteUsesSnapshotAfterLiveBindingWasRemoved() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        Map<String, SubTableWriteDesign.Binding> frozen = Map.of("101",
+                new SubTableWriteDesign.Binding("101", "dw:attachment", "case_id", "MAIN",
+                        "cases", List.of("id"), List.of("id"), "structuralFk"));
+        Map<String, Object> submitted = new HashMap<>(Map.of("dw:attachment",
+                List.of(Map.of("id", "Y", "case_id", "C1"))));
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope("101", "dw:attachment", List.of(Map.of("id", "Y")), false)),
+                FU, Map.of("id", "C1"), submitted, Map.of(), frozen);
+        org.mockito.Mockito.verifyNoInteractions(jdbc);
     }
 
     private static Map<String, Object> currentItem(String participantId) {

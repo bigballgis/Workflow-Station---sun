@@ -283,7 +283,7 @@ public class ProcessFormComponent {
             Map<String, Object> updatedVariables = new HashMap<>(oldValues);
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
             isolateProcessFormSubTables(inbound, emptiedKeys, bindingScopes, oldValues,
-                    processInstance.getFunctionUnitCode());
+                    processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId());
             updatedVariables.putAll(inbound);
             // Owner fields: Creator pins startUserId; Current Assignee follows snapshot.
             if (ownerFieldComponent != null) {
@@ -370,6 +370,12 @@ public class ProcessFormComponent {
     void isolateProcessFormSubTables(Map<String, Object> inbound, List<String> emptiedKeys,
             List<SubTableBindingScope> scopes, Map<String, Object> baselineVariables,
             String functionUnitCode) {
+        isolateProcessFormSubTables(inbound, emptiedKeys, scopes, baselineVariables, functionUnitCode, null);
+    }
+
+    void isolateProcessFormSubTables(Map<String, Object> inbound, List<String> emptiedKeys,
+            List<SubTableBindingScope> scopes, Map<String, Object> baselineVariables,
+            String functionUnitCode, String catalogId) {
         SubTableWriteIsolation isolation = subTableWriteIsolation;
         if (isolation == null || inbound == null) {
             return;
@@ -380,7 +386,7 @@ public class ProcessFormComponent {
                 baselineVariables == null ? Map.of() : baselineVariables,
                 emptiedKeys,
                 scopes,
-                functionUnitCode));
+                functionUnitCode, catalogId, null));
     }
 
     @SuppressWarnings("unchecked")

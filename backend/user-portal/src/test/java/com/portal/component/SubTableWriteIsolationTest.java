@@ -35,6 +35,22 @@ class SubTableWriteIsolationTest {
     private static final String STORE = "dw:attachment";
 
     @Test
+    void frozenMultiBindingCannotOptOutByOmittingScopes() {
+        SubTableWriteDesign design = mock(SubTableWriteDesign.class);
+        when(design.resolve("pin", "review")).thenReturn(Map.of(
+                "101", new SubTableWriteDesign.Binding("101", STORE, "main_fk", "MAIN", "cases",
+                        List.of("id"), List.of("id"), "structuralFk"),
+                "202", new SubTableWriteDesign.Binding("202", STORE, "party_fk", "SUB", "parties",
+                        List.of("id"), List.of("id"), "structuralFk")));
+        var isolation = new SubTableWriteIsolation(mock(MiSubTaskSubTableRowMerger.class),
+                mock(SubTableBindingScopeGuard.class), design);
+        assertThatThrownBy(() -> isolation.apply(new SubTableWriteIsolation.Request(
+                Map.of(), new HashMap<>(Map.of("__subTables__", Map.of(STORE, List.of()))),
+                Map.of(), List.of(), List.of(), FU, "pin", "review")))
+                .isInstanceOf(com.portal.exception.PortalException.class).hasMessageContaining("require binding scopes");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void apply_miThinCompletePayloadKeepsSiblingAtBaseline() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);

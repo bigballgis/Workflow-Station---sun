@@ -201,6 +201,15 @@ class MiSubTaskSubTableRowMerger {
             Set<String> explicitlyEmptiedKeys,
             List<SubTableBindingScope> bindingScopes,
             String functionUnitCode) {
+        return mergeCurrentRowOnly(submittedSubTables, baselineSubTables, rowKey,
+                explicitlyEmptiedKeys, bindingScopes, functionUnitCode, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> mergeCurrentRowOnly(Map<String, Object> submittedSubTables,
+            Map<String, Object> baselineSubTables, Map<String, Object> rowKey,
+            Set<String> explicitlyEmptiedKeys, List<SubTableBindingScope> bindingScopes,
+            String functionUnitCode, Map<String, SubTableWriteDesign.Binding> frozen) {
         Set<String> emptied = explicitlyEmptiedKeys != null ? explicitlyEmptiedKeys : Set.<String>of();
         List<String> pkCols = List.copyOf(rowKey.keySet());
         Map<String, Object> merged = new LinkedHashMap<>();
@@ -230,7 +239,7 @@ class MiSubTaskSubTableRowMerger {
                         jdbcTemplate, key, submittedRowsList, baselineRows, rowKey, keyScopes,
                         emptied.contains(key), functionUnitCode,
                         (fk, explEmptied) -> mergeRowsKeepingBaselineExceptCurrent(
-                                baselineRows, submittedRowsList, pkCols, rowKey, fk, explEmptied)));
+                                baselineRows, submittedRowsList, pkCols, rowKey, fk, explEmptied), frozen));
                 continue;
             }
             if (!isParticipantScopedBinding(key)) {

@@ -734,7 +734,8 @@ public class TaskFormComponent {
             // MI payload cannot overwrite sibling rows on either writer.
             subTableWriteIsolation().apply(new SubTableWriteIsolation.Request(
                     formData, inbound, currentVariables, emptiedKeys, bindingScopes,
-                    processInstance.getFunctionUnitCode()));
+                    processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId(),
+                    taskInfo.taskDefinitionKey));
 
             updatedVariables.putAll(inbound);
 

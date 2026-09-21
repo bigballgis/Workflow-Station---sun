@@ -452,7 +452,8 @@ public class TaskApprovalCompletionComponent {
         isolation.apply(new SubTableWriteIsolation.Request(
                 formData, variables, baselineVars,
                 request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),
-                functionUnitCode));
+                functionUnitCode, process.map(ProcessInstance::getFunctionUnitCatalogId).orElse(null),
+                task.getTaskDefinitionKey()));
     }
 
     /**

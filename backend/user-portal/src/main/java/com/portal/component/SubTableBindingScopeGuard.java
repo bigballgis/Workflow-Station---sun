@@ -37,6 +37,12 @@ class SubTableBindingScopeGuard {
     void assertAndApply(List<SubTableBindingScope> scopes, String functionUnitCode,
                         Map<String, Object> formData, Map<String, Object> submitted,
                         Map<String, Object> baseline) {
+        assertAndApply(scopes, functionUnitCode, formData, submitted, baseline, null);
+    }
+
+    void assertAndApply(List<SubTableBindingScope> scopes, String functionUnitCode,
+            Map<String, Object> formData, Map<String, Object> submitted, Map<String, Object> baseline,
+            Map<String, SubTableWriteDesign.Binding> frozen) {
         if (scopes == null || scopes.isEmpty() || submitted == null) {
             return;
         }
@@ -46,15 +52,27 @@ class SubTableBindingScopeGuard {
         Map<String, Object> base = baseline != null ? baseline : Map.of();
         Map<String, List<String>> pkByStoreKey = new HashMap<>();
         for (SubTableBindingScope scope : scopes) {
-            applyOneScope(scope, functionUnitCode.trim(), formData, submitted, base, pkByStoreKey);
+            applyOneScope(scope, functionUnitCode.trim(), formData, submitted, base, pkByStoreKey, frozen);
         }
         rejectUnclaimedChanges(scopes, submitted, base, pkByStoreKey);
+        // All bindings validate the original client version before any row is mutated.
+        // Intersections are one business row, so increment each table's claimed rows once.
+        for (Map.Entry<String, List<String>> entry : pkByStoreKey.entrySet()) {
+            List<Map<String, Object>> claims = new ArrayList<>();
+            for (SubTableBindingScope scope : scopes) {
+                if (entry.getKey().equals(scope.getStoreKey()) && scope.getRowKeys() != null) {
+                    claims.addAll(scope.getRowKeys());
+                }
+            }
+            bumpVersions(submitted, entry.getKey(), claims, entry.getValue(), rowsOf(base, entry.getKey()));
+        }
     }
 
     private void applyOneScope(SubTableBindingScope scope, String functionUnitCode,
                                Map<String, Object> formData, Map<String, Object> submitted,
-                               Map<String, Object> baseline, Map<String, List<String>> pkByStoreKey) {
-        BindingMeta meta = loadBinding(scope, functionUnitCode);
+                               Map<String, Object> baseline, Map<String, List<String>> pkByStoreKey,
+                               Map<String, SubTableWriteDesign.Binding> frozen) {
+        BindingMeta meta = loadBinding(scope, functionUnitCode, frozen);
         pkByStoreKey.put(meta.storeKey(), meta.pkColumns());
         List<Map<String, Object>> claimed = scope.getRowKeys() != null ? scope.getRowKeys() : List.of();
         Object expected = expectedFilterValue(meta, formData, submitted, baseline);
@@ -71,18 +89,34 @@ class SubTableBindingScopeGuard {
             assertRowMatchesFilter(meta, expected, row);
             assertRowVersion(row, findRow(baselineRows, rowKey, meta.pkColumns()));
         }
-        if (Boolean.TRUE.equals(scope.getEmptied()) && meta.filterField() != null && expected != null) {
-            submitted.put(meta.storeKey(), removeMatching(submittedRows, meta.filterField(), expected));
+        // Empty is a UI hint, never authority to delete rows the client did not read.
+        List<Map<String, Object>> deletions = scope.getDeletedRows() == null ? List.of() : scope.getDeletedRows();
+        for (Map<String, Object> deletion : deletions) {
+            Map<String, Object> before = findRow(baselineRows, deletion, meta.pkColumns());
+            if (before == null) {
+                throw new PortalException("409", "Sub-table deletion no longer matches a saved row");
+            }
+            assertRowMatchesFilter(meta, expected, before);
+            Object version = before.getOrDefault(ROW_VERSION_FIELD, 0);
+            if (!sameValue(version, deletion.get(ROW_VERSION_FIELD))) {
+                throw new PortalException("409", "Sub-table row was modified by another save; reload and retry");
+            }
+            submittedRows.removeIf(raw -> raw instanceof Map<?, ?> row
+                    && keysMatch(rowKeyOf((Map<String, Object>) row, meta.pkColumns()),
+                            rowKeyOf(deletion, meta.pkColumns())));
         }
-        bumpVersions(submitted, meta.storeKey(), claimed, meta.pkColumns(), baselineRows);
+        submitted.put(meta.storeKey(), submittedRows);
     }
 
     private void rejectUnclaimedChanges(List<SubTableBindingScope> scopes,
                                         Map<String, Object> submitted, Map<String, Object> baseline,
                                         Map<String, List<String>> pkByStoreKey) {
         Map<String, List<Map<String, Object>>> claimedByKey = new HashMap<>();
+        for (String storeKey : pkByStoreKey.keySet()) {
+            claimedByKey.put(storeKey, new ArrayList<>());
+        }
         for (SubTableBindingScope scope : scopes) {
-            if (scope.getStoreKey() == null || scope.getRowKeys() == null) {
+            if (scope == null || scope.getStoreKey() == null || scope.getRowKeys() == null) {
                 continue;
             }
             claimedByKey.computeIfAbsent(scope.getStoreKey(), k -> new ArrayList<>())
@@ -91,6 +125,18 @@ class SubTableBindingScopeGuard {
         for (Map.Entry<String, List<Map<String, Object>>> e : claimedByKey.entrySet()) {
             rejectUnclaimedForKey(e.getKey(), e.getValue(), submitted, baseline,
                     pkByStoreKey.getOrDefault(e.getKey(), List.of()));
+            List<String> pk = pkByStoreKey.getOrDefault(e.getKey(), List.of());
+            List<Map<String, Object>> deleted = scopes.stream()
+                    .filter(s -> e.getKey().equals(s.getStoreKey()) && s.getDeletedRows() != null)
+                    .flatMap(s -> s.getDeletedRows().stream()).toList();
+            for (Object raw : rowsOf(baseline, e.getKey())) {
+                if (!(raw instanceof Map<?, ?> row)) continue;
+                Map<String, Object> key = rowKeyOf((Map<String, Object>) row, pk);
+                if (findRow(rowsOf(submitted, e.getKey()), key, pk) == null
+                        && !claimedContains(deleted, key, pk)) {
+                    throw new PortalException("403", "Sub-table deletion requires an explicit versioned deletion claim");
+                }
+            }
         }
     }
 
@@ -123,7 +169,8 @@ class SubTableBindingScopeGuard {
         }
     }
 
-    private BindingMeta loadBinding(SubTableBindingScope scope, String functionUnitCode) {
+    private BindingMeta loadBinding(SubTableBindingScope scope, String functionUnitCode,
+                                    Map<String, SubTableWriteDesign.Binding> frozen) {
         if (scope == null || !StringUtils.hasText(scope.getBindingId())) {
             throw new PortalException("400", "Binding scope is missing bindingId");
         }
@@ -132,6 +179,15 @@ class SubTableBindingScopeGuard {
             bindingId = Long.parseLong(scope.getBindingId().trim());
         } catch (NumberFormatException e) {
             throw new PortalException("400", "Binding scope bindingId is not a number");
+        }
+        String requestedBindingId = scope.getBindingId().trim();
+        if (frozen != null) {
+            SubTableWriteDesign.Binding b = frozen.get(requestedBindingId);
+            if (b == null || !b.storeKey().equals(scope.getStoreKey())) {
+                throw new PortalException("403", "Binding is not part of the pinned form");
+            }
+            return new BindingMeta(bindingId, b.storeKey(), b.filterField(), b.refType(),
+                    b.refTableName(), null, b.pk(), b.refPk());
         }
         List<BindingMeta> rows = jdbcTemplate.query(
                 """
@@ -157,15 +213,15 @@ class SubTableBindingScopeGuard {
                             rs.getString("filter_ref_type"),
                             rs.getString("filter_ref_table_name"),
                             refTableId,
-                            pkColumns(bindingId));
+                            pkColumns(bindingId), null);
                 },
                 bindingId, functionUnitCode);
         if (rows.isEmpty()) {
             throw new PortalException("403", "Binding is not part of this function unit");
         }
         BindingMeta meta = rows.get(0);
-        if (StringUtils.hasText(scope.getStoreKey())
-                && !meta.storeKey().equalsIgnoreCase(scope.getStoreKey().trim())) {
+        if (!StringUtils.hasText(scope.getStoreKey())
+                || !meta.storeKey().equalsIgnoreCase(scope.getStoreKey().trim())) {
             throw new PortalException("403", "Binding scope storeKey does not match the binding's table");
         }
         return meta;
@@ -203,10 +259,10 @@ class SubTableBindingScopeGuard {
     }
 
     private Object mainRecordFilterKeys(BindingMeta meta, Map<String, Object> formData) {
-        if (formData == null || meta.filterRefTableId() == null) {
+        if (formData == null || (meta.filterRefTableId() == null && meta.refPkColumns() == null)) {
             return null;
         }
-        List<String> pk = pkColumnsOfTable(meta.filterRefTableId());
+        List<String> pk = meta.refPkColumns() != null ? meta.refPkColumns() : pkColumnsOfTable(meta.filterRefTableId());
         if (pk.isEmpty()) {
             return null;
         }
@@ -225,7 +281,8 @@ class SubTableBindingScopeGuard {
 
     private List<Object> siblingParentKeys(BindingMeta meta, Map<String, Object> submitted,
                                            Map<String, Object> baseline) {
-        if (!StringUtils.hasText(meta.filterRefTableName()) || meta.filterRefTableId() == null) {
+        if (!StringUtils.hasText(meta.filterRefTableName())
+                || (meta.filterRefTableId() == null && meta.refPkColumns() == null)) {
             return List.of();
         }
         String parentKey = "dw:" + meta.filterRefTableName();
@@ -233,7 +290,7 @@ class SubTableBindingScopeGuard {
         if (parentRows.isEmpty()) {
             parentRows = rowsOf(baseline, parentKey);
         }
-        List<String> pk = pkColumnsOfTable(meta.filterRefTableId());
+        List<String> pk = meta.refPkColumns() != null ? meta.refPkColumns() : pkColumnsOfTable(meta.filterRefTableId());
         List<Object> keys = new ArrayList<>();
         for (Object raw : parentRows) {
             if (!(raw instanceof Map<?, ?>)) {
@@ -325,7 +382,7 @@ class SubTableBindingScopeGuard {
 
     private record BindingMeta(long id, String storeKey, String filterField, String filterRefType,
                                String filterRefTableName, Long filterRefTableId,
-                               List<String> pkColumns) {}
+                               List<String> pkColumns, List<String> refPkColumns) {}
 
     @SuppressWarnings("unchecked")
     private static List<Object> rowsOf(Map<String, Object> tables, String storeKey) {

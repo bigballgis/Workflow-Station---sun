@@ -23,4 +23,11 @@ public class SubTableBindingScope {
     private String storeKey;
     private List<Map<String, Object>> rowKeys;
     private Boolean emptied;
+    /** Explicit deleted identities, including the version observed by the client. */
+    private List<Map<String, Object>> deletedRows;
+
+    public SubTableBindingScope(String bindingId, String storeKey,
+            List<Map<String, Object>> rowKeys, Boolean emptied) {
+        this(bindingId, storeKey, rowKeys, emptied, null);
+    }
 }

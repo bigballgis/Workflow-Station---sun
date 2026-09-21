@@ -21,11 +21,16 @@ import java.util.Set;
  * Process Form updates use the process instance variables as baseline.
  */
 @Component
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @org.springframework.beans.factory.annotation.Autowired)
 class SubTableWriteIsolation {
 
     private final MiSubTaskSubTableRowMerger merger;
     private final SubTableBindingScopeGuard guard;
+    private final SubTableWriteDesign writeDesign;
+
+    SubTableWriteIsolation(MiSubTaskSubTableRowMerger merger, SubTableBindingScopeGuard guard) {
+        this(merger, guard, null);
+    }
 
     static final String EMPTIED_KEYS_FIELD = "emptiedSubTableKeys";
     static final String SCOPES_FIELD = "subTableBindingScopes";
@@ -57,7 +62,12 @@ class SubTableWriteIsolation {
             Map<String, Object> baselineVariables,
             List<String> emptiedSubTableKeys,
             List<SubTableBindingScope> scopes,
-            String functionUnitCode) {
+            String functionUnitCode, String catalogId, String stageId) {
+        Request(Map<String, Object> formData, Map<String, Object> inbound,
+                Map<String, Object> baselineVariables, List<String> emptiedSubTableKeys,
+                List<SubTableBindingScope> scopes, String functionUnitCode) {
+            this(formData, inbound, baselineVariables, emptiedSubTableKeys, scopes, functionUnitCode, null, null);
+        }
     }
 
     /**
@@ -79,13 +89,16 @@ class SubTableWriteIsolation {
                 : Map.of();
         List<SubTableBindingScope> bindingScopes =
                 request.scopes() == null ? List.of() : List.copyOf(request.scopes());
+        Map<String, SubTableWriteDesign.Binding> frozen = writeDesign == null ? null
+                : writeDesign.resolve(request.catalogId(), request.stageId());
+        requireScopesForFrozenMultiBindings(frozen, submitted, bindingScopes);
         if (merger.isMiSubTaskSubmission(request.formData())) {
             Map<String, Object> rowKey = merger.resolveCurrentItemRowKey(request.formData());
             merger.requireResolvedRowKey(rowKey);
             submitted = merger.mergeCurrentRowOnly(
                     submitted, baseline, rowKey,
                     normalizeEmptiedKeys(request.emptiedSubTableKeys()), bindingScopes,
-                    request.functionUnitCode());
+                    request.functionUnitCode(), frozen);
             inbound.put("__subTables__", submitted);
         }
         if (bindingScopes.isEmpty()) {
@@ -94,8 +107,32 @@ class SubTableWriteIsolation {
         Map<String, Object> guarded = submitted instanceof LinkedHashMap
                 ? submitted
                 : new LinkedHashMap<>(submitted);
-        guard.assertAndApply(bindingScopes, request.functionUnitCode(), request.formData(),
-                guarded, baseline);
+        if (frozen == null) {
+            guard.assertAndApply(bindingScopes, request.functionUnitCode(), request.formData(), guarded, baseline);
+        } else {
+            Map<String, Object> context = request.formData() == null
+                    ? new LinkedHashMap<>() : new LinkedHashMap<>(request.formData());
+            // Persisted main identity wins over user input. MI context is task-scoped by the caller.
+            if (baselineVars != null) baselineVars.forEach((key, value) -> {
+                if (!"_currentItem".equals(key) && !"currentItem".equals(key)) context.put(key, value);
+            });
+            guard.assertAndApply(bindingScopes, request.functionUnitCode(), context, guarded, baseline, frozen);
+        }
         inbound.put("__subTables__", guarded);
+    }
+
+    private static void requireScopesForFrozenMultiBindings(Map<String, SubTableWriteDesign.Binding> frozen,
+            Map<String, Object> submitted, List<SubTableBindingScope> scopes) {
+        if (frozen == null) return;
+        Map<String, Long> counts = frozen.values().stream().collect(java.util.stream.Collectors.groupingBy(
+                SubTableWriteDesign.Binding::storeKey, java.util.stream.Collectors.counting()));
+        for (Map.Entry<String, Long> entry : counts.entrySet()) {
+            if (entry.getValue() < 2 || !submitted.containsKey(entry.getKey())) continue;
+            boolean declared = scopes.stream().anyMatch(s -> s != null
+                    && entry.getKey().equals(s.getStoreKey())
+                    && s.getBindingId() != null && frozen.containsKey(s.getBindingId().trim()));
+            if (!declared) throw new com.portal.exception.PortalException("403",
+                    "Multi-binding writes require binding scopes from the pinned form");
+        }
     }
 }

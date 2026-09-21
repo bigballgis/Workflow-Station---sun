@@ -64,7 +64,25 @@ final class MiSubTableScopeAwareMerge {
             boolean storeKeyEmptied,
             String functionUnitCode,
             ParticipantRowMerge participantMerge) {
-        List<ScopeFilter> filters = loadFilters(jdbc, keyScopes, storeKey, functionUnitCode);
+        return apply(jdbc, storeKey, submittedRows, baselineRows, currentItemKey, keyScopes,
+                storeKeyEmptied, functionUnitCode, participantMerge, null);
+    }
+
+    static List<Object> apply(JdbcTemplate jdbc, String storeKey, List<Object> submittedRows,
+            List<Object> baselineRows, Map<String, Object> currentItemKey,
+            List<SubTableBindingScope> keyScopes, boolean storeKeyEmptied, String functionUnitCode,
+            ParticipantRowMerge participantMerge, Map<String, SubTableWriteDesign.Binding> frozen) {
+        List<ScopeFilter> filters = frozen == null ? loadFilters(jdbc, keyScopes, storeKey, functionUnitCode)
+                : keyScopes.stream().map(scope -> {
+                    if (scope == null || !org.springframework.util.StringUtils.hasText(scope.getBindingId())) {
+                        throw new PortalException("400", "Binding scope is missing bindingId");
+                    }
+                    SubTableWriteDesign.Binding b = frozen.get(scope.getBindingId().trim());
+                    if (b == null || !storeKey.equals(b.storeKey())) {
+                        throw new PortalException("403", "Binding is not part of the pinned form");
+                    }
+                    return new ScopeFilter(b.id(), b.filterField(), b.refType(), b.linkMode());
+                }).toList();
         ScopeKind kind = classify(filters);
         if (kind == ScopeKind.SHARED) {
             return new ArrayList<>(submittedRows);
