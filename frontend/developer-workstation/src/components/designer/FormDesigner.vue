@@ -1527,9 +1527,6 @@ const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoS
   t,
   autoSaving,
   lastAutoSaveTime,
-  flushPendingCanvasEdits: () => {
-    flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
-  },
   getPollDesigner: () => getActiveDesignerRef() ?? designerRef.value,
 })
 

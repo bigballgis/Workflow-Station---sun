@@ -175,10 +175,10 @@ export function flushDesignerPropsPanelToActiveRule(
  * here — the "focus merely moved inside my own wrapper" check reads `event.relatedTarget`,
  * and a programmatic `.blur()` reports `null`, so the popper always closes.
  *
- * The auto-save poll calls the flush helpers on every tick, which made every config-panel
- * dropdown (e.g. Sub Table Binding) shut itself within one poll interval of opening. Such
- * controls commit on `change`, not on blur, so skipping them loses no pending edit — only
- * free-text inputs need the blur to emit.
+ * Explicit Save and Preview call the flush helpers so pending text edits are included.
+ * Background auto-save intentionally waits until the author leaves the focused property input.
+ * Open poppers still need this guard when Save or Preview is triggered, because a programmatic
+ * blur would close the list before the author can finish the interaction.
  */
 function hasOpenPopperInteraction(active: HTMLElement): boolean {
   // Element Plus marks the live trigger of an open popper with aria-expanded="true" — on the
@@ -188,7 +188,8 @@ function hasOpenPopperInteraction(active: HTMLElement): boolean {
 }
 
 /**
- * Blur focused config-panel control so fc-designer commits pending validate/base edits.
+ * Blur focused config-panel control so fc-designer commits pending validate/base edits for an
+ * explicit Save or Preview action.
  * Never blurs a control whose popper is open — see {@link hasOpenPopperInteraction}.
  */
 export function commitDesignerPanelEditsBeforePreview(): void {

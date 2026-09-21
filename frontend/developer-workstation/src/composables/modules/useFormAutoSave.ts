@@ -22,12 +22,6 @@ export interface FormAutoSaveOptions {
   /** External ref for lastAutoSaveTime — set after successful save */
   lastAutoSaveTime: Ref<Date | null>
   /**
-   * Copy pending right-panel edits (Validate / props) onto the live canvas rule
-   * before snapshotting. Auto-save polls getRule(), which otherwise misses
-   * Validation+ rows that have not been blurred/emitted yet.
-   */
-  flushPendingCanvasEdits?: () => void
-  /**
    * Designer whose getRule()/getOption() feed the poll snapshot. Defaults to
    * designerRef (main canvas). Pass the active tab instance so sub-table
    * Form Design Validation+ edits are detected.
@@ -45,7 +39,7 @@ const POLL_INTERVAL_MS = 3000
 export function useFormAutoSave(options: FormAutoSaveOptions) {
   const {
     selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving,
-    flushPendingCanvasEdits, getPollDesigner,
+    getPollDesigner,
   } = options
 
   // --- State ---
@@ -108,8 +102,15 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
     return getPollDesigner?.() ?? designerRef.value
   }
 
+  function isDesignerPanelInputFocused(): boolean {
+    if (typeof document === 'undefined') return false
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement)) return false
+    if (!active.matches('input, textarea, [contenteditable="true"]')) return false
+    return !!active.closest('._fc-m-con, ._fc-r, ._fd-config, .form-editor-view')
+  }
+
   function buildDesignerPollSnapshot(): string {
-    flushPendingCanvasEdits?.()
     const designer = resolvePollDesigner()
     const rawRule = stripFormCreateRulesDisabledDeep(designer?.getRule?.() || [])
     prepareFormCreateRulesForPersist(rawRule)
@@ -140,6 +141,9 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
     // Poll for changes every 3 seconds
     pollTimerRef.value = setInterval(() => {
       if (!selectedForm.value || autoSaving.value) return
+      // A property-panel input is still being edited. Do not blur it or snapshot its
+      // transient value; the next tick after the user clicks elsewhere will detect and save it.
+      if (isDesignerPanelInputFocused()) return
       try {
         const currentState = buildDesignerPollSnapshot()
         if (currentState !== lastDesignerState.value) {
