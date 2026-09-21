@@ -3,9 +3,17 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import DelegationsPage from '../delegations/index.vue'
 import { queryDelegationRules, queryDelegationAudit } from '@/api/delegation'
+import { queryTodoTasks } from '@/api/task'
 import type { ListColumnMeta } from '@platform-shared/list/columnMeta'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+  createI18n: () => ({
+    global: { t: (key: string) => key, locale: { value: 'en' } },
+    install: () => {},
+  }),
+}))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/api/delegation', () => ({
   queryDelegationRules: vi.fn(),
   queryDelegationAudit: vi.fn(),
@@ -14,12 +22,25 @@ vi.mock('@/api/delegation', () => ({
   resumeDelegationRule: vi.fn(),
   deleteDelegationRule: vi.fn(),
 }))
+vi.mock('@/api/task', () => ({
+  queryTodoTasks: vi.fn(),
+}))
+vi.mock('@/api/permission', () => ({
+  permissionApi: {
+    getBusinessUnitsTree: vi.fn(),
+    getBusinessUnitRoles: vi.fn(),
+  },
+}))
+vi.mock('@/components/lookup/LookupField.vue', () => ({
+  default: { name: 'LookupField', template: '<div />' },
+}))
 vi.mock('@/composables/list/searchListFilterUsers', () => ({
   searchListFilterUsers: vi.fn(async () => []),
 }))
 
 const rulesApi = vi.mocked(queryDelegationRules)
 const auditApi = vi.mocked(queryDelegationAudit)
+const todoApi = vi.mocked(queryTodoTasks)
 
 const RULE_COLUMNS: ListColumnMeta[] = [
   { field: 'delegateId', label: 'delegation.delegateTo', kind: 'USER', filterable: true, sortable: true, operators: ['eq'] },
@@ -50,6 +71,7 @@ beforeEach(() => {
   sessionStorage.clear()
   rulesApi.mockResolvedValue(emptyPage(RULE_COLUMNS) as never)
   auditApi.mockResolvedValue(emptyPage([]) as never)
+  todoApi.mockResolvedValue(emptyPage([]) as never)
 })
 
 afterEach(() => {
@@ -88,6 +110,7 @@ describe('Delegations shared list', () => {
           id: 41,
           delegatorId: 'u-me',
           delegateId: 'u-other',
+          delegateDisplayName: 'Lina Chen',
           delegationType: 'FULL',
           status: 'ACTIVE',
           createdAt: '2026-08-01T00:00:00Z',
@@ -104,8 +127,57 @@ describe('Delegations shared list', () => {
     )
     expect(actionCol).toBeTruthy()
     expect(Number(actionCol!.props('width'))).toBe(200)
+    expect(w.text()).toContain('Lina Chen')
     expect(w.text()).toContain('delegation.suspend')
     expect(w.text()).toContain('common.delete')
     expect(w.findAll('.row-actions .el-button').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('loads delegated tasks via todo/query when the Delegated tab opens', async () => {
+    const w = await mountPage()
+    expect(todoApi).not.toHaveBeenCalled()
+    const tabs = w.findAll('.el-tabs__item')
+    expect(tabs.length).toBeGreaterThanOrEqual(2)
+    await tabs[1].trigger('click')
+    await flushPromises()
+    expect(todoApi).toHaveBeenCalled()
+    const body = todoApi.mock.calls[todoApi.mock.calls.length - 1][0]
+    expect(body.assignmentTypes).toEqual(['DELEGATED'])
+  })
+
+  it('shows who delegated and user-or-BU on the Delegated tab', async () => {
+    todoApi.mockResolvedValue({
+      data: {
+        columns: [
+          { field: 'requestId', label: 'task.requestId', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
+          { field: 'functionUnitCode', label: 'task.functionUnit', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
+          { field: 'taskName', label: 'task.taskName', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
+          { field: 'delegatorId', label: 'delegation.delegator', kind: 'USER', filterable: true, sortable: true, operators: ['eq'] },
+          { field: 'delegatedTargetType', label: 'delegation.delegatedTargetKind', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'] },
+          { field: 'assignmentType', label: 'task.assignmentType', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'] },
+          { field: 'createTime', label: 'task.createTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['between'] },
+        ],
+        content: [{
+          taskId: 't-1',
+          requestId: 'R-1',
+          functionUnitCode: 'owner-demo',
+          taskName: 'Review',
+          delegatorId: 'user-e2e-lina',
+          delegatorName: '李娜',
+          delegatedTargetType: 'USER',
+          assignmentType: 'DELEGATED',
+          createTime: '2026-09-18T00:00:00Z',
+        }],
+        totalElements: 1,
+        page: 0,
+        size: 20,
+      },
+    } as never)
+    const w = await mountPage()
+    const tabs = w.findAll('.el-tabs__item')
+    await tabs[1].trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('李娜')
+    expect(w.text()).toContain('delegation.specifyUser')
   })
 })

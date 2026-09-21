@@ -1,11 +1,15 @@
 import { request } from './request'
-import type { PortalListPage } from './task'
+import type { PortalListPage, TaskInfo } from './task'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 export interface DelegationRule {
   id: number
   delegatorId: string
-  delegateId: string
+  delegateId?: string | null
+  delegateDisplayName?: string | null
+  delegateTargetType?: 'USER' | 'BU_ROLE' | null
+  delegateBuCode?: string | null
+  delegateRoleCode?: string | null
   delegationType: string
   processTypes?: string[]
   priorityFilter?: string[]
@@ -18,7 +22,10 @@ export interface DelegationRule {
 }
 
 export interface DelegationRuleRequest {
-  delegateId: string
+  delegateId?: string
+  delegateTargetType?: 'USER' | 'BU_ROLE'
+  delegateBuCode?: string
+  delegateRoleCode?: string
   delegationType: string
   processTypes?: string[]
   priorityFilter?: string[]
@@ -30,7 +37,9 @@ export interface DelegationRuleRequest {
 export interface DelegationAudit {
   id: number
   delegatorId: string
+  delegatorDisplayName?: string | null
   delegateId: string
+  delegateDisplayName?: string | null
   taskId?: string
   operationType: string
   operationResult?: string
@@ -81,7 +90,7 @@ export function resumeDelegationRule(ruleId: number) {
 }
 
 export function getProxyTasks() {
-  return request.get<{ data: DelegationRule[] }>('/delegations/proxy-tasks')
+  return request.get<{ data: TaskInfo[] }>('/delegations/proxy-tasks')
 }
 
 export function getDelegationAuditRecords(page: number = 0, size: number = 20) {

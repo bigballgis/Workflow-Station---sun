@@ -31,12 +31,15 @@ class DelegationListQuerySqlTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private DelegationUserDisplayEnricher userDisplayEnricher;
+
     private DelegationListQueryComponent component;
     private final List<String> preparedSql = new ArrayList<>();
 
     @BeforeEach
     void setUp() throws Exception {
-        component = new DelegationListQueryComponent(jdbcTemplate);
+        component = new DelegationListQueryComponent(jdbcTemplate, userDisplayEnricher);
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
@@ -77,6 +80,14 @@ class DelegationListQuerySqlTest {
 
         assertThat(pageSql()).contains("r.status");
         assertThat(preparedSql.get(0)).contains("r.status");
+    }
+
+    @Test
+    void rulesPageSelectsStandingTargetColumns() {
+        component.queryRules("user-1", request(List.of()));
+        assertThat(pageSql()).contains("r.delegate_target_type");
+        assertThat(pageSql()).contains("r.delegate_bu_code");
+        assertThat(pageSql()).contains("r.delegate_role_code");
     }
 
     @Test
