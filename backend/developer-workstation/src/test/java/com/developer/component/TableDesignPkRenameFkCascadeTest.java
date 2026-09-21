@@ -4,6 +4,7 @@ import com.developer.component.impl.TableDesignComponentImpl;
 import com.developer.dto.FieldDefinitionRequest;
 import com.developer.dto.TableDefinitionRequest;
 import com.developer.entity.FieldDefinition;
+import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DataType;
@@ -53,6 +54,7 @@ class TableDesignPkRenameFkCascadeTest {
     private static final Long CHILD_TABLE_ID = 50333L;
     private static final Long PK_FIELD_ID = 7001L;
     private static final Long PLAIN_FIELD_ID = 7002L;
+    private static final Long REBUILT_FILTER_FIELD_ID = 7101L;
 
     @Mock private TableDefinitionRepository tableDefinitionRepository;
     @Mock private FieldDefinitionRepository fieldDefinitionRepository;
@@ -195,5 +197,29 @@ class TableDesignPkRenameFkCascadeTest {
 
         assertThat(childFk.getRefPrimaryKeyFields()).containsExactly("id_idw");
         verify(fieldDefinitionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("rebuilding table fields remaps a binding filter FK to the new field row")
+    void rebuildingFieldsRemapsBindingFilterFk() {
+        FormTableBinding binding = new FormTableBinding();
+        binding.setId(50705L);
+        binding.setTable(parentTable);
+        binding.setFilterFkFieldId(PK_FIELD_ID);
+        when(formTableBindingRepository.findByTableId(PARENT_TABLE_ID)).thenReturn(List.of(binding));
+
+        FieldDefinition rebuilt = pk(REBUILT_FILTER_FIELD_ID, "id_idw");
+        rebuilt.setTableDefinition(parentTable);
+        when(fieldDefinitionRepository.findByTableDefinitionIdOrderBySortOrderAsc(PARENT_TABLE_ID))
+                .thenReturn(List.of(rebuilt));
+
+        component.update(PARENT_TABLE_ID, tableReq(
+                req(PK_FIELD_ID, "id_idw", true),
+                req(PLAIN_FIELD_ID, "label", false)));
+
+        assertThat(binding.getFilterFkFieldId())
+                .as("delete-and-reinsert must not leave filter_fk_field_id pointing at a deleted row")
+                .isEqualTo(REBUILT_FILTER_FIELD_ID);
+        verify(formTableBindingRepository).saveAll(List.of(binding));
     }
 }

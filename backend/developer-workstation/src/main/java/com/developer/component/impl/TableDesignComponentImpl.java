@@ -166,6 +166,13 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         }
         Long functionUnitId = tableDefinition.getFunctionUnit().getId();
 
+        // update() rebuilds every field row, so any binding reference to a field id must be
+        // translated through the incoming field's stable request id before the old rows vanish.
+        // Keeping the numeric id unchanged leaves a silent dangling filter_fk_field_id and turns
+        // dual-binding projection off after an otherwise harmless Table Design save.
+        List<FilterFkBindingRemap> filterFkBindingRemaps = snapshotFilterFkBindingRemaps(
+                tableDefinition, request.getFields());
+
         // Update table metadata.
         tableDefinition.setTableName(request.getTableName());
         tableDefinition.setTableDisplayName(request.getTableDisplayName());
@@ -232,6 +239,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         tableDefinitionRepository.flush();
+        remapBindingFilterFkFields(saved.getId(), filterFkBindingRemaps);
 
         // Diff field deltas (fieldName/description/dataType/length/scale/nullable) and push into every related Form canvas + permissions.
         List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
@@ -259,6 +267,69 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
     }
+
+    private List<FilterFkBindingRemap> snapshotFilterFkBindingRemaps(
+            TableDefinition table, List<FieldDefinitionRequest> incomingFields) {
+        List<FormTableBinding> bindings = formTableBindingRepository.findByTableId(table.getId());
+        if (bindings.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, FieldDefinition> existingById = table.getFieldDefinitions().stream()
+                .filter(field -> field.getId() != null)
+                .collect(Collectors.toMap(FieldDefinition::getId, field -> field));
+        Map<Long, FieldDefinitionRequest> incomingByOldId = (incomingFields == null
+                ? Collections.<FieldDefinitionRequest>emptyList()
+                : incomingFields).stream()
+                .filter(Objects::nonNull)
+                .filter(field -> field.getId() != null)
+                .collect(Collectors.toMap(FieldDefinitionRequest::getId, field -> field));
+
+        List<FilterFkBindingRemap> remaps = new ArrayList<>();
+        for (FormTableBinding binding : bindings) {
+            Long oldFieldId = binding.getFilterFkFieldId();
+            if (oldFieldId == null) continue;
+            FieldDefinition existing = existingById.get(oldFieldId);
+            if (existing == null) {
+                throw new DeveloperBusinessException("BIZ_FILTER_FK_REFERENCE_STALE",
+                        i18nService.getMessage("table.filter_fk_reference_stale", binding.getId(), oldFieldId));
+            }
+            FieldDefinitionRequest incoming = incomingByOldId.get(oldFieldId);
+            if (incoming == null || incoming.getFieldName() == null || incoming.getFieldName().isBlank()) {
+                throw new DeveloperBusinessException("BIZ_FILTER_FK_FIELD_IN_USE",
+                        i18nService.getMessage("table.filter_fk_field_in_use", existing.getFieldName(), binding.getId()));
+            }
+            remaps.add(new FilterFkBindingRemap(binding, incoming.getFieldName().trim()));
+        }
+        return remaps;
+    }
+
+    private void remapBindingFilterFkFields(Long tableId, List<FilterFkBindingRemap> remaps) {
+        if (remaps.isEmpty()) return;
+        Map<String, Long> rebuiltFieldIdsByName = fieldDefinitionRepository
+                .findByTableDefinitionIdOrderBySortOrderAsc(tableId).stream()
+                .filter(field -> field.getId() != null && field.getFieldName() != null)
+                .collect(Collectors.toMap(
+                        field -> field.getFieldName().trim().toLowerCase(Locale.ROOT),
+                        FieldDefinition::getId,
+                        (first, ignored) -> first,
+                        LinkedHashMap::new));
+        List<FormTableBinding> dirty = new ArrayList<>();
+        for (FilterFkBindingRemap remap : remaps) {
+            Long rebuiltFieldId = rebuiltFieldIdsByName.get(remap.fieldName().toLowerCase(Locale.ROOT));
+            if (rebuiltFieldId == null) {
+                throw new DeveloperBusinessException("BIZ_FILTER_FK_REMAP_FAILED",
+                        i18nService.getMessage("table.filter_fk_remap_failed",
+                                remap.fieldName(), remap.binding().getId()));
+            }
+            remap.binding().setFilterFkFieldId(rebuiltFieldId);
+            dirty.add(remap.binding());
+        }
+        formTableBindingRepository.saveAll(dirty);
+        log.info("Remapped {} binding filter FK reference(s) after rebuilding fields for table {}",
+                dirty.size(), tableId);
+    }
+
+    private record FilterFkBindingRemap(FormTableBinding binding, String fieldName) {}
 
     /**
      * Within the transaction: rewrite {@code dw_form_table_bindings.foreign_key_field} on every binding
