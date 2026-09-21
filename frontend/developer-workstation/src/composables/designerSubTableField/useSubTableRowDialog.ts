@@ -124,6 +124,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
           autoEnsurePrimaryRecord: props.primaryFormData != null,
           bindingLinkMode: props.config.bindingLinkMode,
           bindingForeignKeyField: props.config.bindingForeignKeyField,
+          filterFkFieldName: props.config.filterFkFieldName,
           fkFillSources: props.config.fkFillSources,
           allocatePrimaryKeys:
             props.functionUnitId != null && props.config.tableId != null

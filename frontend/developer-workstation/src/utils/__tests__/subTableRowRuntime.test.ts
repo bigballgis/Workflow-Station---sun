@@ -89,6 +89,33 @@ describe('applyFkPresentationToDialogColumns', () => {
 })
 
 describe('prepareSubTableAddRow autoEnsurePrimaryRecord', () => {
+  it('previews a dual binding with only its declared filter FK by default', async () => {
+    const result = await prepareSubTableAddRow({
+      columns: [
+        { field: 'case_id', label: 'Case', type: 'text' },
+        { field: 'party_id', label: 'Party', type: 'text' },
+      ],
+      fieldDefinitions: [
+        { fieldName: 'case_id', isForeignKey: true, refTableId: 19, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: 21, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: {
+        primaryFormData: { id: 'Case-1' },
+        ancestorRowsByTableId: {
+          19: { id: 'Case-1' },
+          21: { id: 'Party-1' },
+        },
+      },
+      tableId: 20,
+      filterFkFieldName: 'party_id',
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.initialRow.party_id).toBe('Party-1')
+    expect(result.initialRow.case_id).toBe('')
+  })
+
   it('allocates main table PK before opening sub-table add when main row is empty', async () => {
     const allocatePrimaryKeys = vi.fn(async (payload: { tableId: number; fieldName: string }) => {
       if (payload.tableId === 19 && payload.fieldName === 'id') return ['main-uuid-1']

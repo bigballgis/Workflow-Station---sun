@@ -80,14 +80,16 @@ class SubTableBindingScopeGuard {
         List<Object> baselineRows = rowsOf(baseline, meta.storeKey());
         for (Map<String, Object> rowKey : claimed) {
             Map<String, Object> row = findRow(submittedRows, rowKey, meta.pkColumns());
+            Map<String, Object> baselineRow = findRow(baselineRows, rowKey, meta.pkColumns());
             if (row == null) {
-                row = findRow(baselineRows, rowKey, meta.pkColumns());
+                row = baselineRow;
             }
             if (row == null) {
                 throw new PortalException("403", "Binding scope claimed a row that is not in the table store");
             }
             assertRowMatchesFilter(meta, expected, row);
-            assertRowVersion(row, findRow(baselineRows, rowKey, meta.pkColumns()));
+            assertNewRowOwnership(meta, row, baselineRow);
+            assertRowVersion(row, baselineRow);
         }
         // Empty is a UI hint, never authority to delete rows the client did not read.
         List<Map<String, Object>> deletions = scope.getDeletedRows() == null ? List.of() : scope.getDeletedRows();
@@ -187,7 +189,8 @@ class SubTableBindingScopeGuard {
                 throw new PortalException("403", "Binding is not part of the pinned form");
             }
             return new BindingMeta(bindingId, b.storeKey(), b.filterField(), b.refType(),
-                    b.refTableName(), null, b.pk(), b.refPk());
+                    b.refTableName(), null, b.pk(), b.refPk(), b.foreignKeyFields(),
+                    b.explicitFillFields());
         }
         List<BindingMeta> rows = jdbcTemplate.query(
                 """
@@ -213,13 +216,17 @@ class SubTableBindingScopeGuard {
                             rs.getString("filter_ref_type"),
                             rs.getString("filter_ref_table_name"),
                             refTableId,
-                            pkColumns(bindingId), null);
+                            List.of(), null, List.of(), List.of());
                 },
                 bindingId, functionUnitCode);
         if (rows.isEmpty()) {
             throw new PortalException("403", "Binding is not part of this function unit");
         }
-        BindingMeta meta = rows.get(0);
+        BindingMeta raw = rows.get(0);
+        BindingMeta meta = new BindingMeta(raw.id(), raw.storeKey(), raw.filterField(),
+                raw.filterRefType(), raw.filterRefTableName(), raw.filterRefTableId(),
+                pkColumns(bindingId), null, foreignKeyColumns(bindingId),
+                explicitFillColumns(bindingId));
         if (!StringUtils.hasText(scope.getStoreKey())
                 || !meta.storeKey().equalsIgnoreCase(scope.getStoreKey().trim())) {
             throw new PortalException("403", "Binding scope storeKey does not match the binding's table");
@@ -235,6 +242,37 @@ class SubTableBindingScopeGuard {
                         JOIN dw_form_table_bindings b ON b.table_id = f.table_id
                         WHERE b.id = ? AND COALESCE(f.is_primary_key, false) = true
                         ORDER BY f.sort_order NULLS LAST, f.id
+                        """,
+                String.class, bindingId);
+    }
+
+    private List<String> foreignKeyColumns(long bindingId) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT f.field_name
+                        FROM dw_field_definitions f
+                        JOIN dw_form_table_bindings b ON b.table_id = f.table_id
+                        WHERE b.id = ? AND COALESCE(f.is_foreign_key, false) = true
+                        ORDER BY f.sort_order NULLS LAST, f.id
+                        """,
+                String.class, bindingId);
+    }
+
+    private List<String> explicitFillColumns(long bindingId) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT COALESCE(NULLIF(BTRIM(source.value ->> 'fieldName'), ''), f.field_name)
+                        FROM dw_form_table_bindings b
+                        CROSS JOIN LATERAL jsonb_array_elements(
+                            COALESCE(b.fk_fill_sources, '[]'::jsonb)
+                        ) AS source(value)
+                        LEFT JOIN dw_field_definitions f ON f.id = CASE
+                            WHEN source.value ->> 'fieldId' ~ '^[0-9]+$'
+                            THEN (source.value ->> 'fieldId')::bigint
+                            ELSE NULL
+                        END
+                        WHERE b.id = ?
+                          AND COALESCE(NULLIF(BTRIM(source.value ->> 'fieldName'), ''), f.field_name) IS NOT NULL
                         """,
                 String.class, bindingId);
     }
@@ -335,6 +373,33 @@ class SubTableBindingScopeGuard {
         }
     }
 
+    private void assertNewRowOwnership(BindingMeta meta, Map<String, Object> row,
+                                       Map<String, Object> baselineRow) {
+        if (baselineRow != null || !StringUtils.hasText(meta.filterField())) {
+            return;
+        }
+        List<String> allowed = new ArrayList<>(meta.explicitFillFields());
+        allowed.add(meta.filterField());
+        for (String foreignKey : meta.foreignKeyFields()) {
+            if (containsIgnoreCase(allowed, foreignKey)) {
+                continue;
+            }
+            Object value = row.get(foreignKey);
+            if (value == null) {
+                value = ignoreCase(row, foreignKey);
+            }
+            if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                throw new PortalException("403",
+                        "New sub-table row contains a foreign key not owned by this binding");
+            }
+        }
+    }
+
+    private static boolean containsIgnoreCase(List<String> values, String target) {
+        return values != null && target != null && values.stream()
+                .anyMatch(value -> value != null && value.equalsIgnoreCase(target));
+    }
+
     private void assertRowVersion(Map<String, Object> submittedRow, Map<String, Object> baselineRow) {
         if (baselineRow == null) {
             return;
@@ -382,7 +447,8 @@ class SubTableBindingScopeGuard {
 
     private record BindingMeta(long id, String storeKey, String filterField, String filterRefType,
                                String filterRefTableName, Long filterRefTableId,
-                               List<String> pkColumns, List<String> refPkColumns) {}
+                               List<String> pkColumns, List<String> refPkColumns,
+                               List<String> foreignKeyFields, List<String> explicitFillFields) {}
 
     @SuppressWarnings("unchecked")
     private static List<Object> rowsOf(Map<String, Object> tables, String storeKey) {

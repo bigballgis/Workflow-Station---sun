@@ -20,7 +20,14 @@ class SubTableWriteDesign {
     private final ObjectMapper mapper;
 
     record Binding(String id, String storeKey, String filterField, String refType,
-                   String refTableName, List<String> pk, List<String> refPk, String linkMode) { }
+                   String refTableName, List<String> pk, List<String> refPk, String linkMode,
+                   List<String> foreignKeyFields, List<String> explicitFillFields) {
+        Binding(String id, String storeKey, String filterField, String refType,
+                String refTableName, List<String> pk, List<String> refPk, String linkMode) {
+            this(id, storeKey, filterField, refType, refTableName, pk, refPk, linkMode,
+                    List.of(), List.of());
+        }
+    }
 
     /** Null is exclusively the legacy, non-frozen form contract. */
     Map<String, Binding> resolve(String catalogId, String stageId) {
@@ -85,7 +92,8 @@ class SubTableWriteDesign {
             if (id == null || out.containsKey(id)) throw invalid("Pinned binding identity is missing or duplicated");
             out.put(id, new Binding(id, "dw:" + name.toLowerCase(java.util.Locale.ROOT), field,
                     text(parent.get("tableType")), refName, primaryKeys(table), primaryKeys(parent),
-                    text(binding.get("bindingLinkMode"))));
+                    text(binding.get("bindingLinkMode")), foreignKeyFields(table),
+                    explicitFillFields(binding, table)));
         }
         return out;
     }
@@ -113,6 +121,26 @@ class SubTableWriteDesign {
     private static List<String> primaryKeys(Map<String, Object> table) {
         return objects(table.get("fields")).stream().filter(f -> Boolean.TRUE.equals(f.get("isPrimaryKey")))
                 .map(f -> text(f.get("fieldName"))).toList();
+    }
+
+    private static List<String> foreignKeyFields(Map<String, Object> table) {
+        return objects(table.get("fields")).stream().filter(f -> Boolean.TRUE.equals(f.get("isForeignKey")))
+                .map(f -> text(f.get("fieldName"))).filter(java.util.Objects::nonNull).toList();
+    }
+
+    private static List<String> explicitFillFields(Map<String, Object> binding, Map<String, Object> table) {
+        Map<String, String> namesById = new LinkedHashMap<>();
+        for (Map<String, Object> field : objects(table.get("fields"))) {
+            String id = text(field.get("id"));
+            String name = text(field.get("fieldName"));
+            if (id != null && name != null) namesById.put(id, name);
+        }
+        return objects(binding.get("fkFillSources")).stream()
+                .map(source -> {
+                    String name = text(source.get("fieldName"));
+                    return name != null ? name : namesById.get(text(source.get("fieldId")));
+                })
+                .filter(java.util.Objects::nonNull).distinct().toList();
     }
 
     @SuppressWarnings("unchecked")

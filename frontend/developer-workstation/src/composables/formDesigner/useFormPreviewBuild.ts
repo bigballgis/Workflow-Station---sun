@@ -328,6 +328,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
         fieldDefinitions: (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || [],
         bindingLinkMode: b.bindingLinkMode,
         bindingForeignKeyField: b.foreignKeyField,
+        filterFkFieldName: store.tables.find(t => t.id === b.tableId)?.fieldDefinitions
+          ?.find((field: FieldDefinition) => Number(field.id) === Number(b.filterFkFieldId))?.fieldName ?? null,
         fkFillSources: b.fkFillSources,
         // Only a design that actually placed the Assignment Mode component gets the
         // block. The BPMN contract supplies its content, not its existence — passing

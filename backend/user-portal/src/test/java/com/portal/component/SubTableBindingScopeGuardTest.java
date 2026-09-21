@@ -247,6 +247,58 @@ class SubTableBindingScopeGuardTest {
     }
 
     @Test
+    void newRowMayOnlyUseItsFilterFkByDefault() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        Map<String, SubTableWriteDesign.Binding> frozen = Map.of("202",
+                new SubTableWriteDesign.Binding("202", "dw:p0_dual_file", "party_id", "SUB",
+                        "p0_dual_party", List.of("id"), List.of("id"), "structuralFk",
+                        List.of("case_id", "party_id"), List.of()));
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", List.of(fileRow("Y", "C1", "P-A")));
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Y")), false)),
+                FU, currentItem("P-A"), submitted, Map.of(), frozen))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("not owned by this binding");
+    }
+
+    @Test
+    void explicitFillSourceAllowsAnotherFkOnANewRow() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        Map<String, SubTableWriteDesign.Binding> frozen = Map.of("202",
+                new SubTableWriteDesign.Binding("202", "dw:p0_dual_file", "party_id", "SUB",
+                        "p0_dual_party", List.of("id"), List.of("id"), "structuralFk",
+                        List.of("case_id", "party_id"), List.of("case_id")));
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", List.of(fileRow("Y", "C1", "P-A")));
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Y")), false)),
+                FU, currentItem("P-A"), submitted, Map.of(), frozen);
+    }
+
+    @Test
+    void historicalIntersectionMayStillBeEdited() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        Map<String, SubTableWriteDesign.Binding> frozen = Map.of("202",
+                new SubTableWriteDesign.Binding("202", "dw:p0_dual_file", "party_id", "SUB",
+                        "p0_dual_party", List.of("id"), List.of("id"), "structuralFk",
+                        List.of("case_id", "party_id"), List.of()));
+        Map<String, Object> persisted = fileRow("Y", "C1", "P-A");
+        persisted.put("_wsRowVersion", 0);
+        Map<String, Object> submittedRow = new HashMap<>(persisted);
+        submittedRow.put("title", "renamed");
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", List.of(submittedRow));
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Y")), false)),
+                FU, currentItem("P-A"), submitted,
+                Map.of("dw:p0_dual_file", List.of(persisted)), frozen);
+    }
+
+    @Test
     void overlappingBindingsValidateOriginalVersionAndIncrementOnce() {
         JdbcTemplate jdbc = stubTwoBindings();
         Map<String, Object> row = fileRow("Y", "C1", "P-A");
@@ -381,8 +433,10 @@ class SubTableBindingScopeGuardTest {
                     when(rs.wasNull()).thenReturn(filterRefTableId == null);
                     return List.of(mapper.mapRow(rs, 0));
                 });
-        when(jdbc.queryForList(contains("JOIN dw_form_table_bindings"), eq(String.class), eq(bindingId)))
+        when(jdbc.queryForList(contains("is_primary_key"), eq(String.class), eq(bindingId)))
                 .thenReturn(pkColumns);
+        when(jdbc.queryForList(contains("is_foreign_key"), eq(String.class), eq(bindingId)))
+                .thenReturn(List.of(filterField));
         if (filterRefTableId != null) {
             when(jdbc.queryForList(contains("f.table_id ="), eq(String.class), eq(filterRefTableId)))
                     .thenReturn(List.of("id"));

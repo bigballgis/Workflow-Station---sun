@@ -21,6 +21,7 @@ import {
   guardBeforeChildRowAdd,
   isFkHidden,
   isFkReadonly,
+  selectBindingOwnedFkMetas,
   hasAmbiguousAncestorTable,
   replaceAncestorRow,
   uniqueAncestorRow,
@@ -245,6 +246,7 @@ export async function prepareSubTableAddRow(options: {
   autoEnsurePrimaryRecord?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
+  filterFkFieldName?: string | null
   fkFillSources?: import('./tableFkRuntime').FkFillSourceConfig[] | null
   t?: (key: string, params?: Record<string, unknown>) => string
 }): Promise<
@@ -265,11 +267,16 @@ export async function prepareSubTableAddRow(options: {
 
   let rowAddContext = initialRowAddContext
 
-  const fkMetas = applyFkFillSources(
-    filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+  const structuralFkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
       bindingLinkMode: options.bindingLinkMode,
       bindingForeignKeyField: options.bindingForeignKeyField,
-    }),
+    })
+  const fkMetas = applyFkFillSources(
+    selectBindingOwnedFkMetas(
+      structuralFkMetas,
+      options.filterFkFieldName,
+      options.fkFillSources,
+    ),
     options.fkFillSources,
   )
 
@@ -306,7 +313,11 @@ export async function prepareSubTableAddRow(options: {
     }
   }
 
-  const { visibleColumns, allColumns } = applyFkPresentationToDialogColumns(columns, fkMetas, fieldDefinitions)
+  const { visibleColumns, allColumns } = applyFkPresentationToDialogColumns(
+    columns,
+    structuralFkMetas,
+    fieldDefinitions,
+  )
   let row = buildInitialRow(allColumns)
   row = applyFkToInitialRow(row, fkMetas, rowAddContext)
 

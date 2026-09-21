@@ -170,6 +170,8 @@ export interface SubTableFieldProps {
   bindingForeignKeyField?: string | null
   /** Declared filter FK parent table — unique sibling row of that table is the nested parent. */
   filterFkRefTableId?: number | null
+  /** Declared filter FK column — default ownership column for rows created through this binding. */
+  filterFkFieldName?: string | null
   /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null

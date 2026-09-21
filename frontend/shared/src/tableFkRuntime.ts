@@ -34,7 +34,13 @@ import {
 } from './tableFkContext'
 
 export type { FieldFkMeta, FkFillKind, FkFillSourceConfig } from './tableFkMeta'
-export { applyFkFillSources, declaredFkFillSources, isFkHidden, isFkReadonly } from './tableFkMeta'
+export {
+  applyFkFillSources,
+  declaredFkFillSources,
+  isFkHidden,
+  isFkReadonly,
+  selectBindingOwnedFkMetas,
+} from './tableFkMeta'
 
 export interface PkGenerationConfig {
   strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence' | 'dailyDateSequence' | 'monthlyDateSequence' | 'customFormat' | 'datePrefixedSequence'

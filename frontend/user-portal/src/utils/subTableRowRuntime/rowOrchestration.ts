@@ -10,6 +10,7 @@ import {
   applyFkToInitialRow,
   guardBeforeChildRowAdd,
   resolveForeignKeyValues,
+  selectBindingOwnedFkMetas,
   type FieldFkMeta,
   type FkFillSourceConfig,
 } from '../tableFkRuntime'
@@ -193,6 +194,7 @@ export async function prepareSubTableAddRow(options: {
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
   fkFillSources?: FkFillSourceConfig[] | null
+  filterFkFieldName?: string | null
   primaryKeyFields?: string[] | null
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -216,11 +218,16 @@ export async function prepareSubTableAddRow(options: {
 
   let rowAddContext = initialRowAddContext
 
-  const fkMetas = applyFkFillSources(
-    filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+  const structuralFkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
       bindingLinkMode: options.bindingLinkMode,
       bindingForeignKeyField: options.bindingForeignKeyField,
-    }),
+    })
+  const fkMetas = applyFkFillSources(
+    selectBindingOwnedFkMetas(
+      structuralFkMetas,
+      options.filterFkFieldName,
+      options.fkFillSources,
+    ),
     options.fkFillSources,
   )
 
@@ -270,7 +277,11 @@ export async function prepareSubTableAddRow(options: {
     }
   }
 
-  const { visibleColumns, allColumns } = applyFkPresentationToDialogColumns(columns, fkMetas, fieldDefinitions)
+  const { visibleColumns, allColumns } = applyFkPresentationToDialogColumns(
+    columns,
+    structuralFkMetas,
+    fieldDefinitions,
+  )
   let row = buildInitialRow(allColumns)
   row = applyFkToInitialRow(row, fkMetas, rowAddContext)
   row = applyMiParticipantRowSeedToInitialRow(row, {
@@ -337,6 +348,7 @@ export async function finalizeSubTableRowOnSave(options: {
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
   fkFillSources?: FkFillSourceConfig[] | null
+  filterFkFieldName?: string | null
   primaryKeyFields?: string[] | null
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -369,11 +381,16 @@ export async function finalizeSubTableRowOnSave(options: {
   } = options
 
   let rowAddContext = options.rowAddContext
-  const fkMetas = applyFkFillSources(
-    filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+  const structuralFkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
       bindingLinkMode: options.bindingLinkMode,
       bindingForeignKeyField: options.bindingForeignKeyField,
-    }),
+    })
+  const fkMetas = applyFkFillSources(
+    selectBindingOwnedFkMetas(
+      structuralFkMetas,
+      options.filterFkFieldName,
+      options.fkFillSources,
+    ),
     options.fkFillSources,
   )
 

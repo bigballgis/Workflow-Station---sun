@@ -2,6 +2,7 @@ package com.developer.component;
 
 import com.developer.component.impl.TableDesignComponentImpl;
 import com.developer.dto.FieldDefinitionRequest;
+import com.developer.dto.FkFillSource;
 import com.developer.dto.TableDefinitionRequest;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormTableBinding;
@@ -55,6 +56,7 @@ class TableDesignPkRenameFkCascadeTest {
     private static final Long PK_FIELD_ID = 7001L;
     private static final Long PLAIN_FIELD_ID = 7002L;
     private static final Long REBUILT_FILTER_FIELD_ID = 7101L;
+    private static final Long REBUILT_FILL_SOURCE_FIELD_ID = 7102L;
 
     @Mock private TableDefinitionRepository tableDefinitionRepository;
     @Mock private FieldDefinitionRepository fieldDefinitionRepository;
@@ -206,12 +208,17 @@ class TableDesignPkRenameFkCascadeTest {
         binding.setId(50705L);
         binding.setTable(parentTable);
         binding.setFilterFkFieldId(PK_FIELD_ID);
+        binding.setFkFillSources(List.of(
+                FkFillSource.builder().fieldId(PK_FIELD_ID).fieldName("id_idw").kind("PRIMARY").build(),
+                FkFillSource.builder().fieldId(PLAIN_FIELD_ID).fieldName("label").kind("PARENT").build()));
         when(formTableBindingRepository.findByTableId(PARENT_TABLE_ID)).thenReturn(List.of(binding));
 
         FieldDefinition rebuilt = pk(REBUILT_FILTER_FIELD_ID, "id_idw");
         rebuilt.setTableDefinition(parentTable);
+        FieldDefinition rebuiltFillSource = pk(REBUILT_FILL_SOURCE_FIELD_ID, "label");
+        rebuiltFillSource.setTableDefinition(parentTable);
         when(fieldDefinitionRepository.findByTableDefinitionIdOrderBySortOrderAsc(PARENT_TABLE_ID))
-                .thenReturn(List.of(rebuilt));
+                .thenReturn(List.of(rebuilt, rebuiltFillSource));
 
         component.update(PARENT_TABLE_ID, tableReq(
                 req(PK_FIELD_ID, "id_idw", true),
@@ -220,6 +227,8 @@ class TableDesignPkRenameFkCascadeTest {
         assertThat(binding.getFilterFkFieldId())
                 .as("delete-and-reinsert must not leave filter_fk_field_id pointing at a deleted row")
                 .isEqualTo(REBUILT_FILTER_FIELD_ID);
+        assertThat(binding.getFkFillSources()).extracting(FkFillSource::getFieldId)
+                .containsExactly(REBUILT_FILTER_FIELD_ID, REBUILT_FILL_SOURCE_FIELD_ID);
         verify(formTableBindingRepository).saveAll(List.of(binding));
     }
 }

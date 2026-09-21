@@ -578,6 +578,63 @@ describe('dual-binding FK parent context', () => {
     { fieldName: 'party_id', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['id'] },
   ])
 
+  it('fills only the current binding filter FK unless another source is explicit', async () => {
+    const context = buildRowAddContext(
+      { id: 'Case-1' },
+      [
+        { tableId: MAIN, bindingType: 'PRIMARY' },
+        { bindingId: 50704, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-1' }] },
+      ],
+    )
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'party.doc' },
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } },
+        { fieldName: 'case_id', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: context,
+      tableId: 50348,
+      filterFkFieldName: 'party_id',
+      allocatePrimaryKeys: vi.fn(async () => ['File-1']),
+    } as any)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.row.party_id).toBe('Party-1')
+      expect(result.row.case_id).toBeUndefined()
+    }
+  })
+
+  it('also fills an additional FK when fkFillSources explicitly declares it', async () => {
+    const context = buildRowAddContext(
+      { id: 'Case-1' },
+      [
+        { tableId: MAIN, bindingType: 'PRIMARY' },
+        { bindingId: 50704, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-1' }] },
+      ],
+    )
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'nested.doc' },
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } },
+        { fieldName: 'case_id', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: context,
+      tableId: 50348,
+      filterFkFieldName: 'party_id',
+      fkFillSources: [{ fieldName: 'case_id', kind: 'PRIMARY' }],
+      allocatePrimaryKeys: vi.fn(async () => ['File-2']),
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.row.party_id).toBe('Party-1')
+      expect(result.row.case_id).toBe('Case-1')
+    }
+  })
+
   it('does not copy MAIN pk onto a nested party_id when the party ancestor is absent', () => {
     const row = applyFkToInitialRow({}, fileFks, {
       primaryFormData: { id: 'Case-1', title: 'x' },

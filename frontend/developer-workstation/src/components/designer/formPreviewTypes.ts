@@ -1,4 +1,5 @@
 import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 
 export interface PreviewSubTableBinding {
   bindingId: number
@@ -13,9 +14,11 @@ export interface PreviewSubTableBinding {
    * 与 SubTableConfig（composables/designerSubTableField/types.ts）同名同义。
    */
   tableId?: number
-  fieldDefinitions?: unknown[]
+  fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string
   bindingForeignKeyField?: string | null
+  filterFkFieldName?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   rule: any[]
   option?: any
   columns: any[]

@@ -21,7 +21,8 @@ class SubTableWriteDesignTest {
                         """
                         {"formId":2,"formType":"TASK","configJson":{},"tableBindings":[
                           {"bindingId":202,"bindingType":"SUB","tableName":"files",
-                           "filterFkFieldName":"party_ref","filterFkRefTableName":"parties"}]}
+                           "filterFkFieldName":"party_ref","filterFkRefTableName":"parties",
+                           "fkFillSources":[{"fieldId":12,"kind":"PRIMARY"}]}]}
                         """));
         when(jdbc.queryForList(contains("content_type = 'PROCESS'"), eq(String.class), eq("pin")))
                 .thenReturn(List.of("""
@@ -33,7 +34,9 @@ class SubTableWriteDesignTest {
                 .thenReturn(List.of(
                         """
                         {"tableName":"files","tableType":"SUB","fields":[
-                          {"fieldName":"file_key","isPrimaryKey":true}]}
+                          {"fieldName":"file_key","isPrimaryKey":true},
+                          {"id":11,"fieldName":"party_ref","isForeignKey":true},
+                          {"id":12,"fieldName":"case_ref","isForeignKey":true}]}
                         """,
                         """
                         {"tableName":"parties","tableType":"SUB","fields":[
@@ -44,6 +47,8 @@ class SubTableWriteDesignTest {
 
         assertThat(rules).containsOnlyKeys("202");
         assertThat(rules.get("202").filterField()).isEqualTo("party_ref");
+        assertThat(rules.get("202").foreignKeyFields()).containsExactly("party_ref", "case_ref");
+        assertThat(rules.get("202").explicitFillFields()).containsExactly("case_ref");
     }
 
     @Test

@@ -69,3 +69,23 @@ export function applyFkFillSources(
     }
   })
 }
+
+/**
+ * A binding owns its declared filter FK. Additional FK columns participate in automatic
+ * fill only when the designer explicitly lists them in fkFillSources. Bindings without a
+ * declared filter keep the legacy all-structural-FK behavior for old single-binding forms.
+ */
+export function selectBindingOwnedFkMetas(
+  metas: FieldFkMeta[],
+  filterFkFieldName?: string | null,
+  sources?: FkFillSourceConfig[] | null,
+): FieldFkMeta[] {
+  const owner = String(filterFkFieldName ?? '').trim().toLowerCase()
+  if (!owner) return metas
+  const allowed = new Set<string>([owner])
+  for (const source of sources ?? []) {
+    const field = String(source?.fieldName ?? '').trim().toLowerCase()
+    if (field) allowed.add(field)
+  }
+  return metas.filter(meta => allowed.has(String(meta.fieldName ?? '').trim().toLowerCase()))
+}

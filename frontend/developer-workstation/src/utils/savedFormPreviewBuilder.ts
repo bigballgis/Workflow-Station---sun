@@ -284,6 +284,15 @@ function buildBindingMap(
       fieldDefinitions: tables.find(tb => tb.id === b.tableId)?.fieldDefinitions || [],
       bindingLinkMode: b.bindingLinkMode,
       bindingForeignKeyField: b.foreignKeyField,
+      filterFkFieldName: tables.find(tb => tb.id === b.tableId)?.fieldDefinitions
+        ?.find(field => Number(field.id) === Number(b.filterFkFieldId))?.fieldName ?? null,
+      fkFillSources: (b.fkFillSources ?? []).flatMap(source => source.fieldName
+        ? [{
+            fieldName: source.fieldName,
+            kind: source.kind,
+            ancestorBindingId: source.ancestorBindingId,
+          }]
+        : []),
       rule,
       option: subOpt,
       columns,

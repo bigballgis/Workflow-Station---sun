@@ -499,6 +499,14 @@
               :linked-sub-table-bindings="linkedSubTableBindings"
               :show-link-form-dialog-footer="showLinkFormDialogFooter"
               :primary-key-fields="selectedLinkBinding.primaryKeyFields"
+              :table-id="selectedLinkBinding.tableId ?? null"
+              :binding-id="selectedLinkBinding.bindingId"
+              :field-definitions="(selectedLinkBinding as any).fieldDefinitions"
+              :binding-link-mode="selectedLinkBinding.bindingLinkMode"
+              :binding-foreign-key-field="selectedLinkBinding.foreignKeyField"
+              :filter-fk-ref-table-id="selectedLinkBinding.filterFkRefTableId"
+              :filter-fk-field-name="selectedLinkBinding.filterFkFieldName"
+              :fk-fill-sources="selectedLinkBinding.fkFillSources"
               :field-permissions="fieldPermissions"
               @update:model-value="handleLinkedSubTableUpdate"
             />
@@ -700,6 +708,7 @@ const props = withDefaults(defineProps<{
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
   filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null

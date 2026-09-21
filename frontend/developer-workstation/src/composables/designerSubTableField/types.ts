@@ -27,6 +27,7 @@ export interface SubTableConfig {
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  filterFkFieldName?: string | null
   fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   /**
    * ACTION 绑定（FORM_POPUP 弹窗写入的记录表）语义上是操作留痕，恒只读——SubTableField 据此

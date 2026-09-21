@@ -582,6 +582,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :task-id="hostTaskId"
         :binding-link-mode="resolveBinding(field._bindingId)?.bindingLinkMode"
         :binding-foreign-key-field="resolveBinding(field._bindingId)?.foreignKeyField"
+        :filter-fk-field-name="resolveBinding(field._bindingId)?.filterFkFieldName"
         :binding-id="field._bindingId"
         :field-permissions="fieldPermissions"
         :parent-row="model"

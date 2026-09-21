@@ -634,6 +634,7 @@
         :parent-row="formData"
         :parent-table-id="hostTableId ?? null"
         :parent-binding-id="bindingId ?? null"
+        :filter-fk-field-name="nested.filterFkFieldName"
         :fk-fill-sources="nested.fkFillSources"
         :parent-tables-by-id="nestedParentTablesById"
         :primary-form-data="hostPrimaryFormData"

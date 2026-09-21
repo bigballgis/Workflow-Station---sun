@@ -76,8 +76,15 @@ async function deployFromDw(page, userId, fuId) {
   throw new Error('deploy timed out after 180s')
 }
 
-async function addNamedRow(page, tableIndex, tableTitle, fieldHint, value) {
-  const card = page.locator('.sub-table-field').filter({ hasText: tableTitle }).nth(tableIndex)
+function subTableCard(page, title) {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return page.locator('.sub-table-field').filter({
+    hasText: new RegExp(`^${escaped}(?:\\s|\\()`),
+  }).first()
+}
+
+async function addNamedRow(page, tableTitle, fieldHint, value) {
+  const card = subTableCard(page, tableTitle)
   await card.scrollIntoViewIfNeeded()
   await card.getByRole('button', { name: /^(Add|新增)$/ }).click()
   const dlg = page.getByRole('dialog').filter({ hasText: /Add Record|新增/ }).last()
@@ -95,14 +102,15 @@ async function runPortalWrite(browser) {
     waitUntil: 'domcontentloaded',
   })
   await portalPage.waitForTimeout(8000)
+  console.log(`[start] widgets=${JSON.stringify(await portalPage.locator('.sub-table-field').allInnerTexts())}`)
   const title = portalPage.locator('.el-form-item').filter({ hasText: /^Title/ }).locator('input').first()
   await title.fill('P0 dual write')
 
-  await addNamedRow(portalPage, 0, 'P0 Dual File', 'File name', 'case-doc')
-  // Create the case-only row before a Party exists; otherwise structural FK fill
-  // correctly makes it an intersection row owned by both file bindings.
-  await addNamedRow(portalPage, 0, 'P0 Dual Party', 'Party name', 'Alice')
-  await addNamedRow(portalPage, 1, 'P0 Dual File', 'File name', 'party-doc')
+  await addNamedRow(portalPage, 'Case files', 'File name', 'case-doc')
+  await addNamedRow(portalPage, 'Parties', 'Party name', 'Alice')
+  await addNamedRow(portalPage, 'Party files', 'File name', 'party-doc')
+  await addNamedRow(portalPage, 'Case files2', 'File name', 'case2-doc')
+  await addNamedRow(portalPage, 'Case files3', 'File name', 'case3-doc')
 
   const filled = join(PORTAL_SHOTS, `${DATE}_p0-dual-binding-portal-filled.png`)
   await portalPage.screenshot({ path: filled, fullPage: true })
@@ -130,22 +138,29 @@ async function runPortalWrite(browser) {
   if (mainId == null || String(mainId).trim() === '') {
     throw new Error('start payload missing MAIN id after PK preserve')
   }
-  const fileCaseIds = files.map((r) => String(r.case_id ?? ''))
-  if (fileCaseIds.some((id) => id !== String(mainId))) {
-    throw new Error(`start file case_id must match MAIN id ${mainId}, got ${fileCaseIds.join(',')}`)
-  }
   const aliceId = parties[0]?.id
-  const partyDoc = files.find((r) => String(r.file_name) === 'party-doc')
-  if (aliceId && partyDoc && String(partyDoc.party_id ?? '') !== String(aliceId)) {
-    throw new Error(`party-doc party_id expected ${aliceId}, got ${partyDoc.party_id}`)
+  const expectedRows = [
+    ['case-doc', 'case_id', mainId],
+    ['party-doc', 'party_id', aliceId],
+    ['case2-doc', 'case_id2', mainId],
+    ['case3-doc', 'case_id3', mainId],
+  ]
+  const fkFields = ['case_id', 'party_id', 'case_id2', 'case_id3']
+  for (const [name, ownedFk, expected] of expectedRows) {
+    const row = files.find((candidate) => String(candidate.file_name) === name)
+    if (!row) throw new Error(`start payload missing ${name}`)
+    if (String(row[ownedFk] ?? '') !== String(expected ?? '')) {
+      throw new Error(`${name}.${ownedFk} expected ${expected}, got ${row[ownedFk]}`)
+    }
+    const unexpected = fkFields.filter((field) => field !== ownedFk && String(row[field] ?? '').trim() !== '')
+    if (unexpected.length > 0) {
+      throw new Error(`${name} unexpectedly filled ${unexpected.join(',')}: ${JSON.stringify(row)}`)
+    }
   }
-  if (files.length < 2) {
-    throw new Error(`start payload dw:p0_dual_file expected 2 union-merged rows, got ${JSON.stringify(files).slice(0, 500)}`)
+  if (files.length !== 4) {
+    throw new Error(`start payload dw:p0_dual_file expected 4 independently owned rows, got ${JSON.stringify(files).slice(0, 800)}`)
   }
   const names = files.map((r) => String(r.file_name ?? ''))
-  if (!names.includes('case-doc') || !names.includes('party-doc')) {
-    throw new Error(`start payload missing both file names: ${names.join(',')}`)
-  }
   if (payload.subTableBindingScopes) {
     console.log(`[start] scopes=${JSON.stringify(payload.subTableBindingScopes)}`)
   } else {
@@ -201,24 +216,20 @@ async function runPortalWrite(browser) {
   })
   await portalPage.goto(`${ORIGIN}/portal/tasks/${taskId}`, { waitUntil: 'domcontentloaded' })
   await portalPage.waitForTimeout(8000)
-  const fileCards = portalPage.locator('.sub-table-field').filter({ hasText: /P0 Dual File/i })
-  const fileCardCount = await fileCards.count()
-  if (fileCardCount < 2) {
-    throw new Error(`P2 hydrate: expected 2 file widgets, got ${fileCardCount}`)
-  }
+  const fileTitles = ['Case files', 'Party files', 'Case files2', 'Case files3']
+  const fileCards = fileTitles.map((title) => subTableCard(portalPage, title))
   const widgetTexts = []
-  for (let i = 0; i < fileCardCount; i++) {
-    const text = String(await fileCards.nth(i).innerText()).replace(/\s+/g, ' ').slice(0, 500)
+  for (let i = 0; i < fileCards.length; i++) {
+    const text = String(await fileCards[i].innerText()).replace(/\s+/g, ' ').slice(0, 500)
     widgetTexts.push(text)
-    console.log(`[task] file widget ${i}/${fileCardCount}: ${text}`)
+    console.log(`[task] file widget ${i}/${fileCards.length}: ${text}`)
   }
-  const widget0 = widgetTexts[0] ?? ''
-  const widget1 = widgetTexts[1] ?? ''
-  if (!/\bcase-doc\b/.test(widget0) || !/\bparty-doc\b/.test(widget0)) {
-    throw new Error(`P2 display: MAIN-filter widget must show intersection (case-doc + party-doc), got ${widget0}`)
-  }
-  if (!/\bparty-doc\b/.test(widget1) || /\bcase-doc\b/.test(widget1)) {
-    throw new Error(`P2 display: party-filter widget must show only party-doc, got ${widget1}`)
+  for (let i = 0; i < expectedRows.length; i++) {
+    const expectedName = expectedRows[i][0]
+    const otherNames = expectedRows.map((row) => row[0]).filter((name) => name !== expectedName)
+    if (!widgetTexts[i].includes(expectedName) || otherNames.some((name) => widgetTexts[i].includes(name))) {
+      throw new Error(`P2 display: ${fileTitles[i]} must show only ${expectedName}, got ${widgetTexts[i]}`)
+    }
   }
   const hydrateShot = join(PORTAL_SHOTS, `${DATE}_p0-dual-binding-portal-task-hydrate.png`)
   await portalPage.screenshot({ path: hydrateShot, fullPage: true })
@@ -239,21 +250,21 @@ async function runPortalWrite(browser) {
   const submitReq = await submitWait
   const submitPayload = submitReq.postDataJSON() ?? {}
   const savedFiles = submitPayload.formData?.__subTables__?.['dw:p0_dual_file']
-  if (!Array.isArray(savedFiles) || savedFiles.length < 2) {
-    throw new Error(`task submit store must keep both file rows, got ${JSON.stringify(savedFiles).slice(0, 500)}`)
+  if (!Array.isArray(savedFiles) || savedFiles.length !== 4) {
+    throw new Error(`task submit store must keep four file rows, got ${JSON.stringify(savedFiles).slice(0, 800)}`)
   }
   const scopes = submitPayload.subTableBindingScopes
   console.log(`[task] scopes=${JSON.stringify(scopes)}`)
-  if (!Array.isArray(scopes) || scopes.length < 2) {
-    throw new Error(`task submit expected >=2 binding scopes, got ${JSON.stringify(scopes)}`)
+  if (!Array.isArray(scopes) || scopes.length < 4) {
+    throw new Error(`task submit expected >=4 binding scopes, got ${JSON.stringify(scopes)}`)
   }
   const storeKeys = new Set(scopes.map((s) => s.storeKey))
   if (!storeKeys.has('dw:p0_dual_file')) {
     throw new Error(`task scopes missing dw:p0_dual_file: ${JSON.stringify(scopes)}`)
   }
   const bindingIds = new Set(scopes.map((s) => String(s.bindingId)))
-  if (bindingIds.size < 2) {
-    throw new Error(`task scopes expected two binding ids, got ${JSON.stringify(scopes)}`)
+  if (bindingIds.size < 4) {
+    throw new Error(`task scopes expected four binding ids, got ${JSON.stringify(scopes)}`)
   }
   const submitResp = await submitRespWait
   const submitBody = await submitResp.json().catch(() => ({}))
