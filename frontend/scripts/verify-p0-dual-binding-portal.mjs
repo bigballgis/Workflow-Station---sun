@@ -98,8 +98,10 @@ async function runPortalWrite(browser) {
   const title = portalPage.locator('.el-form-item').filter({ hasText: /^Title/ }).locator('input').first()
   await title.fill('P0 dual write')
 
-  await addNamedRow(portalPage, 0, 'P0 Dual Party', 'Party name', 'Alice')
   await addNamedRow(portalPage, 0, 'P0 Dual File', 'File name', 'case-doc')
+  // Create the case-only row before a Party exists; otherwise structural FK fill
+  // correctly makes it an intersection row owned by both file bindings.
+  await addNamedRow(portalPage, 0, 'P0 Dual Party', 'Party name', 'Alice')
   await addNamedRow(portalPage, 1, 'P0 Dual File', 'File name', 'party-doc')
 
   const filled = join(PORTAL_SHOTS, `${DATE}_p0-dual-binding-portal-filled.png`)

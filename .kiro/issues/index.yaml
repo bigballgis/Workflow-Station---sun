@@ -4215,6 +4215,19 @@
     FK 匹配（嵌套父行解析属 P2）。重建 user-portal 后同一脚本 submit HTTP 200。
     两 widget 仍把同一 store 的两行都认领（hydrate 未按 filter 切片）。
     种子未编入 00-init-all。
+    2026-09-18 follow-up：审查 recent commits 后补齐三个写协议缺口。
+    交集行原先被两个 scope 顺序校验，第一条先递增 `_wsRowVersion` 导致第二条
+    对同一次提交误报 409；现改为全部 scope 对原始版本完成校验后，每个 store
+    统一递增一次。删除现携带显式 `deletedRows`（row identity + 读取时版本），
+    后端拒绝未声明删除、旧版本删除，以及 `rowKeys:null` 绕过。前端删除集合从
+    加载时 immutable baseline 计算，Save/autosave/MI Fill 成功后重新加载服务器版本。
+    同表两条 binding 即使指向同一父表，只要 filter FK 列不同也分别投影。
+    尚未收口的设计契约：嵌套子表要求父行“已保存”，但当前前端上下文只有
+    PK / `_wsRowVersion`，没有可信的 server-persisted 标记；不能用“已有 PK”猜保存状态，
+    需后续从加载基线向 FormRenderer/SubTableField 透传持久化身份。
+    验证：聚焦 Maven 5 类全绿；user-portal 全量 1576 测仅余既有
+    ChangeHistoryStatusFieldFilterTest 1 个基线失败；MI 24 files / 212 tests；
+    portal build 与 compose user-portal/user-portal-frontend/workflow-engine 健康。
 
 - id: "1637"
   status: open
@@ -4273,4 +4286,11 @@
     运行时 verify-catalog-pin-coexistence.mjs：1.0.1 实例 625add90 无 fill sources，
     1.0.2 仍 PRIMARY,PARENT。DETAIL 仍 live overlay。Long 列不可变包未做。
     残余：customActionFormPopup 无 resolver 时仍按 process key 拉包。
+    2026-09-18 follow-up：读路径虽已钉住 catalog，binding-scoped 写校验仍查询 live
+    `dw_form_table_bindings`，删除/改名 live binding 会让旧实例保存 403 或套用新 PK/FK。
+    新增 `SubTableWriteDesign` 从 pinned FORM + DATA_TABLE content 解析 binding、过滤 FK、
+    子表/父表主键；Task Save/Complete、Process Start、Return-To-Requester 全部传 catalog
+    与 stage，MI 分类和 Scope Guard 共用冻结规则。冻结配置缺表/重复/歧义时 409 fail closed，
+    仅缺少 tableBindings 的 legacy 包继续 V1。`SubTableWriteDesignTest` 证明 live binding
+    删除后仍按 snapshot 校验，且未访问 live DW 表。
 
