@@ -609,6 +609,7 @@ const loadFunctionUnitContent = async () => {
           fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
           ...declaredFilterFkFields(b as { filterFkRefTableId?: number | null; filterFkFieldName?: string | null }),
+          filterFkRefTableName: (b as { filterFkRefTableName?: string | null }).filterFkRefTableName ?? null,
           ...declaredFkFillSources(b as { fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] }),
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []

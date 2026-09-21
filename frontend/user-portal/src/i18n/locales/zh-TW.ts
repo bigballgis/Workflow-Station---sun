@@ -1170,6 +1170,7 @@ export default {
     mainTableDefault: '主表',
     childTableDefault: '子表',
     fkGuardMainNotReady: '請先建立{parentTableName}記錄，再新增{childTableName}資料。',
+    fkGuardMissingParents: '無法儲存{childTableName}：缺少必要的關聯資訊 {missingDetails}。請先建立對應的父表記錄。',
 import: '匯入',
 exportWithData: '匯出',
     startTime: '開始時間',

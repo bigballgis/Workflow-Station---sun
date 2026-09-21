@@ -8,7 +8,7 @@
  * widgets. Widget edits merge the slice back into the canonical array.
  *
  * V1 is unchanged unless the form actually has two SUB bindings on the same
- * table with different `filterFkRefTableId`. Missing parent → empty list, not
+ * table with different configured filter FKs. Missing parent → empty list, not
  * the full store.
  */
 
@@ -18,10 +18,20 @@ import { resolveMiChildPrimaryKeyColumns } from './miLinkChildIdentity'
 export interface FilterProjectionBinding {
   bindingId?: number | string
   tableId?: number | null
+  tableName?: string | null
+  designerTableName?: string | null
   bindingType?: string | null
   primaryKeyFields?: string[] | null
-  fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }> | null
+  fieldDefinitions?: Array<{
+    fieldName?: string
+    isPrimaryKey?: boolean
+    isForeignKey?: boolean
+    refTableId?: number | null
+    refTableName?: string | null
+  }> | null
+  foreignKeyField?: string | null
   filterFkRefTableId?: number | null
+  filterFkRefTableName?: string | null
   filterFkFieldName?: string | null
   data?: unknown[]
 }
@@ -29,6 +39,7 @@ export interface FilterProjectionBinding {
 export interface FilterProjectionFormContext {
   formData?: Record<string, unknown> | null
   primaryTableId?: number | null
+  primaryTableName?: string | null
   primaryPkFields?: string[] | null
   primaryFieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }> | null
 }
@@ -37,17 +48,17 @@ export function shouldProjectByFilter(
   binding: FilterProjectionBinding,
   siblings: readonly FilterProjectionBinding[],
 ): boolean {
-  const mine = declaredFilterFkFields(binding)
-  if (mine.filterFkFieldName == null || mine.filterFkRefTableId == null) return false
-  const tid = Number(binding.tableId)
-  if (!Number.isFinite(tid)) return false
-  const refs = new Set<number>()
+  const mine = effectiveFilterDeclaration(binding)
+  if (mine.fieldName == null || mine.refIdentity == null) return false
+  const filters = new Set<string>()
   for (const sibling of siblings) {
-    if (!isProjectableSibling(sibling, tid)) continue
-    const ref = declaredFilterFkFields(sibling).filterFkRefTableId
-    if (ref != null) refs.add(ref)
+    if (!isProjectableSibling(sibling, binding)) continue
+    const declared = effectiveFilterDeclaration(sibling)
+    if (declared.refIdentity != null && declared.fieldName != null) {
+      filters.add(declared.fieldName.toLowerCase())
+    }
   }
-  return refs.size > 1
+  return filters.size > 1
 }
 
 export function projectSavedRowsForBinding<T>(
@@ -58,8 +69,8 @@ export function projectSavedRowsForBinding<T>(
 ): T[] | undefined {
   if (!rows) return rows
   if (!shouldProjectByFilter(binding, siblings)) return rows
-  const rowsByTableId = snapshotRowsByTableId(siblings)
-  const parentValues = resolveFilterParentValues(binding, form, rowsByTableId, siblings)
+  const rowsByTable = snapshotRowsByTable(siblings)
+  const parentValues = resolveFilterParentValues(binding, form, rowsByTable, siblings)
   if (parentValues == null) return rows
   return sliceRowsByDeclaredFilter(rows, binding, parentValues) as T[]
 }
@@ -74,7 +85,7 @@ export function mergeFilterSliceIntoCanonical<T>(
   binding: FilterProjectionBinding,
   parentValues: readonly unknown[],
 ): T[] {
-  const field = declaredFilterFkFields(binding).filterFkFieldName
+  const field = effectiveFilterDeclaration(binding).fieldName
   if (field == null || parentValues.length === 0) return [...canonical]
   const kept = canonical.filter(row => !rowMatchesAnyParent(row, field, parentValues))
   return [...kept, ...slice]
@@ -101,17 +112,16 @@ export function applyDisplayedSliceToCanonical(
     binding.data = incoming
     return incoming
   }
-  const rowsByTableId = snapshotRowsByTableId(siblings)
-  const parentValues = resolveFilterParentValues(binding, form, rowsByTableId, siblings)
+  const rowsByTable = snapshotRowsByTable(siblings)
+  const parentValues = resolveFilterParentValues(binding, form, rowsByTable, siblings)
   if (parentValues == null) {
     binding.data = incoming
     return incoming
   }
   const canonical = Array.isArray(binding.data) ? binding.data : []
   const next = mergeFilterSliceIntoCanonical(canonical, incoming, binding, parentValues)
-  const tid = Number(binding.tableId)
   for (const sibling of siblings) {
-    if (Number(sibling.tableId) === tid) sibling.data = next
+    if (sameTable(binding, sibling)) sibling.data = next
   }
   return next
 }
@@ -121,7 +131,7 @@ export function sliceRowsByDeclaredFilter<T>(
   binding: FilterProjectionBinding,
   parentValues: readonly unknown[],
 ): T[] {
-  const field = declaredFilterFkFields(binding).filterFkFieldName
+  const field = effectiveFilterDeclaration(binding).fieldName
   if (field == null) return [...rows]
   if (parentValues.length === 0) return []
   return rows.filter(row => rowMatchesAnyParent(row, field, parentValues))
@@ -131,14 +141,14 @@ export function sliceRowsByDeclaredFilter<T>(
 export function resolveFilterParentValues(
   binding: FilterProjectionBinding,
   form: FilterProjectionFormContext,
-  rowsByTableId: ReadonlyMap<number, readonly unknown[]>,
+  rowsByTable: ReadonlyMap<string, readonly unknown[]>,
   siblings: readonly FilterProjectionBinding[],
 ): unknown[] | null {
-  const declared = declaredFilterFkFields(binding)
-  const refTid = declared.filterFkRefTableId
-  if (declared.filterFkFieldName == null || refTid == null) return null
+  const declared = effectiveFilterDeclaration(binding)
+  const ref = declared.refIdentity
+  if (declared.fieldName == null || ref == null) return null
 
-  if (form.primaryTableId != null && Number(form.primaryTableId) === Number(refTid)) {
+  if (sameTableIdentity(ref, primaryTableIdentity(form))) {
     const pkFields = primaryPkFields(form)
     if (pkFields.length === 0) return null
     const values = pkValuesOf(form.formData ?? null, pkFields)
@@ -147,12 +157,12 @@ export function resolveFilterParentValues(
 
   const currentItem = currentItemOf(form.formData)
   if (currentItem) {
-    const fromItem = valuesFromCurrentItem(currentItem, pkFieldsOfParent(refTid, siblings, form))
+    const fromItem = valuesFromCurrentItem(currentItem, pkFieldsOfParent(ref, siblings, form))
     if (fromItem.length > 0) return fromItem
   }
 
-  const siblingRows = rowsByTableId.get(Number(refTid)) ?? []
-  const pkFields = pkFieldsOfParent(refTid, siblings, form)
+  const siblingRows = rowsByTable.get(ref) ?? []
+  const pkFields = pkFieldsOfParent(ref, siblings, form)
   const fromSiblings: unknown[] = []
   for (const row of siblingRows) {
     fromSiblings.push(...pkValuesOf(asRecord(row), pkFields))
@@ -160,9 +170,12 @@ export function resolveFilterParentValues(
   return uniquePresent(fromSiblings)
 }
 
-function isProjectableSibling(binding: FilterProjectionBinding, tableId: number): boolean {
+function isProjectableSibling(
+  binding: FilterProjectionBinding,
+  target: FilterProjectionBinding,
+): boolean {
   if (isActionOrPrimary(binding)) return false
-  return Number(binding.tableId) === tableId
+  return sameTable(binding, target)
 }
 
 function isActionOrPrimary(binding: FilterProjectionBinding): boolean {
@@ -170,15 +183,15 @@ function isActionOrPrimary(binding: FilterProjectionBinding): boolean {
   return type === 'ACTION' || type === 'PRIMARY'
 }
 
-function snapshotRowsByTableId(
+function snapshotRowsByTable(
   bindings: readonly FilterProjectionBinding[],
-): Map<number, readonly unknown[]> {
-  const out = new Map<number, readonly unknown[]>()
+): Map<string, readonly unknown[]> {
+  const out = new Map<string, readonly unknown[]>()
   for (const binding of bindings) {
-    if (binding.tableId == null || !Array.isArray(binding.data)) continue
-    const tid = Number(binding.tableId)
-    if (!Number.isFinite(tid) || out.has(tid)) continue
-    out.set(tid, binding.data)
+    if (!Array.isArray(binding.data)) continue
+    const identity = tableIdentity(binding)
+    if (identity == null || out.has(identity)) continue
+    out.set(identity, binding.data)
   }
   return out
 }
@@ -191,19 +204,87 @@ function primaryPkFields(form: FilterProjectionFormContext): string[] {
 }
 
 function pkFieldsOfParent(
-  refTid: number,
+  ref: string,
   siblings: readonly FilterProjectionBinding[],
   form: FilterProjectionFormContext,
 ): string[] {
-  if (form.primaryTableId != null && Number(form.primaryTableId) === Number(refTid)) {
+  if (sameTableIdentity(ref, primaryTableIdentity(form))) {
     return primaryPkFields(form)
   }
-  const parent = siblings.find(s => Number(s.tableId) === Number(refTid))
+  const parent = siblings.find(s => sameTableIdentity(ref, tableIdentity(s)))
   if (!parent) return []
   return resolveMiChildPrimaryKeyColumns({
     primaryKeyFields: parent.primaryKeyFields ?? null,
     fieldDefinitions: parent.fieldDefinitions ?? null,
   })
+}
+
+function sameTable(a: FilterProjectionBinding, b: FilterProjectionBinding): boolean {
+  return sameTableIdentity(tableIdentity(a), tableIdentity(b))
+}
+
+function tableIdentity(binding: FilterProjectionBinding): string | null {
+  const id = numericIdentity(binding.tableId)
+  if (id != null) return `id:${id}`
+  const name = normalizedTableName(binding.designerTableName ?? binding.tableName)
+  return name == null ? null : `name:${name}`
+}
+
+function effectiveFilterDeclaration(binding: FilterProjectionBinding): {
+  fieldName: string | null
+  refIdentity: string | null
+} {
+  const explicit = declaredFilterFkFields(binding)
+  const explicitRef = tableReferenceIdentity(
+    explicit.filterFkRefTableId,
+    binding.filterFkRefTableName,
+  )
+  if (explicit.filterFkFieldName != null) {
+    return { fieldName: explicit.filterFkFieldName, refIdentity: explicitRef }
+  }
+  const configuredField = String(binding.foreignKeyField ?? '').trim()
+  if (!configuredField) return { fieldName: null, refIdentity: null }
+  const field = binding.fieldDefinitions?.find(definition =>
+    definition.isForeignKey === true
+      && String(definition.fieldName ?? '').trim().toLowerCase() === configuredField.toLowerCase(),
+  )
+  if (!field) return { fieldName: null, refIdentity: null }
+  return {
+    fieldName: configuredField,
+    refIdentity: tableReferenceIdentity(field.refTableId, field.refTableName),
+  }
+}
+
+function tableReferenceIdentity(
+  tableId: number | null | undefined,
+  tableName: string | null | undefined,
+): string | null {
+  const id = numericIdentity(tableId)
+  if (id != null) return `id:${id}`
+  const name = normalizedTableName(tableName)
+  return name == null ? null : `name:${name}`
+}
+
+function primaryTableIdentity(form: FilterProjectionFormContext): string | null {
+  const id = numericIdentity(form.primaryTableId)
+  if (id != null) return `id:${id}`
+  const name = normalizedTableName(form.primaryTableName)
+  return name == null ? null : `name:${name}`
+}
+
+function sameTableIdentity(a: string | null, b: string | null): boolean {
+  return a != null && b != null && a === b
+}
+
+function numericIdentity(value: number | null | undefined): number | null {
+  if (value == null || String(value).trim() === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function normalizedTableName(value: string | null | undefined): string | null {
+  const name = String(value ?? '').trim().toLowerCase()
+  return name || null
 }
 
 function pkValuesOf(record: Record<string, unknown> | null, pkFields: readonly string[]): unknown[] {

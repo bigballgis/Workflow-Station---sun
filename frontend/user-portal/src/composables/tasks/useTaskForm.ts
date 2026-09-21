@@ -1,9 +1,10 @@
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { subTableStoreKey } from './subTableStore'
 import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { submitTaskForm } from '@/api/processForm'
+import { submitTaskForm, getTaskFormData } from '@/api/processForm'
+import { unwrapPortalApiPayload } from '@/utils/httpErrorMessage'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import { collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
 import {
@@ -19,11 +20,10 @@ import {
   isMiDashboardSubTableBinding,
   shouldSyncStaleSiblingSubTableSlice,
   syncMiLinkChildEditedRowsIntoSiblingSlices,
-  sameSubTableRow,
 } from './shared'
 import { mergeSubTableRowsForMiSave } from './miSubTableSaveMerge'
 import {
-  buildBindingScope,
+  buildBindingScopeFromBaseline,
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
   type SubTableBindingScope,
@@ -94,6 +94,10 @@ export function useTaskForm(options: {
   const formFormOptions = ref<Record<string, unknown>>({})
   const savingTaskForm = ref(false)
   const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
+  const loadedSubTableBaseline = ref<Record<string, unknown>>({})
+  watch(taskFormDTO, dto => {
+    loadedSubTableBaseline.value = JSON.parse(JSON.stringify(dto?.fieldValues?.__subTables__ ?? {}))
+  }, { immediate: true, flush: 'sync' })
   let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
 
   /** Assignment task: merge active binding rows into stale sibling slices for the same MI collection table only. */
@@ -279,7 +283,13 @@ export function useTaskForm(options: {
             primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions ?? null,
           },
         ) ?? out
-        const scope = buildBindingScope(binding, scoped, emptiedThisBinding)
+        const scope = buildBindingScopeFromBaseline(binding, scoped, emptiedThisBinding,
+          loadedSubTableBaseline.value, options.subTableBindings.value, {
+            formData: formData.value,
+            primaryTableId: options.primaryTableBinding?.value?.tableId,
+            primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields,
+            primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions,
+          })
         if (scope) subTableBindingScopes.push(scope)
       }
     }
@@ -400,6 +410,7 @@ export function useTaskForm(options: {
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
       formData.value = { ...formData.value, __subTables__: payload.formData.__subTables__ }
+      if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
       ElMessage.success(t('task.operationSuccess'))
     } catch (error) {
       console.error('[TaskForm] save failed:', error)
@@ -417,14 +428,29 @@ export function useTaskForm(options: {
     subTableAutosaveTimer = setTimeout(async () => {
       subTableAutosaveTimer = null
       try {
+        const payload = buildSubTableSubmitPayload()
         await submitTaskForm(options.effectiveTaskId.value, {
-          ...buildSubTableSubmitPayload(),
+          ...payload,
           baselineValues: {}
         })
+        if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
       } catch (error) {
         console.error('[SubTable] autosave failed:', error)
       }
     }, 400)
+  }
+
+  async function refreshSavedSubTableVersions() {
+    const response = await getTaskFormData(options.effectiveTaskId.value)
+    const dto = unwrapPortalApiPayload(response) as { fieldValues: Record<string, unknown> }
+    const stored = dto.fieldValues.__subTables__ as Record<string, unknown> | undefined
+    if (!stored) throw new Error('Saved sub-table snapshot is missing')
+    taskFormDTO.value = dto
+    formData.value = { ...formData.value, __subTables__: stored }
+    for (const binding of options.subTableBindings.value) {
+      const rows = getSavedSubTableRows(stored, binding)
+      if (rows) binding.data = cloneSubTableRows(rows)
+    }
   }
 
   function getCurrentFormFieldKeys(): string[] {
@@ -456,6 +482,7 @@ export function useTaskForm(options: {
     saveCurrentTaskForm,
     buildCurrentTaskFormSubmitPayload,
     buildSubTableSubmitPayload,
+    loadedSubTableBaseline,
     scheduleSubTableAutosave,
     getCurrentFormFieldKeys,
     clearAutosaveTimer

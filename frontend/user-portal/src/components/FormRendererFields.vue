@@ -11,6 +11,7 @@ import RecordNoteField from './RecordNoteField.vue'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import type { FormField } from './formRendererHelpers'
+import { resolveSubTableWidgetTitle } from './formRendererHelpers'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { isDisplayOnlyLayoutField } from './formRendererHelpers'
 
@@ -278,7 +279,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
       >
         <SubTableField
           v-if="ctx.resolveBinding(field._bindingId)"
-          :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
+          :title="resolveSubTableWidgetTitle(field, ctx.resolveBinding(field._bindingId), ctx.subTableBindings)"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
@@ -337,7 +338,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
       >
         <SubTableField
           v-if="ctx.resolveBinding(field._bindingId)"
-          :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
+          :title="resolveSubTableWidgetTitle(field, ctx.resolveBinding(field._bindingId), ctx.subTableBindings)"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"

@@ -34,6 +34,7 @@ export function createProcessStartSubTables(deps: {
   formData?: Ref<Record<string, unknown>>
   primaryTableBinding?: Ref<{
     tableId?: number | null
+    tableName?: string
     primaryKeyFields?: string[]
     fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }>
   } | null>
@@ -88,6 +89,7 @@ export function createProcessStartSubTables(deps: {
     return assembleScopedSubTablesSubmit(subTableBindings.value, {
       formData: formData?.value ?? {},
       primaryTableId: primary?.tableId ?? null,
+      primaryTableName: primary?.tableName ?? null,
       primaryPkFields: primary?.primaryKeyFields ?? null,
       primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
     })

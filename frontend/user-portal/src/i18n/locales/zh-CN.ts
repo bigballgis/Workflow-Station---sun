@@ -1170,6 +1170,7 @@ export default {
     mainTableDefault: '主表',
     childTableDefault: '子表',
     fkGuardMainNotReady: '请先创建{parentTableName}记录，再添加{childTableName}数据。',
+    fkGuardMissingParents: '无法保存{childTableName}：缺少必需的关联信息 {missingDetails}。请先创建对应的父表记录。',
 import: '导入',
 exportWithData: '导出',
     startTime: '开始时间',

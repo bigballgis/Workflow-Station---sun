@@ -77,7 +77,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
       if (item.type === 'subTable' && bindingId != null) {
         const subTableField: FormField = {
           key: `__subTable_${bindingId}`,
-          label: '',
+          label: getLayoutLabel(item),
           type: 'subTable',
           _bindingId: Number(bindingId),
           // 子表逐操作权限：仅显式 false 才下发（undefined 由 SubTableField 回退 editable）
@@ -97,7 +97,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
       if (item.type === 'inlineSubForm' && bindingId != null) {
         const inlineSubFormField: FormField = {
           key: `__inlineSubForm_${bindingId}`,
-          label: '',
+          label: getLayoutLabel(item),
           type: 'inlineSubForm',
           _bindingId: Number(bindingId),
           span: 24

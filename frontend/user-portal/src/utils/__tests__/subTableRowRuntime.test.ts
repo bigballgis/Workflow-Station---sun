@@ -50,6 +50,66 @@ describe('filterStructuralFkMetasForBinding', () => {
   })
 })
 
+describe('missing structural FK feedback', () => {
+  it('names the missing FK and parent table when a child row cannot be saved', async () => {
+    const seen: Array<{ key: string; params?: Record<string, unknown> }> = []
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'alice.doc' },
+      fieldDefinitions: [{
+        fieldName: 'party_id',
+        isForeignKey: true,
+        refTableId: 50200,
+        refPrimaryKeyFields: ['id'],
+      }],
+      rowAddContext: { primaryFormData: {}, ancestorRowsByTableId: {} },
+      tableId: 50348,
+      tableDisplayName: 'Party Files',
+      parentTableDisplayNamesById: { 50200: 'P0 Dual Party' },
+      t: ((key: string, params?: Record<string, unknown>) => {
+        seen.push({ key, params })
+        return key
+      }) as any,
+    } as any)
+
+    expect(result.ok).toBe(false)
+    expect(seen).toContainEqual({
+      key: 'subTable.fkGuardMissingParents',
+      params: {
+        childTableName: 'Party Files',
+        missingDetails: 'party_id (P0 Dual Party)',
+      },
+    })
+  })
+
+  it('does not skip the binding-configured parent FK in a scoped main-form context', async () => {
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'alice.doc' },
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } },
+        { fieldName: 'case_id', isForeignKey: true, refTableId: 501, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: 502, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: buildRowAddContext(
+        { id: 'Case-1' },
+        [{ tableId: 501, bindingType: 'PRIMARY' }],
+      ),
+      tableId: 503,
+      tableDisplayName: 'Party files',
+      bindingLinkMode: 'structuralFk',
+      bindingForeignKeyField: 'party_id',
+      primaryKeyFields: ['id'],
+      parentTableDisplayNamesById: { 502: 'P0 Dual Party' },
+      allocatePrimaryKeys: vi.fn(async () => ['File-1']),
+      t: ((key: string, params?: Record<string, unknown>) =>
+        key === 'subTable.fkGuardMissingParents'
+          ? `missing ${String(params?.missingDetails)}`
+          : key) as any,
+    } as any)
+
+    expect(result).toEqual({ ok: false, message: 'missing party_id (P0 Dual Party)' })
+  })
+})
+
 describe('applyFkPresentationToDialogColumns auto-PK', () => {
   it('coerces inputNumber to text for prefixedSequence PK', () => {
     const { allColumns } = applyFkPresentationToDialogColumns(

@@ -12,7 +12,7 @@ import {
 } from '@/composables/tasks/shared'
 import { mergeSubTableRowsForMiSave } from '@/composables/tasks/miSubTableSaveMerge'
 import {
-  buildBindingScope,
+  buildBindingScopeFromBaseline,
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
   type SubTableBindingScope,
@@ -175,7 +175,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     }
   }
 
-  function openMiFillDialog(row: any) {
+  function openMiFillDialog() {
     miFillDialogData.value = { ...formData.value }
     miFillSubTableBindings.value = cloneSubTableBindings(subTableBindings.value)
     miFillDialogReadOnly.value = false
@@ -281,7 +281,13 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
               primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions ?? null,
             },
           ) ?? out
-          const scope = buildBindingScope(binding, scoped, emptiedThisBinding)
+          const scope = buildBindingScopeFromBaseline(binding, scoped, emptiedThisBinding,
+            ctx.taskForm.loadedSubTableBaseline.value, miFillSubTableBindings.value, {
+              formData: miFillDialogData.value,
+              primaryTableId: ctx.primaryTableBinding.value?.tableId,
+              primaryPkFields: ctx.primaryTableBinding.value?.primaryKeyFields,
+              primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions,
+            })
           if (scope) subTableBindingScopes.push(scope)
         }
       }
@@ -298,11 +304,11 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
         emptiedSubTableKeys,
         subTableBindingScopes,
       })
-      formData.value = nextFormData
+      await ctx.loadTaskDetail()
       miFilled.value = true
       miFillDialogVisible.value = false
       ElMessage.success(t('task.operationSuccess'))
-    } catch (e) {
+    } catch {
       ElMessage.error(t('task.operationFailed'))
     } finally {
       submitting.value = false

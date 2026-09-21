@@ -8,6 +8,7 @@ import FieldRenderer from './FieldRenderer.vue'
 import SubTableField from './SubTableField.vue'
 import { computed, defineAsyncComponent, provide, ref, watch } from 'vue'
 import type { FormField } from './formRendererHelpers'
+import { resolveSubTableWidgetTitle } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
   isDisplayOnlyLayoutField,
@@ -68,6 +69,7 @@ export interface PortalSubTableBindingLite {
    * (attachment.main_id → the main record), which decides whether rows get scoped to the host row.
    */
   foreignKeyField?: string | null
+  filterFkFieldName?: string | null
   fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
 }
 
@@ -558,7 +560,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
     >
       <SubTableField
         v-if="resolveBinding(field._bindingId)"
-        :title="resolveBinding(field._bindingId)!.tableName || ''"
+        :title="resolveSubTableWidgetTitle(field, resolveBinding(field._bindingId), subTableBindings)"
         :columns="resolveBinding(field._bindingId)!.columns"
         :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
         :form-fields="resolveBinding(field._bindingId)!.formFields"

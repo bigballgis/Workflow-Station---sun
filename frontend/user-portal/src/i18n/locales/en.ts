@@ -1175,6 +1175,7 @@ export default {
     mainTableDefault: 'Main table',
     childTableDefault: 'Sub-table',
     fkGuardMainNotReady: 'Please create a {parentTableName} record before adding {childTableName} data.',
+    fkGuardMissingParents: 'Cannot save {childTableName}: required relationship data is missing: {missingDetails}. Create the related parent record first.',
 import: 'Import',
 exportWithData: 'Export',
     startTime: 'Start time',

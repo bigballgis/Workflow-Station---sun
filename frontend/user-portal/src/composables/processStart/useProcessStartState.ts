@@ -35,6 +35,7 @@ export interface ProcessStartSubTableBinding {
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string
   filterFkRefTableId?: number | null
+  filterFkRefTableName?: string | null
   filterFkFieldName?: string | null
   foreignKeyField?: string | null
 }

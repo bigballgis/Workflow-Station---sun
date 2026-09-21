@@ -17,6 +17,12 @@ const participant = {
 }
 
 describe('subTableCanonicalStamp', () => {
+  it('sends original versions for precisely the rows removed since load', () => {
+    const baseline = [{ id: 'Y', _wsRowVersion: 7 }, { id: 'Z', _wsRowVersion: 3 }]
+    const scope = buildBindingScope(participant, [{ id: 'Z', _wsRowVersion: 3 }], false, baseline)
+    expect(scope?.deletedRows).toEqual([{ id: 'Y', _wsRowVersion: 7 }])
+    expect(baseline).toHaveLength(2)
+  })
   it('marks a table as shared only when two bindings use the same store key', () => {
     expect(storeKeysSharedByMultipleBindings([meeting, participant])).toEqual(new Set(['dw:attachment']))
     expect(storeKeysSharedByMultipleBindings([meeting])).toEqual(new Set())

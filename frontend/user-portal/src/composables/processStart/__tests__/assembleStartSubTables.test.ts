@@ -107,6 +107,95 @@ describe('assembleStartSubTables', () => {
     expect(Object.keys(assembled.subTables)).toEqual(['dw:p0_dual_file'])
   })
 
+  it('uses frozen designer table names when catalog bindings omit runtime table IDs', () => {
+    const caseFiles = fileBinding({
+      tableId: null,
+      filterFkRefTableId: null,
+      filterFkRefTableName: 'p0_dual_case',
+      data: [
+        { id: 'X', case_id: 'C1', title: 'case-doc' },
+        { id: 'Y', case_id: 'C1', party_id: 'P-A', title: 'party-doc' },
+      ],
+    })
+    const partyFiles = fileBinding({
+      bindingId: 50706,
+      tableId: null,
+      filterFkRefTableId: null,
+      filterFkRefTableName: 'p0_dual_party',
+      filterFkFieldName: 'party_id',
+      data: [{ id: 'Y', case_id: 'C1', party_id: 'P-A', title: 'party-doc' }],
+    })
+    const parties = fileBinding({
+      bindingId: 50704,
+      tableId: null,
+      tableName: 'P0 Dual Party',
+      designerTableName: 'p0_dual_party',
+      filterFkRefTableId: null,
+      filterFkRefTableName: 'p0_dual_case',
+      data: [{ id: 'P-A' }],
+    })
+    const { assembleStartSubTables } = createProcessStartSubTables({
+      caches: { cachedContentForms: [], cachedRelationTableFieldIndex: new Map() },
+      subTableBindings: ref([caseFiles, partyFiles, parties]),
+      formData: ref({ id: 'C1' }),
+      primaryTableBinding: ref({
+        tableId: null,
+        tableName: 'p0_dual_case',
+        primaryKeyFields: ['id'],
+      }),
+      deriveColumnsFromBinding: () => [],
+    })
+
+    expect(assembleStartSubTables().subTableBindingScopes).toEqual([
+      expect.objectContaining({ bindingId: '50705', rowKeys: [{ id: 'X' }, { id: 'Y' }] }),
+      expect.objectContaining({ bindingId: '50706', rowKeys: [{ id: 'Y' }] }),
+    ])
+  })
+
+  it('uses the configured structural FK when a legacy catalog has no filter FK declaration', () => {
+    const fields = [
+      { fieldName: 'id', isPrimaryKey: true, isForeignKey: false },
+      { fieldName: 'case_id', isForeignKey: true, refTableId: 50100 },
+      { fieldName: 'party_id', isForeignKey: true, refTableId: 50200 },
+    ] as never
+    const caseFiles = fileBinding({
+      filterFkRefTableId: null,
+      filterFkFieldName: null,
+      foreignKeyField: 'case_id',
+      fieldDefinitions: fields,
+      data: [
+        { id: 'X', case_id: 'C1', title: 'case-doc' },
+        { id: 'Y', case_id: 'C1', party_id: 'P-A', title: 'party-doc' },
+      ],
+    })
+    const partyFiles = fileBinding({
+      bindingId: 50706,
+      filterFkRefTableId: null,
+      filterFkFieldName: null,
+      foreignKeyField: 'party_id',
+      fieldDefinitions: fields,
+      data: [{ id: 'Y', case_id: 'C1', party_id: 'P-A', title: 'party-doc' }],
+    })
+    const parties = fileBinding({
+      bindingId: 50704,
+      tableId: 50200,
+      designerTableName: 'p0_dual_party',
+      data: [{ id: 'P-A' }],
+    })
+    const { assembleStartSubTables } = createProcessStartSubTables({
+      caches: { cachedContentForms: [], cachedRelationTableFieldIndex: new Map() },
+      subTableBindings: ref([caseFiles, partyFiles, parties]),
+      formData: ref({ id: 'C1' }),
+      primaryTableBinding: ref({ tableId: 50100, primaryKeyFields: ['id'] }),
+      deriveColumnsFromBinding: () => [],
+    })
+
+    expect(assembleStartSubTables().subTableBindingScopes).toEqual([
+      expect.objectContaining({ bindingId: '50705', rowKeys: [{ id: 'X' }, { id: 'Y' }] }),
+      expect.objectContaining({ bindingId: '50706', rowKeys: [{ id: 'Y' }] }),
+    ])
+  })
+
   it('omits scopes when shared-table bindings do not declare distinct filter FKs', () => {
     const a = fileBinding({ bindingId: 1, data: [{ id: 'X', case_id: 'C1' }] })
     const b = fileBinding({

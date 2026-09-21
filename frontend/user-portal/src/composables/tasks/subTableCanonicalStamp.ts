@@ -1,6 +1,8 @@
 import { subTableStoreKey, type SubTableStoreBindingLike } from './subTableStore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { PLATFORM_ROW_UUID_FIELD } from '@/utils/subTableRowIdentity'
+import { readSubTableRows } from './subTableStore'
+import { projectSavedRowsForBinding, type FilterProjectionBinding, type FilterProjectionFormContext } from './subTableFilterProjection'
 
 /** Transport metadata: which binding claimed which rows of a shared table-keyed store. */
 export interface SubTableBindingScope {
@@ -8,6 +10,7 @@ export interface SubTableBindingScope {
   storeKey: string
   rowKeys: Array<Record<string, unknown>>
   emptied: boolean
+  deletedRows?: Array<Record<string, unknown>>
 }
 
 export interface CanonicalStampBinding extends SubTableStoreBindingLike {
@@ -83,6 +86,7 @@ export function buildBindingScope(
   binding: CanonicalStampBinding,
   rows: unknown[],
   emptied: boolean,
+  baselineRows?: unknown[],
 ): SubTableBindingScope | null {
   const storeKey = subTableStoreKey(binding)
   const bindingId = binding.bindingId
@@ -94,11 +98,23 @@ export function buildBindingScope(
     const key = rowKeyForScope(raw as Record<string, unknown>, pk)
     if (key) rowKeys.push(key)
   }
+  const deletedRows: Array<Record<string, unknown>> = []
+  for (const raw of baselineRows ?? []) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const row = raw as Record<string, unknown>
+    const key = rowKeyForScope(row, pk)
+    if (!key) throw new Error('Saved sub-table row has no complete identity')
+    const remains = rowKeys.some(candidate => Object.entries(key).every(
+      ([field, value]) => String(candidate[field]) === String(value),
+    ))
+    if (!remains) deletedRows.push({ ...key, _wsRowVersion: row._wsRowVersion ?? 0 })
+  }
   return {
     bindingId: String(bindingId),
     storeKey,
     rowKeys,
     emptied,
+    ...(deletedRows.length ? { deletedRows } : {}),
   }
 }
 
@@ -108,4 +124,18 @@ function nestedRowKeyValue(row: Record<string, unknown>, field: string): unknown
     return (rk as Record<string, unknown>)[field]
   }
   return undefined
+}
+
+/** Deletions are computed against the original read snapshot, never the mutable widget store. */
+export function buildBindingScopeFromBaseline(
+  binding: CanonicalStampBinding & FilterProjectionBinding,
+  rows: unknown[],
+  emptied: boolean,
+  baseline: Record<string, unknown>,
+  siblings: readonly FilterProjectionBinding[],
+  form: FilterProjectionFormContext,
+): SubTableBindingScope | null {
+  const before = readSubTableRows(baseline, binding) ?? []
+  const visibleBefore = projectSavedRowsForBinding(before, binding, siblings, form) ?? before
+  return buildBindingScope(binding, rows, emptied, visibleBefore)
 }

@@ -52,6 +52,17 @@ function parties(rows: Array<Record<string, unknown>> = [{ id: 'P-A' }]) {
 }
 
 describe('shouldProjectByFilter', () => {
+  it('projects distinct FK columns even when both reference the same parent table', () => {
+    const a = caseFiles()
+    const b = { ...caseFiles(), bindingId: 50706, filterFkFieldName: 'related_case_id' }
+    const rows = [
+      { id: 'X', case_id: 'C1', related_case_id: 'C2' },
+      { id: 'Y', case_id: 'C2', related_case_id: 'C1' },
+    ]
+    const context = { primaryTableId: MAIN_TID, primaryPkFields: ['id'], formData: { id: 'C1' } }
+    expect(projectSavedRowsForBinding(rows, a, [a, b], context)).toEqual([rows[0]])
+    expect(projectSavedRowsForBinding(rows, b, [a, b], context)).toEqual([rows[1]])
+  })
   it('does not project a lone SUB binding even when a filter FK is declared', () => {
     expect(shouldProjectByFilter(caseFiles(), [caseFiles(), parties()])).toBe(false)
   })

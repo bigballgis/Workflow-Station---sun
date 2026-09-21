@@ -56,6 +56,7 @@ export interface TaskDetailFormsLoaderFns {
 }
 
 export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailFormsLoaderFns {
+  let processSubTableBaseline: Record<string, unknown> = {}
   const {
     t,
     route,
@@ -237,6 +238,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     if (pfData) {
       processFormData.value = pfData
       processFormValues.value = pfData.fieldValues || {}
+      processSubTableBaseline = JSON.parse(JSON.stringify(pfData.fieldValues?.__subTables__ ?? {}))
 
       if (pfData.processState === 'Return_To_Requester' && pfData.editable) {
         isReturnToRequester.value = true
@@ -426,6 +428,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
           primaryPkFields: primary?.primaryKeyFields ?? null,
           primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
         },
+        processSubTableBaseline,
       )
       await submitProcessFormUpdate(taskInfo.value.processInstanceId, payload)
       ElMessage.success(t('task.operationSuccess'))

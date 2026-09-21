@@ -1,6 +1,7 @@
 import { request } from './request'
 import type { RequestIdConfig } from '../utils/formFieldMeta'
 import type { SensitiveMaskConfig } from '@/utils/sensitiveMask'
+import type { FkFillSourceConfig } from '@/utils/tableFkRuntime'
 
 // --- TypeScript interfaces matching backend DTOs ---
 
@@ -18,6 +19,7 @@ export interface SubTableBindingData {
   primaryKeyFields?: string[]
   filterFkFieldName?: string | null
   filterFkRefTableId?: number | null
+  fkFillSources?: FkFillSourceConfig[] | null
   /** MI assignment contract (allowUser/allowRole/assigneeField/roleField/buField) parsed from BPMN. */
   assignmentConfig?: Record<string, unknown>
 }
@@ -83,6 +85,7 @@ export interface TaskFormSubmitRequest {
     storeKey: string
     rowKeys: Array<Record<string, unknown>>
     emptied: boolean
+    deletedRows?: Array<Record<string, unknown>>
   }>
 }
 

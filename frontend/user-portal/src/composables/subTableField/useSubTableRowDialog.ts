@@ -115,6 +115,24 @@ export function useSubTableRowDialog(
       ?.fkFillSources
   }
 
+  function parentTableDisplayNamesById(): Record<number, string> {
+    const out: Record<number, string> = {}
+    if (props.primaryTableId != null && props.primaryTableDisplayName) {
+      out[Number(props.primaryTableId)] = props.primaryTableDisplayName
+    }
+    const list = (props.subTableBindingsForContext ?? props.linkedSubTableBindings ?? []) as Array<{
+      tableId?: number | null
+      tableName?: string
+      tableDisplayName?: string
+    }>
+    for (const binding of list) {
+      if (binding.tableId == null) continue
+      const name = String(binding.tableDisplayName ?? binding.tableName ?? '').trim()
+      if (name) out[Number(binding.tableId)] = name
+    }
+    return out
+  }
+
   function rowAddContextNow() {
     return buildRowAddContext(
       props.primaryFormData ?? {},
@@ -139,6 +157,7 @@ export function useSubTableRowDialog(
         primaryTableDisplayName: props.primaryTableDisplayName,
         primaryTableId: props.primaryTableId,
         parentTablesById: props.parentTablesById,
+        parentTableDisplayNamesById: parentTableDisplayNamesById(),
         functionUnitId: props.functionUnitId,
         autoEnsurePrimaryRecord: props.primaryFormData != null,
         deferPkAllocationUntilSave: true,
@@ -226,6 +245,7 @@ export function useSubTableRowDialog(
           allocatePrimaryKeys: allocate,
           functionUnitId: props.functionUnitId,
           parentTablesById: props.parentTablesById,
+          parentTableDisplayNamesById: parentTableDisplayNamesById(),
           primaryTableId: props.primaryTableId,
           primaryTableDisplayName: props.primaryTableDisplayName,
           tableDisplayName: props.title,

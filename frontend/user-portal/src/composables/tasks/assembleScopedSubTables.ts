@@ -5,7 +5,7 @@ import {
   normalizeSubTableRowsForBinding,
 } from '@/composables/tasks/shared'
 import {
-  buildBindingScope,
+  buildBindingScopeFromBaseline,
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
   type CanonicalStampBinding,
@@ -33,6 +33,7 @@ export type ScopedSubTableBinding = CanonicalStampBinding & FilterProjectionBind
 export function assembleScopedSubTablesSubmit(
   bindings: readonly ScopedSubTableBinding[],
   form: FilterProjectionFormContext = {},
+  baseline: Record<string, unknown> = {},
 ): ScopedSubTablesSubmit {
   const list: ScopedSubTableBinding[] = [...bindings]
   const subTables: Record<string, unknown> = {}
@@ -52,7 +53,7 @@ export function assembleScopedSubTablesSubmit(
     if (!shouldProjectByFilter(binding, list)) continue
     const rows = readSubTableRows(subTables, binding) ?? []
     const scoped = projectSavedRowsForBinding(rows, binding, list, form) ?? rows
-    const scope = buildBindingScope(binding, scoped, false)
+    const scope = buildBindingScopeFromBaseline(binding, scoped, false, baseline, list, form)
     if (scope) subTableBindingScopes.push(scope)
   }
   return { subTables, emptiedSubTableKeys, subTableBindingScopes }
@@ -63,8 +64,9 @@ export function buildProcessFormUpdateBody(
   values: Record<string, unknown>,
   bindings: readonly ScopedSubTableBinding[],
   form: FilterProjectionFormContext = {},
+  baseline: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  const assembled = assembleScopedSubTablesSubmit(bindings, form)
+  const assembled = assembleScopedSubTablesSubmit(bindings, form, baseline)
   return {
     ...values,
     __subTables__: assembled.subTables,

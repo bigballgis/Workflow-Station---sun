@@ -70,6 +70,7 @@ export interface ProcessStartRequest {
     storeKey: string
     rowKeys: Array<Record<string, unknown>>
     emptied: boolean
+    deletedRows?: Array<Record<string, unknown>>
   }>
 }
 
