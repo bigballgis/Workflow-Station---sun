@@ -171,15 +171,16 @@ FcDesigner.addDragRule({
   only: false,
   handleBtn: true,
   languageKey: [],
-  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it.
+  // The props panel edits props, while the persisted contract keeps binding and title at top level.
   loadRule(rule: any) {
     ensureEmptyRuleComponentEvents(rule)
     rule.props = rule.props || {}
     if (rule._bindingId !== undefined) {
       rule.props._bindingId = rule._bindingId
     }
+    rule.props._displayTitle = typeof rule.title === 'string' ? rule.title : ''
   },
-  // When saving/exporting, move props._bindingId back to top-level _bindingId.
+  // Move temporary props-panel values back to their canonical top-level fields.
   parseRule(rule: any) {
     if (rule.props && rule.props._bindingId !== undefined) {
       rule._bindingId = rule.props._bindingId
@@ -188,11 +189,20 @@ FcDesigner.addDragRule({
       // Ensure _bindingId exists even if props was empty
       if (rule._bindingId === undefined) rule._bindingId = null
     }
+    if (rule.props && rule.props._displayTitle !== undefined) {
+      rule.title = typeof rule.props._displayTitle === 'string'
+        ? rule.props._displayTitle.trim()
+        : ''
+      delete rule.props._displayTitle
+    }
   },
-  // Keep top-level _bindingId in sync when the props panel changes props._bindingId
+  // Keep canonical top-level fields in sync while the props panel is being edited.
   watch: {
     _bindingId({ value, rule }: { value: any; rule: any }) {
       rule._bindingId = value ?? null
+    },
+    _displayTitle({ value, rule }: { value: any; rule: any }) {
+      rule.title = typeof value === 'string' ? value : ''
     }
   },
   rule() {
@@ -202,6 +212,7 @@ FcDesigner.addDragRule({
       title: 'Sub-Table',
       props: {
         _bindingId: null,
+        _displayTitle: 'Sub-Table',
       }
     }
     ensureEmptyRuleComponentEvents(r)
@@ -209,6 +220,14 @@ FcDesigner.addDragRule({
   },
   props() {
     return [
+      {
+        type: 'input',
+        field: '_displayTitle',
+        title: String(i18n.global.t('form.subTableDisplayTitle')),
+        props: {
+          placeholder: String(i18n.global.t('form.subTableDisplayTitlePlaceholder')),
+        },
+      },
       {
         type: 'SubTableBindingSelect',
         field: '_bindingId',

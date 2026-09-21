@@ -821,6 +821,8 @@ export default {
     lookupMatch_endsWith: '結尾是',
     subTablePlaceholderUnconfigured: '未選擇 Sub Table',
     subTablePlaceholderStale: '綁定已失效',
+    subTableDisplayTitle: '顯示標題',
+    subTableDisplayTitlePlaceholder: '在表單預覽和用戶門戶中顯示的標題',
     inlineSubFormLabel: '內嵌表單',
     inlineSubFormBinding: '子表綁定',
     inlineSubFormUnconfigured: '未選擇 Sub Table',

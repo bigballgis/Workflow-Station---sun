@@ -9,8 +9,14 @@
     <el-icon><Grid /></el-icon>
     <span
       v-if="state === 'valid'"
-      class="binding-name"
-    >{{ displayName }}</span>
+      class="binding-copy"
+    >
+      <span
+        v-if="displayTitle"
+        class="display-title"
+      >{{ displayTitle }}</span>
+      <span class="binding-name">{{ bindingDisplayName }}</span>
+    </span>
     <span
       v-else-if="state === 'unconfigured'"
       class="hint-text"
@@ -38,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, getCurrentInstance } from 'vue'
+import { computed, inject } from 'vue'
 // Icons are globally registered in main.ts via ElementPlusIconsVue
 // No need for local imports, which can cause circular dependency issues in production build
 import { useI18n } from 'vue-i18n'
@@ -59,6 +65,7 @@ const props = defineProps<{
   _bindingId?: number | null
   // legacy prop name support
   bindingId?: number | null
+  _displayTitle?: string | null
   subBindings?: DesignerSubBinding[]
   formCreateInject?: any
 }>()
@@ -81,22 +88,6 @@ function onWidgetClick(e: MouseEvent) {
   }
 }
 
-onMounted(() => {
-  const instance = getCurrentInstance()
-  const el = instance?.proxy?.$el as HTMLElement | null
-  if (el) {
-    console.log('[SubTable] mounted, parent classes:', el.parentElement?.className, 'grandparent:', el.parentElement?.parentElement?.className)
-    const dragTool = el.closest('._fd-drag-tool')
-    console.log('[SubTable] closest _fd-drag-tool:', dragTool)
-    const dragMask = dragTool?.querySelector('._fd-drag-mask')
-    console.log('[SubTable] _fd-drag-mask:', dragMask)
-    // Add a click listener to the drag tool to see if it fires
-    dragTool?.addEventListener('click', (e) => {
-      console.log('[SubTable] _fd-drag-tool clicked! target:', (e.target as HTMLElement)?.className)
-    })
-  }
-})
-
 // Prefer injected subBindings from FormDesigner (via provide/inject),
 // fall back to prop, then empty array
 const injectedSubBindings = inject<() => DesignerSubBinding[]>('designerSubBindings', () => [])
@@ -113,7 +104,9 @@ const state = computed((): PlaceholderState => {
   return found ? 'valid' : 'stale'
 })
 
-const displayName = computed(() => {
+const displayTitle = computed(() => String(props._displayTitle ?? '').trim())
+
+const bindingDisplayName = computed(() => {
   if (state.value !== 'valid' || bindingId.value == null) return null
   const binding = subBindings.value.find(b => b.id === bindingId.value)!
   return formatSubTableBindingOptionLabel(binding)
@@ -154,5 +147,21 @@ const displayName = computed(() => {
 
 .navigate-btn {
   margin-left: auto;
+}
+
+.binding-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.display-title {
+  color: #303133;
+  font-weight: 600;
+}
+
+.binding-name {
+  font-size: 12px;
 }
 </style>

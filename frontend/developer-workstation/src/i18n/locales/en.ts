@@ -777,6 +777,8 @@ export default {
     lookupMatch_endsWith: 'Ends with',
     subTablePlaceholderUnconfigured: 'No Sub Table selected',
     subTablePlaceholderStale: 'Binding stale',
+    subTableDisplayTitle: 'Display title',
+    subTableDisplayTitlePlaceholder: 'Title shown in Form Preview and User Portal',
     inlineSubFormLabel: 'Inline Form',
     inlineSubFormBinding: 'Sub Table Binding',
     inlineSubFormUnconfigured: 'No Sub Table selected',

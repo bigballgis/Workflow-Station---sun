@@ -821,6 +821,8 @@ export default {
     lookupMatch_endsWith: '结尾是',
     subTablePlaceholderUnconfigured: '未选择 Sub Table',
     subTablePlaceholderStale: '绑定已失效',
+    subTableDisplayTitle: '显示标题',
+    subTableDisplayTitlePlaceholder: '在表单预览和用户门户中显示的标题',
     inlineSubFormLabel: '内嵌表单',
     inlineSubFormBinding: '子表绑定',
     inlineSubFormUnconfigured: '未选择 Sub Table',
