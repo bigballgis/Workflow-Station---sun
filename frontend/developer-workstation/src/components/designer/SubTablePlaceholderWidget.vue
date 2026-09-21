@@ -42,7 +42,7 @@ import { computed, inject, onMounted, getCurrentInstance } from 'vue'
 // Icons are globally registered in main.ts via ElementPlusIconsVue
 // No need for local imports, which can cause circular dependency issues in production build
 import { useI18n } from 'vue-i18n'
-import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
+import { formatSubTableBindingOptionLabel, normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 
 interface DesignerSubBinding {
   id: number
@@ -50,6 +50,8 @@ interface DesignerSubBinding {
   tableDisplayName?: string
   tableDescription: string
   bindingType: string
+  foreignKeyField?: string | null
+  bindingLinkMode?: string | null
 }
 
 // form-create passes rule props directly — _bindingId comes from rule._bindingId
@@ -114,10 +116,7 @@ const state = computed((): PlaceholderState => {
 const displayName = computed(() => {
   if (state.value !== 'valid' || bindingId.value == null) return null
   const binding = subBindings.value.find(b => b.id === bindingId.value)!
-  const label = binding.tableDisplayName || binding.tableName
-  return binding.tableDescription
-    ? `${label}（${binding.tableDescription}）`
-    : label
+  return formatSubTableBindingOptionLabel(binding)
 })
 </script>
 

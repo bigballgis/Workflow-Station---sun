@@ -183,7 +183,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -219,7 +219,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -255,7 +255,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -942,6 +942,7 @@ import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
+import { formatSubTableBindingOptionLabel } from '@/utils/bindingDisplayHelpers'
 import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
 import TableBindingManager from './TableBindingManager.vue'
 import FormRenameDialog from './form-designer/FormRenameDialog.vue'
@@ -1087,6 +1088,8 @@ const designerSubBindings = computed(() => {
       tableId: b.tableId,
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
+      foreignKeyField: b.foreignKeyField,
+      bindingLinkMode: b.bindingLinkMode,
       subMode: (b.subMode === 'FORM_ONLY') ? 'FORM_ONLY' : 'FULL',
     }
   })
@@ -2223,6 +2226,8 @@ provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
   tableId: b.tableId,
   tableDescription: b.tableDescription,
   bindingType: b.bindingType,
+  foreignKeyField: b.foreignKeyField,
+  bindingLinkMode: b.bindingLinkMode,
 })))
 
 // Provide relation bindings for LookupBindingSelect
