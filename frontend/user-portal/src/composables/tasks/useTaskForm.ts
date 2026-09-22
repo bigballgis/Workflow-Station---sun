@@ -3,8 +3,8 @@ import { subTableStoreKey } from './subTableStore'
 import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { submitTaskForm, getTaskFormData } from '@/api/processForm'
-import { unwrapPortalApiPayload } from '@/utils/httpErrorMessage'
+import { submitTaskForm } from '@/api/processForm'
+import { createSubTableAutosave } from './subTableAutosave'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import { collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
 import {
@@ -104,7 +104,6 @@ export function useTaskForm(options: {
   watch(taskFormDTO, dto => {
     captureLoadedSubTableBaseline(dto?.fieldValues?.__subTables__)
   }, { immediate: true, flush: 'sync' })
-  let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
 
   /** Assignment task: merge active binding rows into stale sibling slices for the same MI collection table only. */
   function syncStaleSiblingSubTableSlicesFromActiveBindings(
@@ -438,38 +437,23 @@ export function useTaskForm(options: {
     }
   }
 
-  function scheduleSubTableAutosave() {
-    if (formReadOnly.value || options.isCompletedTask.value || options.isMiSubTaskMode.value) return
-    if (!options.effectiveTaskId.value) return
-    if (subTableAutosaveTimer) clearTimeout(subTableAutosaveTimer)
-
-    subTableAutosaveTimer = setTimeout(async () => {
-      subTableAutosaveTimer = null
-      try {
-        const payload = buildSubTableSubmitPayload()
-        await submitTaskForm(options.effectiveTaskId.value, {
-          ...payload,
-          baselineValues: {}
-        })
-        if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
-      } catch (error) {
-        console.error('[SubTable] autosave failed:', error)
-      }
-    }, 400)
-  }
-
-  async function refreshSavedSubTableVersions() {
-    const response = await getTaskFormData(options.effectiveTaskId.value)
-    const dto = unwrapPortalApiPayload(response) as { fieldValues: Record<string, unknown> }
-    const stored = dto.fieldValues.__subTables__ as Record<string, unknown> | undefined
-    if (!stored) throw new Error('Saved sub-table snapshot is missing')
-    taskFormDTO.value = dto
-    formData.value = { ...formData.value, __subTables__: stored }
-    for (const binding of options.subTableBindings.value) {
-      const rows = getSavedSubTableRows(stored, binding)
-      if (rows) binding.data = cloneSubTableRows(rows)
-    }
-  }
+  const {
+    scheduleSubTableAutosave,
+    clearAutosaveTimer,
+    refreshSavedSubTableVersions,
+    syncSubTableRowVersionsBeforeSubmit,
+    resumeSubTableAutosave,
+  } = createSubTableAutosave({
+    formReadOnly,
+    isCompletedTask: options.isCompletedTask,
+    isMiSubTaskMode: options.isMiSubTaskMode,
+    effectiveTaskId: options.effectiveTaskId,
+    subTableBindings: options.subTableBindings,
+    formData,
+    taskFormDTO,
+    loadedSubTableBaseline,
+    buildSubTableSubmitPayload,
+  })
 
   function getCurrentFormFieldKeys(): string[] {
     const keys = new Set(collectLeafFormFieldKeys(formFields.value, formTabs.value))
@@ -477,13 +461,6 @@ export function useTaskForm(options: {
       keys.add(key)
     }
     return Array.from(keys)
-  }
-
-  function clearAutosaveTimer() {
-    if (subTableAutosaveTimer) {
-      clearTimeout(subTableAutosaveTimer)
-      subTableAutosaveTimer = null
-    }
   }
 
   return {
@@ -504,6 +481,8 @@ export function useTaskForm(options: {
     captureLoadedSubTableBaseline,
     scheduleSubTableAutosave,
     getCurrentFormFieldKeys,
-    clearAutosaveTimer
+    clearAutosaveTimer,
+    syncSubTableRowVersionsBeforeSubmit,
+    resumeSubTableAutosave,
   }
 }

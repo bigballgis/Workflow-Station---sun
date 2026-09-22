@@ -141,12 +141,13 @@ describe('projectSavedRowsForBinding', () => {
     })).toEqual([{ correspondence_id: 'Corr-000047' }])
   })
 
-  it('does not empty MAIN-filter widgets when the primary PK columns cannot be read', () => {
+  it('claims nothing when a multi-filter table cannot read its parent key', () => {
     const siblings = [caseFiles(), partyFiles(), parties()]
     expect(projectSavedRowsForBinding(siblings[0].data, siblings[0], siblings, {
       formData: { id: 'C1' },
       primaryTableId: MAIN_TID,
-    })).toEqual([caseDoc, partyDoc, otherCase])
+    })).toEqual([])
+    expect(siblings[0].data).toEqual([caseDoc, partyDoc, otherCase])
   })
 
   it('empties the nested widget when no party parent exists', () => {
@@ -184,6 +185,21 @@ describe('applyDisplayedSliceToCanonical', () => {
     expect(next.map(r => (r as { id: string }).id)).toEqual(['X', 'Z', 'Y'])
     expect(caseBinding.data).toBe(next)
     expect(partyBinding.data).toBe(next)
+  })
+
+  it('does not replace the store with one widget slice when the parent key is missing', () => {
+    const caseBinding = caseFiles()
+    const partyBinding = partyFiles()
+    const before = [caseDoc, partyDoc, otherCase]
+    const next = applyDisplayedSliceToCanonical(
+      [caseBinding, partyBinding, parties()],
+      50705,
+      [caseDoc],
+      { formData: {}, primaryTableId: MAIN_TID },
+    )
+    expect(next).toEqual(before)
+    expect(caseBinding.data).toEqual(before)
+    expect(partyBinding.data).toEqual(before)
   })
 
   it('does not wipe the store when the nested parent is missing', () => {

@@ -71,7 +71,9 @@ export function projectSavedRowsForBinding<T>(
   if (!shouldProjectByFilter(binding, siblings)) return rows
   const rowsByTable = snapshotRowsByTable(siblings)
   const parentValues = resolveFilterParentValues(binding, form, rowsByTable, siblings)
-  if (parentValues == null) return rows
+  // Multi-filter table whose parent key is not on the form: claim nothing.
+  // Returning the whole store lets this binding write sibling rows.
+  if (parentValues == null) return []
   return sliceRowsByDeclaredFilter(rows, binding, parentValues) as T[]
 }
 
@@ -115,8 +117,7 @@ export function applyDisplayedSliceToCanonical(
   const rowsByTable = snapshotRowsByTable(siblings)
   const parentValues = resolveFilterParentValues(binding, form, rowsByTable, siblings)
   if (parentValues == null) {
-    binding.data = incoming
-    return incoming
+    return Array.isArray(binding.data) ? binding.data : []
   }
   const canonical = Array.isArray(binding.data) ? binding.data : []
   const next = mergeFilterSliceIntoCanonical(canonical, incoming, binding, parentValues)
@@ -168,7 +169,7 @@ export function removeRowsWithMissingDeclaredParent<T>(
   })
 }
 
-/** `null` = parent identity is unknown, keep V1 (do not slice). */
+/** `null` = parent identity is unknown. Callers must not show or claim the whole store. */
 export function resolveFilterParentValues(
   binding: FilterProjectionBinding,
   form: FilterProjectionFormContext,

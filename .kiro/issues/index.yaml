@@ -4367,3 +4367,22 @@
     frontend/developer-workstation/verification-screenshots/2026-09-22_dw-connection-vault-select.png
     Local Compose: empty VAULT_TOKEN and no SA JWT means local Vault resolve
     fails until a token or K8s login is configured.
+
+- id: "1644"
+  status: fixed
+  fixed_at: "2026-09-22"
+  severity: major
+  category: bug
+  summary: "Review-stage Save twice returned 409 because the task form has no __subTables__ and the page kept the old row version"
+  file: "frontend/user-portal/src/composables/tasks/subTableAutosave.ts"
+  note: |
+    P0 Dual Binding Test 的 Review 节点没有任务表单。getTaskFormData 回退只在 fieldValues
+    里放 __request_id，加过版本的子表在 processFormRef.fieldValues.__subTables__。
+    非多实例子任务的 Save 成功后去刷新行版本时只读了 fieldValues，读不到快照，页面上的
+    _wsRowVersion 停在旧值，第二次 Save 被服务端判为 409。
+    修复：快照改从 fieldValues 或 processFormRef 读取；写回 taskFormDTO 后用这份快照
+    恢复 loadedSubTableBaseline，只把新版本号抄到页面上已有的行，不整表替换。
+    多实例子任务的 Save 仍整页重载任务。
+    验证：saveTwiceKeepsRowVersion 与 autosave sync 单测通过。门户重建后在待办
+    b46d09cd（Request 202609220020）连点两次 Save 均为 200；Party files 新增
+    review-add-check 后再次 Save 仍为 200。
