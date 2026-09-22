@@ -74,9 +74,11 @@ const { t } = useI18n()
 }
 
 .todo-claim-row-actions :deep(.el-button) {
-  flex: 0 0 104px;
-  width: 104px;
-  height: 32px;
+  flex: 0 0 96px;
+  width: 96px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
   margin-left: 0;
 }
 
