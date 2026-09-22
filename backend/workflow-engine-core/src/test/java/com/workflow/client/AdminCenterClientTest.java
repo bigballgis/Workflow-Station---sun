@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -622,6 +623,49 @@ class AdminCenterClientTest {
                     any(HttpEntity.class),
                     any(ParameterizedTypeReference.class)
             )).thenReturn(response);
+        }
+    }
+
+    @Nested
+    @DisplayName("getEmailConnectionCredentials token")
+    class EmailCredentialsTokenTests {
+
+        @BeforeEach
+        void token() {
+            ReflectionTestUtils.setField(client, "serviceInternalToken", "svc-secret");
+        }
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void shouldSendServiceTokenHeader() {
+            when(restTemplate.exchange(
+                    contains("/credentials"),
+                    eq(HttpMethod.GET),
+                    argThat(entity -> entity != null
+                            && "svc-secret".equals(entity.getHeaders().getFirst("X-Service-Token"))),
+                    any(ParameterizedTypeReference.class)
+            )).thenReturn(new ResponseEntity<>(Map.of("password", "p"), HttpStatus.OK));
+
+            Optional<Map<String, Object>> result = client.getEmailConnectionCredentials("fu-1", "conn-1");
+            assertThat(result).isPresent();
+            assertThat(result.get()).containsEntry("password", "p");
+        }
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void shouldThrowWhenAdminRejectsToken() {
+            when(restTemplate.exchange(
+                    contains("/credentials"),
+                    eq(HttpMethod.GET),
+                    any(HttpEntity.class),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(HttpClientErrorException.create(
+                    HttpStatus.FORBIDDEN, "Forbidden", HttpHeaders.EMPTY,
+                    "{\"error\":\"FORBIDDEN\"}".getBytes(), null));
+
+            assertThatThrownBy(() -> client.getEmailConnectionCredentials("fu-1", "conn-1"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("service token");
         }
     }
 }

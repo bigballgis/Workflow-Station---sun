@@ -376,6 +376,14 @@ services:
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
       # C-3 (DECISIONS.md#d6): 可信服务密钥；admin-center 凭此校验裸 X-User-Id。AP 服务不得配置此项。
       SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
+      # HashiCorp Vault (admin-center Kubernetes JWT or optional VAULT_TOKEN for local).
+      VAULT_ADDR: ${VAULT_ADDR:-}
+      VAULT_NAMESPACE: ${VAULT_NAMESPACE:-}
+      VAULT_AUTH_MOUNT: ${VAULT_AUTH_MOUNT:-}
+      VAULT_ROLE: ${VAULT_ROLE:-}
+      VAULT_KV_MOUNT: ${VAULT_KV_MOUNT:-}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      VAULT_LOGIN_REFRESH_SKEW_SECONDS: ${VAULT_LOGIN_REFRESH_SKEW_SECONDS:-30}
       # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连前端端口时见 application.yml 额外前缀
       SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3000/admin/sso/callback}
       SSO_REDIRECT_ADMIN_HTTP_PREFIX: ${SSO_REDIRECT_ADMIN_HTTP_PREFIX:-http://localhost:3000/admin/sso/callback}
@@ -553,6 +561,9 @@ services:
       # C-3 (DECISIONS.md#d6): 可信服务密钥；调用 admin-center 时附带，使其信任转发的 X-User-Id。
       SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
       FILE_UPLOAD_BASE_URL: /api/v1/upload/files
+      # 进程内限流默认关闭：限流由 Kong 统一负责（本服务流量都经 Kong）。仅在 DW 绕过 Kong 暴露时打开。
+      DW_RATE_LIMIT_ENABLED: ${DW_RATE_LIMIT_ENABLED:-false}
+      DW_RATE_LIMIT_PER_MINUTE: ${DW_RATE_LIMIT_PER_MINUTE:-600}
       # AI Generate 直连集团 AI gateway(OpenAI 兼容 chat/completions),凭证是每用户的 DSP AMToken。
       # 空值 => 每轮对话以 AI_GATEWAY_NOT_CONFIGURED 失败(不静默降级);dev 默认取 .env 里的 AI 平台地址。
       AI_GENERATION_ENABLED: ${AI_GENERATION_ENABLED:-true}

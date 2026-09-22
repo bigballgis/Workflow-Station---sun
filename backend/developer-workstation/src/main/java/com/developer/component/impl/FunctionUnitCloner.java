@@ -35,6 +35,8 @@ import com.developer.component.TableDesignComponent;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.MainTableViewService;
+import com.developer.service.impl.FunctionUnitDocumentService;
+import com.platform.security.util.SecurityContextUtils;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
@@ -82,6 +84,7 @@ class FunctionUnitCloner {
     private final FunctionUnitCodeGenerator codeGenerator;
     private final MainTableViewService mainTableViewService;
     private final TableDesignComponent tableDesignComponent;
+    private final FunctionUnitDocumentService documentService;
 
     @Transactional
     FunctionUnit clone(Long id, String newName) {
@@ -215,6 +218,11 @@ class FunctionUnitCloner {
         Map<Long, Long> emailTemplateIdMapping = cloneEmailTemplates(id, cloned);
         emailMonitorRulePortability.cloneAll(
                 id, cloned, formIdMapping, bindingIdMapping, connectionUidMapping);
+
+        // Requirements / Design documents: the source's latest content becomes the clone's v1
+        documentService.appendFromPackage(cloned.getId(), documentService.latestContents(id),
+                FunctionUnitDocumentService.SUMMARY_CLONED,
+                SecurityContextUtils.getCurrentUsername().orElse("system"));
 
         // Clone process definition last; rewrite BPMN ID references
         if (source.getProcessDefinition() != null) {
@@ -543,7 +551,7 @@ class FunctionUnitCloner {
                     .host(source.getHost() != null ? source.getHost() : "")
                     .port(source.getPort())
                     .username(source.getUsername())
-                    .credentialEncrypted(source.getCredentialEncrypted())
+                    .passwordEnvKey(source.getPasswordEnvKey())
                     .fromEmail(source.getFromEmail())
                     .fromName(source.getFromName())
                     .useTls(source.getUseTls())

@@ -861,8 +861,20 @@ Kafka(K8S) ───────────────────────
 |--------|--------|------|
 | `ADMIN_CENTER_URL` | workflow-engine, user-portal, developer-workstation | 管理后台地址 |
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
+| `VAULT_ADDR` | admin-center | HashiCorp Vault 基址（含 `:8200`）。Admin 用 Kubernetes JWT（或本地可选 `VAULT_TOKEN`）登录后读 KV v2 `data.data.password`。空值则 VAULT 解析失败。已有库需手动执行 `00-schema/86-ac-environment-variables.sql`。`credential_encrypted` 列本发保留（应用不再读写）；测通后再另开脚本 DROP。平台须把 ServiceAccount `admin-center` 绑到 `VAULT_ROLE`。 |
 | `USER_PORTAL_BASE_URL` | admin-center | user-portal 基址（含 `/api/portal`）；PortalRuntimePurge / UserPortalAudit 内部调用 |
 | `PORTAL_INTERNAL_API_TOKEN` | admin-center, user-portal, workflow-engine | 调用门户 `/internal/*` 的共享密钥（须两端一致） |
+
+各 Hermes 部署应对接的 **Vault 集群**（Admin 直连 `VAULT_ADDR`，无独立 Wrapper 服务）：
+
+| Hermes 环境 | 配置落点 | `VAULT_ADDR` | 目录 `deploy_env` |
+|-------------|----------|--------------|-------------------|
+| 本地 Docker / DEV | `deploy/environments/dev/.env` | `https://vault-dev.uk.hsbc:8200` | `dev` |
+| PPD（K8s 目录 `preprod`，profile=`sit`） | `deploy/k8s/config_map/preprod/` | `https://vault-uat.uk.hsbc:8200` | **sit**（在 PPD 界面建的变量落 sit 切片） |
+| Hermes UAT（K8s 目录 `uat`） | `deploy/k8s/config_map/uat/` | `https://vault-dev.uk.hsbc:8200` | `uat` |
+| 生产 HK | 生产 ConfigMap（尚未建目录） | `https://vault-prod.hk.hsbc:8200` | `prod` |
+
+配套：`VAULT_NAMESPACE`、`VAULT_AUTH_MOUNT`、`VAULT_ROLE`、`VAULT_KV_MOUNT`。PPD/UAT ConfigMap 目前填的是 DEV POC 的 Kubernetes auth mount/role，上线前须向平台确认该集群的 issuer；不匹配则 Vault login 403。Istio 需放行 admin-center 出站 8200（见 `admin-center.yaml` 的 ServiceEntry）。平台须把 ServiceAccount `admin-center` 绑到 `VAULT_ROLE`。
 
 #### 12.2.1 developer-workstation 专项
 
@@ -870,6 +882,8 @@ Kafka(K8S) ───────────────────────
 |--------|------|--------|
 | `DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH` | 一键部署到 admin 前是否要求当前 HTTP 请求已带 `Authorization: Bearer …`（生产经 Kong 转发用户 JWT 时应为 `true`） | `true`（默认） |
 | `ADMIN_CENTER_URL` | 与 `application.yml` 中 `admin-center.url` 一致；部署目标非默认时需覆盖 | `http://admin-center:8080` |
+| `DW_RATE_LIMIT_ENABLED` | 进程内 Bucket4j 限流开关（`rate-limit.enabled`）。限流由 Kong 统一负责，仅在 DW 不经 Kong 暴露时打开 | `false`（默认） |
+| `DW_RATE_LIMIT_PER_MINUTE` | 开启时每个 remoteAddr 每分钟请求数（`rate-limit.requests-per-minute`），每实例独立计数 | `600`（默认） |
 
 说明：`DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH=false` 仅建议用于本地自动化或测试；生产环境应依赖 **Kong + JWT**，由前端/网关携带令牌，服务端再转发至 admin-center 的 `function-units-import` 接口。
 

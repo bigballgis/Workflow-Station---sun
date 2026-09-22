@@ -2,14 +2,17 @@ package com.developer.service.impl;
 
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.FunctionUnitContextDTO;
+import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
+import com.developer.enums.AiStudioPhase;
 import com.developer.exception.AiGenerationException;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiStudioChatService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,7 +30,15 @@ import java.util.UUID;
 public class AiStudioChatServiceImpl implements AiStudioChatService {
 
     /** 对话转写的字符预算：超出时从最旧的历史开始丢，永远保住最新一条用户消息。 */
-    private static final int TRANSCRIPT_CHAR_BUDGET = 8000;
+    private static final int TRANSCRIPT_CHAR_BUDGET = 16000;
+    private static final int ADVISORY_REQUIREMENTS_CHAR_CAP = 12000;
+    private static final int ADVISORY_DESIGN_CHAR_CAP = 8000;
+
+    /** 历史里单条提案 JSON 进转写的上限：够模型看清上一轮提了什么，又不至于把设计上下文挤出窗口。 */
+    static final int HISTORY_PROPOSAL_CHAR_CAP = 6000;
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper HISTORY_JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     private static final String SYSTEM_PROMPT = """
             You are AI Copilot inside AI Studio of Workflow Station, a low-code workflow platform \
@@ -39,38 +50,11 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
             You are advisory only: you cannot modify the design yourself; the user applies every \
             change in the designer on the left. Give concrete, actionable guidance in the \
             platform's own terms for the current phase. Answer in the same language as the \
-            user's latest message. Be concise; prefer short lists over long prose.""";
-
-    /** 阶段 key → system prompt 里的一句话职责描述（模型上下文用，非 UI 文案）。 */
-    private static final Map<String, String> PHASE_BLURBS = Map.ofEntries(
-            Map.entry("PROCESS_DESIGN", "review the BPMN flow, roles and conditions"),
-            Map.entry("TABLE_DESIGN", "define main and sub tables, fields and keys"),
-            Map.entry("FORM_DESIGN", "bind forms to tables and lay out fields"),
-            Map.entry("VIEW_DESIGN", "configure main table views and access control"),
-            Map.entry("ACTION_DESIGN", "define actions triggered from views and forms"),
-            Map.entry("AUTOMATION", "configure service tasks and automation flows"),
-            Map.entry("CONNECTIONS", "manage external connections used by this unit"),
-            Map.entry("EMAIL_TEMPLATES", "author email templates for notifications"),
-            Map.entry("EMAIL_MONITORS", "set up inbound email monitors"),
-            Map.entry("DECISION_DESIGN", "model decision tables used by the process"),
-            Map.entry("VALIDATION", "run the final whole-design checks before deployment"));
-
-    /**
-     * propose 轮次的写入范围：AI Studio 阶段 → AiWriteService 的 regenerateScope。
-     * 只有 Validation 阶段没有对应的 generatedData 切片（它是校验门禁，无设计产物）。
-     * 邮件三阶段、视图与 service task 绑定的切片是 upsert 语义（见 {@code AiWriteServiceImpl}）。
-     */
-    private static final Map<String, String> PROPOSAL_SCOPE_BY_PHASE = Map.ofEntries(
-            Map.entry("PROCESS_DESIGN", "PROCESS"),
-            Map.entry("TABLE_DESIGN", "TABLES"),
-            Map.entry("FORM_DESIGN", "FORMS"),
-            Map.entry("ACTION_DESIGN", "ACTIONS"),
-            Map.entry("DECISION_DESIGN", "DECISIONS"),
-            Map.entry("EMAIL_TEMPLATES", "EMAIL_TEMPLATES"),
-            Map.entry("CONNECTIONS", "CONNECTIONS"),
-            Map.entry("EMAIL_MONITORS", "EMAIL_MONITORS"),
-            Map.entry("VIEW_DESIGN", "VIEWS"),
-            Map.entry("AUTOMATION", "SERVICE_TASK_BINDINGS"));
+            user's latest message. Be concise; prefer short lists over long prose.
+            The user message may start with the function unit's current design for this phase. \
+            When it does, ground every answer in those real names (tables, fields, forms, nodes, \
+            flow keys) and never invent ones that are not listed. The listing is name-level only: \
+            say so instead of guessing when a detail it does not carry is needed.""";
 
     /** 按业务键 upsert 的 scope：提案只列新增/修改项，未提及的对象保持不变。 */
     static final Set<String> UPSERT_SCOPES = Set.of(
@@ -95,6 +79,16 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
             Map.entry("VIEWS", Set.of("mainTableViews")),
             Map.entry("SERVICE_TASK_BINDINGS", Set.of("serviceTaskBindings")));
 
+    /** 一键生成的写入范围（AiWriteService 的全量替换） */
+    public static final String SCOPE_ALL = "ALL";
+
+    /**
+     * 一键生成产出的切片：六类核心设计。视图、邮件与 service task 绑定不在内——连接要人工补凭证、
+     * 监控依赖连接、绑定依赖已发布的 Automation flow，一次生成里带上它们只会让整份结果过不了引用校验。
+     */
+    public static final Set<String> ONE_CLICK_SLICES = Set.of("tableDefinitions", "tableRelations",
+            "formDefinitions", "actionDefinitions", "decisionDefinitions", "processDefinition");
+
     /** scope 允许的切片 key；ALL 返回全部。供本类与 Apply 编排（component）共用。 */
     public static Set<String> allowedSlices(String scope) {
         if ("ALL".equalsIgnoreCase(scope)) {
@@ -112,12 +106,18 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
     private final AiGatewayClient aiGatewayClient;
     private final AiResponseParser aiResponseParser;
     private final AiGenerationService aiGenerationService;
+    private final AiStudioContextDigest contextDigest;
+    private final FunctionUnitDocumentService documentService;
 
     public AiStudioChatServiceImpl(AiGatewayClient aiGatewayClient, AiResponseParser aiResponseParser,
-                                   AiGenerationService aiGenerationService) {
+                                   AiGenerationService aiGenerationService,
+                                   AiStudioContextDigest contextDigest,
+                                   FunctionUnitDocumentService documentService) {
         this.aiGatewayClient = aiGatewayClient;
         this.aiResponseParser = aiResponseParser;
         this.aiGenerationService = aiGenerationService;
+        this.contextDigest = contextDigest;
+        this.documentService = documentService;
     }
 
     @Override
@@ -134,17 +134,36 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
      */
     @Override
     public ProposalDraft prepareProposal(AiStudioChatRequest request) {
-        String scope = PROPOSAL_SCOPE_BY_PHASE.get(request.getPhase());
-        if (scope == null) {
-            throw new AiGenerationException("AI_STUDIO_PROPOSAL_UNSUPPORTED_PHASE",
-                    "Phase " + request.getPhase() + " has no structured proposal scope; "
-                            + "proposals are supported for: " + PROPOSAL_SCOPE_BY_PHASE.keySet());
-        }
+        // propose 轮次的写入范围：AI Studio 阶段 → AiWriteService 的 regenerateScope；
+        // 邮件三阶段、视图与 service task 绑定的切片是 upsert 语义（见 AiWriteServiceImpl）
+        String scope = AiStudioPhase.fromKey(request.getPhase())
+                .flatMap(AiStudioPhase::proposalScope)
+                .orElseThrow(() -> new AiGenerationException("AI_STUDIO_PROPOSAL_UNSUPPORTED_PHASE",
+                        "Phase " + request.getPhase() + " has no structured proposal scope; "
+                                + "proposals are supported for: " + Arrays.stream(AiStudioPhase.values())
+                                .filter(p -> p.proposalScope().isPresent()).toList()));
         FunctionUnitContextDTO context =
                 aiGenerationService.serializeFunctionUnitContext(request.getFunctionUnitId());
         AiMode mode = aiGenerationService.determineMode(request.getFunctionUnitId());
+        List<Map<String, String>> documents = documentService.latestContents(request.getFunctionUnitId())
+                .entrySet().stream()
+                .map(e -> Map.of("documentType", e.getKey().name(), "content", e.getValue()))
+                .toList();
         return new ProposalDraft(request.getFunctionUnitId(), request.getPhase(), scope,
-                buildProposalMessage(request, scope), context, mode);
+                buildProposalMessage(request, scope), context, mode, documents);
+    }
+
+    @Override
+    public ProposalDraft prepareOneClick(AiStudioChatRequest request) {
+        FunctionUnitContextDTO context =
+                aiGenerationService.serializeFunctionUnitContext(request.getFunctionUnitId());
+        AiMode mode = aiGenerationService.determineMode(request.getFunctionUnitId());
+        List<Map<String, String>> documents = documentService.latestContents(request.getFunctionUnitId())
+                .entrySet().stream()
+                .map(e -> Map.of("documentType", e.getKey().name(), "content", e.getValue()))
+                .toList();
+        return new ProposalDraft(request.getFunctionUnitId(), request.getPhase(), SCOPE_ALL,
+                buildOneClickMessage(request), context, mode, documents);
     }
 
     /**
@@ -157,7 +176,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
         String scope = draft.scope();
         Map<String, Object> parsed = aiGenerationService.callAiModel(
                 UUID.randomUUID(), draft.message(), AiPhase.GENERATION, draft.mode(),
-                draft.context(), draft.functionUnitId(), null, scope, amToken);
+                draft.context(), draft.functionUnitId(), draft.documents(), scope, amToken);
 
         Object reply = parsed.get("reply");
         Object generatedData = parsed.get("generatedData");
@@ -166,7 +185,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                 ? new java.util.LinkedHashMap<>((Map<String, Object>) m)
                 : null;
         if (proposal != null) {
-            proposal.keySet().retainAll(allowedSlices(scope));
+            proposal.keySet().retainAll(SCOPE_ALL.equals(scope) ? ONE_CLICK_SLICES : allowedSlices(scope));
             if (proposal.isEmpty()) proposal = null;
         }
         if (proposal == null && (!(reply instanceof String r) || r.isBlank())) {
@@ -206,16 +225,36 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                 + "========== End of scoped change request ==========";
     }
 
-    private String advisoryChat(AiStudioChatRequest request, String amToken) {
-        String blurb = PHASE_BLURBS.get(request.getPhase());
-        if (blurb == null) {
-            // DTO 的 @Pattern 已挡住未知阶段；这里兜的是两处枚举日后失同步的编程错误
-            throw new AiGenerationException("AI_STUDIO_UNKNOWN_PHASE",
-                    "Unknown AI Studio phase: " + request.getPhase());
-        }
+    /**
+     * 一键生成的用户消息 = 对话转写（含本轮需求描述）+ 整体生成指令。Requirements / Design 文档由管线另行带上。
+     */
+    private String buildOneClickMessage(AiStudioChatRequest request) {
+        return buildTranscript(request) + "\n\n"
+                + "========== One-click generation request (system-provided, highest priority) ==========\n"
+                + "Generate the COMPLETE function unit design in a single pass from the user's requirements above "
+                + "and the Requirements / Function Unit Design documents (when provided). It REPLACES the whole "
+                + "existing design, so every slice must be complete and consistent with the others "
+                + "(forms bind existing tables and fields, the process references existing forms and actions).\n"
+                + "The GENERATED_DATA block must contain exactly these keys and nothing else: "
+                + new java.util.TreeSet<>(ONE_CLICK_SLICES) + ". Use an empty array for a slice the requirements "
+                + "do not call for.\n"
+                + "Do NOT output email templates, connections, email monitors, main table views or service task "
+                + "bindings, do NOT rename the function unit, and do NOT include an icon.\n"
+                + "========== End of one-click generation request ==========";
+    }
 
-        String system = SYSTEM_PROMPT.formatted(request.getPhase(), blurb);
-        String user = buildTranscript(request);
+    private String advisoryChat(AiStudioChatRequest request, String amToken) {
+        // DTO 的 @Pattern 已挡住未知阶段；这里兜的是绕过 DTO 校验的直接调用
+        AiStudioPhase phase = AiStudioPhase.fromKey(request.getPhase())
+                .orElseThrow(() -> new AiGenerationException("AI_STUDIO_UNKNOWN_PHASE",
+                        "Unknown AI Studio phase: " + request.getPhase()));
+
+        String system = SYSTEM_PROMPT.formatted(phase.name(), phase.advisoryHint());
+        String digest = advisoryDigest(request);
+        String user = (digest.isEmpty() ? ""
+                : "## Current design (" + request.getPhase() + ")\n" + digest + "\n\n")
+                + documentsContext(request.getFunctionUnitId(), phase)
+                + buildTranscript(request);
 
         Map<String, Object> httpResult = aiGatewayClient.chat(
                 new AiPromptBuilder.RenderedPrompt(system, user), amToken);
@@ -227,10 +266,75 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
             throw new AiGenerationException("AI_GATEWAY_EMPTY_RESPONSE",
                     "AI gateway returned no usable reply text");
         }
-        log.info("AI Studio copilot replied: functionUnitId={}, phase={}, historySize={}, replyChars={}",
+        log.info("AI Studio copilot replied: functionUnitId={}, phase={}, historySize={}, digestChars={}, replyChars={}",
                 request.getFunctionUnitId(), request.getPhase(),
-                request.getHistory() == null ? 0 : request.getHistory().size(), text.length());
+                request.getHistory() == null ? 0 : request.getHistory().size(), digest.length(), text.length());
         return text.trim();
+    }
+
+    /**
+     * 顾问轮的"当前设计现状"：按阶段裁剪的名称级摘要（见 {@link AiStudioContextDigest}）。
+     *
+     * <p>失败一律降级为无上下文对话——顾问式回答没有上下文只是泛泛而谈，为此让整轮对话失败
+     * 是更差的结果。超大功能单元的 {@code AI_CONTEXT_TOO_LARGE} 也走这条路。</p>
+     */
+    private String advisoryDigest(AiStudioChatRequest request) {
+        try {
+            return contextDigest.digest(request.getPhase(),
+                    aiGenerationService.serializeFunctionUnitContext(request.getFunctionUnitId()));
+        } catch (RuntimeException e) {
+            log.warn("AI Studio copilot chat continues without the design digest (functionUnitId={}): {}",
+                    request.getFunctionUnitId(), e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * 顾问轮带上功能单元的文档：Requirements 全文（有上限）+ Design 里当前阶段那一节。
+     * 两份都没有时返回空串，提示词与原来一致。
+     */
+    private String documentsContext(Long functionUnitId, AiStudioPhase phase) {
+        Map<AiDocumentType, String> docs = documentService.latestContents(functionUnitId);
+        StringBuilder sb = new StringBuilder();
+        String requirements = docs.get(AiDocumentType.REQUIREMENTS);
+        if (requirements != null && !requirements.isBlank()) {
+            sb.append("## Requirements document (the business intent)\n")
+                    .append(capped(requirements, ADVISORY_REQUIREMENTS_CHAR_CAP)).append("\n\n");
+        }
+        String design = docs.get(AiDocumentType.DESIGN);
+        if (design != null && !design.isBlank()) {
+            String label = phase.label();
+            String section = designSection(design, label);
+            if (section != null) {
+                sb.append("## Function Unit Design document — ").append(label).append(" section\n")
+                        .append(capped(section, ADVISORY_DESIGN_CHAR_CAP)).append("\n\n");
+            } else {
+                // FALLBACK(ux): 旧文档还没整理成按阶段分节的结构——带整份（有上限），缺的只是聚焦，不会写错数据
+                sb.append("## Function Unit Design document\n")
+                        .append(capped(design, ADVISORY_DESIGN_CHAR_CAP)).append("\n\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 按文档模板的二级标题取一节（不含标题行）；没有这一节返回 null。 */
+    static String designSection(String design, String label) {
+        String[] lines = design.split("\n", -1);
+        StringBuilder section = null;
+        for (String line : lines) {
+            boolean heading = line.startsWith("## ");
+            if (section != null) {
+                if (heading) break;
+                section.append(line).append('\n');
+            } else if (heading && line.substring(3).strip().equalsIgnoreCase(label)) {
+                section = new StringBuilder();
+            }
+        }
+        return section == null ? null : section.toString().strip();
+    }
+
+    private static String capped(String text, int cap) {
+        return text.length() <= cap ? text : text.substring(0, cap) + "\n…(document truncated)";
     }
 
     /**
@@ -250,19 +354,43 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
         // 从最新的历史往回收，收满预算为止，再按时间序拼出
         int start = history.size();
         int used = 0;
+        String[] rendered = new String[history.size()];
         while (start > 0) {
             AiStudioChatRequest.HistoryMessage m = history.get(start - 1);
-            int cost = m.getContent().length() + 16;
+            rendered[start - 1] = renderHistoryEntry(m);
+            int cost = rendered[start - 1].length() + 1;
             if (used + cost > budget) break;
             used += cost;
             start--;
         }
         transcript.append("Conversation so far:\n");
         for (int i = start; i < history.size(); i++) {
-            AiStudioChatRequest.HistoryMessage m = history.get(i);
-            transcript.append("USER".equals(m.getRole()) ? "User: " : "Assistant: ")
-                    .append(m.getContent()).append('\n');
+            transcript.append(rendered[i]).append('\n');
         }
         return transcript.append(tail).toString();
+    }
+
+    /**
+     * 单条历史 → 转写行。ASSISTANT 条目若附带上一轮的结构化提案，把提案 JSON（裁到
+     * {@link #HISTORY_PROPOSAL_CHAR_CAP}）也写进去——否则"把刚才那个模板改一下"这类二次修改，
+     * 模型只看得到自己说过"Here is the proposed change"，不知道提了什么。
+     */
+    private static String renderHistoryEntry(AiStudioChatRequest.HistoryMessage m) {
+        StringBuilder sb = new StringBuilder("USER".equals(m.getRole()) ? "User: " : "Assistant: ")
+                .append(m.getContent());
+        if (!"USER".equals(m.getRole()) && m.getProposal() != null && !m.getProposal().isEmpty()) {
+            String json;
+            try {
+                json = HISTORY_JSON.writeValueAsString(m.getProposal());
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                json = String.valueOf(m.getProposal());
+            }
+            if (json.length() > HISTORY_PROPOSAL_CHAR_CAP) {
+                json = json.substring(0, HISTORY_PROPOSAL_CHAR_CAP) + " …(truncated)";
+            }
+            sb.append("\n[Proposed change").append(m.getProposalScope() != null ? ", scope=" + m.getProposalScope() : "")
+                    .append("; not yet applied unless the current data already reflects it] ").append(json);
+        }
+        return sb.toString();
     }
 }

@@ -4308,3 +4308,62 @@
     保存时重新校验候选并仅写当前 binding 的归属 FK；显示文字使用主键加第一个已配置
     可见非主键列，无显示列时仅显示主键。共享回归覆盖改名字段、复合主键、去重和归属写入。
 
+- id: "1641"
+  status: fixed
+  fixed_at: "2026-09-17"
+  severity: major
+  category: security
+  summary: "DW login gave role-less users a default DEVELOPER role, so plain team members could MODIFY team function units"
+  file: "backend/developer-workstation/src/main/java/com/developer/security/LegacyVirtualGroupRoleLookup.java"
+  note: |
+    AuthController 与 DeveloperSsoExchangeService 的 getRolesForUserLegacy 在无角色或查询异常时返回 DEVELOPER；
+    FunctionUnitWorkspaceAccessService.hasRole 先信 JWT 角色 → 无能力角色的组员拿到 MODIFY（dev 上 e2e_zhangwei 通过 AI Studio 聊天 MODIFY 校验）。
+    修复：两处重复查询合并为 LegacyVirtualGroupRoleLookup，无角色/异常返回空列表；JWT 信任保留（用户决定），
+    旧令牌在刷新/重新登录后失效。前端 AI Studio 路由去掉已删除的 FU_VIEWER，并加入团队只读兜底（workspaceFallbackApplies）。
+    验证：LegacyVirtualGroupRoleLookupTest 3/3、FunctionUnitWorkspaceAccessServiceTest 16/16；dev 重建 DW 前后端后
+    _dw-no-default-role-check.mjs 8/8（登录与 /auth/me 无 DEVELOPER、chat/proposals 403 WORKSPACE_FORBIDDEN、
+    thread canModify=false、AI Studio 只读打开）；developer（SYS_ADMIN）对照 canModify=true。
+    截图 2026-09-17_dw-no-default-role.png。
+
+- id: "1642"
+  status: fixed
+  fixed_at: "2026-09-20"
+  severity: minor
+  category: bug
+  summary: "AI Studio proposal job snapshots raced on first save: duplicate key on dw_ai_studio_proposal_jobs_pkey, PENDING/RUNNING row could be lost or go stale"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/impl/AiStudioProposalJobServiceImpl.java"
+  note: |
+    submit() 在请求线程 persist，run() 在工作线程一翻 RUNNING 就 persist；store 的 repository.save 对自带 String id 是先查后插，
+    两边同时首写 → 后到的撞主键，只记 WARN "snapshot not persisted"（dev 上每个作业必现）。同一竞态的另一面：
+    早拍的快照晚写完会把更新的状态盖回去，库里留下永远未完成的行（findUnfinished 会把它当成进行中）。
+    修复：每个作业一把 persistLock，快照在锁内现拍再写库；submit() 把 executor.submit 与首次落库放在同一把锁内。
+    不用作业锁，轮询与取消不必等写库；失败仍只 WARN；表与 store 不变。
+    验证：AiStudioProposalJobPersistenceTest 新增两条先红（duplicate key on PENDING / 行停在 PENDING）后绿，相关 5 个测试类 34 条 ×3 轮全绿（JDK17）；
+    dev 重建 developer-workstation 后 _ai-studio-job-persist-race-check.mjs 提交 4 个作业（取消 + supersede）：
+    日志 "snapshot not persisted" 0 次（旧容器 1 个作业 1 次），库里 4 行均为 CANCELLED 终态。
+
+- id: "1643"
+  status: fixed
+  fixed_at: "2026-09-22"
+  severity: major
+  category: architecture
+  summary: "Email Connection mailbox passwords stored as AES credential_encrypted instead of Vault Environment var_key"
+  file: "backend/admin-center/src/main/java/com/admin/component/EnvironmentVariableComponentImpl.java"
+  note: |
+    Admin global Environment catalog (TEXT current/default, VAULT KV path).
+    DW Email Connection binds passwordEnvKey only; passwords stay in HashiCorp
+    Vault KV v2 data.data.password. Admin talks to VAULT_ADDR :8200 (Kubernetes
+    JWT or optional local VAULT_TOKEN). Engine/DW resolve via Admin internal
+    APIs with SERVICE_INTERNAL_TOKEN; Vault 404 is not treated as missing
+    credentials. credential_encrypted column is kept this release (app no
+    longer reads it); DROP after mailbox Vault path is verified.
+    Schema script is 86-ac-environment-variables.sql because 81 was already
+    used by bi_data_view_assignment on this branch.
+    VaultSecretClientImpl gated by vault.enabled so engine does not boot it.
+    验证：targeted mvn tests (Vault/Environment/email) pass; compose rebuild
+    admin-center / developer-workstation / workflow-engine (+ frontends) healthy.
+    截图：
+    frontend/admin-center/verification-screenshots/2026-09-22_admin-environment-variables.png
+    frontend/developer-workstation/verification-screenshots/2026-09-22_dw-connection-vault-select.png
+    Local Compose: empty VAULT_TOKEN and no SA JWT means local Vault resolve
+    fails until a token or K8s login is configured.

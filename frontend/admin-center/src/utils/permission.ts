@@ -53,6 +53,8 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/profile': [], // Everyone can access their profile
   '/relation-tables/structure': [PERMISSIONS.SYSTEM_ADMIN],
   '/relation-tables/structure/create': [PERMISSIONS.SYSTEM_ADMIN],
+  '/environment-variables': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
+  '/relation-tables/environment-variables': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
   '/relation-tables/data': [PERMISSIONS.SYSTEM_ADMIN]
 }
 

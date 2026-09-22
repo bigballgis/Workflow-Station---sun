@@ -28,8 +28,8 @@ public class SysEmailConnection {
     @Column(name = "username")
     private String username;
 
-    @Column(name = "credential_encrypted", columnDefinition = "TEXT")
-    private String credentialEncrypted;
+    @Column(name = "password_env_key", length = 100)
+    private String passwordEnvKey;
 
     @Column(name = "direction", length = 20)
     private String direction;

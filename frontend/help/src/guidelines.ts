@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 import { BASIC_FORM_CONTROLS } from '@/formCtlBasic'
 import { EXTEND_FORM_CONTROLS } from '@/formCtlExtend'
 
@@ -59,6 +59,20 @@ export const GUIDELINES: Guideline[] = [
     load: () => import('@/views/ViewDesignGuide.vue'),
   },
   {
+    id: 'fu-documents',
+    path: '/fu-documents',
+    titleKey: 'guides.fuDocuments.title',
+    summaryKey: 'guides.fuDocuments.summary',
+    load: () => import('@/views/FuDocumentsGuide.vue'),
+  },
+  {
+    id: 'ai-studio',
+    path: '/ai-studio',
+    titleKey: 'guides.aiStudio.title',
+    summaryKey: 'guides.aiStudio.summary',
+    load: () => import('@/views/AiStudioGuide.vue'),
+  },
+  {
     id: 'email-send',
     path: '/email-send',
     titleKey: 'guides.emailSend.title',
@@ -71,6 +85,13 @@ export const GUIDELINES: Guideline[] = [
     titleKey: 'guides.emailMonitor.title',
     summaryKey: 'guides.emailMonitor.summary',
     load: () => import('@/views/EmailMonitorGuide.vue'),
+  },
+  {
+    id: 'environment-variables',
+    path: '/environment-variables',
+    titleKey: 'guides.environmentVariables.title',
+    summaryKey: 'guides.environmentVariables.summary',
+    load: () => import('@/views/EnvironmentVariablesGuide.vue'),
   },
   {
     id: 'up-tasks-to-claim',
@@ -258,6 +279,8 @@ export const NAV_TREE: NavNode[] = [
         titleKey: 'nav.functionUnits',
         open: true,
         children: [
+          { kind: 'leaf', id: 'dw-ai-studio', titleKey: 'nav.aiStudio', to: '/ai-studio' },
+          { kind: 'leaf', id: 'dw-fu-settings', titleKey: 'nav.functionUnitSettings', to: '/fu-documents' },
           { kind: 'leaf', id: 'dw-process', titleKey: 'nav.processDesign' },
           {
             kind: 'group',
@@ -359,9 +382,14 @@ export const NAV_TREE: NavNode[] = [
           { kind: 'leaf', id: 'ac-rt-data', titleKey: 'nav.acTableData' },
         ],
       },
+      {
+        kind: 'leaf',
+        id: 'ac-env',
+        titleKey: 'guides.environmentVariables.title',
+        to: '/environment-variables',
+      },
       { kind: 'leaf', id: 'ac-pieces', titleKey: 'nav.acPieces' },
       { kind: 'leaf', id: 'ac-flows', titleKey: 'nav.acFlowMigration' },
-      { kind: 'leaf', id: 'ac-config', titleKey: 'nav.acSystemConfig' },
     ],
   },
   {

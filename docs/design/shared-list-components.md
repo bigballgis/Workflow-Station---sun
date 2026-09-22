@@ -847,6 +847,7 @@ Action 列可继续 `fixed="right"`（§6.6），不代替共享表头。
 |------|------|
 | `/dashboard` | 概览 |
 | `/organization` | 业务单位树 |
+| `/environment-variables` | 环境变量目录（新增/编辑弹窗），无筛选/排序/分页 |
 | 结构创建/编辑、ER 图、导入页、profile、各 *Dialog | 表单 / 图 / 弹窗小表 |
 
 ### 6.7.4 加 / 改左侧菜单时的硬步骤

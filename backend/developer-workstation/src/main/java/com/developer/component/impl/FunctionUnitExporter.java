@@ -30,11 +30,13 @@ import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.SubTableViewConfigRepository;
+import com.developer.enums.AiDocumentType;
 import com.developer.enums.FormScene;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.service.impl.FunctionUnitDocumentService;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.util.FkFillSourcesSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,6 +88,7 @@ public class FunctionUnitExporter {
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final FunctionUnitDocumentService documentService;
     private final ObjectMapper objectMapper;
 
     @Value("${platform.version:1.0.0}")
@@ -229,6 +232,10 @@ public class FunctionUnitExporter {
                 .map(DecisionDefinition::getDmnXml)
                 .filter(xml -> xml != null && !xml.isBlank())
                 .toList());
+
+        // Requirements / Design documents: latest content only (history stays in dw_ai_documents).
+        // Legacy snapshots lack the key, and rollback then leaves the documents untouched.
+        payload.put(FunctionUnitDocumentService.PACKAGE_KEY, documentService.packagePayload(functionUnitId));
 
         return payload;
     }
@@ -417,6 +424,16 @@ public class FunctionUnitExporter {
                 decisionIndex++;
             }
 
+            // Export Requirements / Design documents (latest version) as Markdown
+            List<String> documentFiles = new ArrayList<>();
+            for (Map.Entry<AiDocumentType, String> doc : documentService.latestContents(functionUnitId).entrySet()) {
+                String fileName = FunctionUnitDocumentService.PACKAGE_FILES.get(doc.getKey());
+                byte[] data = doc.getValue().getBytes(StandardCharsets.UTF_8);
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                documentFiles.add(fileName);
+            }
+
             // Build manifest
             ExportManifest.IconInfo iconInfo = null;
             if (functionUnit.getIcon() != null) {
@@ -448,6 +465,7 @@ public class FunctionUnitExporter {
                             .emailMonitors(monitorFiles)
                             .emailTemplates(emailTemplateFiles)
                             .mainTableViews(viewsFile)
+                            .documents(documentFiles)
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)
@@ -767,7 +785,7 @@ public class FunctionUnitExporter {
         map.put("host", connection.getHost());
         map.put("port", connection.getPort());
         map.put("username", connection.getUsername());
-        map.put("credentialEncrypted", connection.getCredentialEncrypted());
+        map.put("passwordEnvKey", connection.getPasswordEnvKey());
         map.put("fromEmail", connection.getFromEmail());
         map.put("fromName", connection.getFromName());
         map.put("useTls", connection.getUseTls());

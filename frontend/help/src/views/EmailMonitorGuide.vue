@@ -41,6 +41,7 @@ const jumpLinks: GuideJump[] = [
 
 const related: GuideRelated[] = [
   { to: '/email-send#connection', titleKey: 'guides.emailSend.title' },
+  { to: '/environment-variables', titleKey: 'guides.environmentVariables.title' },
   { to: '/computed-fields', titleKey: 'guides.computedFields.title' },
 ]
 
@@ -62,7 +63,7 @@ const sections: GuideSection[] = [
       { code: 'Inbound (monitor)', hintKey: 'emailMonitorGuide.fDirectionInbound' },
       { code: 'Mailbox Email', hintKey: 'emailMonitorGuide.fMailboxEmail' },
       { code: 'IMAP Username', hintKey: 'emailMonitorGuide.fImapUsername' },
-      { code: 'IMAP Password', hintKey: 'emailMonitorGuide.fImapPassword' },
+      { code: 'IMAP password (VAULT)', hintKey: 'emailMonitorGuide.fImapPassword' },
       { code: 'IMAP Host', hintKey: 'emailMonitorGuide.fImapHost' },
       { code: 'IMAP Port', hintKey: 'emailMonitorGuide.fImapPort' },
       { code: 'IMAP SSL', hintKey: 'emailMonitorGuide.fImapSsl' },
