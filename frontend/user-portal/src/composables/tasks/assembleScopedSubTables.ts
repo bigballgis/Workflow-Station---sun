@@ -13,6 +13,7 @@ import {
 } from '@/composables/tasks/subTableCanonicalStamp'
 import {
   projectSavedRowsForBinding,
+  removeRowsWithMissingDeclaredParent,
   shouldProjectByFilter,
   type FilterProjectionBinding,
   type FilterProjectionFormContext,
@@ -25,6 +26,21 @@ export interface ScopedSubTablesSubmit {
 }
 
 export type ScopedSubTableBinding = CanonicalStampBinding & FilterProjectionBinding
+
+/** Apply parent-row deletion to a table-keyed canonical store before it is submitted. */
+export function removeRowsWithMissingParentsFromCanonicalStore(
+  subTables: Record<string, unknown>,
+  bindings: readonly ScopedSubTableBinding[],
+  form: FilterProjectionFormContext = {},
+  sharedKeys: ReadonlySet<string> = storeKeysSharedByMultipleBindings(bindings),
+): void {
+  for (const binding of bindings) {
+    const storeKey = subTableStoreKey(binding)
+    if (!storeKey || !sharedKeys.has(storeKey) || !shouldProjectByFilter(binding, bindings)) continue
+    const rows = readSubTableRows(subTables, binding) ?? []
+    subTables[storeKey] = removeRowsWithMissingDeclaredParent(rows, binding, bindings, form)
+  }
+}
 
 /**
  * Table-keyed {@code __subTables__} plus per-binding write claims.
@@ -45,6 +61,10 @@ export function assembleScopedSubTablesSubmit(
     stampCanonicalStoreRows(subTables, stamped, binding, rows, sharedKeys)
   }
   flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
+  // A parent deletion immediately hides its children from the projected widget. Remove those
+  // now-invisible orphans from the canonical submit store as well; otherwise the backend sees a
+  // changed row that no surviving binding scope can legitimately claim.
+  removeRowsWithMissingParentsFromCanonicalStore(subTables, list, form, sharedKeys)
   const emptiedSubTableKeys: string[] = []
   const subTableBindingScopes: SubTableBindingScope[] = []
   for (const binding of list) {

@@ -4,6 +4,7 @@ import {
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
 } from './subTableCanonicalStamp'
+import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -246,6 +247,12 @@ export function useTaskActions(options: {
     for (const b of options.subTableBindings.value) {
       stampCanonicalStoreRows(mergedSub, stamped, b, Array.isArray(b.data) ? b.data : [], sharedKeys)
     }
+    removeRowsWithMissingParentsFromCanonicalStore(
+      mergedSub,
+      options.subTableBindings.value,
+      { formData: options.formData.value },
+      sharedKeys,
+    )
     currentFormData.__subTables__ = mergedSub
     return currentFormData
   }

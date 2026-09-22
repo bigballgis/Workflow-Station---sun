@@ -18,6 +18,7 @@ import {
   type SubTableBindingScope,
 } from '@/composables/tasks/subTableCanonicalStamp'
 import { projectSavedRowsForBinding } from '@/composables/tasks/subTableFilterProjection'
+import { removeRowsWithMissingParentsFromCanonicalStore } from '@/composables/tasks/assembleScopedSubTables'
 import {
   bindingMatchesMiSubTableName,
 } from '@/composables/tasks/miSubProcessScope'
@@ -291,6 +292,22 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
           if (scope) subTableBindingScopes.push(scope)
         }
       }
+    }
+
+    removeRowsWithMissingParentsFromCanonicalStore(
+      subTables,
+      miFillSubTableBindings.value,
+      {
+        formData: { ...formData.value, ...miFillDialogData.value },
+        primaryTableId: ctx.primaryTableBinding.value?.tableId,
+        primaryPkFields: ctx.primaryTableBinding.value?.primaryKeyFields,
+        primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions,
+      },
+      sharedKeys,
+    )
+    for (const key of Object.keys(subTableData)) {
+      const rows = subTables[key]
+      if (Array.isArray(rows)) subTableData[key] = rows
     }
 
     const nextFormData = { ...formData.value, ...miFillDialogData.value, __subTables__: subTables }

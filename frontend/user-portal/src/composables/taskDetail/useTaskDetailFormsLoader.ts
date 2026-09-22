@@ -306,6 +306,10 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     ctx.syncFormLayoutWithSubTableBindings()
     ctx.refreshNodeFormMapFromFormData()
     ctx.rehydrateSharedProcessSubTableBindings()
+    // Task-form DTOs may omit process-level sub-table rows. Capture the baseline only after
+    // rehydration has materialized those rows, so a later parent deletion can emit versioned
+    // child-row deletion claims instead of leaving the backend with an unclaimed change.
+    ctx.taskForm.captureLoadedSubTableBaseline()
   }
 
   // Parse Process Form config into FormRenderer fields

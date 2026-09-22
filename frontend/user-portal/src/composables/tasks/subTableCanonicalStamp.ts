@@ -136,6 +136,13 @@ export function buildBindingScopeFromBaseline(
   form: FilterProjectionFormContext,
 ): SubTableBindingScope | null {
   const before = readSubTableRows(baseline, binding) ?? []
-  const visibleBefore = projectSavedRowsForBinding(before, binding, siblings, form) ?? before
+  // Project the old child rows against the old parent rows. Using the current siblings here loses
+  // the deleted parent's identity, so the child vanishes from both sides of the comparison and no
+  // versioned deletion claim is produced.
+  const baselineSiblings = siblings.map(sibling => ({
+    ...sibling,
+    data: readSubTableRows(baseline, sibling) ?? [],
+  }))
+  const visibleBefore = projectSavedRowsForBinding(before, binding, baselineSiblings, form) ?? before
   return buildBindingScope(binding, rows, emptied, visibleBefore)
 }

@@ -29,6 +29,7 @@ import {
   type SubTableBindingScope,
 } from './subTableCanonicalStamp'
 import { projectSavedRowsForBinding } from './subTableFilterProjection'
+import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -95,8 +96,13 @@ export function useTaskForm(options: {
   const savingTaskForm = ref(false)
   const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
   const loadedSubTableBaseline = ref<Record<string, unknown>>({})
+  function captureLoadedSubTableBaseline(source: unknown = formData.value.__subTables__): void {
+    loadedSubTableBaseline.value = JSON.parse(JSON.stringify(
+      source && typeof source === 'object' && !Array.isArray(source) ? source : {},
+    ))
+  }
   watch(taskFormDTO, dto => {
-    loadedSubTableBaseline.value = JSON.parse(JSON.stringify(dto?.fieldValues?.__subTables__ ?? {}))
+    captureLoadedSubTableBaseline(dto?.fieldValues?.__subTables__)
   }, { immediate: true, flush: 'sync' })
   let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -331,6 +337,18 @@ export function useTaskForm(options: {
       }
     }
 
+    removeRowsWithMissingParentsFromCanonicalStore(
+      subTables,
+      options.subTableBindings.value,
+      {
+        formData: formData.value,
+        primaryTableId: options.primaryTableBinding?.value?.tableId,
+        primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields,
+        primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions,
+      },
+      sharedKeys,
+    )
+
     // Flatten last so binding.data / sibling-slice stamps cannot resurrect rows the
     // nested Link Form already deleted. subTableData is merged over __subTables__ on
     // the server, so the same membership must be copied onto it.
@@ -483,6 +501,7 @@ export function useTaskForm(options: {
     buildCurrentTaskFormSubmitPayload,
     buildSubTableSubmitPayload,
     loadedSubTableBaseline,
+    captureLoadedSubTableBaseline,
     scheduleSubTableAutosave,
     getCurrentFormFieldKeys,
     clearAutosaveTimer

@@ -137,6 +137,37 @@ export function sliceRowsByDeclaredFilter<T>(
   return rows.filter(row => rowMatchesAnyParent(row, field, parentValues))
 }
 
+/**
+ * Remove rows whose configured filter FK points at a parent row that no longer exists in the
+ * current form. This is the submit-time half of parent deletion: projection already makes those
+ * rows disappear from the child widget, so retaining them in the canonical store would submit an
+ * invisible orphan that no binding can claim.
+ *
+ * Rows without this binding's FK belong to sibling bindings and are preserved. Unknown parent
+ * context ({@code null}) also preserves V1 behavior instead of guessing.
+ */
+export function removeRowsWithMissingDeclaredParent<T>(
+  rows: readonly T[],
+  binding: FilterProjectionBinding,
+  siblings: readonly FilterProjectionBinding[],
+  form: FilterProjectionFormContext,
+): T[] {
+  if (!shouldProjectByFilter(binding, siblings)) return [...rows]
+  const field = effectiveFilterDeclaration(binding).fieldName
+  if (field == null) return [...rows]
+  const parentValues = resolveFilterParentValues(
+    binding,
+    form,
+    snapshotRowsByTable(siblings),
+    siblings,
+  )
+  if (parentValues == null) return [...rows]
+  return rows.filter(row => {
+    const value = rowField(asRecord(row), field)
+    return !isPresent(value) || parentValues.some(parent => sameValue(parent, value))
+  })
+}
+
 /** `null` = parent identity is unknown, keep V1 (do not slice). */
 export function resolveFilterParentValues(
   binding: FilterProjectionBinding,

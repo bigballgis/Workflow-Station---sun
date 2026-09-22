@@ -213,4 +213,40 @@ describe('assembleStartSubTables', () => {
     })
     expect(assembleStartSubTables().subTableBindingScopes).toEqual([])
   })
+
+  it('removes a newly-added child row when its parent row was deleted before submit', () => {
+    const canonicalRows = [
+      { id: 'CASE-FILE', case_id: 'C1', title: 'case-doc' },
+      { id: 'PARTY-FILE', party_id: 'P-A', title: 'party-doc' },
+    ]
+    const caseFiles = fileBinding({ data: canonicalRows })
+    const partyFiles = fileBinding({
+      bindingId: 50706,
+      filterFkRefTableId: 50200,
+      filterFkFieldName: 'party_id',
+      data: canonicalRows,
+    })
+    const parties = fileBinding({
+      bindingId: 50704,
+      tableId: 50200,
+      designerTableName: 'p0_dual_party',
+      data: [],
+    })
+    const { assembleStartSubTables } = createProcessStartSubTables({
+      caches: { cachedContentForms: [], cachedRelationTableFieldIndex: new Map() },
+      subTableBindings: ref([caseFiles, partyFiles, parties]),
+      formData: ref({ id: 'C1' }),
+      primaryTableBinding: ref({ tableId: 50100, primaryKeyFields: ['id'] }),
+      deriveColumnsFromBinding: () => [],
+    })
+
+    const assembled = assembleStartSubTables()
+    expect(assembled.subTables['dw:p0_dual_file']).toEqual([
+      expect.objectContaining({ id: 'CASE-FILE' }),
+    ])
+    expect(assembled.subTableBindingScopes).toEqual([
+      expect.objectContaining({ bindingId: '50705', rowKeys: [{ id: 'CASE-FILE' }] }),
+      expect.objectContaining({ bindingId: '50706', rowKeys: [] }),
+    ])
+  })
 })
