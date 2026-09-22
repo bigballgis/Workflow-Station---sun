@@ -20,6 +20,7 @@ import {
 import {
   buildFkCatalogGroups, flattenFkCatalogItems,
 } from '@/utils/mainTableViewFkCatalog'
+import { collectStaticOptionFields, type FormWithBindings } from '@/utils/mainTableViewOptionFields'
 import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
 import { resolveFormTableId } from '@/utils/formDesigner'
 import { relationTableBindingApi } from '@/api/relationTable'
@@ -67,6 +68,8 @@ const lookupCatalogGroups = ref<MainTableLookupCatalogGroup[]>([])
 const lookupCatalogFields = ref<MainTableFieldCatalogItem[]>([])
 const fkCatalogGroups = ref<MainTableLookupCatalogGroup[]>([])
 const fkCatalogFields = ref<MainTableFieldCatalogItem[]>([])
+// Fields a bound form renders with static options: only these offer the value / label display choice.
+const staticOptionFields = ref<Set<string>>(new Set())
 const fieldMetaMap = ref<Record<string, { isPrimaryKey: boolean; isForeignKey: boolean; refTableId: number | null }>>({})
 const selectedCatalogFields = ref<Set<string>>(new Set())
 const selectedLookupCatalogFields = ref<Set<string>>(new Set())
@@ -223,12 +226,14 @@ async function loadCatalog() {
     // Fetching twice would double the request count for no new information.
     const formsForTable: typeof allForms = []
     const detailFormsForTable: typeof allForms = []
+    const formsWithBindings: FormWithBindings[] = []
     await Promise.all(allForms.map(async (form) => {
       if (form.id == null) return
       let servesThisTable: boolean
+      let binds: FormWithBindings['bindings'] = []
       try {
         const bindRes = await functionUnitApi.getFormBindings(props.functionUnitId, form.id)
-        const binds = bindRes.data || []
+        binds = bindRes.data || []
         servesThisTable = binds.some(b => b.tableId === props.view.mainTableId)
           // Older forms carry only the legacy single-table column, or a lone unmarked binding.
           || resolveFormTableId({ tableBindings: binds, boundTableId: form.boundTableId })
@@ -239,6 +244,7 @@ async function loadCatalog() {
       }
       if (!servesThisTable) return
       formsForTable.push(form)
+      formsWithBindings.push({ form, bindings: binds })
       if (form.formType === 'DETAIL') detailFormsForTable.push(form)
     }))
     // Only forms bound to THIS view's table can render its rows: the portal detail page maps row
@@ -264,6 +270,7 @@ async function loadCatalog() {
     const fkGroups = buildFkCatalogGroups(table, tables)
     fkCatalogGroups.value = fkGroups
     fkCatalogFields.value = flattenFkCatalogItems(fkGroups)
+    staticOptionFields.value = collectStaticOptionFields(formsWithBindings, props.view.mainTableId)
   } catch {
     catalogFields.value = []
     lookupCatalogGroups.value = []
@@ -271,6 +278,7 @@ async function loadCatalog() {
     fkCatalogGroups.value = []
     fkCatalogFields.value = []
     fieldMetaMap.value = {}
+    staticOptionFields.value = new Set()
   }
 }
 
@@ -600,6 +608,13 @@ function isFkDisplayField(field: MainTableViewField): boolean {
   return field.columnType === 'fk_display'
 }
 
+/** A plain column whose field a bound form renders with static options. */
+function hasSelectDisplayChoice(field: MainTableViewField): boolean {
+  return !field.systemField
+    && (field.columnType == null || field.columnType === 'field')
+    && staticOptionFields.value.has(field.fieldName)
+}
+
 // Remove every column from the view at once.
 function clearAllFields() {
   viewFields.value = []
@@ -788,7 +803,7 @@ const previewRowCount = 3
     formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
     removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
     onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd, getFieldDataType,
-    isFkField, isPkField, onFkColumnClick, isLookupDisplayField, isFkDisplayField,
+    isFkField, isPkField, onFkColumnClick, isLookupDisplayField, isFkDisplayField, hasSelectDisplayChoice,
     selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
     allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
     selectedLookupCatalogFields, toggleLookupCatalogSelect, addSelectedLookupFields,

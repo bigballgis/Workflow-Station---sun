@@ -2,6 +2,7 @@ package com.developer.component.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -56,6 +57,7 @@ class MainTableViewPortabilityTest {
                         .sortOrder(0)
                         .visible(true)
                         .isSystemField(false)
+                        .selectDisplay("label")
                         .build()))
                 .build();
 
@@ -78,6 +80,35 @@ class MainTableViewPortabilityTest {
         assertThat(rules.get(0)).containsEntry("targetId", "bu-e2e-finance");
         assertThat(rules.get(0)).containsEntry("targetCode", "FINANCE");
         assertThat(exported.get(0)).containsEntry("restrictToInvolvedUsers", false);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> fields = (List<Map<String, Object>>) exported.get(0).get("fields");
+        assertThat(fields.get(0)).containsEntry("selectDisplay", "label");
+    }
+
+    @Test
+    void import_readsSelectDisplayAndDefaultsOlderPackagesToValue() {
+        FunctionUnit fu = FunctionUnit.builder().id(99L).build();
+        Map<String, Object> viewPayload = new LinkedHashMap<>();
+        viewPayload.put("mainTableName", "HMDC_Case");
+        viewPayload.put("viewName", "HMDC Case");
+        viewPayload.put("isDefault", false);
+        viewPayload.put("status", "DRAFT");
+        viewPayload.put("restrictToInvolvedUsers", false);
+        viewPayload.put("accessRules", List.of());
+        Map<String, Object> labelField = new LinkedHashMap<>();
+        labelField.put("fieldName", "merchant_credit");
+        labelField.put("selectDisplay", "label");
+        Map<String, Object> legacyField = new LinkedHashMap<>();
+        legacyField.put("fieldName", "channel");
+        viewPayload.put("fields", List.of(labelField, legacyField));
+        when(mainTableViewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        portability.importAll(List.of(viewPayload), fu, Map.of("HMDC_Case", 20L));
+
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        verify(mainTableViewConfigRepository).save(captor.capture());
+        assertThat(captor.getValue().getViewFields()).extracting(MainTableViewField::getSelectDisplay)
+                .containsExactly("label", "value");
     }
 
     @Test

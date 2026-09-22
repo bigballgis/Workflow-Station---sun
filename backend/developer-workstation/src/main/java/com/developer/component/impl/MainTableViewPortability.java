@@ -8,6 +8,7 @@ import com.developer.enums.MainTableViewAccessTargetType;
 import com.developer.enums.MainTableViewStatus;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.MainTableViewConfigRepository;
+import com.developer.service.impl.MainTableViewServiceImpl;
 import com.developer.util.MainTableViewAccessRulesValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +84,7 @@ public class MainTableViewPortability {
                     fm.put("columnType", f.getColumnType() != null ? f.getColumnType() : "field");
                     fm.put("lookupSourceField", f.getLookupSourceField());
                     fm.put("lookupDisplayField", f.getLookupDisplayField());
+                    fm.put("selectDisplay", MainTableViewServiceImpl.normalizeSelectDisplay(f.getSelectDisplay()));
                     fields.add(fm);
                 }
             }
@@ -196,6 +198,9 @@ public class MainTableViewPortability {
                     .columnType(columnType)
                     .lookupSourceField(f.get("lookupSourceField") instanceof String s ? s : null)
                     .lookupDisplayField(f.get("lookupDisplayField") instanceof String s ? s : null)
+                    // Packages exported before the switch existed carry no selectDisplay → stored value.
+                    .selectDisplay(MainTableViewServiceImpl.normalizeSelectDisplay(
+                            f.get("selectDisplay") instanceof String s ? s : null))
                     .build());
             order++;
         }
