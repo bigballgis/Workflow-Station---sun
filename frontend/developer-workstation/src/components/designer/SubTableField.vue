@@ -276,8 +276,9 @@
         :option="formOption"
         :columns="dialogColumns"
         :assignment-config="assignmentConfig"
+        :parent-selection="parentSelection"
+        :save-row="handleDialogSave"
         @update:visible="formDialogVisible = $event"
-        @save="handleDialogSave"
       />
 
       <SubTableAddDialog
@@ -285,8 +286,9 @@
         :columns="dialogColumns"
         :mode="dialogMode"
         :initial-data="dialogInitialData"
+        :parent-selection="parentSelection"
+        :save-row="handleDialogSave"
         @update:visible="simpleDialogVisible = $event"
-        @save="handleDialogSave"
       />
     </Teleport>
   </div>
@@ -747,6 +749,7 @@ const {
   dialogMode,
   dialogInitialData,
   dialogColumns,
+  parentSelection,
   handleAdd,
   openEditDialog,
   handleDialogSave,

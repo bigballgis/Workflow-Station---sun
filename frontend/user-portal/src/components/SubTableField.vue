@@ -409,6 +409,7 @@
       :primary-key-fields="primaryKeyFields"
       :binding-id="bindingId"
       :field-permissions="fieldPermissions"
+      :parent-selection="parentSelection"
       @update:visible="dialogVisible = $event"
       :save-row="handleDialogSaveAndSyncNested"
     />
@@ -695,6 +696,16 @@ const props = withDefaults(defineProps<{
     tableName?: string
     tableDisplayName?: string
     filterFkRefTableId?: number | null
+    primaryKeyFields?: string[] | null
+    columns?: Array<{
+      field?: string
+      fieldName?: string
+      label?: string
+      displayName?: string
+      hidden?: boolean
+      type?: string
+      props?: { hidden?: boolean; [key: string]: unknown } | null
+    }> | null
     data?: unknown[]
   }>
   parentRow?: Record<string, unknown> | null
@@ -1038,6 +1049,7 @@ const {
   dialogMode,
   editingRowIndex,
   dialogInitialData,
+  parentSelection,
   subTableDialogColumns,
   listViewColumnsForAudit,
   handleAdd,
@@ -1081,8 +1093,8 @@ function syncNestedSubTableBindings() {
   }
 }
 
-async function handleDialogSaveAndSyncNested(row: Record<string, unknown>) {
-  await handleDialogSave(row)
+async function handleDialogSaveAndSyncNested(row: Record<string, unknown>, selectedParentValue?: string) {
+  await handleDialogSave(row, selectedParentValue)
   syncNestedSubTableBindings()
 }
 

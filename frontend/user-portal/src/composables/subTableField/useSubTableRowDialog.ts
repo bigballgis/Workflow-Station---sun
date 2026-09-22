@@ -12,7 +12,10 @@ import {
   buildRowAddContext,
   finalizeSubTableRowOnSave,
   prepareSubTableAddRow,
+  resolveBindingParentSelection,
   toFieldFkMetas,
+  type BindingParentOption,
+  type BindingParentSelection,
   type AllocatePrimaryKeysFn,
 } from '@/utils/subTableRowRuntime'
 import { unwrapPortalApiPayload, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
@@ -41,6 +44,7 @@ export function useSubTableRowDialog(
   /** 打开编辑弹窗时那一行的快照——用来在保存时按身份找回它，而不是相信下标。 */
   const editingRowSnapshot = ref<Record<string, any> | null>(null)
   const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
+  const parentSelection = ref<BindingParentSelection | null>(null)
 
   const dialogSourceColumns = computed(() =>
     (props.dialogColumns?.length ? props.dialogColumns : props.columns),
@@ -133,19 +137,28 @@ export function useSubTableRowDialog(
     return out
   }
 
-  function rowAddContextNow() {
+  function rowAddContextNow(selectedParent?: BindingParentOption | null) {
     return buildRowAddContext(
       props.primaryFormData ?? {},
       props.subTableBindingsForContext ?? props.linkedSubTableBindings,
-      props.parentRow,
-      props.parentTableId,
+      selectedParent?.row ?? props.parentRow,
+      selectedParent?.tableId ?? props.parentTableId,
       currentBindingForAdd(),
-      props.parentBindingId,
+      selectedParent?.bindingId ?? props.parentBindingId,
     )
   }
 
   async function openAddRowDialog() {
     if (!props.editable) return
+    parentSelection.value = props.parentRow
+      ? null
+      : resolveBindingParentSelection(
+          toFieldFkMetas(props.fieldDefinitions),
+          props.filterFkFieldName,
+          props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+          props.bindingId,
+        )
+    if ((parentSelection.value?.options.length ?? 0) < 2) parentSelection.value = null
     const rowAddContext = rowAddContextNow()
     try {
       const result = await prepareSubTableAddRow({
@@ -195,6 +208,7 @@ export function useSubTableRowDialog(
   })
 
   function openEditDialog(i: number) {
+    parentSelection.value = null
     dialogMode.value = 'edit'
     editingRowIndex.value = i
     // 记住这一行**本身**，而不只是它的下标：下标会因为删除 / 重新排序 / 重新 hydrate 而指向别人。
@@ -226,7 +240,7 @@ export function useSubTableRowDialog(
     return -1
   }
 
-  async function handleDialogSave(rowData: Record<string, any>) {
+  async function handleDialogSave(rowData: Record<string, any>, selectedParentValue?: string) {
     // Add: prefer-filled seed merge keeps PK/FK when empty inputs omit them.
     // Edit: dialog values are authoritative — including intentional clears ('' / null).
     // Re-running mergeFormRowWithSeed against the pre-edit snapshot restores cleared fields.
@@ -236,8 +250,22 @@ export function useSubTableRowDialog(
         : mergeFormRowWithSeed(dialogInitialData.value, rowData)
     if (dialogMode.value === 'add') {
       const allocate = createAllocatePrimaryKeysFn()
+      if (parentSelection.value && (!allocate || props.tableId == null)) {
+        throw new Error(t('common.operationFailed'))
+      }
       if (allocate && props.tableId != null && props.fieldDefinitions?.length) {
-        const rowAddContext = rowAddContextNow()
+        let selectedParent: BindingParentOption | null = null
+        if (parentSelection.value) {
+          const latest = resolveBindingParentSelection(
+            toFieldFkMetas(props.fieldDefinitions),
+            props.filterFkFieldName,
+            props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+            props.bindingId,
+          )
+          selectedParent = latest?.options.find(option => option.value === selectedParentValue) ?? null
+          if (!selectedParent) throw new Error(t('subTable.parentSelectionStale'))
+        }
+        const rowAddContext = rowAddContextNow(selectedParent)
         const result = await finalizeSubTableRowOnSave({
           row: savedRow,
           fieldDefinitions: props.fieldDefinitions,
@@ -397,6 +425,7 @@ export function useSubTableRowDialog(
     dialogMode,
     editingRowIndex,
     dialogInitialData,
+    parentSelection,
     subTableDialogColumns,
     listViewColumnsForAudit,
     handleAdd,

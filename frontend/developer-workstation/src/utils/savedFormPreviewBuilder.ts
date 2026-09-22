@@ -269,6 +269,8 @@ function buildBindingMap(
     if (bindingId == null) continue
     const { rule, options: subOpt } = getSubFormDesign(bindingId)
     const columns = toSubTablePreviewColumns(bindingId, rule, config, tables, bindings, getSubFormDesign, t)
+    const filterFkField = tables.find(tb => tb.id === b.tableId)?.fieldDefinitions
+      ?.find(field => Number(field.id) === Number(b.filterFkFieldId))
     map.set(bindingId, {
       bindingId,
       bindingType: b.bindingType,
@@ -284,8 +286,8 @@ function buildBindingMap(
       fieldDefinitions: tables.find(tb => tb.id === b.tableId)?.fieldDefinitions || [],
       bindingLinkMode: b.bindingLinkMode,
       bindingForeignKeyField: b.foreignKeyField,
-      filterFkFieldName: tables.find(tb => tb.id === b.tableId)?.fieldDefinitions
-        ?.find(field => Number(field.id) === Number(b.filterFkFieldId))?.fieldName ?? null,
+      filterFkFieldName: filterFkField?.fieldName ?? null,
+      filterFkRefTableId: filterFkField?.refTableId ?? null,
       fkFillSources: (b.fkFillSources ?? []).flatMap(source => source.fieldName
         ? [{
             fieldName: source.fieldName,

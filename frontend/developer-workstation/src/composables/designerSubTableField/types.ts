@@ -27,6 +27,7 @@ export interface SubTableConfig {
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  filterFkRefTableId?: number | null
   filterFkFieldName?: string | null
   fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   /**

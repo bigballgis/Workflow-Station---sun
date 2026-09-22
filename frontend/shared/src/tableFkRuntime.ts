@@ -53,6 +53,21 @@ export interface PkGenerationConfig {
   format?: string
 }
 
+export interface BindingParentOption {
+  value: string
+  label: string
+  row: Record<string, unknown>
+  tableId: number
+  bindingId?: number | string
+}
+
+export interface BindingParentSelection {
+  fieldName: string
+  parentTableId: number
+  parentTableName: string
+  options: BindingParentOption[]
+}
+
 const UNIT_SEP = '\u001f'
 
 export function encodeCompositePrimaryKey(
@@ -70,6 +85,83 @@ export function encodeCompositePrimaryKey(
     return v != null ? `${k}=${String(v)}` : null
   }).filter(Boolean)
   return parts.length === ordered.length ? parts.join(UNIT_SEP) : null
+}
+
+/**
+ * Resolve selectable parent rows for the current binding's declared ownership FK.
+ * All semantics come from binding/field metadata; business table and column names are irrelevant.
+ */
+export function resolveBindingParentSelection(
+  fkMetas: FieldFkMeta[],
+  filterFkFieldName: string | null | undefined,
+  bindings: import('./tableFkContext').BindingContextInput[] | null | undefined,
+  currentBindingId?: number | string | null,
+): BindingParentSelection | null {
+  const filterField = String(filterFkFieldName ?? '').trim()
+  if (!filterField) return null
+  const meta = (fkMetas ?? []).find(candidate =>
+    candidate?.isForeignKey
+    && String(candidate.fieldName ?? '').toLowerCase() === filterField.toLowerCase()
+    && candidate.refTableId != null,
+  )
+  if (!meta?.refTableId || !meta.refPrimaryKeyFields?.length) return null
+
+  const parentTableId = Number(meta.refTableId)
+  const parentBindings = (bindings ?? []).filter(binding =>
+    binding.tableId != null
+    && Number(binding.tableId) === parentTableId
+    && (currentBindingId == null || String(binding.bindingId) !== String(currentBindingId)),
+  )
+  if (parentBindings.length === 0) return null
+
+  const configuredPk = meta.refPrimaryKeyFields.map(field => String(field).trim()).filter(Boolean)
+  const primaryKeyLabel = (row: Record<string, unknown>, encoded: string): string => {
+    if (configuredPk.length === 1) return encoded
+    return configuredPk
+      .map(field => `${field}=${String(rowFieldValue(row, field) ?? '')}`)
+      .join(', ')
+  }
+  const displayColumn = parentBindings
+    .flatMap(binding => binding.columns ?? [])
+    .find(column => {
+      const field = String(column?.field ?? column?.fieldName ?? '').trim()
+      if (!field || configuredPk.some(pk => pk.toLowerCase() === field.toLowerCase())) return false
+      if (column?.hidden === true || column?.props?.hidden === true) return false
+      return column?.type !== 'linkForm'
+    })
+  const displayField = String(displayColumn?.field ?? displayColumn?.fieldName ?? '').trim()
+
+  const options: BindingParentOption[] = []
+  const seen = new Set<string>()
+  for (const binding of parentBindings) {
+    for (const raw of Array.isArray(binding.data) ? binding.data : []) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+      const row = raw as Record<string, unknown>
+      const value = encodeCompositePrimaryKey(configuredPk, row)
+      if (value == null || seen.has(value)) continue
+      seen.add(value)
+      const displayValue = displayField ? rowFieldValue(row, displayField) : null
+      const displayText = displayValue == null ? '' : String(displayValue).trim()
+      const keyLabel = primaryKeyLabel(row, value)
+      options.push({
+        value,
+        label: displayText && displayText !== keyLabel ? `${keyLabel} · ${displayText}` : keyLabel,
+        row,
+        tableId: parentTableId,
+        bindingId: binding.bindingId,
+      })
+    }
+  }
+
+  const named = parentBindings.find(binding =>
+    String(binding.tableDisplayName ?? binding.tableName ?? '').trim(),
+  )
+  return {
+    fieldName: meta.fieldName,
+    parentTableId,
+    parentTableName: String(named?.tableDisplayName ?? named?.tableName ?? meta.fieldName).trim(),
+    options,
+  }
 }
 
 function ancestorRowForFk(

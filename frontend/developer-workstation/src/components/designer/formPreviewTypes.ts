@@ -18,6 +18,7 @@ export interface PreviewSubTableBinding {
   bindingLinkMode?: string
   bindingForeignKeyField?: string | null
   filterFkFieldName?: string | null
+  filterFkRefTableId?: number | null
   fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   rule: any[]
   option?: any

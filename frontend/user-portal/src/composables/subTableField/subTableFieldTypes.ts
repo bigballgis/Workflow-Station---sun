@@ -155,6 +155,16 @@ export interface SubTableFieldProps {
     bindingType?: string
     tableName?: string
     tableDisplayName?: string
+    primaryKeyFields?: string[] | null
+    columns?: Array<{
+      field?: string
+      fieldName?: string
+      label?: string
+      displayName?: string
+      hidden?: boolean
+      type?: string
+      props?: { hidden?: boolean; [key: string]: unknown } | null
+    }> | null
     filterFkRefTableId?: number | null
     data?: unknown[]
   }>

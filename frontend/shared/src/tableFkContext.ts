@@ -27,6 +27,18 @@ export interface BindingContextInput {
   tableId?: number | null
   bindingType?: string
   filterFkRefTableId?: number | null
+  tableName?: string
+  tableDisplayName?: string
+  primaryKeyFields?: string[] | null
+  columns?: Array<{
+    field?: string
+    fieldName?: string
+    label?: string
+    displayName?: string
+    hidden?: boolean
+    type?: string
+    props?: { hidden?: boolean; [key: string]: unknown } | null
+  }> | null
   data?: unknown[]
 }
 

@@ -115,6 +115,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
   }>>([])
   const previewSubData = ref<Record<number, any>>({})
   const previewTableRows = ref<Record<number, any[]>>({})
+  const previewBindingColumns = ref<Record<number, any[]>>({})
   // Mixed preview items: alternating form-create rule segments and inline sub-tables
   const previewItems = ref<FormPreviewItem[]>([])
 
@@ -159,12 +160,21 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
   })
 
   const previewTableBindingsForContext = computed(() =>
-    (selectedForm.value?.tableBindings ?? []).map((b: TableBinding) => ({
-      tableId: b.tableId,
-      bindingType: b.bindingType,
-      bindingId: b.id,
-      data: b.id != null ? previewTableRows.value[b.id] : undefined,
-    })),
+    (selectedForm.value?.tableBindings ?? []).map((b: TableBinding) => {
+      const table = store.tables.find(t => t.id === b.tableId)
+      return {
+        tableId: b.tableId,
+        tableName: table?.tableName ?? b.tableName,
+        tableDisplayName: table?.tableDisplayName,
+        bindingType: b.bindingType,
+        bindingId: b.id,
+        primaryKeyFields: table?.fieldDefinitions
+          ?.filter((field: FieldDefinition) => field.isPrimaryKey)
+          .map((field: FieldDefinition) => field.fieldName),
+        columns: b.id != null ? previewBindingColumns.value[b.id] : undefined,
+        data: b.id != null ? previewTableRows.value[b.id] : undefined,
+      }
+    }),
   )
 
   // Preview option: mutable flags + form-create English strings (library defaults to zh-cn without `locale` / `language`)
@@ -253,6 +263,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     previewData.value = {}
     previewSubData.value = {}
     previewTableRows.value = {}
+    previewBindingColumns.value = {}
 
     // Sync label position from designer option
     Object.assign(previewOptionState, {
@@ -316,7 +327,10 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       // nested subTable placeholders in preview form-create resolve their binding.
       rule = withSubTableBindingIdInProps(rule)
       const columns = toSubTablePreviewColumns(bindingId, rule, config)
+      previewBindingColumns.value[bindingId] = columns
       previewTableRows.value[bindingId] = []
+      const filterFkField = tableFields
+        .find((field: FieldDefinition) => Number(field.id) === Number(b.filterFkFieldId))
       bindingMap.set(bindingId, {
         bindingId,
         bindingType: b.bindingType,
@@ -328,8 +342,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
         fieldDefinitions: (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || [],
         bindingLinkMode: b.bindingLinkMode,
         bindingForeignKeyField: b.foreignKeyField,
-        filterFkFieldName: store.tables.find(t => t.id === b.tableId)?.fieldDefinitions
-          ?.find((field: FieldDefinition) => Number(field.id) === Number(b.filterFkFieldId))?.fieldName ?? null,
+        filterFkFieldName: filterFkField?.fieldName ?? null,
+        filterFkRefTableId: filterFkField?.refTableId ?? null,
         fkFillSources: b.fkFillSources,
         // Only a design that actually placed the Assignment Mode component gets the
         // block. The BPMN contract supplies its content, not its existence — passing

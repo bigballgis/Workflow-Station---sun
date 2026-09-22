@@ -1,5 +1,6 @@
 import type { InjectionKey, Ref } from 'vue'
 import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+import type { BindingParentSelection } from '@/utils/tableFkRuntime'
 
 export interface PreviewSubTableRowDialogOpen {
   mode: 'add' | 'edit'
@@ -9,7 +10,8 @@ export interface PreviewSubTableRowDialogOpen {
   formOption?: any
   columns: any[]
   assignmentConfig?: AssignmentConfig
-  onSave: (row: Record<string, any>) => void
+  parentSelection?: BindingParentSelection | null
+  onSave: (row: Record<string, any>, selectedParentValue?: string) => boolean | void | Promise<boolean | void>
 }
 
 export interface PreviewSubTableDialogHost {

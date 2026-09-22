@@ -4294,3 +4294,17 @@
     仅缺少 tableBindings 的 legacy 包继续 V1。`SubTableWriteDesignTest` 证明 live binding
     删除后仍按 snapshot 校验，且未访问 live DW 表。
 
+- id: "1640"
+  status: fixed
+  fixed_at: "2026-09-22"
+  severity: major
+  category: bug
+  summary: "同一父表存在多条候选记录时，子表新增无法选择 filter FK 的具体父记录"
+  file: "frontend/shared/src/tableFkRuntime.ts"
+  note: |
+    原运行时只接受唯一父记录；同一父表出现两行后，filter FK 无法唯一解析，新增被
+    required relationship data is missing 阻断。现按 filterFkFieldName、refTableId 和
+    refPrimaryKeyFields 枚举候选，Portal 与 DW Preview 在多候选时要求显式选择且不预选，
+    保存时重新校验候选并仅写当前 binding 的归属 FK；显示文字使用主键加第一个已配置
+    可见非主键列，无显示列时仅显示主键。共享回归覆盖改名字段、复合主键、去重和归属写入。
+

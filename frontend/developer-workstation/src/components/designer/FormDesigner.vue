@@ -606,8 +606,9 @@
       :option="previewRowDialog.formOption"
       :columns="previewRowDialog.columns"
       :assignment-config="previewRowDialog.assignmentConfig"
+      :parent-selection="previewRowDialog.parentSelection"
+      :save-row="handlePreviewRowDialogSave"
       @update:visible="onPreviewRowDialogVisibleChange"
-      @save="handlePreviewRowDialogSave"
     />
     <SubTableAddDialog
       :visible="previewRowDialog.visible && !previewRowDialog.useFormRule"
@@ -615,8 +616,9 @@
       :title="previewRowDialog.title"
       :mode="previewRowDialog.mode"
       :initial-data="previewRowDialog.initialData"
+      :parent-selection="previewRowDialog.parentSelection"
+      :save-row="handlePreviewRowDialogSave"
       @update:visible="onPreviewRowDialogVisibleChange"
-      @save="handlePreviewRowDialogSave"
     />
 
     <!-- Bind node dialog -->
@@ -2160,6 +2162,7 @@ const previewRowDialog = reactive({
   formOption: {} as Record<string, any>,
   columns: [] as any[],
   assignmentConfig: undefined as import('@/utils/miAssignmentConfig').AssignmentConfig | undefined,
+  parentSelection: null as import('@/utils/tableFkRuntime').BindingParentSelection | null,
   useFormRule: false,
   onSave: null as PreviewSubTableRowDialogOpen['onSave'] | null,
 })
@@ -2181,6 +2184,7 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
       : {}
     previewRowDialog.columns = payload.columns.map((col) => ({ ...col }))
     previewRowDialog.assignmentConfig = payload.assignmentConfig
+    previewRowDialog.parentSelection = payload.parentSelection ?? null
     previewRowDialog.useFormRule = previewRowDialog.formRule.length > 0
     previewRowDialog.onSave = payload.onSave
     previewRowDialog.visible = false
@@ -2208,10 +2212,12 @@ function onPreviewRowDialogVisibleChange(visible: boolean) {
   }
 }
 
-function handlePreviewRowDialogSave(row: Record<string, any>) {
-  previewRowDialog.onSave?.(row)
+async function handlePreviewRowDialogSave(row: Record<string, any>, selectedParentValue?: string) {
+  const saved = await previewRowDialog.onSave?.(row, selectedParentValue)
+  if (saved === false) return false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null
+  return true
 }
 
 // ── Provides for fc-designer property-panel components ──────────────────────

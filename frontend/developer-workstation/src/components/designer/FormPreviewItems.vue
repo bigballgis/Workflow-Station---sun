@@ -91,7 +91,7 @@
       </div>
       <!-- One design, one preview: the form being edited is the form that renders. -->
       <SubTableField
-        :config="{ title: item.binding.tableName, columns: item.binding.columns, bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns, bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, filterFkRefTableId: item.binding.filterFkRefTableId, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="true"
         :allow-add="item.binding.allowAdd"
@@ -127,7 +127,7 @@
       </div>
       <SubTableField
         v-if="hasSubTablePreviewSurface(item.binding)"
-        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, filterFkRefTableId: item.binding.filterFkRefTableId, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="!isMyRequestsPreview"
         :allow-add="item.binding.allowAdd"

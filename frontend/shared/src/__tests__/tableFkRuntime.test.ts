@@ -4,6 +4,8 @@ import {
   applyFkToInitialRow,
   buildRowAddContext,
   guardBeforeChildRowAdd,
+  resolveBindingParentSelection,
+  selectBindingOwnedFkMetas,
   uniqueAncestorRow,
 } from '../tableFkRuntime'
 
@@ -105,5 +107,115 @@ describe('context frames — unique ancestor rows', () => {
     )
     expect(ctx.ancestorRowsByTableId?.[MAIN]).toBeUndefined()
     expect(uniqueAncestorRow(ctx, MAIN)).toBeNull()
+  })
+})
+
+describe('binding parent selection', () => {
+  it('offers every distinct configured parent row without relying on table or field names', () => {
+    const selection = resolveBindingParentSelection(
+      [{
+        fieldName: 'owner_ref',
+        isForeignKey: true,
+        refTableId: PARTY,
+        refPrimaryKeyFields: ['party_key'],
+      }],
+      'owner_ref',
+      [
+        {
+          bindingId: 11,
+          tableId: PARTY,
+          tableDisplayName: 'Stakeholders',
+          primaryKeyFields: ['party_key'],
+          columns: [
+            { field: 'party_key', label: 'Party key' },
+            { field: 'display_text', label: 'Display text' },
+          ],
+          data: [
+            { party_key: 'P-35', display_text: 'Alice' },
+            { party_key: 'P-36', display_text: 'Bob' },
+          ],
+        },
+        { bindingId: 20, tableId: FILE, data: [] },
+      ],
+      20,
+    )
+
+    expect(selection?.fieldName).toBe('owner_ref')
+    expect(selection?.parentTableName).toBe('Stakeholders')
+    expect(selection?.options.map(option => ({ value: option.value, label: option.label }))).toEqual([
+      { value: 'P-35', label: 'P-35 · Alice' },
+      { value: 'P-36', label: 'P-36 · Bob' },
+    ])
+  })
+
+  it('deduplicates the same parent row and falls back to the configured composite key label', () => {
+    const selection = resolveBindingParentSelection(
+      [{
+        fieldName: 'owner_ref',
+        isForeignKey: true,
+        refTableId: PARTY,
+        refPrimaryKeyFields: ['region', 'party_key'],
+      }],
+      'owner_ref',
+      [
+        {
+          bindingId: 11,
+          tableId: PARTY,
+          tableName: 'renamed_parent',
+          primaryKeyFields: ['region', 'party_key'],
+          columns: [
+            { field: 'region', label: 'Region' },
+            { field: 'party_key', label: 'Party key' },
+          ],
+          data: [{ region: 'HK', party_key: 'P-35' }],
+        },
+        {
+          bindingId: 12,
+          tableId: PARTY,
+          data: [{ region: 'HK', party_key: 'P-35' }],
+        },
+      ],
+      20,
+    )
+
+    expect(selection?.options).toHaveLength(1)
+    expect(selection?.options[0].label).toBe('region=HK, party_key=P-35')
+  })
+
+  it('writes the explicitly selected parent only to the current binding ownership FK', () => {
+    const selection = resolveBindingParentSelection(
+      [
+        { fieldName: 'case_ref', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'owner_ref', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['party_key'] },
+      ],
+      'owner_ref',
+      [{
+        bindingId: 11,
+        tableId: PARTY,
+        primaryKeyFields: ['party_key'],
+        data: [
+          { party_key: 'P-35', display_text: 'Alice' },
+          { party_key: 'P-36', display_text: 'Bob' },
+        ],
+      }],
+      20,
+    )
+    const selected = selection?.options.find(option => option.value === 'P-36')
+    expect(selected).toBeDefined()
+
+    const ctx = buildRowAddContext(
+      { id: 'Case-1' },
+      [{ tableId: MAIN, bindingType: 'PRIMARY' }],
+      selected?.row,
+      selected?.tableId,
+      { bindingId: 20, tableId: FILE, filterFkRefTableId: PARTY },
+      selected?.bindingId,
+    )
+    const ownedMetas = selectBindingOwnedFkMetas([
+      { fieldName: 'case_ref', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+      { fieldName: 'owner_ref', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['party_key'] },
+    ], 'owner_ref')
+
+    expect(applyFkToInitialRow({}, ownedMetas, ctx)).toEqual({ owner_ref: 'P-36' })
   })
 })
