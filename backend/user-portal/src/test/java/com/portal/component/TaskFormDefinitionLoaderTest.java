@@ -102,9 +102,79 @@ class TaskFormDefinitionLoaderTest {
                 eq(Map.class));
     }
 
+    /** Unpinned Task Form lookup joins live DW by code, never {@code function_unit_version_id}. */
+    @Test
+    void scopedLookupDoesNotReadInstanceFunctionUnitVersionId() {
+        stubFunctionUnitCode(PROCESS_INSTANCE, "fu-leave");
+        stubScopedBinding("fu-leave", form("Leave Approval"));
+
+        loader.fetchTaskFormByStageId(SHARED_STAGE, PROCESS_INSTANCE, DW_URL);
+
+        verify(jdbcTemplate).query(argThat(sql -> sql != null
+                        && sql.contains("fu.code = ?")
+                        && !sql.contains("function_unit_version_id")),
+                any(RowMapper.class), eq(SHARED_STAGE), eq("fu-leave"));
+    }
+
+    @Test
+    void catalogPinnedInstance_readsSnapshotAndSkipsLiveDwAndHttp() {
+        stubCatalogId(PROCESS_INSTANCE, "cat-leave");
+        when(jdbcTemplate.queryForList(argThat(sql -> sql != null && sql.contains("content_type = 'PROCESS'")),
+                eq(String.class), eq("cat-leave")))
+                .thenReturn(List.of(catalogBpmn("42")));
+        when(jdbcTemplate.query(argThat(sql -> sql != null && sql.contains("content_type = 'FORM'")),
+                any(RowMapper.class), eq("cat-leave"), eq("42")))
+                .thenReturn(List.of(form("Pinned Leave")));
+
+        assertThat(loader.fetchTaskFormByStageId(SHARED_STAGE, PROCESS_INSTANCE, DW_URL))
+                .containsEntry("formName", "Pinned Leave");
+        verify(jdbcTemplate, never()).query(argThat(sql -> sql != null && sql.contains("fu.code = ?")),
+                any(RowMapper.class), eq(SHARED_STAGE), anyString());
+        verify(jdbcTemplate, never()).query(argThat(sql -> sql != null
+                        && sql.contains("dw_form_stage_bindings")
+                        && !sql.contains("fu.code = ?")),
+                any(RowMapper.class), eq(SHARED_STAGE));
+        verify(restTemplate, never()).getForObject(anyString(), eq(Map.class));
+        verify(jdbcTemplate, never()).queryForList(anyString(), eq(String.class), eq(PROCESS_INSTANCE));
+    }
+
+    @Test
+    void catalogPinnedMiss_doesNotFallBackToLiveDwOrHttp() {
+        stubCatalogId(PROCESS_INSTANCE, "cat-leave");
+        when(jdbcTemplate.queryForList(argThat(sql -> sql != null && sql.contains("content_type = 'PROCESS'")),
+                eq(String.class), eq("cat-leave")))
+                .thenReturn(List.of());
+
+        assertThat(loader.fetchTaskFormByStageId(SHARED_STAGE, PROCESS_INSTANCE, DW_URL)).isNull();
+        verify(jdbcTemplate, never()).query(argThat(sql -> sql != null && sql.contains("fu.code = ?")),
+                any(RowMapper.class), eq(SHARED_STAGE), anyString());
+        verify(jdbcTemplate, never()).query(argThat(sql -> sql != null
+                        && sql.contains("dw_form_stage_bindings")
+                        && !sql.contains("fu.code = ?")),
+                any(RowMapper.class), eq(SHARED_STAGE));
+        verify(restTemplate, never()).getForObject(anyString(), eq(Map.class));
+        verify(jdbcTemplate, never()).queryForList(anyString(), eq(String.class), eq(PROCESS_INSTANCE));
+    }
+
     private void stubFunctionUnitCode(String processInstanceId, String functionUnitCode) {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq(processInstanceId)))
                 .thenReturn(List.of(functionUnitCode));
+    }
+
+    private void stubCatalogId(String processInstanceId, String catalogId) {
+        when(jdbcTemplate.query(argThat(sql -> sql != null && sql.contains("function_unit_catalog_id")),
+                any(RowMapper.class), eq(processInstanceId)))
+                .thenReturn(List.of(catalogId));
+    }
+
+    private static String catalogBpmn(String formId) {
+        return """
+                <bpmn:userTask id="UserTask_Approve">
+                  <custom:properties>
+                    <custom:property name="formId" value="%s" />
+                  </custom:properties>
+                </bpmn:userTask>
+                """.formatted(formId);
     }
 
     @SafeVarargs

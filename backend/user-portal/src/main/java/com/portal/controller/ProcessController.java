@@ -71,8 +71,9 @@ public class ProcessController {
     public ApiResponse<Map<String, Object>> getFunctionUnitContent(
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
-            @RequestParam(required = false) String taskId) {
-        requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
+            @RequestParam(required = false) String taskId,
+            @RequestParam(required = false) String processInstanceId) {
+        requireFunctionUnitContentAccess(userId, functionUnitId, taskId, processInstanceId);
         Map<String, Object> content = processComponent.getFunctionUnitContent(functionUnitId);
         return ApiResponse.success(content);
     }
@@ -83,8 +84,9 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType,
-            @RequestParam(required = false) String taskId) {
-        requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
+            @RequestParam(required = false) String taskId,
+            @RequestParam(required = false) String processInstanceId) {
+        requireFunctionUnitContentAccess(userId, functionUnitId, taskId, processInstanceId);
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
         return ApiResponse.success(contents);
     }
@@ -132,10 +134,15 @@ public class ProcessController {
     }
 
     private void requireFunctionUnitContentAccess(String userId, String functionUnitIdOrCode) {
-        requireFunctionUnitContentAccess(userId, functionUnitIdOrCode, null);
+        requireFunctionUnitContentAccess(userId, functionUnitIdOrCode, null, null);
     }
 
     private void requireFunctionUnitContentAccess(String userId, String functionUnitIdOrCode, String taskId) {
+        requireFunctionUnitContentAccess(userId, functionUnitIdOrCode, taskId, null);
+    }
+
+    private void requireFunctionUnitContentAccess(
+            String userId, String functionUnitIdOrCode, String taskId, String processInstanceId) {
         if (userId == null || userId.isBlank()) {
             throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("Please login first before accessing function unit content");
         }
@@ -145,10 +152,66 @@ public class ProcessController {
         if (taskGrantsFunctionUnitContentAccess(userId, functionUnitIdOrCode, taskId)) {
             return;
         }
+        if (processInstanceGrantsFunctionUnitContentAccess(userId, functionUnitIdOrCode, processInstanceId)) {
+            return;
+        }
         if (auditGrantsFunctionUnitContentAccess(userId, functionUnitIdOrCode)) {
             return;
         }
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
+    }
+
+    /**
+     * My Request / process-detail viewers may load the instance's pinned catalog even after
+     * that package was superseded and disabled.
+     */
+    private boolean processInstanceGrantsFunctionUnitContentAccess(
+            String userId, String functionUnitIdOrCode, String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()
+                || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        try {
+            ProcessInstanceInfo detail = processComponent.getProcessDetail(processInstanceId.trim());
+            if (detail == null || !processComponent.canAuditProcessDetail(userId, detail)) {
+                return false;
+            }
+            if (!processBelongsToFunctionUnit(detail, functionUnitIdOrCode)) {
+                return false;
+            }
+            if (!isPinnedCatalogOnProcess(detail, functionUnitIdOrCode)) {
+                functionUnitAccessComponent.requireEnabledFunctionUnit(userId, functionUnitIdOrCode);
+            }
+            return true;
+        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Process-based function unit content access check failed ({}): {}",
+                    processInstanceId, e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean processBelongsToFunctionUnit(ProcessInstanceInfo detail, String functionUnitIdOrCode) {
+        if (isPinnedCatalogOnProcess(detail, functionUnitIdOrCode)) {
+            return true;
+        }
+        String key = detail.getProcessDefinitionKey();
+        String requested = functionUnitIdOrCode.trim();
+        if (key != null && key.trim().equals(requested)) {
+            return true;
+        }
+        String resolvedRequested = functionUnitAccessComponent.resolveFunctionUnitId(requested);
+        String owning = functionUnitAccessComponent.resolveFunctionUnitId(
+                key != null && !key.isBlank() ? key.trim() : requested);
+        return resolvedRequested != null && resolvedRequested.equals(owning);
+    }
+
+    private static boolean isPinnedCatalogOnProcess(ProcessInstanceInfo detail, String functionUnitIdOrCode) {
+        String pin = detail.getFunctionUnitCatalogId();
+        return pin != null && !pin.isBlank()
+                && functionUnitIdOrCode != null
+                && pin.trim().equalsIgnoreCase(functionUnitIdOrCode.trim());
     }
 
     /**
@@ -177,8 +240,9 @@ public class ProcessController {
 
     /**
      * Task-scoped grant for FU content: the task must belong to the requested function unit and the
-     * user must pass {@code canViewTaskForm} for it. Only the role gate is bypassed — the disabled
-     * gate still applies via {@link FunctionUnitAccessComponent#requireEnabledFunctionUnit}.
+     * user must pass {@code canViewTaskForm} for it. The start-access role gate is bypassed.
+     * The disabled gate still applies except when the request is the instance's pinned
+     * catalog id (a superseded package must remain readable for running instances).
      */
     private boolean taskGrantsFunctionUnitContentAccess(String userId, String functionUnitIdOrCode, String taskId) {
         if (taskId == null || taskId.isBlank()) {
@@ -189,7 +253,9 @@ public class ProcessController {
             if (task == null || !taskBelongsToFunctionUnit(task, functionUnitIdOrCode)) {
                 return false;
             }
-            functionUnitAccessComponent.requireEnabledFunctionUnit(userId, functionUnitIdOrCode);
+            if (!isPinnedCatalogRequest(task, functionUnitIdOrCode)) {
+                functionUnitAccessComponent.requireEnabledFunctionUnit(userId, functionUnitIdOrCode);
+            }
             boolean allowed = taskProcessComponent.canViewTaskForm(task, userId,
                     SecurityContextUtils.getCurrentUsername().orElse(null));
             if (allowed) {
@@ -206,19 +272,32 @@ public class ProcessController {
     }
 
     private boolean taskBelongsToFunctionUnit(TaskInfo task, String functionUnitIdOrCode) {
+        if (functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        String requested = functionUnitIdOrCode.trim();
+        if (isPinnedCatalogRequest(task, requested)) {
+            return true;
+        }
         String taskProcessKey = task.getProcessDefinitionKey();
-        if (taskProcessKey == null || taskProcessKey.isBlank()
-                || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+        if (taskProcessKey == null || taskProcessKey.isBlank()) {
             return false;
         }
         // Task detail passes the task's own processDefinitionKey, so a direct match is the hot path.
-        if (taskProcessKey.trim().equals(functionUnitIdOrCode.trim())) {
+        if (taskProcessKey.trim().equals(requested)) {
             return true;
         }
         // Other callers may pass the FU catalog id/code — resolve both sides to catalog IDs.
-        String requested = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode.trim());
+        String resolvedRequested = functionUnitAccessComponent.resolveFunctionUnitId(requested);
         String owning = functionUnitAccessComponent.resolveFunctionUnitId(taskProcessKey.trim());
-        return requested != null && requested.equals(owning);
+        return resolvedRequested != null && resolvedRequested.equals(owning);
+    }
+
+    private static boolean isPinnedCatalogRequest(TaskInfo task, String functionUnitIdOrCode) {
+        String pin = task.getFunctionUnitCatalogId();
+        return pin != null && !pin.isBlank()
+                && functionUnitIdOrCode != null
+                && pin.trim().equalsIgnoreCase(functionUnitIdOrCode.trim());
     }
     
     /**

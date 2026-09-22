@@ -1,6 +1,7 @@
 import formEventMessages from './formEvents.zh-TW'
 import formCtlMessages from './formCtl.zh-TW'
 import tableDesignMessages from './tableDesign.zh-TW'
+import tableBindingsMessages from './tableBindings.zh-TW'
 import viewDesignMessages from './viewDesign.zh-TW'
 import fuDocumentsMessages from './fuDocuments.zh-TW'
 import aiStudioMessages from './aiStudio.zh-TW'
@@ -193,6 +194,10 @@ export default {
     taskDelegate: {
       title: '委託任務',
       summary: '把這一條待辦交給指定使用者或一對 BU+Role，不改目前處理人。',
+    },
+    tableBindings: {
+      title: '管理表綁定',
+      summary: '把 MAIN、SUB、ACTION、RELATION 表掛到表單。Filter foreign key 和填入來源在這裡；Sub-Table 網格另有專文。',
     },
     formUpload: {
       title: '表單設計 — 進階上傳',
@@ -717,6 +722,7 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,

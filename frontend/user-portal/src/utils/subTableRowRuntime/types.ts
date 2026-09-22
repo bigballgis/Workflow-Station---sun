@@ -5,10 +5,12 @@
 import {
   type FieldFkMeta,
   type PkGenerationConfig,
-  type RowAddContext,
+  buildRowAddContext,
   isFkHidden,
   isFkReadonly,
 } from '../tableFkRuntime'
+
+export { buildRowAddContext }
 
 export interface BindingFieldDefinition {
   fieldName: string
@@ -57,24 +59,6 @@ export function filterStructuralFkMetasForBinding(
   const legacy = options.bindingForeignKeyField?.trim()
   if (!legacy) return fkMetas
   return fkMetas.filter(m => m.fieldName !== legacy)
-}
-
-export function buildRowAddContext(
-  primaryFormData: Record<string, unknown>,
-  subTableBindings?: Array<{ tableId?: number | null; bindingType?: string }> | null,
-  parentRow?: Record<string, unknown> | null,
-  parentTableId?: number | null,
-): RowAddContext {
-  const ancestorRowsByTableId: Record<number, Record<string, unknown>> = {}
-  for (const b of subTableBindings ?? []) {
-    if (b.tableId != null && b.bindingType === 'PRIMARY') {
-      ancestorRowsByTableId[Number(b.tableId)] = primaryFormData
-    }
-  }
-  if (parentRow && parentTableId != null) {
-    ancestorRowsByTableId[Number(parentTableId)] = parentRow
-  }
-  return { primaryFormData, ancestorRowsByTableId }
 }
 
 /** True when binding.foreignKeyField names the child row's own PK (e.g. People.id), not the MI parent link. */

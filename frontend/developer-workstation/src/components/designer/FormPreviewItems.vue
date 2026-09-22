@@ -91,7 +91,7 @@
       </div>
       <!-- One design, one preview: the form being edited is the form that renders. -->
       <SubTableField
-        :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, bindingType: item.binding.bindingType }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns, bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, filterFkRefTableId: item.binding.filterFkRefTableId, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="true"
         :allow-add="item.binding.allowAdd"
@@ -127,7 +127,7 @@
       </div>
       <SubTableField
         v-if="hasSubTablePreviewSurface(item.binding)"
-        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, bindingType: item.binding.bindingType }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, filterFkRefTableId: item.binding.filterFkRefTableId, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="!isMyRequestsPreview"
         :allow-add="item.binding.allowAdd"
@@ -277,7 +277,7 @@ const props = defineProps<{
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: import('@/api/functionUnit').FieldDefinition[] }>
-  previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  previewTableBindings?: import('@/utils/tableFkRuntime').BindingContextInput[]
   /** Main table Request ID config — preview recomputes the readonly Request ID live from these fields. */
   requestIdConfig?: import('@/api/functionUnit').RequestIdConfig | null
 }>()

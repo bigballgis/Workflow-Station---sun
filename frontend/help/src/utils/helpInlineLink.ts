@@ -21,6 +21,7 @@ const PATH_TITLE: Record<string, string> = {
   '/form-upload': 'guides.formUpload.title',
   '/computed-fields': 'guides.computedFields.title',
   '/table-design': 'guides.tableDesign.title',
+  '/table-bindings': 'guides.tableBindings.title',
   '/view-design': 'guides.viewDesign.title',
 }
 

@@ -12,7 +12,7 @@ export default {
     flow5: '儲存。主表要先設定 Request ID',
     whatTitle: '表設計是什麼',
     whatBody:
-      '功能單元頁簽「表設計」。Table Type 是 Main Table、Sub Table、Action Table 或 Relation Table。Field Name 必須以字母開頭。表單設計的 Import Table Fields 讀這些欄。[[/view-design]] 裡的檢視要先有主表。',
+      '功能單元頁簽「表設計」。Table Type 是 Main Table、Sub Table、Action Table 或 Relation Table。Field Name 必須以字母開頭。表單設計的 Import Table Fields 讀這些欄。把表掛到表單見 [[/table-bindings]]。[[/view-design]] 裡的檢視要先有主表。',
     fieldsTitle: '欄位',
     fieldsBody:
       '開啟一張表。每一列是一個欄。Data Type 可選 VARCHAR、INTEGER、BIGINT、DECIMAL、BOOLEAN、DATE、TIMESTAMP、TEXT、FILE。VARCHAR 用 Length。DECIMAL 用 Precision 和 Scale。',

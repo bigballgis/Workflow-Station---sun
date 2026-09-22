@@ -207,10 +207,14 @@ function filterRunningMiBindingsByProcessDesignScope(bindings) {
 
    ```
    ① bindingLinkMode === 'miParticipantRow'  → collection   ← 显式声明，必须最先判
-   ② 字段级 FK.refTableId → collection 的 tableId → participant-child
-   ③ 字段级 FK.refTableId → 主表的 tableId        → shared
-   ④ 都判不了                                     → null / 保持参与者守卫开着
+   ② 本 binding 声明的 filterFkRefTableId → collection 的 tableId → participant-child
+   ③ 本 binding 声明的 filterFkRefTableId → 主表的 tableId        → shared
+   ④ 未声明时才回落：扫 fieldDefinitions 里任意 FK（仅当该表恰好 1 个 FK 时无歧义）
+   ⑤ 都判不了                                     → null / 保持参与者守卫开着
    ```
+
+   **禁止**用 `foreignKeyField` 当 ②③ 的判据（存量 binding 上它常等于该表自己的 PK）。
+   **禁止**在已声明 `filterFkRefTableId` 时还去扫表上其它 FK —— 同表第二条 binding 就是靠这条声明区分的。
 
    **前后端必须同序**：前端 `resolveMiBindingKindFromConfig` 第 1 条就是 ①；后端
    `MiSubTaskSubTableRowMerger.isParticipantScopedBinding` 也必须先调
@@ -532,7 +536,8 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 - [ ] **无硬编码**：PK / 状态列 / 当前节点列 / 表名 / 分派字段是否都取自 binding `primaryKeyFields` 与 Sub-Task Config，而非 `id_idw` / `task_status` / `participants` 等字面量？
 - [ ] **binding 分类**：是否用 `resolveMiBindingKindFromConfig`？有没有新增列名/表名/FK 名判断？（`grep -rn "fk === 'id'\|endsWith('participants')" src/` 必须为空）
 - [ ] **上下文注册**：新的详情/加载链路是否调了 `registerMiKindTableIdsFromBindings`？新的 binding 构建点是否透传了 `bindingLinkMode` 与 `fieldDefinitions`？
-- [ ] **child vs shared**：是否靠**字段级 FK 的 `refTableId` 指向 collection 还是主表**区分？（`bindingLinkMode` 对二者都是 `structuralFk`，区分不了）
+- [ ] **child vs shared**：是否靠**本 binding 的 `filterFkRefTableId`**（未声明才回落表级 FK 扫描）区分？（`bindingLinkMode` 对二者都是 `structuralFk`，区分不了）
+- [ ] **binding 重建是否透传 `filterFkRefTableId` / `filterFkFieldName`**？漏传 = 又退回整表扫描，同表双绑定必然同类
 - [ ] **判据顺序**：是否**先**判 `bindingLinkMode === 'miParticipantRow'` 再看 FK 指向？（collection 自己也 FK 到主表，顺序反了会把 collection 判成 shared → 关掉行隔离 → 覆盖别人的数据）**前后端都要查**
 - [ ] **两个主键都传了吗**：归属判定是否同时拿到 **collection 的 `primaryKeyFields`**（宿主标识）和 **child 的 `primaryKeyFields`**（行标识）？漏前者 → 恒不匹配、行刷新后消失；漏后者 → 独立行被折叠合并
 - [ ] **判不了要返回 null**：配置缺失时是否**没有**静默降级成 `shared`（那会让真 child 丢失参与者隔离）？

@@ -699,7 +699,7 @@ const resolveMiRowOwnershipPredicate = (binding: unknown) => {
   return (row: unknown) => belongs(row, myRowId, binding as any)
 }
 
-const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate })
+const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
 const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
 const showImplicitSaveAction = computed(() => !formReadOnly.value && !hasConfiguredSaveAction.value)
@@ -836,7 +836,7 @@ const taskActions = useTaskActions({
     if (isMiSubTaskMode.value) {
       protectMainRecordScalarsInSubmitPayload(payload)
     }
-    return payload.formData
+    return payload
   },
 })
 const {

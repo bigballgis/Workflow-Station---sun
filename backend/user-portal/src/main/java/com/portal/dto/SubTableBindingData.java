@@ -39,6 +39,8 @@ public class SubTableBindingData {
      * key": the two differ precisely for PK-less tables.
      */
     private List<String> primaryKeyFields;
+    /** {@code dw_form_table_bindings.table_id} for SUB/PRIMARY. */
+    private Long tableId;
     /**
      * {@code dw_form_table_bindings.relation_table_id} when this binding targets a RELATION table
      * (including the platform's virtual {@code sys_users}), else {@code null}.
@@ -51,6 +53,13 @@ public class SubTableBindingData {
     private Long relationTableId;
     /** Relation table's own name ({@code rt_table_definitions.table_name}); null for designer tables. */
     private String relationTableName;
+    /**
+     * Declared filter FK column ({@code dw_form_table_bindings.filter_fk_field_id} → field_name).
+     * Null = not declared; dual-binding projection stays off.
+     */
+    private String filterFkFieldName;
+    /** Target table of that declared filter FK. Distinguishes two SUB bindings of the same table. */
+    private Long filterFkRefTableId;
     /** MI assignment contract (allowUser/allowRole/assigneeField/roleField/buField) parsed from BPMN, keyed by tableName. */
     private Map<String, Object> assignmentConfig;
 }

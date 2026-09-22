@@ -61,7 +61,7 @@ public final class FunctionUnitManagerTestFactory {
                 viewValidator);
         FormTableBindingLoader bindingLoader = new FormTableBindingLoader(jdbcTemplate, objectMapper);
         FunctionUnitContentComponent contentComponent = new FunctionUnitContentComponent(
-                contentRepository, jdbcTemplate, lookup, bindingLoader);
+                contentRepository, jdbcTemplate, lookup, bindingLoader, objectMapper);
         FunctionUnitLifecycleComponent lifecycleComponent = new FunctionUnitLifecycleComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(com.admin.repository.FunctionUnitAuditAccessRepository.class),

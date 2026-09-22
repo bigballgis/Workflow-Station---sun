@@ -2033,20 +2033,33 @@
     未改任何 FU 设计。执行后子表行可保存，aggregate 预览端到端通过。
 
 - id: "1522"
-  status: open
+  status: fixed
+  fixed_at: "2026-09-16"
   severity: major
   category: deploy
-  summary: "dev 库流程实例数据全空（act_hi_procinst / act_ru_task 均 0 行），regression:mi 的截图门禁全部无法执行，只剩单测层可跑"
-  file: "frontend/scripts/run-mi-regression.mjs"
+  summary: "regression:mi 截图门禁无法执行 —— 真因是脚本登录账号（默认 developer/user-dev）名下 0 实例，非「dev 库数据全空」"
+  file: "frontend/scripts/playwright-login.mjs"
   note: |
-    2026-08-17 实测：act_hi_procinst = 0、act_ru_task = 0，MI 回归的 6 个场景脚本
-    全部按硬编码 taskId / applicationId 定位（如 verify-myrequest-details-modal.mjs
-    的 app 3777ff51… 与 Test-000060），目标数据不存在 → `pnpm run regression:mi`
-    必然在 e2e 阶段失败，单测层 12 文件 117 项仍全绿。
-    这不是代码缺陷，是环境 fixture 缺口，但它使 performance-change-safety 规定的
-    MI 截图门禁在当前 dev 环境形同虚设（任何触达热路径的改动都无法真正过闸）。
-    处置建议（需人工决定）：要么补一份可重放的 MI 流程实例 seed（起流程 + 走到
-    多实例节点 + 固定 business key），要么让场景脚本改为按语义查找而非硬编码 ID。
+    原判（2026-08-17）：act_hi_procinst = 0、act_ru_task = 0，场景脚本按硬编码
+    taskId/applicationId 定位 → e2e 阶段必然失败。
+    2026-09-16 复测推翻该诊断，真因有两层且都已不成立：
+    1) 数据并非全空：up_process_instance 91 行（53 RUNNING / 38 COMPLETED）、
+       act_ru_task 54 行、wf_extended_task_info 28 行 / 27 个 distinct pid。
+    2) 场景脚本已改为**按语义动态查找**（本轮实际发现 app c9392b2a…、task c95df1a3…），
+       不再依赖硬编码 ID —— 原建议的第二条修法已落地。
+    残余阻塞只剩身份：全部 91 个实例的 start_user_id 均为
+    49d8e25c-9a99-4b04-b661-852c16901110（sys_users.username = `123456`），
+    而 playwright-login.mjs 的默认账号是 `developer`（id `user-dev`），名下 0 实例
+    → verify-myrequest-details-modal.mjs 报 "FAIL: no running My Request to open"。
+    修法（无需改代码，登录助手已支持 env 覆盖 —— playwright-login.mjs
+    `opts.user ?? process.env.LOGIN_USER ?? 'developer'`）：
+      cd frontend; $env:LOGIN_USER="123456"; $env:LOGIN_PASS="password"
+      pnpm run regression:mi
+    验证（2026-09-16，postgres/redis 从 Exited(255) 恢复后全栈 healthy）：
+    Phase 1 单元 23 文件 / 203 测试全绿；Phase 2 六场景**全部 PASS**，
+    9 张截图落 frontend/user-portal/verification-screenshots/2026-09-16_*。
+    遗留（未修，需人工决定）：默认账号应改为数据归属账号，或给 dev 补一份
+    归属 `developer` 的 MI 实例 seed —— 否则下一个人仍会踩同一个误诊。
 
 - id: "1523"
   status: fixed
@@ -4043,6 +4056,262 @@
   status: fixed
   fixed_at: "2026-09-17"
   severity: major
+  category: bug
+  summary: "MI 同表双 binding Complete：scopes 分类 + isolation，独立 FU e2e 保住兄弟行"
+  file: "frontend/user-portal/src/composables/tasks/miBindingKindFromConfig.ts"
+  note: |
+    静态分析发现（未运行时复现，需实测确认）。
+    resolveMiBindingKindFromConfig 的判据输入只有三种：bindingLinkMode（per-binding，
+    但规则已注明区分不了 child/shared，两者都是 structuralFk）、binding.tableId（表级）、
+    hasFieldFkTo 扫 binding.fieldDefinitions（表级 —— 同一张表的多条 binding 完全相同）。
+    后果：判据 2「字段级 FK 指向 collection ⇒ participant-child」按**表**成立。
+    只要在 Table Design 给共享附件表加一个指向 MI collection 的 FK 列（纯 schema 动作，
+    不碰 binding），该表现存的 shared binding 立刻翻成 participant-child →
+    isSharedAttachmentFileBinding 返回 false → 走参与者分片 →
+    未带 participant FK 的全案共享行被裁掉（同 #1546 现场行为）。
+    仅在 MI FU 上成立（非 MI 时 collectionTid 为 null，判据 2 跳过，仍落 shared）。
+    地基已具备：enforcePrimarySubBindingRules 已强制 SUB binding 的 foreignKeyField
+    必须是 Table Design 声明过的 FK（SUB_FK_NOT_DECLARED），注释亦写明该规则存在
+    正是为了让 runtime 分类能区分 participant-child 与 shared。
+    建议方向：增加优先级高于表级扫描的结构判据 —— 解析 binding 自己的 foreignKeyField
+    在 fieldDefinitions 中对应项的 refTableId；仅当该 FK 未声明（dev 实测 33 条 legacy
+    binding）时回落表级扫描。单 binding 且表仅一个 FK 时两者同解，故对存量 FU 行为不变。
+    先写 failing test：同一 Attachment 表上 main FK + collection FK 两条 binding
+    断言得到不同 kind（当前必红）。
+    关联：外部设计文档「DW 同表多绑定与嵌套外键解析」将此列为 P3，但 P1 一落地
+    设计者即可加 FK 列，顺序需前移。
+    后端已核（2026-09-16）：MiSubTaskSubTableRowMerger 同样是表级判据，且更粗 ——
+    isParticipantScopedBinding(String submittedKey) 的入参就是 canonical store key
+    (dw:<table_name>)，**根本收不到 binding 身份**；bindingDeclaredAsMiParticipantRow
+    与 foreignKeyTargetsMainTable 都按表名查库（该表任一 binding / 任一已声明 FK 命中即算）。
+    lookupForeignKeyFieldByStoreKey 的 Javadoc 把这条前提写成了不变量：
+    "Every binding of one table shares the same FK role for this purpose ... after the
+    single-source-of-truth change a table has exactly one key, so there is no per-binding
+    distinction left to make" —— 该方法本身是 dead code（全仓无调用点）。
+    另：后端只有两类（participant-scoped vs pass-through），无 participant-child 第三类；
+    判据 2 用 ref.table_type='MAIN' 而非 refTableId===primaryTableId，与前端已非等价。
+    判不了时前端返回 null、后端默认 true，方向也不一致。
+    因此提交侧（table-keyed payload 擦除 binding 身份）是比分类函数更深的一层阻塞，
+    影响设计文档 §12「后端对每个写操作实施相同范围校验」的可实现性。
+    无跨端同序集成测试，仅靠对称单测 + 规则文档。
+    ---
+    dev 库枚举（2026-09-16，只读 SQL）——推翻本条原先建议的修法：
+    - legacy 未声明 FK 的 SUB binding 实测 **43** 条（代码注释记的 33 已过期），
+      分母 64（=67%）。拆分：miParticipantRow 13 条（**本就该豁免**，分类规则 ①
+      按 link mode 判、从不读其 FK）+ structuralFk 30 条。
+    - 30 条 structuralFk 中仅 12 条所在表另有已声明 FK → **这 12 条才是行为差集**；
+      另 18 条所在表一个已声明 FK 都没有，表级与 binding 级同为「判不了」，无差异。
+    - 12 条差集全部是同一个模式：**binding.foreign_key_field 就是该表自己的主键**，
+      不是父引用。实测：subtable_copy fk=id_idw（声明 FK 为 main_id→main_copy）×6、
+      people/people_copy fk=id（声明 FK 为 sub_task_id→subtable）×4、
+      ATM_Transaction_copy fk=row_id（声明 FK 为 case_row_id→ATM_Case_copy）×2。
+      这正是 portal-mi-subtable-my-request 规则第 3 条的警告
+      （「foreignKeyField 不是父引用，在 People 式 child 上常等于该表自己的 PK」），
+      也是设计文档 §2「V2 不得直接重新解释旧字段」所禁止的。
+      **结论：不得用 binding.foreign_key_field 当 per-binding 判据。**
+      需新增显式的「过滤关系」字段（设计文档 §2 已提出该概念）。
+    - 好消息：该新字段的存量回填**当前无歧义**。实测有已声明 FK 的表共 14 张，
+      每张**恰好只有 1 个**已声明 FK（n_fk=1 / n_distinct_ref=1 / n_ref_types=1），
+      方向分布 10→MAIN、4→SUB，且 `is_foreign_key=true AND ref_table_id IS NULL`
+      为 **0 条**。故可确定性地把每条存量 binding 的过滤关系回填为「该表唯一的已声明 FK」，
+      零猜测。（同时说明 isDeclaredForeignKey 不校验 ref_table_id 的缺口目前尚未在数据上发生。）
+    - 同一枚举顺带发现：原 Demo 的 `subtable` 6 条 binding 全为 miParticipantRow，
+      而其副本 `subtable_copy`（FU multi-instance-subtask-demo2-20260909-v21y13）
+      6 条**全为 structuralFk** —— link mode 未随副本保留。该 FU 的 collection 因此
+      会落到判据 ④ 判成 shared（#1546 覆盖场景）。当前为**潜伏**风险：该 FU 的
+      dw_process_definitions.bpmn_xml 未含 MI 标记，无活跃参与者。
+      创建路径（Clone / Import / 手工）未确认，故不据此判定设计文档 [E18]
+      「Clone 已显式拷贝 link mode」为假 —— 需单独复现确认。
+    ---
+    Batch 1 已落地（2026-09-16）——**只建地基，运行时判据未改，本条仍 open**：
+    新增 `dw_form_table_bindings.filter_fk_field_id`（存 `dw_field_definitions.id`
+    而非列名：列名会被改，demo FU 把 sub_task_id 改成 sub_task_idq 已让名字匹配答错过）。
+    脚本 `deploy/init-scripts/00-schema/83-dw-binding-filter-fk-field.sql`，回填只认
+    「该表恰好 1 个已声明 FK（含 ref_table_id）」。dev 实测：跑 1 次 UPDATE 46，
+    再跑 2 次均 UPDATE 0；64 条 SUB 里 46 填上、18 留空，且 18 条**全部**落在
+    零已声明 FK 的表上（无 >1 FK 的表，回填窗口前提精确成立）；非 SUB 0 条被动过；
+    反例查询「指向非本表字段 / 非已声明 FK」为 0。
+    写入侧已接：createBinding / updateBinding（update 解析不出时**保留**原值，否则
+    改 legacy binding 的无关属性会把回填值擦成 null —— 那 43 条的 foreign_key_field
+    是自己的 PK，必然解析不出）、两处 Copy Form（复用源表，直拷不 remap）、
+    FunctionUnitCloner（克隆表，按字段名 remap 到克隆字段 id）、
+    Exporter/ImportWriter（包里走列名 + 表名，导入侧解回本地 id）、
+    FormTableBindingRestorer、FormConfigJsonTableProvisioner。
+    Restorer 两处 findFirst 已改为「判不了就拒绝重建」：表声明 ≠1 个已声明 FK，
+    或存活兄弟 binding 的 link mode 互相矛盾 → 跳过并留可见 stale placeholder。
+    同时收紧 isDeclaredForeignKey / soleDeclaredForeignKeyField 要求 ref_table_id
+    非空（dev 实测违例 0 条；仅 Provisioner 会造出该状态，见 #1637）。
+    验证：developer-workstation 1064 测仅余 16 个 HEAD 基线已有失败（已用 HEAD
+    worktree 证实同样 15+1）；compose 重建后 `GET /function-units/48/forms/161/bindings`
+    返回 filterFkFieldId=6748/6754，与库内一致（ddl-auto=none，故此为映射的运行时证据）；
+    `pnpm run regression:mi` 6 场景全 PASS。
+    Batch 2 读侧已提交 `1caec95e1`（2026-09-16）——分类改读声明，#1636 因写侧仍
+    table-keyed 保持 open：
+    Admin `TableBindingDTO` + `FormTableBindingLoader` LEFT JOIN 下发
+    `filterFkRefTableId` / `filterFkFieldName`（`FormTableBindingLoaderFilterFkTest`）。
+    前端 `resolveMiBindingKindFromConfig` 已声明则只认该目标，不再扫表上其它 FK；
+    拷贝点经 `declaredFilterFkFields` 透传。后端 `foreignKeyTargetsMainTable` 先
+    DISTINCT 已声明 filter_fk 的 ref type，空则回落表扫描，混合 MAIN+非 MAIN 返回
+    null（既有 fail-loud 守卫仍开）。`AiWriteServiceImpl` 建 SUB 时写 filterFkFieldId。
+    验证：portal vitest miBindingKindFromConfig；Maven
+    FormTableBindingLoaderFilterFkTest + MiSubTaskSubTableRowMergerTest；
+    compose 重建 admin-center / user-portal / developer-workstation；
+    `pnpm -C frontend/user-portal run build`；`pnpm -C frontend run regression:mi`
+    23 files / 203 tests + 6 Playwright 场景全 PASS。
+    剩余：submit 规范 key 仍是 `dw:<table_name>`（方案 A 刻意保留），但
+    Task Form 提交已另带 `subTableBindingScopes`（bindingId/storeKey/rowKeys/emptied），
+    服务端 `SubTableBindingScopeGuard` 按声明 filter FK + `_currentItem` 校验，
+    未认领变更 403，scoped 路径 `_wsRowVersion` 冲突 409。单 binding 省略 scopes = V1。
+    merger 仍按表分类。#1636 保持 open。
+    P1 设计器唯一性已开（2026-09-16）——同表 SUB 只要 `filterFkFieldId` 不同即可
+    并存；同表 + 同 filter FK（含双方均为 null）仍 `BINDING_EXISTS` HTTP 409。
+    PRIMARY/RELATED 仍一表一条。`FormTableBindingUniquenessGuard` + 设计器
+    `isTableBound` 走未占用声明 FK；结构 FK 为 select（已占用项 disabled）。
+    运行时：`node scripts/verify-p0-dual-binding-fu.mjs` 两条 `p0_dual_file`
+    SUB（50705/50706）+ 同 filter 重复 POST 得 `BINDING_EXISTS`；截图
+    `frontend/developer-workstation/verification-screenshots/2026-09-16_p0-dual-binding-*.png`。
+    P2 hydrate 已落地并实测（2026-09-17）：同表双 SUB 才按声明 filter FK **显示**切片
+    （交集，非互斥）。`binding.data` 保持 canonical store，widget 只投影；
+    写回把 slice merge 进同表 sibling。MAIN 主键列读不到则跳过切片。
+    加行不再把 MAIN pk 盖到未在祖先上下文里的 nested FK；唯一 sibling 父行
+    可盖 party_id。`initFormData` 保留非画布 MAIN pk，提交 `formData.id`
+    与子行 `case_id` 对齐。Task Save scopes 按投影行认领；Guard MAIN-filter
+    在主表 PK 可读时校验 `case_id`。
+    实测 `SKIP_DEPLOY=1 node frontend/scripts/verify-p0-dual-binding-portal.mjs`：
+    start `id=Case-000027`，两文件 `case_id` 同值，party-doc `party_id=Party-000007`；
+    task widget0=case-doc+party-doc，widget1=仅 party-doc；Save store 仍 2 行，
+    scopes 50705 两行 / 50706 一行 HTTP 200。截图
+    `frontend/user-portal/verification-screenshots/2026-09-17_p0-dual-binding-portal-task-hydrate.png`。
+    MI unit 24 files / 210 PASS。`pnpm run regression:mi` Playwright：
+    #1441/#1440 PASS；#1438 因环境无 attachment 行失败（与本 diff 无关）。
+    P3 已开始（2026-09-17）：`mergeCurrentRowOnly` 接收 scopes；本表单 binding
+    的声明 filter 分类 SHARED / PARTICIPANT / MIXED；混合时兄弟参与者 nested
+    行留 baseline。无 scopes 仍表级 fail-loud。单测
+    `MiSubTableScopeAwareMergeTest` + 既有 merger/Guard 61 绿。
+    P3 第二刀（2026-09-17）：Complete/Approve 与 Save 共用
+    `SubTableWriteIsolation`（MI merger + Guard）。`TaskCompleteRequest`
+    接收 `emptiedSubTableKeys` / `subTableBindingScopes`（不进 formData）。
+    前端 `buildFormPayloadForComplete` 回传 Save envelope；Approve 原
+    `putAll` 不再用 thin stub 盖兄弟行。单测 `SubTableWriteIsolationTest`。
+    P3 MI Complete e2e（2026-09-17）：独立 FU `p3-mi-dual-binding-test`
+    （种子 `deploy/init-scripts/22-dual-binding-mi/`，表 `p3_mi_file` 两条 SUB，
+    不改 Demo `attachment`）。Alice UI Complete 带 scopes：case-file binding
+    认领三行、party-file binding 只认领 alice-doc；HTTP 200；Bob 待办
+    `__subTables__.dw:p3_mi_file` 仍含 bob-doc。脚本
+    `frontend/scripts/verify-p3-mi-dual-binding-complete.mjs`。
+    Release 节点 catalog Task Form 查找 formName=null（PROCESS 表单绑在
+    Approve 节点上），e2e 用 start payload API Approve 作注入 setup；
+    隔离验收走 MI 子任务 UI Complete。不可变 catalog 包与帮助文另做。
+    #1636 关闭。
+    本地双 binding 样本（2026-09-16）：种子 `deploy/init-scripts/21-dual-binding-p0/`
+    建 FU `p0-dual-binding-test`（现 dw id=50009），独立表名 `p0_dual_file` 两条 SUB
+    （filter `case_id`→MAIN vs `party_id`→party），不改 Demo `attachment`。
+    BPMN 两步 INITIATOR（Fill 自动办结、Review 留待办）。Catalog 经 DW Deploy
+    `p0-dual-binding-test` 1.0.1。
+    写侧实测：start union-merge 2 行 `dw:p0_dual_file`（无 scopes，设计如此）；
+    Review Save 带 binding 50705+50706 scopes。第一次 Save 被 Guard 403
+    （SUB filter 无 `_currentItem` 当 MI 拒）——PROCESS 表单无当前行；
+    Guard 改为：有 current-item 对象但解析不出仍 403；没有 current-item 则跳过
+    FK 匹配（嵌套父行解析属 P2）。重建 user-portal 后同一脚本 submit HTTP 200。
+    两 widget 仍把同一 store 的两行都认领（hydrate 未按 filter 切片）。
+    种子未编入 00-init-all。
+    2026-09-18 follow-up：审查 recent commits 后补齐三个写协议缺口。
+    交集行原先被两个 scope 顺序校验，第一条先递增 `_wsRowVersion` 导致第二条
+    对同一次提交误报 409；现改为全部 scope 对原始版本完成校验后，每个 store
+    统一递增一次。删除现携带显式 `deletedRows`（row identity + 读取时版本），
+    后端拒绝未声明删除、旧版本删除，以及 `rowKeys:null` 绕过。前端删除集合从
+    加载时 immutable baseline 计算，Save/autosave/MI Fill 成功后重新加载服务器版本。
+    同表两条 binding 即使指向同一父表，只要 filter FK 列不同也分别投影。
+    尚未收口的设计契约：嵌套子表要求父行“已保存”，但当前前端上下文只有
+    PK / `_wsRowVersion`，没有可信的 server-persisted 标记；不能用“已有 PK”猜保存状态，
+    需后续从加载基线向 FormRenderer/SubTableField 透传持久化身份。
+    验证：聚焦 Maven 5 类全绿；user-portal 全量 1576 测仅余既有
+    ChangeHistoryStatusFieldFilterTest 1 个基线失败；MI 24 files / 212 tests；
+    portal build 与 compose user-portal/user-portal-frontend/workflow-engine 健康。
+
+- id: "1637"
+  status: open
+  severity: major
+  category: bug
+  summary: "FormConfigJsonTableProvisioner 建子表时把 FK 列标成 isForeignKey=true 但不写 ref_table_id，运行时消费者读不到目标"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FormConfigJsonTableProvisioner.java"
+  note: |
+    createSubTable 为粘贴来的表单materialise 子表时，给 SUB_FK_FIELD 列加了
+    `.isForeignKey(true)`（注释明确说「不只是建列」），但**没有** refTableId ——
+    该 FU 的 primary 表 id 在 createSubTable 里没传进来。
+    后果：这张表的 FK 声明「指向某处」却不说指向哪，而运行时消费者需要目标 ——
+    MiSubTaskSubTableRowMerger.foreignKeyTargetsMainTable 按 ref_table_id 关联，
+    标记而无目标的字段对它是不可见的。
+    发现于 #1636 Batch 1：该批把 isDeclaredForeignKey / soleDeclaredForeignKeyField
+    收紧为要求 ref_table_id 非空（dev 实测 `is_foreign_key=true AND ref_table_id IS NULL`
+    为 0 条，故当轮不拒绝任何存量数据），但**本路径能造出正是被拒的状态** ——
+    此后经该路径 provision 出来的 binding，若设计者再改其 FK 列，会被
+    SUB_FK_NOT_DECLARED 挡住，且它的 filter_fk_field_id 也无法回填。
+    未在本轮修复：把 primary 表 id 串进 createSubTable 属于扩大范围，且 Batch 1
+    承诺零行为变化。修法方向是建列时一并写 refTableId（调用点已持有 primary binding）。
+
+- id: "1638"
+  status: open
+  severity: minor
+  category: quality
+  summary: "developer-workstation 基线红：MemberControllerTest 15 个 403、AuditorReadOnlyControllerContractTest 1 个缺 @RequireDeveloperPermission"
+  file: "backend/developer-workstation/src/test/java/com/developer/controller/MemberControllerTest.java"
+  note: |
+    发现于 #1636 Batch 1 的全量回归（与该改动无关，已证实为基线已有）。
+    `mvn -pl backend/developer-workstation -am test` → 1064 测，16 failures：
+    - MemberControllerTest 15 个全是 `Status expected:<200> but was:<403>`；
+    - AuditorReadOnlyControllerContractTest.fileUploadMutationsRequireUpdate
+      断言 upload 端点必须声明 @RequireDeveloperPermission，实测为 null。
+    证据：在 HEAD（2a14728fa）的干净 git worktree 上单跑这两个类，得到完全相同的
+    15 + 1 = 16 failures，故非本轮引入。
+    后者是真实的权限缺口信号（合约测试本就是为防止 auditor 能写而写的），
+    值得单独查；前者更像测试侧的 security 上下文装配问题。
+    注意：跑这两个模块时必须带 `-am`，否则 platform-common 从 ~/.m2 解析到旧 jar，
+    会额外冒出 58 个 `NoClassDefFoundError: ComputedFieldValidationException` 假阳性。
+
+- id: "1639"
+  status: fixed
+  fixed_at: "2026-09-17"
+  severity: major
+  category: bug
+  summary: "钉住禁用 catalog 的旧实例 Task/My Request 会读到 latest enabled 的 fill sources"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  note: |
+    根因：前端按 processDefinitionKey 拉 FU content，resolve 偏好 enabled catalog
+    （p0/p3 1.0.2）；禁用 pin UUID 被 requireEnabledFunctionUnit 403；
+    CatalogPinnedTaskFormLoader 把 1.0.2 full-form wrapper 整包塞进 configJson；
+    legacy live attach 把当前 DW fk_fill_sources 抄到 1.0.1 PROCESS/TASK。
+    修复：TaskInfo.functionUnitCatalogId；pinnedCatalogContentRef；pin+taskId/
+    processInstanceId 跳过 enabled 门；unwrap wrapper；live 非 DETAIL 清 fill sources。
+    运行时 verify-catalog-pin-coexistence.mjs：1.0.1 实例 625add90 无 fill sources，
+    1.0.2 仍 PRIMARY,PARENT。DETAIL 仍 live overlay。Long 列不可变包未做。
+    残余：customActionFormPopup 无 resolver 时仍按 process key 拉包。
+    2026-09-18 follow-up：读路径虽已钉住 catalog，binding-scoped 写校验仍查询 live
+    `dw_form_table_bindings`，删除/改名 live binding 会让旧实例保存 403 或套用新 PK/FK。
+    新增 `SubTableWriteDesign` 从 pinned FORM + DATA_TABLE content 解析 binding、过滤 FK、
+    子表/父表主键；Task Save/Complete、Process Start、Return-To-Requester 全部传 catalog
+    与 stage，MI 分类和 Scope Guard 共用冻结规则。冻结配置缺表/重复/歧义时 409 fail closed，
+    仅缺少 tableBindings 的 legacy 包继续 V1。`SubTableWriteDesignTest` 证明 live binding
+    删除后仍按 snapshot 校验，且未访问 live DW 表。
+
+- id: "1640"
+  status: fixed
+  fixed_at: "2026-09-22"
+  severity: major
+  category: bug
+  summary: "同一父表存在多条候选记录时，子表新增无法选择 filter FK 的具体父记录"
+  file: "frontend/shared/src/tableFkRuntime.ts"
+  note: |
+    原运行时只接受唯一父记录；同一父表出现两行后，filter FK 无法唯一解析，新增被
+    required relationship data is missing 阻断。现按 filterFkFieldName、refTableId 和
+    refPrimaryKeyFields 枚举候选，Portal 与 DW Preview 在多候选时要求显式选择且不预选，
+    保存时重新校验候选并仅写当前 binding 的归属 FK；显示文字使用主键加第一个已配置
+    可见非主键列，无显示列时仅显示主键。共享回归覆盖改名字段、复合主键、去重和归属写入。
+
+- id: "1641"
+  status: fixed
+  fixed_at: "2026-09-17"
+  severity: major
   category: security
   summary: "DW login gave role-less users a default DEVELOPER role, so plain team members could MODIFY team function units"
   file: "backend/developer-workstation/src/main/java/com/developer/security/LegacyVirtualGroupRoleLookup.java"
@@ -4056,7 +4325,7 @@
     thread canModify=false、AI Studio 只读打开）；developer（SYS_ADMIN）对照 canModify=true。
     截图 2026-09-17_dw-no-default-role.png。
 
-- id: "1637"
+- id: "1642"
   status: fixed
   fixed_at: "2026-09-20"
   severity: minor
@@ -4073,7 +4342,7 @@
     dev 重建 developer-workstation 后 _ai-studio-job-persist-race-check.mjs 提交 4 个作业（取消 + supersede）：
     日志 "snapshot not persisted" 0 次（旧容器 1 个作业 1 次），库里 4 行均为 CANCELLED 终态。
 
-- id: "1638"
+- id: "1643"
   status: fixed
   fixed_at: "2026-09-22"
   severity: major

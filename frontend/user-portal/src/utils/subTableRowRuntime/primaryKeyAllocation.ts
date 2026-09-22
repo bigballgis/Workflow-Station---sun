@@ -5,6 +5,9 @@
 import {
   type FieldFkMeta,
   type RowAddContext,
+  hasAmbiguousAncestorTable,
+  replaceAncestorRow,
+  uniqueAncestorRow,
 } from '../tableFkRuntime'
 import { normalizeFieldDefinitionForRuntime, type RuntimeFieldDefinition } from '../formFieldMeta'
 import { pkNeedsAllocation } from './pkPredicates'
@@ -199,8 +202,12 @@ export async function ensureParentRowsForChildAdd(options: {
   functionUnitId?: string
   primaryTableId?: number | null
 }): Promise<{ rowAddContext: RowAddContext; primaryFormDataPatch?: Record<string, unknown> }> {
-  let primaryFormData = { ...options.rowAddContext.primaryFormData }
-  let ancestorRowsByTableId = { ...(options.rowAddContext.ancestorRowsByTableId ?? {}) }
+  let ctx: RowAddContext = {
+    ...options.rowAddContext,
+    primaryFormData: { ...options.rowAddContext.primaryFormData },
+    ancestorRowsByTableId: { ...(options.rowAddContext.ancestorRowsByTableId ?? {}) },
+    contextFrames: [...(options.rowAddContext.contextFrames ?? [])],
+  }
   let primaryFormDataPatch: Record<string, unknown> | undefined
 
   const refTableIds = [
@@ -212,16 +219,17 @@ export async function ensureParentRowsForChildAdd(options: {
   ]
 
   for (const refTableId of refTableIds) {
+    const unique = uniqueAncestorRow(ctx, refTableId)
+    const isPrimary = options.primaryTableId != null && refTableId === Number(options.primaryTableId)
+    if (hasAmbiguousAncestorTable(ctx, refTableId)) continue
+    if (unique == null && !isPrimary) continue
     const tableMeta = options.parentTablesById[refTableId]
     if (!tableMeta?.fieldDefinitions?.length) continue
 
     const fkMeta = options.fkMetas.find(m => Number(m.refTableId) === refTableId)
     const pkFields = fkMeta?.refPrimaryKeyFields || []
 
-    const existingRow =
-      ancestorRowsByTableId[refTableId] != null
-        ? { ...(ancestorRowsByTableId[refTableId] as Record<string, unknown>) }
-        : { ...primaryFormData }
+    const existingRow = unique != null ? { ...unique } : { ...ctx.primaryFormData }
 
     if (parentRowHasRequiredPk(existingRow, pkFields)) continue
 
@@ -235,15 +243,15 @@ export async function ensureParentRowsForChildAdd(options: {
 
     if (!parentRowHasRequiredPk(nextRow, pkFields)) continue
 
-    ancestorRowsByTableId[refTableId] = nextRow
-    if (options.primaryTableId != null && refTableId === Number(options.primaryTableId)) {
-      primaryFormData = nextRow
+    ctx = replaceAncestorRow(ctx, refTableId, nextRow)
+    if (isPrimary) {
+      ctx = { ...ctx, primaryFormData: nextRow }
       primaryFormDataPatch = { ...nextRow }
     }
   }
 
   return {
-    rowAddContext: { primaryFormData, ancestorRowsByTableId },
+    rowAddContext: ctx,
     ...(primaryFormDataPatch ? { primaryFormDataPatch } : {}),
   }
 }

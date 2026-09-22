@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
@@ -9,6 +10,7 @@ import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.TableType;
 import com.developer.repository.*;
@@ -23,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -205,5 +208,112 @@ class FunctionUnitCloneBindingTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rule = (List<Map<String, Object>>) finalForm.getConfigJson().get("rule");
         assertEquals(501L, ((Number) rule.get(0).get("_bindingId")).longValue());
+    }
+
+    /**
+     * {@code filterFkFieldId} names a {@code dw_field_definitions} row, so unlike
+     * {@code bindingLinkMode} it cannot be copied verbatim — the source id belongs to the source
+     * Function Unit's table. Carrying it across unchanged would point the clone's binding at a
+     * field of the ORIGINAL unit, and losing it would drop the clone back to the table-level scan
+     * that only has one answer while a table declares one key.
+     */
+    @Test
+    void clone_remapsFilterFkFieldIdOntoTheClonedField() {
+        FunctionUnit source = FunctionUnit.builder().id(1L).name("Source").build();
+
+        TableDefinition mainTable = TableDefinition.builder()
+                .id(10L).functionUnit(source).tableName("Main").tableType(TableType.MAIN).build();
+        mainTable.setFieldDefinitions(new ArrayList<>());
+
+        TableDefinition subTable = TableDefinition.builder()
+                .id(11L).functionUnit(source).tableName("Attachment").tableType(TableType.SUB).build();
+        subTable.setFieldDefinitions(new ArrayList<>(List.of(FieldDefinition.builder()
+                .id(1101L)
+                .fieldName("main_ref")
+                .dataType(DataType.VARCHAR)
+                .sortOrder(0)
+                .isForeignKey(true)
+                .refTableId(10L)
+                .tableDefinition(subTable)
+                .build())));
+
+        FormTableBinding primaryBinding = FormTableBinding.builder()
+                .id(101L).bindingType(BindingType.PRIMARY).bindingMode(BindingMode.EDITABLE)
+                .table(mainTable).sortOrder(0).build();
+        FormTableBinding subBinding = FormTableBinding.builder()
+                .id(102L).bindingType(BindingType.SUB).bindingMode(BindingMode.EDITABLE)
+                .table(subTable).foreignKeyField("main_ref")
+                .filterFkFieldId(1101L)
+                .sortOrder(1).build();
+
+        FormDefinition sourceForm = FormDefinition.builder()
+                .id(11L).functionUnit(source).formName("MainForm").formType(FormType.PROCESS)
+                .configJson(new HashMap<>()).showLiveValues(true).build();
+        sourceForm.setTableBindings(List.of(primaryBinding, subBinding));
+
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(source));
+        when(functionUnitRepository.existsByName("Cloned")).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> {
+            FunctionUnit fu = inv.getArgument(0);
+            if (fu.getId() == null) {
+                fu.setId(2L);
+            }
+            return fu;
+        });
+        when(tableDefinitionRepository.findByFunctionUnitIdWithFields(1L))
+                .thenReturn(List.of(mainTable, subTable));
+        when(formDefinitionRepository.findByFunctionUnitIdWithBindings(1L)).thenReturn(List.of(sourceForm));
+        when(tableRelationRepository.findByFunctionUnitId(1L)).thenReturn(List.of());
+        // Mimic JPA cascade persist: the cloned table AND its cloned fields all receive ids.
+        // Without field ids there is nothing for the remap to resolve onto.
+        AtomicLong nextId = new AtomicLong(200L);
+        when(tableDefinitionRepository.save(any(TableDefinition.class))).thenAnswer(inv -> {
+            TableDefinition t = inv.getArgument(0);
+            if (t.getId() == null) {
+                t.setId(nextId.incrementAndGet());
+            }
+            for (FieldDefinition f : t.getFieldDefinitions()) {
+                if (f.getId() == null) {
+                    f.setId(nextId.incrementAndGet());
+                }
+            }
+            return t;
+        });
+        when(formDefinitionRepository.save(any(FormDefinition.class))).thenAnswer(inv -> {
+            FormDefinition f = inv.getArgument(0);
+            if (f.getId() == null) {
+                f.setId(21L);
+            }
+            return f;
+        });
+        when(formTableBindingRepository.findByFormIdWithTable(11L))
+                .thenReturn(List.of(primaryBinding, subBinding));
+        when(formStageBindingRepository.findByFormId(11L)).thenReturn(List.of());
+        when(formTableBindingRepository.save(any(FormTableBinding.class))).thenAnswer(inv -> {
+            FormTableBinding b = inv.getArgument(0);
+            if (b.getId() == null) {
+                b.setId(b.getBindingType() == BindingType.PRIMARY ? 501L : 502L);
+            }
+            return b;
+        });
+
+        component.clone(1L, "Cloned");
+
+        ArgumentCaptor<FormTableBinding> bindingCaptor = ArgumentCaptor.forClass(FormTableBinding.class);
+        verify(formTableBindingRepository, atLeastOnce()).save(bindingCaptor.capture());
+        FormTableBinding clonedSub = bindingCaptor.getAllValues().stream()
+                .filter(b -> b.getBindingType() == BindingType.SUB)
+                .findFirst()
+                .orElseThrow();
+        Long clonedFieldId = clonedSub.getTable().getFieldDefinitions().stream()
+                .filter(f -> "main_ref".equals(f.getFieldName()))
+                .map(FieldDefinition::getId)
+                .findFirst()
+                .orElseThrow();
+
+        assertNotNull(clonedSub.getFilterFkFieldId(), "the declaration must survive the clone");
+        assertNotEquals(1101L, clonedSub.getFilterFkFieldId(),
+                "must not keep the SOURCE field id — it belongs to the source unit's table");
+        assertEquals(clonedFieldId, clonedSub.getFilterFkFieldId());
     }
 }

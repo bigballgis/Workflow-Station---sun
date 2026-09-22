@@ -26,6 +26,9 @@ import {
   attachAssignmentConfigsToBindings,
   stampAssignmentConfigsOnForms,
 } from '@/utils/miAssignmentConfig'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
+import { pinnedCatalogContentRef } from '@/utils/pinnedCatalogContentRef'
 
 export interface ApplicationDetailLoadersFns {
   loadProcessDetail: () => Promise<void>
@@ -79,11 +82,11 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           formData.value = { ...formData.value, __subTables__: stCoerced }
         }
 
-        const processKey = data.processDefinitionKey
+        const processKey = pinnedCatalogContentRef(data)
         if (processKey) functionUnitIdRef.value = String(processKey)
         const historyPromise = ctx.loadProcessHistory()
         const fuFetchPromise = processKey
-          ? processApi.getFunctionUnitContent(processKey).then(r => r.data || r).catch(err => {
+          ? processApi.getFunctionUnitContent(processKey, undefined, processId).then(r => r.data || r).catch(err => {
               console.error('Failed to fetch function unit content:', err)
               return null
             })
@@ -123,7 +126,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
     try {
       const content =
         prefetchedContent ??
-        (await processApi.getFunctionUnitContent(processKey).then(r => r.data || r))
+        (await processApi.getFunctionUnitContent(processKey, undefined, processId).then(r => r.data || r))
       if (content.error) {
         console.error('Function unit content error:', content.error)
         return
@@ -238,6 +241,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             primaryTableBinding.value = {
               tableId: b.tableId != null ? Number(b.tableId) : null,
               tableName: b.tableDisplayName || b.tableName,
+              primaryKeyFields: Array.isArray(b.primaryKeyFields) ? b.primaryKeyFields : undefined,
               fieldDefinitions: b.fieldDefinitions ?? [],
             }
             continue
@@ -274,6 +278,8 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             foreignKeyField: b.foreignKeyField,
             // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
             bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
+            ...declaredFilterFkFields(b),
+            ...declaredFkFillSources(b),
             tableName: b.tableDisplayName || b.tableName,
             designerTableName: b.tableName,
             tableType: b.tableType,

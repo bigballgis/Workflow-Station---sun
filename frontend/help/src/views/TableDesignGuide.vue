@@ -25,6 +25,7 @@ const flowKeys = [
 
 const related: GuideRelated[] = [
   { to: '/computed-fields', titleKey: 'guides.computedFields.title' },
+  { to: '/table-bindings', titleKey: 'guides.tableBindings.title' },
   { to: '/view-design', titleKey: 'guides.viewDesign.title' },
   { to: '/form-events-basic', titleKey: 'guides.formEventsBasic.title' },
 ]

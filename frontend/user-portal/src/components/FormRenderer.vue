@@ -97,6 +97,7 @@ import { useSubTableBindings, type SubTableBinding } from '@/composables/formRen
 import { useSubTablePortalViews } from '@/composables/formRenderer/useSubTablePortalViews'
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
 import { getSavedSubTableRows } from '@/composables/tasks/shared'
+import { projectSavedRowsForBinding, applyDisplayedSliceToCanonical } from '@/composables/tasks/subTableFilterProjection'
 import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
 import { useBusinessLogicEngine } from '@/composables/formRenderer/useBusinessLogicEngine'
 import { useFormCreateEvents } from '@/composables/formRenderer/useFormCreateEvents'
@@ -181,6 +182,7 @@ interface Props {
   primaryTableBinding?: {
     tableId?: number | null
     tableName?: string
+    primaryKeyFields?: string[]
     fieldDefinitions?: SubTableBinding['fieldDefinitions']
   }
   /** form-create designer options (Form event onChange, labelWidth, etc.). */
@@ -537,6 +539,8 @@ const formDataApi = useFormData({
   engineFieldStates,
   eventRequiredFlags,
   requestIdConfig: () => props.requestIdConfig,
+  primaryKeyFields: () => props.primaryTableBinding?.primaryKeyFields,
+  primaryFieldDefinitions: () => props.primaryTableBinding?.fieldDefinitions,
   recomputeComputedFields,
 })
 const {
@@ -563,6 +567,40 @@ const {
   getFormData,
   setFieldValue,
 } = formDataApi
+
+function dualFilterFormContext() {
+  return {
+    formData: formData.value as Record<string, unknown>,
+    primaryTableId: props.primaryTableBinding?.tableId ?? null,
+    primaryPkFields: props.primaryTableBinding?.primaryKeyFields ?? null,
+    primaryFieldDefinitions: props.primaryTableBinding?.fieldDefinitions ?? null,
+  }
+}
+
+function displayedSubTableRows(bindingId?: number): unknown[] {
+  const binding = resolveBinding(bindingId)
+  if (!binding) return []
+  const rows = Array.isArray(binding.data) ? binding.data : []
+  return projectSavedRowsForBinding(
+    rows,
+    binding,
+    props.subTableBindings ?? [],
+    dualFilterFormContext(),
+  ) ?? rows
+}
+
+function handleDisplayedSubTableUpdate(bindingId: number, rows: unknown[]) {
+  const mi = props.currentMiRowId
+  const skipMerge = mi != null && String(mi).trim() !== ''
+  const next = applyDisplayedSliceToCanonical(
+    props.subTableBindings ?? [],
+    bindingId,
+    rows,
+    dualFilterFormContext(),
+    { skipMerge },
+  )
+  handleSubTableUpdate(bindingId, next as any[])
+}
 
 function lookupFilterConditionsFor(field: FormField) {
   return mergeScriptLookupFilters(
@@ -596,9 +634,20 @@ const {
   getSavedRowsForBinding: (binding) => {
     const st = props.modelValue?.__subTables__
     if (!st || typeof st !== 'object') return undefined
-    return getSavedSubTableRows(st as Record<string, unknown>, binding)
+    const rows = getSavedSubTableRows(st as Record<string, unknown>, binding)
+    return projectSavedRowsForBinding(
+      rows,
+      binding,
+      props.subTableBindings ?? [],
+      {
+        formData: props.modelValue as Record<string, unknown>,
+        primaryTableId: props.primaryTableBinding?.tableId ?? null,
+        primaryPkFields: props.primaryTableBinding?.primaryKeyFields ?? null,
+        primaryFieldDefinitions: props.primaryTableBinding?.fieldDefinitions ?? null,
+      },
+    )
   },
-  handleSubTableUpdate,
+  handleSubTableUpdate: handleDisplayedSubTableUpdate,
   fieldPermissions: () => props.fieldPermissions,
   currentMiRowId: () => props.currentMiRowId,
   miKindContext: () => miKindContext.value,
@@ -788,7 +837,8 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   lookupFilterConditionsFor,
   lookupRefreshNonce,
   hasScriptLookupFilter,
-  handleSubTableUpdate,
+  handleSubTableUpdate: handleDisplayedSubTableUpdate,
+  displayedSubTableRows,
   handlePrimaryFormDataPatch,
   handleLookupSelect,
   handleLookupModelUpdate,

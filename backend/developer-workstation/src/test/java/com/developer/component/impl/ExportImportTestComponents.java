@@ -6,6 +6,7 @@ import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.EmailTemplateRepository;
+import com.developer.repository.FieldDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FormTableBindingRepository;
@@ -149,6 +150,36 @@ public final class ExportImportTestComponents {
             ObjectMapper objectMapper,
             DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
             AdminCenterAutomationFlowClient automationFlowClient) {
+        return build(functionUnitRepository, processDefinitionRepository, tableDefinitionRepository,
+                formDefinitionRepository, actionDefinitionRepository, decisionDefinitionRepository,
+                formTableBindingRepository, formStageBindingRepository, tableRelationRepository,
+                dmnXmlParser, functionUnitWorkspaceAccessService, functionUnitDevGroupAssignmentRepository,
+                entityManager, objectMapper, sequenceSynchronizer, automationFlowClient,
+                Mockito.mock(FieldDefinitionRepository.class));
+    }
+
+    /**
+     * 需要断言导入把 binding 的 {@code filterFkFieldName} 解回 {@code dw_field_definitions.id} 时，
+     * 传入受控的字段仓库（包内导出的是列名，id 由导入侧就地解析）。
+     */
+    public static ExportImportComponentImpl build(
+            FunctionUnitRepository functionUnitRepository,
+            ProcessDefinitionRepository processDefinitionRepository,
+            TableDefinitionRepository tableDefinitionRepository,
+            FormDefinitionRepository formDefinitionRepository,
+            ActionDefinitionRepository actionDefinitionRepository,
+            DecisionDefinitionRepository decisionDefinitionRepository,
+            FormTableBindingRepository formTableBindingRepository,
+            FormStageBindingRepository formStageBindingRepository,
+            TableRelationRepository tableRelationRepository,
+            DmnXmlParser dmnXmlParser,
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+            FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
+            EntityManager entityManager,
+            ObjectMapper objectMapper,
+            DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
+            AdminCenterAutomationFlowClient automationFlowClient,
+            FieldDefinitionRepository fieldDefinitionRepository) {
 
         ExportImportPackageParser packageParser = new ExportImportPackageParser(objectMapper);
 
@@ -165,6 +196,7 @@ public final class ExportImportTestComponents {
 
         FunctionUnitImportWriter importWriter = new FunctionUnitImportWriter(
                 tableDefinitionRepository,
+                fieldDefinitionRepository,
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,

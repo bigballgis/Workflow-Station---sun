@@ -7,12 +7,14 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **17** | `index.yaml` |
+| 🔓 Open | **18** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
-| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521、#1523–#1530、#1532–#1539、#1541–#1638 等） |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1643 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-09-18 复核补丁已并回 #1636 / #1639：同表交集行只递增一次版本、删除必须带读取版本、同父表不同 FK 正确投影，旧实例写校验改读 pinned catalog。
 
 ---
 
@@ -26,12 +28,13 @@
 | 1407 | minor | quality | 动作测试仍为占位实现（流程 simulate 已接入 BpmnProcessSimulator） |
 | 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
 | 1501 | major | bug | Main Table View / Relation Tables 列表未应用 Input 敏感打码 |
-| 1522 | major | deploy | dev 库流程实例数据全空，regression:mi 截图门禁全部无法执行（环境 fixture 缺口） |
 | 1531 | minor | quality | Form Business Rules 未交付脚手架（DW 无入口 / Portal 无传参 / 库内 0 数据）— 技术债，非线上缺陷 |
 | 1599 | minor | bug | FU 部署新 catalog 版本后 Portal 发起 403 version mismatch，最长持续 5 分钟（processKeyCache 未失效） |
 | 1540 | minor | quality | Views CSV export：FE 注释称不分页但 body 仍带 size；BE 用 maxRows 覆盖 — 契约需澄清 |
 | 1616 | major | bug | Meeting Assign Participants：引擎 SubTableDataInjector 查物理表 participants.main_record_id |
 | 1617 | major | bug | Showcase Submit Application：部署缺少 DMN showcase_amount_tier |
+| 1637 | major | bug | FormConfigJsonTableProvisioner 建子表时 FK 列标 `isForeignKey=true` 但不写 `ref_table_id`，运行时消费者（按 ref_table_id 关联）读不到目标 |
+| 1638 | minor | quality | developer-workstation 基线红：MemberControllerTest 15 个 403、AuditorReadOnlyControllerContractTest 1 个 upload 端点缺 `@RequireDeveloperPermission`（已在 HEAD worktree 证实非新引入） |
 
 ### Wontfix
 

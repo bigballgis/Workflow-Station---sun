@@ -9,6 +9,8 @@ import {
   isMiDashboardSubTableBinding,
   finalizeMiCollectionSubTableBindingRows,
 } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
@@ -42,7 +44,9 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
       formTabs.value,
       formFieldsAfterTabs.value,
     )
-    if (placed.size === 0) return
+    if (placed.size === 0) {
+      return
+    }
     const have = new Set(bindings.map(b => Number(b.bindingId)))
     const subForms = (formConfig?.subForms ?? {}) as Record<string, any>
 
@@ -79,6 +83,8 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
         primaryKeyFields: resolveSubTablePrimaryKeyFields(raw.primaryKeyFields, bid, cfg),
         fieldDefinitions: raw.fieldDefinitions ?? [],
         bindingLinkMode: raw.bindingLinkMode,
+        ...declaredFilterFkFields(raw),
+        ...declaredFkFillSources(raw),
         data: [],
       } as any)
       have.add(bid)

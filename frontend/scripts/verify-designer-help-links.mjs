@@ -1,6 +1,6 @@
 /**
  * Verify DesignerHelpLink targets: Connections, Form events, selected control,
- * Table Design, and View Design access.
+ * Table Design, Manage Table Bindings, and View Design access.
  */
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
@@ -125,6 +125,15 @@ try {
   await formEdit.click()
   await page.locator('.fc-designer-wrapper').first().waitFor({ state: 'visible', timeout: 15000 })
   await page.waitForTimeout(800)
+  await assertHelpLink(page, context, {
+    testId: 'manage-table-bindings-guide-link',
+    visible: 'Form Design toolbar has the Manage Table Bindings help ?',
+    opens: 'Manage Table Bindings ? opens /help/table-bindings',
+    parts: ['/help/table-bindings'],
+    linkShot: 'dw-table-bindings-help-link',
+    targetShot: 'dw-table-bindings-help-target',
+    shot: page.locator('.editor-header'),
+  })
   const titleField = page.locator('.el-form-item').filter({ hasText: /^Title/ }).first()
   if (await titleField.count()) await titleField.click({ force: true })
   else await page.locator('.el-form-item').first().click({ force: true })

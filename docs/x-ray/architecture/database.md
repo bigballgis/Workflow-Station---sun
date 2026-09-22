@@ -230,7 +230,7 @@ Source: `00-schema/15-bi-management-schema.sql`, `40-superset-schema.sql`. All C
 |---|---|---|
 | `up_process_instance.process_instance_id` | Flowable `ACT_RU_EXECUTION`/`ACT_HI_PROCINST` | portal mirror of engine instance |
 | `up_process_instance.function_unit_catalog_id/code/version_label` | `sys_function_units` | catalog version pinning (27) |
-| `up_process_instance.function_unit_version_id` | `dw_function_units.id` (BIGINT) | version pin (08) — crosses dw/sys ID spaces |
+| `up_process_instance.function_unit_version_id` | `dw_function_units.id` (BIGINT) | live DW join helper (08), **not** a version freeze — catalog freeze is `function_unit_catalog_id` |
 | `wf_extended_task_info.task_id` | `ACT_RU_TASK.ID_` | task extension |
 | `wf_*.process_instance_id`, `up_process_history`, `up_change_history`, `up_delegation_audit.task_id` | Flowable ids | history/audit joins |
 | `sys_function_unit_contents.source_id` | dw source row id | dw→sys deployment lineage |
@@ -362,7 +362,7 @@ erDiagram
         varchar id PK
         jsonb variables "form data + __subTables__"
         varchar function_unit_catalog_id "pin -> sys_function_units"
-        bigint function_unit_version_id "pin -> dw_function_units"
+        bigint function_unit_version_id "join -> live dw_function_units"
     }
     RT_TABLE_DEFINITIONS ||--o{ RT_FIELD_DEFINITIONS : fields
     RT_TABLE_DEFINITIONS ||--o{ RT_TABLE_DATA_ROWS : "JSON rows"
@@ -433,7 +433,7 @@ Cross-module duplicate mappings worth flagging: `up_process_instance` is mapped 
 5. **Append-only convention (Confirmed):** `.cursor/rules/init-scripts-append-only.mdc` + `deploy/CLAUDE.md` mandate never editing existing `.sql`, always new incremented files. However the convention is **snapshot-hybrid**: base scripts 01–05 are retroactively edited to fold in later columns (e.g. `lock_version` in 01, `binding_link_mode` in 04, in-place `ALTER`s inside 01/05 like `chk_content_type` re-add and `admin_audit_logs ADD COLUMN IF NOT EXISTS`). Fresh installs read the snapshot; existing DBs rely on the numbered backfills (32/42/43 explicitly exist only to catch DBs initialized before base-DDL edits). This dual mechanism works but every base-DDL edit must remember its paired backfill script — the 42/43 comments show this has bitten before.
 6. **No migration ledger:** with Flyway gone there is no `schema_version` table; idempotency is per-script (`IF NOT EXISTS` everywhere). Re-running is safe (Confirmed style), but there is no record of what ran, and non-idempotent statements would go unnoticed (e.g. `23-widen-up-process-instance-business-key.sql` runs an unconditional `ALTER COLUMN TYPE` — idempotent by effect, but pattern is fragile).
 7. **SELECT statements inside migrations (Confirmed):** `11-` and `12-` contain bare verification `SELECT`s whose results nobody reads in the Docker path — noise, not risk.
-8. **Cross-ID-space FKs impossible:** dw (BIGSERIAL) vs sys (VARCHAR) means the dw→sys deployment lineage can never be FK-enforced; integrity rests on app code (`sys_function_unit_contents.source_id`, `up_process_instance.function_unit_version_id`). Confirmed design note in 04 header.
+8. **Cross-ID-space FKs impossible:** dw (BIGSERIAL) vs sys (VARCHAR) means the dw→sys deployment lineage can never be FK-enforced; integrity rests on app code (`sys_function_unit_contents.source_id`, `up_process_instance.function_unit_catalog_id`). The Long `function_unit_version_id` joins live `dw_function_units.id` only. Confirmed design note in 04 header.
 9. **Wipe script maintenance risk (Confirmed):** `99-maintenance/00-wipe-all-function-units.sql` TRUNCATEs an explicit table list; any new runtime table (e.g. `up_record_note`, added later) must be manually added or wipes leave orphans. `up_record_note` is **not** in the wipe list (checked §1 of the script) — process-instance-scoped notes survive an FU wipe as orphans. (Also applies to `we_email_processed_messages` — Unknown whether intentional.)
 10. **`members` table breaks the prefix convention** (no `dw_` prefix) — collision-prone in a shared-schema DB (Confirmed DDL, risk Inferred).
 11. **Legacy N8N database still provisioned** every init (`n8n_dev`) although automation moved to Activepieces (Confirmed script; retirement status from repo memory — Inferred).

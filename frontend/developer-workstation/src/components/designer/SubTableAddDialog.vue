@@ -15,6 +15,28 @@
       label-position="left"
       :validate-on-rule-change="false"
     >
+      <el-form-item
+        v-if="mode === 'add' && parentSelection && parentSelection.options.length > 1"
+        :label="t('subTable.relatedParent', { tableName: parentSelection.parentTableName })"
+        required
+        :error="parentSelectionError"
+      >
+        <el-select
+          v-model="selectedParentValue"
+          :placeholder="t('subTable.selectRelatedParent', { tableName: parentSelection.parentTableName })"
+          clearable
+          filterable
+          style="width: 100%"
+          @change="parentSelectionError = ''"
+        >
+          <el-option
+            v-for="option in parentSelection.options"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+      </el-form-item>
       <template
         v-for="col in columns"
         :key="col.field"
@@ -402,6 +424,7 @@ import { isUploadUnauthorizedError } from '@platform-shared/upload/uploadAuthRef
 import { clearUploadWidgetState, setUploadWidgetState, warnIfUploadsBlocking } from '@platform-shared/upload/uploadSubmitGate'
 import { useSubTableDialogComponentEvents } from '@/composables/designerSubTableField/useSubTableDialogComponentEvents'
 import { helpGuideAbsoluteUrl } from '@/utils/computedFieldGuide'
+import type { BindingParentSelection } from '@/utils/tableFkRuntime'
 
 const { t } = useI18n()
 
@@ -411,11 +434,13 @@ const props = defineProps<{
   title?: string
   mode: 'add' | 'edit'
   initialData?: Record<string, any>
+  parentSelection?: BindingParentSelection | null
+  saveRow?: (rowData: Record<string, any>, selectedParentValue?: string) => boolean | void | Promise<boolean | void>
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
-  (e: 'save', rowData: Record<string, any>): void
+  (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
 }>()
 
 const visibleModel = computed({
@@ -425,6 +450,8 @@ const visibleModel = computed({
 
 const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
+const selectedParentValue = ref('')
+const parentSelectionError = ref('')
 const {
   onDialogFieldChange,
   onDialogFieldBlur,
@@ -580,6 +607,8 @@ watch(
     resetDialogEventVisibility()
     const seed = props.initialData ? JSON.parse(JSON.stringify(props.initialData)) : {}
     formData.value = { ...buildInitialRow(props.columns), ...seed }
+    selectedParentValue.value = ''
+    parentSelectionError.value = ''
     if (props.mode === 'edit' && props.initialData) {
       const next: Record<string, Array<{ name: string; url: string; status?: string }>> = {}
       for (const col of props.columns) {
@@ -612,12 +641,21 @@ function saveRow() {
 
 async function handleSave() {
   if (!formRef.value) return
+  if (props.mode === 'add' && props.parentSelection && !selectedParentValue.value) {
+    parentSelectionError.value = t('subTable.parentSelectionRequired')
+    return
+  }
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   if (Object.keys(scriptFieldErrors.value).length > 0) return
   const row = mergeFormRowWithSeed(props.initialData, formData.value)
   normalizeUploadFieldsInRow(row, props.columns)
-  emit('save', row)
+  if (props.saveRow) {
+    const saved = await props.saveRow(row, selectedParentValue.value || undefined)
+    if (saved === false) return
+  } else {
+    emit('save', row, selectedParentValue.value || undefined)
+  }
   visibleModel.value = false
 }
 

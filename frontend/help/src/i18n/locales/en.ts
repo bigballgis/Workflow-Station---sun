@@ -1,6 +1,7 @@
 import formEventMessages from './formEvents.en'
 import formCtlMessages from './formCtl.en'
 import tableDesignMessages from './tableDesign.en'
+import tableBindingsMessages from './tableBindings.en'
 import viewDesignMessages from './viewDesign.en'
 import fuDocumentsMessages from './fuDocuments.en'
 import aiStudioMessages from './aiStudio.en'
@@ -196,6 +197,10 @@ export default {
     taskDelegate: {
       title: 'Delegate a task',
       summary: 'Hand this one To Do to a person or a BU+Role pair without changing Current Assignee.',
+    },
+    tableBindings: {
+      title: 'Manage Table Bindings',
+      summary: 'Attach MAIN, SUB, ACTION, and RELATION tables to a form. Filter foreign key and fill source live here; the Sub-Table grid is a separate article.',
     },
     formUpload: {
       title: 'Form Design — Advanced Upload',
@@ -771,6 +776,7 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,

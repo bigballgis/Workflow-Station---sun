@@ -36,6 +36,8 @@ const MI_REGRESSION_FILES = [
   'src/composables/tasks/__tests__/sharedAttachmentLeakFkConfig.test.ts',
   // 共享附件指向主表的外键不是「参与者外键」（否则附件存了却渲染 0 行）
   'src/composables/tasks/__tests__/sharedAttachmentMainFkNotParticipant.test.ts',
+  // Same-table dual binding: later binding must union-merge, not replace, the canonical store
+  'src/composables/tasks/__tests__/subTableCanonicalStamp.test.ts',
   // collection 主键改名后，宿主行仍能认出自己的 link-child 行（People 刷新后消失）
   'src/composables/tasks/__tests__/miRenamedCollectionPkAlign.test.ts',
   // 嵌套 enrich 同样要带配置，否则改名 FU 上整段空转（字段补不进子表行）

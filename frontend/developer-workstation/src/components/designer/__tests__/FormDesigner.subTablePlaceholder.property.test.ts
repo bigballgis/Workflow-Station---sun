@@ -82,10 +82,10 @@ describe('FormDesigner - SubTablePlaceholder Property Tests', () => {
         ),
         (bindingIds) => {
           // Build rule array with subTable entries
-          const rules = bindingIds.map(id => ({
+          const rules = bindingIds.map((id, index) => ({
             type: 'subTable',
             _bindingId: id,
-            title: 'Sub-Table',
+            title: `Files ${id}-${index}`,
             props: {}
           }))
 
@@ -100,6 +100,7 @@ describe('FormDesigner - SubTablePlaceholder Property Tests', () => {
           loaded.rule.forEach((r: any, i: number) => {
             expect(r.type).toBe('subTable')
             expect(r._bindingId).toBe(bindingIds[i])
+            expect(r.title).toBe(rules[i].title)
           })
         }
       ),

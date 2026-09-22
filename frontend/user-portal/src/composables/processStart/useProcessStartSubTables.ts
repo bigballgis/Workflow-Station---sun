@@ -1,5 +1,4 @@
 import type { Ref } from 'vue'
-import { readSubTableRows, writeSubTableRows } from '@/composables/tasks/subTableStore'
 import {
   flattenNestedSubTableRowsIntoPayload,
   flattenSliceMapsFromBindings,
@@ -14,6 +13,13 @@ import {
   type DialogColumn,
 } from '@/components/subTableAddDialogHelpers'
 import type { ProcessStartSubTableBinding } from './useProcessStartState'
+import { readSubTableRows } from '@/composables/tasks/subTableStore'
+import {
+  assembleScopedSubTablesSubmit,
+  type ScopedSubTablesSubmit,
+} from '@/composables/tasks/assembleScopedSubTables'
+
+export type StartSubTablesSubmit = ScopedSubTablesSubmit
 
 /**
  * Sub-table column resolution + draft/submit payload assembly for the start form.
@@ -25,6 +31,13 @@ export function createProcessStartSubTables(deps: {
     cachedRelationTableFieldIndex: Map<number, RelationFieldDef[]>
   }
   subTableBindings: Ref<ProcessStartSubTableBinding[]>
+  formData?: Ref<Record<string, unknown>>
+  primaryTableBinding?: Ref<{
+    tableId?: number | null
+    tableName?: string
+    primaryKeyFields?: string[]
+    fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }>
+  } | null>
   /** From the form-parsing composable — sub-table display column derivation. */
   deriveColumnsFromBinding: (
     binding: any,
@@ -32,7 +45,7 @@ export function createProcessStartSubTables(deps: {
     formConfig?: Record<string, any>,
   ) => DialogColumn[]
 }) {
-  const { caches, subTableBindings, deriveColumnsFromBinding } = deps
+  const { caches, subTableBindings, formData, primaryTableBinding, deriveColumnsFromBinding } = deps
 
   function resolveSubTableBindingColumnsForStart(
     b: {
@@ -71,17 +84,19 @@ export function createProcessStartSubTables(deps: {
   }
 
   /** Persist one slice per designer table (`dw:` / `rt:`), then flatten nested Link Form deletes. */
+  function assembleStartSubTables(): StartSubTablesSubmit {
+    const primary = primaryTableBinding?.value
+    return assembleScopedSubTablesSubmit(subTableBindings.value, {
+      formData: formData?.value ?? {},
+      primaryTableId: primary?.tableId ?? null,
+      primaryTableName: primary?.tableName ?? null,
+      primaryPkFields: primary?.primaryKeyFields ?? null,
+      primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
+    })
+  }
+
   function buildStartFormSubTablesPayload(): Record<string, unknown> {
-    const subTables: Record<string, unknown> = {}
-    const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
-      subTableBindings.value,
-    )
-    for (const b of subTableBindings.value) {
-      const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
-      writeSubTableRows(subTables, b, rows)
-    }
-    flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
-    return subTables
+    return assembleStartSubTables().subTables
   }
 
   /**
@@ -105,6 +120,7 @@ export function createProcessStartSubTables(deps: {
 
   return {
     resolveSubTableBindingColumnsForStart,
+    assembleStartSubTables,
     buildStartFormSubTablesPayload,
     hydrateStartFormBindingsFromDraftStore,
   }

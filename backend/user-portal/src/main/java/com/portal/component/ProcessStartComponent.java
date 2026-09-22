@@ -83,6 +83,11 @@ public class ProcessStartComponent {
     @Autowired
     private MiOuterStepResolver miOuterStepResolver;
 
+    /** Lazy: start writes share Save/Complete isolation; null in {@code new}-constructed tests. */
+    @Lazy
+    @Autowired
+    private SubTableWriteIsolation subTableWriteIsolation;
+
     private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
         ChangeHistorySubmissionFilter filter = changeHistorySubmissionFilter;
         if (filter == null) {
@@ -121,6 +126,38 @@ public class ProcessStartComponent {
             txTemplate = t;
         }
         return t;
+    }
+
+    /**
+     * Binding-scoped start writes use the same isolation as Task Save/Complete.
+     * Transport metadata stays off {@code formData}/engine variables.
+     */
+    static void stripSubTableTransportMetadata(Map<String, Object> variables) {
+        SubTableWriteIsolation.stripTransportMetadata(variables);
+    }
+
+    void isolateStartSubTables(Map<String, Object> variables, ProcessStartRequest request, String functionUnitCode) {
+        isolateStartSubTables(variables, request, functionUnitCode, null);
+    }
+
+    void isolateStartSubTables(Map<String, Object> variables, ProcessStartRequest request,
+                              String functionUnitCode, String catalogId) {
+        stripSubTableTransportMetadata(variables);
+        SubTableWriteIsolation isolation = subTableWriteIsolation;
+        if (isolation == null) {
+            // Null in {@code new}-constructed tests keeps the previous unscoped start write.
+            return;
+        }
+        if (variables == null || request == null) {
+            return;
+        }
+        isolation.apply(new SubTableWriteIsolation.Request(
+                variables,
+                variables,
+                Map.of(),
+                request.getEmptiedSubTableKeys(),
+                request.getSubTableBindingScopes(),
+                functionUnitCode, catalogId, null));
     }
 
     /**
@@ -218,6 +255,7 @@ public class ProcessStartComponent {
             applyWorkspaceContextVariables(userId, variables);
         }
         processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables);
+        isolateStartSubTables(variables, request, pin.code(), pin.catalogId());
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
@@ -534,6 +572,8 @@ public class ProcessStartComponent {
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
+                // Live DW id for BPMN join only; catalog UUID above is the form/binding freeze.
+                .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
         processInstanceRepository.save(processInstance);
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);

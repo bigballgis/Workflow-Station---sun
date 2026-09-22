@@ -23,13 +23,33 @@ Admin Relation Tables are standalone: no MAIN/SUB lookup, no SUM related-row fun
 
 ## Tables, fields, PK and FK (/help/table-design)
 
-Function Unit tab Table Design. Create MAIN / SUB / ACTION / RELATION tables. Field Name must start with a letter. Import Table Fields on Form Design reads these columns. Views need a Main Table first.
+Function Unit tab Table Design. Create MAIN / SUB / ACTION / RELATION tables. Field Name must start with a letter. Import Table Fields on Form Design reads these columns. Attach tables to a form in /help/table-bindings. Views need a Main Table first.
 
 Order: open Table Design → create or open a table → add fields → tick Primary Key and pick a strategy → tick Foreign Key and set Ref Table → save. On a MAIN table configure Request ID first.
 
 PK strategies: UUID, Manual, Auto increment, Prefixed sequence, Date + daily sequence, Date + monthly sequence, Custom format. Primary Key cannot stay nullable.
 
-Related: /help/computed-fields , /help/view-design
+Related: /help/computed-fields , /help/table-bindings , /help/view-design
+
+## Manage Table Bindings (/help/table-bindings)
+
+Form Design toolbar Manage Table Bindings. Dialog title Table Binding Management. Attaches MAIN / SUB / ACTION / RELATION tables to this form. Not the Sub-Table grid (/help/form-ctl-sub-table). Lookup reads Relation Table bindings (/help/form-ctl-lookup).
+
+Screenshot tables: Purchase Request PRIMARY help_pr, SUB help_pr_line. Do not invent a second FK on help_pr_line.
+
+Order: open Form Design → Edit this form → Manage Table Bindings → Add Binding (type, table, Filter foreign key for Sub Table) → Add → Close → save the form → Sub Table Binding on the canvas picks that SUB.
+
+List columns: Table Name, Binding Type, Mode, Foreign Key Field, Link Mode, Sub Mode, Operations. Empty list: No table bindings. Primary cannot be deleted.
+
+Add Binding fields: Binding Type (Primary Table / Sub Table / Action Table / Relation Table); Sub Mode Full Mode (Form + List) or Form Only Mode; Select Table; Binding Mode Editable / Read Only; Link Mode Structural FK or MI Participant Row; Filter foreign key; Participant Row Field.
+
+Foreign-key fill source (Structural FK Sub Table, after Select Table): Auto (unique table only) / Host / parent row / Primary form / Named ancestor binding + Select ancestor binding.
+
+Same SUB table twice only when Filter foreign key differs. Primary and Relation stay one per table.
+
+Fail: Add a Primary first; A primary binding already exists; A conflicting table binding already exists; No structural FK fields; Select which declared foreign key; Please select a table; Primary table binding cannot be deleted.
+
+Related: /help/table-design , /help/form-ctl-sub-table , /help/form-ctl-lookup
 
 ## View Design (/help/view-design)
 
@@ -180,7 +200,7 @@ Palette group Basic. Each control is /help/form-ctl-<type> (Input, Textarea, Pas
 
 ## Extend and MI events (/help/form-events-extend)
 
-Index for remaining Extend and MI shells. Sub-Table is /help/form-ctl-sub-table (bound SUB grid, help_pr_line, Allow Add/Edit/Delete). Lookup is /help/form-ctl-lookup (Relation Table, filters, cascade, Backfill; setLookupFilter then refresh). This page keeps one event sample for Inline Form, Link Form, Owner, Record Note, and Assignment Mode. Old hashes /help/form-events-extend#subTable and #lookup redirect to those articles.
+Index for remaining Extend and MI shells. Sub-Table is /help/form-ctl-sub-table (bound SUB grid, help_pr_line, Allow Add/Edit/Delete). Attach the table in /help/table-bindings first. Lookup is /help/form-ctl-lookup (Relation Table, filters, cascade, Backfill; setLookupFilter then refresh). This page keeps one event sample for Inline Form, Link Form, Owner, Record Note, and Assignment Mode. Old hashes /help/form-events-extend#subTable and #lookup redirect to those articles.
 
 ## Layout and Auxiliary events (/help/form-events-layout)
 

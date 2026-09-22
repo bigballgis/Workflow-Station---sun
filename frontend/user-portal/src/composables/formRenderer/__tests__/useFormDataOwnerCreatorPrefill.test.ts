@@ -95,4 +95,39 @@ describe('useFormData Owner Creator default', () => {
     expect(api.formData.value.case_creator).toBe('user:u-zhangwei')
     expect(api.formData.value.case_creator__display).toBe('张伟')
   })
+
+  it('keeps a generated MAIN pk that is not a canvas field across initFormData', () => {
+    const allFields = computed(() => [
+      { key: 'title', label: 'Title', type: 'input' },
+    ] as FormField[])
+    const parent = ref<Record<string, unknown>>({ title: 'P0 dual write' })
+    const api = useFormData({
+      formRef: ref(undefined),
+      allFields,
+      modelValue: () => parent.value,
+      readonly: () => false,
+      config: () => undefined,
+      getInternalUpdate: () => false,
+      setInternalUpdate: () => {},
+      emitChange: () => {},
+      emitModelValue: () => {},
+      emitSubTableData: () => {},
+      runComponentEventsOnFieldChange: () => {},
+      formOptionsOnChange: () => undefined,
+      fieldComponentEventsHas: () => false,
+      runFormOptionsOnChange: () => {},
+      engineOnFieldChange: () => ({}),
+      applyEngineResult: () => {},
+      engineOnSubTableChange: () => ({ summaryValues: new Map() }),
+      engineCalculatedValues: ref(new Map()),
+      requestIdConfig: () => undefined,
+      primaryKeyFields: () => ['id'],
+    })
+    api.initFormData()
+    api.handlePrimaryFormDataPatch({ id: 'Case-000021' })
+    parent.value = { title: 'P0 dual write', id: 'Case-000021' }
+    api.initFormData()
+    expect(api.formData.value.id).toBe('Case-000021')
+    expect(api.formData.value.title).toBe('P0 dual write')
+  })
 })

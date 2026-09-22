@@ -33,7 +33,7 @@ interface FormProps {
   /** MAIN form values so a SUB-table formula can preview {@code table.column}. */
   hostPrimaryFormData?: Record<string, unknown>
   columnValidationRules?: Record<string, ValidationRule[]>
-  saveRow?: (row: Record<string, unknown>) => void | Promise<void>
+  saveRow?: (row: Record<string, unknown>, selectedParentValue?: string) => void | Promise<void>
   /** This dialog's own hosting binding id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
   bindingId?: number | null
   /** Task-node field permissions (`TaskFormData.fieldPermissions`); composite-keyed entries gate Add/Edit dialog fields, same as the Link Form dialog paths. */
@@ -43,7 +43,7 @@ interface FormProps {
 /** Emit signature subset the form orchestrator depends on (mirrors SFC defineEmits). */
 interface FormEmit {
   (e: 'update:visible', val: boolean): void
-  (e: 'save', rowData: Record<string, any>): void
+  (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
 }
 
 /** Side-effect hooks owned by sibling composables, injected to break cycles. */
@@ -72,6 +72,7 @@ interface FormDeps {
   scriptFieldErrors?: Ref<Record<string, string>>
   /** Script `api.disabled` overlay. */
   isDialogFieldDisabled?: (fieldKey: string, fallback: boolean) => boolean
+  selectedParentValue?: Ref<string>
 }
 
 /**
@@ -96,6 +97,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     eventRequiredFlags,
     scriptFieldErrors,
     isDialogFieldDisabled,
+    selectedParentValue,
   } = deps
 
   const formRef = ref<FormInstance>()
@@ -360,9 +362,9 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     saving.value = true
     try {
       if (props.saveRow) {
-        await props.saveRow(row)
+        await props.saveRow(row, selectedParentValue?.value)
       } else {
-        emit('save', row)
+        emit('save', row, selectedParentValue?.value)
       }
       emit('update:visible', false)
     } catch (e) {

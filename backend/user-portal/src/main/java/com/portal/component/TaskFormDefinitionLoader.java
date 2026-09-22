@@ -20,8 +20,9 @@ import java.util.Map;
 
 /**
  * Task Form 定义加载协作类。
- * 单一职责：按 stageId（taskDefinitionKey）解析 Task Form 定义——优先本地共享 PostgreSQL（dw_form_stage_bindings），
- * 不可达时回退 developer-workstation HTTP。行为与拆分前 {@link TaskFormComponent} 中的对应私有方法逐字一致。
+ * 单一职责：按 stageId（taskDefinitionKey）解析 Task Form 定义。Catalog-pinned 实例读
+ * {@code sys_function_unit_contents}（失败不回落 live DW）；未钉住的实例优先本地
+ * {@code dw_form_stage_bindings}，不可达时回退 developer-workstation HTTP。
  *
  * <p>{@code developerWorkstationUrl} 作为入参传入而非注入字段：门面 {@link TaskFormComponent} 通过
  * {@code @Value} 持有该配置且测试以反射方式覆盖它，故由门面在调用时透传，避免该协作类持有与门面不同步的副本。</p>
@@ -45,6 +46,10 @@ public class TaskFormDefinitionLoader {
      */
     public Map<String, Object> fetchTaskFormByStageId(String stageId, String processInstanceId,
                                                       String developerWorkstationUrl) {
+        Map<String, Object> pinned = fetchCatalogPinnedForm(stageId, processInstanceId);
+        if (pinned != null) {
+            return pinned.isEmpty() ? null : pinned;
+        }
         String functionUnitCode = resolveFunctionUnitCode(processInstanceId);
         // Try local DB first (millisecond-level) — avoids expensive cross-container HTTP call.
         Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId, functionUnitCode);
@@ -61,6 +66,51 @@ public class TaskFormDefinitionLoader {
         // fromDb == null means local query threw an exception (e.g. table doesn't exist).
         // Fallback: HTTP call to developer-workstation.
         return fetchTaskFormFromDeveloperWorkstation(stageId, functionUnitCode, developerWorkstationUrl);
+    }
+
+    /**
+     * Catalog-pinned instances read {@code sys_function_unit_contents} only. A miss or query
+     * failure is empty — never latest {@code dw_form_definitions}. {@code null} means the
+     * instance is not pinned and the live-DW path should run.
+     */
+    private Map<String, Object> fetchCatalogPinnedForm(String stageId, String processInstanceId) {
+        String catalogId = resolveCatalogId(processInstanceId);
+        if (catalogId == null) {
+            return null;
+        }
+        Map<String, Object> form = CatalogPinnedTaskFormLoader.fetch(
+                jdbcTemplate, objectMapper, catalogId, stageId);
+        if (form == null || form.isEmpty()) {
+            log.debug("No catalog task form for stage '{}' catalog {}, skipping live DW",
+                    stageId, catalogId);
+            return Collections.emptyMap();
+        }
+        log.debug("Resolved task form for stage '{}' from catalog {}", stageId, catalogId);
+        return form;
+    }
+
+    private String resolveCatalogId(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return null;
+        }
+        try {
+            List<String> ids = jdbcTemplate.query(
+                    """
+                            SELECT function_unit_catalog_id
+                            FROM up_process_instance
+                            WHERE id = ?
+                            """,
+                    (ResultSet rs, int rowNum) -> rs.getString("function_unit_catalog_id"),
+                    processInstanceId.trim());
+            if (ids == null || ids.isEmpty() || ids.get(0) == null || ids.get(0).isBlank()) {
+                return null;
+            }
+            return ids.get(0).trim();
+        } catch (Exception e) {
+            log.debug("Catalog pin lookup failed for process instance {}: {}",
+                    processInstanceId, e.getMessage());
+            return null;
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 import formEventMessages from './formEvents.zh-CN'
 import formCtlMessages from './formCtl.zh-CN'
 import tableDesignMessages from './tableDesign.zh-CN'
+import tableBindingsMessages from './tableBindings.zh-CN'
 import viewDesignMessages from './viewDesign.zh-CN'
 import fuDocumentsMessages from './fuDocuments.zh-CN'
 import aiStudioMessages from './aiStudio.zh-CN'
@@ -193,6 +194,10 @@ export default {
     taskDelegate: {
       title: '委托任务',
       summary: '把这一条待办交给指定用户或一对 BU+Role，不改当前处理人。',
+    },
+    tableBindings: {
+      title: '管理表绑定',
+      summary: '把 MAIN、SUB、ACTION、RELATION 表挂到表单。Filter foreign key 和填充来源在这里；Sub-Table 网格另有专文。',
     },
     formUpload: {
       title: '表单设计 — 高级上传',
@@ -717,6 +722,7 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,

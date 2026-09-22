@@ -12,6 +12,14 @@ import {
 } from '@/composables/tasks/shared'
 import { mergeSubTableRowsForMiSave } from '@/composables/tasks/miSubTableSaveMerge'
 import {
+  buildBindingScopeFromBaseline,
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+  type SubTableBindingScope,
+} from '@/composables/tasks/subTableCanonicalStamp'
+import { projectSavedRowsForBinding } from '@/composables/tasks/subTableFilterProjection'
+import { removeRowsWithMissingParentsFromCanonicalStore } from '@/composables/tasks/assembleScopedSubTables'
+import {
   bindingMatchesMiSubTableName,
 } from '@/composables/tasks/miSubProcessScope'
 import {
@@ -168,7 +176,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     }
   }
 
-  function openMiFillDialog(row: any) {
+  function openMiFillDialog() {
     miFillDialogData.value = { ...formData.value }
     miFillSubTableBindings.value = cloneSubTableBindings(subTableBindings.value)
     miFillDialogReadOnly.value = false
@@ -232,6 +240,8 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     // 本次提交里被主动删空的参与者切片 —— 与 buildSubTableSubmitPayload 同一套条件，
     // 否则「在这个弹窗里删掉自己最后一行」仍然会被后端按「切片没渲染」保住基线。
     const emptiedSubTableKeys: string[] = []
+    const sharedKeys = storeKeysSharedByMultipleBindings(miFillSubTableBindings.value)
+    const subTableBindingScopes: SubTableBindingScope[] = []
 
     for (const binding of miFillSubTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
@@ -248,10 +258,8 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
       )
       const key = subTableStoreKey(binding)
       if (key) {
-        subTables[key] = out
-        subTableData[key] = out
-        // 判据是「界面上属于我的行数为 0」，不是「切片为空」——切片里始终还有其他参与者的行。
-        // 且必须「原本有我的行」，否则那不是删除。与 buildSubTableSubmitPayload 同一套条件。
+        stampCanonicalStoreRows(subTables, subTableData, binding, out, sharedKeys)
+        let emptiedThisBinding = false
         if (
           isMiSubTaskMode.value
           && isOwnRow != null
@@ -259,9 +267,47 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
           && !out.some((row: unknown) => isOwnRow(row))
           && (Array.isArray(existing) ? existing.some((row: unknown) => isOwnRow(row)) : false)
         ) {
+          emptiedThisBinding = true
           emptiedSubTableKeys.push(key)
         }
+        if (sharedKeys.has(key)) {
+          const scoped = projectSavedRowsForBinding(
+            out,
+            binding,
+            miFillSubTableBindings.value,
+            {
+              formData: { ...formData.value, ...miFillDialogData.value } as Record<string, unknown>,
+              primaryTableId: ctx.primaryTableBinding.value?.tableId ?? null,
+              primaryPkFields: ctx.primaryTableBinding.value?.primaryKeyFields ?? null,
+              primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions ?? null,
+            },
+          ) ?? out
+          const scope = buildBindingScopeFromBaseline(binding, scoped, emptiedThisBinding,
+            ctx.taskForm.loadedSubTableBaseline.value, miFillSubTableBindings.value, {
+              formData: miFillDialogData.value,
+              primaryTableId: ctx.primaryTableBinding.value?.tableId,
+              primaryPkFields: ctx.primaryTableBinding.value?.primaryKeyFields,
+              primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions,
+            })
+          if (scope) subTableBindingScopes.push(scope)
+        }
       }
+    }
+
+    removeRowsWithMissingParentsFromCanonicalStore(
+      subTables,
+      miFillSubTableBindings.value,
+      {
+        formData: { ...formData.value, ...miFillDialogData.value },
+        primaryTableId: ctx.primaryTableBinding.value?.tableId,
+        primaryPkFields: ctx.primaryTableBinding.value?.primaryKeyFields,
+        primaryFieldDefinitions: ctx.primaryTableBinding.value?.fieldDefinitions,
+      },
+      sharedKeys,
+    )
+    for (const key of Object.keys(subTableData)) {
+      const rows = subTables[key]
+      if (Array.isArray(rows)) subTableData[key] = rows
     }
 
     const nextFormData = { ...formData.value, ...miFillDialogData.value, __subTables__: subTables }
@@ -273,12 +319,13 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
         subTableData,
         baselineValues: taskFormDTO.value?.fieldValues || {},
         emptiedSubTableKeys,
+        subTableBindingScopes,
       })
-      formData.value = nextFormData
+      await ctx.loadTaskDetail()
       miFilled.value = true
       miFillDialogVisible.value = false
       ElMessage.success(t('task.operationSuccess'))
-    } catch (e) {
+    } catch {
       ElMessage.error(t('task.operationFailed'))
     } finally {
       submitting.value = false
