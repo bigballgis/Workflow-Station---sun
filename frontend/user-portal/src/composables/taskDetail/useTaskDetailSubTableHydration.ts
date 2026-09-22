@@ -24,6 +24,7 @@ import {
 } from './subTableRowUtils'
 import type { TaskDetailState } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
+import { resolveMiChildPrimaryKeyColumns } from '@/composables/tasks/miLinkChildIdentity'
 
 export interface TaskDetailHydrationFns {
   getSavedSubTableRows: (
@@ -66,6 +67,10 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
     isMiSubTaskMode,
   } = ctx
   const { formData } = ctx.taskForm
+
+  function primaryKeySources(): Array<Record<string, unknown> | null | undefined> {
+    return [ctx.processFormValues.value, ctx.taskInfo.value.variables]
+  }
 
   /**
    * `forbidNameFallback` param kept for call-site source compatibility (many callers pass
@@ -110,6 +115,7 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
   function applyCompletedSnapshotToForm(data: CompletedTaskFormData | null) {
     const snapshotValues = (data?.snapshot?.fieldValues || {}) as Record<string, any>
     formData.value = { ...snapshotValues }
+    seedMissingConfiguredPrimaryKey(formData.value, ctx.primaryTableBinding.value, primaryKeySources())
 
     const savedSubTables = snapshotValues.__subTables__
     applySavedRowsToBindings(subTableBindings.value, savedSubTables)
@@ -121,6 +127,7 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
       const nextMap = new Map(nodeFormMap.value)
       nextMap.forEach(info => {
         info.values = { ...snapshotValues }
+        seedMissingConfiguredPrimaryKey(info.values, ctx.primaryTableBinding.value, primaryKeySources())
         applySavedRowsToBindings(info.subTableBindings, savedSubTables)
       })
       nodeFormMap.value = nextMap
@@ -319,5 +326,35 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
     backfillEmptySubTableBindingsFromVariables,
     rehydrateSharedAttachmentBindings,
     rehydrateSharedProcessSubTableBindings,
+  }
+}
+
+function valuePresent(value: unknown): boolean {
+  if (value == null) return false
+  if (typeof value === 'string') return value.trim() !== ''
+  return true
+}
+
+/**
+ * Completed snapshots keep only task-form fields. Filter projection reads the main record's
+ * configured primary key from form data, so copy those columns from process variables when
+ * the snapshot left them empty. A value already on the snapshot is left as-is.
+ */
+export function seedMissingConfiguredPrimaryKey(
+  target: Record<string, unknown>,
+  primaryBinding: {
+    primaryKeyFields?: string[] | null
+    fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }> | null
+  } | null,
+  sources: Array<Record<string, unknown> | null | undefined>,
+): void {
+  for (const field of resolveMiChildPrimaryKeyColumns(primaryBinding)) {
+    if (valuePresent(target[field])) continue
+    for (const source of sources) {
+      const value = source?.[field]
+      if (!valuePresent(value)) continue
+      target[field] = value
+      break
+    }
   }
 }
