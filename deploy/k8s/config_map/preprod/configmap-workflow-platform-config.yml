@@ -67,6 +67,17 @@ data:
   WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   FILE_UPLOAD_BASE_URL: "/api/v1/upload/files"
+  # HashiCorp Vault (admin-center Kubernetes JWT). PPD → vault-uat.
+  # admin-center always enables the Vault client in its own application.yml; other services ignore these keys.
+  # AUTH_MOUNT / ROLE below are the DEV POC values (wsit-hk-azx-401 / ame-hase-hermes-role).
+  # Confirm the PPD cluster Kubernetes auth mount + role with the platform before go-live;
+  # a mismatched issuer returns 403 and mailbox password resolve fails. Bind SA admin-center to VAULT_ROLE.
+  VAULT_ADDR: "https://vault-uat.uk.hsbc:8200"
+  VAULT_NAMESPACE: "ITID/22330042_HERMES"
+  VAULT_AUTH_MOUNT: "kubernetes/wsit-hk-azx-401"
+  VAULT_ROLE: "ame-hase-hermes-role"
+  VAULT_KV_MOUNT: "secrets/kv_v2/wsit"
+  VAULT_LOGIN_REFRESH_SKEW_SECONDS: "30"
   # Activepieces (PROD runtime only — UI not exposed; Istio routes only /api/v1/webhooks).
   ACTIVEPIECES_POSTGRES_HOST: "hkl25243602.hc.cloud.hk.hsbc"
   ACTIVEPIECES_POSTGRES_PORT: "25011"

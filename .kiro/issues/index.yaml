@@ -4039,7 +4039,6 @@
     Rebased onto origin/common_0731_SELF_AP; issue retargeted from #1633
     which origin already used for To Do Current Assignee.
 
-
 - id: "1636"
   status: fixed
   fixed_at: "2026-09-17"
@@ -4073,3 +4072,29 @@
     验证：AiStudioProposalJobPersistenceTest 新增两条先红（duplicate key on PENDING / 行停在 PENDING）后绿，相关 5 个测试类 34 条 ×3 轮全绿（JDK17）；
     dev 重建 developer-workstation 后 _ai-studio-job-persist-race-check.mjs 提交 4 个作业（取消 + supersede）：
     日志 "snapshot not persisted" 0 次（旧容器 1 个作业 1 次），库里 4 行均为 CANCELLED 终态。
+
+- id: "1638"
+  status: fixed
+  fixed_at: "2026-09-22"
+  severity: major
+  category: architecture
+  summary: "Email Connection mailbox passwords stored as AES credential_encrypted instead of Vault Environment var_key"
+  file: "backend/admin-center/src/main/java/com/admin/component/EnvironmentVariableComponentImpl.java"
+  note: |
+    Admin global Environment catalog (TEXT current/default, VAULT KV path).
+    DW Email Connection binds passwordEnvKey only; passwords stay in HashiCorp
+    Vault KV v2 data.data.password. Admin talks to VAULT_ADDR :8200 (Kubernetes
+    JWT or optional local VAULT_TOKEN). Engine/DW resolve via Admin internal
+    APIs with SERVICE_INTERNAL_TOKEN; Vault 404 is not treated as missing
+    credentials. credential_encrypted column is kept this release (app no
+    longer reads it); DROP after mailbox Vault path is verified.
+    Schema script is 86-ac-environment-variables.sql because 81 was already
+    used by bi_data_view_assignment on this branch.
+    VaultSecretClientImpl gated by vault.enabled so engine does not boot it.
+    验证：targeted mvn tests (Vault/Environment/email) pass; compose rebuild
+    admin-center / developer-workstation / workflow-engine (+ frontends) healthy.
+    截图：
+    frontend/admin-center/verification-screenshots/2026-09-22_admin-environment-variables.png
+    frontend/developer-workstation/verification-screenshots/2026-09-22_dw-connection-vault-select.png
+    Local Compose: empty VAULT_TOKEN and no SA JWT means local Vault resolve
+    fails until a token or K8s login is configured.

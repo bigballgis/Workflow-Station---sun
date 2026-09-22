@@ -130,12 +130,13 @@ class EmailPortabilityTest {
     }
 
     @Test
-    void importEmailConnection_readsCredentialEncrypted() {
+    void importEmailConnection_readsPasswordEnvKey() {
         FunctionUnit functionUnit = FunctionUnit.builder().id(7L).code("fu_demo").build();
         Map<String, Object> data = new HashMap<>();
         data.put("connectionUid", "uid-abc");
         data.put("name", "SMTP");
         data.put("fromEmail", "a@example.com");
+        data.put("passwordEnvKey", "email.smtp.password");
         data.put("credentialEncrypted", "enc-new");
 
         when(emailConnectionRepository.save(any(EmailConnection.class)))
@@ -143,11 +144,11 @@ class EmailPortabilityTest {
 
         EmailConnection saved = importWriter.importEmailConnection(functionUnit, data);
 
-        assertThat(saved.getCredentialEncrypted()).isEqualTo("enc-new");
+        assertThat(saved.getPasswordEnvKey()).isEqualTo("email.smtp.password");
     }
 
     @Test
-    void importEmailConnection_acceptsLegacyPasswordEncryptedKey() {
+    void importEmailConnection_ignoresLegacyCiphertext() {
         FunctionUnit functionUnit = FunctionUnit.builder().id(7L).code("fu_demo").build();
         Map<String, Object> data = new HashMap<>();
         data.put("connectionUid", "uid-abc");
@@ -160,7 +161,7 @@ class EmailPortabilityTest {
 
         EmailConnection saved = importWriter.importEmailConnection(functionUnit, data);
 
-        assertThat(saved.getCredentialEncrypted()).isEqualTo("enc-legacy");
+        assertThat(saved.getPasswordEnvKey()).isNull();
     }
 
     @Test
@@ -178,7 +179,7 @@ class EmailPortabilityTest {
 
         EmailConnection saved = importWriter.importEmailConnection(functionUnit, data);
 
-        assertThat(saved.getCredentialEncrypted()).isEqualTo("enc-legacy");
+        assertThat(saved.getPasswordEnvKey()).isNull();
     }
 
     @Test

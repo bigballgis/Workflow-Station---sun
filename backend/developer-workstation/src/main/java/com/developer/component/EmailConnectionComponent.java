@@ -2,7 +2,7 @@ package com.developer.component;
 
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
-import com.developer.entity.EmailConnection;
+import com.developer.dto.VaultEnvOption;
 
 import java.util.List;
 import java.util.Map;
@@ -20,4 +20,6 @@ public interface EmailConnectionComponent {
     void delete(Long functionUnitId, Long connectionId);
 
     Map<String, Object> testConnection(Long functionUnitId, Long connectionId, String testRecipient);
+
+    List<VaultEnvOption> listVaultOptions();
 }

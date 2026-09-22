@@ -1,6 +1,6 @@
 package com.workflow.email.inbound;
 
-import com.platform.security.encryption.EncryptionService;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.client.AdminCenterSystemImapClient;
 import com.workflow.email.extract.EmailMessage;
 import com.workflow.email.inbound.entity.SysEmailConnection;
@@ -24,10 +24,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * IMAP fetch failure must not look like a successful poll: cursor stays put and the processor
- * is not invoked.
- */
 class EmailMonitorSchedulerTest {
 
     private SysEmailMonitorRuleRepository ruleRepository;
@@ -35,6 +31,7 @@ class EmailMonitorSchedulerTest {
     private InboundMailClient imapClient;
     private EmailMonitorProcessor processor;
     private AdminCenterSystemImapClient systemImapClient;
+    private AdminCenterClient adminCenterClient;
     private EmailMonitorScheduler scheduler;
 
     @BeforeEach
@@ -43,16 +40,17 @@ class EmailMonitorSchedulerTest {
         connectionRepository = mock(SysEmailConnectionRepository.class);
         imapClient = mock(InboundMailClient.class);
         processor = mock(EmailMonitorProcessor.class);
-        EncryptionService encryptionService = mock(EncryptionService.class);
         systemImapClient = mock(AdminCenterSystemImapClient.class);
+        adminCenterClient = mock(AdminCenterClient.class);
 
-        when(encryptionService.decrypt("enc")).thenReturn("secret");
         when(systemImapClient.fetchSystemImapEndpoint())
                 .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.example.test", 993, true));
+        when(adminCenterClient.getEmailConnectionCredentials("fu-1", "conn-1"))
+                .thenReturn(Optional.of(Map.of("password", "secret")));
 
         scheduler = new EmailMonitorScheduler(
                 ruleRepository, connectionRepository, imapClient, processor,
-                encryptionService, systemImapClient);
+                adminCenterClient, systemImapClient);
         ReflectionTestUtils.setField(scheduler, "enabled", true);
     }
 
@@ -69,6 +67,21 @@ class EmailMonitorSchedulerTest {
 
         assertThat(rule.getLastSyncCursor()).isEqualTo(cursorBefore);
         verify(ruleRepository, never()).save(any());
+        verify(processor, never()).process(any(), any());
+    }
+
+    @Test
+    void vaultPasswordFailureDoesNotTreatAsMissingCredentialsOrFetchImap() {
+        SysEmailMonitorRule rule = enabledRule();
+        when(ruleRepository.findByEnabledTrue()).thenReturn(List.of(rule));
+        when(connectionRepository.findById("conn-1")).thenReturn(Optional.of(inboundConnection()));
+        when(adminCenterClient.getEmailConnectionCredentials("fu-1", "conn-1"))
+                .thenThrow(new IllegalStateException(
+                        "Vault secret not found for environment variable email.qq.inbound.password"));
+
+        scheduler.poll();
+
+        verify(imapClient, never()).fetchNew(any(), any(), any(), anyInt());
         verify(processor, never()).process(any(), any());
     }
 
@@ -175,6 +188,7 @@ class EmailMonitorSchedulerTest {
         rule.setId("rule-1");
         rule.setName("inbox");
         rule.setEnabled(true);
+        rule.setFunctionUnitId("fu-1");
         rule.setConnectionUid("conn-1");
         rule.setFolderLabel("INBOX");
         rule.setPollIntervalSeconds(60);
@@ -188,7 +202,7 @@ class EmailMonitorSchedulerTest {
         connection.setEnabled(true);
         connection.setDirection("INBOUND");
         connection.setMailboxAddress("monitor@example.test");
-        connection.setCredentialEncrypted("enc");
+        connection.setPasswordEnvKey("email.qq.inbound.password");
         return connection;
     }
 }

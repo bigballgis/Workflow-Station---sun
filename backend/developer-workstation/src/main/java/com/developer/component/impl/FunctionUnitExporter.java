@@ -719,7 +719,7 @@ public class FunctionUnitExporter {
         map.put("host", connection.getHost());
         map.put("port", connection.getPort());
         map.put("username", connection.getUsername());
-        map.put("credentialEncrypted", connection.getCredentialEncrypted());
+        map.put("passwordEnvKey", connection.getPasswordEnvKey());
         map.put("fromEmail", connection.getFromEmail());
         map.put("fromName", connection.getFromName());
         map.put("useTls", connection.getUseTls());

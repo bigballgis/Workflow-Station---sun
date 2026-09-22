@@ -72,6 +72,17 @@ data:
   WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   FILE_UPLOAD_BASE_URL: "/api/v1/upload/files"
+  # HashiCorp Vault (admin-center Kubernetes JWT). Hermes UAT → Vault DEV (vault-dev).
+  # admin-center always enables the Vault client in its own application.yml; other services ignore these keys.
+  # AUTH_MOUNT / ROLE below are the DEV POC values (wsit-hk-azx-401 / ame-hase-hermes-role).
+  # Confirm the UAT cluster Kubernetes auth mount + role with the platform before go-live;
+  # a mismatched issuer returns 403 and mailbox password resolve fails. Bind SA admin-center to VAULT_ROLE.
+  VAULT_ADDR: "https://vault-dev.uk.hsbc:8200"
+  VAULT_NAMESPACE: "ITID/22330042_HERMES"
+  VAULT_AUTH_MOUNT: "kubernetes/wsit-hk-azx-401"
+  VAULT_ROLE: "ame-hase-hermes-role"
+  VAULT_KV_MOUNT: "secrets/kv_v2/wsit"
+  VAULT_LOGIN_REFRESH_SKEW_SECONDS: "30"
   # Activepieces (uat: UI exposed via login bridge). DB/Redis = 共享平台那套(同 SPRING_DATASOURCE_*)。
   ACTIVEPIECES_POSTGRES_HOST: "uat-postgres.internal"
   ACTIVEPIECES_POSTGRES_PORT: "5432"

@@ -611,7 +611,7 @@ public class FunctionUnitImportWriter {
                 .host(connectionData.get("host") != null ? (String) connectionData.get("host") : "")
                 .port(connectionData.get("port") != null ? ((Number) connectionData.get("port")).intValue() : 587)
                 .username((String) connectionData.get("username"))
-                .credentialEncrypted(EmailConnectionPortability.readEncryptedCredential(connectionData))
+                .passwordEnvKey(EmailConnectionPortability.readPasswordEnvKey(connectionData))
                 .fromEmail((String) connectionData.get("fromEmail"))
                 .fromName((String) connectionData.get("fromName"))
                 .useTls(connectionData.get("useTls") != null ? (Boolean) connectionData.get("useTls") : true)

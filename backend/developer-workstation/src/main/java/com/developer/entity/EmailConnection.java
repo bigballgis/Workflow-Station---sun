@@ -52,9 +52,8 @@ public class EmailConnection {
     @Column(name = "username")
     private String username;
 
-    @JsonIgnore
-    @Column(name = "credential_encrypted", columnDefinition = "TEXT")
-    private String credentialEncrypted;
+    @Column(name = "password_env_key", length = 100)
+    private String passwordEnvKey;
 
     @Column(name = "from_email", nullable = false)
     private String fromEmail;

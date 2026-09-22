@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 import { BASIC_FORM_CONTROLS } from '@/formCtlBasic'
 import { EXTEND_FORM_CONTROLS } from '@/formCtlExtend'
 
@@ -85,6 +85,13 @@ export const GUIDELINES: Guideline[] = [
     titleKey: 'guides.emailMonitor.title',
     summaryKey: 'guides.emailMonitor.summary',
     load: () => import('@/views/EmailMonitorGuide.vue'),
+  },
+  {
+    id: 'environment-variables',
+    path: '/environment-variables',
+    titleKey: 'guides.environmentVariables.title',
+    summaryKey: 'guides.environmentVariables.summary',
+    load: () => import('@/views/EnvironmentVariablesGuide.vue'),
   },
   {
     id: 'up-tasks-to-claim',
@@ -367,9 +374,14 @@ export const NAV_TREE: NavNode[] = [
           { kind: 'leaf', id: 'ac-rt-data', titleKey: 'nav.acTableData' },
         ],
       },
+      {
+        kind: 'leaf',
+        id: 'ac-env',
+        titleKey: 'guides.environmentVariables.title',
+        to: '/environment-variables',
+      },
       { kind: 'leaf', id: 'ac-pieces', titleKey: 'nav.acPieces' },
       { kind: 'leaf', id: 'ac-flows', titleKey: 'nav.acFlowMigration' },
-      { kind: 'leaf', id: 'ac-config', titleKey: 'nav.acSystemConfig' },
     ],
   },
   {
