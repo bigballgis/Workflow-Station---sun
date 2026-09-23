@@ -59,6 +59,22 @@ async function screenshotAdminEnvTab(prefix) {
     if ((await help.count()) === 0) {
       throw new Error('Environment variables page missing help ? link')
     }
+    const addBtn = page.getByRole('button', { name: /Add variable|新增变量|新增變數/ })
+    if ((await addBtn.count()) === 0) {
+      throw new Error('Environment variables page missing Add variable')
+    }
+    await addBtn.first().click()
+    await page.waitForSelector('.el-dialog', { timeout: 8000 })
+    const vaultRadio = page.locator('.el-dialog').getByText('VAULT', { exact: true })
+    if ((await vaultRadio.count()) > 0) {
+      await vaultRadio.first().click()
+    }
+    await page.waitForTimeout(400)
+    const passwordLabel = page.getByText(/Vault password|Vault 密码|Vault 密碼/)
+    if ((await passwordLabel.count()) === 0) {
+      await page.screenshot({ path: outPath.replace('.png', '-no-password.png'), fullPage: true })
+      throw new Error('VAULT create dialog missing password field')
+    }
     await page.screenshot({ path: outPath, fullPage: true })
     console.log('[saved]', outPath)
     return outPath

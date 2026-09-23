@@ -187,7 +187,7 @@ export default {
     environmentVariables: {
       title: 'Environment variables',
       summary:
-        'Admin Environment variables catalog: TEXT current/default values, and VAULT paths for Email Connection passwords.',
+        'Admin Environment variables catalog: TEXT current/default values, and VAULT keys for Email Connection passwords. A new Vault path is written only when it does not already exist.',
     },
     upTasksToClaim: {
       title: 'To Do — claim pool',
@@ -610,24 +610,25 @@ export default {
     pageTitle: 'Environment variables',
     crumb: 'Admin Center',
     intro:
-      'Admin Center → Environment variables holds TEXT values and VAULT secret paths. Email Connection passwords only bind a VAULT key; the mailbox password stays in Vault.',
+      'Admin Center → Environment variables holds TEXT values and VAULT catalog keys. Creating a VAULT variable writes the password into HashiCorp Vault only when that path does not already exist. Edit and delete never change Vault. Email Connection passwords only bind a VAULT key.',
     flowTitle: 'Order of work',
-    flow1: 'Create a VAULT variable with the Vault secret path',
+    flow1: 'Create a VAULT variable: key, optional password, optional Vault path',
     flow2: 'On Connections, pick that key as Password (VAULT)',
     flow3: 'Test send or Deploy the inbound monitor',
     catalogTitle: 'Catalog fields',
     catalogBody:
-      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a Vault KV path. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
+      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the Vault path is new, Admin writes data.password. If the path already exists, Admin only creates the catalog row. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
     catalogLead: 'Field catalog — Add / Edit variable.',
     fKindText:
       'TEXT. Default value is required. Current value is optional; blank or whitespace uses the default.',
     fKindVault:
-      'VAULT. Only Vault secret path. No current/default text. Runtime reads data.data.password from HashiCorp Vault.',
-    fKey: 'Required. Stable key (for example email.qq.inbound.password). Connections and ZIP export store this key, not the secret.',
+      'VAULT. Enter the key. Password is needed only when the Vault path does not exist yet. No current/default text. Runtime reads data.data.password from HashiCorp Vault.',
+    fKey: 'Required. Stable key (for example email.qq.inbound.password). Connections and ZIP export store this key, not the secret. Duplicate keys are rejected.',
     fDisplayName: 'Required. Label in the Connections dropdown.',
     fDefault: 'Required for TEXT. Used when current value is blank or whitespace.',
     fCurrent: 'Optional for TEXT. Non-blank current value wins over default.',
-    fPath: 'Required for VAULT. Vault KV path such as workflow/email/qq-inbound. Do not paste the password.',
+    fPath: 'Optional for VAULT. Vault KV path such as workflow/email/qq-inbound. Blank uses the key.',
+    fPassword: 'On create: required only if Vault does not already have this path. Existing secrets are reused and never overwritten. Edit never writes Vault. Delete removes only the catalog row.',
     bindTitle: 'Bind on a Connection',
     bindBody:
       'In Developer Workstation → Connections, Username plus Password (VAULT) select a VAULT key from this catalog. Host still comes from System Config SMTP/IMAP. See [[/email-send#connection]] and [[/email-monitor]].',
@@ -636,6 +637,8 @@ export default {
     failTitle: 'What fails',
     failBody: 'Fix the catalog or the Connection binding, then Test or Deploy again.',
     failTextBlank: 'TEXT default empty — save is blocked. Whitespace current value falls back to default.',
+    failDuplicateKey: 'Duplicate catalog key — save is blocked. Use the existing environment variable. Do not operate Vault.',
+    failVaultWrite: 'Vault write failed (connectivity, login, or permissions) — save is blocked and a toast shows the error.',
     failVault404: 'Vault 404 — IMAP/SMTP does not treat this as “no password”; the poll/send fails with a Vault error.',
     failTextForMail: 'Email password bound to TEXT — Admin rejects it; pick a VAULT key.',
   },

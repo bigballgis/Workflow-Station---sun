@@ -45,4 +45,22 @@ class EnvironmentVariablePayloadsTest {
         request.setDefaultValue("x");
         assertThrows(BusinessException.class, () -> EnvironmentVariablePayloads.validate(request));
     }
+
+    @Test
+    void validate_vaultCreateRequiresPassword() {
+        EnvironmentVariableRequest request = new EnvironmentVariableRequest();
+        request.setVarKey("k");
+        request.setDisplayName("n");
+        request.setValueKind(EnvironmentValueKind.VAULT);
+        request.setVaultSecretPath("workflow/email/qq");
+        assertThrows(BusinessException.class, () -> EnvironmentVariablePayloads.validate(request, true));
+    }
+
+    @Test
+    void vaultPath_defaultsToVarKey() {
+        EnvironmentVariableRequest request = new EnvironmentVariableRequest();
+        request.setVarKey(" email.qq.inbound ");
+        request.setValueKind(EnvironmentValueKind.VAULT);
+        assertEquals("email.qq.inbound", EnvironmentVariablePayloads.vaultPath(request));
+    }
 }

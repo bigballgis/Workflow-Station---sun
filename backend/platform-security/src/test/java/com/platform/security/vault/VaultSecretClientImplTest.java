@@ -14,6 +14,7 @@ import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -100,6 +101,45 @@ class VaultSecretClientImplTest {
                 30);
         VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, settings);
         assertThat(client.readPassword("workflow/email/qq")).isEqualTo("auth-code");
+        server.verify();
+    }
+
+    @Test
+    void secretExists_404_returnsFalse() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/secrets/kv_v2/wsit/data/missing"))
+                .andRespond(withResourceNotFound());
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        assertThat(client.secretExists("missing")).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void secretExists_200_returnsTrue() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/secrets/kv_v2/wsit/data/workflow/email/qq"))
+                .andRespond(withSuccess(KV_BODY, MediaType.APPLICATION_JSON));
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        assertThat(client.secretExists("workflow/email/qq")).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void writePassword_postsKvV2Password() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/secrets/kv_v2/wsit/data/workflow/email/qq"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Vault-Token", "dev-token"))
+                .andExpect(content().json("{\"data\":{\"password\":\"auth-code\"}}"))
+                .andRespond(withSuccess("{\"data\":{\"version\":1}}", MediaType.APPLICATION_JSON));
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        client.writePassword("workflow/email/qq", "auth-code");
         server.verify();
     }
 

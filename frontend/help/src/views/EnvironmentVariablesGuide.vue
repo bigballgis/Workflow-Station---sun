@@ -53,6 +53,7 @@ const sections: GuideSection[] = [
       { code: 'Default value', hintKey: 'environmentVariablesGuide.fDefault' },
       { code: 'Current value', hintKey: 'environmentVariablesGuide.fCurrent' },
       { code: 'Vault secret path', hintKey: 'environmentVariablesGuide.fPath' },
+      { code: 'Vault password', hintKey: 'environmentVariablesGuide.fPassword' },
     ],
   },
   {
@@ -70,6 +71,8 @@ const sections: GuideSection[] = [
     bodyKey: 'environmentVariablesGuide.failBody',
     failKeys: [
       'environmentVariablesGuide.failTextBlank',
+      'environmentVariablesGuide.failDuplicateKey',
+      'environmentVariablesGuide.failVaultWrite',
       'environmentVariablesGuide.failVault404',
       'environmentVariablesGuide.failTextForMail',
     ],

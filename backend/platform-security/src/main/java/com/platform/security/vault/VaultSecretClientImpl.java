@@ -92,18 +92,62 @@ public class VaultSecretClientImpl implements VaultSecretClient {
         }
     }
 
-    private String fetchPassword(String secretPath) {
-        String encodedSecret;
-        try {
-            encodedSecret = encodedPath(secretPath);
-        } catch (IllegalArgumentException ex) {
-            throw new VaultSecretNotFoundException("Vault secret path is invalid", ex);
+    @Override
+    public boolean secretExists(String secretPath) {
+        requireAddr();
+        if (!StringUtils.hasText(secretPath)) {
+            return false;
         }
-        String url = settings.addr() + "/v1/" + encodedPath(settings.kvMount())
-                + "/data/" + encodedSecret;
+        try {
+            restTemplate.exchange(
+                    kvDataUrl(secretPath), HttpMethod.GET, new HttpEntity<>(vaultHeaders(true)), MAP_TYPE);
+            return true;
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return false;
+            }
+            log.warn("Vault KV EXISTS failed: status={}", ex.getStatusCode().value());
+            throw new VaultSecretUnavailableException("Vault KV request failed", ex);
+        } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.warn("Vault KV EXISTS failed: {}", ex.getMessage());
+            throw new VaultSecretUnavailableException("Unable to reach Vault", ex);
+        }
+    }
+
+    @Override
+    public void writePassword(String secretPath, String password) {
+        requireAddr();
+        if (!StringUtils.hasText(password)) {
+            throw new VaultSecretUnavailableException("Vault password is blank");
+        }
+        Map<String, Object> inner = new LinkedHashMap<>();
+        inner.put("password", password);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("data", inner);
+        try {
+            restTemplate.exchange(
+                    kvDataUrl(secretPath),
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, vaultHeaders(true)),
+                    MAP_TYPE);
+            putPasswordCache(secretPath, password);
+        } catch (HttpStatusCodeException ex) {
+            log.warn("Vault KV WRITE failed: status={}", ex.getStatusCode().value());
+            throw new VaultSecretUnavailableException("Vault KV write failed", ex);
+        } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.warn("Vault KV WRITE failed: {}", ex.getMessage());
+            throw new VaultSecretUnavailableException("Unable to reach Vault", ex);
+        }
+    }
+
+    private String fetchPassword(String secretPath) {
         try {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(vaultHeaders(true)), MAP_TYPE);
+                    kvDataUrl(secretPath), HttpMethod.GET, new HttpEntity<>(vaultHeaders(true)), MAP_TYPE);
             return passwordFromKvBody(response.getBody());
         } catch (HttpStatusCodeException ex) {
             return translateReadFailure(ex);
@@ -112,6 +156,15 @@ public class VaultSecretClientImpl implements VaultSecretClient {
         } catch (RuntimeException ex) {
             log.warn("Vault KV GET failed: {}", ex.getMessage());
             throw new VaultSecretUnavailableException("Unable to reach Vault", ex);
+        }
+    }
+
+    private String kvDataUrl(String secretPath) {
+        try {
+            return settings.addr() + "/v1/" + encodedPath(settings.kvMount())
+                    + "/data/" + encodedPath(secretPath);
+        } catch (IllegalArgumentException ex) {
+            throw new VaultSecretNotFoundException("Vault secret path is invalid", ex);
         }
     }
 
