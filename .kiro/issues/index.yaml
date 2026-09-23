@@ -4455,3 +4455,33 @@
     提交时按基线盖到两份副本，新行不加版本；保存成功后两份一起更新；服务端 bump 时只同步同一张表的内嵌副本。
     验证：同一待办未改内容 Save 200，ciri file / ciri file2 以版本 2 提交。给 bob 加 bob file3，submit 200，新行无版本。
     不刷新再给 ciri 加 ciri file3，submit 200。整页刷新后 case file、bob file、bob file2、bob file3、ciri file、ciri file2、ciri file3 都在。
+
+- id: "1649"
+  status: fixed
+  fixed_at: "2026-09-23"
+  severity: major
+  category: bug
+  summary: "A task form that dual-binds a table is saved against the process form, so its binding scopes are rejected"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistoryBpmnFormResolver.java"
+  note: |
+    P0 Dual Binding Multi Form（p0-dual-binding-multi-form）有填写表和评审表，每张表都把 p0_mf_file 绑了两次。
+    发起页切片正确：case-doc 只带 case_id，party-doc 只带 party_id。评审页也按各自过滤显示。
+    评审 Save 返回 403 Multi-binding writes require binding scopes from the pinned form。
+    设计器把节点 formId 写在 custom_1:values 上，写路径只读 custom:property，读不到评审表，退回流程表。
+    单表单时两张表是同一张，所以以前测不出来。
+    修复：formId 同时认 property 和 values。同一条评审保存从 403 变为 200，刷新后 case-doc、party-doc、review-doc、Alice 都在。
+
+- id: "1650"
+  status: fixed
+  fixed_at: "2026-09-23"
+  severity: major
+  category: bug
+  summary: "My Request overlap-merge copies another table's rows into a dual-bound sub-table"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailMiHydration.ts"
+  note: |
+    申请 d4b170d6 的库里文件表只有 File-000009（case file）。My Request 的 Review case files 却显示 3 行，
+    另外两行是当事人表的 Party-000004 / Party-000005。它们也带同一个父记录键，过滤把它们留下来了。
+    发起人详情会把带子表单的 binding 和所有 __subTables__ 切片按列重叠合并。文件表有子表单，于是吃进了另一张表。
+    修复：只合并本表的规范 key，或 binding-id 映射到同一 table id 的旧切片。
+    同一页刷新后 Review case files 只剩 File-000009 case file；Review party files 仍是 alice file、bob file。
+    另起一条多表单实例走完新增、评审读取、改名保存、删除保存。库中最终只剩 case-doc 与 party-doc，版本均为 4。

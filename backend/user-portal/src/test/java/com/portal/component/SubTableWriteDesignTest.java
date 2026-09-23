@@ -52,6 +52,50 @@ class SubTableWriteDesignTest {
     }
 
     @Test
+    void taskStageReadsFormIdFromDesignerValuesElement() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))
+                .thenReturn(List.of(
+                        """
+                        {"formId":1,"formType":"PROCESS","configJson":{},"tableBindings":[
+                          {"bindingId":101,"bindingType":"SUB","tableName":"files",
+                           "filterFkFieldName":"case_ref","filterFkRefTableName":"cases"}]}
+                        """,
+                        """
+                        {"formId":2,"formType":"TASK","configJson":{},"tableBindings":[
+                          {"bindingId":202,"bindingType":"SUB","tableName":"files",
+                           "filterFkFieldName":"party_ref","filterFkRefTableName":"parties"}]}
+                        """));
+        when(jdbc.queryForList(contains("content_type = 'PROCESS'"), eq(String.class), eq("pin")))
+                .thenReturn(List.of("""
+                        <bpmn:userTask id="review"><bpmn:extensionElements>
+                          <custom_1:properties>
+                            <custom_1:values name="formId" value="2" />
+                          </custom_1:properties>
+                        </bpmn:extensionElements></bpmn:userTask>
+                        """));
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("DATA_TABLE")))
+                .thenReturn(List.of(
+                        """
+                        {"tableName":"files","tableType":"SUB","fields":[
+                          {"fieldName":"file_key","isPrimaryKey":true}]}
+                        """,
+                        """
+                        {"tableName":"parties","tableType":"SUB","fields":[
+                          {"fieldName":"party_key","isPrimaryKey":true}]}
+                        """,
+                        """
+                        {"tableName":"cases","tableType":"MAIN","fields":[
+                          {"fieldName":"case_key","isPrimaryKey":true}]}
+                        """));
+
+        var rules = new SubTableWriteDesign(jdbc, new ObjectMapper()).resolve("pin", "review");
+
+        assertThat(rules).containsOnlyKeys("202");
+        assertThat(rules.get("202").filterField()).isEqualTo("party_ref");
+    }
+
+    @Test
     void deletedLiveBindingsAndChangedLiveKeysDoNotAffectPinnedRules() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))
