@@ -88,10 +88,19 @@ final class ChangeHistoryBpmnFormResolver {
         return element.contains(name + "=\"" + expected + "\"")
                 || element.contains(name + "='" + expected + "'");
     }
+    /**
+     * Designer BPMN stores node fields on either {@code custom:property} or
+     * {@code custom_1:values}. Both local names carry {@code name}/{@code value}.
+     */
     private static String customPropertyValue(String element, String propertyName) {
+        String fromProperty = valueOnCarrier(element, "property", propertyName);
+        return fromProperty != null ? fromProperty : valueOnCarrier(element, "values", propertyName);
+    }
+
+    private static String valueOnCarrier(String element, String localName, String propertyName) {
         int searchFrom = 0;
         while (searchFrom < element.length()) {
-            int property = element.indexOf("<custom:property", searchFrom);
+            int property = indexOfCarrier(element, localName, searchFrom);
             if (property < 0) return null;
             int end = element.indexOf('>', property);
             if (end < 0) return null;
@@ -100,6 +109,27 @@ final class ChangeHistoryBpmnFormResolver {
             searchFrom = end + 1;
         }
         return null;
+    }
+
+    /** Tag whose local name is exactly {@code localName}, so {@code properties} is not {@code property}. */
+    private static int indexOfCarrier(String element, String localName, int from) {
+        int searchFrom = from;
+        while (searchFrom < element.length()) {
+            int start = element.indexOf('<', searchFrom);
+            if (start < 0) return -1;
+            int nameEnd = start + 1;
+            while (nameEnd < element.length()) {
+                char c = element.charAt(nameEnd);
+                if (c == ' ' || c == '>' || c == '/' || c == '\t' || c == '\n' || c == '\r') break;
+                nameEnd++;
+            }
+            String tagName = element.substring(start + 1, nameEnd);
+            int colon = tagName.lastIndexOf(':');
+            String local = colon >= 0 ? tagName.substring(colon + 1) : tagName;
+            if (local.equals(localName)) return start;
+            searchFrom = nameEnd;
+        }
+        return -1;
     }
     private static String xmlAttribute(String element, String name) {
         for (char quote : new char[] {'\"', '\''}) {
