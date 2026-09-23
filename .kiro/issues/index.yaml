@@ -4386,3 +4386,20 @@
     验证：saveTwiceKeepsRowVersion 与 autosave sync 单测通过。门户重建后在待办
     b46d09cd（Request 202609220020）连点两次 Save 均为 200；Party files 新增
     review-add-check 后再次 Save 仍为 200。
+
+- id: "1645"
+  status: fixed
+  fixed_at: "2026-09-23"
+  severity: major
+  category: bug
+  summary: "Deleting a parent sub-table row rolled back because the child deletion was checked against the surviving parents only"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableBindingScopeGuard.java"
+  note: |
+    P0 Dual Binding Test 待办 ea633673 删除 Party-000085（alice）时，页面上清掉了 alice
+    和 alice file，提交返回 403 Binding is not allowed to write this sub-table row，刷新后两条都回来。
+    客户端声明是对的：party 表只剩 bob，alice file 作为 party_id 绑定的带版本删除。
+    守卫用「提交后还在的父行」（只有 bob）核对这条删除，alice 的文件对不上，整次保存回滚。
+    修复：子表删除在父行已从本次提交中消失、且该父行仍在读取基线里时放行。父行还在、或该行本来不属于被删父行，仍然拒绝。
+    验证：关掉放行时 partyBindingMayDeleteChildOfParentRemovedInTheSameRequest 报同一句 403；
+    恢复后 SubTableBindingScopeGuardTest 24 条通过。重建 user-portal 后同一待办再删 alice，
+    submit 200，刷新后 alice 与 alice file 不再出现，bob 与 bob file 仍在。

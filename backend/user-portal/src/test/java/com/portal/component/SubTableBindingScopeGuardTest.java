@@ -173,6 +173,47 @@ class SubTableBindingScopeGuardTest {
     }
 
     @Test
+    void partyBindingMayDeleteChildOfParentRemovedInTheSameRequest() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> aliceFile = fileRow("Y", "C1", "P-A");
+        Map<String, Object> bobFile = fileRow("Z", "C1", "P-B");
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(bobFile)));
+        submitted.put("dw:p0_dual_party", new ArrayList<>(List.of(Map.of("id", "P-B"))));
+        Map<String, Object> baseline = Map.of(
+                "dw:p0_dual_file", List.of(aliceFile, bobFile),
+                "dw:p0_dual_party", List.of(Map.of("id", "P-A"), Map.of("id", "P-B")));
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Z")), false);
+        partyScope.setDeletedRows(List.of(Map.of("id", "Y", "_wsRowVersion", 0)));
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(partyScope), FU, Map.of("id", "C1"), submitted, baseline);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) submitted.get("dw:p0_dual_file");
+        assertThat(rows).extracting(r -> r.get("id")).containsExactly("Z");
+    }
+
+    @Test
+    void partyBindingCannotDeleteARowWhoseParentStillExists() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> caseFile = fileRow("X", "C1", null);
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of()));
+        submitted.put("dw:p0_dual_party", new ArrayList<>(List.of(Map.of("id", "P-A"))));
+        Map<String, Object> baseline = Map.of(
+                "dw:p0_dual_file", List.of(caseFile),
+                "dw:p0_dual_party", List.of(Map.of("id", "P-A")));
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(), false);
+        partyScope.setDeletedRows(List.of(Map.of("id", "X", "_wsRowVersion", 0)));
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(partyScope), FU, Map.of("id", "C1"), submitted, baseline))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("not allowed to write");
+    }
+
+    @Test
     void processFormPartyBindingCannotClaimACaseFileRow() {
         JdbcTemplate jdbc = stubTwoBindings();
         Map<String, Object> submitted = new HashMap<>();
