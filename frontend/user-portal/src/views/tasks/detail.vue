@@ -700,7 +700,7 @@ const resolveMiRowOwnershipPredicate = (binding: unknown) => {
 }
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
-const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
+const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer, syncSubTableRowVersionsBeforeSubmit, resumeSubTableAutosave } = taskForm
 
 const showImplicitSaveAction = computed(() => !formReadOnly.value && !hasConfiguredSaveAction.value)
 
@@ -825,12 +825,12 @@ const taskActions = useTaskActions({
   prepareBeforeComplete: async () => {
     if (isMiSubTaskMode.value) {
       await mergeMiParticipantScalarsFromForm()
-      return
-    }
-    if (!formReadOnly.value && allowSubTableAssignForCurrentTask.value) {
+    } else if (!formReadOnly.value && allowSubTableAssignForCurrentTask.value) {
       patchFormDataSubTablesFromCurrentBindings()
     }
+    await syncSubTableRowVersionsBeforeSubmit()
   },
+  onSubmitSettled: resumeSubTableAutosave,
   buildFormPayloadForComplete: () => {
     const payload = buildCurrentTaskFormSubmitPayload()
     if (isMiSubTaskMode.value) {

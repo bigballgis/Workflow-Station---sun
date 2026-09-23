@@ -37,7 +37,7 @@ describe('context frames — unique ancestor rows', () => {
     expect(row.party_id).toBe('Party-1')
   })
 
-  it('does not guess when two distinct rows of the same ancestor table are in context', () => {
+  it('uses the host parent row instead of a saved sibling of the same table', () => {
     const ctx = {
       primaryFormData: { id: 'Case-1' },
       contextFrames: [
@@ -46,13 +46,41 @@ describe('context frames — unique ancestor rows', () => {
         { tableId: PARTY, row: { id: 'Party-B' }, role: 'FILTER_SIBLING' as const, bindingId: 12 },
       ],
     }
-    expect(uniqueAncestorRow(ctx, PARTY)).toBeNull()
+    expect(uniqueAncestorRow(ctx, PARTY)?.id).toBe('Party-A')
     expect(uniqueAncestorRow(ctx, MAIN)?.id).toBe('Case-1')
     const row = applyFkToInitialRow({}, fileFks, ctx)
     expect(row.case_id).toBe('Case-1')
-    expect(row.party_id).toBeUndefined()
-    expect(guardBeforeChildRowAdd(fileFks, ctx)).toContain('party_id')
+    expect(row.party_id).toBe('Party-A')
+    expect(guardBeforeChildRowAdd(fileFks, ctx)).not.toContain('party_id')
     expect(guardBeforeChildRowAdd(fileFks, ctx)).not.toContain('case_id')
+  })
+
+  it('does not guess when two saved sibling rows and no host parent are in context', () => {
+    const ctx = {
+      primaryFormData: { id: 'Case-1' },
+      contextFrames: [
+        { tableId: MAIN, row: { id: 'Case-1' }, role: 'PRIMARY' as const },
+        { tableId: PARTY, row: { id: 'Party-A' }, role: 'FILTER_SIBLING' as const, bindingId: 11 },
+        { tableId: PARTY, row: { id: 'Party-B' }, role: 'FILTER_SIBLING' as const, bindingId: 12 },
+      ],
+    }
+    expect(uniqueAncestorRow(ctx, PARTY)).toBeNull()
+    expect(applyFkToInitialRow({}, fileFks, ctx).party_id).toBeUndefined()
+    expect(guardBeforeChildRowAdd(fileFks, ctx)).toContain('party_id')
+  })
+
+  it('does not guess when two host parent rows of the same table are in context', () => {
+    const ctx = {
+      primaryFormData: { id: 'Case-1' },
+      contextFrames: [
+        { tableId: MAIN, row: { id: 'Case-1' }, role: 'PRIMARY' as const },
+        { tableId: PARTY, row: { id: 'Party-A' }, role: 'PARENT' as const, bindingId: 11 },
+        { tableId: PARTY, row: { id: 'Party-B' }, role: 'PARENT' as const, bindingId: 12 },
+      ],
+    }
+    expect(uniqueAncestorRow(ctx, PARTY)).toBeNull()
+    expect(applyFkToInitialRow({}, fileFks, ctx).party_id).toBeUndefined()
+    expect(guardBeforeChildRowAdd(fileFks, ctx)).toContain('party_id')
   })
 
   it('treats two frames of the same row identity as unique', () => {
@@ -83,9 +111,9 @@ describe('context frames — unique ancestor rows', () => {
       { bindingId: 20, tableId: FILE, filterFkRefTableId: PARTY },
       11,
     )
-    expect(uniqueAncestorRow(ctx, PARTY)).toBeNull()
+    expect(uniqueAncestorRow(ctx, PARTY)?.id).toBe('Party-A')
     const undeclared = applyFkToInitialRow({}, fileFks, ctx)
-    expect(undeclared.party_id).toBeUndefined()
+    expect(undeclared.party_id).toBe('Party-A')
     const declared = applyFkToInitialRow({}, applyFkFillSources(fileFks, [
       { fieldName: 'case_id', kind: 'PRIMARY' },
       { fieldName: 'party_id', kind: 'ANCESTOR', ancestorBindingId: 12 },

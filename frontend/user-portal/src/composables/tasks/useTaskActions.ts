@@ -124,6 +124,8 @@ export function useTaskActions(options: {
   validateTaskForm?: () => Promise<boolean>
   /** MI Save parity: seed FK / merge participant scalars before complete. */
   prepareBeforeComplete?: () => Promise<void>
+  /** Runs after Submit finishes, including when Complete fails. */
+  onSubmitSettled?: () => void
   /**
    * Build Task Form payload for complete (clone rows, flatten nested __subTables__, MI scrub).
    * When omitted, falls back to legacy merge from formData + bindings (tests only).
@@ -345,6 +347,7 @@ export function useTaskActions(options: {
       }
     } finally {
       options.submitting.value = false
+      options.onSubmitSettled?.()
     }
   }
   async function submitAction() {

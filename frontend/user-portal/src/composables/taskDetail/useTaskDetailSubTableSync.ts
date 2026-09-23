@@ -19,6 +19,7 @@ import {
   bindingMatchesMiSubTableName,
 } from '@/composables/tasks/miParticipantRowKey'
 import { writeSubTableRows } from '@/composables/tasks/subTableStore'
+import { shouldProjectByFilter } from '@/composables/tasks/subTableFilterProjection'
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
@@ -207,8 +208,12 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
       : nextRows
     const out = cloneSubTableRows(merged)
 
+    // One filter (or two widgets with the same filter) still share one row list.
+    // Distinct filter FKs on the same table must not copy one widget's slice onto the others;
+    // applyDisplayedSliceToCanonical already merged that slice into the shared store.
+    const fanOutSameTable = !shouldProjectByFilter(source, subTableBindings.value)
     const sync = (binding: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null; data: any[] }) => {
-      if (subTableBindingMatches(binding, source)) {
+      if (binding === source || (fanOutSameTable && subTableBindingMatches(binding, source))) {
         binding.data = binding === source ? out : cloneSubTableRows(out)
       }
     }

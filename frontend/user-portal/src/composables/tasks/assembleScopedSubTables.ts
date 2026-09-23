@@ -11,6 +11,7 @@ import {
   type CanonicalStampBinding,
   type SubTableBindingScope,
 } from '@/composables/tasks/subTableCanonicalStamp'
+import { stampAuthoritativeRowVersions } from '@/composables/tasks/subTableRowVersionSync'
 import {
   projectSavedRowsForBinding,
   removeRowsWithMissingDeclaredParent,
@@ -61,6 +62,7 @@ export function assembleScopedSubTablesSubmit(
     stampCanonicalStoreRows(subTables, stamped, binding, rows, sharedKeys)
   }
   flattenNestedSubTableRowsIntoPayload(subTables, 8, primaryKeyFieldsBySliceKey, parentLink)
+  stampAuthoritativeRowVersions(subTables, baseline, list)
   // A parent deletion immediately hides its children from the projected widget. Remove those
   // now-invisible orphans from the canonical submit store as well; otherwise the backend sees a
   // changed row that no surviving binding scope can legitimately claim.

@@ -98,7 +98,7 @@ class SubTableBindingScopeGuard {
             if (before == null) {
                 throw new PortalException("409", "Sub-table deletion no longer matches a saved row");
             }
-            assertRowMatchesFilter(meta, expected, before);
+            assertDeletionStillOwned(meta, expected, before, formData, submitted, baseline);
             Object version = before.getOrDefault(ROW_VERSION_FIELD, 0);
             if (!sameValue(version, deletion.get(ROW_VERSION_FIELD))) {
                 throw new PortalException("409", "Sub-table row was modified by another save; reload and retry");
@@ -319,15 +319,20 @@ class SubTableBindingScopeGuard {
 
     private List<Object> siblingParentKeys(BindingMeta meta, Map<String, Object> submitted,
                                            Map<String, Object> baseline) {
+        List<Object> current = parentKeys(meta, submitted);
+        if (!current.isEmpty()) {
+            return current;
+        }
+        return parentKeys(meta, baseline);
+    }
+
+    private List<Object> parentKeys(BindingMeta meta, Map<String, Object> tables) {
         if (!StringUtils.hasText(meta.filterRefTableName())
                 || (meta.filterRefTableId() == null && meta.refPkColumns() == null)) {
             return List.of();
         }
         String parentKey = "dw:" + meta.filterRefTableName();
-        List<Object> parentRows = rowsOf(submitted, parentKey);
-        if (parentRows.isEmpty()) {
-            parentRows = rowsOf(baseline, parentKey);
-        }
+        List<Object> parentRows = rowsOf(tables, parentKey);
         List<String> pk = meta.refPkColumns() != null ? meta.refPkColumns() : pkColumnsOfTable(meta.filterRefTableId());
         List<Object> keys = new ArrayList<>();
         for (Object raw : parentRows) {
@@ -371,6 +376,34 @@ class SubTableBindingScopeGuard {
         if (!valueMatchesExpected(expected, actual)) {
             throw new PortalException("403", "Binding is not allowed to write this sub-table row");
         }
+    }
+
+    /**
+     * A child row may be deleted together with its parent. Surviving sibling parents are the
+     * write allow-list, so the removed parent's key is absent from {@code expected}. The deletion
+     * is still owned when that key was on the baseline parent row and is gone from the submitted one.
+     */
+    private void assertDeletionStillOwned(BindingMeta meta, Object expected, Map<String, Object> before,
+                                          Map<String, Object> formData, Map<String, Object> submitted,
+                                          Map<String, Object> baseline) {
+        if (!StringUtils.hasText(meta.filterField()) || expected == null) {
+            return;
+        }
+        Object actual = before.get(meta.filterField());
+        if (actual == null) {
+            actual = ignoreCase(before, meta.filterField());
+        }
+        if (valueMatchesExpected(expected, actual)) {
+            return;
+        }
+        if (!hasCurrentItemObject(formData)
+                && meta.filterRefType() != null
+                && "SUB".equalsIgnoreCase(meta.filterRefType())
+                && valueMatchesExpected(parentKeys(meta, baseline), actual)
+                && !valueMatchesExpected(parentKeys(meta, submitted), actual)) {
+            return;
+        }
+        throw new PortalException("403", "Binding is not allowed to write this sub-table row");
     }
 
     private void assertNewRowOwnership(BindingMeta meta, Map<String, Object> row,
@@ -441,8 +474,64 @@ class SubTableBindingScopeGuard {
             Map<String, Object> mutable = new LinkedHashMap<>(row);
             mutable.put(ROW_VERSION_FIELD, next);
             rows.set(i, mutable);
+            copyVersionOntoNestedCopies(submitted, storeKey, pkColumns, key, next);
         }
         submitted.put(storeKey, rows);
+    }
+
+    /**
+     * A parent row keeps a second copy of these children under {@code __subTables__}.
+     * Bumping only the flat row leaves that copy on the previous number, and the next
+     * save then submits the stale one.
+     */
+    @SuppressWarnings("unchecked")
+    private static void copyVersionOntoNestedCopies(Map<String, Object> submitted, String storeKey,
+                                                     List<String> pkColumns, Map<String, Object> key, int next) {
+        for (Object table : submitted.values()) {
+            if (!(table instanceof List<?> rows)) {
+                continue;
+            }
+            for (Object raw : rows) {
+                if (!(raw instanceof Map<?, ?> parent) || !(parent.get("__subTables__") instanceof Map<?, ?> nested)) {
+                    continue;
+                }
+                for (Map.Entry<?, ?> entry : nested.entrySet()) {
+                    if (!storeKey.equals(String.valueOf(entry.getKey()))) {
+                        continue;
+                    }
+                    if (!(entry.getValue() instanceof List<?> children)) {
+                        continue;
+                    }
+                    List<Object> updated = replaceNestedVersion(children, pkColumns, key, next);
+                    if (updated != null) {
+                        ((Map<String, Object>) nested).put(String.valueOf(entry.getKey()), updated);
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<Object> replaceNestedVersion(List<?> children, List<String> pkColumns,
+                                                      Map<String, Object> key, int next) {
+        List<Object> updated = new ArrayList<>(children.size());
+        boolean changed = false;
+        for (Object childRaw : children) {
+            if (!(childRaw instanceof Map<?, ?> child)) {
+                updated.add(childRaw);
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> childMap = (Map<String, Object>) child;
+            if (!keysMatch(rowKeyOf(childMap, pkColumns), key)) {
+                updated.add(childRaw);
+                continue;
+            }
+            Map<String, Object> copy = new LinkedHashMap<>(childMap);
+            copy.put(ROW_VERSION_FIELD, next);
+            updated.add(copy);
+            changed = true;
+        }
+        return changed ? updated : null;
     }
 
     private record BindingMeta(long id, String storeKey, String filterField, String filterRefType,

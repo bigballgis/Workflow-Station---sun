@@ -62,6 +62,40 @@ class SubTableBindingScopeGuardTest {
     }
 
     @Test
+    void bumpingAFlatRowAlsoBumpsTheNestedCopyOnItsParent() {
+        JdbcTemplate jdbc = stubBinding(202L, "attachment", "participant_id", "SUB", List.of("id"));
+        Map<String, Object> nestedCopy = new HashMap<>();
+        nestedCopy.put("id", "Y");
+        nestedCopy.put("participant_id", "P-A");
+        nestedCopy.put("_wsRowVersion", 1);
+        Map<String, Object> otherTableCopy = new HashMap<>();
+        otherTableCopy.put("id", "Y");
+        otherTableCopy.put("_wsRowVersion", 1);
+        Map<String, Object> parent = new HashMap<>();
+        parent.put("id", "P-A");
+        parent.put("__subTables__", new HashMap<>(Map.of(
+                "dw:attachment", new ArrayList<>(List.of(nestedCopy)),
+                "dw:note", new ArrayList<>(List.of(otherTableCopy)))));
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:attachment", new ArrayList<>(List.of(versioned("Y", "P-A", 4))));
+        submitted.put("dw:party", new ArrayList<>(List.of(parent)));
+        Map<String, Object> baseline = Map.of("dw:attachment", List.of(versioned("Y", "P-A", 4)));
+        SubTableBindingScope scope = scope("202", "dw:attachment", List.of(Map.of("id", "Y")), false);
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, currentItem("P-A"), submitted, baseline);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nested = (Map<String, Object>) parent.get("__subTables__");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> copies = (List<Map<String, Object>>) nested.get("dw:attachment");
+        assertThat(copies.get(0).get("_wsRowVersion")).isEqualTo(5);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> other = (List<Map<String, Object>>) nested.get("dw:note");
+        assertThat(other.get(0).get("_wsRowVersion")).isEqualTo(1);
+    }
+
+    @Test
     void emptiedParticipantScopeRemovesOnlyMatchingRows() {
         JdbcTemplate jdbc = stubBinding(202L, "attachment", "participant_id", "SUB", List.of("id"));
         Map<String, Object> submitted = new HashMap<>();
@@ -168,6 +202,47 @@ class SubTableBindingScopeGuardTest {
 
         assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
                 List.of(partyScope), FU, Map.of(), submitted, Map.of()))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("not allowed to write");
+    }
+
+    @Test
+    void partyBindingMayDeleteChildOfParentRemovedInTheSameRequest() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> aliceFile = fileRow("Y", "C1", "P-A");
+        Map<String, Object> bobFile = fileRow("Z", "C1", "P-B");
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of(bobFile)));
+        submitted.put("dw:p0_dual_party", new ArrayList<>(List.of(Map.of("id", "P-B"))));
+        Map<String, Object> baseline = Map.of(
+                "dw:p0_dual_file", List.of(aliceFile, bobFile),
+                "dw:p0_dual_party", List.of(Map.of("id", "P-A"), Map.of("id", "P-B")));
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(Map.of("id", "Z")), false);
+        partyScope.setDeletedRows(List.of(Map.of("id", "Y", "_wsRowVersion", 0)));
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(partyScope), FU, Map.of("id", "C1"), submitted, baseline);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) submitted.get("dw:p0_dual_file");
+        assertThat(rows).extracting(r -> r.get("id")).containsExactly("Z");
+    }
+
+    @Test
+    void partyBindingCannotDeleteARowWhoseParentStillExists() {
+        JdbcTemplate jdbc = stubTwoBindings();
+        Map<String, Object> caseFile = fileRow("X", "C1", null);
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:p0_dual_file", new ArrayList<>(List.of()));
+        submitted.put("dw:p0_dual_party", new ArrayList<>(List.of(Map.of("id", "P-A"))));
+        Map<String, Object> baseline = Map.of(
+                "dw:p0_dual_file", List.of(caseFile),
+                "dw:p0_dual_party", List.of(Map.of("id", "P-A")));
+        SubTableBindingScope partyScope = scope("202", "dw:p0_dual_file", List.of(), false);
+        partyScope.setDeletedRows(List.of(Map.of("id", "X", "_wsRowVersion", 0)));
+
+        assertThatThrownBy(() -> new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(partyScope), FU, Map.of("id", "C1"), submitted, baseline))
                 .isInstanceOf(PortalException.class)
                 .hasMessageContaining("not allowed to write");
     }
@@ -313,6 +388,12 @@ class SubTableBindingScopeGuardTest {
         assertThat((List<?>) submitted.get("dw:p0_dual_file"))
                 .singleElement().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .containsEntry("_wsRowVersion", 8);
+    }
+
+    private static Map<String, Object> versioned(String id, String participantId, int version) {
+        Map<String, Object> r = row(id, participantId);
+        r.put("_wsRowVersion", version);
+        return r;
     }
 
     private static Map<String, Object> row(String id, String participantId) {

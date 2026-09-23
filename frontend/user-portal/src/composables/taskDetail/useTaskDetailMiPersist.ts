@@ -150,24 +150,25 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
 
   async function saveCurrentTaskFormWithMiPersist() {
     if (formReadOnly.value || !effectiveTaskId.value) return
-    if (isMiSubTaskMode.value) {
-      await mergeMiParticipantScalarsFromForm()
+    // The task-form save copies the server row version back onto the open rows.
+    // This button used to submit on its own and skip that, so the next Save still
+    // carried the previous version and the server rejected it.
+    if (!isMiSubTaskMode.value) {
+      await ctx.taskForm.saveCurrentTaskForm()
+      return
     }
+    await mergeMiParticipantScalarsFromForm()
     savingTaskForm.value = true
     try {
       const payload = buildCurrentTaskFormSubmitPayload()
-      if (isMiSubTaskMode.value) {
-        protectMainRecordScalarsInSubmitPayload(payload)
-      }
+      protectMainRecordScalarsInSubmitPayload(payload)
       await apiSubmitTaskForm(effectiveTaskId.value, payload)
       ElMessage.success(t('task.operationSuccess'))
-      if (isMiSubTaskMode.value) {
-        await ctx.loadTaskDetail()
-        // #1446: deterministic last write — re-apply the server-confirmed saved link-form rows
-        // after the in-place reload pipeline, so a stale prior-step/snapshot candidate can never
-        // win the inline-form row pick (full refresh and in-place save then render identically).
-        reapplySavedLinkRowsToBindings(payload)
-      }
+      await ctx.loadTaskDetail()
+      // #1446: deterministic last write — re-apply the server-confirmed saved link-form rows
+      // after the in-place reload pipeline, so a stale prior-step/snapshot candidate can never
+      // win the inline-form row pick (full refresh and in-place save then render identically).
+      reapplySavedLinkRowsToBindings(payload)
     } catch (error) {
       console.error('[TaskForm] save failed:', error)
       ElMessage.error(t('task.operationFailed'))

@@ -141,12 +141,13 @@ describe('projectSavedRowsForBinding', () => {
     })).toEqual([{ correspondence_id: 'Corr-000047' }])
   })
 
-  it('does not empty MAIN-filter widgets when the primary PK columns cannot be read', () => {
+  it('claims nothing when a multi-filter table cannot read its parent key', () => {
     const siblings = [caseFiles(), partyFiles(), parties()]
     expect(projectSavedRowsForBinding(siblings[0].data, siblings[0], siblings, {
       formData: { id: 'C1' },
       primaryTableId: MAIN_TID,
-    })).toEqual([caseDoc, partyDoc, otherCase])
+    })).toEqual([])
+    expect(siblings[0].data).toEqual([caseDoc, partyDoc, otherCase])
   })
 
   it('empties the nested widget when no party parent exists', () => {
@@ -186,6 +187,21 @@ describe('applyDisplayedSliceToCanonical', () => {
     expect(partyBinding.data).toBe(next)
   })
 
+  it('does not replace the store with one widget slice when the parent key is missing', () => {
+    const caseBinding = caseFiles()
+    const partyBinding = partyFiles()
+    const before = [caseDoc, partyDoc, otherCase]
+    const next = applyDisplayedSliceToCanonical(
+      [caseBinding, partyBinding, parties()],
+      50705,
+      [caseDoc],
+      { formData: {}, primaryTableId: MAIN_TID },
+    )
+    expect(next).toEqual(before)
+    expect(caseBinding.data).toEqual(before)
+    expect(partyBinding.data).toEqual(before)
+  })
+
   it('does not wipe the store when the nested parent is missing', () => {
     const caseBinding = caseFiles()
     const partyBinding = partyFiles()
@@ -196,5 +212,50 @@ describe('applyDisplayedSliceToCanonical', () => {
       { formData: { id: 'C1' }, primaryTableId: MAIN_TID, primaryPkFields: ['id'] },
     )
     expect(caseBinding.data).toEqual([caseDoc, partyDoc, otherCase])
+  })
+
+  it('keeps the stored row version when a nested copy omits it', () => {
+    const versionedCase = { ...caseDoc, _wsRowVersion: 1 }
+    const versionedParty = { ...partyDoc, _wsRowVersion: 1 }
+    const caseBinding = { ...caseFiles(), data: [versionedCase, versionedParty, otherCase] }
+    const partyBinding = { ...partyFiles(), data: [versionedCase, versionedParty, otherCase] }
+    const nestedCopy = { id: 'Y', case_id: 'C1', party_id: 'P-A', title: 'party-doc' }
+    const added = { id: 'Ciri', party_id: 'P-A', title: 'ciri file' }
+    const next = applyDisplayedSliceToCanonical(
+      [caseBinding, partyBinding, parties()],
+      50706,
+      [nestedCopy, added],
+      { formData: { id: 'C1' }, primaryTableId: MAIN_TID, primaryPkFields: ['id'] },
+    ) as Array<Record<string, unknown>>
+    expect(next.find(row => row.id === 'Y')?._wsRowVersion).toBe(1)
+    expect(next.find(row => row.id === 'X')?._wsRowVersion).toBe(1)
+    expect(next.find(row => row.id === 'Ciri')?.title).toBe('ciri file')
+  })
+
+  it('keeps the canonical row version when a nested copy still has an older one', () => {
+    const versionedParty = { ...partyDoc, _wsRowVersion: 2 }
+    const caseBinding = { ...caseFiles(), data: [caseDoc, versionedParty, otherCase] }
+    const partyBinding = { ...partyFiles(), data: [caseDoc, versionedParty, otherCase] }
+    const staleCopy = { ...partyDoc, _wsRowVersion: 1 }
+    const next = applyDisplayedSliceToCanonical(
+      [caseBinding, partyBinding, parties()],
+      50706,
+      [staleCopy],
+      { formData: { id: 'C1' }, primaryTableId: MAIN_TID, primaryPkFields: ['id'] },
+    ) as Array<Record<string, unknown>>
+    expect(next.find(row => row.id === 'Y')?._wsRowVersion).toBe(2)
+  })
+
+  it('drops a party file the nested widget no longer contains', () => {
+    const versionedParty = { ...partyDoc, _wsRowVersion: 1 }
+    const caseBinding = { ...caseFiles(), data: [caseDoc, versionedParty, otherCase] }
+    const partyBinding = { ...partyFiles(), data: [caseDoc, versionedParty, otherCase] }
+    const next = applyDisplayedSliceToCanonical(
+      [caseBinding, partyBinding, parties()],
+      50706,
+      [],
+      { formData: { id: 'C1' }, primaryTableId: MAIN_TID, primaryPkFields: ['id'] },
+    ) as Array<{ id: string }>
+    expect(next.map(row => row.id)).toEqual(['X', 'Z'])
   })
 })

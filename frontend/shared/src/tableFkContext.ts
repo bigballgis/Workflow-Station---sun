@@ -101,19 +101,33 @@ export function framesMatchingTable(ctx: RowAddContext, refTableId: number): Con
   return []
 }
 
+/**
+ * One row for these frames, or null when the table is genuinely ambiguous.
+ * A host dialog row (PARENT) wins over saved list rows (FILTER_SIBLING): the nested
+ * child belongs to the row being edited. Two PARENT rows, or a PARENT competing
+ * with PRIMARY, stay unresolved.
+ */
+function resolvedRow(frames: ContextFrame[]): Record<string, unknown> | null {
+  if (frames.length === 0) return null
+  const first = frames[0].row
+  if (frames.every(frame => sameAncestorRow(first, frame.row))) return first
+  const parents = frames.filter(frame => frame.role === 'PARENT')
+  if (
+    parents.length === 1
+    && frames.every(frame => frame.role === 'PARENT' || frame.role === 'FILTER_SIBLING')
+  ) {
+    return parents[0].row
+  }
+  return null
+}
+
 /** Single ancestor row for a table, or null when missing or two distinct rows exist. */
 export function uniqueAncestorRow(
   ctx: RowAddContext,
   refTableId: number | undefined,
 ): Record<string, unknown> | null {
   if (refTableId == null) return null
-  const frames = framesMatchingTable(ctx, Number(refTableId))
-  if (frames.length === 0) return null
-  const first = frames[0].row
-  for (let i = 1; i < frames.length; i += 1) {
-    if (!sameAncestorRow(first, frames[i].row)) return null
-  }
-  return first
+  return resolvedRow(framesMatchingTable(ctx, Number(refTableId)))
 }
 
 export function hasAmbiguousAncestorTable(ctx: RowAddContext, tableId: number): boolean {
@@ -134,10 +148,8 @@ export function ancestorMapFromUniqueFrames(
   }
   const out: Record<number, Record<string, unknown>> = {}
   for (const [tid, list] of grouped) {
-    const first = list[0].row
-    if (list.every(f => sameAncestorRow(first, f.row))) {
-      out[tid] = first
-    }
+    const row = resolvedRow(list)
+    if (row) out[tid] = row
   }
   return out
 }
@@ -221,9 +233,15 @@ export function replaceAncestorRow(
   tableId: number,
   nextRow: Record<string, unknown>,
 ): RowAddContext {
-  const frames = (ctx.contextFrames ?? []).map(frame =>
-    Number(frame.tableId) === Number(tableId) ? { ...frame, row: nextRow } : frame,
+  const hasParent = (ctx.contextFrames ?? []).some(
+    frame => Number(frame.tableId) === Number(tableId) && frame.role === 'PARENT',
   )
+  const frames = (ctx.contextFrames ?? []).map(frame => {
+    if (Number(frame.tableId) !== Number(tableId)) return frame
+    // Keep a named ancestor binding's row. Only the host dialog row receives the new key.
+    if (hasParent && frame.role !== 'PARENT') return frame
+    return { ...frame, row: nextRow }
+  })
   if (!frames.some(frame => Number(frame.tableId) === Number(tableId))) {
     frames.push({ tableId: Number(tableId), row: nextRow, role: 'PRIMARY' })
   }
