@@ -62,6 +62,40 @@ class SubTableBindingScopeGuardTest {
     }
 
     @Test
+    void bumpingAFlatRowAlsoBumpsTheNestedCopyOnItsParent() {
+        JdbcTemplate jdbc = stubBinding(202L, "attachment", "participant_id", "SUB", List.of("id"));
+        Map<String, Object> nestedCopy = new HashMap<>();
+        nestedCopy.put("id", "Y");
+        nestedCopy.put("participant_id", "P-A");
+        nestedCopy.put("_wsRowVersion", 1);
+        Map<String, Object> otherTableCopy = new HashMap<>();
+        otherTableCopy.put("id", "Y");
+        otherTableCopy.put("_wsRowVersion", 1);
+        Map<String, Object> parent = new HashMap<>();
+        parent.put("id", "P-A");
+        parent.put("__subTables__", new HashMap<>(Map.of(
+                "dw:attachment", new ArrayList<>(List.of(nestedCopy)),
+                "dw:note", new ArrayList<>(List.of(otherTableCopy)))));
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:attachment", new ArrayList<>(List.of(versioned("Y", "P-A", 4))));
+        submitted.put("dw:party", new ArrayList<>(List.of(parent)));
+        Map<String, Object> baseline = Map.of("dw:attachment", List.of(versioned("Y", "P-A", 4)));
+        SubTableBindingScope scope = scope("202", "dw:attachment", List.of(Map.of("id", "Y")), false);
+
+        new SubTableBindingScopeGuard(jdbc).assertAndApply(
+                List.of(scope), FU, currentItem("P-A"), submitted, baseline);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nested = (Map<String, Object>) parent.get("__subTables__");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> copies = (List<Map<String, Object>>) nested.get("dw:attachment");
+        assertThat(copies.get(0).get("_wsRowVersion")).isEqualTo(5);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> other = (List<Map<String, Object>>) nested.get("dw:note");
+        assertThat(other.get(0).get("_wsRowVersion")).isEqualTo(1);
+    }
+
+    @Test
     void emptiedParticipantScopeRemovesOnlyMatchingRows() {
         JdbcTemplate jdbc = stubBinding(202L, "attachment", "participant_id", "SUB", List.of("id"));
         Map<String, Object> submitted = new HashMap<>();
@@ -354,6 +388,12 @@ class SubTableBindingScopeGuardTest {
         assertThat((List<?>) submitted.get("dw:p0_dual_file"))
                 .singleElement().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .containsEntry("_wsRowVersion", 8);
+    }
+
+    private static Map<String, Object> versioned(String id, String participantId, int version) {
+        Map<String, Object> r = row(id, participantId);
+        r.put("_wsRowVersion", version);
+        return r;
     }
 
     private static Map<String, Object> row(String id, String participantId) {

@@ -162,7 +162,7 @@ function nestedCopyMatchesEnrichedFlatRow(
 ): boolean {
   let comparedFields = 0
   for (const [k, v] of Object.entries(nested)) {
-    if (k.startsWith('__')) continue
+    if (isNestedCopyMetadata(k)) continue
     const nv = subTableFieldValueKey(v)
     if (nv == null) continue
     const fv = subTableFieldValueKey(flat[k])
@@ -171,11 +171,17 @@ function nestedCopyMatchesEnrichedFlatRow(
   }
   if (comparedFields === 0) return false
   for (const [k, v] of Object.entries(flat)) {
-    if (k.startsWith('__')) continue
+    if (isNestedCopyMetadata(k)) continue
     if (subTableFieldValueKey(v) == null) continue
     if (subTableFieldValueKey(nested[k]) == null) return true
   }
-  return false
+  // Same business row. A different _wsRowVersion is not a second row; keeping
+  // the flat copy preserves the version the server last stored.
+  return true
+}
+
+function isNestedCopyMetadata(key: string): boolean {
+  return key.startsWith('__') || key === '_wsRowVersion'
 }
 
 /** Fold the dropped nested copy's own nested slices into the matched flat row so grandchild rows survive. */

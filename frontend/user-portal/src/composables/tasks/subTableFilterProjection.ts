@@ -14,6 +14,7 @@
 
 import { declaredFilterFkFields } from './miBindingKindFromConfig'
 import { resolveMiChildPrimaryKeyColumns } from './miLinkChildIdentity'
+import { mergeSubTableRowsByRowId, sameSubTableRow } from './subTableRowMerge'
 
 export interface FilterProjectionBinding {
   bindingId?: number | string
@@ -90,7 +91,40 @@ export function mergeFilterSliceIntoCanonical<T>(
   const field = effectiveFilterDeclaration(binding).fieldName
   if (field == null || parentValues.length === 0) return [...canonical]
   const kept = canonical.filter(row => !rowMatchesAnyParent(row, field, parentValues))
-  return [...kept, ...slice]
+  const owned = canonical.filter(row => rowMatchesAnyParent(row, field, parentValues))
+  const mergedSlice = slice.map(row => preserveFieldsOmittedBySlice(owned, row, binding.primaryKeyFields))
+  return [...kept, ...mergedSlice]
+}
+
+/**
+ * A nested dialog emits a copy of the displayed row. That copy is not a source of
+ * `_wsRowVersion`: it may omit the field or still carry the number from an older save.
+ * The canonical row keeps the version it already has. A row the slice no longer
+ * contains stays deleted.
+ */
+function preserveFieldsOmittedBySlice<T>(
+  owned: readonly T[],
+  incoming: T,
+  primaryKeyFields: string[] | null | undefined,
+): T {
+  const previous = owned.find(row => sameSubTableRow(row, incoming, primaryKeyFields))
+  if (!previous) return incoming
+  const [merged] = mergeSubTableRowsByRowId([previous], [incoming], primaryKeyFields)
+  const result = (merged ?? incoming) as T
+  const stored = storedRowVersion(previous)
+  if (stored !== undefined && isVersionRow(result)) result._wsRowVersion = stored
+  return result
+}
+
+function storedRowVersion(row: unknown): unknown {
+  if (!isVersionRow(row)) return undefined
+  const version = row._wsRowVersion
+  if (version == null || version === '') return undefined
+  return version
+}
+
+function isVersionRow(row: unknown): row is Record<string, unknown> {
+  return !!row && typeof row === 'object' && !Array.isArray(row)
 }
 
 /**

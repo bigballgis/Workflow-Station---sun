@@ -4403,3 +4403,55 @@
     验证：关掉放行时 partyBindingMayDeleteChildOfParentRemovedInTheSameRequest 报同一句 403；
     恢复后 SubTableBindingScopeGuardTest 24 条通过。重建 user-portal 后同一待办再删 alice，
     submit 200，刷新后 alice 与 alice file 不再出现，bob 与 bob file 仍在。
+
+- id: "1646"
+  status: fixed
+  fixed_at: "2026-09-23"
+  severity: major
+  category: bug
+  summary: "Nested file add failed when the parent dialog row had no key and one saved sibling already existed"
+  file: "frontend/shared/src/tableFkContext.ts"
+  note: |
+    P0 Dual Binding Test clone 发起页：Parties 里已有一条已保存的 party 时，再打开一条未保存的
+    party 并在内嵌 P0 Dual File 上 Add，报 party_id 缺父记录。列表里那一条和弹窗里正在编辑的
+    父行被当成两个候选，系统拒绝猜测，也不给弹窗行分配主键。
+    修复：同一张表上，弹窗父行优先于列表里的已保存行；主键只写回弹窗行，不提交。两个弹窗父行、
+    或父行与主表行冲突时仍然不猜。指定了祖先绑定的外键仍按那个绑定取值。
+    取消外层弹窗会丢掉这条 party 和它的文件。
+    验证：tableFkRuntime、nestedSubTableAutoPrimaryKey、portal 与设计器 subTableRowRuntime 单测通过。
+    门户重建后，clone 发起页先保存 alice 与 alice file，再在未保存的 ciri 上添加 ciri file，
+    没有缺父记录提示；取消后列表只剩 alice / alice file。
+
+- id: "1647"
+  status: fixed
+  fixed_at: "2026-09-23"
+  severity: major
+  category: bug
+  summary: "Review-task save dropped sub-table row versions when a nested file copy was written back"
+  file: "frontend/user-portal/src/composables/tasks/subTableFilterProjection.ts"
+  note: |
+    Request 202609230003，Review Dual Binding Case。在 Parties 里新增 ciri 并在内嵌文件表加一行后点 Save，
+    返回 409 Sub-table row was modified by another save，刷新后 ciri 不在。
+    内嵌文件表提交的是对话框里的行副本，副本没有 _wsRowVersion。写回共享存储时整行替换，
+    已保存的 party 文件版本被丢掉，服务端按版本校验拒绝，事务回滚。
+    修复：切片写回时按行身份并上存储行里副本没带的字段，版本留在存储行上。切片里已经没有的行仍然删除。
+    验证：修复前 subTableFilterProjection「keeps the stored row version when a nested copy omits it」失败；
+    修复后该文件 18 条通过。重建 user-portal-frontend 后同一待办再加 ciri 与 ciri file，submit 200，
+    刷新后 Party-000012 ciri 与 ciri file 仍在，alice、bob 及其文件仍在。
+
+- id: "1648"
+  status: fixed
+  fixed_at: "2026-09-23"
+  severity: major
+  category: bug
+  summary: "Nested sub-table copies kept a stale row version and overwrote the flat store on the next save"
+  file: "frontend/user-portal/src/composables/tasks/subTableRowVersionSync.ts"
+  note: |
+    Request 202609230004，task 23e4b34f。给已保存的 bob 再加一行内嵌文件，以及给刚保存成功的 ciri 再加一行，
+    Save 都返回 409 Sub-table row was modified by another save，刷新后新文件消失。
+    同一文件有两份：顶层存储和 party 行里的 __subTables__ 副本。服务端只给顶层副本加版本，
+    内嵌副本停在旧号。下次打开时，版本不同被当成另一行，旧副本盖掉顶层版本，提交被拒绝，新行随事务回滚。
+    修复：行身份不再拿 _wsRowVersion 当区别；切片写回保留顶层版本；加载后用原始顶层快照把版本写回页面行和内嵌副本；
+    提交时按基线盖到两份副本，新行不加版本；保存成功后两份一起更新；服务端 bump 时只同步同一张表的内嵌副本。
+    验证：同一待办未改内容 Save 200，ciri file / ciri file2 以版本 2 提交。给 bob 加 bob file3，submit 200，新行无版本。
+    不刷新再给 ciri 加 ciri file3，submit 200。整页刷新后 case file、bob file、bob file2、bob file3、ciri file、ciri file2、ciri file3 都在。

@@ -25,6 +25,7 @@ import {
 import type { TaskDetailState } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
 import { resolveMiChildPrimaryKeyColumns } from '@/composables/tasks/miLinkChildIdentity'
+import { restoreAuthoritativeRowVersions } from '@/composables/tasks/subTableRowVersionSync'
 
 export interface TaskDetailHydrationFns {
   getSavedSubTableRows: (
@@ -304,8 +305,12 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
     }
 
     applyTo(subTableBindings.value)
+    // Slice merges can copy a stale _wsRowVersion off a nested dialog image.
+    // The untouched top-level snapshot is the version the server stored.
+    restoreAuthoritativeRowVersions(savedMap, subTableBindings.value)
     for (const pf of previousForms.value) {
       applyTo(pf.subTableBindings)
+      restoreAuthoritativeRowVersions(savedMap, pf.subTableBindings)
     }
     for (const info of nodeFormMap.value.values()) {
       rehydrateSharedAttachmentBindings(

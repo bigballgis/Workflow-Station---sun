@@ -474,8 +474,64 @@ class SubTableBindingScopeGuard {
             Map<String, Object> mutable = new LinkedHashMap<>(row);
             mutable.put(ROW_VERSION_FIELD, next);
             rows.set(i, mutable);
+            copyVersionOntoNestedCopies(submitted, storeKey, pkColumns, key, next);
         }
         submitted.put(storeKey, rows);
+    }
+
+    /**
+     * A parent row keeps a second copy of these children under {@code __subTables__}.
+     * Bumping only the flat row leaves that copy on the previous number, and the next
+     * save then submits the stale one.
+     */
+    @SuppressWarnings("unchecked")
+    private static void copyVersionOntoNestedCopies(Map<String, Object> submitted, String storeKey,
+                                                     List<String> pkColumns, Map<String, Object> key, int next) {
+        for (Object table : submitted.values()) {
+            if (!(table instanceof List<?> rows)) {
+                continue;
+            }
+            for (Object raw : rows) {
+                if (!(raw instanceof Map<?, ?> parent) || !(parent.get("__subTables__") instanceof Map<?, ?> nested)) {
+                    continue;
+                }
+                for (Map.Entry<?, ?> entry : nested.entrySet()) {
+                    if (!storeKey.equals(String.valueOf(entry.getKey()))) {
+                        continue;
+                    }
+                    if (!(entry.getValue() instanceof List<?> children)) {
+                        continue;
+                    }
+                    List<Object> updated = replaceNestedVersion(children, pkColumns, key, next);
+                    if (updated != null) {
+                        ((Map<String, Object>) nested).put(String.valueOf(entry.getKey()), updated);
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<Object> replaceNestedVersion(List<?> children, List<String> pkColumns,
+                                                      Map<String, Object> key, int next) {
+        List<Object> updated = new ArrayList<>(children.size());
+        boolean changed = false;
+        for (Object childRaw : children) {
+            if (!(childRaw instanceof Map<?, ?> child)) {
+                updated.add(childRaw);
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> childMap = (Map<String, Object>) child;
+            if (!keysMatch(rowKeyOf(childMap, pkColumns), key)) {
+                updated.add(childRaw);
+                continue;
+            }
+            Map<String, Object> copy = new LinkedHashMap<>(childMap);
+            copy.put(ROW_VERSION_FIELD, next);
+            updated.add(copy);
+            changed = true;
+        }
+        return changed ? updated : null;
     }
 
     private record BindingMeta(long id, String storeKey, String filterField, String filterRefType,

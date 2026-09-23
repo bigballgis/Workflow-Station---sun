@@ -29,6 +29,7 @@ import {
   type SubTableBindingScope,
 } from './subTableCanonicalStamp'
 import { projectSavedRowsForBinding } from './subTableFilterProjection'
+import { stampAuthoritativeRowVersions } from './subTableRowVersionSync'
 import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
 
 function subTableSliceUnchanged(
@@ -356,6 +357,13 @@ export function useTaskForm(options: {
       8,
       primaryKeyFieldsBySliceKey,
       parentLink,
+    )
+    // Flatten can keep a nested copy whose version is older than the flat row.
+    // The baseline is the last server snapshot; dialog copies are not.
+    stampAuthoritativeRowVersions(
+      subTables as Record<string, unknown>,
+      loadedSubTableBaseline.value,
+      options.subTableBindings.value,
     )
     for (const key of Object.keys(subTableData)) {
       const rows = subTables[key]
