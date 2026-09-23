@@ -861,8 +861,20 @@ Kafka(K8S) ───────────────────────
 |--------|--------|------|
 | `ADMIN_CENTER_URL` | workflow-engine, user-portal, developer-workstation | 管理后台地址 |
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
+| `VAULT_ADDR` | admin-center | HashiCorp Vault 基址（含 `:8200`）。Admin 用 Kubernetes JWT（或本地可选 `VAULT_TOKEN`）登录后读 KV v2 `data.data.password`。空值则 VAULT 解析失败。已有库需手动执行 `00-schema/86-ac-environment-variables.sql`。`credential_encrypted` 列本发保留（应用不再读写）；测通后再另开脚本 DROP。平台须把 ServiceAccount `admin-center` 绑到 `VAULT_ROLE`。 |
 | `USER_PORTAL_BASE_URL` | admin-center | user-portal 基址（含 `/api/portal`）；PortalRuntimePurge / UserPortalAudit 内部调用 |
 | `PORTAL_INTERNAL_API_TOKEN` | admin-center, user-portal, workflow-engine | 调用门户 `/internal/*` 的共享密钥（须两端一致） |
+
+各 Hermes 部署应对接的 **Vault 集群**（Admin 直连 `VAULT_ADDR`，无独立 Wrapper 服务）：
+
+| Hermes 环境 | 配置落点 | `VAULT_ADDR` | 目录 `deploy_env` |
+|-------------|----------|--------------|-------------------|
+| 本地 Docker / DEV | `deploy/environments/dev/.env` | `https://vault-dev.uk.hsbc:8200` | `dev` |
+| PPD（K8s 目录 `preprod`，profile=`sit`） | `deploy/k8s/config_map/preprod/` | `https://vault-uat.uk.hsbc:8200` | **sit**（在 PPD 界面建的变量落 sit 切片） |
+| Hermes UAT（K8s 目录 `uat`） | `deploy/k8s/config_map/uat/` | `https://vault-dev.uk.hsbc:8200` | `uat` |
+| 生产 HK | 与 non-prod **同一组 Vault key**（集群 ConfigMap `workflow-platform-config`） | `https://vault-prod.hk.hsbc:8200` | `prod` |
+
+配套（**UAT / PPD / prod 必须相同**，只换 `VAULT_ADDR`）：`VAULT_NAMESPACE=ITID/22330042_HERMES`、`VAULT_AUTH_MOUNT=kubernetes/wsit-hk-azx-401`、`VAULT_ROLE=ame-hase-hermes-role`、`VAULT_KV_MOUNT=secrets/kv_v2/wsit`、`VAULT_LOGIN_REFRESH_SKEW_SECONDS=30`。发布方式也相同：把 key 写入 `workflow-platform-config`，再 `rollout restart deploy/admin-center`。Istio 放行 admin-center 出站 8200（见 `admin-center.yaml` 的 ServiceEntry）。平台须把各环境 ServiceAccount `admin-center` 绑到同一个 `VAULT_ROLE`。
 
 #### 12.2.1 developer-workstation 专项
 

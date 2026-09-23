@@ -3,6 +3,7 @@ import type { MainTableViewFieldColumn } from '@/api/mainTableView'
 import {
   extractLookupPrimaryKey,
   formatLookupAwareMainTableViewCell,
+  selectDisplayValue,
 } from '../mainTableViewLookupDisplay'
 
 /** Cell formatting reads only the lookup hints, so the capability declaration is fixed noise here. */
@@ -79,5 +80,27 @@ describe('mainTableViewLookupDisplay', () => {
       lookupDisplayField: 'email',
     })
     expect(formatLookupAwareMainTableViewCell(col, 'uuid-missing', null)).toBe('uuid-missing')
+  })
+
+  describe('select display', () => {
+    const yesNo = [{ value: '1', label: 'Y' }, { value: '2', label: 'N' }]
+
+    it('shows option labels only for columns designed as label', () => {
+      const label = column({ selectDisplay: 'label', selectOptions: yesNo })
+      expect(formatLookupAwareMainTableViewCell(label, '1', null)).toBe('Y')
+      expect(formatLookupAwareMainTableViewCell(label, ['1', '2'], null)).toBe('Y, N')
+
+      const value = column({ selectDisplay: 'value', selectOptions: yesNo })
+      expect(formatLookupAwareMainTableViewCell(value, '1', null)).toBe('1')
+      expect(formatLookupAwareMainTableViewCell(column({}), '1', null)).toBe('1')
+    })
+
+    it('keeps a stored value that is not among the options, and null', () => {
+      const label = column({ selectDisplay: 'label', selectOptions: yesNo })
+      expect(selectDisplayValue(label, '9')).toBe('9')
+      expect(selectDisplayValue(label, 2)).toBe('N')
+      expect(selectDisplayValue(label, null)).toBeNull()
+      expect(selectDisplayValue(column({ selectDisplay: 'label', selectOptions: [] }), '1')).toBe('1')
+    })
   })
 })

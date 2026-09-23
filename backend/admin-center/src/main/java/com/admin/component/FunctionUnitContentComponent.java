@@ -5,6 +5,7 @@ import com.admin.dto.response.FormContentDTO;
 import com.admin.dto.response.FunctionUnitContentItemDTO;
 import com.admin.dto.response.FunctionUnitContentResponse;
 import com.admin.dto.response.ProcessContentDTO;
+import com.admin.dto.response.TableBindingDTO;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.FunctionUnitContent;
 import com.admin.enums.ContentType;
@@ -12,6 +13,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.util.ChecksumUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,6 +42,7 @@ public class FunctionUnitContentComponent {
     private final JdbcTemplate jdbcTemplate;
     private final FunctionUnitLookup functionUnitLookup;
     private final FormTableBindingLoader bindingLoader;
+    private final ObjectMapper objectMapper;
 
     /**
      * In-memory cache for assembled function unit content (forms + bindings + BPMN + data tables).
@@ -149,8 +152,12 @@ public class FunctionUnitContentComponent {
 
     /**
      * Assemble full function unit content (BPMN, forms, data tables, etc.).
-     * <p>Includes Base64 BPMN decode, latest config_json from dw_form_definitions,
-     * load tableBindings and attach to form content.
+     * <p>FORM {@code data} is the catalog {@code content_data} snapshot. Live
+     * {@code dw_form_definitions} supplies {@code form_type}/{@code scene} only, except DETAIL
+     * (Main Table View addresses those forms by live id — see
+     * {@link #appendDetailFormsMissingFromSnapshot}). PROCESS/TASK/ACTION tableBindings come from
+     * the catalog snapshot when present; live {@code dw_form_table_bindings} is only attached for
+     * DETAIL and legacy configJson-only rows.
      *
      * <p><b>Validates: Requirements 6.1, 6.2, 6.3</b>
      */
@@ -186,17 +193,7 @@ public class FunctionUnitContentComponent {
                                 : processKey)
                         .build());
             } else if (content.getContentType() == ContentType.FORM) {
-                FormDefinitionSnapshot latest = fetchLatestFormDefinitionOrFallback(content, data);
-                forms.add(FormContentDTO.builder()
-                        .id(content.getId())
-                        .name(content.getContentName())
-                        .sourceId(content.getSourceId())
-                        .data(latest.configJson())
-                        .formType(latest.formType())
-                        // Lets the portal tell a node's To Do design from its My Requests one.
-                        .scene(latest.scene())
-                        .type(ContentType.FORM.name())
-                        .build());
+                forms.add(assembleFormContent(content, data));
             } else if (content.getContentType() == ContentType.DATA_TABLE) {
                 dataTables.add(DataTableContentDTO.builder()
                         .id(content.getId())
@@ -297,16 +294,38 @@ public class FunctionUnitContentComponent {
         }
     }
 
+    private FormContentDTO assembleFormContent(FunctionUnitContent content, String data) {
+        CatalogFormSnapshot.Payload payload = CatalogFormSnapshot.unwrap(objectMapper, data);
+        FormDefinitionSnapshot snapshot = formSnapshotWithLiveMeta(content, payload.configJson());
+        FormContentDTO form = FormContentDTO.builder()
+                .id(content.getId())
+                .name(content.getContentName())
+                .sourceId(content.getSourceId())
+                .data(snapshot.configJson())
+                .formType(snapshot.formType())
+                // Lets the portal tell a node's To Do design from its My Requests one.
+                .scene(snapshot.scene())
+                .type(ContentType.FORM.name())
+                .build();
+        boolean detail = "DETAIL".equals(snapshot.formType());
+        if (payload.freezeBindings() && !detail) {
+            List<TableBindingDTO> frozen = payload.tableBindings();
+            form.setTableBindings(frozen != null ? frozen : List.of());
+        }
+        return form;
+    }
+
     private record FormDefinitionSnapshot(String configJson, String formType, String scene) {}
 
     /**
-     * For FORM content, try to fetch the latest config_json + form_type from dw_form_definitions
-     * (the content_data may be a stale snapshot from import time).
+     * Snapshot {@code content_data} is the deployed form JSON. Live DW supplies
+     * {@code form_type}/{@code scene}; DETAIL still takes live {@code config_json} because
+     * Main Table View addresses those forms by current {@code detail_form_id}.
      */
-    private FormDefinitionSnapshot fetchLatestFormDefinitionOrFallback(
-            FunctionUnitContent content, String fallbackData) {
+    private FormDefinitionSnapshot formSnapshotWithLiveMeta(
+            FunctionUnitContent content, String snapshotData) {
         if (content.getSourceId() == null) {
-            return new FormDefinitionSnapshot(fallbackData, null, null);
+            return new FormDefinitionSnapshot(snapshotData, null, null);
         }
         try {
             Long sourceIdLong = Long.parseLong(content.getSourceId());
@@ -314,12 +333,14 @@ public class FunctionUnitContentComponent {
                 if (!rs.next()) {
                     return null;
                 }
-                return new FormDefinitionSnapshot(
-                        rs.getString("config_json"),
-                        rs.getString("form_type"),
-                        rs.getString("scene"));
+                String formType = rs.getString("form_type");
+                String scene = rs.getString("scene");
+                String liveConfig = rs.getString("config_json");
+                boolean detail = "DETAIL".equals(formType);
+                String config = detail && liveConfig != null ? liveConfig : snapshotData;
+                return new FormDefinitionSnapshot(config, formType, scene);
             };
-            FormDefinitionSnapshot latest = jdbcTemplate.query(
+            FormDefinitionSnapshot meta = jdbcTemplate.query(
                     """
                             SELECT config_json::text AS config_json, form_type, scene
                             FROM dw_form_definitions
@@ -327,18 +348,16 @@ public class FunctionUnitContentComponent {
                             """,
                     extractor,
                     sourceIdLong);
-            if (latest != null && latest.configJson() != null) {
-                log.info("Using latest config_json/form_type from dw_form_definitions for form sourceId={}",
-                        content.getSourceId());
-                return latest;
+            if (meta != null) {
+                return meta;
             }
         } catch (NumberFormatException e) {
             log.warn("Invalid sourceId format: {}", content.getSourceId());
         } catch (Exception e) {
-            log.warn("Could not fetch latest form definition for form sourceId={}, using content_data: {}",
+            log.warn("Could not fetch live form meta for form sourceId={}, using content_data: {}",
                     content.getSourceId(), e.getMessage());
         }
-        return new FormDefinitionSnapshot(fallbackData, null, null);
+        return new FormDefinitionSnapshot(snapshotData, null, null);
     }
 
     /**

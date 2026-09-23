@@ -33,6 +33,30 @@
       label-position="left"
       :validate-on-rule-change="false"
     >
+      <el-form-item
+        v-if="mode === 'add' && parentSelection && parentSelection.options.length > 1"
+        :label="t('subTable.relatedParent', { tableName: parentSelection.parentTableName })"
+        required
+        :error="parentSelectionError"
+      >
+        <el-select
+          v-model="selectedParentValue"
+          :placeholder="t('subTable.selectRelatedParent', { tableName: parentSelection.parentTableName })"
+          style="width: 100%"
+          clearable
+          filterable
+          :teleported="true"
+          :popper-class="overlayPopperClass"
+          @change="parentSelectionError = ''"
+        >
+          <el-option
+            v-for="option in parentSelection.options"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+      </el-form-item>
       <template
         v-for="group in dialogLayoutGroups"
         :key="group.key"
@@ -633,6 +657,9 @@
         :binding-foreign-key-field="nested.foreignKeyField"
         :parent-row="formData"
         :parent-table-id="hostTableId ?? null"
+        :parent-binding-id="bindingId ?? null"
+        :filter-fk-field-name="nested.filterFkFieldName"
+        :fk-fill-sources="nested.fkFillSources"
         :parent-tables-by-id="nestedParentTablesById"
         :primary-form-data="hostPrimaryFormData"
         :primary-table-id="hostPrimaryTableId ?? null"
@@ -740,6 +767,7 @@ import {
   type AssignmentConfig,
   type AssignmentMode,
 } from '@/utils/miAssignmentConfig'
+import type { BindingParentSelection } from '@/utils/tableFkRuntime'
 
 // SubTableField hosts this dialog and the dialog hosts nested SubTableField — resolve the
 // circular SFC pair lazily.
@@ -813,7 +841,7 @@ const props = defineProps<{
   hostParentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   hostLinkedSubTableBindings?: SubTableBinding[]
   /** When set, awaited before closing (supports async PK allocate on Save). */
-  saveRow?: (row: Record<string, unknown>) => void | Promise<void>
+  saveRow?: (row: Record<string, unknown>, selectedParentValue?: string) => void | Promise<void>
   /** RecordNote components placed in this binding's form design. */
   recordNoteFields?: FormField[]
   recordNoteTableId?: number | string | null
@@ -830,15 +858,24 @@ const props = defineProps<{
    * the same enforcement.
    */
   fieldPermissions?: Record<string, string> | null
+  parentSelection?: BindingParentSelection | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
-  (e: 'save', rowData: Record<string, any>): void
+  (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
 }>()
 
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
+const selectedParentValue = ref('')
+const parentSelectionError = ref('')
+
+watch(() => props.visible, (open) => {
+  if (!open) return
+  selectedParentValue.value = ''
+  parentSelectionError.value = ''
+})
 
 const {
   onDialogFieldChange,
@@ -1356,6 +1393,7 @@ const {
   }),
   scriptFieldErrors,
   isDialogFieldDisabled,
+  selectedParentValue,
 })
 
 const detailsReadonly = computed(() => !detailsCol.value || isColDisabled(detailsCol.value))
@@ -1365,6 +1403,10 @@ function saveDialogRow() {
     inflight: t('upload.waitUntilComplete'),
     failed: t('upload.fixFailedBeforeSubmit'),
   })) return
+  if (props.mode === 'add' && props.parentSelection && !selectedParentValue.value) {
+    parentSelectionError.value = t('subTable.parentSelectionRequired')
+    return
+  }
   return handleSave()
 }
 

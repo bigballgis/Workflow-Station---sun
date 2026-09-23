@@ -18,6 +18,7 @@ export interface EmailConnection {
   useTls: boolean
   enabled: boolean
   hasPassword: boolean
+  passwordEnvKey?: string
   direction?: EmailConnectionDirection
   mailboxAddress?: string
   imapHost?: string
@@ -38,7 +39,7 @@ export interface EmailConnectionRequest {
   host?: string
   port?: number
   username?: string
-  password?: string
+  passwordEnvKey?: string
   fromName?: string
   useTls?: boolean
   enabled?: boolean
@@ -49,10 +50,20 @@ export interface EmailConnectionRequest {
   imapUseSsl?: boolean
 }
 
+export interface VaultEnvOption {
+  varKey: string
+  displayName: string
+}
+
 export const connectionApi = {
   list(functionUnitId: number) {
     return functionUnitAxios.get<any, { data: EmailConnection[] }>(
       `/api/v1/function-units/${functionUnitId}/connections`
+    )
+  },
+  vaultOptions(functionUnitId: number) {
+    return functionUnitAxios.get<any, { data: VaultEnvOption[] }>(
+      `/api/v1/function-units/${functionUnitId}/connections/vault-options`
     )
   },
   create(functionUnitId: number, data: EmailConnectionRequest) {

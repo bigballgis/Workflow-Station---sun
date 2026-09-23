@@ -98,6 +98,7 @@ export const EXTEND_HASH_REDIRECTS: Record<string, string> = Object.fromEntries(
 )
 
 export const EXTEND_INDEX_RELATED: GuideRelated[] = [
+  { to: '/table-bindings', titleKey: 'guides.tableBindings.title' },
   { to: '/form-ctl-sub-table', titleKey: 'nav.formCtlSubTable' },
   { to: '/form-events-extend#inlineSubForm', titleKey: 'nav.formCtlInlineForm' },
   { to: '/form-events-extend#linkForm', titleKey: 'nav.formCtlLinkForm' },

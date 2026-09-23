@@ -89,6 +89,11 @@
           <el-button @click="handleManageBindings(selectedForm)">
             {{ t('form.manageBindings') }}
           </el-button>
+          <DesignerHelpLink
+            path="/table-bindings"
+            :aria-label="t('tableBinding.guideLinkAria')"
+            test-id="manage-table-bindings-guide-link"
+          />
           <el-button
             :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
             @click="handleImportFieldsToDesigner"
@@ -178,7 +183,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -214,7 +219,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -250,7 +255,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -601,8 +606,9 @@
       :option="previewRowDialog.formOption"
       :columns="previewRowDialog.columns"
       :assignment-config="previewRowDialog.assignmentConfig"
+      :parent-selection="previewRowDialog.parentSelection"
+      :save-row="handlePreviewRowDialogSave"
       @update:visible="onPreviewRowDialogVisibleChange"
-      @save="handlePreviewRowDialogSave"
     />
     <SubTableAddDialog
       :visible="previewRowDialog.visible && !previewRowDialog.useFormRule"
@@ -610,8 +616,9 @@
       :title="previewRowDialog.title"
       :mode="previewRowDialog.mode"
       :initial-data="previewRowDialog.initialData"
+      :parent-selection="previewRowDialog.parentSelection"
+      :save-row="handlePreviewRowDialogSave"
       @update:visible="onPreviewRowDialogVisibleChange"
-      @save="handlePreviewRowDialogSave"
     />
 
     <!-- Bind node dialog -->
@@ -937,6 +944,7 @@ import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
+import { formatSubTableBindingOptionLabel } from '@/utils/bindingDisplayHelpers'
 import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
 import TableBindingManager from './TableBindingManager.vue'
 import FormRenameDialog from './form-designer/FormRenameDialog.vue'
@@ -1082,6 +1090,8 @@ const designerSubBindings = computed(() => {
       tableId: b.tableId,
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
+      foreignKeyField: b.foreignKeyField,
+      bindingLinkMode: b.bindingLinkMode,
       subMode: (b.subMode === 'FORM_ONLY') ? 'FORM_ONLY' : 'FULL',
     }
   })
@@ -1519,9 +1529,6 @@ const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoS
   t,
   autoSaving,
   lastAutoSaveTime,
-  flushPendingCanvasEdits: () => {
-    flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
-  },
   getPollDesigner: () => getActiveDesignerRef() ?? designerRef.value,
 })
 
@@ -2155,6 +2162,7 @@ const previewRowDialog = reactive({
   formOption: {} as Record<string, any>,
   columns: [] as any[],
   assignmentConfig: undefined as import('@/utils/miAssignmentConfig').AssignmentConfig | undefined,
+  parentSelection: null as import('@/utils/tableFkRuntime').BindingParentSelection | null,
   useFormRule: false,
   onSave: null as PreviewSubTableRowDialogOpen['onSave'] | null,
 })
@@ -2176,6 +2184,7 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
       : {}
     previewRowDialog.columns = payload.columns.map((col) => ({ ...col }))
     previewRowDialog.assignmentConfig = payload.assignmentConfig
+    previewRowDialog.parentSelection = payload.parentSelection ?? null
     previewRowDialog.useFormRule = previewRowDialog.formRule.length > 0
     previewRowDialog.onSave = payload.onSave
     previewRowDialog.visible = false
@@ -2203,10 +2212,12 @@ function onPreviewRowDialogVisibleChange(visible: boolean) {
   }
 }
 
-function handlePreviewRowDialogSave(row: Record<string, any>) {
-  previewRowDialog.onSave?.(row)
+async function handlePreviewRowDialogSave(row: Record<string, any>, selectedParentValue?: string) {
+  const saved = await previewRowDialog.onSave?.(row, selectedParentValue)
+  if (saved === false) return false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null
+  return true
 }
 
 // ── Provides for fc-designer property-panel components ──────────────────────
@@ -2218,6 +2229,8 @@ provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
   tableId: b.tableId,
   tableDescription: b.tableDescription,
   bindingType: b.bindingType,
+  foreignKeyField: b.foreignKeyField,
+  bindingLinkMode: b.bindingLinkMode,
 })))
 
 // Provide relation bindings for LookupBindingSelect

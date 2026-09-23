@@ -211,4 +211,48 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     expect(participants[0].id).toBe(1)
     expect(String(participants[0][PLATFORM_ROW_UUID_FIELD] ?? '')).not.toBe('')
   })
+  it('forwards Save transport metadata on complete instead of stuffing it into formData', async () => {
+    const scopes = [{
+      bindingId: '50705',
+      storeKey: 'dw:p0_dual_file',
+      rowKeys: [{ id: 'Case-1' }],
+      emptied: false,
+    }]
+    const taskActions = useTaskActions({
+      taskId: 'task-1',
+      taskInfo: ref({}),
+      subTableBindings: ref([]),
+      formData: ref({}),
+      submitting: ref(false),
+      approveDialogVisible: ref(true),
+      approveDialogTitle: ref(''),
+      currentApproveAction: ref('APPROVE'),
+      approveForm: { comment: '' },
+      actionDialogVisible: ref(false),
+      actionDialogTitle: ref(''),
+      currentAction: ref(''),
+      actionForm: { targetUserId: '', reason: '' },
+      userOptions: ref([]),
+      userSearchLoading: ref(false),
+      loadTaskDetail: vi.fn(async () => {}),
+      buildFormPayloadForComplete: () => ({
+        formData: {
+          fieldA: 'x',
+          __subTables__: { 'dw:p0_dual_file': [{ id: 'Case-1' }] },
+        },
+        emptiedSubTableKeys: ['dw:people'],
+        subTableBindingScopes: scopes,
+      }),
+    })
+    await taskActions.submitApprove()
+    const payload = completeTaskMock.mock.calls[0]?.[1]
+    expect(payload?.emptiedSubTableKeys).toEqual(['dw:people'])
+    expect(payload?.subTableBindingScopes).toEqual(scopes)
+    expect(payload?.formData?.emptiedSubTableKeys).toBeUndefined()
+    expect(payload?.formData?.subTableBindingScopes).toBeUndefined()
+    expect(payload?.variables?.emptiedSubTableKeys).toBeUndefined()
+    expect(payload?.variables?.subTableBindingScopes).toBeUndefined()
+    expect(payload?.formData?.__subTables__).toBeUndefined()
+    expect(Object.keys(payload?.variables?.__subTables__ ?? {})).toEqual(['dw:p0_dual_file'])
+  })
 })

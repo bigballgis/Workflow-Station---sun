@@ -1,6 +1,7 @@
 import formEventMessages from './formEvents.zh-TW'
 import formCtlMessages from './formCtl.zh-TW'
 import tableDesignMessages from './tableDesign.zh-TW'
+import tableBindingsMessages from './tableBindings.zh-TW'
 import viewDesignMessages from './viewDesign.zh-TW'
 import fuDocumentsMessages from './fuDocuments.zh-TW'
 import aiStudioMessages from './aiStudio.zh-TW'
@@ -181,6 +182,10 @@ export default {
       title: '郵件監聽',
       summary: '入站信箱、監聽範本、欄位擷取與開始事件綁定：每個欄位的含義，以及 Deploy 前檢查。',
     },
+    environmentVariables: {
+      title: '環境變數',
+      summary: '管理中心環境變數目錄：TEXT 目前/預設值，以及郵件連線用的 VAULT 鍵。Vault 路徑不存在時才寫入密碼。',
+    },
     upTasksToClaim: {
       title: '待辦 — 角色認領',
       summary:
@@ -189,6 +194,10 @@ export default {
     taskDelegate: {
       title: '委託任務',
       summary: '把這一條待辦交給指定使用者或一對 BU+Role，不改目前處理人。',
+    },
+    tableBindings: {
+      title: '管理表綁定',
+      summary: '把 MAIN、SUB、ACTION、RELATION 表掛到表單。Filter foreign key 和填入來源在這裡；Sub-Table 網格另有專文。',
     },
     formUpload: {
       title: '表單設計 — 進階上傳',
@@ -277,7 +286,7 @@ export default {
       "流程設計：選取 Send 任務。To 旁點 {'{'} {'}'} 可插入主表欄位 ${\'{'}fieldName{\'}'}。",
     connectionTitle: '先設出站連線',
     connectionBody:
-      '開啟「連線」，方向選「出站（寄信）」。填寫寄件人地址、SMTP 使用者名稱與密碼。主機、連接埠與是否 TLS 來自管理中心 → 系統設定。先用「測試」寄一封試信，再接到流程上。同一信箱在同一方向不能建兩條連線——請編輯既有列，或改用入站。',
+      '開啟「連線」，方向選「出站（寄信）」。填寫寄件人地址、SMTP 使用者名稱，並在「密碼（VAULT）」選擇管理中心 → 環境變數裡的 VAULT 鍵。主機、連接埠與是否 TLS 來自系統設定。先用「測試」寄一封試信，再接到流程上。同一信箱在同一方向不能建兩條連線——請編輯既有列，或改用入站。',
     connectionCatalogLead: '欄位目錄 —「新增/編輯連線」（出站）與「測試連線」上的每一個控制項。',
     fDirection:
       '必填。本頁選出站（寄信）；入站（監聽）給郵件監聽用。舊的「雙向」列必須存成這兩個之一。',
@@ -289,7 +298,7 @@ export default {
     fSmtpUsername:
       'SMTP 登入（服務帳號）。通常和寄件信箱不同。僅當中繼不需要 SMTP AUTH 時才可留空。',
     fSmtpPassword:
-      '填了使用者名稱時新增必填。SMTP 密碼或信箱授權碼。編輯時留空表示不改已存密碼。',
+      '填了使用者名稱時必填。選擇 VAULT 環境變數（不能選 TEXT）。信箱密碼留在 Vault。見 [[/environment-variables]]。',
     fSmtpHost: '本頁不能填。SMTP 主機來自管理中心 → 系統設定（出站連線）。',
     fSmtpPort: '本頁不能填。常見 25/587（STARTTLS）或 465（SSL）。與「使用 TLS」一起在系統設定裡設。',
     fUseTls: '本頁不能填。465 用 SSL、25/587 用 STARTTLS 時選是。在管理中心 → 系統設定中設定。',
@@ -378,14 +387,14 @@ export default {
     startEventFigure: '開始事件 StartEvent_Email：已綁定 Vendor quote to PR，主旨過濾 Quote，已設定擷取。',
     inboundTitle: '先設入站連線',
     inboundBody:
-      '開啟「連線」，方向選「入站（監聽）」。填寫信箱地址以及 IMAP 使用者名稱與密碼。IMAP 主機、連接埠與 SSL 來自管理中心 → 系統設定。方向未設為入站時，監聽頁會提示尚無入站連線。',
+      '開啟「連線」，方向選「入站（監聽）」。填寫信箱地址、IMAP 使用者名稱，並在「密碼（VAULT）」選擇管理中心 → 環境變數。IMAP 主機、連接埠與 SSL 來自系統設定。方向未設為入站時，監聽頁會提示尚無入站連線。',
     inboundCatalogLead: '欄位目錄 —「新增/編輯連線」（入站）上的每一個控制項。',
     fDirection: '必填。必須是入站（監聽），否則這個信箱不會出現在郵件監聽裡。',
     fDirectionInbound: '選項：用 IMAP 輪詢此信箱。出站（寄信）給「傳送郵件」用，不是本頁。',
     fMailboxEmail: '必填。要輪詢的信箱，同時作為連線名稱。空白無法儲存。',
     fImapUsername: 'IMAP 登入（服務帳號）。通常和信箱地址不同。新增時與密碼一起必填。',
     fImapPassword:
-      'IMAP 密碼或信箱授權碼。新增且填了使用者名稱時必填。編輯時留空表示不改已存密碼。',
+      'IMAP 密碼改為 VAULT 環境變數。填了使用者名稱時必填。不再儲存密文；舊連線需重新選擇 VAULT 鍵。見 [[/environment-variables]]。',
     fImapHost: '本頁不能填。IMAP 主機來自管理中心 → 系統設定（入站連線）。',
     fImapPort: '本頁不能填。常見 993（SSL）或 143（STARTTLS/明文）。在系統設定裡設。',
     fImapSsl: '本頁不能填。是：imaps，通常 993。否：明文或 STARTTLS imap，通常 143。在系統設定裡設。',
@@ -546,6 +555,39 @@ export default {
     deleteTitle: '刪除範本',
     deleteBody: '已綁到一個或多個開始事件的範本無法刪除。先在流程設計裡解除綁定，再刪除範本。',
   },
+  environmentVariablesGuide: {
+    pageTitle: '環境變數',
+    crumb: '管理中心',
+    intro:
+      '管理中心 → 環境變數保存 TEXT 取值和 VAULT 目錄鍵。新增時僅當 Vault 還沒有該路徑才寫入密碼。編輯和刪除都不會改 Vault。郵件連線密碼只綁定 VAULT 變數鍵。',
+    flowTitle: '操作順序',
+    flow1: '新增 VAULT 變數：填寫鍵，密碼和路徑可選',
+    flow2: '在「連線」把密碼選成該 VAULT 鍵',
+    flow3: '測試寄信或部署入站監聽',
+    catalogTitle: '目錄欄位',
+    catalogBody:
+      '開啟管理中心左側的「環境變數」。TEXT 用於普通字串（預設值必填、目前值可選），VAULT 只建目錄鍵。路徑在 Vault 中不存在時才寫入密碼；已有路徑只建目錄行。郵件密碼必須是 VAULT — TEXT 不會出現在連線的密碼下拉。',
+    catalogLead: '欄位目錄 — 新增/編輯變數。',
+    fKindText: 'TEXT。預設值必填。目前值可選；空白或只有空白字元時用預設值。',
+    fKindVault: 'VAULT。填寫鍵。僅當 Vault 還沒有該路徑時才需要密碼。不填目前/預設文字。執行時從 HashiCorp Vault 讀取 data.data.password。',
+    fKey: '必填。穩定鍵（如 email.qq.inbound.password）。連線與 ZIP 只存這個鍵，不存密文。鍵重複會被拒絕。',
+    fDisplayName: '必填。會出現在連線下拉的顯示名稱。',
+    fDefault: 'TEXT 必填。目前值為空或空白時使用。',
+    fCurrent: 'TEXT 選填。非空白目前值優先於預設值。',
+    fPath: 'VAULT 選填。Vault 密鑰路徑，如 workflow/email/qq-inbound。空白時使用變數鍵。',
+    fPassword: '新增時：僅當 Vault 沒有該路徑才必填。已有密鑰會復用且不覆蓋。編輯不會寫 Vault。刪除只去掉目錄行。',
+    bindTitle: '綁到連線',
+    bindBody:
+      '開發工作站 → 連線：填了使用者名稱就必須在「密碼（VAULT）」選本目錄的 VAULT 鍵。主機仍來自系統設定 SMTP/IMAP。見 [[/email-send#connection]] 與 [[/email-monitor]]。',
+    fBindPassword: '填了使用者名稱時必填。清單只有 VAULT。舊連線開啟後必須重新選擇 VAULT 鍵，密文欄已刪除。',
+    failTitle: '失敗時',
+    failBody: '改目錄或連線綁定後再測試或 Deploy。',
+    failTextBlank: 'TEXT 預設值為空 — 無法儲存。目前值只有空白字元時回退預設值。',
+    failDuplicateKey: '目錄鍵已存在 — 無法儲存。請直接使用已有環境變數，不必操作 Vault。',
+    failVaultWrite: '寫入 Vault 失敗（連通、登入或權限）— 無法儲存，頁面會提示錯誤原因。',
+    failVault404: 'Vault 404 — 不會當成「沒有密碼」略過；收信/寄信會明確回報 Vault 錯誤。',
+    failTextForMail: '郵件密碼綁了 TEXT — 管理中心拒絕；請改選 VAULT。',
+  },
   upTasksToClaimGuide: {
     pageTitle: '待辦 — 認領角色請求',
     crumb: '使用者入口 · 任務 · 待辦',
@@ -690,6 +732,7 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,

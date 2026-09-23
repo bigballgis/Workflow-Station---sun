@@ -4,6 +4,7 @@ import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
@@ -33,6 +34,13 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class FormTableBindingRestorerTest {
+
+    /**
+     * Stand-in parent table id for declared foreign keys. The restorer only requires the
+     * declaration to HAVE a target, never that the target is any particular table, so one constant
+     * is enough to model a valid declaration.
+     */
+    private static final long DECLARED_FK_TARGET_ID = 50_001L;
 
     @Mock
     private FormDefinitionRepository formDefinitionRepository;
@@ -225,6 +233,159 @@ class FormTableBindingRestorerTest {
                 b -> b != null && BindingType.SUB == b.getBindingType()));
     }
 
+    /**
+     * Two declared foreign keys make the table bindable in two different roles, and which role the
+     * lost binding held is recorded nowhere on the table. Picking "the first" would be a guess
+     * about participant isolation — the same class of mistake as the old {@code row_id} name test,
+     * which misread MI bindings as structural and silently dropped isolation. Refuse instead.
+     */
+    @Test
+    void repairFormIfMissingBindings_skipsSubTableDeclaringTwoForeignKeys() {
+        TableDefinition mainTable = table("meeting_main", TableType.MAIN, "title");
+        TableDefinition ambiguousSub = subTableWithTwoDeclaredForeignKeys(
+                "attachment", "main_ref", "participant_ref", "file");
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(
+                Map.of("type", "input", "field", "title"),
+                Map.of("type", "subTable", "_bindingId", 903)
+        ));
+        config.put("subListViews", Map.of("903", Map.of("columns", List.of(
+                Map.of("fieldName", "main_ref", "columnType", "field"),
+                Map.of("fieldName", "file", "columnType", "field")))));
+
+        FormDefinition form = FormDefinition.builder()
+                .id(50619L)
+                .formName("Two FK Form")
+                .formType(FormType.PROCESS)
+                .configJson(config)
+                .build();
+
+        when(formTableBindingRepository.countByFormId(50619L)).thenReturn(0L);
+
+        restorer.repairFormIfMissingBindings(form, List.of(mainTable, ambiguousSub));
+
+        verify(formTableBindingRepository, never()).save(argThat(
+                b -> b != null && BindingType.SUB == b.getBindingType()));
+    }
+
+    /**
+     * The rebuilt binding must carry the declaration itself, not leave the runtime to rediscover it
+     * by scanning the table — that scan has one answer only while the table declares one key.
+     */
+    @Test
+    void repairFormIfMissingBindings_recordsFilterFkFieldIdOnRebuiltSubBinding() {
+        TableDefinition mainTable = table("meeting_main", TableType.MAIN, "title");
+        TableDefinition participants = table("participants", TableType.SUB, "main_ref", "name");
+        Long expectedFieldId = participants.getFieldDefinitions().get(0).getId();
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(
+                Map.of("type", "input", "field", "title"),
+                Map.of("type", "subTable", "_bindingId", 904)
+        ));
+        config.put("subListViews", Map.of("904", Map.of("columns", List.of(
+                Map.of("fieldName", "main_ref", "columnType", "field"),
+                Map.of("fieldName", "name", "columnType", "field")))));
+
+        FormDefinition form = FormDefinition.builder()
+                .id(50620L)
+                .formName("Records Filter FK Form")
+                .formType(FormType.PROCESS)
+                .configJson(config)
+                .build();
+
+        when(formTableBindingRepository.countByFormId(50620L)).thenReturn(0L);
+        when(formTableBindingRepository.save(any(FormTableBinding.class)))
+                .thenAnswer(inv -> {
+                    FormTableBinding b = inv.getArgument(0);
+                    if (b.getId() == null) {
+                        b.setId(7101L);
+                    }
+                    return b;
+                });
+        when(subTableViewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(formDefinitionRepository.save(any(FormDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        restorer.repairFormIfMissingBindings(form, List.of(mainTable, participants));
+
+        ArgumentCaptor<FormTableBinding> captor = ArgumentCaptor.forClass(FormTableBinding.class);
+        verify(formTableBindingRepository, atLeastOnce()).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .filteredOn(b -> BindingType.SUB == b.getBindingType())
+                .isNotEmpty()
+                .allMatch(b -> expectedFieldId.equals(b.getFilterFkFieldId()));
+    }
+
+    /**
+     * The link mode of a lost binding is recovered from a surviving sibling on the same table. Once
+     * siblings disagree — which is what binding one table in two roles looks like — "the first
+     * sibling" is a guess, and guessing {@code structuralFk} for what was an MI participant row
+     * drops participant isolation outright.
+     */
+    @Test
+    void repairFormIfMissingBindings_skipsSubTableWhenSurvivingSiblingsDisagreeOnLinkMode() {
+        TableDefinition mainTable = table("meeting_main", TableType.MAIN, "title");
+        TableDefinition participants = table("participants", TableType.SUB, "main_ref", "name");
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(
+                Map.of("type", "input", "field", "title"),
+                Map.of("type", "subTable", "_bindingId", 905)
+        ));
+        config.put("subListViews", Map.of("905", Map.of("columns", List.of(
+                Map.of("fieldName", "main_ref", "columnType", "field"),
+                Map.of("fieldName", "name", "columnType", "field")))));
+
+        FormDefinition form = FormDefinition.builder()
+                .id(50621L)
+                .formName("Conflicting Link Mode Form")
+                .formType(FormType.PROCESS)
+                .configJson(config)
+                .build();
+
+        when(formTableBindingRepository.countByFormId(50621L)).thenReturn(0L);
+        when(formTableBindingRepository.findByTableId(participants.getId())).thenReturn(List.of(
+                siblingSubBinding("main_ref", BindingLinkMode.structuralFk),
+                siblingSubBinding("main_ref", BindingLinkMode.miParticipantRow)));
+
+        restorer.repairFormIfMissingBindings(form, List.of(mainTable, participants));
+
+        verify(formTableBindingRepository, never()).save(argThat(
+                b -> b != null && BindingType.SUB == b.getBindingType()));
+    }
+
+    private static FormTableBinding siblingSubBinding(String foreignKeyField, BindingLinkMode linkMode) {
+        return FormTableBinding.builder()
+                .bindingType(BindingType.SUB)
+                .foreignKeyField(foreignKeyField)
+                .bindingLinkMode(linkMode)
+                .build();
+    }
+
+    /** A sub-table bindable in two roles: two columns, each a declared key with its own target. */
+    private static TableDefinition subTableWithTwoDeclaredForeignKeys(String name, String... fields) {
+        TableDefinition table = TableDefinition.builder()
+                .id(name.hashCode() & 0xffffL)
+                .tableName(name)
+                .tableType(TableType.SUB)
+                .build();
+        int order = 0;
+        for (String fieldName : fields) {
+            boolean declaredFk = order < 2;
+            table.getFieldDefinitions().add(FieldDefinition.builder()
+                    .id(table.getId() * 100 + order)
+                    .fieldName(fieldName)
+                    .dataType(DataType.VARCHAR)
+                    .sortOrder(order++)
+                    .isForeignKey(declaredFk)
+                    .refTableId(declaredFk ? DECLARED_FK_TARGET_ID + order : null)
+                    .tableDefinition(table)
+                    .build());
+        }
+        return table;
+    }
+
     /** Same as {@link #table} but leaves every column unmarked, modelling the contract violation. */
     private static TableDefinition tableWithoutForeignKey(String name, String... fields) {
         TableDefinition table = TableDefinition.builder()
@@ -253,7 +414,12 @@ class FormTableBindingRestorerTest {
                 .build();
         int order = 0;
         for (String fieldName : fields) {
+            boolean declaredFk = type == TableType.SUB && order == 0;
             table.getFieldDefinitions().add(FieldDefinition.builder()
+                    // Field ids matter now: the rebuilt binding records WHICH declared key it
+                    // filters by as a dw_field_definitions id, so a fixture without ids would
+                    // silently produce a binding with no declaration.
+                    .id(table.getId() * 100 + order)
                     .fieldName(fieldName)
                     .dataType(DataType.VARCHAR)
                     .sortOrder(order++)
@@ -261,7 +427,11 @@ class FormTableBindingRestorerTest {
                     // DECLARED as such: the Form Designer refuses a sub-table binding without a
                     // foreign key, so a fixture with none models a state the product does not
                     // allow — and the restorer now (correctly) refuses to rebuild from it.
-                    .isForeignKey(type == TableType.SUB && order == 1)
+                    .isForeignKey(declaredFk)
+                    // The declaration needs a TARGET, not just the flag. The restorer requires
+                    // ref_table_id because a flag-only key is invisible to the runtime consumers
+                    // that join on it, so a fixture that omitted it modelled an unusable state.
+                    .refTableId(declaredFk ? DECLARED_FK_TARGET_ID : null)
                     .tableDefinition(table)
                     .build());
         }

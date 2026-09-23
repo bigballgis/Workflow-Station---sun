@@ -122,14 +122,22 @@
             />
             <div class="form-tip">{{ t('connection.monitorUsernameHint') }}</div>
           </el-form-item>
-          <el-form-item :label="t('connection.monitorPassword')" :required="!editingId">
-            <el-input
-              v-model="form.password"
-              type="password"
-              show-password
-              autocomplete="new-password"
-              :placeholder="editingId ? t('connection.passwordKeep') : ''"
-            />
+          <el-form-item :label="t('connection.monitorPassword')" :required="!!form.username?.trim()">
+            <el-select
+              v-model="form.passwordEnvKey"
+              filterable
+              clearable
+              style="width: 100%"
+              :placeholder="t('connection.passwordEnvPlaceholder')"
+              :loading="vaultOptionsLoading"
+            >
+              <el-option
+                v-for="opt in vaultOptions"
+                :key="opt.varKey"
+                :label="`${opt.displayName} (${opt.varKey})`"
+                :value="opt.varKey"
+              />
+            </el-select>
             <div class="form-tip">{{ t('connection.monitorPasswordHint') }}</div>
           </el-form-item>
         </template>
@@ -162,14 +170,22 @@
             />
             <div class="form-tip">{{ t('connection.usernameHint') }}</div>
           </el-form-item>
-          <el-form-item :label="t('connection.password')" :required="!editingId">
-            <el-input
-              v-model="form.password"
-              type="password"
-              show-password
-              autocomplete="new-password"
-              :placeholder="editingId ? t('connection.passwordKeep') : ''"
-            />
+          <el-form-item :label="t('connection.password')" :required="!!form.username?.trim()">
+            <el-select
+              v-model="form.passwordEnvKey"
+              filterable
+              clearable
+              style="width: 100%"
+              :placeholder="t('connection.passwordEnvPlaceholder')"
+              :loading="vaultOptionsLoading"
+            >
+              <el-option
+                v-for="opt in vaultOptions"
+                :key="opt.varKey"
+                :label="`${opt.displayName} (${opt.varKey})`"
+                :value="opt.varKey"
+              />
+            </el-select>
             <div class="form-tip">{{ t('connection.passwordHint') }}</div>
           </el-form-item>
         </template>
@@ -203,7 +219,7 @@ import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { connectionApi, type EmailConnection, type EmailConnectionRequest } from '@/api/connection'
+import { connectionApi, type EmailConnection, type EmailConnectionRequest, type VaultEnvOption } from '@/api/connection'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import {
   formatConnectionTestFailureMessage,
@@ -247,13 +263,15 @@ const defaultForm = (): ConnectionFormState => ({
   senderEmail: '',
   connectionType: SMTP_CONNECTION_TYPE,
   username: '',
-  password: '',
+  passwordEnvKey: '',
   fromName: '',
   enabled: true,
   direction: 'OUTBOUND',
 })
 
 const form = reactive<ConnectionFormState>(defaultForm())
+const vaultOptions = ref<VaultEnvOption[]>([])
+const vaultOptionsLoading = ref(false)
 
 const isInboundOnly = computed(() => form.direction === 'INBOUND')
 const legacyBothEditing = ref(false)
@@ -327,7 +345,7 @@ function buildPayload(): EmailConnectionRequest {
     name: emailAddress,
     connectionType: SMTP_CONNECTION_TYPE,
     username: login || undefined,
-    password: form.password,
+    passwordEnvKey: form.passwordEnvKey?.trim() || undefined,
     fromName: isInboundOnly.value ? undefined : (form.fromName?.trim() || undefined),
     enabled: form.enabled,
     direction: form.direction || 'OUTBOUND',
@@ -346,6 +364,19 @@ async function loadConnections() {
   }
 }
 
+async function loadVaultOptions() {
+  vaultOptionsLoading.value = true
+  try {
+    const res = await connectionApi.vaultOptions(props.functionUnitId)
+    vaultOptions.value = res.data || []
+  } catch {
+    vaultOptions.value = []
+    ElMessage.error(t('connection.vaultOptionsLoadFailed'))
+  } finally {
+    vaultOptionsLoading.value = false
+  }
+}
+
 function scrollConnectionDialogToTop() {
   nextTick(() => {
     const body = document.querySelector('.el-dialog.connection-form-dialog .el-dialog__body')
@@ -361,6 +392,7 @@ function openCreateDialog() {
   Object.assign(form, defaultForm())
   showFormDialog.value = true
   clearConnectionFormValidation()
+  void loadVaultOptions()
 }
 
 function openEditDialog(row: EmailConnection) {
@@ -371,13 +403,14 @@ function openEditDialog(row: EmailConnection) {
     senderEmail: row.fromEmail || row.name || '',
     connectionType: SMTP_CONNECTION_TYPE,
     username: row.username || '',
-    password: '',
+    passwordEnvKey: row.passwordEnvKey || '',
     direction: rowDirection === 'BOTH' ? 'OUTBOUND' : rowDirection,
     fromName: row.fromName || '',
     enabled: row.enabled,
   })
   showFormDialog.value = true
   clearConnectionFormValidation()
+  void loadVaultOptions()
 }
 
 function openTestDialog(row: EmailConnection) {
@@ -396,7 +429,7 @@ async function handleSave() {
     return
   }
 
-  if (form.username?.trim() && !form.password && !editingId.value) {
+  if (form.username?.trim() && !form.passwordEnvKey?.trim()) {
     ElMessage.warning({ message: t('connection.passwordRequired'), zIndex: 10001 })
     return
   }
@@ -404,9 +437,6 @@ async function handleSave() {
   saving.value = true
   try {
     const payload = buildPayload()
-    if (editingId.value && !payload.password) {
-      delete payload.password
-    }
     if (editingId.value) {
       await connectionApi.update(props.functionUnitId, editingId.value, payload)
     } else {

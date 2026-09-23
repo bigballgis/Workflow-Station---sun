@@ -73,6 +73,7 @@ class FunctionUnitComputedFieldPortabilityTest {
                 objectMapper);
         importWriter = new FunctionUnitImportWriter(
                 tableDefinitionRepository,
+                mock(com.developer.repository.FieldDefinitionRepository.class),
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,

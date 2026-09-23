@@ -376,6 +376,14 @@ services:
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
       # C-3 (DECISIONS.md#d6): 可信服务密钥；admin-center 凭此校验裸 X-User-Id。AP 服务不得配置此项。
       SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
+      # HashiCorp Vault (admin-center Kubernetes JWT or optional VAULT_TOKEN for local).
+      VAULT_ADDR: ${VAULT_ADDR:-}
+      VAULT_NAMESPACE: ${VAULT_NAMESPACE:-}
+      VAULT_AUTH_MOUNT: ${VAULT_AUTH_MOUNT:-}
+      VAULT_ROLE: ${VAULT_ROLE:-}
+      VAULT_KV_MOUNT: ${VAULT_KV_MOUNT:-}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      VAULT_LOGIN_REFRESH_SKEW_SECONDS: ${VAULT_LOGIN_REFRESH_SKEW_SECONDS:-30}
       # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连前端端口时见 application.yml 额外前缀
       SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3000/admin/sso/callback}
       SSO_REDIRECT_ADMIN_HTTP_PREFIX: ${SSO_REDIRECT_ADMIN_HTTP_PREFIX:-http://localhost:3000/admin/sso/callback}

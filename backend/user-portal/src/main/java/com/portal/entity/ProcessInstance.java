@@ -95,7 +95,11 @@ public class ProcessInstance {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
-    /** 绑定的功能单元版本（dw_function_units.id），与 developer 侧共用表时可空 */
+    /**
+     * Live Designer row ({@code dw_function_units.id}) for BPMN preferred join.
+     * Not an immutable version pack: {@code dw_function_units.code} is unique and that row is
+     * updated in place. Runtime form/binding freeze is {@link #functionUnitCatalogId}.
+     */
     @Column(name = "function_unit_version_id")
     private Long functionUnitVersionId;
 

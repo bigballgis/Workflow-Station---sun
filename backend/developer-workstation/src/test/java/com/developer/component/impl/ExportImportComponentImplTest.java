@@ -87,6 +87,9 @@ class ExportImportComponentImplTest {
 
     @Mock
     private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
+
+    @Mock
+    private FieldDefinitionRepository fieldDefinitionRepository;
     
     private FunctionUnitExporter functionUnitExporter;
 
@@ -512,6 +515,135 @@ class ExportImportComponentImplTest {
         assertEquals(501L, ((Number) rule.get(0).get("_bindingId")).longValue());
         verify(formTableBindingRepository).save(any());
         verify(tableRelationRepository, never()).save(any());
+    }
+
+    /**
+     * The package carries the filter FK as a column NAME, because {@code dw_field_definitions.id}
+     * means nothing in the target environment. Import must resolve that name against the fields it
+     * just wrote and persist the local id — dropping it would leave the binding relying on the
+     * table-level FK scan, which only has one answer while a table declares one key.
+     * Portable {@code fkFillSources} must likewise resolve {@code fieldName} to the local field id.
+     */
+    @Test
+    void importFunctionUnit_resolvesFilterFkFieldNameToLocalFieldId() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        ExportImportComponentImpl impl = ExportImportTestComponents.build(
+                functionUnitRepository,
+                processDefinitionRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                formTableBindingRepository,
+                formStageBindingRepository,
+                tableRelationRepository,
+                dmnXmlParser,
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository,
+                entityManager,
+                om,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                mock(com.developer.client.AdminCenterAutomationFlowClient.class),
+                fieldDefinitionRepository);
+
+        when(functionUnitRepository.findByName("FilterFkFU")).thenReturn(java.util.Optional.empty());
+        when(functionUnitRepository.existsByCode(any())).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit saved = invocation.getArgument(0);
+            saved.setId(10L);
+            return saved;
+        });
+        when(tableDefinitionRepository.save(any(TableDefinition.class))).thenAnswer(invocation -> {
+            TableDefinition saved = invocation.getArgument(0);
+            saved.setId(20L);
+            return saved;
+        });
+        when(tableDefinitionRepository.getReferenceById(20L)).thenAnswer(invocation ->
+                TableDefinition.builder().id(20L).tableName("Main").build());
+        // The freshly imported fields carry LOCAL ids, unrelated to whatever the source unit used.
+        when(fieldDefinitionRepository.findByTableDefinitionIdOrderBySortOrderAsc(20L))
+                .thenReturn(List.of(
+                        com.developer.entity.FieldDefinition.builder()
+                                .id(776L).fieldName("id").build(),
+                        com.developer.entity.FieldDefinition.builder()
+                                .id(777L).fieldName("main_id").build()));
+        when(formDefinitionRepository.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, com.developer.entity.FormDefinition.class);
+            if (saved.getId() == null) {
+                saved.setId(30L);
+            }
+            return saved;
+        });
+        when(formDefinitionRepository.findById(30L)).thenAnswer(invocation ->
+                java.util.Optional.of(com.developer.entity.FormDefinition.builder()
+                        .id(30L)
+                        .formName("MainForm")
+                        .formType(com.developer.enums.FormType.PROCESS)
+                        .configJson(new java.util.HashMap<>())
+                        .build()));
+        when(formTableBindingRepository.save(any())).thenAnswer(invocation -> {
+            com.developer.entity.FormTableBinding binding = invocation.getArgument(0);
+            binding.setId(501L);
+            return binding;
+        });
+
+        String formJson = """
+                {
+                  "formId": 11,
+                  "formName": "MainForm",
+                  "formType": "PROCESS",
+                  "boundTableName": "Main",
+                  "configJson": { "rule": [] },
+                  "tableBindings": [
+                    {
+                      "bindingId": 101,
+                      "bindingType": "SUB",
+                      "bindingMode": "EDITABLE",
+                      "tableName": "Main",
+                      "foreignKeyField": "main_id",
+                      "filterFkFieldName": "main_id",
+                      "fkFillSources": [{"fieldName": "main_id", "kind": "PRIMARY"}],
+                      "sortOrder": 1,
+                      "subMode": "FULL"
+                    }
+                  ]
+                }
+                """;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry("manifest.json"));
+            zos.write("{\"name\":\"FilterFkFU\",\"code\":\"filter-fk-fu\",\"version\":\"1.0.0\"}"
+                    .getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("tables/table_0.json"));
+            zos.write(("{\"tableId\":13,\"tableName\":\"Main\",\"tableType\":\"MAIN\",\"fields\":["
+                    + "{\"fieldName\":\"id\",\"dataType\":\"BIGINT\",\"sortOrder\":0},"
+                    + "{\"fieldName\":\"main_id\",\"dataType\":\"VARCHAR\",\"sortOrder\":1}]}")
+                    .getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("forms/form_0.json"));
+            zos.write(formJson.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+
+        MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
+        assertEquals("SUCCESS", impl.importFunctionUnit(file, null).get("status"));
+
+        org.mockito.ArgumentCaptor<com.developer.entity.FormTableBinding> bindingCaptor =
+                org.mockito.ArgumentCaptor.forClass(com.developer.entity.FormTableBinding.class);
+        verify(formTableBindingRepository, atLeastOnce()).save(bindingCaptor.capture());
+        var imported = bindingCaptor.getAllValues().stream()
+                .filter(b -> com.developer.enums.BindingType.SUB == b.getBindingType())
+                .toList();
+        assertFalse(imported.isEmpty());
+        assertEquals(777L, imported.get(0).getFilterFkFieldId());
+        var withFill = imported.stream()
+                .filter(b -> b.getFkFillSources() != null && !b.getFkFillSources().isEmpty())
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, withFill.getFkFillSources().size());
+        assertEquals(777L, withFill.getFkFillSources().get(0).getFieldId());
+        assertEquals("PRIMARY", withFill.getFkFillSources().get(0).getKind());
     }
 
     private static byte[] zipSingleEntry(String entryName, String utf8Content) throws Exception {

@@ -11,15 +11,15 @@ export default {
     summary: 'Bound child grid (help_pr_line). Binding, Allow Add/Edit/Delete, List View columns.',
     crumb: 'Developer Workstation · Function Units · Form Design · Controls · Extend · Sub-Table',
     intro:
-      'Grid of a bound SUB table. On Purchase Request this is help_pr_line. Differs from [[/form-ctl-lookup]] (search-and-pick one row) and Inline Form (the same SUB form in place, no grid).',
+      'Grid of a bound SUB table. Attach the table in [[/table-bindings]] first. On Purchase Request this is help_pr_line. Differs from [[/form-ctl-lookup]] (search-and-pick one row) and Inline Form (the same SUB form in place, no grid).',
     whatTitle: 'What Sub-Table is',
     whatBody:
       'A grid of SUB table rows on the form. On Purchase Request that is help_pr_line. The person adds, edits, and deletes rows when those Allow switches are on. Event value is the row list after those edits; empty means no rows.',
     howBody:
-      'Select the placeholder. Sub Table Binding: choose the SUB table (help_pr_line). Tick Allow Add, Allow Edit, Allow Delete as needed. Compact cells keeps lookup and user cells on one line. Open List View to pick Table Columns and Extend Action (Link Form or Lookup columns). Save the form. Preview the grid.',
+      'Select the placeholder. Sub Table Binding: choose the SUB already attached in [[/table-bindings]] (help_pr_line). Tick Allow Add, Allow Edit, Allow Delete as needed. Compact cells keeps lookup and user cells on one line. Open List View to pick Table Columns and Extend Action (Link Form or Lookup columns). Save the form. Preview the grid.',
     propsFigure: 'Form Design. Sub-Table selected. Right panel: Sub Table Binding, Allow Add / Edit / Delete, Compact cells.',
     catBinding: 'Required. The SUB or ACTION table this grid shows. Blank: the canvas reads No Sub Table selected, and save is blocked.',
-    catSelect: 'Dropdown placeholder on Sub Table Binding. Empty list reads No Sub Tables available — bind a SUB table on the form first.',
+    catSelect: 'Dropdown placeholder on Sub Table Binding. Empty list reads No Sub Tables available — bind a SUB table in [[/table-bindings]] first.',
     catAllowAdd: 'On: people can add rows. Off hides Add. ACTION bindings omit this row.',
     catAllowEdit: 'On: people can edit rows. Off is view-only. ACTION bindings omit this row.',
     catAllowDelete: 'On: people can delete rows. Off keeps rows. ACTION bindings omit this row.',

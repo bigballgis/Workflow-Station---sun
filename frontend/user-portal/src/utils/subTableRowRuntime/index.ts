@@ -37,3 +37,9 @@ export {
   prepareSubTableAddRow,
   finalizeSubTableRowOnSave,
 } from './rowOrchestration'
+
+export {
+  resolveBindingParentSelection,
+  type BindingParentOption,
+  type BindingParentSelection,
+} from '../tableFkRuntime'

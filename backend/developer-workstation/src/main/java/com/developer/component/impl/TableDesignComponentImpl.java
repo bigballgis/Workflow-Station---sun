@@ -22,6 +22,7 @@ import com.developer.service.ComputedFieldValidator;
 import com.developer.service.FieldFkPkSyncService;
 import com.developer.service.FormConfigFieldRenamer;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
+import com.developer.util.FkFillSourcesSupport;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -166,6 +167,13 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         }
         Long functionUnitId = tableDefinition.getFunctionUnit().getId();
 
+        // update() rebuilds every field row, so any binding reference to a field id must be
+        // translated through the incoming field's stable request id before the old rows vanish.
+        // Keeping the numeric id unchanged leaves a silent dangling filter_fk_field_id and turns
+        // dual-binding projection off after an otherwise harmless Table Design save.
+        List<BindingFieldReferenceRemap> bindingFieldReferenceRemaps = snapshotBindingFieldReferenceRemaps(
+                tableDefinition, request.getFields());
+
         // Update table metadata.
         tableDefinition.setTableName(request.getTableName());
         tableDefinition.setTableDisplayName(request.getTableDisplayName());
@@ -232,6 +240,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         tableDefinitionRepository.flush();
+        remapBindingFieldReferences(saved.getId(), bindingFieldReferenceRemaps);
 
         // Diff field deltas (fieldName/description/dataType/length/scale/nullable) and push into every related Form canvas + permissions.
         List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
@@ -259,6 +268,118 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
     }
+
+    private List<BindingFieldReferenceRemap> snapshotBindingFieldReferenceRemaps(
+            TableDefinition table, List<FieldDefinitionRequest> incomingFields) {
+        List<FormTableBinding> bindings = formTableBindingRepository.findByTableId(table.getId());
+        if (bindings.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, FieldDefinition> existingById = table.getFieldDefinitions().stream()
+                .filter(field -> field.getId() != null)
+                .collect(Collectors.toMap(FieldDefinition::getId, field -> field));
+        Map<Long, FieldDefinitionRequest> incomingByOldId = (incomingFields == null
+                ? Collections.<FieldDefinitionRequest>emptyList()
+                : incomingFields).stream()
+                .filter(Objects::nonNull)
+                .filter(field -> field.getId() != null)
+                .collect(Collectors.toMap(FieldDefinitionRequest::getId, field -> field));
+
+        List<BindingFieldReferenceRemap> remaps = new ArrayList<>();
+        for (FormTableBinding binding : bindings) {
+            Long oldFieldId = binding.getFilterFkFieldId();
+            String filterFieldName = oldFieldId == null ? null : referencedIncomingFieldName(
+                    binding, oldFieldId, existingById, incomingByOldId,
+                    "BIZ_FILTER_FK_REFERENCE_STALE", "table.filter_fk_reference_stale",
+                    "BIZ_FILTER_FK_FIELD_IN_USE", "table.filter_fk_field_in_use");
+
+            Map<Long, String> fillSourceFieldNames = new LinkedHashMap<>();
+            if (binding.getFkFillSources() != null) {
+                binding.getFkFillSources().stream()
+                        .filter(Objects::nonNull)
+                        .map(source -> source.getFieldId())
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .forEach(fieldId -> fillSourceFieldNames.put(fieldId, referencedIncomingFieldName(
+                                binding, fieldId, existingById, incomingByOldId,
+                                "BIZ_FK_FILL_SOURCE_REFERENCE_STALE", "table.fk_fill_source_reference_stale",
+                                "BIZ_FK_FILL_SOURCE_FIELD_IN_USE", "table.fk_fill_source_field_in_use")));
+            }
+            if (filterFieldName != null || !fillSourceFieldNames.isEmpty()) {
+                remaps.add(new BindingFieldReferenceRemap(binding, filterFieldName, fillSourceFieldNames));
+            }
+        }
+        return remaps;
+    }
+
+    private String referencedIncomingFieldName(
+            FormTableBinding binding,
+            Long oldFieldId,
+            Map<Long, FieldDefinition> existingById,
+            Map<Long, FieldDefinitionRequest> incomingByOldId,
+            String staleCode,
+            String staleMessageKey,
+            String deletedCode,
+            String deletedMessageKey) {
+        FieldDefinition existing = existingById.get(oldFieldId);
+        if (existing == null) {
+            throw new DeveloperBusinessException(staleCode,
+                    i18nService.getMessage(staleMessageKey, binding.getId(), oldFieldId));
+        }
+        FieldDefinitionRequest incoming = incomingByOldId.get(oldFieldId);
+        if (incoming == null || incoming.getFieldName() == null || incoming.getFieldName().isBlank()) {
+            throw new DeveloperBusinessException(deletedCode,
+                    i18nService.getMessage(deletedMessageKey, existing.getFieldName(), binding.getId()));
+        }
+        return incoming.getFieldName().trim();
+    }
+
+    private void remapBindingFieldReferences(Long tableId, List<BindingFieldReferenceRemap> remaps) {
+        if (remaps.isEmpty()) return;
+        Map<String, Long> rebuiltFieldIdsByName = fieldDefinitionRepository
+                .findByTableDefinitionIdOrderBySortOrderAsc(tableId).stream()
+                .filter(field -> field.getId() != null && field.getFieldName() != null)
+                .collect(Collectors.toMap(
+                        field -> field.getFieldName().trim().toLowerCase(Locale.ROOT),
+                        FieldDefinition::getId,
+                        (first, ignored) -> first,
+                        LinkedHashMap::new));
+        List<FormTableBinding> dirty = new ArrayList<>();
+        for (BindingFieldReferenceRemap remap : remaps) {
+            if (remap.filterFieldName() != null) {
+                Long rebuiltFieldId = rebuiltFieldIdsByName.get(remap.filterFieldName().toLowerCase(Locale.ROOT));
+                if (rebuiltFieldId == null) {
+                    throw new DeveloperBusinessException("BIZ_FILTER_FK_REMAP_FAILED",
+                            i18nService.getMessage("table.filter_fk_remap_failed",
+                                    remap.filterFieldName(), remap.binding().getId()));
+                }
+                remap.binding().setFilterFkFieldId(rebuiltFieldId);
+            }
+            Map<Long, Long> fillSourceIdMapping = new LinkedHashMap<>();
+            for (Map.Entry<Long, String> entry : remap.fillSourceFieldNames().entrySet()) {
+                Long rebuiltFieldId = rebuiltFieldIdsByName.get(entry.getValue().toLowerCase(Locale.ROOT));
+                if (rebuiltFieldId == null) {
+                    throw new DeveloperBusinessException("BIZ_FK_FILL_SOURCE_REMAP_FAILED",
+                            i18nService.getMessage("table.fk_fill_source_remap_failed",
+                                    entry.getValue(), remap.binding().getId()));
+                }
+                fillSourceIdMapping.put(entry.getKey(), rebuiltFieldId);
+            }
+            if (!fillSourceIdMapping.isEmpty()) {
+                remap.binding().setFkFillSources(FkFillSourcesSupport.remapFieldIds(
+                        remap.binding().getFkFillSources(), fillSourceIdMapping));
+            }
+            dirty.add(remap.binding());
+        }
+        formTableBindingRepository.saveAll(dirty);
+        log.info("Remapped {} binding filter FK reference(s) after rebuilding fields for table {}",
+                dirty.size(), tableId);
+    }
+
+    private record BindingFieldReferenceRemap(
+            FormTableBinding binding,
+            String filterFieldName,
+            Map<Long, String> fillSourceFieldNames) {}
 
     /**
      * Within the transaction: rewrite {@code dw_form_table_bindings.foreign_key_field} on every binding

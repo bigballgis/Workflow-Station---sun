@@ -178,7 +178,7 @@ class AiContextSerializer {
     }
 
     /**
-     * 连接的安全视图：白名单输出，绝不带 username / credentialEncrypted / oauth* / token*。
+     * 连接的安全视图：白名单输出，绝不带 username / passwordEnvKey / oauth* / token*。
      * {@code hasCredentials} 让模型知道哪些入站连接能被监控模板引用。
      */
     private List<Map<String, Object>> serializeEmailConnections(List<EmailConnection> connections) {
@@ -191,7 +191,7 @@ class AiContextSerializer {
             map.put("fromName", c.getFromName());
             map.put("mailboxAddress", c.getMailboxAddress());
             map.put("enabled", c.getEnabled());
-            map.put("hasCredentials", c.getCredentialEncrypted() != null && !c.getCredentialEncrypted().isBlank());
+            map.put("hasCredentials", c.getPasswordEnvKey() != null && !c.getPasswordEnvKey().isBlank());
             return map;
         }).collect(Collectors.toList());
     }

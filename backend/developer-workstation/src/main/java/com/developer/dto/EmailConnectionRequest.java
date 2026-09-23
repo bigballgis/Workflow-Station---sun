@@ -20,8 +20,8 @@ public class EmailConnectionRequest {
 
     private String username;
 
-    /** Plain password on create/update; omitted when unchanged */
-    private String password;
+    /** VAULT environment variable key; required when username is set */
+    private String passwordEnvKey;
 
     /** SMTP host; defaults from provider preset when omitted on create. */
     private String host;

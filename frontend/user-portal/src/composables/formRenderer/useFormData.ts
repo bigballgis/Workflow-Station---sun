@@ -77,7 +77,9 @@ interface FormDataDeps {
   applyEngineResult: (result: any) => void
   engineOnSubTableChange: (bindingId: number, rows: any[], formData: Record<string, any>) => any
   engineCalculatedValues: Ref<Map<string, number>>
-  /** Main-table Request ID config — drives live recompute of the readonly __request_id field. */
+  /** Main-table PK columns — initFormData must keep these even when they are not canvas fields. */
+  primaryKeyFields?: () => string[] | null | undefined
+  primaryFieldDefinitions?: () => Array<{ fieldName?: string; isPrimaryKey?: boolean }> | null | undefined
   requestIdConfig?: () => RequestIdConfig | null | undefined
   /** Re-previews the main table's computed columns; no-op when the table has none. */
   recomputeComputedFields?: (changedSubTable?: { bindingId: number; rows: unknown[] }) => void
@@ -85,6 +87,36 @@ interface FormDataDeps {
   engineFieldStates?: Ref<Map<string, { disabled?: boolean; required?: boolean }>>
   /** Script `api.required` overlay (true/false); missing key → designer + linkage. */
   eventRequiredFlags?: Ref<Map<string, boolean>>
+}
+
+function declaredPrimaryKeyFields(deps: FormDataDeps): string[] {
+  const declared = (deps.primaryKeyFields?.() ?? [])
+    .map(f => String(f ?? '').trim())
+    .filter(Boolean)
+  if (declared.length > 0) return declared
+  return (deps.primaryFieldDefinitions?.() ?? [])
+    .filter(f => f?.isPrimaryKey)
+    .map(f => String(f?.fieldName ?? '').trim())
+    .filter(Boolean)
+}
+
+function copyPreservedPrimaryKeys(
+  target: Record<string, unknown>,
+  sources: Array<Record<string, unknown> | null | undefined>,
+  pkFields: string[],
+): void {
+  for (const field of pkFields) {
+    const existing = target[field]
+    if (existing != null && String(existing).trim() !== '') continue
+    for (const src of sources) {
+      if (!src) continue
+      const v = src[field]
+      if (v != null && String(v).trim() !== '') {
+        target[field] = v
+        break
+      }
+    }
+  }
 }
 
 export function useFormData(deps: FormDataDeps) {
@@ -184,6 +216,7 @@ export function useFormData(deps: FormDataDeps) {
       }
       copyFieldDisplayCompanion(parent, field.key, data)
     })
+    copyPreservedPrimaryKeys(data, [parent, formData.value], declaredPrimaryKeyFields(deps))
     // Seed the readonly Request ID: prefer the backend-filled value, else compute from
     // the contributing fields already present (e.g. new-request page has no backend fill yet).
     const ridCfg = deps.requestIdConfig?.()

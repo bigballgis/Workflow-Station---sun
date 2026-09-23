@@ -244,9 +244,18 @@ export interface TableBinding {
   bindingMode: BindingMode
   foreignKeyField?: string
   bindingLinkMode?: BindingLinkMode
+  filterFkFieldId?: number
+  fkFillSources?: FkFillSource[]
   sortOrder: number
   subListViewId?: number
   subMode?: SubBindingMode
+}
+
+export interface FkFillSource {
+  fieldId: number
+  fieldName?: string
+  kind: 'PARENT' | 'PRIMARY' | 'ANCESTOR'
+  ancestorBindingId?: number
 }
 
 // Table binding request
@@ -257,6 +266,8 @@ export interface TableBindingRequest {
   bindingMode?: BindingMode
   foreignKeyField?: string
   bindingLinkMode?: BindingLinkMode
+  filterFkFieldId?: number
+  fkFillSources?: FkFillSource[]
   sortOrder?: number
   subMode?: SubBindingMode
 }

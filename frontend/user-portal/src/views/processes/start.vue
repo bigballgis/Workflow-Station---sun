@@ -289,6 +289,8 @@ import { actionButtonStyle, isCustomButtonColor } from '@/utils/actionButtonColo
 import {
   resolveSubTablePrimaryKeyFields,
 } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import {
   buildRelationTableFieldIndexFromDataTables,
   resolveBindingFieldDefinitions,
@@ -400,11 +402,14 @@ const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBindin
 // 子表列解析 + 草稿/提交载荷
 const {
   resolveSubTableBindingColumnsForStart,
+  assembleStartSubTables,
   buildStartFormSubTablesPayload,
   hydrateStartFormBindingsFromDraftStore,
 } = createProcessStartSubTables({
   caches,
   subTableBindings,
+  formData,
+  primaryTableBinding,
   deriveColumnsFromBinding,
 })
 
@@ -556,6 +561,9 @@ const loadFunctionUnitContent = async () => {
           primaryBindingMeta = {
             tableId: (b as { tableId?: number | null }).tableId ?? null,
             tableName: b.tableDisplayName || b.tableName,
+            primaryKeyFields: Array.isArray((b as { primaryKeyFields?: string[] }).primaryKeyFields)
+              ? (b as { primaryKeyFields?: string[] }).primaryKeyFields
+              : undefined,
             fieldDefinitions: resolveBindingFieldDefinitions(
               { tableId: (b as { tableId?: number | null }).tableId, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
               caches.cachedRelationTableFieldIndex,
@@ -600,6 +608,9 @@ const loadFunctionUnitContent = async () => {
           ...(subFormOptions ? { formOptions: subFormOptions } : {}),
           fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
+          ...declaredFilterFkFields(b as { filterFkRefTableId?: number | null; filterFkFieldName?: string | null }),
+          filterFkRefTableName: (b as { filterFkRefTableName?: string | null }).filterFkRefTableName ?? null,
+          ...declaredFkFillSources(b as { fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] }),
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []
         })
@@ -870,12 +881,15 @@ const handleSubmit = async () => {
     const liveFormData = (formRendererRef.value as { getFormData?: () => Record<string, unknown> } | null)
       ?.getFormData?.() ?? formData.value
     formData.value = { ...liveFormData }
+    const assembled = assembleStartSubTables()
     const startResponse: any = await processApi.startProcess(procKey, {
       processDefinitionKey: procKey,
       formData: {
         ...liveFormData,
-        __subTables__: buildStartFormSubTablesPayload()
+        __subTables__: assembled.subTables,
       },
+      emptiedSubTableKeys: assembled.emptiedSubTableKeys,
+      subTableBindingScopes: assembled.subTableBindingScopes,
       priority: 'NORMAL'
     })
 

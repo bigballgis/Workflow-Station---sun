@@ -1,6 +1,7 @@
 import formEventMessages from './formEvents.en'
 import formCtlMessages from './formCtl.en'
 import tableDesignMessages from './tableDesign.en'
+import tableBindingsMessages from './tableBindings.en'
 import viewDesignMessages from './viewDesign.en'
 import fuDocumentsMessages from './fuDocuments.en'
 import aiStudioMessages from './aiStudio.en'
@@ -183,6 +184,11 @@ export default {
       summary:
         'Inbound mailbox, monitor template, field extraction, and Start Event binding — every field, before Deploy.',
     },
+    environmentVariables: {
+      title: 'Environment variables',
+      summary:
+        'Admin Environment variables catalog: TEXT current/default values, and VAULT keys for Email Connection passwords. A new Vault path is written only when it does not already exist.',
+    },
     upTasksToClaim: {
       title: 'To Do — claim pool',
       summary:
@@ -191,6 +197,10 @@ export default {
     taskDelegate: {
       title: 'Delegate a task',
       summary: 'Hand this one To Do to a person or a BU+Role pair without changing Current Assignee.',
+    },
+    tableBindings: {
+      title: 'Manage Table Bindings',
+      summary: 'Attach MAIN, SUB, ACTION, and RELATION tables to a form. Filter foreign key and fill source live here; the Sub-Table grid is a separate article.',
     },
     formUpload: {
       title: 'Form Design — Advanced Upload',
@@ -284,7 +294,7 @@ export default {
       "Process Design: Send task selected. Click {'{'} {'}'} beside To to insert a main-table field as ${\'{'}fieldName{\'}'}.",
     connectionTitle: 'First: an Outbound connection',
     connectionBody:
-      'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and password. Host, port, and Use TLS come from Admin Center → System Config. Use Test to send a trial message before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead.',
+      'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and Password (VAULT) — pick a VAULT key from Admin Center → Environment variables. Host, port, and Use TLS come from System Config. Use Test before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead.',
     connectionCatalogLead: 'Field catalog — every control on New / Edit Connection (Outbound) and Test.',
     fDirection:
       'Required. Outbound (send) for this job; Inbound (monitor) is for Email Monitor. A legacy Both row must be saved as one of those two.',
@@ -298,7 +308,7 @@ export default {
     fSmtpUsername:
       'SMTP login (service account). Usually different from the sender email. Leave blank only for an anonymous relay that does not use SMTP AUTH.',
     fSmtpPassword:
-      'Required when Username is set (new row). SMTP password or provider app password. On edit, leave blank to keep the stored password.',
+      'Required when Username is set. Select a VAULT environment variable (not TEXT). The mailbox password stays in Vault. See [[/environment-variables]].',
     fSmtpHost:
       'Not typed here. SMTP hostname comes from Admin Center → System Config (Outbound connections).',
     fSmtpPort:
@@ -402,7 +412,7 @@ export default {
     startEventFigure: 'Start event StartEvent_Email: Vendor quote to PR bound, Subject Filter Quote, extraction configured.',
     inboundTitle: 'First: an Inbound connection',
     inboundBody:
-      'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address and IMAP username and password. IMAP host, port, and SSL come from Admin Center → System Config. There is no inbound connection until Direction is Inbound.',
+      'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address, IMAP username, and Password (VAULT) from Admin Center → Environment variables. IMAP host, port, and SSL come from System Config. There is no inbound connection until Direction is Inbound.',
     inboundCatalogLead: 'Field catalog — every control on New / Edit Connection (Inbound).',
     fDirection: 'Required. Must be Inbound (monitor) or this mailbox never appears under Email Monitors.',
     fDirectionInbound: 'Choice: poll this mailbox with IMAP. Outbound (send) is for Send email, not this page.',
@@ -411,7 +421,7 @@ export default {
     fImapUsername:
       'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row.',
     fImapPassword:
-      'IMAP password or provider app password. Required on create when username is set. On edit, leave blank to keep the stored password.',
+      'IMAP password is a VAULT environment variable. Required when username is set. Ciphertext is no longer stored; re-select a VAULT key on old rows. See [[/environment-variables]].',
     fImapHost:
       'Not typed here. IMAP hostname comes from Admin Center → System Config (Inbound connections).',
     fImapPort:
@@ -596,6 +606,42 @@ export default {
     deleteBody:
       'A template bound to one or more Start Events cannot be deleted. Unbind it in Process Design first, then delete the template.',
   },
+  environmentVariablesGuide: {
+    pageTitle: 'Environment variables',
+    crumb: 'Admin Center',
+    intro:
+      'Admin Center → Environment variables holds TEXT values and VAULT catalog keys. Creating a VAULT variable writes the password into HashiCorp Vault only when that path does not already exist. Edit and delete never change Vault. Email Connection passwords only bind a VAULT key.',
+    flowTitle: 'Order of work',
+    flow1: 'Create a VAULT variable: key, optional password, optional Vault path',
+    flow2: 'On Connections, pick that key as Password (VAULT)',
+    flow3: 'Test send or Deploy the inbound monitor',
+    catalogTitle: 'Catalog fields',
+    catalogBody:
+      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the Vault path is new, Admin writes data.password. If the path already exists, Admin only creates the catalog row. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
+    catalogLead: 'Field catalog — Add / Edit variable.',
+    fKindText:
+      'TEXT. Default value is required. Current value is optional; blank or whitespace uses the default.',
+    fKindVault:
+      'VAULT. Enter the key. Password is needed only when the Vault path does not exist yet. No current/default text. Runtime reads data.data.password from HashiCorp Vault.',
+    fKey: 'Required. Stable key (for example email.qq.inbound.password). Connections and ZIP export store this key, not the secret. Duplicate keys are rejected.',
+    fDisplayName: 'Required. Label in the Connections dropdown.',
+    fDefault: 'Required for TEXT. Used when current value is blank or whitespace.',
+    fCurrent: 'Optional for TEXT. Non-blank current value wins over default.',
+    fPath: 'Optional for VAULT. Vault KV path such as workflow/email/qq-inbound. Blank uses the key.',
+    fPassword: 'On create: required only if Vault does not already have this path. Existing secrets are reused and never overwritten. Edit never writes Vault. Delete removes only the catalog row.',
+    bindTitle: 'Bind on a Connection',
+    bindBody:
+      'In Developer Workstation → Connections, Username plus Password (VAULT) select a VAULT key from this catalog. Host still comes from System Config SMTP/IMAP. See [[/email-send#connection]] and [[/email-monitor]].',
+    fBindPassword:
+      'Required when Username is set. Only VAULT keys are listed. Opening an old connection after this change: re-select a VAULT key; ciphertext is gone.',
+    failTitle: 'What fails',
+    failBody: 'Fix the catalog or the Connection binding, then Test or Deploy again.',
+    failTextBlank: 'TEXT default empty — save is blocked. Whitespace current value falls back to default.',
+    failDuplicateKey: 'Duplicate catalog key — save is blocked. Use the existing environment variable. Do not operate Vault.',
+    failVaultWrite: 'Vault write failed (connectivity, login, or permissions) — save is blocked and a toast shows the error.',
+    failVault404: 'Vault 404 — IMAP/SMTP does not treat this as “no password”; the poll/send fails with a Vault error.',
+    failTextForMail: 'Email password bound to TEXT — Admin rejects it; pick a VAULT key.',
+  },
   upTasksToClaimGuide: {
     pageTitle: 'To Do — claiming role requests',
     crumb: 'User Portal · Task · To Do',
@@ -740,6 +786,7 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,

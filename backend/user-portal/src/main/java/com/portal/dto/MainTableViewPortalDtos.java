@@ -74,7 +74,18 @@ public final class MainTableViewPortalDtos {
             Boolean sortable,
             List<String> operators,
             /** Closed choices for ENUM / BOOLEAN; empty for open-value kinds. */
-            List<ListColumnMeta.Option> options
+            List<ListColumnMeta.Option> options,
+            /**
+             * {@code value} (stored option value, the default) or {@code label}: what a select-like
+             * column shows. Designed per column in the DW View Design column settings.
+             */
+            String selectDisplay,
+            /**
+             * Static options of the form widget bound to this field, sent only when
+             * {@link #selectDisplay} is {@code label}; the portal maps each cell value to its label.
+             * Row values stay raw so detail forms, FK links and lookup hydration keep working.
+             */
+            List<ListColumnMeta.Option> selectOptions
     ) {
         /**
          * Copies the list-header contract onto a view column. {@code options} must travel:

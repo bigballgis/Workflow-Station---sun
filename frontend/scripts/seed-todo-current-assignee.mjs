@@ -239,4 +239,3 @@ try {
 
 console.log(`[seed] open ${ORIGIN}/portal/tasks as ${VIEWER.user}`)
 await browser.close()
-

@@ -1,0 +1,20 @@
+# Merge-patch only. Adds/updates Vault keys on workflow-platform-config.
+# Does not replace other ConfigMap data.
+#
+# Do NOT: kubectl apply -f this file
+#
+#   kubectl --context <prod-context> -n <prod-namespace> patch configmap workflow-platform-config --type merge --patch-file deploy/k8s/patches/workflow-platform-config-vault-keys-prod.yml
+#   kubectl --context <prod-context> -n <prod-namespace> rollout restart deploy/admin-center
+#   kubectl --context <prod-context> -n <prod-namespace> rollout status deploy/admin-center
+#   kubectl --context <prod-context> -n <prod-namespace> exec deploy/admin-center -- printenv VAULT_ADDR
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-platform-config
+data:
+  VAULT_ADDR: "https://vault-prod.hk.hsbc:8200"
+  VAULT_NAMESPACE: "ITID/22330042_HERMES"
+  VAULT_AUTH_MOUNT: "kubernetes/wsit-hk-azx-401"
+  VAULT_ROLE: "ame-hase-hermes-role"
+  VAULT_KV_MOUNT: "secrets/kv_v2/wsit"
+  VAULT_LOGIN_REFRESH_SKEW_SECONDS: "30"

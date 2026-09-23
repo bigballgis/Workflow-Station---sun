@@ -1,10 +1,12 @@
 package com.developer.component.impl;
 
+import com.developer.client.AdminCenterEnvironmentClient;
 import com.developer.client.AdminCenterSystemImapClient;
 import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.component.EmailConnectionComponent;
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
+import com.developer.dto.VaultEnvOption;
 import com.developer.entity.EmailConnection;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.EmailConnectionDirection;
@@ -16,7 +18,6 @@ import com.developer.util.SmtpMailSender;
 import com.platform.common.mail.MailDiagnostics;
 import com.platform.common.security.SsrfProtection;
 import com.platform.common.i18n.I18nService;
-import com.platform.security.encryption.EncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,10 +39,10 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
     private final EmailConnectionRepository emailConnectionRepository;
     private final FunctionUnitRepository functionUnitRepository;
-    private final EncryptionService encryptionService;
     private final I18nService i18nService;
     private final AdminCenterSystemSmtpClient adminCenterSystemSmtpClient;
     private final AdminCenterSystemImapClient adminCenterSystemImapClient;
+    private final AdminCenterEnvironmentClient adminCenterEnvironmentClient;
 
     /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
@@ -63,6 +64,17 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<VaultEnvOption> listVaultOptions() {
+        try {
+            return adminCenterEnvironmentClient.listVaultVariables();
+        } catch (IllegalStateException ex) {
+            throw new DeveloperBusinessException("VAULT_OPTIONS_UNAVAILABLE",
+                    i18nService.getMessage("email.connection.vault_options_failed"));
+        }
+    }
+
+    @Override
     @Transactional
     public EmailConnectionResponse create(Long functionUnitId, EmailConnectionRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
@@ -74,11 +86,11 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         assertNameUniqueForDirection(functionUnitId, request.getName(), direction, null);
 
         if (!StringUtils.hasText(request.getUsername())) {
-            if (StringUtils.hasText(request.getPassword())) {
+            if (StringUtils.hasText(request.getPasswordEnvKey())) {
                 throw new DeveloperBusinessException("VALIDATION_USERNAME_REQUIRED",
                         i18nService.getMessage("email.connection.password_requires_username"));
             }
-        } else if (!StringUtils.hasText(request.getPassword())) {
+        } else if (!StringUtils.hasText(request.getPasswordEnvKey())) {
             throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED",
                     i18nService.getMessage("email.connection.username_requires_password"));
         }
@@ -96,8 +108,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .host(endpoint.host())
                 .port(endpoint.port())
                 .username(username)
-                .credentialEncrypted(StringUtils.hasText(request.getPassword())
-                        ? encryptionService.encrypt(request.getPassword())
+                .passwordEnvKey(StringUtils.hasText(request.getPasswordEnvKey())
+                        ? request.getPasswordEnvKey().trim()
                         : null)
                 .fromEmail(emailAddress)
                 .fromName(request.getFromName())
@@ -150,10 +162,13 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         connection.setImapPort(imap.port());
         connection.setImapUseSsl(imap.useSsl());
         if (!StringUtils.hasText(request.getUsername())) {
-            connection.setCredentialEncrypted(null);
-        } else if (StringUtils.hasText(request.getPassword())) {
-            connection.setCredentialEncrypted(encryptionService.encrypt(request.getPassword()));
+            connection.setPasswordEnvKey(null);
+        } else if (StringUtils.hasText(request.getPasswordEnvKey())) {
+            connection.setPasswordEnvKey(request.getPasswordEnvKey().trim());
         } else if (!StringUtils.hasText(connection.getUsername())) {
+            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED",
+                    i18nService.getMessage("email.connection.username_requires_password"));
+        } else if (!StringUtils.hasText(connection.getPasswordEnvKey())) {
             throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED",
                     i18nService.getMessage("email.connection.username_requires_password"));
         }
@@ -343,8 +358,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
     private SmtpMailSender.SmtpConfig toSmtpConfig(EmailConnection connection, ResolvedSmtpEndpoint endpoint) {
         String password = null;
-        if (connection.getCredentialEncrypted() != null) {
-            password = encryptionService.decrypt(connection.getCredentialEncrypted());
+        if (StringUtils.hasText(connection.getPasswordEnvKey())) {
+            password = adminCenterEnvironmentClient.resolveVaultPassword(connection.getPasswordEnvKey());
         }
         return new SmtpMailSender.SmtpConfig(
                 endpoint.host(),

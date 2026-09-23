@@ -410,11 +410,10 @@ export function collectRecordNoteScopes(items: any[]): string[] {
 }
 
 /**
- * Copy top-level `_bindingId` into `props._bindingId` on every SUB-binding rule (non-mutating).
- * Persisted rules keep `_bindingId` only at top level (the drag rule's parseRule strips the
- * props copy on save), but the placeholder widgets read props — so preview surfaces that
- * feed saved rules straight into form-create must run this or nested placeholders render
- * as "unconfigured".
+ * Hydrate designer-only props on every SUB-binding rule without mutating persisted config.
+ * Persisted rules keep `_bindingId` and the Sub-Table display `title` at top level, while
+ * placeholder widgets read props. Preview surfaces that feed saved rules straight into
+ * form-create must run this or placeholders lose their binding state or display title.
  */
 export function withSubTableBindingIdInProps(items: any[]): any[] {
   const visited = new WeakSet<object>()
@@ -429,8 +428,17 @@ export function withSubTableBindingIdInProps(items: any[]): any[] {
     visited.add(item)
 
     let next = item
-    if (SUB_BINDING_RULE_TYPES.has(item.type) && item._bindingId != null && item.props?._bindingId == null) {
-      next = { ...item, props: { ...(item.props || {}), _bindingId: item._bindingId } }
+    if (SUB_BINDING_RULE_TYPES.has(item.type)) {
+      const needsBindingId = item._bindingId != null && item.props?._bindingId == null
+      const needsDisplayTitle = item.type === 'subTable'
+        && item.title !== undefined
+        && item.props?._displayTitle == null
+      if (needsBindingId || needsDisplayTitle) {
+        const props = { ...(item.props || {}) }
+        if (needsBindingId) props._bindingId = item._bindingId
+        if (needsDisplayTitle) props._displayTitle = String(item.title ?? '')
+        next = { ...item, props }
+      }
     }
     const children = getRuleChildren(next)
     if (!children.length) return next

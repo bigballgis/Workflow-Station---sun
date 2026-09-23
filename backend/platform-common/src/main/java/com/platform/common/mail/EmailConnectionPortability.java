@@ -13,18 +13,24 @@ public final class EmailConnectionPortability {
     }
 
     /**
-     * Read AES ciphertext from connection JSON. Prefers {@code credentialEncrypted}; when that key
-     * is absent or blank, falls back to legacy {@code passwordEncrypted} from pre-rename packages.
+     * Read environment-variable key for mailbox password. Ciphertext keys from old packages
+     * are ignored — operators must bind a VAULT variable.
      */
-    public static String readEncryptedCredential(Map<String, Object> connectionData) {
+    public static String readPasswordEnvKey(Map<String, Object> connectionData) {
         if (connectionData == null) {
             return null;
         }
-        Object credential = connectionData.get("credentialEncrypted");
-        if (credential instanceof String credentialText && StringUtils.isNotBlank(credentialText)) {
-            return credentialText;
+        Object key = connectionData.get("passwordEnvKey");
+        if (key instanceof String text && StringUtils.isNotBlank(text)) {
+            return text.trim();
         }
-        Object legacy = connectionData.get("passwordEncrypted");
-        return legacy instanceof String legacyText ? legacyText : null;
+        return null;
+    }
+
+    /**
+     * @deprecated mailbox passwords are no longer imported from ZIP ciphertext
+     */
+    public static String readEncryptedCredential(Map<String, Object> connectionData) {
+        return null;
     }
 }

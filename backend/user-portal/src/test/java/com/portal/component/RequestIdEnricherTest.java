@@ -114,6 +114,7 @@ class RequestIdEnricherTest {
                 .id("pi-1")
                 .processDefinitionKey("Process_1")
                 .functionUnitCode("help_pr")
+                .functionUnitCatalogId("cat-help-pr")
                 .variables(vars("dept", "HR"))
                 .build();
         ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
@@ -137,6 +138,7 @@ class RequestIdEnricherTest {
 
         assertThat(task.getRequestId()).isEqualTo("HR");
         assertThat(task.getFunctionUnitCode()).isEqualTo("help_pr");
+        assertThat(task.getFunctionUnitCatalogId()).isEqualTo("cat-help-pr");
         assertThat(task.getFunctionUnitName()).isEqualTo("Purchase Request");
     }
 }

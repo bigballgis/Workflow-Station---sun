@@ -1,9 +1,10 @@
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { subTableStoreKey } from './subTableStore'
 import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { submitTaskForm } from '@/api/processForm'
+import { createSubTableAutosave } from './subTableAutosave'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import { collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
 import {
@@ -19,9 +20,17 @@ import {
   isMiDashboardSubTableBinding,
   shouldSyncStaleSiblingSubTableSlice,
   syncMiLinkChildEditedRowsIntoSiblingSlices,
-  sameSubTableRow,
 } from './shared'
 import { mergeSubTableRowsForMiSave } from './miSubTableSaveMerge'
+import {
+  buildBindingScopeFromBaseline,
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+  type SubTableBindingScope,
+} from './subTableCanonicalStamp'
+import { projectSavedRowsForBinding } from './subTableFilterProjection'
+import { stampAuthoritativeRowVersions } from './subTableRowVersionSync'
+import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -39,16 +48,11 @@ function subTableSliceUnchanged(
 function stampBindingTableNameAliases(
   subTables: Record<string, any>,
   subTableData: Record<string, Array<Record<string, unknown>>>,
-  binding: { tableName?: string; designerTableName?: string },
+  binding: { tableName?: string; designerTableName?: string; primaryKeyFields?: string[] | null },
   rows: unknown[],
+  sharedKeys: Set<string>,
 ) {
-  // 规范 key：一张表一个 key。subTableData 是提交时的另一个字段（controller 会并进
-  // __subTables__），用同一个 key 规则，避免两边再度分叉。
-  const key = subTableStoreKey(binding)
-  if (key) {
-    subTables[key] = rows
-    subTableData[key] = rows as Array<Record<string, unknown>>
-  }
+  stampCanonicalStoreRows(subTables, subTableData, binding, rows, sharedKeys)
 }
 
 export function useTaskForm(options: {
@@ -73,6 +77,11 @@ export function useTaskForm(options: {
     binding: unknown,
   ) => ((row: unknown) => boolean) | null
   onFormReadOnlyChange?: (readonly: boolean) => void
+  primaryTableBinding?: Ref<{
+    tableId?: number | null
+    primaryKeyFields?: string[] | null
+    fieldDefinitions?: Array<{ fieldName?: string; isPrimaryKey?: boolean }> | null
+  } | null>
 }) {
   const { t } = useI18n()
 
@@ -87,7 +96,15 @@ export function useTaskForm(options: {
   const formFormOptions = ref<Record<string, unknown>>({})
   const savingTaskForm = ref(false)
   const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
-  let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
+  const loadedSubTableBaseline = ref<Record<string, unknown>>({})
+  function captureLoadedSubTableBaseline(source: unknown = formData.value.__subTables__): void {
+    loadedSubTableBaseline.value = JSON.parse(JSON.stringify(
+      source && typeof source === 'object' && !Array.isArray(source) ? source : {},
+    ))
+  }
+  watch(taskFormDTO, dto => {
+    captureLoadedSubTableBaseline(dto?.fieldValues?.__subTables__)
+  }, { immediate: true, flush: 'sync' })
 
   /** Assignment task: merge active binding rows into stale sibling slices for the same MI collection table only. */
   function syncStaleSiblingSubTableSlicesFromActiveBindings(
@@ -183,6 +200,8 @@ export function useTaskForm(options: {
      * 见 `MiSubTaskSubTableRowMerger` 的 empty-slice 分支。
      */
     const emptiedSubTableKeys: string[] = []
+    const subTableBindingScopes: SubTableBindingScope[] = []
+    const sharedKeys = storeKeysSharedByMultipleBindings(options.subTableBindings.value)
 
     for (const binding of options.subTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
@@ -243,24 +262,42 @@ export function useTaskForm(options: {
        * </ul>
        * 三条都满足才发这个 key，后端也只对声明过的 key 清「我的」行 —— 其余情况一律保持基线。
        */
+      let emptiedThisBinding = false
       if (
         options.isMiSubTaskMode.value
         && ownRowPredicate != null
         && isMiParticipantScopedSubTableBinding(binding)
         && !(out as unknown[]).some(row => ownRowPredicate(row))
-        // 只有「原本有我的行、现在没了」才算删除。基线里本来就没有我的行时不发声明 ——
-        // 那不是删除，是这张表我还没有行；发出去只是让后端对零行做一次空转。
         && (Array.isArray(existing) ? existing.some(row => ownRowPredicate(row)) : false)
       ) {
+        emptiedThisBinding = true
         const emptiedKey = subTableStoreKey(binding)
         if (emptiedKey) emptiedSubTableKeys.push(emptiedKey)
       }
-      // One canonical key per designer table. The previous code also wrote the bindingId key and
-      // then arbitrated, via `nameMissing` / `subTableSliceUnchanged`, which binding got to be the
-      // last writer of the shared table-name alias — an arbitration only needed because several
-      // bindings each held their own copy. With a single key there is no second copy to lose to,
-      // so an unchanged list-only binding writing the same rows is a no-op rather than a clobber.
-      stampBindingTableNameAliases(subTables, subTableData, binding, out)
+      // Shared store keys union-merge so a later binding cannot drop another binding's rows.
+      stampBindingTableNameAliases(subTables, subTableData, binding, out, sharedKeys)
+      const storeKey = subTableStoreKey(binding)
+      if (storeKey && sharedKeys.has(storeKey)) {
+        const scoped = projectSavedRowsForBinding(
+          out,
+          binding,
+          options.subTableBindings.value,
+          {
+            formData: formData.value as Record<string, unknown>,
+            primaryTableId: options.primaryTableBinding?.value?.tableId ?? null,
+            primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields ?? null,
+            primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions ?? null,
+          },
+        ) ?? out
+        const scope = buildBindingScopeFromBaseline(binding, scoped, emptiedThisBinding,
+          loadedSubTableBaseline.value, options.subTableBindings.value, {
+            formData: formData.value,
+            primaryTableId: options.primaryTableBinding?.value?.tableId,
+            primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields,
+            primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions,
+          })
+        if (scope) subTableBindingScopes.push(scope)
+      }
     }
 
     if (!options.isMiSubTaskMode.value) {
@@ -273,7 +310,7 @@ export function useTaskForm(options: {
         if (!Array.isArray(binding.formFields) || binding.formFields.length === 0) continue
         const live = subTables[String(binding.bindingId)]
         if (!Array.isArray(live) || live.length === 0) continue
-        stampBindingTableNameAliases(subTables, subTableData, binding, live)
+        stampBindingTableNameAliases(subTables, subTableData, binding, live, sharedKeys)
       }
     } else {
       // #1446: link-form (People) edits must also reach the same relation table's stale sibling
@@ -300,6 +337,18 @@ export function useTaskForm(options: {
       }
     }
 
+    removeRowsWithMissingParentsFromCanonicalStore(
+      subTables,
+      options.subTableBindings.value,
+      {
+        formData: formData.value,
+        primaryTableId: options.primaryTableBinding?.value?.tableId,
+        primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields,
+        primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions,
+      },
+      sharedKeys,
+    )
+
     // Flatten last so binding.data / sibling-slice stamps cannot resurrect rows the
     // nested Link Form already deleted. subTableData is merged over __subTables__ on
     // the server, so the same membership must be copied onto it.
@@ -308,6 +357,13 @@ export function useTaskForm(options: {
       8,
       primaryKeyFieldsBySliceKey,
       parentLink,
+    )
+    // Flatten can keep a nested copy whose version is older than the flat row.
+    // The baseline is the last server snapshot; dialog copies are not.
+    stampAuthoritativeRowVersions(
+      subTables as Record<string, unknown>,
+      loadedSubTableBaseline.value,
+      options.subTableBindings.value,
     )
     for (const key of Object.keys(subTableData)) {
       const rows = subTables[key]
@@ -320,6 +376,7 @@ export function useTaskForm(options: {
       formData: { __subTables__: subTables },
       subTableData,
       emptiedSubTableKeys,
+      subTableBindingScopes,
     }
   }
 
@@ -361,9 +418,10 @@ export function useTaskForm(options: {
       },
       subTableData: subTablePayload.subTableData,
       baselineValues: taskFormDTO.value?.fieldValues || {},
-      // 传输元数据，**刻意放在 formData 之外**：approve/complete 链路会把 formData 整体
-      // 灌进流程变量（Object.assign(variables, formData)），放进去就会被当成业务变量持久化。
+      // 传输元数据，**刻意放在 formData 之外**：approve/complete 会把 formData 灌进
+      // 流程变量。Complete 请求在顶层携带这两项，由 `SubTableWriteIsolation` 消费。
       emptiedSubTableKeys: subTablePayload.emptiedSubTableKeys,
+      subTableBindingScopes: subTablePayload.subTableBindingScopes,
     }
   }
 
@@ -377,6 +435,7 @@ export function useTaskForm(options: {
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
       formData.value = { ...formData.value, __subTables__: payload.formData.__subTables__ }
+      if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
       ElMessage.success(t('task.operationSuccess'))
     } catch (error) {
       console.error('[TaskForm] save failed:', error)
@@ -386,23 +445,23 @@ export function useTaskForm(options: {
     }
   }
 
-  function scheduleSubTableAutosave() {
-    if (formReadOnly.value || options.isCompletedTask.value || options.isMiSubTaskMode.value) return
-    if (!options.effectiveTaskId.value) return
-    if (subTableAutosaveTimer) clearTimeout(subTableAutosaveTimer)
-
-    subTableAutosaveTimer = setTimeout(async () => {
-      subTableAutosaveTimer = null
-      try {
-        await submitTaskForm(options.effectiveTaskId.value, {
-          ...buildSubTableSubmitPayload(),
-          baselineValues: {}
-        })
-      } catch (error) {
-        console.error('[SubTable] autosave failed:', error)
-      }
-    }, 400)
-  }
+  const {
+    scheduleSubTableAutosave,
+    clearAutosaveTimer,
+    refreshSavedSubTableVersions,
+    syncSubTableRowVersionsBeforeSubmit,
+    resumeSubTableAutosave,
+  } = createSubTableAutosave({
+    formReadOnly,
+    isCompletedTask: options.isCompletedTask,
+    isMiSubTaskMode: options.isMiSubTaskMode,
+    effectiveTaskId: options.effectiveTaskId,
+    subTableBindings: options.subTableBindings,
+    formData,
+    taskFormDTO,
+    loadedSubTableBaseline,
+    buildSubTableSubmitPayload,
+  })
 
   function getCurrentFormFieldKeys(): string[] {
     const keys = new Set(collectLeafFormFieldKeys(formFields.value, formTabs.value))
@@ -410,13 +469,6 @@ export function useTaskForm(options: {
       keys.add(key)
     }
     return Array.from(keys)
-  }
-
-  function clearAutosaveTimer() {
-    if (subTableAutosaveTimer) {
-      clearTimeout(subTableAutosaveTimer)
-      subTableAutosaveTimer = null
-    }
   }
 
   return {
@@ -433,8 +485,12 @@ export function useTaskForm(options: {
     saveCurrentTaskForm,
     buildCurrentTaskFormSubmitPayload,
     buildSubTableSubmitPayload,
+    loadedSubTableBaseline,
+    captureLoadedSubTableBaseline,
     scheduleSubTableAutosave,
     getCurrentFormFieldKeys,
-    clearAutosaveTimer
+    clearAutosaveTimer,
+    syncSubTableRowVersionsBeforeSubmit,
+    resumeSubTableAutosave,
   }
 }

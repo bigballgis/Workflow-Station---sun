@@ -12,7 +12,14 @@
     <!-- Binding list -->
     <div class="binding-list">
       <div class="binding-header">
-        <span class="title">{{ t('tableBinding.title') }}</span>
+        <div class="binding-header-start">
+          <span class="title">{{ t('tableBinding.title') }}</span>
+          <DesignerHelpLink
+            path="/table-bindings"
+            :aria-label="t('tableBinding.guideLinkAria')"
+            test-id="table-binding-guide-link"
+          />
+        </div>
         <el-button
           type="primary"
           size="small"
@@ -154,7 +161,7 @@
     <el-dialog 
       v-model="showAddDialog" 
       :title="editingBinding ? t('tableBinding.editBinding') : t('tableBinding.addBinding')" 
-      width="500px"
+      width="640px"
       @close="resetForm"
     >
       <el-form
@@ -304,24 +311,29 @@
 
         <el-form-item
           v-if="(bindingForm.bindingType === 'SUB' || bindingForm.bindingType === 'ACTION') && bindingForm.bindingLinkMode === 'structuralFk'"
-          :label="t('tableBinding.structuralFkFields')"
+          :label="t('tableBinding.structuralFkFilterField')"
+          prop="foreignKeyField"
         >
-          <div v-if="structuralFkFieldNames.length">
-            <el-tag
-              v-for="name in structuralFkFieldNames"
-              :key="name"
-              size="small"
-              style="margin-right: 6px;"
-            >
-              {{ name }}
-            </el-tag>
-          </div>
+          <el-select
+            v-if="structuralFkFieldNames.length"
+            v-model="bindingForm.foreignKeyField"
+            :placeholder="t('tableBinding.selectForeignKey')"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="field in structuralFkSelectFields"
+              :key="field.fieldName"
+              :label="field.displayName ? `${field.fieldName} (${field.displayName})` : field.fieldName"
+              :value="field.fieldName"
+              :disabled="isStructuralFkUsed(field.fieldName)"
+            />
+          </el-select>
           <span
             v-else
             class="text-muted"
           >{{ t('tableBinding.noStructuralFkFields') }}</span>
           <div class="form-item-tip">
-            {{ t('tableBinding.structuralFkTip') }}
+            {{ t('tableBinding.structuralFkFilterTip') }}
           </div>
         </el-form-item>
         
@@ -347,6 +359,61 @@
             {{ t('tableBinding.miParticipantRowTip') }}
           </div>
         </el-form-item>
+
+        <template
+          v-if="bindingForm.bindingType === 'SUB' && bindingForm.bindingLinkMode === 'structuralFk' && structuralFkSelectFields.length"
+        >
+          <div class="fk-fill-sources">
+            <div class="fk-fill-sources-title">
+              {{ t('tableBinding.fkFillSources') }}
+            </div>
+            <p class="form-item-tip">
+              {{ t('tableBinding.fkFillSourcesTip') }}
+            </p>
+            <el-form-item
+              v-for="field in structuralFkSelectFields"
+              :key="field.fieldName"
+              :label="field.displayName ? `${field.fieldName} (${field.displayName})` : field.fieldName"
+            >
+              <el-select
+                :model-value="kindOfField(bindingForm.fkFillSources, field.id ?? -1)"
+                style="width: 100%"
+                @change="(kind: string) => onFillKindChange(field, kind)"
+              >
+                <el-option
+                  :label="t('tableBinding.fkFillKindAuto')"
+                  value="AUTO"
+                />
+                <el-option
+                  :label="t('tableBinding.fkFillKindParent')"
+                  value="PARENT"
+                />
+                <el-option
+                  :label="t('tableBinding.fkFillKindPrimary')"
+                  value="PRIMARY"
+                />
+                <el-option
+                  :label="t('tableBinding.fkFillKindAncestor')"
+                  value="ANCESTOR"
+                />
+              </el-select>
+              <el-select
+                v-if="kindOfField(bindingForm.fkFillSources, field.id ?? -1) === 'ANCESTOR'"
+                :model-value="ancestorIdOfField(bindingForm.fkFillSources, field.id ?? -1)"
+                :placeholder="t('tableBinding.fkFillSelectAncestor')"
+                style="width: 100%; margin-top: 8px;"
+                @change="(id: number) => onFillAncestorChange(field, id)"
+              >
+                <el-option
+                  v-for="opt in ancestorOptions"
+                  :key="opt.id"
+                  :label="opt.label"
+                  :value="opt.id"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+        </template>
       </el-form>
       
       <template #footer>
@@ -369,10 +436,17 @@
 import { computed, watch, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { type TableDefinition } from '@/api/functionUnit'
+import { type FieldDefinition, type TableDefinition } from '@/api/functionUnit'
 import { useTableBindingList } from '@/composables/tableBindingManager/useTableBindingList'
 import { useTableBindingForm } from '@/composables/tableBindingManager/useTableBindingForm'
 import { useTableBindingSubmit } from '@/composables/tableBindingManager/useTableBindingSubmit'
+import {
+  ancestorBindingOptions,
+  ancestorIdOfField,
+  kindOfField,
+  setFieldFillKind,
+} from '@/composables/tableBindingManager/fkFillSources'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 
 const { t } = useI18n()
 
@@ -437,9 +511,11 @@ const {
   emptyTableListHint,
   selectedTableFields,
   structuralFkFieldNames,
+  structuralFkSelectFields,
   toRelationTableOptionId,
   bindingLinkModeLabel,
   isTableBound,
+  isStructuralFkUsed,
   handleBindingTypeChange,
   handleBindingLinkModeChange,
   handleTableSelect,
@@ -453,6 +529,31 @@ const {
   tableTypeLabel,
   t,
 })
+
+const ancestorOptions = computed(() =>
+  ancestorBindingOptions(bindings.value, editingBinding.value?.id, props.tables, t),
+)
+
+function onFillKindChange(field: FieldDefinition, kind: string) {
+  const nextKind = kind === 'PARENT' || kind === 'PRIMARY' || kind === 'ANCESTOR' || kind === 'AUTO'
+    ? kind
+    : 'AUTO'
+  bindingForm.value.fkFillSources = setFieldFillKind(
+    bindingForm.value.fkFillSources,
+    field,
+    nextKind,
+    ancestorIdOfField(bindingForm.value.fkFillSources, field.id ?? -1),
+  )
+}
+
+function onFillAncestorChange(field: FieldDefinition, ancestorBindingId: number) {
+  bindingForm.value.fkFillSources = setFieldFillKind(
+    bindingForm.value.fkFillSources,
+    field,
+    'ANCESTOR',
+    ancestorBindingId,
+  )
+}
 
 // 提交与后端错误映射
 const { handleSubmit } = useTableBindingSubmit({
@@ -504,6 +605,12 @@ defineExpose({
       font-weight: 500;
       font-size: 14px;
     }
+
+    .binding-header-start {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
   }
   
   .text-muted {
@@ -518,6 +625,18 @@ defineExpose({
 
   .binding-constraint-alert {
     margin-bottom: 12px;
+  }
+
+  .fk-fill-sources {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+
+  .fk-fill-sources-title {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
   }
 }
 </style>

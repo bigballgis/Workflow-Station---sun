@@ -34,6 +34,9 @@ export interface ProcessStartSubTableBinding {
   data: any[]
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string
+  filterFkRefTableId?: number | null
+  filterFkRefTableName?: string | null
+  filterFkFieldName?: string | null
   foreignKeyField?: string | null
 }
 
@@ -82,6 +85,7 @@ export function createProcessStartState() {
   const primaryTableBinding = ref<{
     tableId?: number | null
     tableName?: string
+    primaryKeyFields?: string[]
     fieldDefinitions?: BindingFieldDefinition[]
   } | null>(null)
 

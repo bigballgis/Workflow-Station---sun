@@ -1042,4 +1042,53 @@ class MiSubTaskSubTableRowMergerTest {
         org.assertj.core.api.Assertions.assertThat(out)
                 .containsExactlyInAnyOrder(siblingSaved, mine);
     }
+
+    /**
+     * Per-binding filter FK: when every binding on the table declares a MAIN-targeted key, the
+     * table is still shared and must pass through — without scanning the table's other FK columns.
+     */
+    @Test
+    void mergeCurrentRowOnly_declaredFilterFkToMainStillPassesThrough() {
+        when(jdbcTemplate.queryForList(contains("filter_fk_field_id"), eq(String.class), eq("attachment")))
+                .thenReturn(List.of("MAIN"));
+
+        Map<String, Object> attachmentRow = new HashMap<>();
+        attachmentRow.put("idfa", "att-1");
+        attachmentRow.put("main_idva", "Meeting-000002");
+        attachmentRow.put("file", "notes.pdf");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(attachmentRow)));
+
+        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+                submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"));
+
+        @SuppressWarnings("unchecked")
+        List<Object> out = (List<Object>) merged.get("dw:attachment");
+        org.assertj.core.api.Assertions.assertThat(out).containsExactly(attachmentRow);
+    }
+
+    /**
+     * Same physical table bound in two roles (MAIN + collection). A table-keyed payload cannot
+     * say which binding the rows belong to; picking MAIN would skip isolation for the child
+     * binding. Fail-loud keeps the participant guard on, which for a shared-shaped row means
+     * the save is rejected rather than silently classified.
+     */
+    @Test
+    void mergeCurrentRowOnly_conflictingFilterFkDeclarationsDoNotTreatTableAsShared() {
+        when(jdbcTemplate.queryForList(contains("filter_fk_field_id"), eq(String.class), eq("attachment")))
+                .thenReturn(List.of("MAIN", "SUB"));
+
+        Map<String, Object> attachmentRow = new HashMap<>();
+        attachmentRow.put("idfa", "att-1");
+        attachmentRow.put("main_idva", "Meeting-000002");
+        attachmentRow.put("file", "notes.pdf");
+
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(attachmentRow)));
+
+        assertThatThrownBy(() ->
+                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwxwc", "Test-000003")))
+                .hasMessageContaining("own row");
+    }
 }
