@@ -684,7 +684,7 @@ describe('dual-binding FK parent context', () => {
     expect(ensured.rowAddContext.ancestorRowsByTableId?.[PARTY]).toBeUndefined()
   })
 
-  it('does not stamp a party FK when two distinct party ancestors are in context', () => {
+  it('stamps party_id from the host parent when a saved sibling party is also in context', () => {
     const ctx = buildRowAddContext(
       { id: 'Case-1' },
       [{ tableId: MAIN, bindingType: 'PRIMARY' }],
@@ -697,6 +697,6 @@ describe('dual-binding FK parent context', () => {
     ]
     const row = applyFkToInitialRow({}, fileFks, ctx)
     expect(row.case_id).toBe('Case-1')
-    expect(row.party_id).toBeUndefined()
+    expect(row.party_id).toBe('Party-A')
   })
 })
