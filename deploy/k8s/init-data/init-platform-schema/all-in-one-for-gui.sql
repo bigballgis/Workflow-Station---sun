@@ -4540,3 +4540,14 @@ COMMENT ON COLUMN dw_email_connections.password_env_key IS
     'References ac_environment_variables.var_key (VAULT kind) for mailbox password';
 COMMENT ON COLUMN sys_email_connections.password_env_key IS
     'References ac_environment_variables.var_key (VAULT kind) for mailbox password';
+
+
+-- =============================================================================
+-- 87. Main Table View: select column display (value | label)
+-- =============================================================================
+
+ALTER TABLE dw_main_table_view_fields
+    ADD COLUMN IF NOT EXISTS select_display VARCHAR(10) NOT NULL DEFAULT 'value';
+
+COMMENT ON COLUMN dw_main_table_view_fields.select_display IS
+    'value = show the stored option value; label = show the option label from the bound form widget';

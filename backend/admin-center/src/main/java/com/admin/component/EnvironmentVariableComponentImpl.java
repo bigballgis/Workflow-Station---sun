@@ -14,6 +14,7 @@ import com.platform.security.vault.VaultSecretClient;
 import com.platform.security.vault.VaultSecretNotFoundException;
 import com.platform.security.vault.VaultSecretUnavailableException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class EnvironmentVariableComponentImpl implements EnvironmentVariableComponent {
@@ -54,8 +56,9 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
         String key = request.getVarKey().trim();
         if (repository.existsByVarKeyAndDeployEnv(key, env)) {
             throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS,
-                    "Environment variable already exists for this deploy_env");
+                    "Environment variable key already exists");
         }
+        boolean wroteVault = writeVaultOnCreate(request);
         EnvironmentVariable entity = EnvironmentVariable.builder()
                 .id(UUID.randomUUID().toString())
                 .varKey(key)
@@ -66,7 +69,7 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
                 .updatedBy(userId)
                 .build();
         applyPayload(entity, request);
-        return EnvironmentVariableResponse.fromEntity(repository.save(entity));
+        return persistNew(entity, key, EnvironmentVariablePayloads.vaultPath(request), wroteVault);
     }
 
     @Override
@@ -80,7 +83,7 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
                 .filter(other -> !other.getId().equals(id))
                 .ifPresent(other -> {
                     throw new BusinessException(ErrorCode.RESOURCE_ALREADY_EXISTS,
-                            "Environment variable already exists for this deploy_env");
+                            "Environment variable key already exists");
                 });
         entity.setVarKey(key);
         entity.setValueKind(request.getValueKind());
@@ -119,13 +122,65 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
     }
 
     private String readVaultPassword(EnvironmentVariable entity) {
+        String varKey = entity.getVarKey();
+        String path = entity.getVaultSecretPath();
         try {
-            return vaultSecretClient.readPassword(entity.getVaultSecretPath());
+            return vaultSecretClient.readPassword(path);
         } catch (VaultSecretNotFoundException ex) {
+            log.warn("Vault secret not found varKey={} path={}", varKey, path);
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                    "Vault secret not found for environment variable " + entity.getVarKey());
+                    "Vault secret not found for environment variable " + varKey);
         } catch (VaultSecretUnavailableException ex) {
-            throw new IllegalStateException("Vault is unavailable", ex);
+            log.warn("Vault unavailable varKey={} path={}: {}", varKey, path, ex.getMessage());
+            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR,
+                    "Vault is unavailable. Check Vault connectivity and permissions.", ex);
+        }
+    }
+
+    private boolean writeVaultOnCreate(EnvironmentVariableRequest request) {
+        if (request.getValueKind() != EnvironmentValueKind.VAULT) {
+            return false;
+        }
+        String path = EnvironmentVariablePayloads.vaultPath(request);
+        String varKey = request.getVarKey().trim();
+        try {
+            return writeNewVaultSecret(varKey, path, request.getVaultPassword());
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (VaultSecretNotFoundException ex) {
+            log.warn("Vault path invalid varKey={} path={}", varKey, path);
+            throw new BusinessException(ErrorCode.VALIDATION_FIELD_INVALID,
+                    "Vault secret path is invalid", ex);
+        } catch (VaultSecretUnavailableException ex) {
+            log.warn("Vault write failed varKey={} path={}: {}", varKey, path, ex.getMessage());
+            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR,
+                    "Could not write the secret to Vault. Check Vault connectivity and permissions.", ex);
+        }
+    }
+
+    private boolean writeNewVaultSecret(String varKey, String path, String password) {
+        if (vaultSecretClient.secretExists(path)) {
+            log.info("Reusing existing Vault secret varKey={} path={}", varKey, path);
+            return false;
+        }
+        if (!StringUtils.hasText(password)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FIELD_REQUIRED,
+                    "VAULT environment variables require vaultPassword");
+        }
+        vaultSecretClient.writePassword(path, password);
+        log.info("Wrote Vault secret varKey={} path={}", varKey, path);
+        return true;
+    }
+
+    private EnvironmentVariableResponse persistNew(
+            EnvironmentVariable entity, String varKey, String path, boolean wroteVault) {
+        try {
+            return EnvironmentVariableResponse.fromEntity(repository.save(entity));
+        } catch (RuntimeException ex) {
+            if (wroteVault) {
+                log.error("Catalog save failed after Vault write varKey={} path={}", varKey, path);
+            }
+            throw ex;
         }
     }
 
@@ -166,7 +221,7 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
         }
         entity.setDefaultValue(null);
         entity.setCurrentValue(null);
-        entity.setVaultSecretPath(request.getVaultSecretPath().trim());
+        entity.setVaultSecretPath(EnvironmentVariablePayloads.vaultPath(request));
     }
 
     private static String blankToNull(String value) {

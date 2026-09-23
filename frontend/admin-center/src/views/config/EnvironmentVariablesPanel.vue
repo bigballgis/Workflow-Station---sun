@@ -128,19 +128,29 @@
             </div>
           </el-form-item>
         </template>
-        <el-form-item
-          v-else
-          :label="t('config.envVaultPath')"
-          required
-        >
-          <el-input
-            v-model="form.vaultSecretPath"
-            placeholder="workflow/email/qq-inbound"
-          />
-          <div class="form-tip">
-            {{ t('config.envVaultPathHint') }}
-          </div>
-        </el-form-item>
+        <template v-else>
+          <el-form-item :label="t('config.envVaultPath')">
+            <el-input
+              v-model="form.vaultSecretPath"
+              placeholder="workflow/email/qq-inbound"
+            />
+            <div class="form-tip">
+              {{ t('config.envVaultPathHint') }}
+            </div>
+          </el-form-item>
+          <el-form-item :label="t('config.envVaultPassword')">
+            <el-input
+              v-model="form.vaultPassword"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              :placeholder="editingId ? t('config.envVaultPasswordEditHint') : ''"
+            />
+            <div class="form-tip">
+              {{ t('config.envVaultPasswordHint') }}
+            </div>
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">

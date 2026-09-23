@@ -872,9 +872,9 @@ Kafka(K8S) ───────────────────────
 | 本地 Docker / DEV | `deploy/environments/dev/.env` | `https://vault-dev.uk.hsbc:8200` | `dev` |
 | PPD（K8s 目录 `preprod`，profile=`sit`） | `deploy/k8s/config_map/preprod/` | `https://vault-uat.uk.hsbc:8200` | **sit**（在 PPD 界面建的变量落 sit 切片） |
 | Hermes UAT（K8s 目录 `uat`） | `deploy/k8s/config_map/uat/` | `https://vault-dev.uk.hsbc:8200` | `uat` |
-| 生产 HK | 生产 ConfigMap（尚未建目录） | `https://vault-prod.hk.hsbc:8200` | `prod` |
+| 生产 HK | 与 non-prod **同一组 Vault key**（集群 ConfigMap `workflow-platform-config`） | `https://vault-prod.hk.hsbc:8200` | `prod` |
 
-配套：`VAULT_NAMESPACE`、`VAULT_AUTH_MOUNT`、`VAULT_ROLE`、`VAULT_KV_MOUNT`。PPD/UAT ConfigMap 目前填的是 DEV POC 的 Kubernetes auth mount/role，上线前须向平台确认该集群的 issuer；不匹配则 Vault login 403。Istio 需放行 admin-center 出站 8200（见 `admin-center.yaml` 的 ServiceEntry）。平台须把 ServiceAccount `admin-center` 绑到 `VAULT_ROLE`。
+配套（**UAT / PPD / prod 必须相同**，只换 `VAULT_ADDR`）：`VAULT_NAMESPACE=ITID/22330042_HERMES`、`VAULT_AUTH_MOUNT=kubernetes/wsit-hk-azx-401`、`VAULT_ROLE=ame-hase-hermes-role`、`VAULT_KV_MOUNT=secrets/kv_v2/wsit`、`VAULT_LOGIN_REFRESH_SKEW_SECONDS=30`。发布方式也相同：把 key 写入 `workflow-platform-config`，再 `rollout restart deploy/admin-center`。Istio 放行 admin-center 出站 8200（见 `admin-center.yaml` 的 ServiceEntry）。平台须把各环境 ServiceAccount `admin-center` 绑到同一个 `VAULT_ROLE`。
 
 #### 12.2.1 developer-workstation 专项
 

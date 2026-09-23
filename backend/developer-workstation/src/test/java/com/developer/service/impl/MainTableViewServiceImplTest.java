@@ -621,6 +621,50 @@ class MainTableViewServiceImplTest {
     }
 
     @Test
+    void updateView_persistsSelectDisplayAndDefaultsMissingToValue() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        TableDefinition table = TableDefinition.builder()
+                .id(20L)
+                .tableType(TableType.MAIN)
+                .fieldDefinitions(new ArrayList<>())
+                .build();
+        MainTableViewConfig config = MainTableViewConfig.builder()
+                .id(10L)
+                .functionUnit(fu)
+                .mainTableId(20L)
+                .viewName("Merchants")
+                .status(MainTableViewStatus.DRAFT)
+                .viewFields(new ArrayList<>())
+                .accessRules(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(table));
+        when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of());
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null, null, null, null, null, null,
+                List.of(
+                        MainTableViewFieldDTO.builder().fieldName("merchant_credit").selectDisplay("label").build(),
+                        MainTableViewFieldDTO.builder().fieldName("channel").build()));
+
+        service.updateView(1L, 10L, request);
+
+        assertThat(config.getViewFields()).extracting(MainTableViewField::getSelectDisplay)
+                .containsExactly("label", "value");
+    }
+
+    @Test
+    void normalizeSelectDisplay_rejectsUnknownMode() {
+        assertThat(MainTableViewServiceImpl.normalizeSelectDisplay(null)).isEqualTo("value");
+        assertThat(MainTableViewServiceImpl.normalizeSelectDisplay(" Label ")).isEqualTo("label");
+        assertThatThrownBy(() -> MainTableViewServiceImpl.normalizeSelectDisplay("code"))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo("BIZ_VIEW_SELECT_DISPLAY_INVALID");
+    }
+
+    @Test
     void updateView_rejectsFkDisplayWhenSourceNotForeignKey() {
         FunctionUnit fu = FunctionUnit.builder().id(1L).build();
         FieldDefinition fileName = FieldDefinition.builder()

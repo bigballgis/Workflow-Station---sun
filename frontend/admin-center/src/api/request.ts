@@ -116,7 +116,7 @@ request.interceptors.response.use(
           userMsg = errorMsg || i18n.global.t('api.serverError')
           break
         case 502:
-          userMsg = i18n.global.t('api.serviceUnavailable')
+          userMsg = errorMsg || i18n.global.t('api.serviceUnavailable')
           break
         case 503:
           userMsg = i18n.global.t('api.serviceMaintenance')

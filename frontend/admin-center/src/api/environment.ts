@@ -27,6 +27,7 @@ export interface EnvironmentVariableRequest {
   defaultValue?: string
   currentValue?: string
   vaultSecretPath?: string
+  vaultPassword?: string
 }
 
 export const environmentVariableApi = {

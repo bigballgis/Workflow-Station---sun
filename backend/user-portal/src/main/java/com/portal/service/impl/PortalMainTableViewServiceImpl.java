@@ -33,6 +33,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalMainTableViewService;
 import com.portal.service.UserDisplayNameResolver;
+import com.portal.util.MainTableViewSelectDisplay;
 import com.portal.util.PortalMainTableViewCsvUtils;
 import com.portal.util.PortalMainTableViewDetailValues;
 import com.portal.util.PortalMainTableViewNestedSubTables;
@@ -368,7 +369,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 sb.append(',');
             }
             sb.append(columns.stream()
-                    .map(c -> PortalMainTableViewCsvUtils.csvEscape(PortalMainTableViewCsvUtils.formatCell(values.get(c.fieldName()))))
+                    .map(c -> PortalMainTableViewCsvUtils.csvEscape(PortalMainTableViewCsvUtils.formatCell(
+                            MainTableViewSelectDisplay.display(c, values.get(c.fieldName())))))
                     .collect(Collectors.joining(",")));
             sb.append('\n');
         }
@@ -730,8 +732,14 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         final Map<String, FkSourceMeta> fkSourceMeta = loadFkSourceMeta(view.id());
         // Lookup columns reference a Relation Table (via the form's lookupConfig), not a DW table.
         final Map<String, LookupColumnMeta> lookupMeta = loadLookupColumnMeta(view.mainTableId());
+        // Only a column designed to show option labels needs the bound forms' static options.
+        boolean anyLabelDisplay = view.fields().stream()
+                .anyMatch(f -> MainTableViewSelectDisplay.showsLabel(f.selectDisplay()));
+        final Map<String, List<ListColumnMeta.Option>> selectOptions = anyLabelDisplay
+                ? loadSelectOptionMeta(view.mainTableId())
+                : Map.of();
         ColumnMetaBundle bundle = new ColumnMetaBundle(
-                fkMeta, fkSourceMeta, lookupMeta, declaredCapabilities(view));
+                fkMeta, fkSourceMeta, lookupMeta, declaredCapabilities(view), selectOptions);
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
@@ -770,7 +778,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .lookupDisplayField(derived ? f.lookupDisplayField() : null)
                 .lookupSelectedDisplayField(lookup != null ? lookup.selectedDisplayField() : null)
                 .lookupSearchFields(lookup != null ? lookup.searchFields() : null)
-                .fkRefTableId(fkSrc != null ? fkSrc.refTableId() : null);
+                .fkRefTableId(fkSrc != null ? fkSrc.refTableId() : null)
+                .selectDisplay(MainTableViewSelectDisplay.showsLabel(f.selectDisplay())
+                        ? MainTableViewSelectDisplay.LABEL : MainTableViewSelectDisplay.VALUE)
+                .selectOptions(MainTableViewSelectDisplay.showsLabel(f.selectDisplay())
+                        ? meta.selectOptions().get(f.fieldName()) : null);
         return MainTableViewFieldColumn.applyListCapabilities(column, capability).build();
     }
 
@@ -887,7 +899,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Map<String, FkColumnMeta> fk,
             Map<String, FkSourceMeta> fkSource,
             Map<String, LookupColumnMeta> lookup,
-            Map<String, ListColumnMeta> capabilities) {
+            Map<String, ListColumnMeta> capabilities,
+            Map<String, List<ListColumnMeta.Option>> selectOptions) {
     }
 
     /**
@@ -947,6 +960,40 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             log.warn("Failed to load lookup column metadata for table {}: {}", tableId, e.getMessage());
             return Map.of();
         }
+    }
+
+    /**
+     * Static options of the select-like widgets that render this table, keyed by field. Each form
+     * binding of the table contributes the part of its form that draws the table: the top-level
+     * rules for a PRIMARY binding, the {@code subForms} entry for a sub-table binding. A widget
+     * whose options are fetched at runtime declares none here and its column keeps showing values.
+     */
+    private Map<String, List<ListColumnMeta.Option>> loadSelectOptionMeta(Long tableId) {
+        if (tableId == null) {
+            return Map.of();
+        }
+        List<Map<String, Object>> bindings = jdbcTemplate.queryForList("""
+                SELECT b.id AS binding_id, b.binding_type, f.config_json::text AS cfg
+                FROM dw_form_table_bindings b
+                INNER JOIN dw_form_definitions f ON f.id = b.form_id
+                WHERE b.table_id = ? AND f.config_json IS NOT NULL
+                ORDER BY b.id
+                """, tableId);
+        Map<String, List<ListColumnMeta.Option>> meta = new LinkedHashMap<>();
+        for (Map<String, Object> binding : bindings) {
+            String cfg = stringVal(binding.get("cfg"));
+            if (cfg == null || cfg.isBlank()) {
+                continue;
+            }
+            long bindingId = ((Number) binding.get("binding_id")).longValue();
+            boolean primary = "PRIMARY".equalsIgnoreCase(stringVal(binding.get("binding_type")));
+            try {
+                MainTableViewSelectDisplay.collectOptionsForBinding(objectMapper.readTree(cfg), bindingId, primary, meta);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalStateException("Form config for table " + tableId + " is not valid JSON", e);
+            }
+        }
+        return meta;
     }
 
     /** Walk a form config JSON tree, recording each lookup widget's field → lookup metadata. */
@@ -1174,7 +1221,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         List<ViewFieldDef> fields = jdbcTemplate.query("""
                         SELECT field_name, display_label, column_width, sort_order, visible, is_system_field,
                                COALESCE(column_type, 'field') AS column_type,
-                               lookup_source_field, lookup_display_field
+                               lookup_source_field, lookup_display_field,
+                               COALESCE(select_display, 'value') AS select_display
                         FROM dw_main_table_view_fields
                         WHERE view_config_id = ?
                         ORDER BY sort_order
@@ -1188,7 +1236,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                         rs.getBoolean("is_system_field"),
                         rs.getString("column_type"),
                         rs.getString("lookup_source_field"),
-                        rs.getString("lookup_display_field")),
+                        rs.getString("lookup_display_field"),
+                        rs.getString("select_display")),
                 viewId);
 
         Long mainTableId = row.get("main_table_id") != null
@@ -1407,7 +1456,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Boolean systemField,
             String columnType,
             String lookupSourceField,
-            String lookupDisplayField) {}
+            String lookupDisplayField,
+            String selectDisplay) {}
 
     private record ViewDefinition(
             Long id,

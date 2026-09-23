@@ -1,6 +1,8 @@
 package com.admin.controller;
 
 import com.admin.component.EmailConnectionSyncComponent;
+import com.platform.common.enums.ErrorCode;
+import com.platform.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,5 +57,16 @@ class InternalEmailConnectionControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsEntry("password", "from-vault");
+    }
+
+    @Test
+    void getCredentials_vaultUnavailable_returns503() {
+        when(syncComponent.getCredentials("fu-1", "conn-1"))
+                .thenThrow(new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR, "Vault is unavailable"));
+
+        ResponseEntity<Map<String, Object>> response = controller.getCredentials("svc-secret", "fu-1", "conn-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).containsEntry("error", "VAULT_UNAVAILABLE");
     }
 }

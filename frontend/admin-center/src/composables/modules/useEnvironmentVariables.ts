@@ -18,6 +18,7 @@ export type EnvironmentFormState = {
   defaultValue: string
   currentValue: string
   vaultSecretPath: string
+  vaultPassword: string
 }
 
 function emptyForm(): EnvironmentFormState {
@@ -29,7 +30,49 @@ function emptyForm(): EnvironmentFormState {
     defaultValue: '',
     currentValue: '',
     vaultSecretPath: '',
+    vaultPassword: '',
   }
+}
+
+export type EnvironmentPayloadResult =
+  | { errorKey: string }
+  | { payload: EnvironmentVariableRequest }
+
+export function buildEnvironmentPayload(
+  form: EnvironmentFormState,
+  editing: boolean,
+): EnvironmentPayloadResult {
+  const varKey = form.varKey.trim()
+  const displayName = form.displayName.trim()
+  if (!varKey || !displayName) {
+    return { errorKey: 'config.envKeyRequired' }
+  }
+  if (form.valueKind === 'TEXT') {
+    if (!form.defaultValue.trim()) {
+      return { errorKey: 'config.envDefaultRequired' }
+    }
+    return {
+      payload: {
+        varKey,
+        displayName,
+        description: form.description.trim() || undefined,
+        valueKind: 'TEXT',
+        defaultValue: form.defaultValue,
+        currentValue: form.currentValue,
+      },
+    }
+  }
+  const payload: EnvironmentVariableRequest = {
+    varKey,
+    displayName,
+    description: form.description.trim() || undefined,
+    valueKind: 'VAULT',
+    vaultSecretPath: form.vaultSecretPath.trim() || varKey,
+  }
+  if (!editing && form.vaultPassword) {
+    payload.vaultPassword = form.vaultPassword
+  }
+  return { payload }
 }
 
 export function useEnvironmentVariables() {
@@ -68,42 +111,18 @@ export function useEnvironmentVariables() {
       defaultValue: row.defaultValue || '',
       currentValue: row.currentValue || '',
       vaultSecretPath: row.vaultSecretPath || '',
+      vaultPassword: '',
     })
     dialogVisible.value = true
   }
 
   const buildPayload = (): EnvironmentVariableRequest | null => {
-    const varKey = form.varKey.trim()
-    const displayName = form.displayName.trim()
-    if (!varKey || !displayName) {
-      notifyError(t('config.envKeyRequired'))
+    const result = buildEnvironmentPayload(form, editingId.value != null)
+    if ('errorKey' in result) {
+      notifyError(t(result.errorKey))
       return null
     }
-    if (form.valueKind === 'TEXT') {
-      if (!form.defaultValue.trim()) {
-        notifyError(t('config.envDefaultRequired'))
-        return null
-      }
-      return {
-        varKey,
-        displayName,
-        description: form.description.trim() || undefined,
-        valueKind: 'TEXT',
-        defaultValue: form.defaultValue,
-        currentValue: form.currentValue,
-      }
-    }
-    if (!form.vaultSecretPath.trim()) {
-      notifyError(t('config.envVaultPathRequired'))
-      return null
-    }
-    return {
-      varKey,
-      displayName,
-      description: form.description.trim() || undefined,
-      valueKind: 'VAULT',
-      vaultSecretPath: form.vaultSecretPath.trim(),
-    }
+    return result.payload
   }
 
   const save = async (): Promise<void> => {

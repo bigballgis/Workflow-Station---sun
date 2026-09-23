@@ -428,6 +428,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     .columnType(normalizeColumnType(field.getColumnType()))
                     .lookupSourceField(field.getLookupSourceField())
                     .lookupDisplayField(field.getLookupDisplayField())
+                    .selectDisplay(normalizeSelectDisplay(field.getSelectDisplay()))
                     .build());
         }
     }
@@ -459,11 +460,26 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                 .columnType(columnType)
                 .lookupSourceField(source)
                 .lookupDisplayField(display)
+                .selectDisplay(normalizeSelectDisplay(fieldDto.selectDisplay()))
                 .build();
     }
 
     static String lookupDisplayFieldName(String sourceField, String displayField) {
         return sourceField + "@" + displayField;
+    }
+
+    /** Absent means the stored value (the behaviour before the switch existed); anything else must be a known mode. */
+    public static String normalizeSelectDisplay(String selectDisplay) {
+        if (selectDisplay == null || selectDisplay.isBlank()) {
+            return MainTableViewField.SELECT_DISPLAY_VALUE;
+        }
+        String mode = selectDisplay.trim().toLowerCase();
+        if (!MainTableViewField.SELECT_DISPLAY_VALUE.equals(mode)
+                && !MainTableViewField.SELECT_DISPLAY_LABEL.equals(mode)) {
+            throw new DeveloperBusinessException("BIZ_VIEW_SELECT_DISPLAY_INVALID",
+                    "selectDisplay must be 'value' or 'label', got: " + selectDisplay);
+        }
+        return mode;
     }
 
     private static String normalizeColumnType(String columnType) {
@@ -613,6 +629,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                             .columnType(normalizeColumnType(f.getColumnType()))
                             .lookupSourceField(f.getLookupSourceField())
                             .lookupDisplayField(f.getLookupDisplayField())
+                            .selectDisplay(normalizeSelectDisplay(f.getSelectDisplay()))
                             .build();
                 })
                 .toList();
@@ -741,6 +758,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
             m.put("columnType", normalizeColumnType(f.getColumnType()));
             m.put("lookupSourceField", f.getLookupSourceField());
             m.put("lookupDisplayField", f.getLookupDisplayField());
+            m.put("selectDisplay", normalizeSelectDisplay(f.getSelectDisplay()));
             return m;
         }).toList();
         snap.put("fields", fields);

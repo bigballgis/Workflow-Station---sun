@@ -23,7 +23,7 @@ const {
   formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
   removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
   onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd,
-  isFkField, isPkField, onFkColumnClick, isLookupDisplayField, isFkDisplayField,
+  isFkField, isPkField, onFkColumnClick, isLookupDisplayField, isFkDisplayField, hasSelectDisplayChoice,
   selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
   allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
   selectedLookupCatalogFields, toggleLookupCatalogSelect, addSelectedLookupFields,
@@ -869,6 +869,24 @@ const {
               class="col-label-input"
 
             />
+
+            <el-select
+              v-if="hasSelectDisplayChoice(field)"
+              :model-value="field.selectDisplay || 'value'"
+              size="small"
+              class="col-select-display"
+              :title="t('mainTableView.selectDisplayHint')"
+              @update:model-value="field.selectDisplay = $event"
+            >
+              <el-option
+                value="value"
+                :label="t('mainTableView.selectDisplayValue')"
+              />
+              <el-option
+                value="label"
+                :label="t('mainTableView.selectDisplayLabel')"
+              />
+            </el-select>
 
             <el-tag
 
