@@ -22,8 +22,10 @@ import com.admin.exception.DuplicateAssignmentException;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRoleRepository;
 import com.admin.service.UserBusinessUnitService;
+import com.platform.security.entity.UserBusinessUnitRole;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.springframework.data.domain.Page;
@@ -57,6 +59,7 @@ class BiDashboardAssignmentServicePropertyTest {
     private RoleRepository roleRepository;
     private BusinessUnitRepository businessUnitRepository;
     private UserRoleRepository userRoleRepository;
+    private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private UserBusinessUnitService userBusinessUnitService;
     private BiRbacMappingService rbacMappingService;
     private BiProperties biProperties;
@@ -70,13 +73,14 @@ class BiDashboardAssignmentServicePropertyTest {
         roleRepository = mock(RoleRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
         userRoleRepository = mock(UserRoleRepository.class);
+        userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         userBusinessUnitService = mock(UserBusinessUnitService.class);
         rbacMappingService = mock(BiRbacMappingService.class);
         biProperties = new BiProperties();
         service = new BiDashboardAssignmentServiceImpl(
                 assignmentRepository, registryRepository,
                 userRepository, roleRepository, businessUnitRepository,
-                userRoleRepository, userBusinessUnitService,
+                userRoleRepository, userBusinessUnitRoleRepository, userBusinessUnitService,
                 new DashboardRoleGate(rbacMappingService, biProperties, userRoleRepository));
     }
 
@@ -354,16 +358,26 @@ class BiDashboardAssignmentServicePropertyTest {
         // Mock repositories
         when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
                 .thenReturn(userAssignments);
-        when(userRoleRepository.findAllRoleIdsByUserId(userId)).thenReturn(roleIds);
-        when(userBusinessUnitService.getUserBusinessUnitIds(userId)).thenReturn(buIds);
+        when(userRoleRepository.findGlobalRoleIdsByUserId(userId)).thenReturn(roleIds);
+
+        String activeBuId = buIds.isEmpty() ? null : buIds.get(0);
+        List<BiDashboardAssignment> activeBuAssignments = activeBuId == null
+                ? List.of()
+                : buAssignments.stream()
+                        .filter(a -> activeBuId.equals(a.getTargetId()))
+                        .toList();
+        if (activeBuId != null) {
+            when(userBusinessUnitService.isMember(userId, activeBuId)).thenReturn(true);
+        }
 
         if (!roleIds.isEmpty()) {
             when(assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.ROLE, roleIds))
                     .thenReturn(roleAssignments);
         }
-        if (!buIds.isEmpty()) {
-            when(assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.BUSINESS_UNIT, buIds))
-                    .thenReturn(buAssignments);
+        if (activeBuId != null) {
+            when(assignmentRepository.findByTargetTypeAndTargetIdIn(
+                    AssignmentTargetType.BUSINESS_UNIT, List.of(activeBuId)))
+                    .thenReturn(activeBuAssignments);
         }
 
         for (BiDashboardRegistry d : dashboards) {
@@ -371,7 +385,7 @@ class BiDashboardAssignmentServicePropertyTest {
         }
 
         // Execute
-        List<UserDashboardResponse> result = service.getUserDashboards(userId, null);
+        List<UserDashboardResponse> result = service.getUserDashboards(userId, activeBuId);
 
         // Verify: only ACTIVE dashboards
         Set<String> activeDashboardIds = dashboards.stream()
@@ -400,7 +414,7 @@ class BiDashboardAssignmentServicePropertyTest {
                 .collect(Collectors.toMap(BiDashboardAssignment::getDashboardId, a -> a, (a, b) -> a));
         Map<String, BiDashboardAssignment> roleMap = roleAssignments.stream()
                 .collect(Collectors.toMap(BiDashboardAssignment::getDashboardId, a -> a, (a, b) -> a));
-        Map<String, BiDashboardAssignment> buMap = buAssignments.stream()
+        Map<String, BiDashboardAssignment> buMap = activeBuAssignments.stream()
                 .collect(Collectors.toMap(BiDashboardAssignment::getDashboardId, a -> a, (a, b) -> a));
 
         for (UserDashboardResponse r : result) {
@@ -529,6 +543,67 @@ class BiDashboardAssignmentServicePropertyTest {
 
     // ========== Property 18: Dashboard 角色门禁（RBAC 映射 × Superset dashboard_roles） ==========
 
+    @Example
+    void roleAndBusinessUnitAssignmentsAreScopedToTheActiveBusinessUnit() {
+        String userId = "portal-user";
+        String activeBuId = "bu-active";
+        String globalRoleId = "role-global";
+        String activeBuRoleId = "role-bu-active";
+
+        BiDashboardRegistry globalRoleDashboard = activeDashboard("dash-global-role");
+        BiDashboardRegistry activeBuRoleDashboard = activeDashboard("dash-active-bu-role");
+        BiDashboardRegistry activeBuDashboard = activeDashboard("dash-active-bu");
+
+        when(userRoleRepository.findGlobalRoleIdsByUserId(userId))
+                .thenReturn(List.of(globalRoleId));
+        when(userBusinessUnitService.isMember(userId, activeBuId)).thenReturn(true);
+        when(userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitId(userId, activeBuId))
+                .thenReturn(List.of(UserBusinessUnitRole.builder()
+                        .id("membership-active")
+                        .userId(userId)
+                        .businessUnitId(activeBuId)
+                        .roleId(activeBuRoleId)
+                        .build()));
+        when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
+                .thenReturn(List.of());
+        when(assignmentRepository.findByTargetTypeAndTargetIdIn(
+                AssignmentTargetType.ROLE, List.of(globalRoleId, activeBuRoleId)))
+                .thenReturn(List.of(
+                        buildAssignment(globalRoleDashboard.getId(), AssignmentTargetType.ROLE, globalRoleId, 1),
+                        buildAssignment(activeBuRoleDashboard.getId(), AssignmentTargetType.ROLE, activeBuRoleId, 2)));
+        when(assignmentRepository.findByTargetTypeAndTargetIdIn(
+                AssignmentTargetType.ROLE, List.of(globalRoleId)))
+                .thenReturn(List.of(
+                        buildAssignment(globalRoleDashboard.getId(), AssignmentTargetType.ROLE, globalRoleId, 1)));
+        when(assignmentRepository.findByTargetTypeAndTargetIdIn(
+                AssignmentTargetType.BUSINESS_UNIT, List.of(activeBuId)))
+                .thenReturn(List.of(
+                        buildAssignment(activeBuDashboard.getId(), AssignmentTargetType.BUSINESS_UNIT, activeBuId, 3)));
+
+        for (BiDashboardRegistry dashboard : List.of(
+                globalRoleDashboard, activeBuRoleDashboard, activeBuDashboard)) {
+            when(registryRepository.findById(dashboard.getId())).thenReturn(Optional.of(dashboard));
+        }
+
+        assertThat(service.getUserDashboards(userId, activeBuId))
+                .extracting(UserDashboardResponse::getDashboardId)
+                .containsExactly("dash-global-role", "dash-active-bu-role", "dash-active-bu");
+
+        assertThat(service.getUserDashboards(userId, null))
+                .extracting(UserDashboardResponse::getDashboardId)
+                .containsExactly("dash-global-role");
+    }
+
+    @Example
+    void rejectsActiveBusinessUnitOutsideTheCurrentUsersMemberships() {
+        when(userBusinessUnitService.isMember("portal-user", "bu-other")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getUserDashboards("portal-user", "bu-other"))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verifyNoInteractions(assignmentRepository);
+    }
+
     /**
      * Property 18: Dashboard 角色门禁
      *
@@ -566,8 +641,7 @@ class BiDashboardAssignmentServicePropertyTest {
 
         when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
                 .thenReturn(List.of(buildAssignment(dashboard.getId(), AssignmentTargetType.USER, userId, 0)));
-        when(userRoleRepository.findAllRoleIdsByUserId(userId)).thenReturn(sysRoleIds);
-        when(userBusinessUnitService.getUserBusinessUnitIds(userId)).thenReturn(List.of());
+        when(userRoleRepository.findGlobalRoleIdsByUserId(userId)).thenReturn(sysRoleIds);
         when(registryRepository.findById(dashboard.getId())).thenReturn(Optional.of(dashboard));
 
         List<BiSupersetRole> mapped = new ArrayList<>();
@@ -605,6 +679,18 @@ class BiDashboardAssignmentServicePropertyTest {
                 .supersetRoleId(supersetRoleId)
                 .name(name)
                 .status(SupersetRoleStatus.ACTIVE)
+                .lastSyncedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private static BiDashboardRegistry activeDashboard(String id) {
+        return BiDashboardRegistry.builder()
+                .id(id)
+                .dashboardTitle(id)
+                .embedId(UUID.randomUUID())
+                .supersetDashboardUuid(UUID.randomUUID())
+                .supersetDashboardId(1)
+                .status(DashboardStatus.ACTIVE)
                 .lastSyncedAt(LocalDateTime.now())
                 .build();
     }

@@ -19,8 +19,10 @@ import com.admin.exception.DuplicateAssignmentException;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRoleRepository;
 import com.admin.service.UserBusinessUnitService;
+import com.platform.security.entity.UserBusinessUnitRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -45,6 +47,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
     private final RoleRepository roleRepository;
     private final BusinessUnitRepository businessUnitRepository;
     private final UserRoleRepository userRoleRepository;
+    private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final UserBusinessUnitService userBusinessUnitService;
     private final DashboardRoleGate dashboardRoleGate;
 
@@ -133,24 +136,22 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
     @Override
     @Transactional(readOnly = true)
     public List<UserDashboardResponse> getUserDashboards(String userId, String activeBusinessUnitId) {
+        String activeBuId = normalizeActiveBusinessUnit(userId, activeBusinessUnitId);
+
         // 1. Query USER dimension assignments
         List<BiDashboardAssignment> userAssignments =
                 assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId);
 
-        // 2. Get user's role IDs and query ROLE dimension assignments
-        List<String> roleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
+        // 2. Resolve roles in this workspace context. Non-BU-bounded direct and
+        // virtual-group roles are global; BU-bounded roles require a UBR grant in the active BU.
+        List<String> roleIds = getEffectiveRoleIds(userId, activeBuId);
         List<BiDashboardAssignment> roleAssignments = roleIds.isEmpty()
                 ? Collections.emptyList()
                 : assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.ROLE, roleIds);
 
-        // 3. BU dimension: when an active BU context is provided, restrict to that BU only;
-        //    otherwise fall back to all BUs the user belongs to.
-        List<String> buIds;
-        if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
-            buIds = List.of(activeBusinessUnitId);
-        } else {
-            buIds = userBusinessUnitService.getUserBusinessUnitIds(userId);
-        }
+        // 3. BU assignments are workspace-scoped. No active BU means no BU audience grant;
+        // it must never silently expand to every BU the user belongs to.
+        List<String> buIds = activeBuId == null ? Collections.emptyList() : List.of(activeBuId);
         List<BiDashboardAssignment> buAssignments = buIds.isEmpty()
                 ? Collections.emptyList()
                 : assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.BUSINESS_UNIT, buIds);
@@ -196,6 +197,35 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
                 .filter(Objects::nonNull)
                 .sorted(Comparator.comparingInt(UserDashboardResponse::getDisplayOrder))
                 .collect(Collectors.toList());
+    }
+
+    private String normalizeActiveBusinessUnit(String userId, String activeBusinessUnitId) {
+        if (activeBusinessUnitId == null || activeBusinessUnitId.isBlank()) {
+            return null;
+        }
+        String normalized = activeBusinessUnitId.trim();
+        if (!userBusinessUnitService.isMember(userId, normalized)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Active business unit does not belong to the current user");
+        }
+        return normalized;
+    }
+
+    private List<String> getEffectiveRoleIds(String userId, String activeBusinessUnitId) {
+        LinkedHashSet<String> roleIds = new LinkedHashSet<>();
+        List<String> globalRoleIds = userRoleRepository.findGlobalRoleIdsByUserId(userId);
+        if (globalRoleIds != null) {
+            roleIds.addAll(globalRoleIds);
+        }
+        if (activeBusinessUnitId != null) {
+            userBusinessUnitRoleRepository
+                    .findByUserIdAndBusinessUnitId(userId, activeBusinessUnitId)
+                    .stream()
+                    .map(UserBusinessUnitRole::getRoleId)
+                    .filter(Objects::nonNull)
+                    .forEach(roleIds::add);
+        }
+        return new ArrayList<>(roleIds);
     }
 
     /**

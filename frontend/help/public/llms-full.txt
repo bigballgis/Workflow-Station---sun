@@ -105,7 +105,7 @@ To Do lists direct assignments and business-unit role requests (free, held by yo
 
 Order: open To Do → Claim, Claim all, or Unclaim all → edit and submit.
 
-Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first) or Reassign the request to another member of the same role. Force Unclaim returns the request to the pool; Reassign does not. Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role. Change History and Admin Center User Portal Audit Log record claim, unclaim, force unclaim, and reassign (who / when / from / to).
+Leader of that role, the business-unit Approver, and SYS_ADMIN can Release Claim on someone else’s hold (confirm first) or Reassign the request to another member of the same role. Release Claim returns the request to the pool; Reassign does not. Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role. Change History and Admin Center User Portal Audit Log record claim, unclaim, release claim, and reassign (who / when / from / to).
 
 ## Delegate a task (/help/task-delegate)
 

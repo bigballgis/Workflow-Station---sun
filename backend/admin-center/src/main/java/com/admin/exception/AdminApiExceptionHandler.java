@@ -78,6 +78,30 @@ public class AdminApiExceptionHandler {
         return respond(HttpStatus.NOT_FOUND, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
     }
 
+    @ExceptionHandler(DashboardNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDashboardNotFound(
+            DashboardNotFoundException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.warn("BI dashboard not found [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.NOT_FOUND, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
+    }
+
+    @ExceptionHandler(DashboardInactiveException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDashboardInactive(
+            DashboardInactiveException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.warn("BI dashboard inactive [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.NOT_FOUND, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
+    }
+
+    @ExceptionHandler(SupersetApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSupersetApi(
+            SupersetApiException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.error("Superset API failed [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.BAD_GATEWAY, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
+    }
+
     @ExceptionHandler(RelationTableNameDuplicateException.class)
     public ResponseEntity<ApiResponse<Void>> handleRelationTableDuplicate(
             RelationTableNameDuplicateException ex, HttpServletRequest request) {

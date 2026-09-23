@@ -40,8 +40,8 @@ public interface BiDashboardAssignmentService {
      * 获取用户有效 Dashboard 列表
      * 合并 User/Role/BU 维度，去重（优先级 USER > ROLE > BU），
      * 仅含 ACTIVE Dashboard，按 displayOrder 升序排序。
-     * activeBusinessUnitId 不为空时，BU 维度仅检索该指定 BU 的分配记录，
-     * 而非用户所属的全部 BU，以确保 Dashboard 随工作台切换而正确隔离。
+     * activeBusinessUnitId 不为空时，必须是用户所属 BU；BU assignment 和
+     * BU-scoped role 仅在该 BU 上下文生效。为空时不授予任何 BU 维度权限。
      */
     List<UserDashboardResponse> getUserDashboards(String userId, String activeBusinessUnitId);
 }

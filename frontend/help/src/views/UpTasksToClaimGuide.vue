@@ -27,6 +27,17 @@ const sections: GuideSection[] = [
     bodyKey: 'upTasksToClaimGuide.listBody',
   },
   {
+    anchor: 'row-actions',
+    titleKey: 'upTasksToClaimGuide.rowActionsTitle',
+    bodyKey: 'upTasksToClaimGuide.rowActionsBody',
+    samples: [
+      { code: 'Claim', hintKey: 'upTasksToClaimGuide.claimButtonSample' },
+      { code: 'Unclaim', hintKey: 'upTasksToClaimGuide.unclaimButtonSample' },
+      { code: 'Release Claim', hintKey: 'upTasksToClaimGuide.releaseClaimButtonSample' },
+      { code: 'Reassign', hintKey: 'upTasksToClaimGuide.reassignButtonSample' },
+    ],
+  },
+  {
     anchor: 'claim',
     titleKey: 'upTasksToClaimGuide.claimTitle',
     bodyKey: 'upTasksToClaimGuide.claimBody',
@@ -74,7 +85,7 @@ const sections: GuideSection[] = [
     titleKey: 'upTasksToClaimGuide.leaderTitle',
     bodyKey: 'upTasksToClaimGuide.leaderBody',
     samples: [
-      { code: 'Force Unclaim', hintKey: 'upTasksToClaimGuide.forceUnclaimSample' },
+      { code: 'Release Claim', hintKey: 'upTasksToClaimGuide.forceUnclaimSample' },
       { code: 'Reassign', hintKey: 'upTasksToClaimGuide.reassignSample' },
     ],
   },
