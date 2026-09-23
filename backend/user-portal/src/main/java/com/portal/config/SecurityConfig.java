@@ -1,6 +1,7 @@
 package com.portal.config;
 
 import com.platform.security.filter.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,12 +39,15 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // DESIGN NOTE: Authentication is handled by Kong Gateway (JWT plugin) as the first line of defense,
-                // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally
-                // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
-                // In production, Kong rejects unauthenticated requests before they reach this service.
+                // Kong and JwtAuthenticationFilter establish identity. Most legacy routes retain
+                // their existing controller-level authorization; the BI facade is explicitly
+                // fail-closed here and also resolves its user solely from SecurityContext.
                 .requestMatchers("/health/**", "/.well-known/health").permitAll()
+                .requestMatchers("/bi/**").authenticated()
                 .anyRequest().permitAll())
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint((request, response, authException) ->
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required")))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(portalSelfServiceAccessFilter, JwtAuthenticationFilter.class);
 

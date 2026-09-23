@@ -469,14 +469,8 @@ const showFullPortal = computed(
 const checkBiDashboards = async () => {
   try {
     const storedUser = getStoredUser()
-    const userId = storedUser?.userId || localStorage.getItem(USER_ID_KEY)
-    if (userId) {
-      const dashboards = await biDashboardApi.getUserDashboards(
-        userId,
-        storedUser?.activeBusinessUnitId
-      )
-      hasBiDashboards.value = Array.isArray(dashboards) && dashboards.length > 0
-    }
+    const dashboards = await biDashboardApi.getUserDashboards(storedUser?.activeBusinessUnitId)
+    hasBiDashboards.value = Array.isArray(dashboards) && dashboards.length > 0
   } catch (e) {
     console.error('Failed to check BI dashboards:', e)
     hasBiDashboards.value = false

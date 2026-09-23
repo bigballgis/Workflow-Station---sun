@@ -95,4 +95,23 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
         )
         """)
     List<String> findAllRoleIdsByUserId(@Param("userId") String userId);
+
+    /**
+     * Global role grants only: direct user roles plus virtual-group roles whose
+     * type is not BU_BOUNDED. BU-bounded eligibility may come from a virtual
+     * group, but the actual grant is the UBR row for the current active BU.
+     */
+    @Query("""
+        SELECT DISTINCT r.id FROM Role r
+        WHERE (r.type IS NULL OR r.type <> 'BU_BOUNDED')
+        AND r.id IN (
+            SELECT ur.roleId FROM UserRole ur WHERE ur.userId = :userId
+            UNION
+            SELECT vgr.roleId FROM VirtualGroupRole vgr
+            WHERE vgr.virtualGroupId IN (
+                SELECT vgm.groupId FROM VirtualGroupMember vgm WHERE vgm.userId = :userId
+            )
+        )
+        """)
+    List<String> findGlobalRoleIdsByUserId(@Param("userId") String userId);
 }

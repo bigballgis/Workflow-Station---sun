@@ -1,5 +1,6 @@
 package com.admin.bi.controller;
 
+import com.admin.bi.component.BiAdminAccessGuard;
 import com.admin.bi.component.BiAssignmentListQueryComponent;
 import com.admin.bi.dto.request.DashboardAssignmentCreateRequest;
 import com.admin.bi.dto.response.DashboardAssignmentResponse;
@@ -33,6 +34,7 @@ public class BiDashboardAssignmentController {
 
     private final BiDashboardAssignmentService assignmentService;
     private final BiAssignmentListQueryComponent assignmentListQueryComponent;
+    private final BiAdminAccessGuard adminAccessGuard;
 
     @PostMapping
     @Operation(summary = "Create assignment record", description = "Assign a Dashboard to a User, Role, or Business Unit")
@@ -88,6 +90,7 @@ public class BiDashboardAssignmentController {
     public ResponseEntity<List<UserDashboardResponse>> getUserDashboards(
             @PathVariable String userId,
             @RequestParam(required = false) String activeBusinessUnitId) {
+        adminAccessGuard.requireAdminUserId();
         List<UserDashboardResponse> dashboards = assignmentService.getUserDashboards(userId, activeBusinessUnitId);
         return ResponseEntity.ok(dashboards);
     }
