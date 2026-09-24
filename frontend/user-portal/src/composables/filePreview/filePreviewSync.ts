@@ -1,12 +1,28 @@
 import type { FilePreviewItem, FilePreviewPayload } from './useFilePreview'
 
-export const FILE_PREVIEW_STORAGE_KEY = 'ws-file-preview-snapshot'
-export const FILE_PREVIEW_CHANNEL = 'ws-file-preview'
-export const FILE_PREVIEW_WINDOW_NAME = 'ws-file-preview'
+/** Map of preview-window id → snapshot. One shared key would replace every open window. */
+export const FILE_PREVIEW_STORAGE_KEY = 'ws-file-preview-snapshots'
+const MAX_PREVIEW_SNAPSHOTS = 20
+const PREVIEW_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export function filePreviewHref(): string {
+interface StoredPreview {
+  savedAt: number
+  payload: FilePreviewPayload
+}
+
+export function newFilePreviewId(): string {
+  return crypto.randomUUID()
+}
+
+export function previewIdFromLocation(search: string): string | null {
+  const id = new URLSearchParams(search).get('id')
+  if (!id || !PREVIEW_ID_RE.test(id)) return null
+  return id
+}
+
+export function filePreviewHref(id: string): string {
   const base = String(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/')
-  const path = `${base}file-preview`
+  const path = `${base}file-preview?id=${encodeURIComponent(id)}`
   if (typeof window === 'undefined') return path
   return `${window.location.origin}${path}`
 }
@@ -36,65 +52,69 @@ export function parseFilePreviewSnapshot(raw: unknown): FilePreviewPayload | nul
   }
 }
 
-export function readStoredPreviewSnapshot(): FilePreviewPayload | null {
+function isStoredPreview(value: unknown): value is StoredPreview {
+  if (!value || typeof value !== 'object') return false
+  const rec = value as StoredPreview
+  return typeof rec.savedAt === 'number' && parseFilePreviewSnapshot(rec.payload) !== null
+}
+
+function readPreviewMap(): Record<string, StoredPreview> {
   try {
     const raw = localStorage.getItem(FILE_PREVIEW_STORAGE_KEY)
-    if (!raw) return null
-    return parseFilePreviewSnapshot(JSON.parse(raw) as unknown)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const map: Record<string, StoredPreview> = {}
+    for (const [id, value] of Object.entries(parsed)) {
+      if (isStoredPreview(value)) map[id] = value
+    }
+    return map
   } catch {
-    return null
+    // FALLBACK(ux): corrupt storage — that window hydrates empty rather than another file
+    return {}
   }
 }
 
-export function writeStoredPreviewSnapshot(payload: FilePreviewPayload): void {
+function trimPreviewSnapshots(map: Record<string, StoredPreview>, keepId: string): void {
+  const extras = Object.entries(map)
+    .filter(([id]) => id !== keepId)
+    .sort((a, b) => a[1].savedAt - b[1].savedAt)
+  const dropCount = extras.length - (MAX_PREVIEW_SNAPSHOTS - 1)
+  for (let i = 0; i < dropCount; i++) delete map[extras[i][0]]
+}
+
+export function readStoredPreviewSnapshot(id: string): FilePreviewPayload | null {
+  const entry = readPreviewMap()[id]
+  if (!entry) return null
+  return parseFilePreviewSnapshot(entry.payload)
+}
+
+export function writeStoredPreviewSnapshot(id: string, payload: FilePreviewPayload): void {
   try {
-    localStorage.setItem(FILE_PREVIEW_STORAGE_KEY, JSON.stringify(payload))
+    const map = readPreviewMap()
+    map[id] = { savedAt: Date.now(), payload }
+    trimPreviewSnapshots(map, id)
+    localStorage.setItem(FILE_PREVIEW_STORAGE_KEY, JSON.stringify(map))
   } catch {
-    // FALLBACK(ux): quota / private mode — the preview tab hydrates empty; BroadcastChannel may still deliver
+    // FALLBACK(ux): quota / private mode — the preview window hydrates empty
   }
 }
 
-export function postFilePreviewBroadcast(payload: FilePreviewPayload): void {
-  if (typeof BroadcastChannel === 'undefined') return
-  try {
-    const channel = new BroadcastChannel(FILE_PREVIEW_CHANNEL)
-    channel.postMessage(payload)
-    channel.close()
-  } catch {
-    // FALLBACK(ux): channel unsupported — other tabs still receive the storage event
-  }
+/** `popup=yes` requests a separate browser window. Do not add `noopener`: `window.open` would return null. */
+export function filePreviewWindowFeatures(): string {
+  const width = 1200
+  const height = 800
+  const availW = window.screen?.availWidth || width
+  const availH = window.screen?.availHeight || height
+  const w = Math.min(width, availW)
+  const h = Math.min(height, availH)
+  const left = Math.max(0, Math.floor((availW - w) / 2))
+  const top = Math.max(0, Math.floor((availH - h) / 2))
+  return `popup=yes,width=${w},height=${h},left=${left},top=${top}`
 }
 
-export function tryOpenPreviewWindow(): boolean {
+export function tryOpenPreviewWindow(id: string): boolean {
   if (typeof window === 'undefined' || isFilePreviewRoute()) return false
-  const opened = window.open(filePreviewHref(), FILE_PREVIEW_WINDOW_NAME)
+  const opened = window.open(filePreviewHref(id), '_blank', filePreviewWindowFeatures())
   return opened != null && opened.closed !== true
-}
-
-export function subscribeFilePreviewBroadcast(
-  onPayload: (payload: FilePreviewPayload) => void,
-): () => void {
-  if (typeof window === 'undefined') return () => {}
-  const onStorage = (event: StorageEvent) => {
-    if (event.key !== FILE_PREVIEW_STORAGE_KEY || !event.newValue) return
-    try {
-      const parsed = parseFilePreviewSnapshot(JSON.parse(event.newValue) as unknown)
-      if (parsed) onPayload(parsed)
-    } catch {
-      return
-    }
-  }
-  window.addEventListener('storage', onStorage)
-  let channel: BroadcastChannel | null = null
-  if (typeof BroadcastChannel !== 'undefined') {
-    channel = new BroadcastChannel(FILE_PREVIEW_CHANNEL)
-    channel.onmessage = (event: MessageEvent) => {
-      const parsed = parseFilePreviewSnapshot(event.data)
-      if (parsed) onPayload(parsed)
-    }
-  }
-  return () => {
-    window.removeEventListener('storage', onStorage)
-    channel?.close()
-  }
 }

@@ -17,22 +17,18 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from 'vue'
+import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FilePreviewPane from '@/components/filePreview/FilePreviewPane.vue'
 import {
-  applyFilePreviewPayload,
   hydrateFilePreviewFromStorage,
   useFilePreviewState,
 } from '@/composables/filePreview/useFilePreview'
-import { subscribeFilePreviewBroadcast } from '@/composables/filePreview/filePreviewSync'
+import { previewIdFromLocation } from '@/composables/filePreview/filePreviewSync'
 
 const { t } = useI18n()
 const state = useFilePreviewState()
-hydrateFilePreviewFromStorage()
-const stopBroadcast = subscribeFilePreviewBroadcast((payload) => {
-  applyFilePreviewPayload(payload, true)
-})
+hydrateFilePreviewFromStorage(previewIdFromLocation(window.location.search))
 
 watch(
   () => state.name,
@@ -41,8 +37,6 @@ watch(
   },
   { immediate: true },
 )
-
-onBeforeUnmount(stopBroadcast)
 </script>
 
 <style scoped>
