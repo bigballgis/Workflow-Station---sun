@@ -50,7 +50,7 @@ export function writeStoredPreviewSnapshot(payload: FilePreviewPayload): void {
   try {
     localStorage.setItem(FILE_PREVIEW_STORAGE_KEY, JSON.stringify(payload))
   } catch {
-    // FALLBACK(ux): quota / private mode — the preview tab hydrates empty; BroadcastChannel may still deliver
+    // FALLBACK(ux): quota / private mode — the preview window hydrates empty; BroadcastChannel may still deliver
   }
 }
 
@@ -65,9 +65,22 @@ export function postFilePreviewBroadcast(payload: FilePreviewPayload): void {
   }
 }
 
+/** `popup=yes` requests a separate browser window. Do not add `noopener`: `window.open` would return null. */
+export function filePreviewWindowFeatures(): string {
+  const width = 1200
+  const height = 800
+  const availW = window.screen?.availWidth || width
+  const availH = window.screen?.availHeight || height
+  const w = Math.min(width, availW)
+  const h = Math.min(height, availH)
+  const left = Math.max(0, Math.floor((availW - w) / 2))
+  const top = Math.max(0, Math.floor((availH - h) / 2))
+  return `popup=yes,width=${w},height=${h},left=${left},top=${top}`
+}
+
 export function tryOpenPreviewWindow(): boolean {
   if (typeof window === 'undefined' || isFilePreviewRoute()) return false
-  const opened = window.open(filePreviewHref(), FILE_PREVIEW_WINDOW_NAME)
+  const opened = window.open(filePreviewHref(), FILE_PREVIEW_WINDOW_NAME, filePreviewWindowFeatures())
   return opened != null && opened.closed !== true
 }
 

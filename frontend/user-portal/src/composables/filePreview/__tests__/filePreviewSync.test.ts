@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   FILE_PREVIEW_STORAGE_KEY,
+  FILE_PREVIEW_WINDOW_NAME,
+  filePreviewWindowFeatures,
   parseFilePreviewSnapshot,
   readStoredPreviewSnapshot,
+  tryOpenPreviewWindow,
   writeStoredPreviewSnapshot,
 } from '../filePreviewSync'
 
@@ -29,5 +32,15 @@ describe('filePreviewSync', () => {
     writeStoredPreviewSnapshot({ url: '/a.pdf', name: 'a.pdf', index: 0, items: [{ url: '/a.pdf', name: 'a.pdf' }] })
     expect(readStoredPreviewSnapshot()?.url).toBe('/a.pdf')
     localStorage.removeItem(FILE_PREVIEW_STORAGE_KEY)
+  })
+
+  it('asks the browser for a separate preview window', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue({ closed: false } as Window)
+    expect(tryOpenPreviewWindow()).toBe(true)
+    const features = filePreviewWindowFeatures()
+    expect(features.startsWith('popup=yes,')).toBe(true)
+    expect(features).not.toContain('noopener')
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('/file-preview'), FILE_PREVIEW_WINDOW_NAME, features)
+    open.mockRestore()
   })
 })
