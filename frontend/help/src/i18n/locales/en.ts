@@ -612,7 +612,7 @@ export default {
     intro:
       'Admin Center → Environment variables holds TEXT values and VAULT catalog keys. Creating a VAULT variable writes the password into HashiCorp Vault only when that path does not already exist. Edit and delete never change Vault. Email Connection passwords only bind a VAULT key.',
     flowTitle: 'Order of work',
-    flow1: 'Create a VAULT variable: key, optional password, optional Vault path',
+    flow1: 'Create a VAULT variable: key and optional password',
     flow2: 'On Connections, pick that key as Password (VAULT)',
     flow3: 'Test send or Deploy the inbound monitor',
     catalogTitle: 'Catalog fields',
@@ -627,8 +627,8 @@ export default {
     fDisplayName: 'Required. Label in the Connections dropdown.',
     fDefault: 'Required for TEXT. Used when current value is blank or whitespace.',
     fCurrent: 'Optional for TEXT. Non-blank current value wins over default.',
-    fPath: 'Optional for VAULT. Vault KV path such as workflow/email/qq-inbound. Blank uses the key.',
-    fPassword: 'On create: required only if Vault does not already have this path. Existing secrets are reused and never overwritten. Edit never writes Vault. Delete removes only the catalog row.',
+    fPath: 'Not shown. Secret path is ame-hase-hermes/env-var/{key} under mount secrets/kv_v2/wsit in namespace ITID/12139042_HERMES.',
+    fPassword: 'On create: required only if Vault does not already have this key. Existing secrets are reused and never overwritten. Edit never writes Vault. Delete removes only the catalog row.',
     bindTitle: 'Bind on a Connection',
     bindBody:
       'In Developer Workstation → Connections, Username plus Password (VAULT) select a VAULT key from this catalog. Host still comes from System Config SMTP/IMAP. See [[/email-send#connection]] and [[/email-monitor]].',

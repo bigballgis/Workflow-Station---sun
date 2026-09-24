@@ -221,7 +221,9 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
         }
         entity.setDefaultValue(null);
         entity.setCurrentValue(null);
-        entity.setVaultSecretPath(EnvironmentVariablePayloads.vaultPath(request));
+        if (!StringUtils.hasText(entity.getVaultSecretPath())) {
+            entity.setVaultSecretPath(EnvironmentVariablePayloads.vaultPath(request));
+        }
     }
 
     private static String blankToNull(String value) {

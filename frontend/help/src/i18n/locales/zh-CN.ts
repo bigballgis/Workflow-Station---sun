@@ -561,7 +561,7 @@ export default {
     intro:
       '管理中心 → 环境变量保存 TEXT 取值和 VAULT 目录键。新建时仅当 Vault 还没有该路径才写入密码。编辑和删除都不会改 Vault。邮件连接密码只绑定 VAULT 变量键。',
     flowTitle: '操作顺序',
-    flow1: '新建 VAULT 变量：填写键，密码和路径可选',
+    flow1: '新建 VAULT 变量：填写键，密码可选',
     flow2: '在「连接」里把密码选成该 VAULT 键',
     flow3: '测试发信或部署入站监听',
     catalogTitle: '目录字段',
@@ -574,8 +574,8 @@ export default {
     fDisplayName: '必填。会出现在连接下拉的显示名。',
     fDefault: 'TEXT 必填。当前值为空或空白时使用。',
     fCurrent: 'TEXT 选填。非空白当前值优先于默认值。',
-    fPath: 'VAULT 选填。Vault 密钥路径，如 workflow/email/qq-inbound。空白时使用变量键。',
-    fPassword: '新建时：仅当 Vault 没有该路径才必填。已有密钥会复用且不覆盖。编辑不会写 Vault。删除只去掉目录行。',
+    fPath: '界面不填。密钥路径固定为 ame-hase-hermes/env-var/{键}，mount 为 secrets/kv_v2/wsit，namespace 为 ITID/12139042_HERMES。',
+    fPassword: '新建时：仅当 Vault 没有该键才必填。已有密钥会复用且不覆盖。编辑不会写 Vault。删除只去掉目录行。',
     bindTitle: '绑到连接',
     bindBody:
       '开发工作站 → 连接：填了用户名就必须在「密码（VAULT）」里选本目录的 VAULT 键。主机仍来自系统配置 SMTP/IMAP。见 [[/email-send#connection]] 和 [[/email-monitor]]。',

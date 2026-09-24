@@ -8,6 +8,12 @@ import org.springframework.util.StringUtils;
 
 public final class EnvironmentVariablePayloads {
 
+    /**
+     * KV path under {@code VAULT_KV_MOUNT}. Namespace and mount stay on the Vault client
+     * ({@code X-Vault-Namespace}, {@code /v1/{mount}/data/...}).
+     */
+    public static final String VAULT_SECRET_PREFIX = "ame-hase-hermes/env-var";
+
     private EnvironmentVariablePayloads() {
     }
 
@@ -28,10 +34,10 @@ public final class EnvironmentVariablePayloads {
     }
 
     public static String vaultPath(EnvironmentVariableRequest request) {
-        if (StringUtils.hasText(request.getVaultSecretPath())) {
-            return request.getVaultSecretPath().trim();
+        if (request.getVarKey() == null || !StringUtils.hasText(request.getVarKey().trim())) {
+            return "";
         }
-        return request.getVarKey().trim();
+        return VAULT_SECRET_PREFIX + "/" + request.getVarKey().trim();
     }
 
     public static String resolvedText(String currentValue, String defaultValue) {
@@ -60,7 +66,7 @@ public final class EnvironmentVariablePayloads {
     private static void validateVault(EnvironmentVariableRequest request, boolean requireVaultPassword) {
         if (!StringUtils.hasText(vaultPath(request))) {
             throw new BusinessException(ErrorCode.VALIDATION_FIELD_REQUIRED,
-                    "VAULT environment variables require a key or vaultSecretPath");
+                    "VAULT environment variables require a key");
         }
         if (StringUtils.hasText(request.getDefaultValue()) || StringUtils.hasText(request.getCurrentValue())) {
             throw new BusinessException(ErrorCode.VALIDATION_FIELD_INVALID,

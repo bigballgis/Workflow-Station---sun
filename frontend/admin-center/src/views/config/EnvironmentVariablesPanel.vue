@@ -129,15 +129,6 @@
           </el-form-item>
         </template>
         <template v-else>
-          <el-form-item :label="t('config.envVaultPath')">
-            <el-input
-              v-model="form.vaultSecretPath"
-              placeholder="workflow/email/qq-inbound"
-            />
-            <div class="form-tip">
-              {{ t('config.envVaultPathHint') }}
-            </div>
-          </el-form-item>
           <el-form-item :label="t('config.envVaultPassword')">
             <el-input
               v-model="form.vaultPassword"

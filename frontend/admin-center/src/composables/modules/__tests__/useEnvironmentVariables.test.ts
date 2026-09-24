@@ -32,7 +32,6 @@ describe('buildEnvironmentPayload', () => {
         displayName: 'QQ inbound',
         description: undefined,
         valueKind: 'VAULT',
-        vaultSecretPath: 'workflow/email/qq',
         vaultPassword: 'secret',
       },
     })
@@ -43,15 +42,16 @@ describe('buildEnvironmentPayload', () => {
     expect('payload' in result).toBe(true)
     if ('payload' in result) {
       expect(result.payload.vaultPassword).toBeUndefined()
-      expect(result.payload.vaultSecretPath).toBe('workflow/email/qq')
+      expect(result.payload.vaultSecretPath).toBeUndefined()
     }
   })
 
-  it('edit VAULT never sends vaultPassword', () => {
+  it('edit VAULT never sends vaultPassword or vaultSecretPath', () => {
     const result = buildEnvironmentPayload(vaultForm({ vaultPassword: 'new-secret' }), true)
     expect('payload' in result).toBe(true)
     if ('payload' in result) {
       expect(result.payload.vaultPassword).toBeUndefined()
+      expect(result.payload.vaultSecretPath).toBeUndefined()
     }
   })
 })

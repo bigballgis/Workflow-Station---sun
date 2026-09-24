@@ -57,10 +57,21 @@ class EnvironmentVariablePayloadsTest {
     }
 
     @Test
-    void vaultPath_defaultsToVarKey() {
+    void validate_vaultRequiresKey() {
+        EnvironmentVariableRequest request = new EnvironmentVariableRequest();
+        request.setDisplayName("n");
+        request.setValueKind(EnvironmentValueKind.VAULT);
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> EnvironmentVariablePayloads.validate(request));
+        assertEquals("VAULT environment variables require a key", ex.getMessage());
+    }
+
+    @Test
+    void vaultPath_usesFixedPrefixAndIgnoresRequestPath() {
         EnvironmentVariableRequest request = new EnvironmentVariableRequest();
         request.setVarKey(" email.qq.inbound ");
         request.setValueKind(EnvironmentValueKind.VAULT);
-        assertEquals("email.qq.inbound", EnvironmentVariablePayloads.vaultPath(request));
+        request.setVaultSecretPath("workflow/email/qq");
+        assertEquals("ame-hase-hermes/env-var/email.qq.inbound", EnvironmentVariablePayloads.vaultPath(request));
     }
 }

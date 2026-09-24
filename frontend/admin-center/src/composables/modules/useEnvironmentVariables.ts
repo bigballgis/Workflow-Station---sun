@@ -67,7 +67,6 @@ export function buildEnvironmentPayload(
     displayName,
     description: form.description.trim() || undefined,
     valueKind: 'VAULT',
-    vaultSecretPath: form.vaultSecretPath.trim() || varKey,
   }
   if (!editing && form.vaultPassword) {
     payload.vaultPassword = form.vaultPassword

@@ -561,7 +561,7 @@ export default {
     intro:
       '管理中心 → 環境變數保存 TEXT 取值和 VAULT 目錄鍵。新增時僅當 Vault 還沒有該路徑才寫入密碼。編輯和刪除都不會改 Vault。郵件連線密碼只綁定 VAULT 變數鍵。',
     flowTitle: '操作順序',
-    flow1: '新增 VAULT 變數：填寫鍵，密碼和路徑可選',
+    flow1: '新增 VAULT 變數：填寫鍵，密碼可選',
     flow2: '在「連線」把密碼選成該 VAULT 鍵',
     flow3: '測試寄信或部署入站監聽',
     catalogTitle: '目錄欄位',
@@ -574,8 +574,8 @@ export default {
     fDisplayName: '必填。會出現在連線下拉的顯示名稱。',
     fDefault: 'TEXT 必填。目前值為空或空白時使用。',
     fCurrent: 'TEXT 選填。非空白目前值優先於預設值。',
-    fPath: 'VAULT 選填。Vault 密鑰路徑，如 workflow/email/qq-inbound。空白時使用變數鍵。',
-    fPassword: '新增時：僅當 Vault 沒有該路徑才必填。已有密鑰會復用且不覆蓋。編輯不會寫 Vault。刪除只去掉目錄行。',
+    fPath: '介面不填。密鑰路徑固定為 ame-hase-hermes/env-var/{鍵}，mount 為 secrets/kv_v2/wsit，namespace 為 ITID/12139042_HERMES。',
+    fPassword: '新增時：僅當 Vault 沒有該鍵才必填。已有密鑰會復用且不覆蓋。編輯不會寫 Vault。刪除只去掉目錄行。',
     bindTitle: '綁到連線',
     bindBody:
       '開發工作站 → 連線：填了使用者名稱就必須在「密碼（VAULT）」選本目錄的 VAULT 鍵。主機仍來自系統設定 SMTP/IMAP。見 [[/email-send#connection]] 與 [[/email-monitor]]。',

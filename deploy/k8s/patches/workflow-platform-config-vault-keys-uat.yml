@@ -14,7 +14,7 @@ metadata:
   name: workflow-platform-config
 data:
   VAULT_ADDR: "https://vault-dev.uk.hsbc:8200"
-  VAULT_NAMESPACE: "ITID/1239042_HERMES"
+  VAULT_NAMESPACE: "ITID/12139042_HERMES"
   VAULT_AUTH_MOUNT: "kubernetes/wsit-hk-azx-401"
   VAULT_ROLE: "ame-hase-hermes-role"
   VAULT_KV_MOUNT: "secrets/kv_v2/wsit"

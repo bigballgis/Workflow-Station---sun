@@ -52,7 +52,6 @@ const sections: GuideSection[] = [
       { code: 'Display name', hintKey: 'environmentVariablesGuide.fDisplayName' },
       { code: 'Default value', hintKey: 'environmentVariablesGuide.fDefault' },
       { code: 'Current value', hintKey: 'environmentVariablesGuide.fCurrent' },
-      { code: 'Vault secret path', hintKey: 'environmentVariablesGuide.fPath' },
       { code: 'Vault password', hintKey: 'environmentVariablesGuide.fPassword' },
     ],
   },
