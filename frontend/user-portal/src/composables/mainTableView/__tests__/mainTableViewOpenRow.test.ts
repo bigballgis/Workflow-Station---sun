@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMainTableView, resolveRowOpenTarget } from '../mainTableViewNav'
+import { isMainTableView, resolveFkOpenTarget, resolveRowOpenTarget } from '../mainTableViewNav'
 
 /**
  * `isMainTableView` is the branch that decides where a row click lands: MAIN views open the
@@ -78,5 +78,26 @@ describe('resolveRowOpenTarget', () => {
   it('refuses a bound view when the row has no key', () => {
     expect(resolveRowOpenTarget(SUB_BOUND, 9, { processInstanceId: 'pi-1' }, null))
       .toEqual({ kind: 'refuse', messageKey: 'rowNotAddressable' })
+  })
+})
+
+describe('resolveFkOpenTarget', () => {
+  const OWNING = { refOwningRequest: true, refViewId: 50292, refFunctionUnitCode: 'atm' }
+  const FIELD_FK = { refOwningRequest: false, refViewId: 60001, refFunctionUnitCode: 'merchants' }
+
+  // The transaction row's id is not a case number: filtering the case view by it finds nothing.
+  it('opens the request a SUB row lives in, not the MAIN view filtered by the cell text', () => {
+    expect(resolveFkOpenTarget(OWNING, { processInstanceId: 'pi-1' }, 'ATM-DC-PW-TRANS-000018'))
+      .toEqual({ kind: 'request', processInstanceId: 'pi-1' })
+  })
+
+  it('keeps the filtered drill-down for an FK that names a row this one does not own', () => {
+    expect(resolveFkOpenTarget(FIELD_FK, { processInstanceId: 'pi-1' }, 'M-7'))
+      .toEqual({ kind: 'list', functionUnitCode: 'merchants', viewId: 60001, fk: 'M-7' })
+  })
+
+  it('drills down as before when the row has no instance to open', () => {
+    expect(resolveFkOpenTarget(OWNING, { processInstanceId: null }, 'X'))
+      .toEqual({ kind: 'list', functionUnitCode: 'atm', viewId: 50292, fk: 'X' })
   })
 })

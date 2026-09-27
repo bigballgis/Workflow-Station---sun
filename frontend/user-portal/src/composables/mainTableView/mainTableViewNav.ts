@@ -89,6 +89,31 @@ export function resolveRowOpenTarget(
   return { kind: 'detail', viewId, rowKey }
 }
 
+/**
+ * Where an FK link lands. A SUB row's link back to its MAIN row (`refOwningRequest`) names the
+ * request the row lives in, so it opens that request as a MAIN row click would. Any other FK names
+ * a row this one does not own; it drills to the referenced view filtered by the cell value.
+ */
+export type FkOpenTarget =
+  | { kind: 'request'; processInstanceId: string }
+  | { kind: 'list'; functionUnitCode: string; viewId: number; fk: string }
+
+export function resolveFkOpenTarget(
+  col: { refOwningRequest?: boolean; refViewId?: number | null; refFunctionUnitCode?: string | null },
+  row: { processInstanceId?: string | null },
+  fk: string,
+): FkOpenTarget {
+  if (col.refOwningRequest && row.processInstanceId) {
+    return { kind: 'request', processInstanceId: String(row.processInstanceId) }
+  }
+  return {
+    kind: 'list',
+    functionUnitCode: String(col.refFunctionUnitCode),
+    viewId: Number(col.refViewId),
+    fk,
+  }
+}
+
 export function filterTableGroups(groups: TableViewGroup[], keyword: string): TableViewGroup[] {
   const kw = keyword.trim().toLowerCase()
   if (!kw) return groups

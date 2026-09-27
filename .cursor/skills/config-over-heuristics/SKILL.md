@@ -432,6 +432,7 @@ private BindingLinkMode bindingLinkMode = BindingLinkMode.structuralFk;
 | 同上，匹配到无 FK 的已有表 | 落进 createSubTable | 静默新建一张近似重复的表 |
 | `SubTableRowKeySupport`(×4) | `id` ⇄ `id_idw` 互顶 | 只对主键正好叫这两个名字的表有效 |
 | `SUB_TABLE_STRUCTURAL_FK_KEYS` | 两份手抄副本**已漂移** | 同一行在 To Do 与 My Request 对「算不算空行」答案相反 |
+| portal `PortalMainTableViewServiceImpl.loadSubMainFkMeta` | SUB 视图「回主表」链接列取 `binding.foreign_key_field` | 6 个 SUB 视图里 5 个把**行自己的主键**渲染成「打开关联记录」链接；已改为读 SUB 表指向同表单 PRIMARY 表的已声明 FK（`filter_fk_field_id` 收窄，多于 1 个不猜）；视图没放该列就没有链接 |
 
 ### 10.6 子表专用自检
 

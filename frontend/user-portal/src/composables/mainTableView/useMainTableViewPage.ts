@@ -32,6 +32,7 @@ import {
   groupViewsByTable,
   isMainTableView,
   pickDefaultView,
+  resolveFkOpenTarget,
   resolveRowOpenTarget,
   sortViewsByName,
   tableGroupKey,
@@ -550,7 +551,8 @@ function isFkLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boole
   return value !== null && value !== undefined && String(value) !== ''
 }
 
-// Drill to the referenced table's published default view, pre-filtered by this cell's FK value.
+// Open the referenced record: the owning request directly, otherwise the referenced table's
+// published default view pre-filtered by this cell's FK value (see resolveFkOpenTarget).
 function openFkTarget(col: MainTableViewFieldColumn, row: GridDisplayRow) {
   if (!isFkLinkCell(col, row)) return
   const raw = row.values?.[col.fieldName]
@@ -558,9 +560,14 @@ function openFkTarget(col: MainTableViewFieldColumn, row: GridDisplayRow) {
   const value = raw && typeof raw === 'object'
     ? String((raw as Record<string, unknown>).id ?? '')
     : String(raw)
+  const target = resolveFkOpenTarget(col, row, value)
+  if (target.kind === 'request') {
+    router.push(`/applications/${target.processInstanceId}?from=views`)
+    return
+  }
   router.push({
-    path: `/views/${encodeURIComponent(col.refFunctionUnitCode as string)}`,
-    query: { viewId: String(col.refViewId), fk: value },
+    path: `/views/${encodeURIComponent(target.functionUnitCode)}`,
+    query: { viewId: String(target.viewId), fk: target.fk },
   })
 }
 

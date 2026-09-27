@@ -720,12 +720,12 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
     private List<MainTableViewFieldColumn> visibleColumns(ViewDefinition view) {
         Map<String, FkColumnMeta> resolvedFk = loadFkColumnMeta(view.id());
-        // SUB views: the main-id column is a FK back to the owning MAIN table. That linkage lives on the
-        // form-table binding (foreign_key_field), not in dw_field_definitions, so resolve it separately.
+        // SUB views: the declared FK back to the owning MAIN table is already a field-level FK above;
+        // mark it so the portal opens the row's own request. A view that hides it has no such link.
         if ("SUB".equalsIgnoreCase(view.tableType()) && view.mainTableId() != null) {
             Map<String, FkColumnMeta> merged = new LinkedHashMap<>(resolvedFk);
-            loadSubMainFkMeta(view.mainTableId())
-                    .ifPresent(m -> merged.putIfAbsent(m.fieldName(), m.meta()));
+            loadOwningMainFkField(view.mainTableId()).ifPresent(field -> merged.computeIfPresent(field,
+                    (k, m) -> new FkColumnMeta(m.refViewId(), m.refFunctionUnitCode(), m.refPrimaryKeyFields(), true)));
             resolvedFk = merged;
         }
         final Map<String, FkColumnMeta> fkMeta = resolvedFk;
@@ -769,6 +769,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .isForeignKey(fk != null)
                 .refViewId(fk != null ? fk.refViewId() : null)
                 .refFunctionUnitCode(fk != null ? fk.refFunctionUnitCode() : null)
+                .refOwningRequest(fk != null && fk.owningRequest())
                 .refPrimaryKeyFields(fk != null ? fk.refPrimaryKeyFields()
                         : (fkSrc != null ? fkSrc.refPrimaryKeyFields() : null))
                 .isLookup(lookupTableId != null)
@@ -802,7 +803,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private List<MainTableViewColumnSpec.FieldSource> queryableFieldSources(ViewDefinition view) {
         Map<String, String> dataTypes = fieldDataTypes(view);
         Map<String, LookupColumnMeta> lookupMeta = loadLookupColumnMeta(view.mainTableId());
-        Map<String, FkSourceMeta> fkMeta = fkSourceMetaFor(view);
+        Map<String, FkSourceMeta> fkMeta = loadFkSourceMeta(view.id());
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
@@ -846,16 +847,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 displayField,
                 lookupTableId,
                 fkPks);
-    }
-
-    private Map<String, FkSourceMeta> fkSourceMetaFor(ViewDefinition view) {
-        Map<String, FkSourceMeta> fkSource = new LinkedHashMap<>(loadFkSourceMeta(view.id()));
-        if (isSubView(view) && view.mainTableId() != null) {
-            loadSubMainFkMeta(view.mainTableId()).ifPresent(m -> fkSource.putIfAbsent(
-                    m.fieldName(),
-                    new FkSourceMeta(null, m.meta().refPrimaryKeyFields())));
-        }
-        return fkSource;
     }
 
     /**
@@ -1090,7 +1081,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 meta.put(fieldName, new FkColumnMeta(
                         ((Number) row.get("ref_view_id")).longValue(),
                         stringVal(row.get("ref_fu_code")),
-                        parseStringList(stringVal(row.get("ref_pk_fields")))));
+                        parseStringList(stringVal(row.get("ref_pk_fields"))),
+                        false));
             }
             return meta;
         } catch (Exception e) {
@@ -1100,47 +1092,38 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     /**
-     * Resolve the FK metadata for a SUB table's main-id column. The SUB→MAIN link is stored on the
-     * form-table binding ({@code foreign_key_field}); the MAIN table is the PRIMARY-bound table on the
-     * same form(s). Returns the main-id field name + the MAIN table's published default view, or empty
-     * when no such published default view exists (graceful degrade to plain text).
+     * The SUB table's declared FK column that references the MAIN table bound PRIMARY on the same
+     * form — the MAIN row this SUB row lives in. Read from {@code dw_field_definitions}
+     * ({@code is_foreign_key} + {@code ref_table_id}), narrowed by the binding's
+     * {@code filter_fk_field_id} when set. {@code foreign_key_field} is not consulted: on legacy SUB
+     * bindings it holds the sub-table's own primary key. Empty when none is declared or more than
+     * one column qualifies (no guessing between them).
      */
-    private Optional<SubMainFk> loadSubMainFkMeta(Long subTableId) {
+    private Optional<String> loadOwningMainFkField(Long subTableId) {
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                    SELECT sub.foreign_key_field AS fk_field,
-                           rv.id AS ref_view_id,
-                           rfu.code AS ref_fu_code
+            List<String> fields = jdbcTemplate.queryForList("""
+                    SELECT DISTINCT fd.field_name
                     FROM dw_form_table_bindings sub
                     INNER JOIN dw_form_table_bindings main
                             ON main.form_id = sub.form_id
                            AND main.binding_type = 'PRIMARY'
-                    INNER JOIN dw_table_definitions rt ON rt.id = main.table_id
-                    INNER JOIN dw_function_units rfu ON rfu.id = rt.function_unit_id
-                    INNER JOIN dw_main_table_view_configs rv
-                            ON rv.main_table_id = main.table_id
-                           AND rv.is_default = TRUE
-                           AND rv.status = 'PUBLISHED'
+                    INNER JOIN dw_field_definitions fd
+                            ON fd.table_id = sub.table_id
+                           AND fd.is_foreign_key = TRUE
+                           AND fd.ref_table_id = main.table_id
+                           AND (sub.filter_fk_field_id IS NULL OR fd.id = sub.filter_fk_field_id)
                     WHERE sub.table_id = ?
                       AND sub.binding_type = 'SUB'
-                      AND sub.foreign_key_field IS NOT NULL
-                    LIMIT 1
-                    """, subTableId);
-            if (rows.isEmpty()) {
+                    """, String.class, subTableId);
+            if (fields.size() > 1) {
+                log.warn("SUB table {} declares several FK columns to its MAIN table ({}); set the binding's "
+                        + "filter FK field in Form Design so the portal knows which one links the owning request",
+                        subTableId, fields);
                 return Optional.empty();
             }
-            Map<String, Object> row = rows.get(0);
-            String fkField = stringVal(row.get("fk_field"));
-            if (fkField == null || fkField.isBlank()) {
-                return Optional.empty();
-            }
-            FkColumnMeta meta = new FkColumnMeta(
-                    ((Number) row.get("ref_view_id")).longValue(),
-                    stringVal(row.get("ref_fu_code")),
-                    List.of());
-            return Optional.of(new SubMainFk(fkField, meta));
+            return fields.stream().findFirst();
         } catch (Exception e) {
-            log.warn("Failed to resolve SUB main FK metadata for table {}: {}", subTableId, e.getMessage());
+            log.warn("Failed to resolve SUB owning-request FK for table {}: {}", subTableId, e.getMessage());
             return Optional.empty();
         }
     }
@@ -1432,15 +1415,18 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return Boolean.parseBoolean(String.valueOf(val));
     }
 
+    /**
+     * @param owningRequest the column links a SUB row to the MAIN row it lives in — that row is the
+     *                      row's own process instance, so the portal opens it without a lookup
+     */
     private record FkColumnMeta(
             Long refViewId,
             String refFunctionUnitCode,
-            List<String> refPrimaryKeyFields) {}
+            List<String> refPrimaryKeyFields,
+            boolean owningRequest) {}
 
     /** Structural FK on the owning table — used to hydrate {@code fk_display} columns. */
     private record FkSourceMeta(Long refTableId, List<String> refPrimaryKeyFields) {}
-
-    private record SubMainFk(String fieldName, FkColumnMeta meta) {}
 
     private record LookupColumnMeta(
             Long tableId,

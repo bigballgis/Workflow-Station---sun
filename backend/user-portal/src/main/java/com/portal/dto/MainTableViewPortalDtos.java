@@ -50,6 +50,11 @@ public final class MainTableViewPortalDtos {
             Long refViewId,
             String refFunctionUnitCode,
             List<String> refPrimaryKeyFields,
+            /**
+             * The referenced row is the one this SUB row lives in (its own process instance), so
+             * the portal opens that request directly instead of searching {@code refViewId}.
+             */
+            Boolean refOwningRequest,
             // Lookup drill-down: when isLookup, the portal links to the referenced Relation Table's data
             // (lookupTableId), pre-filtered by this cell's value. Resolved from the form's lookupConfig.
             Boolean isLookup,
