@@ -9,6 +9,7 @@ import com.admin.enums.AuditAction;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RoleRepository;
+import com.admin.repository.SystemConfigRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +53,8 @@ public class AdminAuditAspect {
     private final BiRbacMappingRepository biRbacMappingRepository;
     @Autowired
     private BiDataViewAssignmentRepository biDataViewAssignmentRepository;
+    @Autowired
+    private SystemConfigRepository systemConfigRepository;
     private final TransactionTemplate auditTxTemplate;
     private final ObjectMapper mapper;
 
@@ -216,6 +219,16 @@ public class AdminAuditAspect {
         return audit(pjp, "AUTOMATION_PIECE");
     }
 
+    @Around("within(com.admin.controller.ConfigController) "
+            + "&& (execution(* *.createConfig(..)) "
+            + "|| execution(* *.updateConfig(..)) "
+            + "|| execution(* *.deleteConfig(..)) "
+            + "|| execution(* *.rollbackConfig(..)) "
+            + "|| execution(* *.syncConfigs(..)))")
+    public Object auditConfig(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "CONFIG");
+    }
+
     // =========================================================================
     // Core audit logic
     // =========================================================================
@@ -286,6 +299,7 @@ public class AdminAuditAspect {
             case "BI_RBAC"             -> resolveBiRbacMeta(methodName, args);
             case "AUTOMATION_FLOW"     -> resolveAutomationFlowMeta(methodName, args);
             case "AUTOMATION_PIECE"    -> resolveAutomationPieceMeta(methodName, args);
+            case "CONFIG"              -> resolveConfigMeta(methodName, firstArg, args);
             default -> new AuditMeta(AuditAction.QUERY, domain, null);
         };
     }
@@ -479,6 +493,21 @@ public class AdminAuditAspect {
         };
     }
 
+    /** Config is keyed by configKey; sync spans many keys, so it records its parameters instead. */
+    private AuditMeta resolveConfigMeta(String method, String configKey, Object[] args) {
+        return switch (method) {
+            case "createConfig"   -> new AuditMeta(AuditAction.CREATE, "CONFIG", null);
+            case "updateConfig"   -> new AuditMeta(AuditAction.UPDATE, "CONFIG", configKey);
+            case "rollbackConfig" -> new AuditMeta(AuditAction.UPDATE, "CONFIG", configKey);
+            case "deleteConfig"   -> new AuditMeta(AuditAction.DELETE, "CONFIG", configKey);
+            case "syncConfigs"    -> new AuditMeta(AuditAction.UPDATE, "CONFIG", null,
+                    detailJson("sourceEnv", configKey,
+                            "targetEnv", args.length > 1 ? args[1] : null,
+                            "configKeys", args.length > 2 ? args[2] : null));
+            default               -> AuditMeta.skip();
+        };
+    }
+
     /** Build a small JSON object from alternating key/value pairs; null on failure. */
     private String detailJson(Object... keyValuePairs) {
         Map<String, Object> fields = new LinkedHashMap<>();
@@ -533,11 +562,14 @@ public class AdminAuditAspect {
                     case "BI_DATA_VIEW_ASSIGNMENT" -> biDataViewAssignmentRepository != null
                             ? biDataViewAssignmentRepository.findById(resourceId).orElse(null) : null;
                     case "BI_RBAC"        -> biRbacMappingRepository.findById(resourceId).orElse(null);
+                    case "CONFIG"         -> systemConfigRepository != null
+                            ? systemConfigRepository.findByConfigKey(resourceId).orElse(null) : null;
                     // RELATION_TABLE_ROW uses a composite id (tableId:rowId) and row data is
                     // schema-less — skip DB lookup and rely on response body / request args.
                     default               -> null;
                 };
-                return entity != null ? toJson(entity) : null;
+                if (entity == null) return null;
+                return "CONFIG".equals(resourceType) ? toJsonMasked(entity) : toJson(entity);
             });
         } catch (Throwable e) {
             log.debug("Could not fetch audit entity state (type={}, id={}): {}",
@@ -756,6 +788,11 @@ public class AdminAuditAspect {
             ObjectNode node = (ObjectNode) mapper.readTree(json);
             for (String field : SENSITIVE_FIELDS) {
                 if (node.has(field)) node.put(field, "***");
+            }
+            // SystemConfig flagged encrypted: its value is a secret, keep it out of the audit log.
+            if (node.path("encrypted").asBoolean(false)) {
+                if (node.has("configValue"))  node.put("configValue", "***");
+                if (node.has("defaultValue")) node.put("defaultValue", "***");
             }
             return mapper.writeValueAsString(node);
         } catch (Exception e) {

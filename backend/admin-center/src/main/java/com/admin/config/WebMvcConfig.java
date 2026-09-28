@@ -23,6 +23,7 @@ import org.springframework.web.util.pattern.PathPatternParser;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final OrganizationMutationAccessInterceptor organizationMutationAccessInterceptor;
+    private final ConfigMutationAccessInterceptor configMutationAccessInterceptor;
     
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
@@ -42,6 +43,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/virtual-groups/*/tasks/*/claim",
                         "/virtual-groups/tasks/*/delegate");
+        registry.addInterceptor(configMutationAccessInterceptor)
+                .addPathPatterns("/configs", "/configs/**")
+                // Read-only impact preview that happens to be a POST.
+                .excludePathPatterns("/configs/*/assess-impact");
     }
 
     @Override

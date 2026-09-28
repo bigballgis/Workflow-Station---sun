@@ -106,6 +106,7 @@ public class SecurityAuditController {
             "AUTOMATION_FLOW", "AUTOMATION_PIECE",
             "BI_ASSIGNMENT", "BI_DATA_VIEW_ASSIGNMENT", "BI_DASHBOARD", "BI_RBAC",
             "BUSINESS_UNIT",
+            "CONFIG",
             "RELATION_TABLE", "RELATION_TABLE_ROW",
             "ROLE",
             "USER", "VIRTUAL_GROUP"

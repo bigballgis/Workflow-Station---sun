@@ -58,6 +58,7 @@ export const resourceTypeText = (t: AuditTranslate, rt: string | null | undefine
     // 自动化两页是顶级菜单项，无父级分组，故不拼 sep
     case 'AUTOMATION_FLOW':    return t('menu.automationFlows')
     case 'AUTOMATION_PIECE':   return t('menu.automationPieces')
+    case 'CONFIG':             return t('menu.config')
     default:                   return rt || ''
   }
 }
