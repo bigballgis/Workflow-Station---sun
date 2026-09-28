@@ -106,13 +106,14 @@ public class VaultSecretClientImpl implements VaultSecretClient {
             if (ex.getStatusCode().value() == 404) {
                 return false;
             }
-            log.warn("Vault KV EXISTS failed: status={}", ex.getStatusCode().value());
-            throw new VaultSecretUnavailableException("Vault KV request failed", ex);
+            String detail = httpFailureDetail(ex);
+            log.warn("Vault KV EXISTS failed: path={} {}", secretPath, detail, ex);
+            throw new VaultSecretUnavailableException("Vault KV request failed: " + detail, ex);
         } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.warn("Vault KV EXISTS failed: {}", ex.getMessage());
-            throw new VaultSecretUnavailableException("Unable to reach Vault", ex);
+            log.warn("Vault KV EXISTS failed: path={} {}", secretPath, ex.toString(), ex);
+            throw new VaultSecretUnavailableException("Unable to reach Vault: " + ex, ex);
         }
     }
 
@@ -134,13 +135,14 @@ public class VaultSecretClientImpl implements VaultSecretClient {
                     MAP_TYPE);
             putPasswordCache(secretPath, password);
         } catch (HttpStatusCodeException ex) {
-            log.warn("Vault KV WRITE failed: status={}", ex.getStatusCode().value());
-            throw new VaultSecretUnavailableException("Vault KV write failed", ex);
+            String detail = httpFailureDetail(ex);
+            log.warn("Vault KV WRITE failed: path={} {}", secretPath, detail, ex);
+            throw new VaultSecretUnavailableException("Vault KV write failed: " + detail, ex);
         } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.warn("Vault KV WRITE failed: {}", ex.getMessage());
-            throw new VaultSecretUnavailableException("Unable to reach Vault", ex);
+            log.warn("Vault KV WRITE failed: path={} {}", secretPath, ex.toString(), ex);
+            throw new VaultSecretUnavailableException("Unable to reach Vault: " + ex, ex);
         }
     }
 
@@ -150,12 +152,12 @@ public class VaultSecretClientImpl implements VaultSecretClient {
                     kvDataUrl(secretPath), HttpMethod.GET, new HttpEntity<>(vaultHeaders(true)), MAP_TYPE);
             return passwordFromKvBody(response.getBody());
         } catch (HttpStatusCodeException ex) {
-            return translateReadFailure(ex);
+            return translateReadFailure(secretPath, ex);
         } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.warn("Vault KV GET failed: {}", ex.getMessage());
-            throw new VaultSecretUnavailableException("Unable to reach Vault", ex);
+            log.warn("Vault KV GET failed: path={} {}", secretPath, ex.toString(), ex);
+            throw new VaultSecretUnavailableException("Unable to reach Vault: " + ex, ex);
         }
     }
 
@@ -168,13 +170,15 @@ public class VaultSecretClientImpl implements VaultSecretClient {
         }
     }
 
-    private String translateReadFailure(HttpStatusCodeException ex) {
-        HttpStatusCode status = ex.getStatusCode();
-        log.warn("Vault KV GET failed: status={}", status.value());
-        if (status.value() == 404) {
+    private String translateReadFailure(String secretPath, HttpStatusCodeException ex) {
+        int status = ex.getStatusCode().value();
+        if (status == 404) {
+            log.warn("Vault KV GET failed: path={} status=404", secretPath);
             throw new VaultSecretNotFoundException("Vault secret not found", ex);
         }
-        throw new VaultSecretUnavailableException("Vault KV request failed", ex);
+        String detail = httpFailureDetail(ex);
+        log.warn("Vault KV GET failed: path={} {}", secretPath, detail, ex);
+        throw new VaultSecretUnavailableException("Vault KV request failed: " + detail, ex);
     }
 
     private HttpHeaders vaultHeaders(boolean includeToken) {
@@ -216,13 +220,16 @@ public class VaultSecretClientImpl implements VaultSecretClient {
                     url, HttpMethod.POST, new HttpEntity<>(body, vaultHeaders(false)), MAP_TYPE);
             applyLogin(response.getBody());
         } catch (HttpStatusCodeException ex) {
-            log.warn("Vault Kubernetes login failed: status={}", ex.getStatusCode().value());
-            throw new VaultSecretUnavailableException("Vault Kubernetes login failed", ex);
+            String detail = httpFailureDetail(ex);
+            log.warn("Vault Kubernetes login failed: url={} role={} {}", url, settings.role(), detail, ex);
+            throw new VaultSecretUnavailableException(
+                    "Vault Kubernetes login failed: url=" + url + " role=" + settings.role() + " " + detail, ex);
         } catch (VaultSecretUnavailableException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.warn("Vault Kubernetes login failed: {}", ex.getMessage());
-            throw new VaultSecretUnavailableException("Unable to reach Vault for login", ex);
+            log.warn("Vault Kubernetes login failed: url={} role={} {}", url, settings.role(), ex.toString(), ex);
+            throw new VaultSecretUnavailableException(
+                    "Unable to reach Vault for login: url=" + url + " role=" + settings.role() + " " + ex, ex);
         }
     }
 
@@ -283,6 +290,28 @@ public class VaultSecretClientImpl implements VaultSecretClient {
             throw new VaultSecretUnavailableException("Vault secret data.password is missing");
         }
         return text;
+    }
+
+    /**
+     * Status and response body only. Never includes the request JWT or a client token.
+     */
+    private static String httpFailureDetail(HttpStatusCodeException ex) {
+        String body = ex.getResponseBodyAsString();
+        if (!StringUtils.hasText(body)) {
+            body = "(empty)";
+        } else {
+            body = redactVaultBody(body.trim());
+            if (body.length() > 400) {
+                body = body.substring(0, 400) + "...";
+            }
+        }
+        return "status=" + ex.getStatusCode().value() + " body=" + body;
+    }
+
+    private static String redactVaultBody(String body) {
+        return body
+                .replaceAll("(?i)(\"(?:client_token|jwt|password)\"\\s*:\\s*\")[^\"]*\"", "$1[redacted]\"")
+                .replaceAll("eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+", "[redacted-jwt]");
     }
 
     static String encodedPath(String rawPath) {

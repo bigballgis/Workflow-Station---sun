@@ -131,9 +131,9 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
                     "Vault secret not found for environment variable " + varKey);
         } catch (VaultSecretUnavailableException ex) {
-            log.warn("Vault unavailable varKey={} path={}: {}", varKey, path, ex.getMessage());
+            log.warn("Vault unavailable varKey={} path={}", varKey, path, ex);
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR,
-                    "Vault is unavailable. Check Vault connectivity and permissions.", ex);
+                    "Vault is unavailable. " + ex.getMessage(), ex);
         }
     }
 
@@ -152,9 +152,9 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
             throw new BusinessException(ErrorCode.VALIDATION_FIELD_INVALID,
                     "Vault secret path is invalid", ex);
         } catch (VaultSecretUnavailableException ex) {
-            log.warn("Vault write failed varKey={} path={}: {}", varKey, path, ex.getMessage());
+            log.warn("Vault write failed varKey={} path={}", varKey, path, ex);
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR,
-                    "Could not write the secret to Vault. Check Vault connectivity and permissions.", ex);
+                    "Could not write the secret to Vault. " + ex.getMessage(), ex);
         }
     }
 

@@ -3,11 +3,11 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-09-23)
+## 统计 (截至 2026-09-28)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **18** | `index.yaml` |
+| 🔓 Open | **20** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650 等） |
 
@@ -35,6 +35,8 @@
 | 1617 | major | bug | Showcase Submit Application：部署缺少 DMN showcase_amount_tier |
 | 1637 | major | bug | FormConfigJsonTableProvisioner 建子表时 FK 列标 `isForeignKey=true` 但不写 `ref_table_id`，运行时消费者（按 ref_table_id 关联）读不到目标 |
 | 1638 | minor | quality | developer-workstation 基线红：MemberControllerTest 15 个 403、AuditorReadOnlyControllerContractTest 1 个 upload 端点缺 `@RequireDeveloperPermission`（已在 HEAD worktree 证实非新引入） |
+| 1651 | major | security | Vault 失败日志和部分 400 响应带上未脱敏的原始响应体，脱敏可被绕过（调试期间暂不改） |
+| 1652 | minor | quality | Vault 403 单测的响应体没有 JWT，脱敏逻辑未被断言（随 #1651 再补） |
 
 ### Wontfix
 

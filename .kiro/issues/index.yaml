@@ -4485,3 +4485,28 @@
     修复：只合并本表的规范 key，或 binding-id 映射到同一 table id 的旧切片。
     同一页刷新后 Review case files 只剩 File-000009 case file；Review party files 仍是 alice file、bob file。
     另起一条多表单实例走完新增、评审读取、改名保存、删除保存。库中最终只剩 case-doc 与 party-doc，版本均为 4。
+
+- id: "1651"
+  status: open
+  severity: major
+  category: security
+  summary: "Vault failure logs and some API messages include the raw response, so redaction can be bypassed"
+  file: "backend/platform-security/src/main/java/com/platform/security/vault/VaultSecretClientImpl.java"
+  note: |
+    Deferred 2026-09-28 while diagnosing the UAT Vault login 403. httpFailureDetail redacts
+    client_token, jwt, password and eyJ-shaped tokens, but log.warn still passes the raw
+    HttpStatusCodeException, whose message contains the response body. The connection-failure
+    path appends that exception text, and EnvironmentVariableComponentImpl puts it on the HTTP 400.
+    After debugging: log and return only the redacted detail, and keep a stack whose message is already redacted.
+
+- id: "1652"
+  status: open
+  severity: minor
+  category: quality
+  summary: "Vault 403 test does not put a JWT in the response body, so redaction is untested"
+  file: "backend/platform-security/src/test/java/com/platform/security/vault/VaultSecretClientImplTest.java"
+  note: |
+    Deferred 2026-09-28 with #1651. readPassword_kubernetesLogin403_includesVaultErrorBody asserts
+    the request placeholder k8s-jwt is absent. The response body is only "permission denied", so
+    redactVaultBody is not exercised. When #1651 is fixed, put an eyJ token in the error body and
+    assert the thrown message contains [redacted-jwt].

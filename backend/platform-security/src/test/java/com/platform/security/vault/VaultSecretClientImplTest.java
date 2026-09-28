@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
@@ -20,6 +21,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class VaultSecretClientImplTest {
@@ -101,6 +103,36 @@ class VaultSecretClientImplTest {
                 30);
         VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, settings);
         assertThat(client.readPassword("workflow/email/qq")).isEqualTo("auth-code");
+        server.verify();
+    }
+
+    @Test
+    void readPassword_kubernetesLogin403_includesVaultErrorBody(@TempDir Path tempDir) throws Exception {
+        Path tokenFile = tempDir.resolve("token");
+        Files.writeString(tokenFile, "k8s-jwt");
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/auth/kubernetes/wsit-hk-azx-401/login"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"errors\":[\"permission denied\"]}"));
+
+        VaultClientSettings settings = new VaultClientSettings(
+                "http://vault.example",
+                "ITID/HERMES",
+                "kubernetes/wsit-hk-azx-401",
+                "ame-hase-hermes-role",
+                "secrets/kv_v2/wsit",
+                tokenFile.toString(),
+                "",
+                30);
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, settings);
+        assertThatThrownBy(() -> client.readPassword("workflow/email/qq"))
+                .isInstanceOf(VaultSecretUnavailableException.class)
+                .hasMessageContaining("status=403")
+                .hasMessageContaining("permission denied")
+                .hasMessageContaining("role=ame-hase-hermes-role")
+                .hasMessageNotContaining("k8s-jwt");
         server.verify();
     }
 
