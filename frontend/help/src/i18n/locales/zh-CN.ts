@@ -566,15 +566,15 @@ export default {
     flow3: '测试发信或部署入站监听',
     catalogTitle: '目录字段',
     catalogBody:
-      '打开管理中心左侧的「环境变量」。TEXT 用于普通字符串（默认值必填、当前值可选），VAULT 只建目录键。路径在 Vault 中不存在时才写入密码；已有路径只建目录行。邮件密码必须是 VAULT — TEXT 不会出现在连接的密码下拉里。',
+      '打开管理中心左侧的「环境变量」。TEXT 用于普通字符串（默认值必填、当前值可选），VAULT 只建目录键。字段在 Vault 中不存在时才写入密码；已有字段只建目录行。邮件密码必须是 VAULT — TEXT 不会出现在连接的密码下拉里。',
     catalogLead: '字段目录 — 新增/编辑变量。',
     fKindText: 'TEXT。默认值必填。当前值可选；空白或只有空格时用默认值。',
-    fKindVault: 'VAULT。填写键。仅当 Vault 还没有该路径时才需要密码。不填当前/默认文本。运行时从 HashiCorp Vault 读取 data.data.password。',
+    fKindVault: 'VAULT。填写键。仅当 ame-hase-hermes/env-var 下还没有该字段时才需要密码。不填当前/默认文本。运行时读取该字段。',
     fKey: '必填。稳定键（如 email.qq.inbound.password）。连接和 ZIP 只存这个键，不存密文。键重复会被拒绝。',
     fDisplayName: '必填。会出现在连接下拉的显示名。',
     fDefault: 'TEXT 必填。当前值为空或空白时使用。',
     fCurrent: 'TEXT 选填。非空白当前值优先于默认值。',
-    fPath: '界面不填。密钥路径固定为 ame-hase-hermes/env-var/{键}，mount 为 secrets/kv_v2/wsit，namespace 为 ITID/12139042_HERMES。',
+    fPath: '界面不填。密钥路径固定为 ame-hase-hermes/env-var，mount 为 secrets/kv_v2/wsit，namespace 为 ITID/12139042_HERMES。目录键是该 secret 下的字段名。',
     fPassword: '新建时：仅当 Vault 没有该键才必填。已有密钥会复用且不覆盖。编辑不会写 Vault。删除只去掉目录行。',
     bindTitle: '绑到连接',
     bindBody:

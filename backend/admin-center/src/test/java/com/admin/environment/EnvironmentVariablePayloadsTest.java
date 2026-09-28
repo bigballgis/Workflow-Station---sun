@@ -72,6 +72,6 @@ class EnvironmentVariablePayloadsTest {
         request.setVarKey(" email.qq.inbound ");
         request.setValueKind(EnvironmentValueKind.VAULT);
         request.setVaultSecretPath("workflow/email/qq");
-        assertEquals("ame-hase-hermes/env-var/email.qq.inbound", EnvironmentVariablePayloads.vaultPath(request));
+        assertEquals("ame-hase-hermes/env-var", EnvironmentVariablePayloads.vaultPath(request));
     }
 }

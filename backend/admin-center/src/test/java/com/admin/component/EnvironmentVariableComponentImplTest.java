@@ -117,6 +117,22 @@ class EnvironmentVariableComponentImplTest {
     }
 
     @Test
+    void resolveVaultPassword_sharedPath_readsField() {
+        EnvironmentVariable entity = EnvironmentVariable.builder()
+                .id("1")
+                .varKey("test2")
+                .deployEnv("dev")
+                .valueKind(EnvironmentValueKind.VAULT)
+                .displayName("Test 2")
+                .vaultSecretPath("ame-hase-hermes/env-var")
+                .build();
+        when(repository.findByVarKeyAndDeployEnv("test2", "dev")).thenReturn(Optional.of(entity));
+        when(vaultSecretClient.readDataField("ame-hase-hermes/env-var", "test2")).thenReturn("xxx");
+
+        assertEquals("xxx", component.resolveVaultPassword("test2"));
+    }
+
+    @Test
     void delete_rejectsOtherDeployEnv() {
         EnvironmentVariable entity = EnvironmentVariable.builder()
                 .id("uat-row")
@@ -153,15 +169,15 @@ class EnvironmentVariableComponentImplTest {
     void create_vaultWritesPasswordThenSaves() {
         EnvironmentVariableRequest request = vaultCreateRequest("email.qq.inbound", "workflow/email/qq", "secret");
         when(repository.existsByVarKeyAndDeployEnv("email.qq.inbound", "dev")).thenReturn(false);
-        when(vaultSecretClient.secretExists("ame-hase-hermes/env-var/email.qq.inbound")).thenReturn(false);
+        when(vaultSecretClient.dataFieldExists("ame-hase-hermes/env-var", "email.qq.inbound")).thenReturn(false);
         when(repository.save(any(EnvironmentVariable.class))).thenAnswer(inv -> inv.getArgument(0));
 
         component.create(request, "user-1");
 
-        verify(vaultSecretClient).writePassword("ame-hase-hermes/env-var/email.qq.inbound", "secret");
+        verify(vaultSecretClient).upsertDataField("ame-hase-hermes/env-var", "email.qq.inbound", "secret");
         ArgumentCaptor<EnvironmentVariable> captor = ArgumentCaptor.forClass(EnvironmentVariable.class);
         verify(repository).save(captor.capture());
-        assertEquals("ame-hase-hermes/env-var/email.qq.inbound", captor.getValue().getVaultSecretPath());
+        assertEquals("ame-hase-hermes/env-var", captor.getValue().getVaultSecretPath());
     }
 
     @Test
@@ -172,7 +188,7 @@ class EnvironmentVariableComponentImplTest {
         BusinessException ex = assertThrows(BusinessException.class, () -> component.create(request, "user-1"));
         assertEquals("RESOURCE_ALREADY_EXISTS", ex.getErrorCode().name());
         assertEquals("Environment variable key already exists", ex.getMessage());
-        verify(vaultSecretClient, never()).writePassword(any(), any());
+        verify(vaultSecretClient, never()).upsertDataField(any(), any(), any());
         verify(repository, never()).save(any());
     }
 
@@ -180,27 +196,27 @@ class EnvironmentVariableComponentImplTest {
     void create_existingVaultSecret_reusesWithoutWrite() {
         EnvironmentVariableRequest request = vaultCreateRequest("email.qq.inbound", "workflow/email/qq", "secret");
         when(repository.existsByVarKeyAndDeployEnv("email.qq.inbound", "dev")).thenReturn(false);
-        when(vaultSecretClient.secretExists("ame-hase-hermes/env-var/email.qq.inbound")).thenReturn(true);
+        when(vaultSecretClient.dataFieldExists("ame-hase-hermes/env-var", "email.qq.inbound")).thenReturn(true);
         when(repository.save(any(EnvironmentVariable.class))).thenAnswer(inv -> inv.getArgument(0));
 
         component.create(request, "user-1");
 
-        verify(vaultSecretClient, never()).writePassword(any(), any());
+        verify(vaultSecretClient, never()).upsertDataField(any(), any(), any());
         ArgumentCaptor<EnvironmentVariable> captor = ArgumentCaptor.forClass(EnvironmentVariable.class);
         verify(repository).save(captor.capture());
-        assertEquals("ame-hase-hermes/env-var/email.qq.inbound", captor.getValue().getVaultSecretPath());
+        assertEquals("ame-hase-hermes/env-var", captor.getValue().getVaultSecretPath());
     }
 
     @Test
     void create_existingVaultSecret_passwordOptional() {
         EnvironmentVariableRequest request = vaultCreateRequest("email.qq.inbound", "workflow/email/qq", null);
         when(repository.existsByVarKeyAndDeployEnv("email.qq.inbound", "dev")).thenReturn(false);
-        when(vaultSecretClient.secretExists("ame-hase-hermes/env-var/email.qq.inbound")).thenReturn(true);
+        when(vaultSecretClient.dataFieldExists("ame-hase-hermes/env-var", "email.qq.inbound")).thenReturn(true);
         when(repository.save(any(EnvironmentVariable.class))).thenAnswer(inv -> inv.getArgument(0));
 
         component.create(request, "user-1");
 
-        verify(vaultSecretClient, never()).writePassword(any(), any());
+        verify(vaultSecretClient, never()).upsertDataField(any(), any(), any());
         verify(repository).save(any(EnvironmentVariable.class));
     }
 
@@ -208,11 +224,11 @@ class EnvironmentVariableComponentImplTest {
     void create_missingVaultSecret_requiresPassword() {
         EnvironmentVariableRequest request = vaultCreateRequest("email.qq.inbound", "workflow/email/qq", null);
         when(repository.existsByVarKeyAndDeployEnv("email.qq.inbound", "dev")).thenReturn(false);
-        when(vaultSecretClient.secretExists("ame-hase-hermes/env-var/email.qq.inbound")).thenReturn(false);
+        when(vaultSecretClient.dataFieldExists("ame-hase-hermes/env-var", "email.qq.inbound")).thenReturn(false);
 
         BusinessException ex = assertThrows(BusinessException.class, () -> component.create(request, "user-1"));
         assertEquals("VALIDATION_FIELD_REQUIRED", ex.getErrorCode().name());
-        verify(vaultSecretClient, never()).writePassword(any(), any());
+        verify(vaultSecretClient, never()).upsertDataField(any(), any(), any());
         verify(repository, never()).save(any());
     }
 
@@ -235,7 +251,9 @@ class EnvironmentVariableComponentImplTest {
         component.update("1", request, "user-1");
 
         verify(vaultSecretClient, never()).writePassword(any(), any());
+        verify(vaultSecretClient, never()).upsertDataField(any(), any(), any());
         verify(vaultSecretClient, never()).secretExists(any());
+        verify(vaultSecretClient, never()).dataFieldExists(any(), any());
         ArgumentCaptor<EnvironmentVariable> captor = ArgumentCaptor.forClass(EnvironmentVariable.class);
         verify(repository).save(captor.capture());
         assertEquals("workflow/email/qq", captor.getValue().getVaultSecretPath());
@@ -245,9 +263,9 @@ class EnvironmentVariableComponentImplTest {
     void create_vaultWriteFailure_doesNotSave() {
         EnvironmentVariableRequest request = vaultCreateRequest("email.qq.inbound", "workflow/email/qq", "secret");
         when(repository.existsByVarKeyAndDeployEnv("email.qq.inbound", "dev")).thenReturn(false);
-        when(vaultSecretClient.secretExists("ame-hase-hermes/env-var/email.qq.inbound")).thenReturn(false);
+        when(vaultSecretClient.dataFieldExists("ame-hase-hermes/env-var", "email.qq.inbound")).thenReturn(false);
         doThrow(new VaultSecretUnavailableException("down"))
-                .when(vaultSecretClient).writePassword("ame-hase-hermes/env-var/email.qq.inbound", "secret");
+                .when(vaultSecretClient).upsertDataField("ame-hase-hermes/env-var", "email.qq.inbound", "secret");
 
         BusinessException ex = assertThrows(BusinessException.class, () -> component.create(request, "user-1"));
         assertEquals("EXTERNAL_SERVICE_ERROR", ex.getErrorCode().name());

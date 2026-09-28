@@ -617,17 +617,17 @@ export default {
     flow3: 'Test send or Deploy the inbound monitor',
     catalogTitle: 'Catalog fields',
     catalogBody:
-      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the Vault path is new, Admin writes data.password. If the path already exists, Admin only creates the catalog row. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
+      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the field under ame-hase-hermes/env-var is new, Admin writes it. If that field already exists, Admin only creates the catalog row. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
     catalogLead: 'Field catalog — Add / Edit variable.',
     fKindText:
       'TEXT. Default value is required. Current value is optional; blank or whitespace uses the default.',
     fKindVault:
-      'VAULT. Enter the key. Password is needed only when the Vault path does not exist yet. No current/default text. Runtime reads data.data.password from HashiCorp Vault.',
+      'VAULT. Enter the key. Password is needed only when that field does not exist yet under ame-hase-hermes/env-var. No current/default text. Runtime reads that field from HashiCorp Vault.',
     fKey: 'Required. Stable key (for example email.qq.inbound.password). Connections and ZIP export store this key, not the secret. Duplicate keys are rejected.',
     fDisplayName: 'Required. Label in the Connections dropdown.',
     fDefault: 'Required for TEXT. Used when current value is blank or whitespace.',
     fCurrent: 'Optional for TEXT. Non-blank current value wins over default.',
-    fPath: 'Not shown. Secret path is ame-hase-hermes/env-var/{key} under mount secrets/kv_v2/wsit in namespace ITID/12139042_HERMES.',
+    fPath: 'Not shown. Secret path is always ame-hase-hermes/env-var under mount secrets/kv_v2/wsit in namespace ITID/12139042_HERMES. The catalog key is a field name in that secret.',
     fPassword: 'On create: required only if Vault does not already have this key. Existing secrets are reused and never overwritten. Edit never writes Vault. Delete removes only the catalog row.',
     bindTitle: 'Bind on a Connection',
     bindBody:

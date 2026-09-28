@@ -10,7 +10,6 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -146,6 +145,128 @@ public class VaultSecretClientImpl implements VaultSecretClient {
         }
     }
 
+    @Override
+    public boolean dataFieldExists(String secretPath, String field) {
+        requireAddr();
+        if (!StringUtils.hasText(secretPath) || !StringUtils.hasText(field)) {
+            return false;
+        }
+        return stringField(loadInnerData(secretPath, true), field) != null;
+    }
+
+    @Override
+    public String readDataField(String secretPath, String field) {
+        requireAddr();
+        requireField(field);
+        String cacheKey = fieldCacheKey(secretPath, field);
+        CachedPassword hit = passwordCache.get(cacheKey);
+        if (hit != null && !hit.expired()) {
+            return hit.password();
+        }
+        String value = stringField(loadInnerData(secretPath, false), field);
+        if (value == null) {
+            throw new VaultSecretNotFoundException("Vault secret field not found");
+        }
+        putPasswordCache(cacheKey, value);
+        return value;
+    }
+
+    @Override
+    public void upsertDataField(String secretPath, String field, String value) {
+        requireAddr();
+        requireField(field);
+        if (!StringUtils.hasText(value)) {
+            throw new VaultSecretUnavailableException("Vault password is blank");
+        }
+        Map<String, Object> inner = loadInnerData(secretPath, true);
+        inner.put(field, value);
+        postInnerData(secretPath, inner);
+        putPasswordCache(fieldCacheKey(secretPath, field), value);
+    }
+
+    private Map<String, Object> loadInnerData(String secretPath, boolean emptyOn404) {
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    kvDataUrl(secretPath), HttpMethod.GET, new HttpEntity<>(vaultHeaders(true)), MAP_TYPE);
+            return copyKvInner(response.getBody());
+        } catch (HttpStatusCodeException ex) {
+            if (emptyOn404 && ex.getStatusCode().value() == 404) {
+                return new LinkedHashMap<>();
+            }
+            if (ex.getStatusCode().value() == 404) {
+                throw new VaultSecretNotFoundException("Vault secret not found", ex);
+            }
+            String detail = httpFailureDetail(ex);
+            log.warn("Vault KV GET failed: path={} {}", secretPath, detail, ex);
+            throw new VaultSecretUnavailableException("Vault KV request failed: " + detail, ex);
+        } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.warn("Vault KV GET failed: path={} {}", secretPath, ex.toString(), ex);
+            throw new VaultSecretUnavailableException("Unable to reach Vault: " + ex, ex);
+        }
+    }
+
+    private void postInnerData(String secretPath, Map<String, Object> inner) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("data", inner);
+        try {
+            restTemplate.exchange(
+                    kvDataUrl(secretPath),
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, vaultHeaders(true)),
+                    MAP_TYPE);
+        } catch (HttpStatusCodeException ex) {
+            String detail = httpFailureDetail(ex);
+            log.warn("Vault KV WRITE failed: path={} {}", secretPath, detail, ex);
+            throw new VaultSecretUnavailableException("Vault KV write failed: " + detail, ex);
+        } catch (VaultSecretNotFoundException | VaultSecretUnavailableException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.warn("Vault KV WRITE failed: path={} {}", secretPath, ex.toString(), ex);
+            throw new VaultSecretUnavailableException("Unable to reach Vault: " + ex, ex);
+        }
+    }
+
+    private static void requireField(String field) {
+        if (!StringUtils.hasText(field)) {
+            throw new VaultSecretNotFoundException("Vault secret field is blank");
+        }
+    }
+
+    private static String fieldCacheKey(String secretPath, String field) {
+        return secretPath + "\n" + field;
+    }
+
+    private static String stringField(Map<String, Object> inner, String field) {
+        Object value = inner.get(field);
+        if (value instanceof String text && StringUtils.hasText(text)) {
+            return text;
+        }
+        return null;
+    }
+
+    private static Map<String, Object> copyKvInner(Map<String, Object> body) {
+        if (body == null) {
+            throw new VaultSecretUnavailableException("Vault returned an empty body");
+        }
+        Object dataObj = body.get("data");
+        if (!(dataObj instanceof Map<?, ?> data)) {
+            throw new VaultSecretUnavailableException("Vault data is not an object");
+        }
+        Object innerObj = data.get("data");
+        if (!(innerObj instanceof Map<?, ?> inner)) {
+            throw new VaultSecretUnavailableException("Vault KV v2 data.data is not an object");
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : inner.entrySet()) {
+            if (entry.getKey() instanceof String key) {
+                copy.put(key, entry.getValue());
+            }
+        }
+        return copy;
+    }
+
     private String fetchPassword(String secretPath) {
         try {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -274,18 +395,7 @@ public class VaultSecretClientImpl implements VaultSecretClient {
     }
 
     private static String passwordFromKvBody(Map<String, Object> body) {
-        if (body == null) {
-            throw new VaultSecretUnavailableException("Vault returned an empty body");
-        }
-        Object dataObj = body.get("data");
-        if (!(dataObj instanceof Map<?, ?> data)) {
-            throw new VaultSecretUnavailableException("Vault data is not an object");
-        }
-        Object innerObj = data.get("data");
-        if (!(innerObj instanceof Map<?, ?> inner)) {
-            throw new VaultSecretUnavailableException("Vault KV v2 data.data is not an object");
-        }
-        Object password = inner.get("password");
+        Object password = copyKvInner(body).get("password");
         if (!(password instanceof String text) || !StringUtils.hasText(text)) {
             throw new VaultSecretUnavailableException("Vault secret data.password is missing");
         }

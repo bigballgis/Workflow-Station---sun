@@ -175,6 +175,83 @@ class VaultSecretClientImplTest {
         server.verify();
     }
 
+    @Test
+    void dataFieldExists_404_returnsFalse() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/secrets/kv_v2/wsit/data/ame-hase-hermes/env-var"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withResourceNotFound());
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        assertThat(client.dataFieldExists("ame-hase-hermes/env-var", "test2")).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void dataFieldExists_missingField_returnsFalse() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/secrets/kv_v2/wsit/data/ame-hase-hermes/env-var"))
+                .andRespond(withSuccess(
+                        "{\"data\":{\"data\":{\"other\":\"a\"}}}", MediaType.APPLICATION_JSON));
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        assertThat(client.dataFieldExists("ame-hase-hermes/env-var", "test2")).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void readDataField_returnsNamedKey() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo("http://vault.example/v1/secrets/kv_v2/wsit/data/ame-hase-hermes/env-var"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"data\":{\"data\":{\"test2\":\"xxx\"}}}", MediaType.APPLICATION_JSON));
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        assertThat(client.readDataField("ame-hase-hermes/env-var", "test2")).isEqualTo("xxx");
+        server.verify();
+    }
+
+    @Test
+    void upsertDataField_mergesIntoExistingSecret() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        String url = "http://vault.example/v1/secrets/kv_v2/wsit/data/ame-hase-hermes/env-var";
+        server.expect(requestTo(url))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "{\"data\":{\"data\":{\"email.qq.inbound\":\"old\"}}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(url))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"data\":{\"email.qq.inbound\":\"old\",\"test2\":\"xxx\"}}"))
+                .andRespond(withSuccess("{\"data\":{\"version\":2}}", MediaType.APPLICATION_JSON));
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        client.upsertDataField("ame-hase-hermes/env-var", "test2", "xxx");
+        server.verify();
+    }
+
+    @Test
+    void upsertDataField_404CreatesSingleField() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        String url = "http://vault.example/v1/secrets/kv_v2/wsit/data/ame-hase-hermes/env-var";
+        server.expect(requestTo(url))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withResourceNotFound());
+        server.expect(requestTo(url))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"data\":{\"test2\":\"xxx\"}}"))
+                .andRespond(withSuccess("{\"data\":{\"version\":1}}", MediaType.APPLICATION_JSON));
+
+        VaultSecretClientImpl client = new VaultSecretClientImpl(restTemplate, staticTokenSettings());
+        client.upsertDataField("ame-hase-hermes/env-var", "test2", "xxx");
+        server.verify();
+    }
+
     private static ObjectProvider<RestTemplate> emptyRestTemplateProvider() {
         return new ObjectProvider<>() {
             @Override

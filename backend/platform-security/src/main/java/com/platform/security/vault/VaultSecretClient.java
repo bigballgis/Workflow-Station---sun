@@ -28,4 +28,22 @@ public interface VaultSecretClient {
      * @throws VaultSecretUnavailableException if Vault is unconfigured, login fails, or write fails
      */
     void writePassword(String secretPath, String password);
+
+    /**
+     * {@code true} when KV v2 {@code data.data} contains a non-blank string for {@code field}.
+     * Missing secret (404) is {@code false}.
+     */
+    boolean dataFieldExists(String secretPath, String field);
+
+    /**
+     * Returns the string at KV v2 {@code data.data[field]}.
+     *
+     * @throws VaultSecretNotFoundException if the secret or field is missing
+     */
+    String readDataField(String secretPath, String field);
+
+    /**
+     * GET-merge-POST: writes {@code data.data[field]} without dropping other keys at the path.
+     */
+    void upsertDataField(String secretPath, String field, String value);
 }

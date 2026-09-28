@@ -37,7 +37,11 @@ public final class EnvironmentVariablePayloads {
         if (request.getVarKey() == null || !StringUtils.hasText(request.getVarKey().trim())) {
             return "";
         }
-        return VAULT_SECRET_PREFIX + "/" + request.getVarKey().trim();
+        return VAULT_SECRET_PREFIX;
+    }
+
+    public static boolean isSharedSecretPath(String path) {
+        return VAULT_SECRET_PREFIX.equals(path);
     }
 
     public static String resolvedText(String currentValue, String defaultValue) {

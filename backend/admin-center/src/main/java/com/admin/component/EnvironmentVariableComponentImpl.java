@@ -125,6 +125,9 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
         String varKey = entity.getVarKey();
         String path = entity.getVaultSecretPath();
         try {
+            if (EnvironmentVariablePayloads.isSharedSecretPath(path)) {
+                return vaultSecretClient.readDataField(path, varKey);
+            }
             return vaultSecretClient.readPassword(path);
         } catch (VaultSecretNotFoundException ex) {
             log.warn("Vault secret not found varKey={} path={}", varKey, path);
@@ -159,16 +162,16 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
     }
 
     private boolean writeNewVaultSecret(String varKey, String path, String password) {
-        if (vaultSecretClient.secretExists(path)) {
-            log.info("Reusing existing Vault secret varKey={} path={}", varKey, path);
+        if (vaultSecretClient.dataFieldExists(path, varKey)) {
+            log.info("Reusing existing Vault field varKey={} path={}", varKey, path);
             return false;
         }
         if (!StringUtils.hasText(password)) {
             throw new BusinessException(ErrorCode.VALIDATION_FIELD_REQUIRED,
                     "VAULT environment variables require vaultPassword");
         }
-        vaultSecretClient.writePassword(path, password);
-        log.info("Wrote Vault secret varKey={} path={}", varKey, path);
+        vaultSecretClient.upsertDataField(path, varKey, password);
+        log.info("Wrote Vault field varKey={} path={}", varKey, path);
         return true;
     }
 

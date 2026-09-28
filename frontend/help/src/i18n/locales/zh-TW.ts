@@ -566,15 +566,15 @@ export default {
     flow3: '測試寄信或部署入站監聽',
     catalogTitle: '目錄欄位',
     catalogBody:
-      '開啟管理中心左側的「環境變數」。TEXT 用於普通字串（預設值必填、目前值可選），VAULT 只建目錄鍵。路徑在 Vault 中不存在時才寫入密碼；已有路徑只建目錄行。郵件密碼必須是 VAULT — TEXT 不會出現在連線的密碼下拉。',
+      '開啟管理中心左側的「環境變數」。TEXT 用於普通字串（預設值必填、目前值可選），VAULT 只建目錄鍵。欄位在 Vault 中不存在時才寫入密碼；已有欄位只建目錄行。郵件密碼必須是 VAULT — TEXT 不會出現在連線的密碼下拉。',
     catalogLead: '欄位目錄 — 新增/編輯變數。',
     fKindText: 'TEXT。預設值必填。目前值可選；空白或只有空白字元時用預設值。',
-    fKindVault: 'VAULT。填寫鍵。僅當 Vault 還沒有該路徑時才需要密碼。不填目前/預設文字。執行時從 HashiCorp Vault 讀取 data.data.password。',
+    fKindVault: 'VAULT。填寫鍵。僅當 ame-hase-hermes/env-var 下還沒有該欄位時才需要密碼。不填目前/預設文字。執行時讀取該欄位。',
     fKey: '必填。穩定鍵（如 email.qq.inbound.password）。連線與 ZIP 只存這個鍵，不存密文。鍵重複會被拒絕。',
     fDisplayName: '必填。會出現在連線下拉的顯示名稱。',
     fDefault: 'TEXT 必填。目前值為空或空白時使用。',
     fCurrent: 'TEXT 選填。非空白目前值優先於預設值。',
-    fPath: '介面不填。密鑰路徑固定為 ame-hase-hermes/env-var/{鍵}，mount 為 secrets/kv_v2/wsit，namespace 為 ITID/12139042_HERMES。',
+    fPath: '介面不填。密鑰路徑固定為 ame-hase-hermes/env-var，mount 為 secrets/kv_v2/wsit，namespace 為 ITID/12139042_HERMES。目錄鍵是該 secret 下的欄位名。',
     fPassword: '新增時：僅當 Vault 沒有該鍵才必填。已有密鑰會復用且不覆蓋。編輯不會寫 Vault。刪除只去掉目錄行。',
     bindTitle: '綁到連線',
     bindBody:
