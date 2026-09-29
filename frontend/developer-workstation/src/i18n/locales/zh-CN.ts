@@ -1793,7 +1793,7 @@ export default {
     gatewayBranchSelectionPatched: '已写入调试变量：{gatewayId} -> {flowId}',
     gatewayEvaluated: '已完成网关判定: {node}',
     noNodeActions: '当前节点没有可执行动作',
-    runAction: '执行（Dry Run）',
+    runAction: 'Dry Run',
     actionRunResult: '动作执行结果',
     actionRunFinished: '动作执行完成: {actionId}',
     actionRunFailed: '动作执行失败: {actionId}',

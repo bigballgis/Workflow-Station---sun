@@ -4,7 +4,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import TaskActionBar from '@/components/tasks/TaskActionBar.vue'
 import type { TaskActionInfo } from '@/api/task'
-import { actionButtonStyle, isCustomButtonColor } from '@/utils/actionButtonColor'
+import { actionButtonStyle, isCustomButtonColor, resolveActionButtonType } from '@/utils/actionButtonColor'
 
 let wrapper: VueWrapper | null = null
 
@@ -25,7 +25,6 @@ function mountActionBar(actions: TaskActionInfo[]) {
       savingTaskForm: false,
       actions,
       canDelegate: true,
-      getButtonType: () => 'primary',
       getIconComponent: () => h('span'),
       getActionLabel: (a: TaskActionInfo) => a.actionName,
       global: undefined,
@@ -72,6 +71,24 @@ describe('actionButtonColor util', () => {
     expect(actionButtonStyle('primary')).toBeUndefined()
     expect(actionButtonStyle(null)).toBeUndefined()
   })
+
+  it('resolves legacy empty colours from Action Type in one shared contract', () => {
+    expect(resolveActionButtonType('APPROVE')).toBe('success')
+    expect(resolveActionButtonType('REJECT')).toBe('danger')
+    expect(resolveActionButtonType('PROCESS_REJECT')).toBe('danger')
+    expect(resolveActionButtonType('URGE')).toBe('warning')
+    expect(resolveActionButtonType('TRANSFER')).toBeUndefined()
+    expect(resolveActionButtonType('DELEGATE')).toBeUndefined()
+    expect(resolveActionButtonType('PROCESS_SUBMIT')).toBe('primary')
+    expect(resolveActionButtonType('SAVE')).toBe('primary')
+    expect(resolveActionButtonType('FORM_POPUP')).toBe('primary')
+  })
+
+  it('lets an explicit colour override the legacy fallback while preserving named values', () => {
+    expect(resolveActionButtonType('REJECT', '#1F5C4A')).toBe('primary')
+    expect(resolveActionButtonType('APPROVE', 'danger')).toBe('danger')
+    expect(resolveActionButtonType('APPROVE', 'not-a-colour')).toBe('success')
+  })
 })
 
 describe('TaskActionBar designer-picked button colour', () => {
@@ -87,5 +104,10 @@ describe('TaskActionBar designer-picked button colour', () => {
     const button = w.find('.right-actions button')
     expect(button.attributes('style')).toBeUndefined()
     expect(button.classes()).toContain('el-button--warning')
+  })
+
+  it('uses Action Type semantic colours while buttonColor remains empty', () => {
+    const w = mountActionBar([action({ actionType: 'REJECT', buttonColor: undefined })])
+    expect(w.find('.right-actions button').classes()).toContain('el-button--danger')
   })
 })

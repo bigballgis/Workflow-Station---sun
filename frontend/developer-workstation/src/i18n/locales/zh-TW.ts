@@ -1794,7 +1794,7 @@ export default {
     gatewayBranchSelectionPatched: '已寫入偵錯變數：{gatewayId} -> {flowId}',
     gatewayEvaluated: '已完成閘道判定: {node}',
     noNodeActions: '當前節點沒有可執行動作',
-    runAction: '執行（Dry Run）',
+    runAction: 'Dry Run',
     actionRunResult: '動作執行結果',
     actionRunFinished: '動作執行完成: {actionId}',
     actionRunFailed: '動作執行失敗: {actionId}',

@@ -1798,7 +1798,7 @@ export default {
     gatewayBranchSelectionPatched: 'Debug variable patched: {gatewayId} -> {flowId}',
     gatewayEvaluated: 'Gateway evaluated: {node}',
     noNodeActions: 'No runnable actions on current node',
-    runAction: 'Run (Dry Run)',
+    runAction: 'Dry Run',
     actionRunResult: 'Action run result',
     actionRunFinished: 'Action run finished: {actionId}',
     actionRunFailed: 'Action run failed: {actionId}',

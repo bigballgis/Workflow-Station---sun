@@ -159,15 +159,19 @@
                     <span>{{ action.actionName || action.id }}</span>
                     <el-tag size="small" type="info">{{ action.id }}</el-tag>
                   </div>
-                  <el-button
-                    size="small"
-                    type="primary"
-                    :loading="runningActionId === String(action.id)"
-                    :disabled="!isDebugging || !isPaused"
-                    @click="handleRunAction(action.id)"
-                  >
-                    {{ t('debug.runAction') }}
-                  </el-button>
+                  <div class="action-preview">
+                    <span class="action-dry-run">{{ t('debug.runAction') }}</span>
+                    <el-button
+                      size="small"
+                      :type="resolveActionButtonType(action.actionType, action.buttonColor)"
+                      :style="actionButtonStyle(action.buttonColor)"
+                      :loading="runningActionId === String(action.id)"
+                      :disabled="!isDebugging || !isPaused"
+                      @click="handleRunAction(action.id)"
+                    >
+                      {{ action.actionName || action.id }}
+                    </el-button>
+                  </div>
                 </div>
                 <p v-if="action.description" class="action-description">{{ action.description }}</p>
               </el-card>
@@ -437,6 +441,7 @@ import { useDebugGateway } from '@/composables/processDebug/useDebugGateway'
 import { useDebugActions } from '@/composables/processDebug/useDebugActions'
 import { useDebugBreakpoints } from '@/composables/processDebug/useDebugBreakpoints'
 import { useDebugSession } from '@/composables/processDebug/useDebugSession'
+import { actionButtonStyle, resolveActionButtonType } from '@platform-shared/actionButtonPresentation'
 
 const { t } = useI18n()
 
@@ -819,6 +824,19 @@ const {
     gap: 6px;
     font-size: 13px;
     color: #303133;
+  }
+
+  .action-preview {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .action-dry-run {
+    color: #909399;
+    font-size: 12px;
   }
 
   .action-description {

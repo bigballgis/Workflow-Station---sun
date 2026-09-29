@@ -112,7 +112,10 @@
           <el-input v-model="selectedAction.actionName" />
         </el-form-item>
         <el-form-item :label="t('action.actionType')">
-          <el-select v-model="selectedAction.actionType">
+          <el-select
+            v-model="selectedAction.actionType"
+            @change="handleSelectedActionTypeChange"
+          >
             <el-option-group :label="t('action.approvalOperations')">
               <el-option
                 :label="t('action.approve')"
@@ -493,6 +496,7 @@
     <ActionCreateDialog
       v-model="showCreateDialog"
       :create-form="createForm"
+      @action-type-change="handleCreateActionTypeChange"
       @confirm="handleCreateAction"
     />
 
@@ -571,6 +575,8 @@ const {
   actionTypeLabel,
   loadActions,
   handleSelectAction,
+  handleSelectedActionTypeChange,
+  handleCreateActionTypeChange,
   handleBackToList,
   handleCreateAction,
   handleSaveAction,
