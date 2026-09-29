@@ -18,6 +18,7 @@ alwaysApply: false
   - `frontend/admin-center/src/styles/index.scss`
   - `frontend/developer-workstation/src/styles/index.scss`
 - **不要**给 `.el-form-item__content` 加 margin 兜底对齐。
+- **例外 — DW Form Preview 主表单区**（`FormPreviewItems.vue` / `FormDesigner.vue` 的 `.form-preview-wrapper`，含 lookup 字段 label）：它是 Portal 主表单的设计稿，**与 Portal `FormRenderer.vue` 一致**用固定 160px + 超长折行（`white-space: normal`），不按弹窗表单处理；Preview 里再弹出的子表/Link Form 弹窗仍按本规则不折行。
 
 ## 完整规范与验证
 
