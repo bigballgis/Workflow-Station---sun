@@ -4508,5 +4508,20 @@
   note: |
     Deferred 2026-09-28 with #1651. readPassword_kubernetesLogin403_includesVaultErrorBody asserts
     the request placeholder k8s-jwt is absent. The response body is only "permission denied", so
-    redactVaultBody is not exercised. When #1651 is fixed, put an eyJ token in the error body and
+    redactVaultBody is not exercised.     When #1651 is fixed, put an eyJ token in the error body and
     assert the thrown message contains [redacted-jwt].
+
+- id: "1653"
+  status: fixed
+  fixed_at: "2026-10-01"
+  severity: major
+  category: bug
+  summary: "Inbound Email Monitor logged in as the service account only, so bound mailbox mail was never polled"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java"
+  note: |
+    Connection UI had Mailbox Email vs IMAP Username but buildPayload never sent mailboxAddress;
+    the scheduler used mailboxAddress or username as the sole IMAP login, so connect(A) only
+    opened the account primary INBOX. Bound addresses such as hk.hermes.mailin@ were not read.
+    Fix: persist mailboxAddress; login=username, mailbox=mailboxAddress/from_email; SASL
+    authorizationid when they differ. HSBC IMAP must support SASL authzid or this still sees
+    only the primary mailbox.

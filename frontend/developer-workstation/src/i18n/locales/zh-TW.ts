@@ -2100,7 +2100,8 @@ export default {
     monitorSection: '郵件監聽（入站）',
     monitorMailboxEmail: '監聽信箱',
     monitorMailboxEmailPlaceholder: "inbox{'@'}your-domain.example.com",
-    monitorMailboxEmailHint: '要輪詢的信箱位址（同時作為連線名稱）。',
+    monitorMailboxEmailHint:
+      '要輪詢的信箱（同時作為連線名稱）。IMAP 使用者名稱是服務帳號。兩者不同時，監聽會嘗試用該帳號開啟這個信箱，需郵件伺服器支援。',
     monitorUsername: 'IMAP 使用者名稱',
     monitorPassword: 'IMAP 密碼（VAULT）',
     systemImapFromAdminHint:

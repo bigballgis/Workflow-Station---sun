@@ -2105,7 +2105,8 @@ export default {
     monitorSection: 'Email monitor (inbound)',
     monitorMailboxEmail: 'Mailbox Email',
     monitorMailboxEmailPlaceholder: "inbox{'@'}your-domain.example.com",
-    monitorMailboxEmailHint: 'Mailbox address to poll for new emails (also used as the connection name).',
+    monitorMailboxEmailHint:
+      'Mailbox to poll (also the connection name). IMAP Username is the service account. When they differ, the monitor will try to open this mailbox; the mail server must support that.',
     monitorUsername: 'IMAP Username',
     monitorPassword: 'IMAP password (VAULT)',
     systemImapFromAdminHint:

@@ -341,14 +341,16 @@ const listColumns = computed<DesignerListTableColumn<EmailConnection>[]>(() => [
 function buildPayload(): EmailConnectionRequest {
   const emailAddress = form.senderEmail.trim()
   const login = form.username?.trim()
+  const inbound = isInboundOnly.value
   return {
     name: emailAddress,
     connectionType: SMTP_CONNECTION_TYPE,
     username: login || undefined,
     passwordEnvKey: form.passwordEnvKey?.trim() || undefined,
-    fromName: isInboundOnly.value ? undefined : (form.fromName?.trim() || undefined),
+    fromName: inbound ? undefined : (form.fromName?.trim() || undefined),
     enabled: form.enabled,
     direction: form.direction || 'OUTBOUND',
+    mailboxAddress: inbound ? emailAddress : undefined,
   }
 }
 

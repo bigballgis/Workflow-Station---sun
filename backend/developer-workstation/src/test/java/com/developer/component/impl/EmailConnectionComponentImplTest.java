@@ -196,7 +196,62 @@ class EmailConnectionComponentImplTest {
         assertEquals("imap.local", response.getImapHost());
         assertEquals(993, response.getImapPort());
         assertTrue(response.getImapUseSsl());
+        assertEquals("inbox@example.com", response.getMailboxAddress());
         verify(adminCenterSystemSmtpClient, never()).fetchSystemSmtpEndpoint();
+    }
+
+    @Test
+    void create_inbound_withoutMailboxAddress_defaultsToName() {
+        FunctionUnit functionUnit = FunctionUnit.builder().id(1L).name("FU").build();
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("inbox@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setUsername("svc");
+        request.setPasswordEnvKey("email.smtp.password");
+        request.setDirection(EmailConnectionDirection.INBOUND);
+        request.setEnabled(true);
+
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirection(
+                eq(1L), eq("inbox@example.com"), eq(EmailConnectionDirection.INBOUND))).thenReturn(false);
+        when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
+                .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.local", 993, true));
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.create(1L, request);
+
+        assertEquals("inbox@example.com", response.getMailboxAddress());
+    }
+
+    @Test
+    void update_inbound_withoutMailboxAddress_defaultsToEmailAddress() {
+        EmailConnection existing = sampleConnection(EmailConnectionDirection.INBOUND);
+        existing.setName("inbox@example.com");
+        existing.setFromEmail("inbox@example.com");
+        existing.setUsername("svc");
+        existing.setPasswordEnvKey("email.smtp.password");
+        existing.setMailboxAddress(null);
+
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("inbox@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setUsername("svc");
+        request.setDirection(EmailConnectionDirection.INBOUND);
+        request.setEnabled(true);
+
+        when(emailConnectionRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirectionAndIdNot(
+                eq(1L), eq("inbox@example.com"), eq(EmailConnectionDirection.INBOUND), eq(10L)))
+                .thenReturn(false);
+        when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
+                .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.local", 993, true));
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.update(1L, 10L, request);
+
+        assertEquals("inbox@example.com", response.getMailboxAddress());
     }
 
     @Test

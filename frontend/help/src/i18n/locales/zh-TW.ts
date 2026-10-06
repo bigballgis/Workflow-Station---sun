@@ -391,8 +391,8 @@ export default {
     inboundCatalogLead: '欄位目錄 —「新增/編輯連線」（入站）上的每一個控制項。',
     fDirection: '必填。必須是入站（監聽），否則這個信箱不會出現在郵件監聽裡。',
     fDirectionInbound: '選項：用 IMAP 輪詢此信箱。出站（寄信）給「傳送郵件」用，不是本頁。',
-    fMailboxEmail: '必填。要輪詢的信箱，同時作為連線名稱。空白無法儲存。',
-    fImapUsername: 'IMAP 登入（服務帳號）。通常和信箱地址不同。新增時與密碼一起必填。',
+    fMailboxEmail: '必填。要輪詢的信箱，同時作為連線名稱。IMAP 使用者名稱是服務帳號時，監聽會嘗試用該帳號開啟這個信箱（需郵件伺服器支援）。空白無法儲存。',
+    fImapUsername: 'IMAP 登入（服務帳號）。通常和信箱地址不同。新增時與密碼一起必填。用來認證；監聽信箱是將嘗試讀取的收件匣。',
     fImapPassword:
       'IMAP 密碼改為 VAULT 環境變數。填了使用者名稱時必填。不再儲存密文；舊連線需重新選擇 VAULT 鍵。見 [[/environment-variables]]。',
     fImapHost: '本頁不能填。IMAP 主機來自管理中心 → 系統設定（入站連線）。',

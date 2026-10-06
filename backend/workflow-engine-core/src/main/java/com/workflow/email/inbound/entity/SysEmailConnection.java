@@ -28,6 +28,9 @@ public class SysEmailConnection {
     @Column(name = "username")
     private String username;
 
+    @Column(name = "from_email")
+    private String fromEmail;
+
     @Column(name = "password_env_key", length = 100)
     private String passwordEnvKey;
 

@@ -183,6 +183,37 @@ class EmailMonitorSchedulerTest {
         assertThat(captor.getValue().username()).isEqualTo("monitor@example.test");
     }
 
+    @Test
+    void pollUsesServiceAccountLoginAndBoundMailbox() {
+        SysEmailMonitorRule rule = enabledRule();
+        SysEmailConnection connection = inboundConnection();
+        connection.setUsername("ADRES-SVC-HMS-NP");
+        connection.setMailboxAddress("hk.hermes.mailin@example.test");
+        when(ruleRepository.findByEnabledTrue()).thenReturn(List.of(rule));
+        when(connectionRepository.findById("conn-1")).thenReturn(Optional.of(connection));
+        when(imapClient.fetchNew(any(), any(), any(), anyInt()))
+                .thenReturn(new FetchResult(List.of(), "1"));
+
+        scheduler.poll();
+
+        ArgumentCaptor<MailboxAccess> captor = ArgumentCaptor.forClass(MailboxAccess.class);
+        verify(imapClient).fetchNew(captor.capture(), any(), any(), anyInt());
+        assertThat(captor.getValue().username()).isEqualTo("ADRES-SVC-HMS-NP");
+        assertThat(captor.getValue().mailboxAddress()).isEqualTo("hk.hermes.mailin@example.test");
+    }
+
+    @Test
+    void resolveIdentities_loginIsUsername_mailboxFallsBackToFromEmail() {
+        SysEmailConnection connection = new SysEmailConnection();
+        connection.setUsername("ADRES-SVC-HMS-NP");
+        connection.setFromEmail("hk.hermes.mailin@example.test");
+
+        EmailMonitorScheduler.ImapIdentities ids = EmailMonitorScheduler.resolveIdentities(connection);
+
+        assertThat(ids.login()).isEqualTo("ADRES-SVC-HMS-NP");
+        assertThat(ids.mailbox()).isEqualTo("hk.hermes.mailin@example.test");
+    }
+
     private static SysEmailMonitorRule enabledRule() {
         SysEmailMonitorRule rule = new SysEmailMonitorRule();
         rule.setId("rule-1");

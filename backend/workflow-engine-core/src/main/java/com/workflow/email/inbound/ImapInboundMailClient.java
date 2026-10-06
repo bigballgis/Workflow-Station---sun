@@ -96,7 +96,10 @@ public class ImapInboundMailClient implements InboundMailClient {
     }
 
     private Properties buildProps(MailboxAccess access, String protocol) {
-        return ImapTransportProperties.apply(access.host(), access.port(), access.ssl(), protocol);
+        Properties props = ImapTransportProperties.apply(access.host(), access.port(), access.ssl(), protocol);
+        ImapTransportProperties.applyAuthorizationIdentity(
+                props, protocol, access.username(), access.mailboxAddress());
+        return props;
     }
 
     private FetchResult fetchSince(UIDFolder uidFolder, Folder folder, long lastUid, int max) throws Exception {

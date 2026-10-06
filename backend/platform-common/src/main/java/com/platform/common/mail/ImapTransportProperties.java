@@ -32,6 +32,31 @@ public final class ImapTransportProperties {
         return props;
     }
 
+    /**
+     * When the IMAP login (service account) differs from the mailbox to open, enable
+     * SASL PLAIN with an authorization identity so the session can try to read that
+     * mailbox (RFC 4616). The mail server must honour authzid.
+     */
+    public static void applyAuthorizationIdentity(
+            Properties props, String protocol, String login, String mailbox) {
+        if (props == null || protocol == null || protocol.isBlank()) {
+            return;
+        }
+        if (mailbox == null || mailbox.isBlank()) {
+            return;
+        }
+        String mailboxId = mailbox.trim();
+        if (login != null && mailboxId.equalsIgnoreCase(login.trim())) {
+            return;
+        }
+        if (mailboxId.indexOf('\r') >= 0 || mailboxId.indexOf('\n') >= 0) {
+            throw new IllegalArgumentException("IMAP authorization identity must not contain CR/LF");
+        }
+        props.put("mail." + protocol + ".sasl.enable", "true");
+        props.put("mail." + protocol + ".sasl.mechanisms", "PLAIN");
+        props.put("mail." + protocol + ".sasl.authorizationid", mailboxId);
+    }
+
     private static Properties baseProps(String host, int port, boolean ssl, String protocol) {
         Properties props = new Properties();
         props.put("mail.store.protocol", protocol);

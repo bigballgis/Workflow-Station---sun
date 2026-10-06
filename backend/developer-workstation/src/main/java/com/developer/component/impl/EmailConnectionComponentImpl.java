@@ -116,7 +116,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .useTls(endpoint.useTls())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
                 .direction(direction)
-                .mailboxAddress(request.getMailboxAddress())
+                .mailboxAddress(resolveMailboxAddress(request, direction, emailAddress))
                 .imapHost(imap.host())
                 .imapPort(imap.port())
                 .imapUseSsl(imap.useSsl())
@@ -157,7 +157,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         if (request.getDirection() != null) {
             connection.setDirection(request.getDirection());
         }
-        connection.setMailboxAddress(request.getMailboxAddress());
+        connection.setMailboxAddress(resolveMailboxAddress(request, direction, emailAddress));
         connection.setImapHost(imap.host());
         connection.setImapPort(imap.port());
         connection.setImapUseSsl(imap.useSsl());
@@ -335,6 +335,17 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                     i18nService.getMessage("email.connection.system_imap_required",
                             ex.getMessage() != null ? ex.getMessage() : ""));
         }
+    }
+
+    private static String resolveMailboxAddress(
+            EmailConnectionRequest request, EmailConnectionDirection direction, String emailAddress) {
+        if (StringUtils.hasText(request.getMailboxAddress())) {
+            return request.getMailboxAddress().trim();
+        }
+        if (direction == EmailConnectionDirection.INBOUND) {
+            return emailAddress;
+        }
+        return null;
     }
 
     private void ensureFunctionUnitExists(Long functionUnitId) {

@@ -417,9 +417,9 @@ export default {
     fDirection: 'Required. Must be Inbound (monitor) or this mailbox never appears under Email Monitors.',
     fDirectionInbound: 'Choice: poll this mailbox with IMAP. Outbound (send) is for Send email, not this page.',
     fMailboxEmail:
-      'Required. Mailbox to poll; also used as the connection name. Blank blocks save.',
+      'Required. Mailbox to poll; also the connection name. When IMAP Username is a service account, the monitor will try to open this mailbox (the mail server must support that). Blank blocks save.',
     fImapUsername:
-      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row.',
+      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row. Authenticates the session; Mailbox Email is the inbox the monitor will try to read.',
     fImapPassword:
       'IMAP password is a VAULT environment variable. Required when username is set. Ciphertext is no longer stored; re-select a VAULT key on old rows. See [[/environment-variables]].',
     fImapHost:

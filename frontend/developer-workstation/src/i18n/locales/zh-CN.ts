@@ -2099,7 +2099,8 @@ export default {
     monitorSection: '邮件监听（入站）',
     monitorMailboxEmail: '监听邮箱',
     monitorMailboxEmailPlaceholder: "inbox{'@'}your-domain.example.com",
-    monitorMailboxEmailHint: '要轮询的邮箱地址（同时作为连接名称）。',
+    monitorMailboxEmailHint:
+      '要轮询的邮箱（同时作为连接名称）。IMAP 用户名是服务账号。两者不同时，监听会尝试用该账号打开这个邮箱，需邮件服务器支持。',
     monitorUsername: 'IMAP 用户名',
     monitorPassword: 'IMAP 密码（VAULT）',
     systemImapFromAdminHint:
