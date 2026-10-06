@@ -4525,3 +4525,24 @@
     Fix: persist mailboxAddress; login=username, mailbox=mailboxAddress/from_email; SASL
     authorizationid when they differ. HSBC IMAP must support SASL authzid or this still sees
     only the primary mailbox.
+
+- id: "1654"
+  status: fixed
+  fixed_at: "2026-10-06"
+  severity: major
+  category: bug
+  summary: "Email Monitor poll cursor survived a mailbox rebind, so polling silently fetched nothing forever"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
+  note: |
+    last_sync_cursor is an IMAP UID, meaningful only inside one mailbox under one UIDVALIDITY,
+    but deploy carried it over unconditionally (EmailMonitorSyncComponentImpl) and the client
+    never read UIDVALIDITY. After rebinding a rule to another mailbox the stale cursor could sit
+    beyond the new UID space: UID FETCH <ahead>:* matches only older messages per RFC 3501
+    unordered ranges, which the uid > cursor filter then drops, so every poll logged
+    "SUCCESS ... fetched=0" and no case was ever created. Observed on rule
+    eadd3b44-db56-4774-ab7c-5a1f3c574afc stuck at cursor 26.
+    Fix: cursor is now "<uidValidity>:<lastUid>" (MailboxCursor, bare numbers still parse);
+    a cursor from another UIDVALIDITY or ahead of UIDNEXT reseeds a baseline with a WARN instead
+    of matching nothing; sync no longer inherits the cursor when connectionUid or folderLabel
+    changed. IMAP-FETCH begin now also logs mailbox and authzid. Existing stuck rules self-heal
+    on the next poll.

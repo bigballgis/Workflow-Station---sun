@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -125,6 +126,62 @@ class EmailMonitorSyncComponentImplTest {
         assertEquals("3480", captor.getValue().getLastSyncCursor());
         assertEquals(existing.getLastSyncedAt(), captor.getValue().getLastSyncedAt());
         assertEquals("fu-new", captor.getValue().getFunctionUnit().getId());
+    }
+
+    @Test
+    void syncMonitorRules_resetsCursorWhenReboundToAnotherConnection() {
+        EmailMonitorRule saved = syncRebound(existingBinding("uid-1", "INBOX"), "uid-2", "INBOX");
+
+        assertNull(saved.getLastSyncCursor());
+        assertNull(saved.getLastSyncedAt());
+    }
+
+    @Test
+    void syncMonitorRules_resetsCursorWhenFolderChanges() {
+        EmailMonitorRule saved = syncRebound(existingBinding("uid-1", "INBOX"), "uid-1", "Cases");
+
+        assertNull(saved.getLastSyncCursor());
+        assertNull(saved.getLastSyncedAt());
+    }
+
+    @Test
+    void syncMonitorRules_keepsCursorWhenLegacyRowHasNoFolderLabel() {
+        EmailMonitorRule saved = syncRebound(existingBinding("uid-1", null), "uid-1", "INBOX");
+
+        assertEquals("3479", saved.getLastSyncCursor());
+    }
+
+    private EmailMonitorRule existingBinding(String connectionUid, String folderLabel) {
+        return EmailMonitorRule.builder()
+                .id("bind-1")
+                .name("old")
+                .connectionUid(connectionUid)
+                .folderLabel(folderLabel)
+                .startEventId("StartEvent_1")
+                .lastSyncCursor("3479")
+                .lastSyncedAt(Instant.parse("2026-09-08T10:42:40Z"))
+                .build();
+    }
+
+    private EmailMonitorRule syncRebound(
+            EmailMonitorRule existing, String newConnectionUid, String newFolderLabel) {
+        FunctionUnit functionUnit = FunctionUnit.builder().id("fu-1").code("fu_demo").build();
+        when(functionUnitRepository.findById("fu-1")).thenReturn(Optional.of(functionUnit));
+        existing.setFunctionUnit(functionUnit);
+        when(emailMonitorRuleRepository.findByFunctionUnitId("fu-1")).thenReturn(List.of(existing));
+        when(emailMonitorRuleRepository.save(any(EmailMonitorRule.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        syncComponent.syncMonitorRules("fu-1", List.of(Map.of(
+                "ruleUid", "bind-1",
+                "name", "Inbound template → StartEvent_1",
+                "connectionUid", newConnectionUid,
+                "folderLabel", newFolderLabel,
+                "startEventId", "StartEvent_1")));
+
+        ArgumentCaptor<EmailMonitorRule> captor = ArgumentCaptor.forClass(EmailMonitorRule.class);
+        verify(emailMonitorRuleRepository).save(captor.capture());
+        return captor.getValue();
     }
 
     @Test
