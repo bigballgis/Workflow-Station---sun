@@ -27,7 +27,6 @@ import org.mockito.quality.Strictness;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -110,16 +109,18 @@ class TaskHistoryAssemblerSendEmailTest {
     }
 
     @Test
-    @DisplayName("excludes Activepieces serviceTask from flow history")
-    void excludesNonSendEmailServiceTask() {
+    @DisplayName("includes completed Activepieces serviceTask as AUTO with operator system")
+    void includesNonSendEmailServiceTaskAsAuto() {
         List<Map<String, Object>> history = assembler.assembleProcessInstanceHistory(PROCESS_INSTANCE_ID);
 
-        Set<Object> activityIds = history.stream()
-                .map(item -> item.get("activityId"))
-                .collect(java.util.stream.Collectors.toSet());
+        Map<String, Object> apRow = history.stream()
+                .filter(item -> AP_ACTIVITY_ID.equals(item.get("activityId")))
+                .findFirst()
+                .orElseThrow();
 
-        assertThat(activityIds).contains(SEND_EMAIL_ACTIVITY_ID, "Activity_UserTask");
-        assertThat(activityIds).doesNotContain(AP_ACTIVITY_ID);
+        assertThat(apRow.get("operationType")).isEqualTo("AUTO");
+        assertThat(apRow.get("operatorId")).isEqualTo("system");
+        assertThat(apRow.get("activityType")).isEqualTo("serviceTask");
     }
 
     @Test
@@ -151,14 +152,16 @@ class TaskHistoryAssemblerSendEmailTest {
     }
 
     @Test
-    @DisplayName("omits Send Email rows when BPMN model is unavailable")
-    void omitsSendEmailWhenBpmnModelMissing() {
+    @DisplayName("keeps service task rows as AUTO when BPMN model is unavailable")
+    void serviceTasksFallBackToAutoWhenBpmnModelMissing() {
         when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(null);
 
         List<Map<String, Object>> history = assembler.assembleProcessInstanceHistory(PROCESS_INSTANCE_ID);
 
-        assertThat(history.stream().map(item -> item.get("activityId")))
-                .doesNotContain(SEND_EMAIL_ACTIVITY_ID, AP_ACTIVITY_ID);
+        assertThat(history.stream()
+                .filter(item -> "serviceTask".equals(item.get("activityType")))
+                .map(item -> item.get("operationType")))
+                .containsOnly("AUTO");
     }
 
     private static HistoricActivityInstance completedServiceTask(String activityId, String name) {
