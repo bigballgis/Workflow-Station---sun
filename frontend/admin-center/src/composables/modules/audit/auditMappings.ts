@@ -59,6 +59,7 @@ export const resourceTypeText = (t: AuditTranslate, rt: string | null | undefine
     case 'AUTOMATION_FLOW':    return t('menu.automationFlows')
     case 'AUTOMATION_PIECE':   return t('menu.automationPieces')
     case 'CONFIG':             return t('menu.config')
+    case 'SLA_POLICY':         return t('menu.slaPolicies')
     default:                   return rt || ''
   }
 }

@@ -16,6 +16,7 @@ import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.TableRelation;
 import com.developer.dto.RequestIdConfig;
+import com.developer.dto.SlaConfig;
 import com.developer.enums.ActionType;
 import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
@@ -108,6 +109,7 @@ public class FunctionUnitImportWriter {
                 .tableDisplayName((String) tableData.get("tableDisplayName"))
                 .displayName((String) tableData.get("description"))
                 .requestIdConfig(parseRequestIdConfig(tableData.get("requestIdConfig")))
+                .slaConfig(parseSlaConfig(tableData.get("slaConfig")))
                 .build();
         table = tableDefinitionRepository.save(table);
 
@@ -582,6 +584,13 @@ public class FunctionUnitImportWriter {
             return null;
         }
         return objectMapper.convertValue(requestIdConfigObj, RequestIdConfig.class);
+    }
+
+    private SlaConfig parseSlaConfig(Object slaConfigObj) {
+        if (slaConfigObj == null) {
+            return null;
+        }
+        return objectMapper.convertValue(slaConfigObj, SlaConfig.class);
     }
 
     @SuppressWarnings("unchecked")

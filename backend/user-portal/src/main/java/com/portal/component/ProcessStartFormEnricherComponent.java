@@ -9,9 +9,12 @@ import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.SystemAuditFieldFiller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,6 +50,11 @@ public class ProcessStartFormEnricherComponent {
     private final RequestIdEnricher requestIdEnricher;
     private final UserDisplayNameResolver userDisplayNameResolver;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
     public void enrichOnInsert(String functionUnitCode, String userId, Map<String, Object> variables) {
         if (variables == null) {
             return;
@@ -67,6 +75,10 @@ public class ProcessStartFormEnricherComponent {
         SystemAuditFieldFiller.fillOnInsert(variables, userDisplayNameResolver.resolve(userId));
         computedFieldRecalculator.recalculate(functionUnitCode, variables);
         requestIdEnricher.stampRequestId(functionUnitCode, variables);
+        if (slaDueDateEnricher != null) {
+            // Not persisted yet: the case is submitted today.
+            slaDueDateEnricher.stamp(functionUnitCode, variables, LocalDate.now());
+        }
     }
 
     private Long requireFunctionUnitId(String functionUnitCode) {

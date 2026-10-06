@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.dto.RequestIdConfig;
+import com.developer.dto.SlaConfig;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.EmailConnection;
@@ -316,6 +317,7 @@ class FunctionUnitCloner {
                 .tableDisplayName(source.getTableDisplayName())
                 .displayName(source.getDisplayName())
                 .requestIdConfig(copyRequestIdConfig(source.getRequestIdConfig()))
+                .slaConfig(copySlaConfig(source.getSlaConfig()))
                 .build();
         cloned = tableDefinitionRepository.save(cloned);
 
@@ -388,6 +390,17 @@ class FunctionUnitCloner {
         return RequestIdConfig.builder()
                 .fieldNames(source.getFieldNames() != null ? new ArrayList<>(source.getFieldNames()) : null)
                 .separator(source.getSeparator())
+                .build();
+    }
+
+    private SlaConfig copySlaConfig(SlaConfig source) {
+        if (source == null) {
+            return null;
+        }
+        return SlaConfig.builder()
+                .startDateSource(source.getStartDateSource())
+                .startDateField(source.getStartDateField())
+                .dueDateField(source.getDueDateField())
                 .build();
     }
 

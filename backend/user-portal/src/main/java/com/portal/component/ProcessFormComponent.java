@@ -68,6 +68,20 @@ public class ProcessFormComponent {
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
+    /** Re-derives the readonly SLA due date from the case's start; the client value never survives. */
+    private void stampSlaDueDate(ProcessInstance processInstance, Map<String, Object> variables) {
+        if (slaDueDateEnricher == null) {
+            return;
+        }
+        slaDueDateEnricher.stamp(processInstance.getFunctionUnitCode(), variables,
+                processInstance.getStartTime() == null ? null : processInstance.getStartTime().toLocalDate());
+    }
+
     private RequestIdEnricher requestIdEnricher() {
         RequestIdEnricher r = requestIdEnricher;
         if (r == null) {
@@ -305,6 +319,7 @@ public class ProcessFormComponent {
             // Request ID is platform-derived: recompute it here too, so a resubmit that edits a
             // contributing field cannot persist a stale or client-supplied identifier.
             requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
+            stampSlaDueDate(processInstance, updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
 

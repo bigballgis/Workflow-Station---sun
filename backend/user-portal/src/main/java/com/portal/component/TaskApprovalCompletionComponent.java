@@ -59,6 +59,11 @@ public class TaskApprovalCompletionComponent {
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
     /** Lazy: Case Handler Complete/terminal writes; null in {@code new}-constructed tests skips Owner. */
     @Lazy
     @Autowired
@@ -223,6 +228,10 @@ public class TaskApprovalCompletionComponent {
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
                 stampRequestId(syncInstance.getFunctionUnitCode(), mergedVars);
+                if (slaDueDateEnricher != null) {
+                    slaDueDateEnricher.stamp(syncInstance.getFunctionUnitCode(), mergedVars,
+                            syncInstance.getStartTime() == null ? null : syncInstance.getStartTime().toLocalDate());
+                }
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);

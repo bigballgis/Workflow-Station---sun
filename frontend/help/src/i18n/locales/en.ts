@@ -5,6 +5,7 @@ import tableBindingsMessages from './tableBindings.en'
 import viewDesignMessages from './viewDesign.en'
 import fuDocumentsMessages from './fuDocuments.en'
 import aiStudioMessages from './aiStudio.en'
+import slaPoliciesMessages from './slaPolicies.en'
 
 export default {
   app: {
@@ -188,6 +189,11 @@ export default {
       title: 'Environment variables',
       summary:
         'Admin Environment variables catalog: TEXT current/default values, and VAULT keys for Email Connection passwords. A new Vault path is written only when it does not already exist.',
+    },
+    slaPolicies: {
+      title: 'SLA Policies',
+      summary:
+        'Admin SLA Policies: lead time in days per Function Unit, recalculation of open cases\' due dates, job and change history. Fields are mapped in Table Design.',
     },
     upTasksToClaim: {
       title: 'To Do — claim pool',
@@ -790,4 +796,5 @@ export default {
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,
+  ...slaPoliciesMessages,
 }

@@ -1,6 +1,7 @@
 package com.developer.entity;
 
 import com.developer.dto.RequestIdConfig;
+import com.developer.dto.SlaConfig;
 import com.developer.enums.TableType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -56,6 +57,11 @@ public class TableDefinition {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "request_id_config", columnDefinition = "jsonb")
     private RequestIdConfig requestIdConfig;
+
+    /** 主表 SLA 到期日映射(开始日来源 + 到期日字段);时效天数在 Admin 的 ac_sla_policies。仅 MAIN 表,可空。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "sla_config", columnDefinition = "jsonb")
+    private SlaConfig slaConfig;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

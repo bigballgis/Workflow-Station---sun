@@ -541,6 +541,9 @@ public class FunctionUnitExporter {
         if (table.getRequestIdConfig() != null) {
             map.put("requestIdConfig", table.getRequestIdConfig());
         }
+        if (table.getSlaConfig() != null) {
+            map.put("slaConfig", table.getSlaConfig());
+        }
         map.put("fields", table.getFieldDefinitions().stream()
                 .map(field -> serializeField(field, tableIdToName))
                 .toList());

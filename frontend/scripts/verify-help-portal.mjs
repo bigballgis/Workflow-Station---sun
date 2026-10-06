@@ -132,9 +132,36 @@ try {
     'Table-design related links include computed-fields',
     await tableArticle.locator('.help-related a[href$="/computed-fields"]').count().then((n) => n > 0),
   )
+  rec(
+    'Table-design has the SLA Due Date section with its figure',
+    await tableArticle.locator('#sla-due-date').count().then((n) => n > 0)
+      && await tableArticle.locator('img[src*="dw-table-design-sla.png"]').evaluate((img) => img.complete && img.naturalWidth > 0),
+  )
   const tableShot = resolve(DW_SHOTS, `${DATE}_help-portal-table-design.png`)
   await page.screenshot({ path: tableShot, fullPage: true })
   console.log(`screenshot ${tableShot}`)
+
+  await page.goto('http://localhost:3000/help/sla-policies', { waitUntil: 'domcontentloaded' })
+  const slaArticle = page.getByTestId('sla-policies-guide-page')
+  await slaArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec('SLA-policies guideline is visible', await slaArticle.isVisible())
+  rec(
+    'SLA-policies catalogs Lead Time (days) and Recalculation start',
+    (await slaArticle.textContent())?.includes('Lead Time (days)') === true
+      && (await slaArticle.textContent())?.includes('Recalculation start') === true,
+  )
+  for (const fig of ['ac-sla-policies-list.png', 'ac-sla-policies-edit.png', 'ac-sla-policies-detail.png']) {
+    const img = slaArticle.locator(`img[src*="${fig}"]`)
+    await img.scrollIntoViewIfNeeded()
+    rec(`SLA-policies figure ${fig} loads`, await img.evaluate((el) => el.complete && el.naturalWidth > 0))
+  }
+  rec(
+    'SLA-policies links back to Table Design #sla-due-date',
+    await slaArticle.locator('a[href*="/table-design#sla-due-date"]').count().then((n) => n > 0),
+  )
+  const slaShot = resolve(DW_SHOTS, `${DATE}_help-portal-sla-policies.png`)
+  await page.screenshot({ path: slaShot, fullPage: true })
+  console.log(`screenshot ${slaShot}`)
 
   await page.goto('http://localhost:3000/help/table-bindings', { waitUntil: 'domcontentloaded' })
   const bindingsArticle = page.getByTestId('table-bindings-guide-page')
@@ -352,6 +379,7 @@ try {
   rec('llms.txt is served', llms?.ok() === true && llmsText.includes('/help/computed-fields'))
   rec('llms.txt lists task-delegate', llmsText.includes('/help/task-delegate'))
   rec('llms.txt lists table-design', llmsText.includes('/help/table-design'))
+  rec('llms.txt lists sla-policies', llmsText.includes('/help/sla-policies'))
   rec('llms.txt lists table-bindings', llmsText.includes('/help/table-bindings'))
   rec('llms.txt lists view-design', llmsText.includes('/help/view-design'))
   rec('llms.txt lists fu-documents', llmsText.includes('/help/fu-documents'))

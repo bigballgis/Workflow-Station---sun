@@ -29,7 +29,9 @@ Order: open Table Design → create or open a table → add fields → tick Prim
 
 PK strategies: UUID, Manual, Auto increment, Prefixed sequence, Date + daily sequence, Date + monthly sequence, Custom format. Primary Key cannot stay nullable.
 
-Related: /help/computed-fields , /help/table-bindings , /help/view-design
+SLA Due Date (#sla-due-date, MAIN only, optional): Configure on the SLA Due Date row → Start date source (Main table field: pick a DATE/TIMESTAMP Start date field; or Submission time) → Due date field (non-formula DATE, read-only on forms) → Confirm → Save the table. Remove clears the mapping. Renaming the mapped field in the grid carries the mapping along; deleting it blocks Save with "SLA field does not exist on this table". The lead time in days is set in Admin Center (/help/sla-policies).
+
+Related: /help/computed-fields , /help/table-bindings , /help/view-design , /help/sla-policies
 
 ## Manage Table Bindings (/help/table-bindings)
 
@@ -235,3 +237,17 @@ Result (#result): AI Studio opens on Process Design and waits, usually 7 to 15 m
 Fail: Generate disabled without description or Requirements document; AI credentials are missing, please sign in again; errors on the card mean nothing was written; a warning that it could not be applied automatically → click Apply; a red copilot message means the round failed and the design is unchanged; no Undo, roll back in Version Management.
 
 Related: /help/fu-documents , /help/table-design , /help/view-design , /help/email-send
+
+## SLA Policies (/help/sla-policies)
+
+Admin Center → SLA Policies. Due date = start date + lead time (calendar days). Fields are mapped in Table Design (/help/table-design#sla-due-date); the lead time is set here per Function Unit and per environment, never exported with the Function Unit.
+
+Order: map fields in Developer Workstation and deploy → the Function Unit appears with Lead Time Not set → Edit, Lead Time (days) 1–3650 whole number, optional Change reason (≤500) → Save → Details.
+
+Saving recalculates every open case (Running, Suspended) in the background; completed and withdrawn cases keep their due date. Recalculate re-runs it with the current lead time. Job statuses: Pending, Running, Succeeded, Partial (some cases skipped or failed), Failed, Superseded (a newer save replaced it). Details: latest 20 jobs; per job up to 500 Updated / Skipped / Failed cases with Old Due Date, New Due Date, Reason; Change history of the latest 50 saves with Recalculation start Started / Pending / Failed to start.
+
+Rules: Lead Time Not set → no due date, existing values stay. Start date empty or not a date → due date unchanged, case Skipped. The due date is written by the platform on submit and save and cannot be edited on forms.
+
+Permissions: System Administrator all; sla:policy:edit view, edit, recalculate; sla:policy:view read-only (Auditor). An Auditor never edits. Changes apply after signing in again.
+
+Related: /help/table-design#sla-due-date , /help/environment-variables

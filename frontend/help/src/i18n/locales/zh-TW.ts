@@ -5,6 +5,7 @@ import tableBindingsMessages from './tableBindings.zh-TW'
 import viewDesignMessages from './viewDesign.zh-TW'
 import fuDocumentsMessages from './fuDocuments.zh-TW'
 import aiStudioMessages from './aiStudio.zh-TW'
+import slaPoliciesMessages from './slaPolicies.zh-TW'
 
 export default {
   app: {
@@ -185,6 +186,11 @@ export default {
     environmentVariables: {
       title: '環境變數',
       summary: '管理中心環境變數目錄：TEXT 目前/預設值，以及郵件連線用的 VAULT 鍵。Vault 路徑不存在時才寫入密碼。',
+    },
+    slaPolicies: {
+      title: 'SLA 策略',
+      summary:
+        '管理中心 SLA 策略：按功能單元設定時效天數，重算未結案件的到期日，查看任務與修改歷史。欄位對應在 Table Design。',
     },
     upTasksToClaim: {
       title: '待辦 — 角色認領',
@@ -736,4 +742,5 @@ export default {
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,
+  ...slaPoliciesMessages,
 }

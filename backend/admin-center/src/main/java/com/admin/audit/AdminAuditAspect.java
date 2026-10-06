@@ -9,6 +9,7 @@ import com.admin.enums.AuditAction;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RoleRepository;
+import com.admin.repository.SlaPolicyRepository;
 import com.admin.repository.SystemConfigRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupRepository;
@@ -55,6 +56,8 @@ public class AdminAuditAspect {
     private BiDataViewAssignmentRepository biDataViewAssignmentRepository;
     @Autowired
     private SystemConfigRepository systemConfigRepository;
+    @Autowired
+    private SlaPolicyRepository slaPolicyRepository;
     private final TransactionTemplate auditTxTemplate;
     private final ObjectMapper mapper;
 
@@ -229,6 +232,12 @@ public class AdminAuditAspect {
         return audit(pjp, "CONFIG");
     }
 
+    @Around("within(com.admin.controller.SlaPolicyController) "
+            + "&& (execution(* *.updatePolicy(..)) || execution(* *.recalculate(..)))")
+    public Object auditSlaPolicy(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "SLA_POLICY");
+    }
+
     // =========================================================================
     // Core audit logic
     // =========================================================================
@@ -300,6 +309,7 @@ public class AdminAuditAspect {
             case "AUTOMATION_FLOW"     -> resolveAutomationFlowMeta(methodName, args);
             case "AUTOMATION_PIECE"    -> resolveAutomationPieceMeta(methodName, args);
             case "CONFIG"              -> resolveConfigMeta(methodName, firstArg, args);
+            case "SLA_POLICY"          -> resolveSlaPolicyMeta(methodName, firstArg);
             default -> new AuditMeta(AuditAction.QUERY, domain, null);
         };
     }
@@ -493,6 +503,19 @@ public class AdminAuditAspect {
         };
     }
 
+    /**
+     * SLA policy is keyed by Function Unit code: a lead time change is an UPDATE with before/after
+     * policy state; a manual recalculation creates a portal job, so it records what was re-run.
+     */
+    private AuditMeta resolveSlaPolicyMeta(String method, String functionUnitCode) {
+        return switch (method) {
+            case "updatePolicy" -> new AuditMeta(AuditAction.UPDATE, "SLA_POLICY", functionUnitCode);
+            case "recalculate"  -> new AuditMeta(AuditAction.CREATE, "SLA_POLICY", functionUnitCode,
+                    detailJson("functionUnitCode", functionUnitCode, "operation", "recalculate"));
+            default             -> AuditMeta.skip();
+        };
+    }
+
     /** Config is keyed by configKey; sync spans many keys, so it records its parameters instead. */
     private AuditMeta resolveConfigMeta(String method, String configKey, Object[] args) {
         return switch (method) {
@@ -562,6 +585,8 @@ public class AdminAuditAspect {
                     case "BI_DATA_VIEW_ASSIGNMENT" -> biDataViewAssignmentRepository != null
                             ? biDataViewAssignmentRepository.findById(resourceId).orElse(null) : null;
                     case "BI_RBAC"        -> biRbacMappingRepository.findById(resourceId).orElse(null);
+                    case "SLA_POLICY"     -> slaPolicyRepository != null
+                            ? slaPolicyRepository.findById(resourceId).orElse(null) : null;
                     case "CONFIG"         -> systemConfigRepository != null
                             ? systemConfigRepository.findByConfigKey(resourceId).orElse(null) : null;
                     // RELATION_TABLE_ROW uses a composite id (tableId:rowId) and row data is

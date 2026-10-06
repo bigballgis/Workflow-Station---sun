@@ -66,6 +66,7 @@
 | [function-unit-development-guide.md](./guides/function-unit-development-guide.md) | 功能单元（Function Unit）完整开发文档（developer-workstation 权威长文） |
 | [form-script-api.md](./guides/form-script-api.md) | 表单脚本 API：Form/Component event、`$FNX:` 与 `[[FORM-CREATE-PREFIX…]]`、PortalFormApi 等 |
 | [local-developer.md](./guides/local-developer.md) | 本地开发环境速记 |
+| [sla-policy-guide.md](./guides/sla-policy-guide.md) | SLA 到期日：DW 字段映射、Admin 时效天数与重算、部署脚本、实现与排查 |
 | [email-sending-implementation-guide.md](./email-sending-implementation-guide.md) | 邮件发送实现指南（SMTP 连接 / 引擎发信链路；被 `scripts/email-smtp-test` 引用，根路径锚点） |
 
 ## AI 治理规则 · AI Rules — [`ai-rules/`](./ai-rules/)

@@ -94,6 +94,13 @@ export const GUIDELINES: Guideline[] = [
     load: () => import('@/views/EnvironmentVariablesGuide.vue'),
   },
   {
+    id: 'sla-policies',
+    path: '/sla-policies',
+    titleKey: 'guides.slaPolicies.title',
+    summaryKey: 'guides.slaPolicies.summary',
+    load: () => import('@/views/SlaPoliciesGuide.vue'),
+  },
+  {
     id: 'up-tasks-to-claim',
     path: '/up-tasks-to-claim',
     titleKey: 'guides.upTasksToClaim.title',
@@ -387,6 +394,12 @@ export const NAV_TREE: NavNode[] = [
         id: 'ac-env',
         titleKey: 'guides.environmentVariables.title',
         to: '/environment-variables',
+      },
+      {
+        kind: 'leaf',
+        id: 'ac-sla',
+        titleKey: 'guides.slaPolicies.title',
+        to: '/sla-policies',
       },
       { kind: 'leaf', id: 'ac-pieces', titleKey: 'nav.acPieces' },
       { kind: 'leaf', id: 'ac-flows', titleKey: 'nav.acFlowMigration' },

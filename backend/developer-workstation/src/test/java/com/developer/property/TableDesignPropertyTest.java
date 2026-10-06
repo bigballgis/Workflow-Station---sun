@@ -42,7 +42,8 @@ public class TableDesignPropertyTest {
                 mock(com.developer.service.FieldFkPkSyncService.class),
                 mock(com.developer.service.ComputedFieldValidator.class),
                 mock(JdbcTemplate.class),
-                mock(com.developer.service.MainTableViewService.class));
+                mock(com.developer.service.MainTableViewService.class),
+                mock(com.developer.service.SlaConfigValidator.class));
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -71,7 +72,8 @@ public class TableDesignPropertyTest {
                 mock(com.developer.service.FieldFkPkSyncService.class),
                 mock(com.developer.service.ComputedFieldValidator.class),
                 mock(JdbcTemplate.class),
-                mock(com.developer.service.MainTableViewService.class));
+                mock(com.developer.service.MainTableViewService.class),
+                mock(com.developer.service.SlaConfigValidator.class));
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();

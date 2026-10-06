@@ -577,6 +577,40 @@
               {{ t('table.requestId.configure') }}
             </el-button>
           </div>
+          <!-- SLA due date mapping: optional, same virtual-row styling as Request ID -->
+          <div
+            v-if="selectedTable.tableType === 'MAIN'"
+            class="request-id-field-row"
+          >
+            <div class="request-id-field-main">
+              <span class="request-id-field-name">{{ t('table.sla.label') }}</span>
+              <el-tag
+                size="small"
+                type="info"
+                effect="plain"
+                round
+                class="request-id-field-badge"
+              >
+                {{ t('form.virtualField') }}
+              </el-tag>
+              <span class="request-id-field-preview">{{ slaSummary }}</span>
+            </div>
+            <span class="sla-row-actions">
+              <DesignerHelpLink
+                path="/table-design#sla-due-date"
+                :aria-label="t('table.sla.guideLinkAria')"
+                test-id="table-sla-guide-link"
+              />
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="showSlaDialog = true"
+              >
+                {{ t('table.requestId.configure') }}
+              </el-button>
+            </span>
+          </div>
         </div>
       </el-card>
     </div>
@@ -723,21 +757,32 @@
       :config="selectedTable.requestIdConfig"
       @confirm="onRequestIdConfirm"
     />
+
+    <!-- SLA Due Date Config Dialog (MAIN tables only) -->
+    <SlaConfigDialog
+      v-if="selectedTable"
+      v-model="showSlaDialog"
+      :fields="selectedTable.fieldDefinitions"
+      :config="selectedTable.slaConfig"
+      @confirm="onSlaConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh, InfoFilled, WarningFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { type TableDefinition, type FieldDefinition, type ForeignKeyDTO, type RequestIdConfig } from '@/api/functionUnit'
+import { type TableDefinition, type FieldDefinition, type ForeignKeyDTO, type RequestIdConfig, type SlaConfig } from '@/api/functionUnit'
 import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.vue'
 import RequestIdConfigDialog from '@/components/designer/RequestIdConfigDialog.vue'
+import SlaConfigDialog from '@/components/designer/SlaConfigDialog.vue'
 import PkGenerationEditor from '@/components/designer/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/designer/FieldForeignKeyEditor.vue'
 import ComputedFieldEditor from '@/components/designer/ComputedFieldEditor.vue'
 import { hasRequestIdConfig } from '@/utils/formFieldMeta'
+import { followRenamedSlaFields, type FieldNamePair } from '@/utils/slaConfigFields'
 import { useTableNaming } from '@/composables/tableDesigner/useTableNaming'
 import { useTableList } from '@/composables/tableDesigner/useTableList'
 import { useTableEditor } from '@/composables/tableDesigner/useTableEditor'
@@ -770,6 +815,7 @@ const tableNameTouched = ref(false)
 const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
 const showRequestIdDialog = ref(false)
+const showSlaDialog = ref(false)
 
 // table-meta-card 的 Request ID 只读预览:用已选字段的 displayName 占位拼出形态
 const requestIdPreview = computed(() => {
@@ -792,6 +838,37 @@ function onRequestIdConfirm(cfg: RequestIdConfig | null) {
     selectedTable.value.requestIdConfig = cfg
   }
 }
+
+const slaSummary = computed(() => {
+  const cfg = selectedTable.value?.slaConfig
+  if (!cfg?.dueDateField) return t('table.sla.notConfigured')
+  const fields = selectedTable.value?.fieldDefinitions ?? []
+  const labelOf = (name?: string | null) =>
+    fields.find((f) => f.fieldName === name)?.displayName || name || ''
+  const start = cfg.startDateSource === 'SUBMITTED_AT'
+    ? t('table.sla.sourceSubmittedAt')
+    : labelOf(cfg.startDateField)
+  return t('table.sla.summary', { start, due: labelOf(cfg.dueDateField) })
+})
+
+function onSlaConfirm(cfg: SlaConfig | null) {
+  if (selectedTable.value) {
+    selectedTable.value.slaConfig = cfg
+  }
+}
+
+// Renaming the mapped start / due field in the grid carries the SLA mapping along (rows keep __uid).
+watch(
+  () => (selectedTable.value?.fieldDefinitions ?? [])
+    .map((f): FieldNamePair => [(f as FieldDefinition & { __uid?: number }).__uid, f.fieldName]),
+  (next, prev) => {
+    if (!selectedTable.value || !prev) return
+    const followed = followRenamedSlaFields(selectedTable.value.slaConfig, prev, next)
+    if (followed !== selectedTable.value.slaConfig) {
+      selectedTable.value.slaConfig = followed
+    }
+  },
+)
 
 function auditFieldRowClassName({ row }: { row: FieldDefinition }) {
   return isTableAuditField(row.fieldName) ? 'audit-field-row' : ''
@@ -1269,5 +1346,10 @@ onMounted(loadTables)
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+.sla-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

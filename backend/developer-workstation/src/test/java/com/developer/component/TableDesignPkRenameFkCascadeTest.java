@@ -81,7 +81,8 @@ class TableDesignPkRenameFkCascadeTest {
                 tableDefinitionRepository, fieldDefinitionRepository, foreignKeyRepository,
                 functionUnitRepository, formDefinitionRepository, formTableBindingRepository,
                 i18nService, sequenceSynchronizer, fieldFkPkSyncService,
-                new com.developer.service.ComputedFieldValidator(), jdbcTemplate, mainTableViewService);
+                new com.developer.service.ComputedFieldValidator(), jdbcTemplate, mainTableViewService,
+                new com.developer.service.SlaConfigValidator(i18nService));
 
         FunctionUnit fu = new FunctionUnit();
         fu.setId(FU_ID);
