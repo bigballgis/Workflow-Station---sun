@@ -221,6 +221,8 @@ data:
   DSP_ACCEPT_GATEWAY_E2E_TOKEN: "false"
   DSP_EMPLOYEE_ID_CLAIMS: "employeeID,employeeNumber,hsbcStaffId,sub"
   DSP_USERNAME_CLAIMS: "uid,preferred_username,samAccountName,sub"
+  IB2B_USERNAME: "HK-HERMES-D"
+  IB2B_TOKEN_URL: "https://cmb-ib2b-dsp-pprod-ap.hk.hsbc:8443/dsp/rest-sts/DSP_iB2B/iB2B_tokenTranslator?_action=translate"
   VITE_DSP_PASSWORDLESS_ENABLED: "true"
   VITE_DSP_AUTHENTICATE_URL: "https://cmb-staff-dsp-uat.hk.hsbc:8443/dsp/dspAuthenticate.jsp?realm=staff&service=wdssoservice"
   VITE_DSP_CLIENT_ID: "HERMES"

@@ -200,3 +200,5 @@ data:
   DSP_E2E_HEADER_NAME: "X-HSBC-E2E-Trust-Token"
   DSP_EMPLOYEE_ID_CLAIMS: "employeeID,employeeNumber,hsbcStaffId,sub"
   DSP_USERNAME_CLAIMS: "uid,preferred_username,samAccountName,sub"
+  IB2B_USERNAME: "HK-HERMES-D"
+  IB2B_TOKEN_URL: "https://cmb-ib2b-dsp-pprod-ap.hk.hsbc:8443/dsp/rest-sts/DSP_iB2B/iB2B_tokenTranslator?_action=translate"
