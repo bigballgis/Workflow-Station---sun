@@ -9,7 +9,7 @@
       <span>{{ t('organization.eligibleRolesDesc') }}</span>
       <DesignerHelpLink
         path="/up-tasks-to-claim#leader"
-        :aria-label="t('organization.roleLeadersGuideLinkAria')"
+        :ariaLabel="t('organization.roleLeadersGuideLinkAria')"
         test-id="org-role-leaders-guide-link"
       />
     </div>

@@ -4,7 +4,7 @@
       <template #actions>
         <DesignerHelpLink
           path="/sla-policies"
-          :aria-label="t('sla.guideLinkAria')"
+          :ariaLabel="t('sla.guideLinkAria')"
           test-id="sla-policies-guide-link"
         />
         <el-button @click="exportGridCsv('sla-policies')">

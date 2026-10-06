@@ -7,7 +7,7 @@
       </el-button>
       <DesignerHelpLink
         path="/email-send#connection"
-        :aria-label="t('connection.guideLinkAria')"
+        :ariaLabel="t('connection.guideLinkAria')"
         test-id="connection-guide-link"
       />
     </div>
@@ -76,7 +76,7 @@
           <span class="el-dialog__title">{{ editingId ? t('connection.edit') : t('connection.create') }}</span>
           <DesignerHelpLink
             path="/email-send#connection"
-            :aria-label="t('connection.guideLinkAria')"
+            :ariaLabel="t('connection.guideLinkAria')"
             test-id="connection-dialog-guide-link"
           />
         </div>

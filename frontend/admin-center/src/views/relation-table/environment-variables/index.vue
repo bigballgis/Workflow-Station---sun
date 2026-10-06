@@ -4,7 +4,7 @@
       <template #actions>
         <DesignerHelpLink
           path="/environment-variables"
-          :aria-label="t('config.envGuideLinkAria')"
+          :ariaLabel="t('config.envGuideLinkAria')"
           test-id="env-guide-link"
         />
       </template>

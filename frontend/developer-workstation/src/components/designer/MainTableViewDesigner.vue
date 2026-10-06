@@ -646,7 +646,7 @@ const {
             <label class="section-label">{{ t('mainTableView.accessControl') }}</label>
             <DesignerHelpLink
               path="/view-design#access"
-              :aria-label="t('mainTableView.guideLinkAria')"
+              :ariaLabel="t('mainTableView.guideLinkAria')"
               test-id="view-access-guide-link"
             />
           </div>

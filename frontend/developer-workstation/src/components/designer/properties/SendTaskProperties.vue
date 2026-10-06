@@ -5,7 +5,7 @@
         {{ t('properties.emailConfig') }}
         <DesignerHelpLink
           path="/email-send#send-task"
-          :aria-label="t('properties.emailGuideLinkAria')"
+          :ariaLabel="t('properties.emailGuideLinkAria')"
           test-id="send-task-guide-link"
         />
       </div>

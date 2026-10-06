@@ -51,7 +51,7 @@
         >{{ selectedForm.formName }}</span>
         <DesignerHelpLink
           :path="selectedControlHelpPath"
-          :aria-label="t('form.controlGuideLinkAria')"
+          :ariaLabel="t('form.controlGuideLinkAria')"
           test-id="form-control-guide-link"
         />
         <el-tag
@@ -91,7 +91,7 @@
           </el-button>
           <DesignerHelpLink
             path="/table-bindings"
-            :aria-label="t('tableBinding.guideLinkAria')"
+            :ariaLabel="t('tableBinding.guideLinkAria')"
             test-id="manage-table-bindings-guide-link"
           />
           <el-button
@@ -112,7 +112,7 @@
             </el-button>
             <DesignerHelpLink
               path="/form-upload#scenes"
-              :aria-label="t('form.uploadGuideLinkAria')"
+              :ariaLabel="t('form.uploadGuideLinkAria')"
               test-id="add-advanced-upload-guide-link"
             />
           </span>

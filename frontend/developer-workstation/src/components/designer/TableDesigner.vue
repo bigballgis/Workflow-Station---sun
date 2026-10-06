@@ -30,7 +30,7 @@
       </el-button>
       <DesignerHelpLink
         path="/table-design"
-        :aria-label="t('table.guideLinkAria')"
+        :ariaLabel="t('table.guideLinkAria')"
         test-id="table-design-guide-link"
       />
       <input
@@ -598,7 +598,7 @@
             <span class="sla-row-actions">
               <DesignerHelpLink
                 path="/table-design#sla-due-date"
-                :aria-label="t('table.sla.guideLinkAria')"
+                :ariaLabel="t('table.sla.guideLinkAria')"
                 test-id="table-sla-guide-link"
               />
               <el-button

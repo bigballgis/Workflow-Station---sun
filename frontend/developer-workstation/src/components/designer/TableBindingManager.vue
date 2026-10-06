@@ -16,7 +16,7 @@
           <span class="title">{{ t('tableBinding.title') }}</span>
           <DesignerHelpLink
             path="/table-bindings"
-            :aria-label="t('tableBinding.guideLinkAria')"
+            :ariaLabel="t('tableBinding.guideLinkAria')"
             test-id="table-binding-guide-link"
           />
         </div>

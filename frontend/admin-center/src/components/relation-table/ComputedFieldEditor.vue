@@ -48,7 +48,7 @@
           <span class="el-dialog__title">{{ t('relationTable.computedField.dialogTitle') }}</span>
           <DesignerHelpLink
             path="/computed-fields#relation"
-            :aria-label="t('relationTable.computedField.guideLinkAria')"
+            :ariaLabel="t('relationTable.computedField.guideLinkAria')"
             test-id="computed-field-guide-link"
           />
         </div>
