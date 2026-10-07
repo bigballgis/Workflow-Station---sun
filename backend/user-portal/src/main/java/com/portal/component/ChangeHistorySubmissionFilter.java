@@ -3,6 +3,7 @@ package com.portal.component;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.audit.SystemAuditFields;
+import com.platform.common.functionunit.ProcessStartForm;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.platform.common.subtable.SubTableStoreKeys;
 import lombok.RequiredArgsConstructor;
@@ -452,7 +453,7 @@ public class ChangeHistorySubmissionFilter {
         priorities.putIfAbsent(normalized, priority);
     }
 
-    /** TASK-scene PROCESS form only — REQUEST (My Request) clones are display-only. */
+    /** The process start form ({@link ProcessStartForm}). */
     private Map<String, Object> loadProcessFormDefinition(String functionUnitCode) {
         if (functionUnitCode == null || functionUnitCode.isBlank())
             return Map.of();
@@ -462,9 +463,9 @@ public class ChangeHistorySubmissionFilter {
                             fd.field_permissions::text AS field_permissions
                         FROM dw_form_definitions fd
                         INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                        WHERE fu.code = ? AND fd.form_type = 'PROCESS' AND fd.scene = 'TASK'
+                        WHERE fu.code = ? AND %s
                         ORDER BY fd.id DESC LIMIT 1
-                        """, functionUnitCode.trim());
+                        """.formatted(ProcessStartForm.SQL_PREDICATE), functionUnitCode.trim());
     }
 
     /**

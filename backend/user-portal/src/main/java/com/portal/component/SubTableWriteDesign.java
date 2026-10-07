@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.ProcessStartForm;
 import com.portal.exception.PortalException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,7 +47,7 @@ class SubTableWriteDesign {
         Long selectedId = taskFormId;
         List<Map<String, Object>> selected = forms.stream().filter(form -> selectedId != null
                 ? String.valueOf(selectedId).equals(String.valueOf(form.get("formId")))
-                : "PROCESS".equals(form.get("formType"))).toList();
+                : ProcessStartForm.matches(form)).toList();
         if (selected.isEmpty() && forms.stream().noneMatch(f -> f.containsKey("tableBindings"))) {
             // FALLBACK(migration): pre-freeze catalog packages contain bare configJson.
             // Retire only after those pinned instances have completed; never upgrade their semantics.

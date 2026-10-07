@@ -16,6 +16,7 @@ import com.admin.repository.SlaPolicyRepository;
 import com.platform.common.enums.ErrorCode;
 import com.platform.common.exception.BusinessException;
 import com.platform.common.exception.ResourceNotFoundException;
+import com.platform.common.functionunit.ProcessStartForm;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.list.ListFilterSql;
 import lombok.extern.slf4j.Slf4j;
@@ -58,11 +59,11 @@ public class SlaPolicyComponent {
                  INNER JOIN dw_form_table_bindings ftb
                      ON ftb.form_id = fd.id AND ftb.binding_type = 'PRIMARY'
                  INNER JOIN dw_table_definitions td ON td.id = ftb.table_id
-                 WHERE fd.function_unit_id = fu.id AND fd.form_type = 'PROCESS'
+                 WHERE fd.function_unit_id = fu.id AND %s
                  ORDER BY ftb.sort_order NULLS LAST, ftb.id
                  LIMIT 1) m
              LEFT JOIN ac_sla_policies p ON p.function_unit_code = fu.code
-             WHERE m.sla_config IS NOT NULL""";
+             WHERE m.sla_config IS NOT NULL""".formatted(ProcessStartForm.SQL_PREDICATE);
 
     private final SlaPolicyRepository policyRepository;
     private final SlaPolicyHistoryRepository historyRepository;

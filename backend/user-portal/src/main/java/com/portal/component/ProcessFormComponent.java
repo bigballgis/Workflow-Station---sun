@@ -25,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriUtils;
 
+import com.platform.common.functionunit.ProcessStartForm;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 
 import java.nio.charset.StandardCharsets;
@@ -499,9 +500,9 @@ public class ProcessFormComponent {
                             SELECT fd.id AS form_id, fd.form_name, fd.config_json::text AS config_json
                             FROM dw_form_definitions fd
                             INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                            WHERE fu.code = ? AND fd.form_type = 'PROCESS'
+                            WHERE fu.code = ? AND %s
                             LIMIT 1
-                            """,
+                            """.formatted(ProcessStartForm.SQL_PREDICATE),
                     (rs, rowNum) -> {
                         Map<String, Object> m = new HashMap<>();
                         m.put("formId", rs.getLong("form_id"));
@@ -669,8 +670,7 @@ public class ProcessFormComponent {
             }
             try {
                 Map<String, Object> parsed = objectMapper.readValue(contentDataStr, new TypeReference<Map<String, Object>>() {});
-                Object ft = parsed.get("formType");
-                if (!"PROCESS".equals(ft instanceof String ? ft : Objects.toString(ft, null))) {
+                if (!ProcessStartForm.matches(parsed)) {
                     continue;
                 }
                 Map<String, Object> formDef = new HashMap<>();
