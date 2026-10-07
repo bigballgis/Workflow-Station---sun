@@ -1,0 +1,92 @@
+{
+  "name": "@activepieces/piece-content-organizer",
+  "version": "1.0.0",
+  "displayName": "Content Organizer",
+  "logoUrl": "/ap-cdn/pieces/hermes/content-organizer.svg",
+  "description": "文档 OCR / 字段抽取（Content Organizer；iB2B 服务账号凭证取自部署环境）。",
+  "minimumSupportedRelease": "0.82.0",
+  "auth": null,
+  "actions": {
+    "extract_fields": {
+      "name": "extract_fields",
+      "displayName": "Extract Fields",
+      "description": "Uploads a document to Content Organizer and asks it to read the listed fields (OCR). Credentials come from the environment (iB2B service account), not from the flow.",
+      "props": {
+        "file": {
+          "displayName": "File URL",
+          "description": "The uploaded file, e.g. {{trigger.output.body.variables.document}}. One file only.",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "staffId": {
+          "displayName": "Staff ID",
+          "description": "Whose request this is, for Content Organizer auditing, e.g. {{trigger.output.body.context.currentUser.employeeId}}.",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "fields": {
+          "displayName": "Fields",
+          "description": "What to read from the document. Each key becomes an output value of the same name.",
+          "required": true,
+          "properties": {
+            "key": {
+              "displayName": "Key",
+              "required": true,
+              "type": "SHORT_TEXT"
+            },
+            "label": {
+              "displayName": "Label on the document",
+              "required": true,
+              "type": "SHORT_TEXT"
+            },
+            "type": {
+              "displayName": "Type",
+              "required": false,
+              "defaultValue": "text",
+              "options": {
+                "options": [
+                  {
+                    "label": "Text",
+                    "value": "text"
+                  },
+                  {
+                    "label": "Date (YYYY-MM-DD)",
+                    "value": "date"
+                  },
+                  {
+                    "label": "Number",
+                    "value": "number"
+                  }
+                ]
+              },
+              "type": "STATIC_DROPDOWN"
+            },
+            "hint": {
+              "displayName": "Hint",
+              "required": false,
+              "type": "SHORT_TEXT"
+            }
+          },
+          "type": "ARRAY"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    }
+  },
+  "triggers": {},
+  "categories": [
+    "CONTENT_AND_FILES"
+  ],
+  "authors": [
+    "workflow-station"
+  ],
+  "i18n": null
+}

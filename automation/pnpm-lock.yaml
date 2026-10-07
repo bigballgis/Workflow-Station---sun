@@ -373,6 +373,25 @@ importers:
         specifier: 2.6.2
         version: 2.6.2
 
+  packages/pieces/community/content-organizer:
+    dependencies:
+      '@activepieces/pieces-common':
+        specifier: workspace:*
+        version: link:../../common
+      '@activepieces/pieces-framework':
+        specifier: workspace:*
+        version: link:../../framework
+      '@activepieces/shared':
+        specifier: workspace:*
+        version: link:../../../core/shared
+      tslib:
+        specifier: 2.6.2
+        version: 2.6.2
+    devDependencies:
+      vitest:
+        specifier: 3.2.6
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@24.11.0)(jiti@2.7.0)(jsdom@24.1.3)(lightningcss@1.30.2)(terser@5.50.0)(tsx@4.21.0)(yaml@2.9.0)
+
   packages/pieces/community/hash-helper:
     dependencies:
       '@activepieces/pieces-common':

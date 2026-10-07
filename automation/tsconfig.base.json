@@ -38,6 +38,9 @@
       "@activepieces/piece-biz-calendar": [
         "packages/pieces/community/biz-calendar/src/index.ts"
       ],
+      "@activepieces/piece-content-organizer": [
+        "packages/pieces/community/content-organizer/src/index.ts"
+      ],
       "@activepieces/piece-csv": [
         "packages/pieces/core/csv/src/index.ts"
       ],
