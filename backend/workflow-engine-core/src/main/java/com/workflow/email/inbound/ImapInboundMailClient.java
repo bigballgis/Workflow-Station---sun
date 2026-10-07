@@ -15,15 +15,21 @@ import jakarta.mail.UIDFolder;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeUtility;
+import jakarta.mail.search.ComparisonTerm;
+import jakarta.mail.search.ReceivedDateTerm;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -34,8 +40,9 @@ import java.nio.charset.StandardCharsets;
  *
  * <p>Works with app-password mailboxes (QQ / 163 / Outlook / Gmail) — no OAuth required.
  * Incremental polling uses IMAP UIDs as the cursor (Power Automate-style "new email arrives"):
- * a blank cursor seeds the baseline (no history replay) and subsequent polls return only
- * messages with a higher UID. The cursor carries its {@code UIDVALIDITY} (see
+ * a blank cursor returns what was received since the rule was deployed (or seeds a baseline when
+ * that instant is unknown) and subsequent polls return only messages with a higher UID. The
+ * cursor carries its {@code UIDVALIDITY} (see
  * {@link MailboxCursor}) so a position from a different UID space is reseeded rather than
  * silently matching nothing.
  */
@@ -44,20 +51,24 @@ import java.nio.charset.StandardCharsets;
 public class ImapInboundMailClient implements InboundMailClient {
 
     @Override
-    public FetchResult fetchNew(MailboxAccess access, String folder, String cursor, int max) {
+    public FetchResult fetchNew(MailboxAccess access, String folder, String cursor, Instant watchFrom, int max) {
         String protocol = access.ssl() ? "imaps" : "imap";
-        return fetchNew(access, folder, cursor, max, buildProps(access, protocol));
+        return fetchNew(access, new FetchRequest(folder, cursor, watchFrom, max), buildProps(access, protocol));
     }
 
-    FetchResult fetchNew(MailboxAccess access, String folder, String cursor, int max, Properties props) {
-        String folderName = StringUtils.hasText(folder) ? folder : "INBOX";
+    record FetchRequest(String folder, String cursor, Instant watchFrom, int max) { }
+
+    FetchResult fetchNew(MailboxAccess access, FetchRequest request, Properties props) {
+        String folderName = StringUtils.hasText(request.folder()) ? request.folder() : "INBOX";
+        int max = request.max();
         String protocol = access.ssl() ? "imaps" : "imap";
         Session session = Session.getInstance(props);
 
         log.info("[IMAP-FETCH] begin protocol={} host={} port={} ssl={} user={} mailbox={} authzid={} "
-                        + "folder={} cursor={} max={}",
+                        + "folder={} cursor={} watchFrom={} max={}",
                 protocol, access.host(), access.port(), access.ssl(), mask(access.username()),
-                mask(access.mailboxAddress()), authorizationId(props, protocol), folderName, cursor, max);
+                mask(access.mailboxAddress()), authorizationId(props, protocol), folderName, request.cursor(),
+                request.watchFrom(), max);
 
         Store store = null;
         Folder mailFolder = null;
@@ -70,10 +81,11 @@ public class ImapInboundMailClient implements InboundMailClient {
             UIDFolder uidFolder = (UIDFolder) mailFolder;
             long uidValidity = uidFolder.getUIDValidity();
             long uidNext = uidFolder.getUIDNext();
-            MailboxCursor stored = MailboxCursor.parse(cursor);
+            MailboxCursor stored = MailboxCursor.parse(request.cursor());
 
             if (stored == null) {
-                return baseline(access.host(), folderName, uidValidity, uidNext, "first poll");
+                return catchUpSince(uidFolder, mailFolder, request.watchFrom(), max, uidValidity)
+                        .orElseGet(() -> baseline(access.host(), folderName, uidValidity, uidNext, "first poll"));
             }
             String staleReason = stored.staleReason(uidValidity, uidNext);
             if (staleReason != null) {
@@ -127,28 +139,88 @@ public class ImapInboundMailClient implements InboundMailClient {
         return props;
     }
 
+    /**
+     * First poll of a freshly deployed or rebound rule: mail received since {@code watchFrom}
+     * belongs to the rule even though the poll comes later. Empty means seed a baseline.
+     */
+    private Optional<FetchResult> catchUpSince(
+            UIDFolder uidFolder, Folder folder, Instant watchFrom, int max, long uidValidity) throws Exception {
+        if (watchFrom == null) {
+            return Optional.empty();
+        }
+        // SEARCH SINCE compares calendar days in the server's zone; widen by a day, then
+        // apply the instant per message. INTERNALDATE has whole-second precision.
+        Date searchFrom = Date.from(watchFrom.minus(1, ChronoUnit.DAYS));
+        Instant from = watchFrom.truncatedTo(ChronoUnit.SECONDS);
+        List<Message> arrived = new ArrayList<>();
+        for (Message message : folder.search(new ReceivedDateTerm(ComparisonTerm.GE, searchFrom))) {
+            Date received = message.getReceivedDate();
+            if (received != null && !received.toInstant().isBefore(from)) {
+                arrived.add(message);
+            }
+        }
+        if (arrived.isEmpty()) {
+            return Optional.empty();
+        }
+        FetchResult result = mapInUidOrder(uidFolder, folder, arrived, max, new MailboxCursor(uidValidity, 0));
+        log.info("[IMAP-FETCH] folder={} first poll caught up {} message(s) received since {}; newCursor={}",
+                folder.getName(), result.messages().size(), watchFrom, result.nextCursor());
+        return Optional.of(result);
+    }
+
     private FetchResult fetchSince(
             UIDFolder uidFolder, Folder folder, long lastUid, int max, long uidValidity) throws Exception {
         Message[] candidates = uidFolder.getMessagesByUID(lastUid + 1, UIDFolder.LASTUID);
         List<Message> newer = new ArrayList<>();
         for (Message message : candidates) {
-            if (uidFolder.getUID(message) > lastUid) {
+            if (message != null && safeUid(uidFolder, message) > lastUid) {
                 newer.add(message);
             }
         }
-        newer.sort(Comparator.comparingLong(m -> safeUid(uidFolder, m)));
+        return mapInUidOrder(uidFolder, folder, newer, max, new MailboxCursor(uidValidity, lastUid));
+    }
+
+    /** @param from position before {@code messages}; the returned cursor never moves behind it */
+    private FetchResult mapInUidOrder(
+            UIDFolder uidFolder, Folder folder, List<Message> messages, int max, MailboxCursor from) {
+        messages.sort(Comparator.comparingLong(m -> safeUid(uidFolder, m)));
 
         List<EmailMessage> mapped = new ArrayList<>();
-        long maxUid = lastUid;
-        for (Message message : newer) {
+        long maxUid = from.lastUid();
+        for (Message message : messages) {
             if (mapped.size() >= max) {
                 break;
             }
-            long uid = uidFolder.getUID(message);
-            mapped.add(toEmailMessage(message, uid));
+            long uid = safeUid(uidFolder, message);
+            if (uid == Long.MAX_VALUE) {
+                log.error("[IMAP-FETCH] folder={} listed a message whose UID cannot be read; "
+                        + "leaving it for the next poll", folder.getName());
+                continue;
+            }
+            EmailMessage email = readOrSkip(message, uid, folder.getName());
+            if (email != null) {
+                mapped.add(email);
+            }
             maxUid = Math.max(maxUid, uid);
         }
-        return new FetchResult(mapped, MailboxCursor.format(uidValidity, maxUid));
+        return new FetchResult(mapped, MailboxCursor.format(from.uidValidity(), maxUid));
+    }
+
+    /**
+     * @return {@code null} when this one message could not be mapped; its UID is still consumed
+     */
+    private EmailMessage readOrSkip(Message message, long uid, String folderName) {
+        try {
+            return toEmailMessage(message, uid);
+        } catch (Exception e) {
+            // FALLBACK(external): a single unreadable message (corrupt MIME, UID expunged between
+            // the listing and the read) must not abort the batch — the cursor would never advance
+            // past it and every later email would be missed. Losing this one mail is logged at
+            // ERROR with its UID so it can be recovered from the mailbox by hand.
+            log.error("[IMAP-FETCH] folder={} skipping unreadable message uid={} | rootCause={}",
+                    folderName, uid, MailDiagnostics.rootCause(e), e);
+            return null;
+        }
     }
 
     private long safeUid(UIDFolder uidFolder, Message message) {
@@ -159,7 +231,7 @@ public class ImapInboundMailClient implements InboundMailClient {
         }
     }
 
-    private EmailMessage toEmailMessage(Message message, long uid) throws Exception {
+    EmailMessage toEmailMessage(Message message, long uid) throws Exception {
         byte[] rawRfc822 = captureRawRfc822(message);
         String subject = message.getSubject();
         String from = (message.getFrom() != null && message.getFrom().length > 0)

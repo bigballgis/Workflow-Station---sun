@@ -1439,7 +1439,7 @@
   summary: "DW 保存 Outbound 邮件连接 toast「name resolution failed」（Kong 上游 DNS 缓存）"
   file: "deploy/environments/dev/docker-compose.dev.yml"
   note: |
-    现象：Edit Connection → Save 出现英文 name resolution failed，与 QQ/SMTP 配置无关。
+    现象：Edit Connection → Save 出现英文 name resolution failed，与邮箱/SMTP 配置无关。
     根因：Kong 日志 PUT /api/v1/function-units/48/connections/4 在 developer-workstation
     容器重建期间无法刷新 developer-workstation DNS（stale upstream IP）。
     修复：KONG_DNS_STALE_TTL/NOT_FOUND/ERROR_TTL=0/1；build-and-deploy 后端部署后 restart kong；
@@ -2270,7 +2270,7 @@
   fixed_at: "2026-08-18"
   severity: major
   category: bug
-  summary: "家用 QQ IMAP 可 monitor，公司内网邮箱被 SSRF/无 STARTTLS 拦住无法建 case"
+  summary: "家用邮箱 IMAP 可 monitor，公司内网邮箱被 SSRF/无 STARTTLS 拦住无法建 case"
   file: "backend/admin-center/src/main/java/com/admin/component/SystemImapConfigResolver.java; backend/developer-workstation/src/main/java/com/developer/component/impl/EmailConnectionComponentImpl.java; backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
   note: |
     发送在公司内网正常、Monitor 不能建 case：SMTP 已有 ssl.trust / STARTTLS，
@@ -2291,7 +2291,7 @@
   note: |
     三语改为只提示 Inbound。en: "No inbound connection yet. In Connections, set a
     connection Direction to Inbound first." zh-CN/zh-TW 对应「入站」无「双向」。
-    截图：FU 48 Demo QQ Mailbox（BOTH）时 warning 不含 Both，下拉为空。
+    截图：FU 48 Demo 邮箱（BOTH）时 warning 不含 Both，下拉为空。
     路径：frontend/developer-workstation/verification-screenshots/2026-08-19_email-monitor-inbound-03-no-inbound-warning.png
 
 - id: "1537"
@@ -3787,11 +3787,11 @@
   summary: "入站 IMAP 未解码 RFC 2047 地址，Portal To/From 显示 =?utf-8?B?...?="
   file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
   note: |
-    根因：formatAddresses/from 使用 Address.toString()，QQ 等邮箱 To 显示名带 MIME encoded-word 原样入库。
+    根因：formatAddresses/from 使用 Address.toString()，部分邮箱 To 显示名带 MIME encoded-word 原样入库。
     修复：formatAddress 对 InternetAddress 解码 getPersonal()（MimeUtility.decodeText），
     统一用于 From/To/Cc/Reply-To；decodeAddressText 兜底 raw 头片段。
     验证：ImapInboundMailClientExtractTest 5/5；workflow-engine package + compose rebuild 已拉起。
-    端到端需新发 QQ 测试信（旧案 Email-000002 不回填）。
+    端到端需新发邮箱测试信（旧案 Email-000002 不回填）。
 
 - id: "1622"
   status: fixed
@@ -4546,3 +4546,142 @@
     of matching nothing; sync no longer inherits the cursor when connectionUid or folderLabel
     changed. IMAP-FETCH begin now also logs mailbox and authzid. Existing stuck rules self-heal
     on the next poll.
+
+- id: "1655"
+  status: fixed
+  fixed_at: "2026-10-07"
+  severity: critical
+  category: bug
+  summary: "Email Monitor records STATUS_FAILED in the idempotency ledger, so a transient portal/admin outage loses that email's case forever"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    record(..., STATUS_FAILED, ...) writes we_email_processed_messages, and process() short-circuits
+    on existsByRuleUidAndMessageId regardless of status, so the email is never retried. FAILED is
+    returned for transient causes: startPortalProcess failure (user-portal restarting / 500 /
+    timeout — EmailMonitorPortalSyncComponent catches Exception and returns fail), missing
+    portal.internal.api-token, missing systemInitiatorUserId, and functionUnitCode resolution
+    failure via admin-center (which is itself flaky because AdminApiExceptionHandler maps
+    UserNotFoundException to 400 instead of 404). The asymmetry is counter-intuitive: if process()
+    THROWS, EmailMonitorScheduler.processFetched returns false and the cursor is not advanced so the
+    batch is retried; gracefully recording FAILED permanently burns the message. Needs either a
+    retryable-vs-terminal distinction (do not ledger transient failures) or a bounded retry on
+    FAILED rows.
+    Fix: transient causes (admin-center functionUnitCode resolve, portal start) now throw
+    EmailMonitorRetryableException instead of calling record(); the scheduler already holds the UID
+    cursor on throw, so the mail is re-fetched next poll. EmailMonitorDeliveryRetry counts attempts
+    per (ruleUid, messageId) in memory (process-local like EmailMonitorPollBackoff, ShedLock pins
+    polling to one replica) and only after MAX_ATTEMPTS=3 is the message recorded FAILED, so a
+    target that stays broken cannot block later mail. record() releases the counter on every
+    terminal outcome. Rule-level config errors (no extraction rules, unsupported action, missing
+    process key) stay terminal: they affect every email equally.
+    Verified red->green: EmailMonitorProcessorTest 3 new tests failed against the old code
+    (Tests run 9, Failures 3), then 58/58 green across the email.inbound suite.
+
+- id: "1656"
+  status: fixed
+  fixed_at: "2026-10-07"
+  severity: major
+  category: bug
+  summary: "One unparsable inbound email aborts the whole IMAP fetch, stalling that monitor rule forever so all later mail is missed"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
+  note: |
+    fetchSince calls toEmailMessage inside the loop with no per-message try/catch, so any failure
+    while reading one message (corrupt MIME part, UID expunged between the UID listing and the read,
+    transient server error) propagates out of fetchNew. EmailMonitorScheduler then takes
+    onPollFailure, which deliberately does NOT advance lastSyncCursor, so the next poll starts at the
+    same poison message and fails again. The rule is permanently stuck behind it and every later
+    email is never seen; backoff pushes retries to the 15min cap while only logging
+    "[IMAP-FETCH] FAILED". Note processFetched already isolates per-message failures at the
+    PROCESSING stage — the FETCH stage lacks the same isolation.
+    Fix: fetchSince now maps each message through readOrSkip, which catches per message, logs the
+    UID at ERROR and returns null while still consuming the UID so maxUid advances past the poison
+    mail. Listing also skips nulls and messages whose UID cannot be read (left for the next poll
+    rather than silently moving the cursor).
+    Verified red->green with a live GreenMail IMAP server: a subclass throwing MessagingException
+    for one of two messages aborted the whole fetch before the fix
+    ("IllegalState IMAP fetch failed for localhost: MessagingException: corrupt MIME"), and after
+    the fix returns only the good mail and the next poll finds nothing left to stall on.
+
+- id: "1657"
+  status: open
+  severity: major
+  category: architecture
+  summary: "we_email_processed_messages REVIEW/FAILED rows have no API, UI or alert, so 'send to manual review' is a silent drop"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    ProcessedEmailMessageRepository exposes only existsByRuleUidAndMessageId, and no controller or
+    frontend reads the table (repo-wide search). So the reviewOnMissing path (default TRUE, labelled
+    "Send to manual review when required fields are missing" in DW) writes STATUS_REVIEW and nobody
+    is ever notified: no queue, no notification, no metric. Same for STATUS_FAILED (see #1655).
+    Operators can only find these by querying the DB directly. Needs at minimum a read API +
+    designer/admin list of REVIEW/FAILED rows per rule, and ideally a re-drive action.
+
+- id: "1658"
+  status: fixed
+  fixed_at: "2026-10-07"
+  severity: major
+  category: bug
+  summary: "Email Monitor 切换 connection 后重新 deploy：旧连接的内存退避沿用到新连接，首次 baseline 吞掉空窗期邮件"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java"
+  note: |
+    ruleId = ruleUid，切换 connection 重新部署后 id 不变。Admin carryOverPollState 识别 rebound
+    并清空 lastSyncCursor/lastSyncedAt，但引擎 EmailMonitorPollBackoff.failures 仍按 ruleId
+    保留旧连接的失败状态（最长 15min retryAfter），部署不会清除。退避结束后首次轮询 cursor=null，
+    ImapInboundMailClient.baseline 取 UIDNEXT-1 且不处理任何邮件，部署到首次轮询之间进入新邮箱的
+    邮件全部被跳过。次要风险：pollRule 持有轮询开始时读出的 detached 实体，persistCursor/
+    markPollAttempt 整行 save，若 deploy 在 IMAP 拉取期间写入新 connection_uid，会被旧值覆盖回去。
+    dev 日志佐证：rule b200e7a9… consecutiveFailures=9 cap=true。
+    修复（仅 workflow-engine-core，Admin/DW 不改）：
+    1) EmailMonitorPollBackoff.FailureState 记录 mailbox（connectionUid|folder），目标变化即丢弃旧退避。
+    2) SysEmailMonitorRule 只读映射 Admin 每次部署写入的 synced_at；游标为空时 Scheduler 传
+       watchFrom=max(synced_at, now-24h)，ImapInboundMailClient.catchUpSince 用 SEARCH SINCE
+       （放宽一天）+ 按秒级 INTERNALDATE 精确过滤，处理部署后到达的邮件；无邮件时仍取 UIDNEXT-1 基线。
+       游标失效（UIDVALIDITY 变化/超前）仍从此刻起，不回放。
+    3) 游标回写改为 SysEmailMonitorRuleRepository.updatePollState：只更新 last_sync_cursor/
+       last_synced_at，且要求 connection_uid 与 folder 仍为轮询时的值；0 行时记 INFO 丢弃旧游标。
+    验证：修复前 EmailMonitorSchedulerTest 换绑用例红（fetchNew 1 次，期望 2 次），修复后绿；
+    新增 Scheduler/GreenMail 用例在临时关掉修复时红（3 个），恢复后 65 个 inbound 测试全绿；
+    workflow-engine 重建后 healthy，JPQL 启动校验通过。
+    端到端（EmailMonitorRebindGreenMailTest，真实 Scheduler + ImapInboundMailClient + GreenMail 两个邮箱）：
+    修复前行为：换绑后被旧退避挡住、0 次处理；只修退避：首次轮询 baseline 吞掉部署后邮件；修复后：
+    部署后邮件启动流程、部署前邮件不处理、后续邮件照常。
+    未验证：真实邮箱 + Admin Vault 取密码（本地 Docker 无法登录公司 Vault），需在测试环境复验。
+
+- id: "1659"
+  status: open
+  severity: major
+  category: deploy
+  summary: "init-scripts 注册表漂移：00-schema 下 4 个 SQL 不会在全新库执行（87 两处都漏；83/84/85 的 dw-binding 三个文件只漏 PowerShell 一处）"
+  file: "deploy/init-scripts/00-init-all.sh"
+  detail: |
+    两处注册表与 00-schema 目录不一致，全新初始化的库会缺这些 DDL：
+    1) 00-init-all.sh（Docker 入口，按 NN-*.sql glob）循环只到 86-*.sql，漏 87-dw-main-table-view-select-display.sql。
+    2) init-database.ps1（本地/手工初始化，写死文件名）漏 4 个：
+       83-dw-binding-filter-fk-field.sql、84-dw-binding-fk-fill-sources.sql、
+       85-dw-binding-uniqueness.sql、87-dw-main-table-view-select-display.sql
+       （83/84/85 这三个是「同编号两文件」，glob 版能命中，写死文件名的版本命中不到。）
+    根因：两个注册表用不同机制（glob vs 显式列表），新增脚本时只改了一处或都没改；
+    k8s 的 all-in-one-for-gui.sql 是第三份手工合并副本，同样容易漏。
+    建议：init-database.ps1 改为按目录 glob 排序执行（与 00-init-all.sh 同口径），
+    或加一条 CI 校验「00-schema 下每个 .sql 都被两处注册表覆盖」。
+    发现于 #1657 调研期间（该功能已撤销，此漂移与其无关，独立存在）。
+
+- id: "1660"
+  status: open
+  severity: minor
+  category: quality
+  summary: "workflow-engine-core 基线红：TaskManagerComponentMultiInstanceTest 5 个用例因 taskClaimSupport 未注入而 NPE（HEAD worktree 已证实非新引入）"
+  file: "backend/workflow-engine-core/src/test/java/com/workflow/component/TaskManagerComponentMultiInstanceTest.java"
+  detail: |
+    mvn -pl backend/workflow-engine-core -am test → Tests run: 994, Failures: 1, Errors: 4。
+    全部集中在 TaskManagerComponentMultiInstanceTest：
+      WorkflowBusinessException: Task completion failed: Cannot invoke
+      "com.workflow.component.TaskClaimSupport.engineActorMatchesPortalUser(String, String)"
+      because "this.taskClaimSupport" is null
+      at TaskCompletionService.completeTask(TaskCompletionService.java:258)
+    根因：TaskCompletionService 后来新增了 TaskClaimSupport 依赖，该测试用手工 new/反射装配
+    组件但没有补这个 mock，于是 completeTask 走到 engineActorMatchesPortalUser 就 NPE。
+    已证实非新引入：在 4b0a3863d 的干净 git worktree 上单跑该类，结果同样是
+    Tests run: 5, Failures: 1, Errors: 4、同一个 NPE 栈。
+    与 #1638（developer-workstation 基线红）同类问题，不同模块。
+    影响：该模块无法用「全量测试全绿」做提交门禁，只能对比基线。

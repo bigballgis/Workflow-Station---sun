@@ -48,6 +48,8 @@ public class EmailMonitorProcessor {
     private final ObjectMapper objectMapper;
     private final PlatformTransactionManager transactionManager;
 
+    private final EmailMonitorDeliveryRetry deliveryRetry = new EmailMonitorDeliveryRetry();
+
     private volatile TransactionTemplate txTemplate;
 
     private TransactionTemplate tx() {
@@ -106,7 +108,7 @@ public class EmailMonitorProcessor {
 
         Optional<String> functionUnitCode = resolveFunctionUnitCode(rule);
         if (functionUnitCode.isEmpty()) {
-            return record(rule, email, ProcessedEmailMessage.STATUS_FAILED, null,
+            return failTransient(rule, email,
                     "functionUnitCode could not be resolved for rule " + rule.getId());
         }
 
@@ -122,9 +124,27 @@ public class EmailMonitorProcessor {
                 startVariables);
         if (result == null || !result.isSuccess()) {
             String msg = result != null ? result.getMessage() : "portal startProcess returned null";
-            return record(rule, email, ProcessedEmailMessage.STATUS_FAILED, null, msg);
+            return failTransient(rule, email, msg);
         }
         return record(rule, email, ProcessedEmailMessage.STATUS_STARTED, result.getProcessInstanceId(), null);
+    }
+
+    /**
+     * Transient delivery failures (portal / admin-center unavailable) must not reach the
+     * idempotency ledger: {@link #process} skips any message that already has a row, so one blip
+     * would cost that email its case permanently. Throwing makes the scheduler hold the UID cursor
+     * so the message is re-fetched on a later poll. Only after
+     * {@link EmailMonitorDeliveryRetry#MAX_ATTEMPTS} is it recorded FAILED, so a target that stays
+     * broken cannot block every later email behind it.
+     */
+    private String failTransient(SysEmailMonitorRule rule, EmailMessage email, String reason) {
+        int attempt = deliveryRetry.recordFailure(rule.getId(), email.messageId());
+        if (attempt < EmailMonitorDeliveryRetry.MAX_ATTEMPTS) {
+            throw new EmailMonitorRetryableException(
+                    reason, attempt, EmailMonitorDeliveryRetry.MAX_ATTEMPTS);
+        }
+        return record(rule, email, ProcessedEmailMessage.STATUS_FAILED, null,
+                "after " + attempt + " attempts: " + reason);
     }
 
     /**
@@ -220,8 +240,10 @@ public class EmailMonitorProcessor {
         }
     }
 
+    /** Every terminal outcome lands here, so this is also where the retry counter is released. */
     private String record(SysEmailMonitorRule rule, EmailMessage email,
                           String status, String processInstanceId, String error) {
+        deliveryRetry.clear(rule.getId(), email.messageId());
         return tx().execute(txStatus -> {
             ProcessedEmailMessage row = new ProcessedEmailMessage();
             row.setRuleUid(rule.getId());

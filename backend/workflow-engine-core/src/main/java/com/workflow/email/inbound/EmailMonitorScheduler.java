@@ -16,6 +16,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -37,6 +38,7 @@ import java.util.List;
 public class EmailMonitorScheduler {
 
     private static final int MAX_PER_POLL = 20;
+    static final Duration MAX_CATCH_UP = Duration.ofHours(24);
 
     private final SysEmailMonitorRuleRepository ruleRepository;
     private final SysEmailConnectionRepository connectionRepository;
@@ -84,8 +86,8 @@ public class EmailMonitorScheduler {
             return;
         }
         for (SysEmailMonitorRule rule : rules) {
-            if (pollBackoff.shouldPoll(
-                    rule.getId(), now, rule.getPollIntervalSeconds(), rule.getLastSyncedAt())) {
+            if (pollBackoff.shouldPoll(rule.getId(), mailbox(rule), now,
+                    rule.getPollIntervalSeconds(), rule.getLastSyncedAt())) {
                 pollRule(rule, now);
             }
         }
@@ -109,8 +111,8 @@ public class EmailMonitorScheduler {
         }
         FetchResult result;
         try {
-            result = imapClient.fetchNew(
-                    access, rule.getFolderLabel(), rule.getLastSyncCursor(), MAX_PER_POLL);
+            result = imapClient.fetchNew(access, rule.getFolderLabel(), rule.getLastSyncCursor(),
+                    watchFrom(rule, now), MAX_PER_POLL);
         } catch (Exception e) {
             onPollFailure(rule, now, e.getMessage());
             return;
@@ -144,6 +146,12 @@ public class EmailMonitorScheduler {
             String status = processor.process(rule, email);
             logProcessOutcome(rule, email, status);
             return true;
+        } catch (EmailMonitorRetryableException retryable) {
+            log.warn("[EMAIL-MONITOR] rule {} messageId={} delivery attempt {}/{} failed; "
+                            + "holding UID cursor so the mail is retried: {}",
+                    rule.getId(), email.messageId(), retryable.attempt(), retryable.maxAttempts(),
+                    retryable.getMessage());
+            return false;
         } catch (Exception e) {
             log.error("[EMAIL-MONITOR] rule {} failed to process messageId={}",
                     rule.getId(), email.messageId(), e);
@@ -167,13 +175,42 @@ public class EmailMonitorScheduler {
     }
 
     private void markPollAttempt(SysEmailMonitorRule rule) {
-        rule.setLastSyncedAt(Instant.now());
-        ruleRepository.save(rule);
+        writePollState(rule, rule.getLastSyncCursor());
+    }
+
+    /**
+     * A blank cursor means the rule was just deployed or rebound to another mailbox. Mail that
+     * arrived since that deploy is the rule's to handle even if the first successful poll comes
+     * later (backoff, credentials not yet in Vault), but a rule that failed for days must not
+     * start a flood of processes once fixed, so the catch-up window is bounded.
+     *
+     * @return {@code null} when the rule already has a position in its mailbox
+     */
+    static Instant watchFrom(SysEmailMonitorRule rule, Instant now) {
+        if (StringUtils.hasText(rule.getLastSyncCursor()) || rule.getSyncedAt() == null) {
+            return null;
+        }
+        Instant floor = now.minus(MAX_CATCH_UP);
+        if (rule.getSyncedAt().isBefore(floor)) {
+            log.warn("[EMAIL-MONITOR] rule {} deployed at {} has not polled since; mail received before {} "
+                    + "is skipped", rule.getId(), rule.getSyncedAt(), floor);
+            return floor;
+        }
+        return rule.getSyncedAt();
+    }
+
+    /** Backoff and cursor both belong to one mailbox: the connection plus the folder. */
+    private static String mailbox(SysEmailMonitorRule rule) {
+        return rule.getConnectionUid() + "|" + folderKey(rule);
+    }
+
+    private static String folderKey(SysEmailMonitorRule rule) {
+        return rule.getFolderLabel() != null ? rule.getFolderLabel() : "";
     }
 
     private void onPollFailure(SysEmailMonitorRule rule, Instant now, String reason) {
-        EmailMonitorPollBackoff.FailureState state =
-                pollBackoff.recordFailure(rule.getId(), now, rule.getPollIntervalSeconds());
+        EmailMonitorPollBackoff.FailureState state = pollBackoff.recordFailure(
+                rule.getId(), mailbox(rule), now, rule.getPollIntervalSeconds());
         log.error("[EMAIL-MONITOR] poll failed ruleId={} name={} consecutiveFailures={} retryAfter={} cap={} reason={}",
                 rule.getId(),
                 rule.getName(),
@@ -281,9 +318,20 @@ public class EmailMonitorScheduler {
     }
 
     private void persistCursor(SysEmailMonitorRule rule, String nextCursor) {
-        rule.setLastSyncCursor(nextCursor);
-        rule.setLastSyncedAt(Instant.now());
-        ruleRepository.save(rule);
+        writePollState(rule, nextCursor);
+    }
+
+    private void writePollState(SysEmailMonitorRule rule, String cursor) {
+        Instant syncedAt = Instant.now();
+        int updated = ruleRepository.updatePollState(
+                rule.getId(), rule.getConnectionUid(), folderKey(rule), cursor, syncedAt);
+        if (updated == 0) {
+            log.info("[EMAIL-MONITOR] rule {} was redeployed or removed during this poll; "
+                    + "dropping cursor {} of connection {}", rule.getId(), cursor, rule.getConnectionUid());
+            return;
+        }
+        rule.setLastSyncCursor(cursor);
+        rule.setLastSyncedAt(syncedAt);
     }
 
     private String resolvePassword(SysEmailMonitorRule rule, SysEmailConnection connection) {

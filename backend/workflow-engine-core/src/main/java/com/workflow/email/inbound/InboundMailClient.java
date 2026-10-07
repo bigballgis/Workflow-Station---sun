@@ -1,5 +1,7 @@
 package com.workflow.email.inbound;
 
+import java.time.Instant;
+
 /**
  * Reads newly-arrived mail from a connection-defined mailbox.
  *
@@ -11,11 +13,14 @@ public interface InboundMailClient {
     /**
      * Fetches messages newer than {@code cursor} from {@code folder}.
      *
-     * @param access mailbox connection parameters
-     * @param folder folder/label name (e.g. {@code INBOX})
-     * @param cursor last persisted cursor; {@code null}/blank seeds a baseline and returns no messages
-     * @param max    maximum messages to return in one poll
+     * @param access    mailbox connection parameters
+     * @param folder    folder/label name (e.g. {@code INBOX})
+     * @param cursor    last persisted cursor; {@code null}/blank means the rule has not polled
+     *                  this mailbox yet
+     * @param watchFrom with a blank cursor, messages received at or after this instant are
+     *                  returned; {@code null} seeds a baseline and returns no messages
+     * @param max       maximum messages to return in one poll
      * @return new messages and the advanced cursor
      */
-    FetchResult fetchNew(MailboxAccess access, String folder, String cursor, int max);
+    FetchResult fetchNew(MailboxAccess access, String folder, String cursor, Instant watchFrom, int max);
 }
