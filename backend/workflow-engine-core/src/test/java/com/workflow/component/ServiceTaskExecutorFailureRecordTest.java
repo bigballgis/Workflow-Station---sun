@@ -1,6 +1,7 @@
 package com.workflow.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.entity.ServiceTaskExecutionRecord;
 import com.workflow.repository.ServiceTaskExecutionRecordRepository;
 import org.flowable.bpmn.model.ExtensionAttribute;
@@ -58,13 +59,16 @@ class ServiceTaskExecutorFailureRecordTest {
     @Mock
     private PlatformTransactionManager transactionManager;
     @Mock
+    private AdminCenterClient adminCenterClient;
+    @Mock
     private DelegateExecution execution;
 
     private ServiceTaskExecutor executor;
 
     @BeforeEach
     void setUp() {
-        executor = new ServiceTaskExecutor(recordRepository, restTemplate, new ObjectMapper(), transactionManager);
+        executor = new ServiceTaskExecutor(recordRepository, restTemplate, new ObjectMapper(), transactionManager,
+                adminCenterClient);
         ReflectionTestUtils.setField(executor, "webhookBaseUrl", "http://activepieces:80");
         ReflectionTestUtils.setField(executor, "fileServiceBaseUrl", "http://developer-workstation:8080");
 
