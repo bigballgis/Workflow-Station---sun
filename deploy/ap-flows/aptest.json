@@ -15,7 +15,7 @@
         "input": {
           "fields": {
             "body": {
-              "echo": "{{trigger.body.text}}"
+              "echo": "{{trigger.output.body.text}}"
             },
             "status": 200,
             "headers": {}
