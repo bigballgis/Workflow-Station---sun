@@ -376,6 +376,23 @@ export default {
     tableName: 'Table Name',
     tableDisplayName: 'Table Display Name',
     tableType: 'Table Type',
+    sla: {
+      guideLinkAria: 'Open the SLA Due Date guideline',
+      label: 'SLA Due Date',
+      notConfigured: 'Not configured (no due date is derived)',
+      summary: '{due} = {start} + SLA lead time',
+      dialogTitle: 'Configure SLA Due Date',
+      dialogHint: 'The due date field is filled by the platform as start date + the SLA lead time (calendar days). The lead time is maintained per environment in Admin Center > SLA Policies; the due date field is read-only on forms.',
+      startSource: 'Start date source',
+      sourceField: 'Main table field',
+      sourceSubmittedAt: 'Submission time',
+      startField: 'Start date field',
+      dueField: 'Due date field',
+      selectField: 'Select a field',
+      noStartCandidates: 'No Date / Timestamp fields on this table',
+      noDueCandidates: 'No non-formula Date fields on this table',
+      clear: 'Remove',
+    },
     requestId: {
       label: 'Request ID',
       metaHint: 'Combine main-table fields into a human-readable identifier shown on the form and portal lists (e.g. HR-2026-001).',
@@ -2105,7 +2122,8 @@ export default {
     monitorSection: 'Email monitor (inbound)',
     monitorMailboxEmail: 'Mailbox Email',
     monitorMailboxEmailPlaceholder: "inbox{'@'}your-domain.example.com",
-    monitorMailboxEmailHint: 'Mailbox address to poll for new emails (also used as the connection name).',
+    monitorMailboxEmailHint:
+      'Mailbox to poll (also the connection name). IMAP Username is the service account. When they differ, the monitor will try to open this mailbox; the mail server must support that.',
     monitorUsername: 'IMAP Username',
     monitorPassword: 'IMAP password (VAULT)',
     systemImapFromAdminHint:

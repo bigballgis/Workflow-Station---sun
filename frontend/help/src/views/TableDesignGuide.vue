@@ -28,6 +28,7 @@ const related: GuideRelated[] = [
   { to: '/table-bindings', titleKey: 'guides.tableBindings.title' },
   { to: '/view-design', titleKey: 'guides.viewDesign.title' },
   { to: '/form-events-basic', titleKey: 'guides.formEventsBasic.title' },
+  { to: '/sla-policies', titleKey: 'guides.slaPolicies.title' },
 ]
 
 const jumpLinks: GuideJump[] = [
@@ -35,6 +36,7 @@ const jumpLinks: GuideJump[] = [
   { anchor: 'pk', titleKey: 'tableDesignGuide.pkTitle' },
   { anchor: 'fk', titleKey: 'tableDesignGuide.fkTitle' },
   { anchor: 'request-id', titleKey: 'tableDesignGuide.requestIdTitle' },
+  { anchor: 'sla-due-date', titleKey: 'tableDesignGuide.slaTitle' },
 ]
 
 const sections: GuideSection[] = [
@@ -100,6 +102,22 @@ const sections: GuideSection[] = [
     samples: [{ code: 'Request ID', hintKey: 'tableDesignGuide.catRequestId' }],
   },
   {
+    anchor: 'sla-due-date',
+    titleKey: 'tableDesignGuide.slaTitle',
+    bodyKey: 'tableDesignGuide.slaBody',
+    bodyKeys: ['tableDesignGuide.slaLead'],
+    figure: { src: 'guides/dw-table-design-sla.png', captionKey: 'tableDesignGuide.slaFigure' },
+    sampleLayout: 'block',
+    samples: [
+      { code: 'SLA Due Date', hintKey: 'tableDesignGuide.catSlaRow' },
+      { code: 'Start date source', hintKey: 'tableDesignGuide.catSlaSource' },
+      { code: 'Start date field', hintKey: 'tableDesignGuide.catSlaStart' },
+      { code: 'Due date field', hintKey: 'tableDesignGuide.catSlaDue' },
+      { code: 'Remove', hintKey: 'tableDesignGuide.catSlaRemove' },
+      { code: 'Field Name (rename)', hintKey: 'tableDesignGuide.catSlaRename' },
+    ],
+  },
+  {
     titleKey: 'tableDesignGuide.failTitle',
     failKeys: [
       'tableDesignGuide.failDisplayName',
@@ -107,6 +125,9 @@ const sections: GuideSection[] = [
       'tableDesignGuide.failFieldName',
       'tableDesignGuide.failPkNullable',
       'tableDesignGuide.failRequestId',
+      'tableDesignGuide.failSlaField',
+      'tableDesignGuide.failSlaDueType',
+      'tableDesignGuide.failSlaSame',
     ],
   },
 ]

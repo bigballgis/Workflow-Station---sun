@@ -61,4 +61,24 @@ class ImapTransportPropertiesTest {
         assertEquals("localhost", imap.get("mail.imaps.ssl.trust"));
         assertEquals("false", imap.get("mail.imaps.ssl.checkserveridentity"));
     }
+
+    @Test
+    void applyAuthorizationIdentity_setsSaslWhenMailboxDiffers() {
+        Properties imap = new Properties();
+        ImapTransportProperties.applyAuthorizationIdentity(
+                imap, "imaps", "ADRES-SVC-HMS-NP", "hk.hermes.mailin@example.test");
+        assertEquals("true", imap.get("mail.imaps.sasl.enable"));
+        assertEquals("PLAIN", imap.get("mail.imaps.sasl.mechanisms"));
+        assertEquals("hk.hermes.mailin@example.test", imap.get("mail.imaps.sasl.authorizationid"));
+    }
+
+    @Test
+    void applyAuthorizationIdentity_skipsWhenMailboxEqualsLogin() {
+        Properties imap = new Properties();
+        ImapTransportProperties.applyAuthorizationIdentity(
+                imap, "imaps", "monitor@example.test", "monitor@example.test");
+        assertNull(imap.get("mail.imaps.sasl.authorizationid"));
+        assertNull(imap.get("mail.imaps.sasl.enable"));
+        assertNull(imap.get("mail.imaps.sasl.mechanisms"));
+    }
 }

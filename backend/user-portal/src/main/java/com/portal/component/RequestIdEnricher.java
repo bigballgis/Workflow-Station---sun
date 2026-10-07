@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.ProcessStartForm;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
@@ -295,7 +296,7 @@ public class RequestIdEnricher {
                         SELECT td.request_id_config::text AS cfg
                         FROM dw_function_units fu
                         INNER JOIN dw_form_definitions fd
-                            ON fd.function_unit_id = fu.id AND fd.form_type = 'PROCESS'
+                            ON fd.function_unit_id = fu.id AND %s
                         INNER JOIN dw_form_table_bindings ftb
                             ON ftb.form_id = fd.id AND ftb.binding_type = 'PRIMARY'
                         INNER JOIN dw_table_definitions td
@@ -303,7 +304,7 @@ public class RequestIdEnricher {
                         WHERE fu.code = ?
                         ORDER BY ftb.sort_order NULLS LAST, ftb.id
                         LIMIT 1
-                        """,
+                        """.formatted(ProcessStartForm.SQL_PREDICATE),
                 (rs, rowNum) -> rs.getString("cfg"),
                 functionUnitCode);
         if (rows.isEmpty() || rows.get(0) == null || rows.get(0).isBlank()) {

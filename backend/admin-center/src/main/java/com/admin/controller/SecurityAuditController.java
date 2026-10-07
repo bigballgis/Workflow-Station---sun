@@ -109,6 +109,7 @@ public class SecurityAuditController {
             "CONFIG",
             "RELATION_TABLE", "RELATION_TABLE_ROW",
             "ROLE",
+            "SLA_POLICY",
             "USER", "VIRTUAL_GROUP"
     );
     

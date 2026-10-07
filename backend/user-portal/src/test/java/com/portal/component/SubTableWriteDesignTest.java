@@ -96,6 +96,51 @@ class SubTableWriteDesignTest {
     }
 
     @Test
+    void processStartUsesTaskSceneFormWhenMyRequestCopyIsPinnedToo() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))
+                .thenReturn(List.of(
+                        """
+                        {"formId":1,"formType":"PROCESS","scene":"TASK","configJson":{},"tableBindings":[
+                          {"bindingId":101,"bindingType":"SUB","tableName":"files",
+                           "filterFkFieldName":"case_ref","filterFkRefTableName":"cases"}]}
+                        """,
+                        """
+                        {"formId":2,"formType":"PROCESS","scene":"REQUEST","configJson":{},"tableBindings":[
+                          {"bindingId":202,"bindingType":"SUB","tableName":"files",
+                           "filterFkFieldName":"case_ref","filterFkRefTableName":"cases"}]}
+                        """));
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("DATA_TABLE")))
+                .thenReturn(List.of("""
+                        {"tableName":"files","tableType":"SUB","fields":[
+                          {"fieldName":"file_key","isPrimaryKey":true}]}
+                        """, """
+                        {"tableName":"cases","tableType":"MAIN","fields":[
+                          {"fieldName":"case_key","isPrimaryKey":true}]}
+                        """));
+
+        var rules = new SubTableWriteDesign(jdbc, new ObjectMapper()).resolve("pin", null);
+
+        assertThat(rules).containsOnlyKeys("101");
+    }
+
+    @Test
+    void processStartStillRejectsTwoTaskScenePinnedForms() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))
+                .thenReturn(List.of(
+                        """
+                        {"formId":1,"formType":"PROCESS","scene":"TASK","configJson":{},"tableBindings":[]}
+                        """,
+                        """
+                        {"formId":2,"formType":"PROCESS","configJson":{},"tableBindings":[]}
+                        """));
+
+        assertThatThrownBy(() -> new SubTableWriteDesign(jdbc, new ObjectMapper()).resolve("pin", null))
+                .isInstanceOf(PortalException.class).hasMessageContaining("Pinned form is missing or ambiguous");
+    }
+
+    @Test
     void deletedLiveBindingsAndChangedLiveKeysDoNotAffectPinnedRules() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))

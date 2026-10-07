@@ -1,4 +1,4 @@
-import type { FieldDefinition, RequestIdConfig } from '@/api/functionUnit'
+import type { FieldDefinition, RequestIdConfig, TableDefinition } from '@/api/functionUnit'
 import { getRuleChildren } from '@/utils/formDesigner'
 import { parsePkGeneration } from '@/utils/pkGenerationConfig'
 import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@/utils/tableFkRuntime'
@@ -115,6 +115,19 @@ export function isComputedTableField(field: FieldDefinition): boolean {
   return field.isComputed === true
 }
 
+/**
+ * Flags the SLA due date field of a MAIN table so every form rule / task permission built from the
+ * table locks it. The value is derived by the portal on each save, so user input would be discarded.
+ */
+export function markSlaDerivedFields<T extends TableDefinition | null | undefined>(table: T): T {
+  if (!table?.fieldDefinitions) return table
+  const dueField = table.tableType === 'MAIN' ? table.slaConfig?.dueDateField : undefined
+  for (const field of table.fieldDefinitions) {
+    field.slaDerived = !!dueField && field.fieldName === dueField
+  }
+  return table
+}
+
 export function applyTableFieldMetaToFormRule(
   field: FieldDefinition,
   rule: Record<string, unknown>,
@@ -123,7 +136,7 @@ export function applyTableFieldMetaToFormRule(
 
   // Audit columns are platform-filled at insert/update — always locked, even if
   // the designer Readonly toggle was turned off (Portal also forces this).
-  if (isTableAuditField(field.fieldName)) {
+  if (isTableAuditField(field.fieldName) || field.slaDerived) {
     props.readonly = true
     return { ...rule, props, readonly: true }
   }
@@ -225,7 +238,7 @@ export function syncFormRulesWithTableFields(
 }
 
 export function taskFieldPermissionForField(field: FieldDefinition): TaskFieldPermission | null {
-  if (isTableAuditField(field.fieldName)) {
+  if (isTableAuditField(field.fieldName) || field.slaDerived) {
     return 'READONLY'
   }
   if (field.isForeignKey && isFkReadonly(toFkMeta(field))) {

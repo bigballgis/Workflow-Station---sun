@@ -301,6 +301,16 @@ const routes: RouteRecordRaw[] = [
         redirect: "/environment-variables",
       },
       {
+        path: "sla-policies",
+        name: "SlaPolicies",
+        component: () => import("@/views/sla-policy/index.vue"),
+        meta: {
+          titleKey: "menu.slaPolicies",
+          icon: "Timer",
+          permissions: [PERMISSIONS.SLA_POLICY_VIEW, PERMISSIONS.SLA_POLICY_EDIT],
+        },
+      },
+      {
         path: "relation-tables/data/:functionUnitCode?",
         name: "RelationTableData",
         component: () => import("@/views/relation-table/data/index.vue"),

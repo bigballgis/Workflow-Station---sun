@@ -51,7 +51,7 @@
         >{{ selectedForm.formName }}</span>
         <DesignerHelpLink
           :path="selectedControlHelpPath"
-          :aria-label="t('form.controlGuideLinkAria')"
+          :ariaLabel="t('form.controlGuideLinkAria')"
           test-id="form-control-guide-link"
         />
         <el-tag
@@ -91,7 +91,7 @@
           </el-button>
           <DesignerHelpLink
             path="/table-bindings"
-            :aria-label="t('tableBinding.guideLinkAria')"
+            :ariaLabel="t('tableBinding.guideLinkAria')"
             test-id="manage-table-bindings-guide-link"
           />
           <el-button
@@ -112,7 +112,7 @@
             </el-button>
             <DesignerHelpLink
               path="/form-upload#scenes"
-              :aria-label="t('form.uploadGuideLinkAria')"
+              :ariaLabel="t('form.uploadGuideLinkAria')"
               test-id="add-advanced-upload-guide-link"
             />
           </span>
@@ -2800,10 +2800,13 @@ onMounted(() => {
       margin-bottom: 18px;
     }
 
-    // label 不折行；保留 label-width 统一宽度使各行输入框左对齐，超长时撑开
+    // 与 Portal FormRenderer 一致：label 固定 160px，超长折行（不被输入框遮挡、各行输入框左对齐）；
+    // 覆盖全局弹窗 label 的 nowrap/max-content 规则（Form Preview 是 Portal 主表单的设计稿，不按弹窗表单处理）
     :deep(.el-form-item__label) {
-      white-space: nowrap !important;
-      min-width: max-content !important;
+      width: 160px !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere;
+      min-width: 0 !important;
       max-width: none !important;
       height: auto !important;
       line-height: 1.5 !important;

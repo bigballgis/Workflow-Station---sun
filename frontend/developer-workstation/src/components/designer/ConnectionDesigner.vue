@@ -7,7 +7,7 @@
       </el-button>
       <DesignerHelpLink
         path="/email-send#connection"
-        :aria-label="t('connection.guideLinkAria')"
+        :ariaLabel="t('connection.guideLinkAria')"
         test-id="connection-guide-link"
       />
     </div>
@@ -76,7 +76,7 @@
           <span class="el-dialog__title">{{ editingId ? t('connection.edit') : t('connection.create') }}</span>
           <DesignerHelpLink
             path="/email-send#connection"
-            :aria-label="t('connection.guideLinkAria')"
+            :ariaLabel="t('connection.guideLinkAria')"
             test-id="connection-dialog-guide-link"
           />
         </div>
@@ -341,14 +341,16 @@ const listColumns = computed<DesignerListTableColumn<EmailConnection>[]>(() => [
 function buildPayload(): EmailConnectionRequest {
   const emailAddress = form.senderEmail.trim()
   const login = form.username?.trim()
+  const inbound = isInboundOnly.value
   return {
     name: emailAddress,
     connectionType: SMTP_CONNECTION_TYPE,
     username: login || undefined,
     passwordEnvKey: form.passwordEnvKey?.trim() || undefined,
-    fromName: isInboundOnly.value ? undefined : (form.fromName?.trim() || undefined),
+    fromName: inbound ? undefined : (form.fromName?.trim() || undefined),
     enabled: form.enabled,
     direction: form.direction || 'OUTBOUND',
+    mailboxAddress: inbound ? emailAddress : undefined,
   }
 }
 

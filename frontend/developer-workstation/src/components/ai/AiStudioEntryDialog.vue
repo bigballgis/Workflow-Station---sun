@@ -12,7 +12,7 @@
           {{ t('ai.studio.title') }}
           <DesignerHelpLink
             path="/ai-studio"
-            :aria-label="t('ai.studio.guideLinkAria')"
+            :ariaLabel="t('ai.studio.guideLinkAria')"
             test-id="ai-studio-guide-link"
           />
         </h2>

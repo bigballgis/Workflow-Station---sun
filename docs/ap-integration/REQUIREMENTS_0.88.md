@@ -544,8 +544,9 @@ BPMN 存业务键，部署期解析成本环境真实 flowId。落到 FR-C01、F
 Service Task 配置面板只剩 flow id；数据靠约定结构传递。落到 FR-C03、FR-C3、FR-C08 ~ FR-C10。
 
 > **连带后果（成本主要在存量侧）**：**所有存量 flow 都要改造**——原先按映射后的扁平字段名取值
-> （如 `{{trigger.body.name}}`），改信封后要按 `{{trigger.body.variables.name}}` 取，并且
+> （如 `{{trigger.output.body.name}}`），改信封后要按 `{{trigger.output.body.variables.name}}` 取，并且
 > Return Response 必须返回 `{"variables":{…}}`。**AI Generate 是生产依赖，也在其中**（MIG-03/MIG-05）。
+> 取值路径必须带 `.output`（引擎把每个步骤暴露为 `{ output, error }`，`trigger.body.…` 静默解析为空），见 MIG-05 更正。
 
 <a id="d-6"></a>
 **D-6　空 body 一律 fail-fast**

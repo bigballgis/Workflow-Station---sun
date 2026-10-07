@@ -24,6 +24,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     private final OrganizationMutationAccessInterceptor organizationMutationAccessInterceptor;
     private final ConfigMutationAccessInterceptor configMutationAccessInterceptor;
+    private final SlaPolicyAccessInterceptor slaPolicyAccessInterceptor;
     
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
@@ -47,6 +48,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/configs", "/configs/**")
                 // Read-only impact preview that happens to be a POST.
                 .excludePathPatterns("/configs/*/assess-impact");
+        registry.addInterceptor(slaPolicyAccessInterceptor)
+                .addPathPatterns("/sla-policies", "/sla-policies/**");
     }
 
     @Override

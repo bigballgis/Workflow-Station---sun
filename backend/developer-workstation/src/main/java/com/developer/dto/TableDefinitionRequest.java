@@ -35,5 +35,8 @@ public class TableDefinitionRequest {
     /** 主表 Request ID 配置(有序字段 + 分隔符);仅 MAIN 表有意义,可空。 */
     private RequestIdConfig requestIdConfig;
 
+    /** 主表 SLA 到期日映射;仅 MAIN 表有意义,可空。 */
+    private SlaConfig slaConfig;
+
     private List<FieldDefinitionRequest> fields;
 }

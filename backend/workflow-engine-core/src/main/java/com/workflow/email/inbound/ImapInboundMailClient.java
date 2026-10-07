@@ -35,7 +35,9 @@ import java.nio.charset.StandardCharsets;
  * <p>Works with app-password mailboxes (QQ / 163 / Outlook / Gmail) — no OAuth required.
  * Incremental polling uses IMAP UIDs as the cursor (Power Automate-style "new email arrives"):
  * a blank cursor seeds the baseline (no history replay) and subsequent polls return only
- * messages with a higher UID.
+ * messages with a higher UID. The cursor carries its {@code UIDVALIDITY} (see
+ * {@link MailboxCursor}) so a position from a different UID space is reseeded rather than
+ * silently matching nothing.
  */
 @Slf4j
 @Component
@@ -52,8 +54,10 @@ public class ImapInboundMailClient implements InboundMailClient {
         String protocol = access.ssl() ? "imaps" : "imap";
         Session session = Session.getInstance(props);
 
-        log.info("[IMAP-FETCH] begin protocol={} host={} port={} ssl={} user={} folder={} cursor={} max={}",
-                protocol, access.host(), access.port(), access.ssl(), mask(access.username()), folderName, cursor, max);
+        log.info("[IMAP-FETCH] begin protocol={} host={} port={} ssl={} user={} mailbox={} authzid={} "
+                        + "folder={} cursor={} max={}",
+                protocol, access.host(), access.port(), access.ssl(), mask(access.username()),
+                mask(access.mailboxAddress()), authorizationId(props, protocol), folderName, cursor, max);
 
         Store store = null;
         Folder mailFolder = null;
@@ -64,15 +68,19 @@ public class ImapInboundMailClient implements InboundMailClient {
             mailFolder.open(Folder.READ_ONLY);
 
             UIDFolder uidFolder = (UIDFolder) mailFolder;
-            long lastUid = parseCursor(cursor);
+            long uidValidity = uidFolder.getUIDValidity();
+            long uidNext = uidFolder.getUIDNext();
+            MailboxCursor stored = MailboxCursor.parse(cursor);
 
-            if (lastUid < 0) {
-                long baseline = Math.max(0, uidFolder.getUIDNext() - 1);
-                log.info("[IMAP-FETCH] host={} folder={} first poll, baseline cursor={}",
-                        access.host(), folderName, baseline);
-                return new FetchResult(List.of(), String.valueOf(baseline));
+            if (stored == null) {
+                return baseline(access.host(), folderName, uidValidity, uidNext, "first poll");
             }
-            FetchResult result = fetchSince(uidFolder, mailFolder, lastUid, max);
+            String staleReason = stored.staleReason(uidValidity, uidNext);
+            if (staleReason != null) {
+                return baseline(access.host(), folderName, uidValidity, uidNext,
+                        "stored cursor discarded: " + staleReason);
+            }
+            FetchResult result = fetchSince(uidFolder, mailFolder, stored.lastUid(), max, uidValidity);
             log.info("[IMAP-FETCH] SUCCESS host={} folder={} fetched={} newCursor={}",
                     access.host(), folderName, result.messages().size(), result.nextCursor());
             return result;
@@ -87,6 +95,23 @@ public class ImapInboundMailClient implements InboundMailClient {
         }
     }
 
+    /**
+     * Baselines mark "start watching from now": history before this point is never replayed,
+     * so a discarded cursor loses nothing that the previous mailbox had already processed.
+     */
+    private FetchResult baseline(
+            String host, String folderName, long uidValidity, long uidNext, String reason) {
+        long lastUid = Math.max(0, uidNext - 1);
+        log.info("[IMAP-FETCH] host={} folder={} {}; baseline cursor={} uidValidity={}",
+                host, folderName, reason, lastUid, uidValidity);
+        return new FetchResult(List.of(), MailboxCursor.format(uidValidity, lastUid));
+    }
+
+    private static String authorizationId(Properties props, String protocol) {
+        Object value = props.get("mail." + protocol + ".sasl.authorizationid");
+        return value != null ? mask(String.valueOf(value)) : "<none>";
+    }
+
     private static String mask(String value) {
         if (value == null || value.isBlank()) {
             return "<none>";
@@ -96,10 +121,14 @@ public class ImapInboundMailClient implements InboundMailClient {
     }
 
     private Properties buildProps(MailboxAccess access, String protocol) {
-        return ImapTransportProperties.apply(access.host(), access.port(), access.ssl(), protocol);
+        Properties props = ImapTransportProperties.apply(access.host(), access.port(), access.ssl(), protocol);
+        ImapTransportProperties.applyAuthorizationIdentity(
+                props, protocol, access.username(), access.mailboxAddress());
+        return props;
     }
 
-    private FetchResult fetchSince(UIDFolder uidFolder, Folder folder, long lastUid, int max) throws Exception {
+    private FetchResult fetchSince(
+            UIDFolder uidFolder, Folder folder, long lastUid, int max, long uidValidity) throws Exception {
         Message[] candidates = uidFolder.getMessagesByUID(lastUid + 1, UIDFolder.LASTUID);
         List<Message> newer = new ArrayList<>();
         for (Message message : candidates) {
@@ -119,7 +148,7 @@ public class ImapInboundMailClient implements InboundMailClient {
             mapped.add(toEmailMessage(message, uid));
             maxUid = Math.max(maxUid, uid);
         }
-        return new FetchResult(mapped, String.valueOf(maxUid));
+        return new FetchResult(mapped, MailboxCursor.format(uidValidity, maxUid));
     }
 
     private long safeUid(UIDFolder uidFolder, Message message) {
@@ -376,17 +405,6 @@ public class ImapInboundMailClient implements InboundMailClient {
             return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
         }
         return null;
-    }
-
-    private long parseCursor(String cursor) {
-        if (!StringUtils.hasText(cursor)) {
-            return -1L;
-        }
-        try {
-            return Long.parseLong(cursor.trim());
-        } catch (NumberFormatException e) {
-            return -1L;
-        }
     }
 
     private void closeQuietly(Folder folder, Store store) {

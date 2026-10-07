@@ -112,6 +112,11 @@ public class TaskFormComponent {
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
     /**
      * Lazy: resolves updated_by display names for system audit fields (null in
      * `new`-constructed tests).
@@ -249,6 +254,15 @@ public class TaskFormComponent {
             Map<String, Object> storedValues) {
         return changeHistorySubmissionFilter().projectTaskAuditBaseline(
                 processInstanceId, stageId, storedValues);
+    }
+
+    /** Re-derives the readonly SLA due date from the case's start; the client value never survives. */
+    private void stampSlaDueDate(ProcessInstance processInstance, Map<String, Object> variables) {
+        if (slaDueDateEnricher == null) {
+            return;
+        }
+        slaDueDateEnricher.stamp(processInstance.getFunctionUnitCode(), variables,
+                processInstance.getStartTime() == null ? null : processInstance.getStartTime().toLocalDate());
     }
 
     private RequestIdEnricher requestIdEnricher() {
@@ -780,6 +794,7 @@ public class TaskFormComponent {
             // that edits a contributing field cannot leave the persisted identifier stale, and a
             // client-supplied value never survives.
             requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
+            stampSlaDueDate(processInstance, updatedVariables);
             // Prevent geometric __subTables__ bloat: drop deep nested copies before
             // persisting so each
             // task save stores the canonical one-level structure instead of compounding
@@ -1101,6 +1116,7 @@ public class TaskFormComponent {
         // The merge can pull a client-supplied Request ID in from completedVariables; re-derive it
         // so a snapshot capture never rewrites the stored identifier with an unstamped value.
         requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), merged);
+        stampSlaDueDate(processInstance, merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
 

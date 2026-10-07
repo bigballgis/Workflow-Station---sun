@@ -223,6 +223,46 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: ACTIVEPIECES_SSRF_ALLOW_LIST
+        # content-organizer piece (OCR): one iB2B service account per environment. Read by the
+        # piece from the engine environment, never stored in a flow, so a flow migrates between
+        # environments unchanged. IB2B_SECRET is synced from Key Vault into the platform Secret.
+        # optional: an environment without these keys must still start Automation — the piece then
+        # fails at use with "missing environment variable(s): ...", not every flow at boot.
+        # The hosts must be on ACTIVEPIECES_SSRF_ALLOW_LIST; Node should trust the corporate CA
+        # for them (NODE_EXTRA_CA_CERTS) — see docs/guides/content-organizer-ocr-guide.md §4.2.
+        - name: IB2B_TOKEN_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: IB2B_TOKEN_URL
+              optional: true
+        - name: IB2B_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: IB2B_USERNAME
+              optional: true
+        - name: IB2B_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: IB2B_SECRET
+              optional: true
+        - name: CONTENT_ORGANIZER_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_BASE_URL
+              optional: true
+        - name: CONTENT_ORGANIZER_APPLICATION_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_APPLICATION_ID
+              optional: true
+        # The engine process inherits only whitelisted variables; these are the ones pieces may read.
+        - name: AP_SANDBOX_PROPAGATED_ENV_VARS
+          value: "IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION"
         ports:
         - containerPort: 80
           name: http
@@ -298,6 +338,36 @@ spec:
   - hosts:
     - ./*
     - istio-system/*
+    # content-organizer piece (OCR): iB2B token translator + HASE Content Organizer.
+    - "*/cmb-ib2b-dsp-pprod-ap.hk.hsbc"
+    - "*/uat-api.gcp.cloud.hk.hsbc"
+    - "*/ppd-api.gcp.cloud.hk.hsbc"
+    - "*/api.gcp.cloud.hk.hsbc"
+---
+# MESH_EXTERNAL hosts the content-organizer piece calls (same pattern as admin-center's Vault
+# entry). The piece speaks HTTPS itself, so Envoy must pass TLS through — verify from an
+# activepieces Pod with deploy/scripts/content-organizer-smoke.mjs before go-live
+# (docs/guides/content-organizer-ocr-guide.md §12). Prod iB2B host: add it here once known.
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: content-organizer-egress
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+    - cmb-ib2b-dsp-pprod-ap.hk.hsbc
+    - uat-api.gcp.cloud.hk.hsbc
+    - ppd-api.gcp.cloud.hk.hsbc
+    - api.gcp.cloud.hk.hsbc
+  location: MESH_EXTERNAL
+  ports:
+    - number: 8443
+      name: https-ib2b
+      protocol: TLS
+    - number: 443
+      name: https
+      protocol: TLS
+  resolution: DNS
 ---
 # Webhook-only ingress. ONLY /api/v1/webhooks is routed from outside so external
 # systems can trigger flows. The UI (root) and the rest of the API are NOT matched

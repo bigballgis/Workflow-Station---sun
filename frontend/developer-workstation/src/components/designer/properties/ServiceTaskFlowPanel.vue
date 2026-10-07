@@ -106,7 +106,9 @@ const { t } = useI18n()
 
 // 信封契约样例。字符串拼接是必需的：模板里直接写 `{{…}}` 字面量会被 Vue 编译器
 // 当成插值结束符，SFC 解析直接报错。
-const INPUT_EXPRESSION = `{${'{'}trigger.body.variables.<name>${'}'}}`
+// 引擎把每个步骤（含 trigger）暴露为 `{ output, error }`，必须带 `.output`；
+// 写成 `trigger.body.…` 会静默解析成空字符串。
+const INPUT_EXPRESSION = `{${'{'}trigger.output.body.variables.<name>${'}'}}`
 const OUTPUT_ENVELOPE = '{ "variables": { ... } }'
 
 const props = defineProps<{

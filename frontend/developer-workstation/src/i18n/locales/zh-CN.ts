@@ -423,6 +423,23 @@ export default {
     tableName: '表名',
     tableDisplayName: '表显示名称',
     tableType: '表类型',
+    sla: {
+      guideLinkAria: '打开 SLA 到期日说明',
+      label: 'SLA 到期日',
+      notConfigured: '未配置（不计算到期日）',
+      summary: '{due} = {start} + SLA 时效天数',
+      dialogTitle: '配置 SLA 到期日',
+      dialogHint: '到期日字段由平台按「开始日 + SLA 时效天数（自然日）」自动填充。时效天数按环境在 Admin Center > SLA 策略中维护；到期日字段在表单上只读。',
+      startSource: '开始日来源',
+      sourceField: '主表字段',
+      sourceSubmittedAt: '提交时间',
+      startField: '开始日字段',
+      dueField: '到期日字段',
+      selectField: '请选择字段',
+      noStartCandidates: '本表没有日期 / 时间戳字段',
+      noDueCandidates: '本表没有非公式的日期字段',
+      clear: '移除',
+    },
     requestId: {
       label: 'Request ID',
       metaHint: '从主表字段里选取若干字段拼成一条 request 的人类可读标识,展示在表单和 Portal 列表上(如 HR-2026-001)。',
@@ -2099,7 +2116,8 @@ export default {
     monitorSection: '邮件监听（入站）',
     monitorMailboxEmail: '监听邮箱',
     monitorMailboxEmailPlaceholder: "inbox{'@'}your-domain.example.com",
-    monitorMailboxEmailHint: '要轮询的邮箱地址（同时作为连接名称）。',
+    monitorMailboxEmailHint:
+      '要轮询的邮箱（同时作为连接名称）。IMAP 用户名是服务账号。两者不同时，监听会尝试用该账号打开这个邮箱，需邮件服务器支持。',
     monitorUsername: 'IMAP 用户名',
     monitorPassword: 'IMAP 密码（VAULT）',
     systemImapFromAdminHint:

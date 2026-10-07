@@ -840,6 +840,7 @@ Action 列可继续 `fixed="right"`（§6.6），不代替共享表头。
 | `/automation-pieces` | `automation-piece/index.vue` |
 | `/automation-flows` | `automation-flow/index.vue` |
 | `/automation-runs` | `automation-run/index.vue` |
+| `/sla-policies` | `sla-policy/index.vue`（详情抽屉里的历史 / 任务 / 明细小表属弹窗小表，不接） |
 
 **Admin — exempt**
 

@@ -10,7 +10,7 @@
       />
       <DesignerHelpLink
         path="/form-upload#advance"
-        :aria-label="t('form.fileNet.guideLinkAria')"
+        :ariaLabel="t('form.fileNet.guideLinkAria')"
         test-id="upload-filenet-guide-link"
       />
     </div>

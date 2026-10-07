@@ -84,6 +84,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private com.portal.component.SlaDueDateEnricher slaDueDateEnricher;
+
     @Override
     @Transactional(readOnly = true)
     public List<FunctionUnitViewMenuItem> listAccessibleFunctionUnits(String userId) {
@@ -473,6 +478,10 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 // identifier keeps matching the row it names.
                 if (requestIdEnricher != null) {
                     requestIdEnricher.stampRequestId(pi.getFunctionUnitCode(), vars);
+                }
+                if (slaDueDateEnricher != null) {
+                    slaDueDateEnricher.stamp(pi.getFunctionUnitCode(), vars,
+                            pi.getStartTime() == null ? null : pi.getStartTime().toLocalDate());
                 }
                 pi.setVariables(vars);
                 processInstanceRepository.save(pi);

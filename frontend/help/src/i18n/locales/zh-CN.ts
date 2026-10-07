@@ -5,6 +5,7 @@ import tableBindingsMessages from './tableBindings.zh-CN'
 import viewDesignMessages from './viewDesign.zh-CN'
 import fuDocumentsMessages from './fuDocuments.zh-CN'
 import aiStudioMessages from './aiStudio.zh-CN'
+import slaPoliciesMessages from './slaPolicies.zh-CN'
 
 export default {
   app: {
@@ -185,6 +186,11 @@ export default {
     environmentVariables: {
       title: '环境变量',
       summary: '管理中心环境变量目录：TEXT 当前/默认值，以及邮件连接用的 VAULT 键。Vault 路径不存在时才写入密码。',
+    },
+    slaPolicies: {
+      title: 'SLA 策略',
+      summary:
+        '管理中心 SLA 策略：按功能单元设置时效天数，重算未结案件的到期日，查看任务与修改历史。字段映射在 Table Design。',
     },
     upTasksToClaim: {
       title: '待办 — 角色认领',
@@ -391,8 +397,8 @@ export default {
     inboundCatalogLead: '字段目录 —「新建/编辑连接」（入站）上的每一个控件。',
     fDirection: '必填。必须是入站（监听），否则这个邮箱不会出现在邮件监听里。',
     fDirectionInbound: '选项：用 IMAP 轮询此邮箱。出站（发信）给「发送邮件」用，不是本页。',
-    fMailboxEmail: '必填。要轮询的邮箱，同时作为连接名称。空白无法保存。',
-    fImapUsername: 'IMAP 登录（服务账号）。通常和邮箱地址不同。新建时与密码一起必填。',
+    fMailboxEmail: '必填。要轮询的邮箱，同时作为连接名称。IMAP 用户名是服务账号时，监听会尝试用该账号打开这个邮箱（需邮件服务器支持）。空白无法保存。',
+    fImapUsername: 'IMAP 登录（服务账号）。通常和邮箱地址不同。新建时与密码一起必填。用来认证；监听邮箱是将尝试读取的收件箱。',
     fImapPassword:
       'IMAP 密码改为 VAULT 环境变量。填了用户名时必填。不再保存密文；旧连接需重新选择 VAULT 键。见 [[/environment-variables]]。',
     fImapHost: '本页不能填。IMAP 主机来自管理中心 → 系统配置（入站连接）。',
@@ -736,4 +742,5 @@ export default {
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,
+  ...slaPoliciesMessages,
 }

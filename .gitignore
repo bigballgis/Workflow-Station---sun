@@ -377,3 +377,6 @@ deploy/**/*.zip
 # build-and-deploy.ps1 的本机 schema 迁移标记（按本地 Postgres 卷记录已应用 SQL 的
 # content-hash），机器本地状态，不入库
 deploy/environments/*/.schema-migration-markers/
+
+# OCR 本地样例：含真实个人信息（姓名/地址/出生日期），只在本机测试用，不入库
+/Receipt Notice.pdf

@@ -50,7 +50,7 @@ description: >-
 }
 ```
 
-覆盖**所有**弹窗表单，无需逐组件改。组件内**禁止**再写 `width: auto !important` / `max-width: <px>` / `text-overflow: ellipsis` 之类盖过该规则（developer-workstation 的 `FormPreviewItems.vue`、`FormDesigner.vue` 预览区、`SubTableAddDialog.vue` 已按此修正）。
+覆盖**所有**弹窗表单，无需逐组件改。组件内**禁止**再写 `width: auto !important` / `max-width: <px>` / `text-overflow: ellipsis` 之类盖过该规则（developer-workstation 的 `SubTableAddDialog.vue` 已按此修正）。**例外**：DW Form Preview 主表单区（`FormPreviewItems.vue`、`FormDesigner.vue` 的 `.form-preview-wrapper`）是 Portal 主表单的设计稿，与 Portal `FormRenderer.vue` 一致用固定 160px + 超长折行，不套本规则；Preview 内再弹出的子表 / Link Form 弹窗仍不折行。
 
 **自定义弹窗外壳（不走 el-dialog、Teleport 到 body 的面板）不会被 `.el-dialog` 规则罩住** —— 新增此类外壳时必须把面板 class 加进上面三个 index.scss 的选择器列表（曾漏过 `SubTableNestedModalShell` → Form Preview 子表弹窗折行）。
 

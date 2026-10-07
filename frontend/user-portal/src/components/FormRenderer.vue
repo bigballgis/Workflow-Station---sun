@@ -914,9 +914,11 @@ defineExpose({
     margin-bottom: 12px;
   }
 
+  /* Long labels wrap within label-width instead of running under the input; dialogs keep the no-wrap rule in styles/index.scss */
   :deep(.el-form-item__label) {
     font-weight: 500;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     padding-right: 16px;
     height: auto;
     line-height: 1.5;

@@ -22,6 +22,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class EmailMonitorSyncComponentImpl implements EmailMonitorSyncComponent {
 
+    private static final String DEFAULT_FOLDER_LABEL = "INBOX";
+
     private final EmailMonitorRuleRepository emailMonitorRuleRepository;
     private final FunctionUnitRepository functionUnitRepository;
 
@@ -51,8 +53,7 @@ public class EmailMonitorSyncComponentImpl implements EmailMonitorSyncComponent 
             EmailMonitorRule entity = toEntity(functionUnit, rule);
             EmailMonitorRule previous = resolvePreviousRule(existingById, entity.getId());
             if (previous != null) {
-                entity.setLastSyncCursor(previous.getLastSyncCursor());
-                entity.setLastSyncedAt(previous.getLastSyncedAt());
+                carryOverPollState(previous, entity);
             }
             emailMonitorRuleRepository.save(entity);
             syncedIds.add(entity.getId());
@@ -92,6 +93,36 @@ public class EmailMonitorSyncComponentImpl implements EmailMonitorSyncComponent 
         }
     }
 
+    /**
+     * Poll state is an IMAP UID cursor, meaningful only for the mailbox and folder it was read
+     * from. Rebinding the rule to another connection or folder must not inherit it, or the
+     * monitor fetches nothing until the new mailbox grows past the old UID.
+     */
+    private void carryOverPollState(EmailMonitorRule previous, EmailMonitorRule entity) {
+        if (!sameMailboxTarget(previous, entity)) {
+            log.info("Email monitor {} rebound (connection {} -> {}, folder {} -> {}); poll cursor reset",
+                    entity.getId(), previous.getConnectionUid(), entity.getConnectionUid(),
+                    previous.getFolderLabel(), entity.getFolderLabel());
+            return;
+        }
+        entity.setLastSyncCursor(previous.getLastSyncCursor());
+        entity.setLastSyncedAt(previous.getLastSyncedAt());
+    }
+
+    private static boolean sameMailboxTarget(EmailMonitorRule previous, EmailMonitorRule entity) {
+        return trimmed(previous.getConnectionUid()).equals(trimmed(entity.getConnectionUid()))
+                && folderOrDefault(previous.getFolderLabel()).equals(folderOrDefault(entity.getFolderLabel()));
+    }
+
+    private static String folderOrDefault(String folderLabel) {
+        String value = trimmed(folderLabel);
+        return value.isEmpty() ? DEFAULT_FOLDER_LABEL : value;
+    }
+
+    private static String trimmed(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private EmailMonitorRule resolvePreviousRule(Map<String, EmailMonitorRule> existingById, String ruleUid) {
         EmailMonitorRule previous = existingById.get(ruleUid);
         if (previous != null) {
@@ -116,7 +147,8 @@ public class EmailMonitorSyncComponentImpl implements EmailMonitorSyncComponent 
                 .connectionUid((String) rule.get("connectionUid"))
                 .processDefinitionKey((String) rule.get("processDefinitionKey"))
                 .startEventId((String) rule.get("startEventId"))
-                .folderLabel(rule.get("folderLabel") != null ? (String) rule.get("folderLabel") : "INBOX")
+                .folderLabel(rule.get("folderLabel") != null
+                        ? (String) rule.get("folderLabel") : DEFAULT_FOLDER_LABEL)
                 .filterFrom((String) rule.get("filterFrom"))
                 .filterSubject((String) rule.get("filterSubject"))
                 .actionType(rule.get("actionType") != null ? (String) rule.get("actionType") : "START_PROCESS")

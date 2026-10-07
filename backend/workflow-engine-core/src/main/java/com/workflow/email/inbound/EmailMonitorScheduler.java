@@ -214,8 +214,7 @@ public class EmailMonitorScheduler {
         log.info("[EMAIL-MONITOR] rule {} using system IMAP endpoint: host={} port={} ssl={}",
                 rule.getId(), host, port, ssl);
 
-        String username = StringUtils.hasText(connection.getMailboxAddress())
-                ? connection.getMailboxAddress() : connection.getUsername();
+        ImapIdentities identities = resolveIdentities(connection);
         String password;
         try {
             password = resolvePassword(rule, connection);
@@ -224,12 +223,38 @@ public class EmailMonitorScheduler {
                     rule.getId(), ex.getMessage());
             return null;
         }
-        if (!StringUtils.hasText(username) || password == null) {
+        if (!StringUtils.hasText(identities.login()) || password == null) {
             log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} missing IMAP credentials (username/passwordEnvKey)",
                     rule.getId(), rule.getConnectionUid());
             return null;
         }
-        return new MailboxAccess(host, port, ssl, username, password);
+        return new MailboxAccess(host, port, ssl, identities.login(), password, identities.mailbox());
+    }
+
+    /**
+     * Login is the service account; mailbox is the bound inbox to open (Mailbox Email / from_email).
+     */
+    static ImapIdentities resolveIdentities(SysEmailConnection connection) {
+        String login = firstNonBlank(
+                connection.getUsername(), connection.getMailboxAddress(), connection.getFromEmail());
+        String mailbox = firstNonBlank(
+                connection.getMailboxAddress(), connection.getFromEmail(), login);
+        return new ImapIdentities(login, mailbox);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    record ImapIdentities(String login, String mailbox) {
     }
 
     /**

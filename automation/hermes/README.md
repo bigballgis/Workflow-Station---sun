@@ -36,7 +36,7 @@
 > `check-tsconfig-paths.mjs`）。它第三条不变量「community/ 只许有白名单里的件」**故意没有保留**：
 > community/ 正是自研件的所在地，那条检查等于给它本该保护的流程收税——每加一个自研件都得先去脚本的
 > KEEP 里登记。裁剪结果现在就是树的状态：`packages/pieces/{core,custom}` 已整体删除，
-> `community/` 留 4 个（`biz-calendar` / `hash-helper` 自研件 + 白名单件 `json` / `postgres` 的源码）。
+> `community/` 留 5 个（`biz-calendar` / `hash-helper` / `content-organizer` 自研件 + 白名单件 `json` / `postgres` 的源码）。
 
 > `patch-piece-ai-run-agent.js`（HERMES-PATCH-002）已于 2026-07-28 删除：AI Generate 改用
 > HTTP piece 直连模型端点，`piece-ai` 的 `run_agent` 链路作废，补丁没有可打的对象了。
@@ -81,8 +81,8 @@
 - prewarm 写的 `package.json` / `pnpm-workspace.yaml` / `.npmrc` 与 `pkgRunner().install()`
   的命令行是**逐字复刻** `piece-installer.ts`；上游改布局，运行时会重装（联网环境静默变慢，
   气隙环境直接 `PieceNotFound`）。
-- **piece 源码树已收敛到 6 个包**：`framework` / `common` + `community/` 下 4 个
-  （`biz-calendar` / `hash-helper` 自研件，`json` / `postgres` 是白名单件的源码）。
+- **piece 源码树已收敛到 7 个包**：`framework` / `common` + `community/` 下 5 个
+  （`biz-calendar` / `hash-helper` / `content-organizer` 自研件，`json` / `postgres` 是白名单件的源码）。
   上游的 694 个 community 件与整个 `packages/pieces/{core,custom}` 都已从树上删除
   （最后一步 2026-08-07，[D13](../../docs/ap-integration/DECISIONS.md#d13)）；
   需要读被删的上游源码时从 `de4f6469` 取回（VT-09 约定）。三步的动机不同，别合并理解：

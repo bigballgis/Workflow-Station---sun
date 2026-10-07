@@ -17,7 +17,7 @@
       >{{ t('functionUnit.documents.empty') }}</span>
       <DesignerHelpLink
         path="/fu-documents"
-        :aria-label="t('functionUnit.documents.guideLinkAria')"
+        :ariaLabel="t('functionUnit.documents.guideLinkAria')"
         test-id="fu-documents-guide-link"
       />
       <el-tag

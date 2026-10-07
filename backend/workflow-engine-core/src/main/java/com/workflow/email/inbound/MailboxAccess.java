@@ -3,15 +3,19 @@ package com.workflow.email.inbound;
 /**
  * Connection-resolved access parameters for reading a mailbox via IMAP.
  *
- * <p>Built by the scheduler from a synced email connection (provider preset host/port +
- * username + decrypted app password). Mirrors Power Automate's "shared mailbox" connection:
- * the mailbox and how to reach it are entirely connection-determined.
+ * <p>{@code username} is the IMAP login (service account). {@code mailboxAddress} is the
+ * mailbox to open when it differs from the login (shared / bound mailbox). Null mailbox
+ * means the login's primary inbox.
  */
 public record MailboxAccess(
         String host,
         int port,
         boolean ssl,
         String username,
-        String password
+        String password,
+        String mailboxAddress
 ) {
+    public MailboxAccess(String host, int port, boolean ssl, String username, String password) {
+        this(host, port, ssl, username, password, null);
+    }
 }

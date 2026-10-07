@@ -5,6 +5,7 @@ import tableBindingsMessages from './tableBindings.en'
 import viewDesignMessages from './viewDesign.en'
 import fuDocumentsMessages from './fuDocuments.en'
 import aiStudioMessages from './aiStudio.en'
+import slaPoliciesMessages from './slaPolicies.en'
 
 export default {
   app: {
@@ -188,6 +189,11 @@ export default {
       title: 'Environment variables',
       summary:
         'Admin Environment variables catalog: TEXT current/default values, and VAULT keys for Email Connection passwords. A new Vault path is written only when it does not already exist.',
+    },
+    slaPolicies: {
+      title: 'SLA Policies',
+      summary:
+        'Admin SLA Policies: lead time in days per Function Unit, recalculation of open cases\' due dates, job and change history. Fields are mapped in Table Design.',
     },
     upTasksToClaim: {
       title: 'To Do — claim pool',
@@ -417,9 +423,9 @@ export default {
     fDirection: 'Required. Must be Inbound (monitor) or this mailbox never appears under Email Monitors.',
     fDirectionInbound: 'Choice: poll this mailbox with IMAP. Outbound (send) is for Send email, not this page.',
     fMailboxEmail:
-      'Required. Mailbox to poll; also used as the connection name. Blank blocks save.',
+      'Required. Mailbox to poll; also the connection name. When IMAP Username is a service account, the monitor will try to open this mailbox (the mail server must support that). Blank blocks save.',
     fImapUsername:
-      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row.',
+      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row. Authenticates the session; Mailbox Email is the inbox the monitor will try to read.',
     fImapPassword:
       'IMAP password is a VAULT environment variable. Required when username is set. Ciphertext is no longer stored; re-select a VAULT key on old rows. See [[/environment-variables]].',
     fImapHost:
@@ -790,4 +796,5 @@ export default {
   ...viewDesignMessages,
   ...fuDocumentsMessages,
   ...aiStudioMessages,
+  ...slaPoliciesMessages,
 }

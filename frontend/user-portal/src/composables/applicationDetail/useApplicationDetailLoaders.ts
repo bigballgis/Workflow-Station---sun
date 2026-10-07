@@ -100,7 +100,12 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           } catch (error) {
             console.error('Failed to load function unit content, but continuing:', error)
           }
-          ctx.scheduleApplicationDetailSecondary(historyPromise)
+          if (ctx.pendingApplicationDetailSecondary) {
+            ctx.scheduleApplicationDetailSecondary(historyPromise)
+          } else {
+            // No forms → no secondary pass; the diagram still needs history to colour node status.
+            void historyPromise.then(() => ctx.scheduleParseApplicationBpmnDiagram(bpmnXml.value))
+          }
         } else {
           await historyPromise
         }
@@ -373,7 +378,6 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             selectedForm.sourceId != null ? Number(selectedForm.sourceId) : null
         }
       } else {
-        diagramReady.value = true
         previousForms.value = []
         subTableBindings.value = []
         nodeFormMap.value = new Map()

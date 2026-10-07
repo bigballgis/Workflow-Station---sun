@@ -4,14 +4,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.PkGenerationConfig;
 import com.platform.common.fk.PrimaryKeyAllocationService;
+import com.platform.common.functionunit.ProcessStartForm;
 import com.portal.exception.PortalException;
 import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.SystemAuditFieldFiller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,6 +51,11 @@ public class ProcessStartFormEnricherComponent {
     private final RequestIdEnricher requestIdEnricher;
     private final UserDisplayNameResolver userDisplayNameResolver;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
     public void enrichOnInsert(String functionUnitCode, String userId, Map<String, Object> variables) {
         if (variables == null) {
             return;
@@ -67,6 +76,10 @@ public class ProcessStartFormEnricherComponent {
         SystemAuditFieldFiller.fillOnInsert(variables, userDisplayNameResolver.resolve(userId));
         computedFieldRecalculator.recalculate(functionUnitCode, variables);
         requestIdEnricher.stampRequestId(functionUnitCode, variables);
+        if (slaDueDateEnricher != null) {
+            // Not persisted yet: the case is submitted today.
+            slaDueDateEnricher.stamp(functionUnitCode, variables, LocalDate.now());
+        }
     }
 
     private Long requireFunctionUnitId(String functionUnitCode) {
@@ -83,10 +96,10 @@ public class ProcessStartFormEnricherComponent {
                 FROM dw_form_definitions fd
                 INNER JOIN dw_form_table_bindings ftb
                     ON ftb.form_id = fd.id AND ftb.binding_type = 'PRIMARY'
-                WHERE fd.function_unit_id = ? AND fd.form_type = 'PROCESS'
+                WHERE fd.function_unit_id = ? AND %s
                 ORDER BY ftb.sort_order NULLS LAST, ftb.id
                 LIMIT 1
-                """,
+                """.formatted(ProcessStartForm.SQL_PREDICATE),
                 rs -> rs.next() ? rs.getLong("table_id") : null,
                 functionUnitId);
     }

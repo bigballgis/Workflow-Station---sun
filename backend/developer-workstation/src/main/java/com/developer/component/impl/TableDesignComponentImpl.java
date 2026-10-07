@@ -21,6 +21,7 @@ import com.developer.repository.*;
 import com.developer.service.ComputedFieldValidator;
 import com.developer.service.FieldFkPkSyncService;
 import com.developer.service.FormConfigFieldRenamer;
+import com.developer.service.SlaConfigValidator;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.FkFillSourcesSupport;
 import com.platform.common.i18n.I18nService;
@@ -66,6 +67,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final ComputedFieldValidator computedFieldValidator;
     private final JdbcTemplate jdbcTemplate;
     private final MainTableViewService mainTableViewService;
+    private final SlaConfigValidator slaConfigValidator;
     
     @Override
     @Transactional
@@ -78,6 +80,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
         }
+        slaConfigValidator.validate(request);
         
         TableDefinition tableDefinition = TableDefinition.builder()
                 .functionUnit(functionUnit)
@@ -86,6 +89,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .tableType(request.getTableType())
                 .displayName(request.getDescription())
                 .requestIdConfig(request.getRequestIdConfig())
+                .slaConfig(request.getSlaConfig())
                 .build();
         
         tableDefinition = tableDefinitionRepository.save(tableDefinition);
@@ -150,6 +154,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
         }
+        slaConfigValidator.validate(request);
 
         // Before deleting legacy fields snapshot (fieldName, description, ...) keyed by id for diffing after save
         // so renames/display-name tweaks propagate into every referencing Form rule + fieldPermissions.
@@ -180,6 +185,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         tableDefinition.setTableType(request.getTableType());
         tableDefinition.setDisplayName(request.getDescription());
         tableDefinition.setRequestIdConfig(request.getRequestIdConfig());
+        tableDefinition.setSlaConfig(request.getSlaConfig());
 
         List<TableDefinition> allTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
         if (request.getFields() != null && !request.getFields().isEmpty()) {

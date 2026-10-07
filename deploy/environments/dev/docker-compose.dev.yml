@@ -216,6 +216,18 @@ services:
       # HTTP step. Entries are IPs or CIDRs only (matched against RESOLVED addresses — a
       # hostname here would never match); empty = fail-closed. See docs/ap-integration D9-4.
       AP_SSRF_ALLOW_LIST: ${AP_SSRF_ALLOW_LIST:-}
+      # Content Organizer piece (OCR): iB2B service account + CO endpoint, read by the piece from
+      # the engine environment — never stored in a flow. Container names mirror
+      # deploy/k8s/activepieces.yaml. dev defaults to mock-content-organizer (a laptop cannot reach
+      # *.hk.hsbc), so the source variables are OCR_IB2B_* rather than .env's IB2B_*: set them plus
+      # CONTENT_ORGANIZER_* to rehearse against the real endpoints. Hosts must be in AP_SSRF_ALLOW_LIST.
+      IB2B_TOKEN_URL: ${OCR_IB2B_TOKEN_URL:-http://mock-content-organizer:9100/ib2b/translate}
+      IB2B_USERNAME: ${OCR_IB2B_USERNAME:-HK-HERMES-D}
+      IB2B_SECRET: ${OCR_IB2B_SECRET:-dev-ib2b-secret}
+      CONTENT_ORGANIZER_BASE_URL: ${CONTENT_ORGANIZER_BASE_URL:-http://mock-content-organizer:9100/co/v1}
+      CONTENT_ORGANIZER_APPLICATION_ID: ${CONTENT_ORGANIZER_APPLICATION_ID:-dev-ocr-app}
+      # The engine process only inherits whitelisted variables; list the ones pieces may read.
+      AP_SANDBOX_PROPAGATED_ENV_VARS: IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION
     volumes:
       - activepieces_data:/app/packages/server/data
     healthcheck:
@@ -225,6 +237,27 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # dev-only stand-in for iB2B + HASE Content Organizer (unreachable from a laptop). The
+  # content-organizer piece calls it exactly like the real API; the completion is answered by the
+  # dev AI gateway model over the PDF text layer. Not deployed anywhere else.
+  # Runs on the Automation image: it already has Node 24 and unpdf, so nothing extra is pulled.
+  mock-content-organizer:
+    image: activepieces:0.88.0-ee-removed
+    container_name: platform-mock-content-organizer-dev
+    entrypoint: ["node", "/mock/mock-content-organizer.mjs"]
+    volumes:
+      - ./mock-content-organizer:/mock:ro
+    environment:
+      MOCK_IB2B_USERNAME: ${OCR_IB2B_USERNAME:-HK-HERMES-D}
+      MOCK_IB2B_SECRET: ${OCR_IB2B_SECRET:-dev-ib2b-secret}
+      MOCK_CO_APPLICATION_ID: ${CONTENT_ORGANIZER_APPLICATION_ID:-dev-ocr-app}
+      MOCK_LLM_URL: ${GROUP_AI_GATEWAY_URL:-}
+      MOCK_LLM_MODEL: ${AI_GATEWAY_MODEL:-}
+      MOCK_LLM_API_KEY: ${AI_GATEWAY_API_KEY:-}
     networks:
       - platform-dev-network
     restart: unless-stopped

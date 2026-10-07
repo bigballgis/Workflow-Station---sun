@@ -423,6 +423,23 @@ export default {
     tableName: '表名',
     tableDisplayName: '表顯示名稱',
     tableType: '表類型',
+    sla: {
+      guideLinkAria: '開啟 SLA 到期日說明',
+      label: 'SLA 到期日',
+      notConfigured: '未設定（不計算到期日）',
+      summary: '{due} = {start} + SLA 時效天數',
+      dialogTitle: '設定 SLA 到期日',
+      dialogHint: '到期日欄位由平台按「開始日 + SLA 時效天數（自然日）」自動填入。時效天數按環境在 Admin Center > SLA 策略中維護；到期日欄位在表單上唯讀。',
+      startSource: '開始日來源',
+      sourceField: '主表欄位',
+      sourceSubmittedAt: '提交時間',
+      startField: '開始日欄位',
+      dueField: '到期日欄位',
+      selectField: '請選擇欄位',
+      noStartCandidates: '本表沒有日期 / 時間戳欄位',
+      noDueCandidates: '本表沒有非公式的日期欄位',
+      clear: '移除',
+    },
     requestId: {
       label: 'Request ID',
       metaHint: '從主表欄位裡選取若干欄位拼成一條 request 的人類可讀標識,展示在表單和 Portal 列表上(如 HR-2026-001)。',
@@ -2100,7 +2117,8 @@ export default {
     monitorSection: '郵件監聽（入站）',
     monitorMailboxEmail: '監聽信箱',
     monitorMailboxEmailPlaceholder: "inbox{'@'}your-domain.example.com",
-    monitorMailboxEmailHint: '要輪詢的信箱位址（同時作為連線名稱）。',
+    monitorMailboxEmailHint:
+      '要輪詢的信箱（同時作為連線名稱）。IMAP 使用者名稱是服務帳號。兩者不同時，監聽會嘗試用該帳號開啟這個信箱，需郵件伺服器支援。',
     monitorUsername: 'IMAP 使用者名稱',
     monitorPassword: 'IMAP 密碼（VAULT）',
     systemImapFromAdminHint:

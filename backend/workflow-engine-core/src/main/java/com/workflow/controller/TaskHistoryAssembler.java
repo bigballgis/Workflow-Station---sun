@@ -30,9 +30,11 @@ import java.util.stream.Collectors;
  * Controller-layer support for assembling process instance flow history.
  *
  * <p>Shapes Flowable historic activity/task/comment data into the portal UI timeline payload.
- * Includes completed Send Email {@code serviceTask} rows ({@code operationType=SEND}, operator
- * {@code system}). Reads through {@link HistoryService}/{@link TaskService}/{@link RepositoryService}
- * and resolves display names via {@link TaskManagerComponent}.
+ * Includes completed {@code serviceTask} rows with operator {@code system}: Send Email as
+ * {@code operationType=SEND}, every other automation (e.g. Activepieces) as {@code AUTO}, so the
+ * portal diagram can color executed service tasks. Reads through {@link HistoryService}/
+ * {@link TaskService}/{@link RepositoryService} and resolves display names via
+ * {@link TaskManagerComponent}.
  */
 @Slf4j
 @Component
@@ -151,7 +153,7 @@ class TaskHistoryAssembler {
 
         // Shape response for the portal UI
         List<Map<String, Object>> historyList = activities.stream()
-            .filter(activity -> shouldIncludeInHistory(activity, sendEmailActivityIds, bpmnModel))
+            .filter(TaskHistoryAssembler::shouldIncludeInHistory)
             .map(activity -> {
                 Map<String, Object> item = new HashMap<>();
                 item.put("id", activity.getId());
@@ -164,6 +166,7 @@ class TaskHistoryAssembler {
                 // Derive operation type from activity type and deleteReason
                 String activityType = activity.getActivityType();
                 boolean sendEmailTask = isCompletedSendEmailTask(activity, sendEmailActivityIds, bpmnModel);
+                boolean automatedTask = isCompletedServiceTask(activity);
                 String operationType = "PENDING";
                 if (activity.getEndTime() != null) {
                     if ("startEvent".equals(activityType)) {
@@ -174,6 +177,8 @@ class TaskHistoryAssembler {
                         operationType = "GATEWAY";
                     } else if (sendEmailTask) {
                         operationType = "SEND";
+                    } else if (automatedTask) {
+                        operationType = "AUTO";
                     } else if ("userTask".equals(activityType)) {
                         String taskIdForActivity = activity.getTaskId();
                         if (taskIdForActivity != null && taskDraftComments.containsKey(taskIdForActivity)) {
@@ -208,7 +213,7 @@ class TaskHistoryAssembler {
                 }
                 item.put("operationType", operationType);
 
-                if (sendEmailTask) {
+                if (automatedTask) {
                     item.put("operatorId", SYSTEM_OPERATOR);
                     item.put("operatorName", SYSTEM_OPERATOR);
                 } else {
@@ -335,8 +340,7 @@ class TaskHistoryAssembler {
         return ids;
     }
 
-    private static boolean shouldIncludeInHistory(
-            HistoricActivityInstance activity, Set<String> sendEmailActivityIds, BpmnModel bpmnModel) {
+    private static boolean shouldIncludeInHistory(HistoricActivityInstance activity) {
         String type = activity.getActivityType();
         if ("userTask".equals(type)
                 || "manualTask".equals(type)
@@ -350,7 +354,11 @@ class TaskHistoryAssembler {
                 || "inclusiveGateway".equals(type)) {
             return true;
         }
-        return isCompletedSendEmailTask(activity, sendEmailActivityIds, bpmnModel);
+        return isCompletedServiceTask(activity);
+    }
+
+    private static boolean isCompletedServiceTask(HistoricActivityInstance activity) {
+        return "serviceTask".equals(activity.getActivityType()) && activity.getEndTime() != null;
     }
 
     private static boolean isCompletedSendEmailTask(
