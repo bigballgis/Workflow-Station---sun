@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { Property, createAction } from '@activepieces/pieces-framework';
 import { FetchLike, complete, uploadFile } from '../common/client';
 import { readConfig } from '../common/config';
-import { FieldSpec, buildInstructions, parseAnswer, validateFields } from '../common/field-prompt';
+import { EXTRACTION_QUESTION, FieldSpec, buildFieldList, parseAnswer, validateFields } from '../common/field-prompt';
 
 export const extractFieldsAction = createAction({
   name: 'extract_fields', // stable machine name, stored in flow JSON — renaming is breaking
@@ -67,7 +67,7 @@ export async function extractFields(params: {
   // A new session per run: Content Organizer allows only 3 files per session.
   const session = { config, fetchImpl, sessionId: `hermes-${randomUUID()}`, userId: params.staffId };
   const fileId = await uploadFile(session, file);
-  const answer = await complete(session, buildInstructions(params.fields));
+  const answer = await complete(session, EXTRACTION_QUESTION, buildFieldList(params.fields));
   return { values: parseAnswer(answer, params.fields), sessionId: session.sessionId, fileId };
 }
 

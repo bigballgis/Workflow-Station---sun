@@ -9,6 +9,8 @@ const ENV = {
   IB2B_SECRET: 's3cret',
   CONTENT_ORGANIZER_BASE_URL: 'https://co.example/proxy/v1/',
   CONTENT_ORGANIZER_APPLICATION_ID: 'app-1',
+  CONTENT_ORGANIZER_PROMPT_SETTING_ID: 'ps-1',
+  CONTENT_ORGANIZER_PROMPT_VARIABLE_ID: 'var-1',
 };
 const FILE_URL = 'http://developer-workstation:8080/api/v1/upload/files/a1.pdf?originalName=Receipt+Notice.pdf';
 const FIELDS = [{ key: 'receipt_number', label: 'Receipt Number' }];
@@ -76,7 +78,15 @@ describe('extractFields', () => {
     expect(body.sessionId).toBe(out.sessionId);
     expect(body.userId).toBe('45349679');
     expect(body.parameter.applicationId).toBe('app-1');
-    expect(body.parameter.messages[0].content).toContain('- receipt_number: "Receipt Number" (text)');
+    expect(body.parameter.messages).toEqual([{ role: 'user', content: 'Extract the fields from the uploaded document.' }]);
+    expect(body.parameter.promptSetting).toEqual({
+      id: 'ps-1',
+      promptVars: [{ name: 'var-1', value: ['- receipt_number: "Receipt Number" (text)'] }],
+      settingType: 'PROMPT',
+    });
+    expect(body.workflow).toBe('default');
+    expect(body.version).toBe('1.0');
+    expect(body.defaultOptions).toEqual({ language: 'English', noOfOutput: 1 });
   });
 
   test('a 401 from Content Organizer mints a new iB2B token and retries once', async () => {
@@ -104,13 +114,17 @@ describe('extractFields', () => {
 describe('readConfig', () => {
   test('names every missing variable', () => {
     expect(() => readConfig({ IB2B_TOKEN_URL: 'x' })).toThrow(
-      /IB2B_USERNAME, IB2B_SECRET, CONTENT_ORGANIZER_BASE_URL, CONTENT_ORGANIZER_APPLICATION_ID/,
+      /IB2B_USERNAME, IB2B_SECRET, CONTENT_ORGANIZER_BASE_URL, CONTENT_ORGANIZER_APPLICATION_ID, CONTENT_ORGANIZER_PROMPT_SETTING_ID, CONTENT_ORGANIZER_PROMPT_VARIABLE_ID/,
     );
   });
 
-  test('strips the trailing slash of the base url and defaults the api version', () => {
+  test('strips the trailing slash of the base url and defaults the api version and workflow', () => {
     const config = readConfig(ENV);
     expect(config.baseUrl).toBe('https://co.example/proxy/v1');
     expect(config.apiVersion).toBe('2024-10-01-preview');
+    expect(config.workflow).toBe('default');
+    expect(config.workflowVersion).toBe('1.0');
+    expect(readConfig({ ...ENV, CONTENT_ORGANIZER_WORKFLOW: 'ReasearchChatCompletion', CONTENT_ORGANIZER_WORKFLOW_VERSION: '001' }))
+      .toMatchObject({ workflow: 'ReasearchChatCompletion', workflowVersion: '001' });
   });
 });

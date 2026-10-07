@@ -84,9 +84,10 @@ export async function uploadFile(
 
 /**
  * #1 Chat completion. The uploaded file is linked by the same sessionId + applicationId + userId
- * (confirmed by the Content Organizer team), not by passing its file_id.
+ * (confirmed by the Content Organizer team), not by passing its file_id. The instructions live in the
+ * configured prompt setting; `variableValue` fills its one variable (the field list).
  */
-export async function complete(session: ContentOrganizerSession, prompt: string): Promise<string> {
+export async function complete(session: ContentOrganizerSession, question: string, variableValue: string): Promise<string> {
   const { config, sessionId, userId } = session;
   const body = await callWithFreshToken(session, (token) => session.fetchImpl(
     `${config.baseUrl}/api/management-service/chat/completion`,
@@ -99,8 +100,16 @@ export async function complete(session: ContentOrganizerSession, prompt: string)
         metadata: { apiVersion: config.apiVersion },
         parameter: {
           applicationId: config.applicationId,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: question }],
+          promptSetting: {
+            id: config.promptSettingId,
+            promptVars: [{ name: config.promptVariableId, value: [variableValue] }],
+            settingType: 'PROMPT',
+          },
         },
+        workflow: config.workflow,
+        version: config.workflowVersion,
+        defaultOptions: { language: 'English', noOfOutput: 1 },
       }),
       signal: AbortSignal.timeout(240_000),
     },
