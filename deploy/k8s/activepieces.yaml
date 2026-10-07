@@ -297,8 +297,12 @@ spec:
               key: CONTENT_ORGANIZER_APPLICATION_NAME
               optional: true
         # The engine process inherits only whitelisted variables; these are the ones pieces may read.
+        # NODE_EXTRA_CA_CERTS must be listed too: the sandbox child is forked with ONLY this list as
+        # its environment, so without it the piece's HTTPS calls to iB2B / Content Organizer fail
+        # with a bare "fetch failed" (cause SELF_SIGNED_CERT_IN_CHAIN) although the same calls
+        # succeed from the AP main process (UAT 2026-10-08). Unset in an environment = not passed.
         - name: AP_SANDBOX_PROPAGATED_ENV_VARS
-          value: "IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION,CONTENT_ORGANIZER_PROMPT_SETTING_ID,CONTENT_ORGANIZER_PROMPT_VARIABLE_ID,CONTENT_ORGANIZER_WORKFLOW,CONTENT_ORGANIZER_WORKFLOW_VERSION,CONTENT_ORGANIZER_MODEL,CONTENT_ORGANIZER_APPLICATION_NAME"
+          value: "NODE_EXTRA_CA_CERTS,IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION,CONTENT_ORGANIZER_PROMPT_SETTING_ID,CONTENT_ORGANIZER_PROMPT_VARIABLE_ID,CONTENT_ORGANIZER_WORKFLOW,CONTENT_ORGANIZER_WORKFLOW_VERSION,CONTENT_ORGANIZER_MODEL,CONTENT_ORGANIZER_APPLICATION_NAME"
         ports:
         - containerPort: 80
           name: http

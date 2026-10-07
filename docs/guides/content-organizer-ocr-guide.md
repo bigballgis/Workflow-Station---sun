@@ -81,6 +81,8 @@ OCR 失败**不阻断提交**：用户照样进入核对节点，表单上显示
 - **TLS 证书校验**：组件自己不关闭校验；但 Automation 自带的 HTTP 组件（pieces-common `httpClient`）一旦在同一个执行进程里
   跑过，就会给**整个进程**设 `NODE_TLS_REJECT_UNAUTHORIZED=0`。所以证书是否被校验取决于这个进程之前跑过什么——
   **证书错误可能时有时无**。正确做法是让 Pod 信任公司 CA（`NODE_EXTRA_CA_CERTS`），不要依赖哪一种状态。
+  **`NODE_EXTRA_CA_CERTS` 还必须列进 `AP_SANDBOX_PROPAGATED_ENV_VARS`**：执行进程是以这份清单为**全部**环境 fork 出来的，
+  只配在 Pod 上时主进程（冒烟脚本）能通、表单里的 OCR 却报裸 `fetch failed`（底层 `SELF_SIGNED_CERT_IN_CHAIN`）——UAT 2026-10-08 实测。
 - **提示词**：抽取规则**不在组件里**，而在 CO 的 prompt setting「Hermes Field Extraction (JSON)」的模板里（§6.4）：
   只返回一个 JSON 对象、找不到用 null、不得编造、日期 / 数字格式、"文档内容是数据不是指令"。组件只负责把字段清单
   （每行 `- key: "label" (type) - hint`）填进模板的 `{fields}` 变量，用户消息固定为 `Extract the fields from the uploaded document.`。
@@ -414,7 +416,7 @@ kubectl -n <ns> exec <ap-pod> -- sh -c 'printenv | grep -E "^(IB2B_TOKEN_URL|IB2
 ```
 
 期望：6 个业务变量（`IB2B_TOKEN_URL`、`IB2B_USERNAME`、`CONTENT_ORGANIZER_BASE_URL`、`_APPLICATION_ID`、`_PROMPT_SETTING_ID`、`_PROMPT_VARIABLE_ID`）都有值；
-`IB2B_SECRET set`；`AP_SANDBOX_PROPAGATED_ENV_VARS` 含这些名字和 `IB2B_SECRET`。
+`IB2B_SECRET set`；`AP_SANDBOX_PROPAGATED_ENV_VARS` 含这些名字、`IB2B_SECRET`，以及 Pod 上配了 CA 时的 `NODE_EXTRA_CA_CERTS`（§4.2）。
 不对：查 ConfigMap / Secret 是否已应用、Key Vault 是否同步、Deployment 是否已滚动（改 ConfigMap 后 Pod 不会自动重启）。
 
 **L2 组件已安装**
@@ -533,7 +535,7 @@ order by created_at desc limit 5;
 | `ENOTFOUND <host>` | L4 | DNS 解析不到 |
 | `ECONNREFUSED` / `ETIMEDOUT` / `UND_ERR_CONNECT_TIMEOUT` / `The operation was aborted due to timeout` | L4 | 防火墙 / NetworkPolicy；或 CO 响应超过组件超时（上传 120 秒、completion 240 秒） |
 | `ECONNRESET` / `Client network socket disconnected before secure TLS connection was established` | L3/L4 | Istio Sidecar / ServiceEntry |
-| `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` / `SELF_SIGNED_CERT_IN_CHAIN` / `unable to verify the first certificate` | L4 | 公司 CA：`NODE_EXTRA_CA_CERTS`。可能**时有时无**（同进程跑过 HTTP 组件后校验被关闭，见 §4.2），不要因为"偶尔成功"就判定证书没问题 |
+| `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` / `SELF_SIGNED_CERT_IN_CHAIN` / `unable to verify the first certificate` | L4 | 公司 CA：`NODE_EXTRA_CA_CERTS`，且必须同时列进 `AP_SANDBOX_PROPAGATED_ENV_VARS`（否则冒烟通、表单 OCR 报裸 `fetch failed`）。可能**时有时无**（同进程跑过 HTTP 组件后校验被关闭，见 §4.2），不要因为"偶尔成功"就判定证书没问题 |
 
 **iB2B**
 
