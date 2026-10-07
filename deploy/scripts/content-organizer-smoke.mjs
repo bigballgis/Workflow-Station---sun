@@ -130,6 +130,17 @@ const done = await post(`${base}/api/management-service/chat/completion`, {
     metadata: { apiVersion: env('CONTENT_ORGANIZER_API_VERSION') || '2024-10-01-preview' },
     parameter: {
       applicationId: appId,
+      applicationName: env('CONTENT_ORGANIZER_APPLICATION_NAME') || 'Hermes Workflow',
+      model: env('CONTENT_ORGANIZER_MODEL') || 'gemini-3.5-flash',
+      llmProvider: 'OpenAI',
+      apiVersion: '2023-03-15-preview',
+      promptEngineer: 'true',
+      enableQuestionDetection: 'false',
+      numberOfRelevantDocument: 3,
+      searchingScore: 0.3,
+      temperature: 1,
+      referDocumentList: [],
+      referDocumentbaseList: [],
       messages: [{ role: 'user', content: 'Extract the fields from the uploaded document.' }],
       promptSetting: {
         id: env('CONTENT_ORGANIZER_PROMPT_SETTING_ID'),

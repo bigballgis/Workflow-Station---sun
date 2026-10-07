@@ -9,7 +9,7 @@
  *   POST /co/v1/api/management-service/api/applications/{applicationId}/sessions/{sessionId}/files   (#9)
  *        multipart: files, userId; header X-HSBC-E2E-Trust-Token
  *   POST /co/v1/api/management-service/chat/completion                                                (#1)
- *        {"sessionId","userId","parameter":{"applicationId","messages":[...],
+ *        {"sessionId","userId","parameter":{"applicationId","applicationName","model","messages":[...],
  *         "promptSetting":{"id","promptVars":[{"name":<variable id>,"value":[...]}]}}}
  *
  * Real Content Organizer reads the uploaded file with Gemini. The mock extracts the PDF text layer
@@ -175,6 +175,13 @@ async function completion(req, res) {
   const messages = body?.parameter?.messages ?? [];
   if (applicationId !== APPLICATION_ID) return send(res, 404, { detail: 'Application not found' });
   if (!body.userId) return send(res, 400, { detail: 'userId is required when calling with an iB2B token' });
+  // The real API answers 422 (FastAPI validation) when these are missing — found in UAT 2026-10-07.
+  const missingFields = ['model', 'applicationName'].filter((f) => !body?.parameter?.[f]);
+  if (missingFields.length > 0) {
+    return send(res, 422, {
+      detail: missingFields.map((f) => ({ type: 'missing', loc: ['body', 'parameter', f], msg: 'Field required' })),
+    });
+  }
   const setting = body?.parameter?.promptSetting;
   if (setting?.id !== PROMPT_SETTING_ID) return send(res, 400, { detail: 'Prompt setting not found' });
   const fields = (setting.promptVars ?? []).find((v) => v?.name === PROMPT_VARIABLE_ID)?.value?.[0];

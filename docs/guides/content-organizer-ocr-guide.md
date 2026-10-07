@@ -99,6 +99,8 @@ OCR 失败**不阻断提交**：用户照样进入核对节点，表单上显示
 | `CONTENT_ORGANIZER_API_VERSION` | 否 | 请求里的 `metadata.apiVersion`，默认 `2024-10-01-preview` |
 | `CONTENT_ORGANIZER_WORKFLOW` | 否 | 请求顶层 `workflow`，默认 `default`（API 文档的值）；CO 网页自己发的是 `ReasearchChatCompletion` |
 | `CONTENT_ORGANIZER_WORKFLOW_VERSION` | 否 | 请求顶层 `version`，默认 `1.0`（API 文档的值）；CO 网页自己发的是 `001` |
+| `CONTENT_ORGANIZER_MODEL` | 否 | `parameter.model`，默认 `gemini-3.5-flash`（Hermes use case 配置的模型）。**真实 API 必填**，文档没写 |
+| `CONTENT_ORGANIZER_APPLICATION_NAME` | 否 | `parameter.applicationName`，默认 `Hermes Workflow`。**真实 API 必填**，文档没写 |
 
 缺任何一个必填项，运行时报错并列出缺的变量名。**这些变量必须同时列在 `AP_SANDBOX_PROPAGATED_ENV_VARS` 里**，
 否则执行进程里读不到（Automation 的执行进程只继承白名单内的变量）。
@@ -180,7 +182,8 @@ Field list (one per line: key: "label" (type) - hint):
 {fields}
 ```
 
-组件发出的 completion 请求体（与 CO 网页自己发的结构一致，`workflow` / `version` 取值见 §4.3）：
+组件发出的 completion 请求体。2026-10-07 在 **UAT 实测 HTTP 200**（`Testing_1_4.pdf` 的标题抽对了）；
+`parameter` 块与 CO 网页自己发的一致。缺 `model` 或 `applicationName` 时返回 **HTTP 422**（API 文档没写这两个必填项）：
 
 ```json
 {
@@ -188,6 +191,11 @@ Field list (one per line: key: "label" (type) - hint):
   "metadata": { "apiVersion": "2024-10-01-preview" },
   "parameter": {
     "applicationId": "57c0247a-249f-4414-936e-a4599d81cccd",
+    "applicationName": "Hermes Workflow", "model": "gemini-3.5-flash",
+    "llmProvider": "OpenAI", "apiVersion": "2023-03-15-preview",
+    "promptEngineer": "true", "enableQuestionDetection": "false",
+    "numberOfRelevantDocument": 3, "searchingScore": 0.3, "temperature": 1,
+    "referDocumentList": [], "referDocumentbaseList": [],
     "messages": [{ "role": "user", "content": "Extract the fields from the uploaded document." }],
     "promptSetting": {
       "id": "a20e508c-3101-4be2-a8dd-c3a98e6f560c",
@@ -205,8 +213,8 @@ Field list (one per line: key: "label" (type) - hint):
   浏览器 DevTools → Network → `completion` 请求的 Payload 里就能看到 `promptSetting.id` 与 `promptVars[0].name`。
 - **改模板**：在 Workbench 里改会产生新版本，需重新激活；ID 是否变化以 Payload 为准，变了要同步 ConfigMap。
   dev 的 mock（§10）里有一份同样的模板，改了要一起改。
-- **其他环境**：applicationId 各环境相同（CO 团队确认）；prompt setting 是否同样跨环境共享**未确认**（§9 第 1 项）。
-  若 UAT / PPD 的 completion 报 `Prompt setting not found`，在该环境的 CO 网页按上表重建、激活，把新 ID 写进该环境 ConfigMap。
+- **其他环境**：applicationId 各环境相同（CO 团队确认）；在 CO dev 建的 prompt setting **UAT 实测可用**（2026-10-07），
+  PPD / prod 未验证。若某环境 completion 报 `Prompt setting not found`，在该环境的 CO 网页按上表重建、激活，把新 ID 写进该环境 ConfigMap。
 
 ---
 
@@ -268,10 +276,10 @@ export const code = async (inputs) => {
 
 | # | 位置 | 内容 | 仓库文件 |
 |---|---|---|---|
-| 1 | ConfigMap `workflow-platform-config` | `IB2B_TOKEN_URL`、`IB2B_USERNAME`、`CONTENT_ORGANIZER_BASE_URL`、`CONTENT_ORGANIZER_APPLICATION_ID`、`CONTENT_ORGANIZER_PROMPT_SETTING_ID`、`CONTENT_ORGANIZER_PROMPT_VARIABLE_ID`（可选：`CONTENT_ORGANIZER_WORKFLOW`、`CONTENT_ORGANIZER_WORKFLOW_VERSION`） | `deploy/k8s/config_map/<env>/configmap-workflow-platform-config.yml` |
+| 1 | ConfigMap `workflow-platform-config` | `IB2B_TOKEN_URL`、`IB2B_USERNAME`、`CONTENT_ORGANIZER_BASE_URL`、`CONTENT_ORGANIZER_APPLICATION_ID`、`CONTENT_ORGANIZER_PROMPT_SETTING_ID`、`CONTENT_ORGANIZER_PROMPT_VARIABLE_ID`（可选：`CONTENT_ORGANIZER_WORKFLOW`、`_WORKFLOW_VERSION`、`_MODEL`、`_APPLICATION_NAME`） | `deploy/k8s/config_map/<env>/configmap-workflow-platform-config.yml` |
 | 2 | 同上 | `ACTIVEPIECES_SSRF_ALLOW_LIST` 含 `cmb-ib2b-dsp-pprod-ap.hk.hsbc` 与 CO 主机（uat：`uat-api.gcp.cloud.hk.hsbc`，ppd：`ppd-api.gcp.cloud.hk.hsbc`） | 同上 |
 | 3 | Secret `workflow-platform-secrets`（Key Vault 同步） | `IB2B_SECRET`（服务账号密码，**不得为空**） | `deploy/k8s/secret/<env>/…`（仓库里是空值占位） |
-| 4 | Deployment `activepieces` | 上述变量注入（7 个必填 + 2 个可选，都是 `optional: true` 引用）+ `AP_SANDBOX_PROPAGATED_ENV_VARS` | `deploy/k8s/activepieces.yaml` |
+| 4 | Deployment `activepieces` | 上述变量注入（7 个必填 + 4 个可选，都是 `optional: true` 引用）+ `AP_SANDBOX_PROPAGATED_ENV_VARS` | `deploy/k8s/activepieces.yaml` |
 | 5 | Istio `Sidecar activepieces-sidecar` | egress hosts 含 iB2B 与 CO 主机 | 同上 |
 | 6 | Istio `ServiceEntry content-organizer-egress` | 上述主机 MESH_EXTERNAL，端口 8443 / 443，协议 TLS（应用自己做 HTTPS，Envoy 透传） | 同上 |
 | 7 | 集群 / 防火墙 / NetworkPolicy | Automation Pod → `cmb-ib2b-dsp-pprod-ap.hk.hsbc:8443`、`<env>-api.gcp.cloud.hk.hsbc:443` 放行 | 运维 |
@@ -280,13 +288,21 @@ export const code = async (inputs) => {
 `CONTENT_ORGANIZER_APPLICATION_ID = 57c0247a-249f-4414-936e-a4599d81cccd`（Hermes 的 use case，已开通文件上传）；
 prompt setting 的两个 ID 见 §6.4。
 
+> **改共享 ConfigMap 只能用 `kubectl patch --type merge`**（2026-10-07 UAT 事故）。`workflow-platform-config`
+> 是平台所有服务共用的，线上还有别的团队直接加的键，跟仓库并不一致，所以既不能整份 `kubectl apply`（会覆盖），
+> 也**绝不能**只带几个键做 `kubectl apply --server-side`：kubectl 会把原来由普通 apply 管理的字段整体迁到新的
+> field manager 名下，再把这次清单里没有的键当成"不要了"删掉——那次一下删了 160 个键，Automation 新 Pod 因
+> `couldn't find key ACTIVEPIECES_POSTGRES_HOST` 起不来，其他 11 个服务也会在下次重启时失败（当时按部署前快照
+> 用 merge patch 原值补回，未造成实际停机）。正确做法：先导出快照 `kubectl get cm workflow-platform-config -o yaml > snap.yaml`，
+> 再 `kubectl patch configmap workflow-platform-config --type merge -p '{"data":{"KEY":"value",...}}'`，事后与快照逐键比对。
+
 ### 8.2 发布组件
 
 物料已在仓库（按 [PIECE_DEVELOPMENT_HOWTO.md](../ap-integration/PIECE_DEVELOPMENT_HOWTO.md) §3–§7 产出）：
 
 | 半边 | 文件 |
 |---|---|
-| 运行时 | `automation/hermes/tarballs/activepieces-piece-content-organizer-1.0.1.tgz`（`automation/hermes/pieces.json` 已登记） |
+| 运行时 | `automation/hermes/tarballs/activepieces-piece-content-organizer-1.0.2.tgz`（`automation/hermes/pieces.json` 已登记） |
 | 元数据 | `deploy/pieces/metadata/piece-content-organizer.json` → 已汇入 `deploy/pieces/metadata/pieces-seed.sql` |
 | 图标 | `automation/packages/web/public/ap-cdn/pieces/hermes/content-organizer.svg` |
 
@@ -297,7 +313,8 @@ prompt setting 的两个 ID 见 §6.4。
    **不一定是平台的 schema**：preprod 的平台在 `hmhkdev` 库的 `hmwfst` schema，Automation 在同库的默认 schema。
 4. **重启 Automation**：`kubectl -n <ns> rollout restart deployment/activepieces`（不重启则设计器单查组件 404）。
 
-> **版本**：当前是 **1.0.1**（加了 `promptSetting`）。1.0.0 不带 `promptSetting`，对真实 CO 必然失败，已从白名单移除。
+> **版本**：当前是 **1.0.2**。1.0.0 不带 `promptSetting`；1.0.1 带了但缺 `parameter.model` / `applicationName`（UAT 返回 422）——
+> 两者对真实 CO 都必然失败，已从白名单移除。
 > Automation 的 flow 步骤**精确锁定组件版本**（不支持 `~` / `^` 范围），所以升级组件后，引用旧版本的 flow 要在设计器里把该步骤
 > 换到新版本（或重新导入已改好版本号的 flow）再发布，否则运行时找不到旧版本（`PieceNotFound`）。
 
@@ -319,10 +336,10 @@ prompt setting 的两个 ID 见 §6.4。
 
 | # | 事项 | 现状 | 怎么确认 |
 |---|---|---|---|
-| 1 | prompt setting 是否跨 CO 环境共享（像 applicationId 那样） | 两个 ID 取自 CO **dev**，已写进 UAT / preprod ConfigMap | 冒烟脚本第 5 步：报 `Prompt setting not found` 就按 §6.4 在该环境重建并替换 ID |
-| 2 | 顶层 `workflow` / `version` 用文档值还是网页值 | 默认文档值 `default` / `1.0`；网页实发 `ReasearchChatCompletion` / `001` | 冒烟脚本第 5 步；被拒时把 ConfigMap 的 `CONTENT_ORGANIZER_WORKFLOW` / `_WORKFLOW_VERSION` 改成网页值，滚动重启即可，不用重建镜像 |
-| 3 | Automation Pod 是否信任公司 CA | 组件不关闭校验，但校验状态受同进程其他组件影响（§4.2） | 冒烟脚本第 3 步（冒烟脚本是独立进程，必定校验证书，结果可信）；证书类错误见 §12.4 |
-| 4 | Istio ServiceEntry 是否透传 TLS | 按 admin-center 访问 Vault 的同款写法配置，**未在集群验证** | 冒烟脚本第 3 步 |
+| 1 | prompt setting 是否跨 CO 环境共享（像 applicationId 那样） | **UAT 已验证共享**（dev 的两个 ID 在 UAT completion 200）；PPD / prod 未验证 | 冒烟脚本第 5 步：报 `Prompt setting not found` 就按 §6.4 在该环境重建并替换 ID |
+| 2 | 顶层 `workflow` / `version` 用文档值还是网页值 | **UAT 已验证**文档值 `default` / `1.0` 可用；网页实发 `ReasearchChatCompletion` / `001` 作为备选 | 被拒时把 ConfigMap 的 `CONTENT_ORGANIZER_WORKFLOW` / `_WORKFLOW_VERSION` 改成网页值，滚动重启即可，不用重建镜像 |
+| 3 | Automation Pod 是否信任公司 CA | **UAT 已验证**：Pod 已配 `NODE_EXTRA_CA_CERTS`，冒烟 TLS / iB2B / CO 全通 | 其他环境照冒烟脚本第 3 步验证；证书类错误见 §12.4 |
+| 4 | Istio ServiceEntry 是否透传 TLS | **UAT 已验证**（iB2B 与 CO 上传、completion 都 200） | 其他环境照冒烟脚本第 3 步 |
 | 5 | prod 的 iB2B 地址 | 目前只知道 pprod：`cmb-ib2b-dsp-pprod-ap.hk.hsbc` | 上 prod 前补进 ConfigMap、Sidecar、ServiceEntry、SSRF 白名单四处 |
 
 ---
@@ -408,12 +425,12 @@ select name, version from piece_metadata where name = '@activepieces/piece-conte
 ```
 
 ```bash
-kubectl -n <ns> exec <ap-pod> -- ls /usr/src/app/cache/v13/common/pieces/@activepieces/piece-content-organizer-1.0.1/ready
+kubectl -n <ns> exec <ap-pod> -- ls /usr/src/app/cache/v13/common/pieces/@activepieces/piece-content-organizer-1.0.2/ready
 ```
 
-期望：表里有 `1.0.1`；`ready` 文件存在。
+期望：表里有 `1.0.2`；`ready` 文件存在。
 不对：表里没有 → 跑 `pieces-seed.sql` 并重启；`ready` 不存在 → 镜像不是含该组件的新版本（运行时报 `PieceNotFound`）。
-另查 flow 步骤引用的版本：设计器里打开 `Extract fields (OCR)` 步骤，版本应为 1.0.1（§8.2 的版本说明）。
+另查 flow 步骤引用的版本：设计器里打开 `Extract fields (OCR)` 步骤，版本应为 1.0.2（§8.2 的版本说明）。
 
 **L3 出网白名单（仅看配置，冒烟脚本测不到这一层）**
 
@@ -537,6 +554,7 @@ order by created_at desc limit 5;
 | `File "…" exceeds the maximum allowed size …` | 文件过大 |
 | `The maximum number of file uploads for this use case, has been reached for today. …` | 当天 100 个文件额度用完 |
 | `The maximum number of file uploads per session has been reached …` | 不应出现（组件每次运行新开 session）；出现说明 session 被复用，联系开发 |
+| HTTP 422 `{"detail":[{"type":"missing","loc":["body","parameter","model"],…}]}` | 组件是 1.0.1 或更早：请求体缺 `parameter.model` / `applicationName`。升到 1.0.2（§8.2），flow 步骤换版本 |
 | `Prompt setting not found` | `CONTENT_ORGANIZER_PROMPT_SETTING_ID` 不对，或该环境的 CO 没有这个 setting / 未激活：按 §6.4 重建或核对 ID |
 | 提示缺少必填变量 / 变量相关报错 | `CONTENT_ORGANIZER_PROMPT_VARIABLE_ID` 填成了变量名或旧 ID：按 §6.4 从 Payload 取变量 ID |
 | `workflow` / `version` 相关报错 | 按 §9 第 2 项改用网页值 |

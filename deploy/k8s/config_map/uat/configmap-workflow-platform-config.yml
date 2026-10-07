@@ -233,7 +233,8 @@ data:
   # 抽取用 prompt setting「Hermes Field Extraction (JSON)」(CO Prompt Settings Workbench 建、已激活)与其
   # {fields} 变量的 ID(promptVars[].name 填 ID 不是变量名)。取自 CO dev;若本环境的 CO 不共享 dev 的
   # prompt setting(completion 报 Prompt setting not found),在本环境 CO 重建后换成新 ID。
-  # 可选:CONTENT_ORGANIZER_WORKFLOW / CONTENT_ORGANIZER_WORKFLOW_VERSION(默认 default / 1.0)。
+  # 可选:CONTENT_ORGANIZER_WORKFLOW / _WORKFLOW_VERSION(默认 default / 1.0,UAT 已验证)、
+  # CONTENT_ORGANIZER_MODEL / _APPLICATION_NAME(默认 gemini-3.5-flash / Hermes Workflow)。
   CONTENT_ORGANIZER_PROMPT_SETTING_ID: "a20e508c-3101-4be2-a8dd-c3a98e6f560c"
   CONTENT_ORGANIZER_PROMPT_VARIABLE_ID: "02486f43-1614-4f07-b5c7-2b4bf5ecaec1"
   VITE_DSP_PASSWORDLESS_ENABLED: "true"
