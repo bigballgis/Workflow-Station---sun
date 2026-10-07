@@ -135,7 +135,8 @@ data:
   # /v1/engine/pieces/bundle,用对外地址未必解析得回自己 => fetch failed => Import Piece 500。
   # webhook 仍用对外地址,不受影响。
   ACTIVEPIECES_SELF_INTERNAL_URL: "http://activepieces-service:80"
-  ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__"
+  # content-organizer piece(OCR)出站:iB2B token translator + Content Organizer API。
+  ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__,cmb-ib2b-dsp-pprod-ap.hk.hsbc,ppd-api.gcp.cloud.hk.hsbc"
   # admin-center 已不读共享账号(身份一律 per-user managed)。保留这两项仅供空库引导
   # (ap-bootstrap-job.yaml 用 sign-up 建 AP 的第一个身份)与 deploy/scripts/ap-{export,import}.js。
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
@@ -202,3 +203,9 @@ data:
   DSP_USERNAME_CLAIMS: "uid,preferred_username,samAccountName,sub"
   IB2B_USERNAME: "HK-HERMES-D"
   IB2B_TOKEN_URL: "https://cmb-ib2b-dsp-pprod-ap.hk.hsbc:8443/dsp/rest-sts/DSP_iB2B/iB2B_tokenTranslator?_action=translate"
+  # HASE Content Organizer(Automation 的 content-organizer piece 读取,经 AP_SANDBOX_PROPAGATED_ENV_VARS 透传;
+  # 上面两个 IB2B_* 与 Secret 的 IB2B_SECRET 同样注入 activepieces Deployment)。
+  # 上传与 completion 靠同一组 sessionId + applicationId + userId(工号)关联。
+  CONTENT_ORGANIZER_BASE_URL: "https://ppd-api.gcp.cloud.hk.hsbc/cmb-hase-co-pa-completion-proxy/v1"
+  # Hermes 在 Content Organizer 的 use case(已开通文件上传)。
+  CONTENT_ORGANIZER_APPLICATION_ID: "57c0247a-249f-4414-936e-a4599d81cccd"
