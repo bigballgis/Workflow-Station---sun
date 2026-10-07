@@ -98,8 +98,21 @@ export async function complete(session: ContentOrganizerSession, question: strin
         sessionId,
         userId,
         metadata: { apiVersion: config.apiVersion },
+        // Same parameter block as the Content Organizer web UI sends; verified against UAT
+        // (2026-10-07). model and applicationName are mandatory (HTTP 422 without them).
         parameter: {
           applicationId: config.applicationId,
+          applicationName: config.applicationName,
+          model: config.model,
+          llmProvider: 'OpenAI',
+          apiVersion: '2023-03-15-preview',
+          promptEngineer: 'true',
+          enableQuestionDetection: 'false',
+          numberOfRelevantDocument: 3,
+          searchingScore: 0.3,
+          temperature: 1,
+          referDocumentList: [],
+          referDocumentbaseList: [],
           messages: [{ role: 'user', content: question }],
           promptSetting: {
             id: config.promptSettingId,
@@ -136,7 +149,9 @@ async function callWithFreshToken(
   const body = safeJson(text) as Record<string, unknown> | undefined;
   if (!res.ok || !body || (body['code'] !== undefined && body['code'] !== SUCCESS_CODE)) {
     const detail = body?.['detail'] ?? body?.['msg'] ?? text;
-    throw new ContentOrganizerError(`${what} failed (HTTP ${res.status}): ${preview(String(detail))}`, res.status);
+    // A 422 validation error carries detail as an array of {type, loc, msg} — keep it readable.
+    const reason = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    throw new ContentOrganizerError(`${what} failed (HTTP ${res.status}): ${preview(reason)}`, res.status);
   }
   return body;
 }

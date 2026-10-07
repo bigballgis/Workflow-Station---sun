@@ -78,6 +78,16 @@ describe('extractFields', () => {
     expect(body.sessionId).toBe(out.sessionId);
     expect(body.userId).toBe('45349679');
     expect(body.parameter.applicationId).toBe('app-1');
+    expect(body.parameter).toMatchObject({
+      applicationName: 'Hermes Workflow',
+      model: 'gemini-3.5-flash',
+      llmProvider: 'OpenAI',
+      apiVersion: '2023-03-15-preview',
+      promptEngineer: 'true',
+      enableQuestionDetection: 'false',
+      referDocumentList: [],
+      referDocumentbaseList: [],
+    });
     expect(body.parameter.messages).toEqual([{ role: 'user', content: 'Extract the fields from the uploaded document.' }]);
     expect(body.parameter.promptSetting).toEqual({
       id: 'ps-1',
@@ -102,6 +112,16 @@ describe('extractFields', () => {
     expect(calls.filter((c) => c.url === ENV.IB2B_TOKEN_URL)).toHaveLength(2);
   });
 
+  test('a 422 validation error keeps its detail readable', async () => {
+    const { impl } = fakeFetch();
+    const failing = (async (input: string | URL, init?: RequestInit) => String(input).endsWith('/chat/completion')
+      ? new Response(JSON.stringify({ detail: [{ type: 'missing', loc: ['body', 'parameter', 'model'], msg: 'Field required' }] }), { status: 422 })
+      : impl(input, init)) as typeof fetch;
+
+    await expect(extractFields({ fileUrl: FILE_URL, staffId: '45349679', fields: FIELDS, fetchImpl: failing, env: ENV }))
+      .rejects.toThrow('Chat completion failed (HTTP 422): [{"type":"missing","loc":["body","parameter","model"],"msg":"Field required"}]');
+  });
+
   test('rejects a multi-file value before calling anything', async () => {
     const { impl, calls } = fakeFetch();
     await expect(extractFields({
@@ -124,6 +144,8 @@ describe('readConfig', () => {
     expect(config.apiVersion).toBe('2024-10-01-preview');
     expect(config.workflow).toBe('default');
     expect(config.workflowVersion).toBe('1.0');
+    expect(config.model).toBe('gemini-3.5-flash');
+    expect(config.applicationName).toBe('Hermes Workflow');
     expect(readConfig({ ...ENV, CONTENT_ORGANIZER_WORKFLOW: 'ReasearchChatCompletion', CONTENT_ORGANIZER_WORKFLOW_VERSION: '001' }))
       .toMatchObject({ workflow: 'ReasearchChatCompletion', workflowVersion: '001' });
   });

@@ -20,12 +20,18 @@ export type ContentOrganizerConfig = {
   /** ID (not name) of the template's `{fields}` variable — `promptVars[].name` takes the ID. */
   promptVariableId: string;
   /**
-   * Top-level `workflow` / `version` of the completion request. Defaults are the API document's
-   * values; the Content Organizer web UI itself sends "ReasearchChatCompletion" / "001" — switch to
-   * those here if an environment rejects the defaults.
+   * Top-level `workflow` / `version` of the completion request. The API document's values
+   * (default / 1.0) are accepted by UAT; the Content Organizer web UI itself sends
+   * "ReasearchChatCompletion" / "001".
    */
   workflow: string;
   workflowVersion: string;
+  /**
+   * `parameter.model` / `parameter.applicationName` — required by the real API (422 without them),
+   * although the API document does not list them. Defaults are the Hermes use case's values.
+   */
+  model: string;
+  applicationName: string;
 };
 
 const REQUIRED = {
@@ -42,6 +48,9 @@ const REQUIRED = {
 const DEFAULT_API_VERSION = '2024-10-01-preview';
 const DEFAULT_WORKFLOW = 'default';
 const DEFAULT_WORKFLOW_VERSION = '1.0';
+/** The model configured on the Hermes Workflow use case. */
+const DEFAULT_MODEL = 'gemini-3.5-flash';
+const DEFAULT_APPLICATION_NAME = 'Hermes Workflow';
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env): ContentOrganizerConfig {
   const missing = Object.values(REQUIRED).filter((name) => !env[name]?.trim());
@@ -63,5 +72,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ContentOrganiz
     promptVariableId: value(REQUIRED.promptVariableId),
     workflow: env['CONTENT_ORGANIZER_WORKFLOW']?.trim() || DEFAULT_WORKFLOW,
     workflowVersion: env['CONTENT_ORGANIZER_WORKFLOW_VERSION']?.trim() || DEFAULT_WORKFLOW_VERSION,
+    model: env['CONTENT_ORGANIZER_MODEL']?.trim() || DEFAULT_MODEL,
+    applicationName: env['CONTENT_ORGANIZER_APPLICATION_NAME']?.trim() || DEFAULT_APPLICATION_NAME,
   };
 }
