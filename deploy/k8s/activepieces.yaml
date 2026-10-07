@@ -260,9 +260,33 @@ spec:
               name: workflow-platform-config
               key: CONTENT_ORGANIZER_APPLICATION_ID
               optional: true
+        - name: CONTENT_ORGANIZER_PROMPT_SETTING_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_PROMPT_SETTING_ID
+              optional: true
+        - name: CONTENT_ORGANIZER_PROMPT_VARIABLE_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_PROMPT_VARIABLE_ID
+              optional: true
+        - name: CONTENT_ORGANIZER_WORKFLOW
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_WORKFLOW
+              optional: true
+        - name: CONTENT_ORGANIZER_WORKFLOW_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_WORKFLOW_VERSION
+              optional: true
         # The engine process inherits only whitelisted variables; these are the ones pieces may read.
         - name: AP_SANDBOX_PROPAGATED_ENV_VARS
-          value: "IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION"
+          value: "IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION,CONTENT_ORGANIZER_PROMPT_SETTING_ID,CONTENT_ORGANIZER_PROMPT_VARIABLE_ID,CONTENT_ORGANIZER_WORKFLOW,CONTENT_ORGANIZER_WORKFLOW_VERSION"
         ports:
         - containerPort: 80
           name: http

@@ -45,7 +45,10 @@ async function post(url, init) {
 const preview = (t) => (t.length > 300 ? `${t.slice(0, 297)}...` : t);
 
 // 1. environment
-const names = ['IB2B_TOKEN_URL', 'IB2B_USERNAME', 'IB2B_SECRET', 'CONTENT_ORGANIZER_BASE_URL', 'CONTENT_ORGANIZER_APPLICATION_ID'];
+const names = [
+  'IB2B_TOKEN_URL', 'IB2B_USERNAME', 'IB2B_SECRET', 'CONTENT_ORGANIZER_BASE_URL', 'CONTENT_ORGANIZER_APPLICATION_ID',
+  'CONTENT_ORGANIZER_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID',
+];
 for (const n of names) {
   const v = env(n);
   step(`env ${n}`, v !== '', n === 'IB2B_SECRET' ? (v ? `set (${v.length} chars)` : 'missing') : v || 'missing');
@@ -115,7 +118,10 @@ if (up.error || !step('CO upload (#9)', up.res.ok, `HTTP ${up.res.status} ${prev
   process.exit(1);
 }
 
-// 5. CO #1 completion (same sessionId + applicationId + userId)
+// 5. CO #1 completion (same sessionId + applicationId + userId), same body as the piece sends
+const workflow = env('CONTENT_ORGANIZER_WORKFLOW') || 'default';
+const workflowVersion = env('CONTENT_ORGANIZER_WORKFLOW_VERSION') || '1.0';
+console.log(`INFO  prompt setting=${env('CONTENT_ORGANIZER_PROMPT_SETTING_ID')} workflow=${workflow} version=${workflowVersion}`);
 const done = await post(`${base}/api/management-service/chat/completion`, {
   headers: { 'Content-Type': 'application/json', 'X-HSBC-E2E-Trust-Token': token },
   body: JSON.stringify({
@@ -124,8 +130,16 @@ const done = await post(`${base}/api/management-service/chat/completion`, {
     metadata: { apiVersion: env('CONTENT_ORGANIZER_API_VERSION') || '2024-10-01-preview' },
     parameter: {
       applicationId: appId,
-      messages: [{ role: 'user', content: 'Return ONLY a JSON object {"title": <the document title>}.' }],
+      messages: [{ role: 'user', content: 'Extract the fields from the uploaded document.' }],
+      promptSetting: {
+        id: env('CONTENT_ORGANIZER_PROMPT_SETTING_ID'),
+        promptVars: [{ name: env('CONTENT_ORGANIZER_PROMPT_VARIABLE_ID'), value: ['- title: "Title" (text) - the document title'] }],
+        settingType: 'PROMPT',
+      },
     },
+    workflow,
+    version: workflowVersion,
+    defaultOptions: { language: 'English', noOfOutput: 1 },
   }),
 });
 if (done.error) {
