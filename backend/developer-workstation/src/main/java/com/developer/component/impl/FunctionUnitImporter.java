@@ -63,6 +63,7 @@ public class FunctionUnitImporter {
     private final MainTableViewService mainTableViewService;
     private final AdminCenterAutomationFlowClient automationFlowClient;
     private final FunctionUnitDocumentService documentService;
+    private final FunctionUnitBasicPortability basicPortability;
 
     /**
      * 导入功能单元。无冲突策略选项：
@@ -133,6 +134,7 @@ public class FunctionUnitImporter {
             functionUnit = functionUnitRepository.save(functionUnit);
         }
 
+        basicPortability.restore(functionUnit, manifest);
         Map<Long, Long> tableIdMapping = new HashMap<>();
         Map<String, Long> importedTableNameToId = new HashMap<>();
         Map<String, Map<String, FieldDefinition>> importedFieldLookup = new HashMap<>();

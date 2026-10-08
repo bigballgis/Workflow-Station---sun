@@ -73,6 +73,7 @@ class MainTableViewPortabilityTest {
         List<Map<String, Object>> exported = portability.export(1L, Map.of(20L, "HMDC_Case"));
 
         assertThat(exported).hasSize(1);
+        assertThat(exported.get(0)).doesNotContainKey("viewId");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rules = (List<Map<String, Object>>) exported.get(0).get("accessRules");
         assertThat(rules).hasSize(2);
@@ -86,11 +87,25 @@ class MainTableViewPortabilityTest {
     }
 
     @Test
+    void snapshotCapturesIdentityButZipExportDoesNot() {
+        MainTableViewConfig view = MainTableViewConfig.builder().id(10L).mainTableId(20L)
+                .viewName("Saved View").status(MainTableViewStatus.PUBLISHED).viewFields(List.of()).build();
+        when(mainTableViewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(view));
+        Map<String, Object> snapshot = portability.snapshot(1L, Map.of(20L, "main"), Map.of()).get(0);
+        Map<String, Object> exported = portability.export(1L, Map.of(20L, "main"), Map.of()).get(0);
+        assertThat(snapshot).containsEntry("viewId", 10L);
+        assertThat(exported).doesNotContainKey("viewId");
+        snapshot.remove("viewId");
+        assertThat(snapshot).isEqualTo(exported);
+    }
+
+    @Test
     void import_readsSelectDisplayAndDefaultsOlderPackagesToValue() {
         FunctionUnit fu = FunctionUnit.builder().id(99L).build();
         Map<String, Object> viewPayload = new LinkedHashMap<>();
         viewPayload.put("mainTableName", "HMDC_Case");
         viewPayload.put("viewName", "HMDC Case");
+        viewPayload.put("viewId", 12345L); // Compare metadata must never be reused as the restored entity ID.
         viewPayload.put("isDefault", false);
         viewPayload.put("status", "DRAFT");
         viewPayload.put("restrictToInvolvedUsers", false);
@@ -107,6 +122,7 @@ class MainTableViewPortabilityTest {
 
         ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
         verify(mainTableViewConfigRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isNull();
         assertThat(captor.getValue().getViewFields()).extracting(MainTableViewField::getSelectDisplay)
                 .containsExactly("label", "value");
     }

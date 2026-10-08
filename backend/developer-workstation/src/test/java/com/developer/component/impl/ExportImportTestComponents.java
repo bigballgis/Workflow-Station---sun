@@ -230,7 +230,7 @@ public final class ExportImportTestComponents {
                 Mockito.mock(MainTableViewPortability.class),
                 Mockito.mock(com.developer.service.MainTableViewService.class),
                 automationFlowClient,
-                documentService());
+                documentService(), new FunctionUnitBasicPortability(Mockito.mock(com.developer.repository.IconRepository.class)));
 
         return new ExportImportComponentImpl(
                 functionUnitRepository,

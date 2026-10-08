@@ -54,6 +54,7 @@ public class FunctionUnitSnapshotRestorer {
     private final EntityManager entityManager;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final FormTableBindingRestorer formTableBindingRestorer;
+    private final FunctionUnitBasicPortability basicPortability;
 
     public static boolean isExportFormatSnapshot(Map<String, Object> snapshot) {
         if (snapshot == null || snapshot.isEmpty()) {
@@ -67,6 +68,7 @@ public class FunctionUnitSnapshotRestorer {
     }
 
     public void restore(FunctionUnit functionUnit, Map<String, Object> snapshot) {
+        basicPortability.restore(functionUnit, snapshot);
         if (isExportFormatSnapshot(snapshot)) {
             restoreExportFormat(functionUnit, snapshot);
         } else {
@@ -152,7 +154,14 @@ public class FunctionUnitSnapshotRestorer {
 
         Map<Long, Long> actionIdMapping = importActions(functionUnit, snapshot);
 
-        if (snapshot.containsKey("decisions")) {
+        Map<Long, Long> decisionIdMapping = new HashMap<>();
+        if (snapshot.containsKey("decisionDefinitions")) {
+            List<Map<String, Object>> records = (List<Map<String, Object>>) snapshot.get("decisionDefinitions");
+            for (Map<String, Object> record : records) {
+                var decision = importWriter.importDecisionRecord(functionUnit, record);
+                importWriter.recordSourceIdMapping(record.get("decisionId"), decision.getId(), decisionIdMapping);
+            }
+        } else if (snapshot.containsKey("decisions")) {
             List<String> decisions = (List<String>) snapshot.get("decisions");
             for (String dmnXml : decisions) {
                 importWriter.importDecision(functionUnit, dmnXml);
@@ -194,7 +203,7 @@ public class FunctionUnitSnapshotRestorer {
 
         restoreProcess(functionUnit, snapshot, tableIdMapping, formIdMapping, actionIdMapping,
                 importedTableNameToId, importedFormNameToId, connectionIdMapping, emailTemplateIdMapping,
-                connectionUidMapping);
+                connectionUidMapping, decisionIdMapping);
 
         formTableBindingRestorer.repairFunctionUnitForms(functionUnit.getId());
 
@@ -266,7 +275,8 @@ public class FunctionUnitSnapshotRestorer {
                                 Map<String, Long> importedFormNameToId,
                                 Map<Long, Long> connectionIdMapping,
                                 Map<Long, Long> emailTemplateIdMapping,
-                                Map<String, String> connectionUidMapping) {
+                                Map<String, String> connectionUidMapping,
+                                Map<Long, Long> decisionIdMapping) {
         String bpmnXml = resolveProcessXml(snapshot);
         if (bpmnXml == null || bpmnXml.isBlank()) {
             return;
@@ -282,7 +292,8 @@ public class FunctionUnitSnapshotRestorer {
                 connectionIdMapping,
                 emailTemplateIdMapping,
                 connectionUidMapping);
-        rewrittenBpmn = staleIdFixer.fixStaleIds(functionUnit.getId(), XmlEncodingUtil.smartDecode(rewrittenBpmn));
+        rewrittenBpmn = rewriteDecisionReferences(XmlEncodingUtil.smartDecode(rewrittenBpmn), decisionIdMapping);
+        rewrittenBpmn = staleIdFixer.fixStaleIds(functionUnit.getId(), rewrittenBpmn);
         rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, functionUnit.getCode());
         assertLastTaskAssigneeTopologyOrThrow(XmlEncodingUtil.smartDecode(rewrittenBpmn));
 
@@ -309,6 +320,55 @@ public class FunctionUnitSnapshotRestorer {
             return XmlEncodingUtil.smartDecode(processXml);
         }
         return null;
+    }
+
+    static String rewriteDecisionReferences(String xml, Map<Long, Long> mapping) {
+        if (mapping.isEmpty() || xml == null || xml.isBlank()) return xml;
+        try {
+            var factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            var document = factory.newDocumentBuilder().parse(
+                    new org.xml.sax.InputSource(new java.io.StringReader(xml)));
+            Map<String, String> ids = new HashMap<>();
+            mapping.forEach((source, target) -> ids.put(source.toString(), target.toString()));
+            boolean changed = false;
+            var elements = document.getElementsByTagNameNS("*", "serviceTask");
+            for (int index = 0; index < elements.getLength(); index++) {
+                var attributes = elements.item(index).getAttributes();
+                for (int attributeIndex = 0; attributeIndex < attributes.getLength(); attributeIndex++) {
+                    var attribute = attributes.item(attributeIndex);
+                    String name = attribute.getLocalName() == null ? attribute.getNodeName() : attribute.getLocalName();
+                    String target = ids.get(attribute.getNodeValue());
+                    if ("decisionId".equals(name) && target != null) {
+                        attribute.setNodeValue(target);
+                        changed = true;
+                    }
+                }
+            }
+            if (!changed) return xml;
+            var transformers = javax.xml.transform.TransformerFactory.newInstance();
+            transformers.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            transformers.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            transformers.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+            var transformer = transformers.newTransformer();
+            transformer.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
+            var output = new java.io.StringWriter();
+            transformer.transform(new javax.xml.transform.dom.DOMSource(document),
+                    new javax.xml.transform.stream.StreamResult(output));
+            return output.toString();
+        } catch (Exception error) {
+            throw new DeveloperBusinessException("BIZ_DECISION_SNAPSHOT_INVALID",
+                    "Cannot restore Decision references from saved process XML");
+        }
     }
 
     @SuppressWarnings("unchecked")

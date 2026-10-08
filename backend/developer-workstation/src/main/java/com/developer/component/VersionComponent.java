@@ -2,6 +2,7 @@ package com.developer.component;
 
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.Version;
+import com.developer.dto.VersionCompareResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,9 @@ public interface VersionComponent {
      * 比较两个版本
      */
     Map<String, Object> compare(Long versionId1, Long versionId2);
+
+    /** Compare two saved snapshots without returning raw snapshot data. */
+    VersionCompareResponse compareV2(Long versionId1, Long versionId2);
     
     /**
      * 回滚到指定版本

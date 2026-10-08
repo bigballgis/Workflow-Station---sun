@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -223,6 +224,30 @@ class FunctionUnitComponentImplTest {
         verify(versionRepository).save(saved.capture());
         assertEquals("1.0.1", saved.getValue().getVersionNumber());
         assertEquals("1.0.1", result.getCurrentVersion());
+        assertEquals(FunctionUnitStatus.PUBLISHED, result.getStatus());
+    }
+
+    @Test
+    void publishSnapshotsThePublishedFunctionUnitAndViews() throws Exception {
+        FunctionUnit functionUnit = FunctionUnit.builder()
+                .id(1L).name("Test Function").status(FunctionUnitStatus.DRAFT).build();
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitExporter.buildVersionSnapshotPayload(1L)).thenAnswer(inv -> {
+            assertEquals(FunctionUnitStatus.PUBLISHED, functionUnit.getStatus());
+            verify(mainTableViewService).publishViewsForFunctionUnit(1L);
+            return Map.of("status", functionUnit.getStatus().name());
+        });
+        when(objectMapper.writeValueAsBytes(any())).thenReturn("published".getBytes());
+        when(versionRepository.save(any(Version.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(functionUnitRepository.save(functionUnit)).thenReturn(functionUnit);
+
+        FunctionUnit result = functionUnitComponent.publish(1L, "First publish");
+
+        InOrder order = inOrder(mainTableViewService, functionUnitExporter, versionRepository);
+        order.verify(mainTableViewService).publishViewsForFunctionUnit(1L);
+        order.verify(functionUnitExporter).buildVersionSnapshotPayload(1L);
+        order.verify(versionRepository).save(any(Version.class));
+        assertEquals("1.0.0", result.getCurrentVersion());
         assertEquals(FunctionUnitStatus.PUBLISHED, result.getStatus());
     }
 
