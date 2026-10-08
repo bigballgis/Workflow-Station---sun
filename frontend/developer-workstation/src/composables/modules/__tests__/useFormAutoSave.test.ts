@@ -3,99 +3,77 @@ import { defineComponent, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useFormAutoSave } from '../useFormAutoSave'
 
-/** Mirrors POLL_INTERVAL_MS / the scheduleAutoSave debounce in useFormAutoSave. */
 const POLL_INTERVAL_MS = 3000
-const SAVE_DEBOUNCE_MS = 5000
 
-function mountAutoSave(options: Parameters<typeof useFormAutoSave>[0]) {
+function mountDirtyTracker(options: Parameters<typeof useFormAutoSave>[0]) {
   const Host = defineComponent({
     setup() {
       const api = useFormAutoSave(options)
       api.setupAutoSavePolling()
-      return () => null
+      return api
     },
+    template: '<div />',
   })
   return mount(Host)
 }
 
-describe('useFormAutoSave', () => {
+describe('useFormAutoSave dirty tracking', () => {
   afterEach(() => {
     vi.useRealTimers()
-    document.body.innerHTML = ''
   })
 
-  it('waits for the user to leave a property-panel input before saving its edit', async () => {
+  it('clears dirty state when a designer property is restored to its saved value', async () => {
     vi.useFakeTimers()
-    const rule = [{ field: 'name', type: 'input' }] as Array<Record<string, unknown>>
-    const handleSaveForm = vi.fn().mockResolvedValue(undefined)
-    const designerRef = ref({
-      getRule: () => rule,
-      getOption: () => ({}),
-    })
-
-    const wrapper = mountAutoSave({
+    const rule = [{ field: 'name', title: 'Name' }] as Array<Record<string, unknown>>
+    const wrapper = mountDirtyTracker({
       selectedForm: ref({ id: 1 }),
-      designerRef,
-      handleSaveForm,
+      designerRef: ref({ getRule: () => rule, getOption: () => ({}) }),
       relationViewState: ref({}),
-      t: (key: string) => key,
-      autoSaving: ref(false),
-      lastAutoSaveTime: ref(null),
     })
 
-    const panel = document.createElement('div')
-    panel.className = '_fc-r'
-    const input = document.createElement('input')
-    panel.appendChild(input)
-    document.body.appendChild(panel)
-    input.focus()
-    rule[0] = { field: 'name', type: 'input', title: 'Typing' }
-
+    rule[0] = { field: 'name', title: 'Display name' }
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS)
-    expect(document.activeElement).toBe(input)
-    expect(handleSaveForm).not.toHaveBeenCalled()
+    expect(wrapper.vm.isDirty).toBe(true)
 
-    input.blur()
+    rule[0] = { field: 'name', title: 'Name' }
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS)
-    expect(handleSaveForm).toHaveBeenCalledWith(false)
+    expect(wrapper.vm.isDirty).toBe(false)
     wrapper.unmount()
   })
 
-  it('detects a committed change on the active designer after the user leaves the field', async () => {
-    vi.useFakeTimers()
-    const mainRule = [{ field: 'main' }] as Array<Record<string, unknown>>
-    const subRule = [{ field: 'sub' }] as Array<Record<string, unknown>>
-    const handleSaveForm = vi.fn().mockResolvedValue(undefined)
-    const designerRef = ref({
-      getRule: () => mainRule,
-      getOption: () => ({}),
-    })
-
-    const wrapper = mountAutoSave({
+  it('updates dirty state immediately when the designer emits a change event', () => {
+    const rule = [{ field: 'name', title: 'Name' }] as Array<Record<string, unknown>>
+    const wrapper = mountDirtyTracker({
       selectedForm: ref({ id: 1 }),
-      designerRef,
-      handleSaveForm,
+      designerRef: ref({ getRule: () => rule, getOption: () => ({}) }),
       relationViewState: ref({}),
-      t: (key: string) => key,
-      autoSaving: ref(false),
-      lastAutoSaveTime: ref(null),
-      getPollDesigner: () => ({
-        getRule: () => subRule,
-        getOption: () => ({}),
-      }),
     })
 
-    // Mirrors the property input's blur/change commit after the user clicks elsewhere.
-    subRule[0] = { field: 'sub', validate: [{ mode: 'email', email: true }] }
+    rule[0] = { field: 'name', title: 'Display name' }
+    wrapper.vm.refreshDirtyState()
+    expect(wrapper.vm.isDirty).toBe(true)
 
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    expect(mainRule[0].validate).toBeUndefined()
-    expect(subRule[0].validate).toEqual([{ mode: 'email', email: true }])
+    rule[0] = { field: 'name', title: 'Name' }
+    wrapper.vm.refreshDirtyState()
+    expect(wrapper.vm.isDirty).toBe(false)
+    wrapper.unmount()
+  })
 
-    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS)
-    expect(handleSaveForm).toHaveBeenCalledWith(false)
+  it('tracks relation-view changes against the same saved baseline', async () => {
+    const relationViewState = ref({ customer: { visible: true } })
+    const wrapper = mountDirtyTracker({
+      selectedForm: ref({ id: 1 }),
+      designerRef: ref({ getRule: () => [], getOption: () => ({}) }),
+      relationViewState,
+    })
+
+    relationViewState.value.customer.visible = false
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.isDirty).toBe(true)
+
+    relationViewState.value.customer.visible = true
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.isDirty).toBe(false)
     wrapper.unmount()
   })
 })

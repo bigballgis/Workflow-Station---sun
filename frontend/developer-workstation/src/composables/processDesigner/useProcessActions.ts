@@ -46,8 +46,13 @@ export function useProcessActions(options: UseProcessActionsOptions) {
   const lastAutoSaveTime = ref<Date | null>(null)
   /** 画布已被清空、自动保存被空图护栏挡下（工具栏据此提示需手动保存确认）。 */
   const autoSaveBlocked = ref(false)
+  const isDirty = ref(false)
 
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+  /** bpmn-js canonicalizes XML on import, so this baseline must come from saveXML(). */
+  let savedBpmnXml: string | null = null
+  /** Guards an older asynchronous XML serialization from overwriting a newer edit. */
+  let dirtyVersion = 0
   /** 每轮阻断只弹一次 toast：commandStack.changed 每 2s 就会再次触发保存。 */
   let emptyDiagramWarned = false
   let fallbackDiagramWarned = false
@@ -59,6 +64,40 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     return violations
       .map((v) => `${v.taskName || v.taskId} (${v.incomingCount})`)
       .join('; ')
+  }
+
+  async function serializeCurrentBpmnXml(): Promise<string> {
+    const bpmnModeler = getModeler()
+    if (!bpmnModeler) throw new Error('BPMN modeler is unavailable')
+    const { xml } = await bpmnModeler.saveXML({ format: true })
+    if (!xml) throw new Error('BPMN modeler did not return XML')
+    return xml
+  }
+
+  async function refreshDirtyState(expectedVersion = dirtyVersion): Promise<boolean> {
+    if (savedBpmnXml === null || !getModeler()) return isDirty.value
+
+    const isCurrentDirty = (await serializeCurrentBpmnXml()) !== savedBpmnXml
+    if (expectedVersion === dirtyVersion) {
+      isDirty.value = isCurrentDirty
+    }
+    return isCurrentDirty
+  }
+
+  /** Captures bpmn-js's canonical XML after the initial import or a discard. */
+  async function initializeSavedState(): Promise<void> {
+    savedBpmnXml = await serializeCurrentBpmnXml()
+    dirtyVersion += 1
+    isDirty.value = false
+  }
+
+  /** Always serializes the latest canvas before a navigation decision. */
+  async function hasUnsavedChanges(): Promise<boolean> {
+    while (true) {
+      const version = dirtyVersion
+      const dirty = await refreshDirtyState(version)
+      if (version === dirtyVersion) return dirty
+    }
   }
 
   /**
@@ -270,6 +309,9 @@ export function useProcessActions(options: UseProcessActionsOptions) {
       } else {
         ElMessage.success(t('process.saveSuccess'))
       }
+      savedBpmnXml = xml
+      dirtyVersion += 1
+      void refreshDirtyState(dirtyVersion)
     } catch (e) {
       const code = (e as { response?: { data?: { error?: { code?: string } } } })?.response?.data
         ?.error?.code
@@ -301,6 +343,21 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     }, 2000)
   }
 
+  function markDirty() {
+    dirtyVersion += 1
+    isDirty.value = true
+    void refreshDirtyState(dirtyVersion)
+  }
+
+  async function discardChanges(): Promise<void> {
+    const bpmnModeler = getModeler()
+    if (!bpmnModeler) return
+    await store.fetchProcess?.(functionUnitId)
+    const xml = store.process?.bpmnXml
+    if (xml) await bpmnModeler.importXML(xml)
+    await initializeSavedState()
+  }
+
   function clearAutoSaveTimer() {
     if (autoSaveTimer) {
       clearTimeout(autoSaveTimer)
@@ -327,6 +384,9 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     autoSaving,
     lastAutoSaveTime,
     autoSaveBlocked,
+    isDirty,
+    initializeSavedState,
+    hasUnsavedChanges,
     formatLastTaskTopologyViolations,
     exportCurrentBpmnXml,
     handleValidate,
@@ -335,6 +395,8 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     handleImportXML,
     handleSave,
     scheduleAutoSave,
+    markDirty,
+    discardChanges,
     clearAutoSaveTimer,
     formatAutoSaveTime,
   }

@@ -100,6 +100,7 @@
       <el-tabs
         v-model="activeTab"
         type="border-card"
+        :before-leave="beforeTabLeave"
       >
         <el-tab-pane
           :label="t('functionUnit.process')"
@@ -107,6 +108,7 @@
         >
           <ProcessDesigner
             v-if="activeTab === 'process'"
+            ref="processDesignerRef"
             :key="processDesignerReloadKey"
             :function-unit-id="functionUnitId"
           />
@@ -126,6 +128,7 @@
         >
           <FormDesigner
             v-if="activeTab === 'forms'"
+            ref="formDesignerRef"
             :function-unit-id="functionUnitId"
           />
         </el-tab-pane>
@@ -523,7 +526,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
@@ -570,10 +573,41 @@ function onReadOnlyInteraction(event: Event): void {
 // Back always means "up to the Function Unit list", never "the previous page": jumping
 // between function units from the sidebar's Recent list would otherwise make Back walk
 // backwards through those function units instead of leaving the designer.
-const goBack = () => {
-  router.push('/function-units')
+type DirtyDesigner = { hasUnsavedChanges: () => boolean | Promise<boolean>; saveChanges: () => Promise<boolean>; discardChanges: () => Promise<void> }
+const processDesignerRef = ref<DirtyDesigner | null>(null)
+const formDesignerRef = ref<DirtyDesigner | null>(null)
+const activeDesigner = () => activeTab.value === 'process' ? processDesignerRef.value : activeTab.value === 'forms' ? formDesignerRef.value : null
+
+async function confirmLeave(): Promise<boolean> {
+  const designer = activeDesigner()
+  if (!designer || !(await designer.hasUnsavedChanges())) return true
+  try {
+    await ElMessageBox.confirm(t('process.unsavedChanges'), t('functionUnit.documents.unsavedTitle'), {
+      type: 'warning',
+      confirmButtonText: t('common.save'),
+      cancelButtonText: t('functionUnit.documents.discard'),
+      distinguishCancelAndClose: true,
+    })
+    return await designer.saveChanges()
+  } catch (reason) {
+    if (reason === 'cancel') {
+      await designer.discardChanges()
+      return true
+    }
+    return false
+  }
+}
+
+const goBack = async () => {
+  if (await confirmLeave()) await router.push('/function-units')
 }
 const activeTab = ref('process')
+
+async function beforeTabLeave(): Promise<boolean> {
+  return confirmLeave()
+}
+
+onBeforeRouteLeave(async () => confirmLeave())
 
 watch(activeTab, (tab) => {
   if (tab === 'forms' && functionUnitId.value) {
