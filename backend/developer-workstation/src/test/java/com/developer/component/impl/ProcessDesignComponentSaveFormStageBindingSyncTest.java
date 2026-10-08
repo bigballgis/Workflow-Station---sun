@@ -95,7 +95,8 @@ class ProcessDesignComponentSaveFormStageBindingSyncTest {
                 new ProcessSimulationHelper(tableDefinitionRepository),
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
                 new ProcessBpmnFormStageBindingSync(
-                        new BpmnFormStageBindingParser(), formDefinitionRepository, formStageBindingRepository));
+                        new BpmnFormStageBindingParser(), formDefinitionRepository, formStageBindingRepository),
+                null);
     }
 
     @Test

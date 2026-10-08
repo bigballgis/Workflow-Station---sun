@@ -358,6 +358,20 @@
           </div>
 </el-tab-pane>
 
+        <!-- Function Unit sub-processes this request called. Lazy like the other tabs: the
+             child data is read live from the called instances, so it is fetched only when
+             someone actually opens this tab. -->
+        <el-tab-pane
+          v-if="hasCalledFunctionUnits"
+          :label="t('calledFunctionUnit.tabTitle')"
+          name="called-function-units"
+          lazy
+        >
+          <div class="section called-function-unit-tab">
+            <CalledFunctionUnitSection :process-id="processId" />
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane
           :label="t('changeHistory.title')"
           name="change-history"
@@ -469,6 +483,7 @@ import FormRenderer from '@/components/FormRenderer.vue'
 import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
+import CalledFunctionUnitSection from '@/components/CalledFunctionUnitSection.vue'
 import { formatDate } from '@/utils/dateFormat'
 import {
   buildSensitiveMaskLookup,
@@ -493,6 +508,7 @@ import { createApplicationDetailLoaders } from '@/composables/applicationDetail/
 import { createApplicationDetailActions } from '@/composables/applicationDetail/useApplicationDetailActions'
 import { createApplicationDetailDiagramParser } from '@/composables/applicationDetail/useApplicationDetailDiagramParser'
 import type { ProcessNode } from '@/components/ProcessDiagram.vue'
+import { useCallActivityDiagramStatus } from '@/composables/useCallActivityDiagramStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -591,6 +607,27 @@ const {
   diagramSelectedBottomSubTables,
   previousForms,
 } = ctx
+
+/**
+ * Whether this request's process calls other Function Units, decided from the BPMN already
+ * loaded for the diagram — no extra request just to find out whether to offer the tab.
+ *
+ * A `callActivity` is the only element that hands control to another Function Unit; the
+ * multi-instance `subProcess` used for sub-tasks expands inside this very process and is
+ * unrelated, so matching on the element name keeps the two apart.
+ */
+// Function Unit call steps: coloured from the calls they started (the parser cannot tell).
+useCallActivityDiagramStatus({
+  processInstanceId: ref(processId),
+  bpmnXml,
+  processNodes,
+  currentNodeId,
+})
+
+const hasCalledFunctionUnits = computed(() => {
+  const xml = bpmnXml.value
+  return typeof xml === 'string' && /<(?:\w+:)?callActivity\b/.test(xml)
+})
 
 /** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
 const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({

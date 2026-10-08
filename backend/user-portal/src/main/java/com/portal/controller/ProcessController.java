@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.portal.component.CalledFunctionUnitComponent;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.FunctionUnitAuditScopeComponent;
 import com.portal.component.ProcessComponent;
@@ -35,6 +36,7 @@ import java.util.Map;
 public class ProcessController {
 
     private final ProcessComponent processComponent;
+    private final CalledFunctionUnitComponent calledFunctionUnitComponent;
     private final I18nService i18nService;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final FunctionUnitAuditScopeComponent functionUnitAuditScopeComponent;
@@ -387,6 +389,27 @@ public class ProcessController {
             return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
         }
         return ApiResponse.success(detail);
+    }
+
+    @GetMapping("/{processId}/called-function-units")
+    @Operation(summary = "获取本申请调用的子功能单元实例（只读）")
+    public ApiResponse<List<CalledFunctionUnitInstance>> getCalledFunctionUnits(
+            @CurrentUserId String userId,
+            @PathVariable String processId) {
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "Please login first before viewing process details");
+        }
+        // Gated by the CALLING request, deliberately: a sub-process is part of that request, so
+        // whoever may open the request may see what it produced. This grants nothing beyond
+        // reading — opening the called unit itself still goes through its own authorisation.
+        ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
+        if (detail == null || !processComponent.canAuditProcessDetail(userId, detail)) {
+            log.warn("User {} attempted to access called function units of process {} without detail access",
+                    userId, processId);
+            return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
+        }
+        return ApiResponse.success(calledFunctionUnitComponent.findCalledInstances(processId));
     }
 
     @PostMapping("/{processId}/withdraw")

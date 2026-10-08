@@ -255,6 +255,21 @@ fi
 # 20-email-inbound-reply/init.sql is UAT-only. Do not load it here (DEV docker init).
 # UAT: apply deploy/init-scripts/20-email-inbound-reply/init.sql manually.
 
+echo ""
+echo "[4g/7] Loading Function Unit call demo (one FU calling another)..."
+# The callee (00-03) must be seeded before the caller (04-07): the caller's
+# callActivity references the callee by code.
+for f in /docker-entrypoint-initdb.d/21-fu-call-demo/00-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/01-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/02-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/03-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/04-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/05-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/06-*.sql \
+         /docker-entrypoint-initdb.d/21-fu-call-demo/07-*.sql; do
+  [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
+done
+
 # --- Step 5f: Post-seed alignment ---
 # Scripts under 90-post-seed/ run on every init, AFTER all seed packages above.
 # They are not DDL and not seed data -- they reconcile state introduced by the

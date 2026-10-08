@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
 import { normalizeTags, collectAvailableTags } from '@/utils/tagStorage'
+import type { FunctionUnitStartupMode } from '@/api/functionUnit'
 
 type FunctionUnitStore = ReturnType<typeof useFunctionUnitStore>
 
@@ -24,7 +25,8 @@ export function useFunctionUnitSettings(options: UseFunctionUnitSettingsOptions)
     name: '',
     description: '',
     iconId: undefined as number | null | undefined,
-    tags: [] as string[]
+    tags: [] as string[],
+    startupMode: 'STANDALONE' as FunctionUnitStartupMode
   })
 
   const availableTags = computed(() => {
@@ -39,6 +41,7 @@ export function useFunctionUnitSettings(options: UseFunctionUnitSettingsOptions)
     editForm.description = store.current?.description || ''
     editForm.iconId = store.current?.icon?.id ?? undefined
     editForm.tags = [...normalizeTags(store.current?.tags)]
+    editForm.startupMode = store.current?.startupMode ?? 'STANDALONE'
     showEditDialog.value = true
   }
 
@@ -55,6 +58,7 @@ export function useFunctionUnitSettings(options: UseFunctionUnitSettingsOptions)
         description: desc || undefined,
         iconId: editForm.iconId ?? undefined,
         tags: normalizeTags(editForm.tags),
+        startupMode: editForm.startupMode,
       })
       ElMessage.success(t('functionUnit.saveSuccess'))
       showEditDialog.value = false

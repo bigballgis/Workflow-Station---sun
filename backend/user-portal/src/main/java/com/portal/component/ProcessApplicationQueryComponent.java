@@ -59,6 +59,15 @@ public class ProcessApplicationQueryComponent {
     @Qualifier(com.portal.config.PortalAsyncConfig.AGGREGATION_EXECUTOR)
     private java.util.concurrent.Executor aggregationExecutor;
 
+    /** Decides COMPLETED vs REJECTED; when absent, finished instances stay COMPLETED as before. */
+    @Autowired(required = false)
+    private ProcessTerminalStatusResolver terminalStatusResolver;
+
+    /** Repairs requests waiting on a called Function Unit; absent in {@code new}-constructed tests. */
+    @org.springframework.context.annotation.Lazy
+    @Autowired(required = false)
+    private CalledProcessSyncComponent calledProcessSync;
+
     /**
      * For running processes with incomplete local assignee data, backfill user/candidate ids from engine and persist.
      *
@@ -158,9 +167,9 @@ public class ProcessApplicationQueryComponent {
 
         Page<ProcessInstance> instancePage;
         if (status != null && !status.isEmpty()) {
-            instancePage = processInstanceRepository.findByStartUserIdAndStatusOrderByStartTimeDesc(userId, status, pageable);
+            instancePage = processInstanceRepository.findByStartUserIdAndStatusAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(userId, status, pageable);
         } else {
-            instancePage = processInstanceRepository.findByStartUserIdOrderByStartTimeDesc(userId, pageable);
+            instancePage = processInstanceRepository.findByStartUserIdAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(userId, pageable);
         }
 
         return toInfoPage(instancePage, pageable);
@@ -446,6 +455,33 @@ public class ProcessApplicationQueryComponent {
         return vars != null && vars.containsValue(null);
     }
 
+    /**
+     * A running request with no task of its own is usually waiting on a Function Unit it called:
+     * show that unit's task as its current step, and record the called instances (which also
+     * repairs requests submitted before calls were tracked).
+     */
+    private void refreshFromCalledWork(String processId, ProcessInstance instance, ProcessInstanceInfo info) {
+        if (calledProcessSync == null) {
+            log.debug("getProcessDetail: no active tasks in Flowable for process {}, keeping null currentNode", processId);
+            return;
+        }
+        Optional<Map<String, Object>> status = workflowEngineClient.getProcessInstanceStatus(processId);
+        if (status.isEmpty() || !(status.get().get("nextTaskName") instanceof String nextTaskName)) {
+            return;
+        }
+        String assignee = (String) status.get().get("nextAssignee");
+        String candidates = (String) status.get().get("nextCandidateUsers");
+        instance.setCurrentNode(nextTaskName);
+        instance.setCurrentAssignee(assignee);
+        instance.setCandidateUsers(candidates);
+        processInstanceRepository.save(instance);
+        info.setCurrentNode(nextTaskName);
+        info.setCandidateUsers(candidates);
+        calledProcessSync.recordCalledWork(processId, status.get());
+        log.info("getProcessDetail: process {} waits on a called Function Unit at {} ({})",
+                processId, nextTaskName, assignee);
+    }
+
     public ProcessInstanceInfo getProcessDetail(String processId) {
         Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
         if (optInstance.isEmpty()) {
@@ -506,7 +542,7 @@ public class ProcessApplicationQueryComponent {
                                             snapshot.getCandidateUserIds(), processId);
                                 }
                             } else {
-                                log.debug("getProcessDetail: no active tasks in Flowable for process {}, keeping null currentNode", processId);
+                                refreshFromCalledWork(processId, instance, info);
                             }
                         }
                     }
@@ -747,7 +783,13 @@ public class ProcessApplicationQueryComponent {
                 return;
             }
             LocalDateTime finishedAt = LocalDateTime.now();
-            instance.setStatus("COMPLETED");
+            // Take the outcome from the approval decision, not from "the engine says it ended":
+            // a rejection ends the instance just as normally as an approval does, and writing
+            // COMPLETED here would relabel a rejected request the next time someone opened it.
+            String finishedStatus = terminalStatusResolver != null
+                    ? terminalStatusResolver.resolveFinishedStatus(instance)
+                    : ProcessTerminalStatusResolver.STATUS_COMPLETED;
+            instance.setStatus(finishedStatus);
             instance.setEndTime(finishedAt);
             instance.setCompletedAt(finishedAt);
             instance.setCurrentNode(null);
@@ -755,14 +797,14 @@ public class ProcessApplicationQueryComponent {
             instance.setCandidateUsers(null);
             processInstanceRepository.save(instance);
 
-            info.setStatus("COMPLETED");
+            info.setStatus(finishedStatus);
             info.setCurrentNode(null);
             info.setCurrentAssignee(null);
             info.setCandidateUsers(null);
             info.setCurrentStepName(null);
             info.setEndTime(finishedAt);
-            log.info("getProcessDetail: reconciled portal status to COMPLETED for finished engine instance {}",
-                    instance.getId());
+            log.info("getProcessDetail: reconciled portal status to {} for finished engine instance {}",
+                    finishedStatus, instance.getId());
         } catch (Exception e) {
             log.warn("getProcessDetail: failed to reconcile completion status for {}: {}",
                     instance.getId(), e.getMessage());

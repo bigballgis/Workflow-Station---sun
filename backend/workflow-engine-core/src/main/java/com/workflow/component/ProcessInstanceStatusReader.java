@@ -62,16 +62,19 @@ public class ProcessInstanceStatusReader {
                 status.put("processInstanceId", processInstanceId);
                 status.put("state", processInstance.isSuspended() ? "SUSPENDED" : "RUNNING");
 
-                // Get current active tasks
-                List<Task> tasks = taskService.createTaskQuery()
-                        .processInstanceId(processInstanceId)
-                        .list();
+                if (processInstance.getSuperExecutionId() != null) {
+                    putSuperProcessInstanceId(status, processInstanceId);
+                }
 
-                if (!tasks.isEmpty()) {
-                    Task currentTask = tasks.get(0);
+                // Get current active tasks — this instance's own, or, while it waits at a call
+                // activity, those of the Function Unit it called.
+                Task currentTask = findCurrentTask(processInstanceId, 0);
+
+                if (currentTask != null) {
                     status.put("nextTaskName", currentTask.getName());
                     status.put("nextAssignee", currentTask.getAssignee());
                     status.put("nextTaskId", currentTask.getId());
+                    status.put("nextTaskProcessInstanceId", currentTask.getProcessInstanceId());
 
                     List<String> candidateUserIds = new ArrayList<>();
                     for (org.flowable.identitylink.api.IdentityLink link
@@ -101,6 +104,9 @@ public class ProcessInstanceStatusReader {
                 status.put("processInstanceId", processInstanceId);
                 status.put("state", "COMPLETED");
                 status.put("endTime", historicProcessInstance.getEndTime());
+                if (historicProcessInstance.getSuperProcessInstanceId() != null) {
+                    status.put("superProcessInstanceId", historicProcessInstance.getSuperProcessInstanceId());
+                }
 
                 // Get last activity node (prioritize end events)
                 List<HistoricActivityInstance> endEvents = historyService
@@ -150,6 +156,49 @@ public class ProcessInstanceStatusReader {
             status.put("completed", false);
             status.put("error", e.getMessage());
             return status;
+        }
+    }
+
+    /** How deep a chain of Function Unit calls is followed; guards against a malformed cycle. */
+    private static final int MAX_CALL_DEPTH = 5;
+
+    /**
+     * The task a process is currently waiting on.
+     *
+     * <p>A process parked at a call activity has no task of its own: the work is in the called
+     * Function Unit's instance (and, if that one calls further, in its callee). Reporting nothing
+     * there left the calling request with no current step or assignee for as long as the call ran,
+     * so this follows the chain down to the first instance that does have a task.
+     */
+    private Task findCurrentTask(String processInstanceId, int depth) {
+        List<Task> own = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .list();
+        if (!own.isEmpty()) {
+            return own.get(0);
+        }
+        if (depth >= MAX_CALL_DEPTH) {
+            return null;
+        }
+        List<ProcessInstance> called = runtimeService.createProcessInstanceQuery()
+                .superProcessInstanceId(processInstanceId)
+                .list();
+        for (ProcessInstance child : called) {
+            Task task = findCurrentTask(child.getId(), depth + 1);
+            if (task != null) {
+                return task;
+            }
+        }
+        return null;
+    }
+
+    /** The calling instance of a running Function Unit call, so the caller's state can be refreshed too. */
+    private void putSuperProcessInstanceId(Map<String, Object> status, String processInstanceId) {
+        ProcessInstance parent = runtimeService.createProcessInstanceQuery()
+                .subProcessInstanceId(processInstanceId)
+                .singleResult();
+        if (parent != null) {
+            status.put("superProcessInstanceId", parent.getId());
         }
     }
 

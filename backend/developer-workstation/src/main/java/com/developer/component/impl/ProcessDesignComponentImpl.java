@@ -47,6 +47,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     private final ProcessSimulationHelper simulationHelper;
     private final ProcessDebugProbeRunner debugProbeRunner;
     private final ProcessBpmnFormStageBindingSync formStageBindingSync;
+    /** Null in the test-only constructor below, like {@code formStageBindingSync}. */
+    private final CallActivityBpmnValidator callActivityValidator;
 
     @Autowired
     public ProcessDesignComponentImpl(
@@ -56,7 +58,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
             ProcessBpmnValidator bpmnValidator,
             ProcessSimulationHelper simulationHelper,
             ProcessDebugProbeRunner debugProbeRunner,
-            ProcessBpmnFormStageBindingSync formStageBindingSync) {
+            ProcessBpmnFormStageBindingSync formStageBindingSync,
+            CallActivityBpmnValidator callActivityValidator) {
         this.processDefinitionRepository = processDefinitionRepository;
         this.functionUnitRepository = functionUnitRepository;
         this.staleIdFixer = staleIdFixer;
@@ -64,6 +67,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
         this.simulationHelper = simulationHelper;
         this.debugProbeRunner = debugProbeRunner;
         this.formStageBindingSync = formStageBindingSync;
+        this.callActivityValidator = callActivityValidator;
     }
 
     /**
@@ -72,7 +76,9 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
      * <p>仅注入 4 个仓库；缺失的调试依赖（FormTableBinding/Action 仓库、JdbcTemplate、ObjectMapper）
      * 以 null 占位，与拆分前的行为一致（仅调试场景使用，校验/解析/模拟不受影响）。
      * {@code formStageBindingSync} 同样以 null 占位——依赖 {@code FormStageBindingRepository}，
-     * 该仓库在这个精简构造器里没有对应入参；{@code save()} 对 null 直接跳过同步，不影响其余行为。</p>
+     * 该仓库在这个精简构造器里没有对应入参；{@code save()} 对 null 直接跳过同步，不影响其余行为。
+     * {@code callActivityValidator} 同理以 null 占位；{@code validateCallActivities()} 对 null
+     * 返回空结果（视为「无跨 FU 调用可校验」），与拆分前不存在该校验时的行为一致。</p>
      */
     public ProcessDesignComponentImpl(
             ProcessDefinitionRepository processDefinitionRepository,
@@ -86,6 +92,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 new ProcessBpmnValidator(tableDefinitionRepository, formDefinitionRepository, testI18nService()),
                 new ProcessSimulationHelper(tableDefinitionRepository),
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
+                null,
                 null);
     }
 
@@ -214,6 +221,15 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     @Override
     public ValidationResult validateMultiInstance(String bpmnXml, Long functionUnitId) {
         return bpmnValidator.validateMultiInstance(bpmnXml, functionUnitId);
+    }
+
+    @Override
+    public ValidationResult validateCallActivities(String bpmnXml, Long functionUnitId) {
+        if (callActivityValidator == null) {
+            // Test-only constructor: no cross-FU validation wired, nothing to check.
+            return new ValidationResult();
+        }
+        return callActivityValidator.validateCallActivities(bpmnXml, functionUnitId);
     }
 
     @Override

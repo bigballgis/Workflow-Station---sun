@@ -8,6 +8,7 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.FunctionUnitStartupMode;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
@@ -116,6 +117,7 @@ public class FunctionUnitImporter {
             // Snapshot current content into dw_versions and clear it; currentVersion stays unchanged.
             versionComponent.snapshotAndClearForReimport(functionUnit, changeLog);
             functionUnit.setDisplayName(description);
+            applyImportedStartupMode(functionUnit, manifest);
             functionUnit = functionUnitRepository.save(functionUnit);
             // Re-sync sequences after the snapshot/clear writes before rebuilding content.
             sequenceSynchronizer.synchronizeAll();
@@ -128,6 +130,7 @@ public class FunctionUnitImporter {
                     .currentVersion(version)
                     .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
                     .build();
+            applyImportedStartupMode(functionUnit, manifest);
             functionUnit = functionUnitRepository.save(functionUnit);
         }
 
@@ -389,6 +392,27 @@ public class FunctionUnitImporter {
      * Resolve the code for a brand-new imported function unit (name is known not to exist).
      * Reuse the manifest code when it is free; otherwise generate a unique one from the name.
      */
+    /**
+     * Applies the package's declared startup mode, when it carries one.
+     *
+     * <p>Packages exported before startup mode existed omit the key; those units keep whatever
+     * mode they already have (a newly created one gets the STANDALONE default). An unrecognised
+     * value is logged and ignored rather than defaulted, since silently resetting a unit to
+     * STANDALONE would break every call activity targeting it.
+     */
+    private void applyImportedStartupMode(FunctionUnit functionUnit, Map<String, Object> manifest) {
+        Object raw = manifest.get("startupMode");
+        if (!(raw instanceof String mode) || mode.isBlank()) {
+            return;
+        }
+        try {
+            functionUnit.setStartupMode(FunctionUnitStartupMode.valueOf(mode.trim()));
+        } catch (IllegalArgumentException e) {
+            log.warn("Imported package for function unit '{}' declares unknown startupMode '{}'; keeping {}",
+                    functionUnit.getName(), mode, functionUnit.getStartupMode());
+        }
+    }
+
     private String resolveNewImportCode(String name, String manifestCode) {
         String normalized = manifestCode != null && !manifestCode.isBlank() ? manifestCode : null;
         if (normalized != null && !functionUnitRepository.existsByCode(normalized)) {

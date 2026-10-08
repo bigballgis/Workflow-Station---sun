@@ -1210,6 +1210,17 @@ exportWithData: '匯出',
     noSubTableRows: '暫無列',
     subTableRow: '第 {n} 列',
   },
+  /** 本申請透過呼叫環節啟動的子功能單元流程。 */
+  calledFunctionUnit: {
+    tabTitle: '子流程',
+    none: '本申請尚未啟動任何子流程',
+    noData: '該子流程尚未填寫資料',
+    currentStep: '目前步驟：{step}',
+    finished: '已結束',
+    instanceCount: '共 {count} 個實例',
+    untitledCall: '被呼叫的功能單元',
+  },
+
   changeHistory: {
     title: '變更歷史',
     noRecords: '暫無變更歷史記錄',

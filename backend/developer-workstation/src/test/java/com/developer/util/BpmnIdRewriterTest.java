@@ -225,6 +225,22 @@ class BpmnIdRewriterTest {
                 .doesNotContain("value=\"main\"");
     }
 
+    /** A per-row Function Unit call in a clone must run over the clone's sub-table, not the source's. */
+    @Test
+    void rewritesThePerRowCallsRowsTableToTheRenamedCloneTable() {
+        String xml = """
+                <custom:properties>
+                  <custom:property name="callRowsTable" value="extra_vendors" />
+                </custom:properties>
+                """;
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, Map.of(), Map.of(), Map.of(),
+                Map.of(), Map.of(), Map.of("extra_vendors", "extra_vendors_copy"));
+
+        assertThat(rewritten).contains("name=\"callRowsTable\" value=\"extra_vendors_copy\"");
+    }
+
     @Test
     void keepsTableNameValuesWhenNoRenameMapping() {
         String xml = """

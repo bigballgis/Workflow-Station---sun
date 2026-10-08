@@ -901,6 +901,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, ArrowDown, Check, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
+import { fieldSwitchTypes } from '@/utils/designerDragRules'
 import { functionUnitApi } from '@/api/functionUnit'
 import type { MainTableViewDefinition } from '@/api/mainTableView'
 import { mainTableViewApi } from '@/api/mainTableView'
@@ -2129,6 +2130,9 @@ const designerConfig = computed(() => ({
       },
     },
   },
+  // Lets the "Type" switcher turn any field into any other field component, Extend ones
+  // (Lookup, Owner, Advanced Upload) included — by default it only offers the same palette group.
+  switchType: [fieldSwitchTypes()],
   hiddenItemConfig: {
     // Hide the built-in Basic "Hidden" (rule-level `hidden`) — it collapses field content on the
     // canvas. The built-in top toggle (props.hide → `_hidden`) is the single Hide control.

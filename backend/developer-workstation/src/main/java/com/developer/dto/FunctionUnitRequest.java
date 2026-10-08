@@ -1,5 +1,6 @@
 package com.developer.dto;
 
+import com.developer.enums.FunctionUnitStartupMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -28,6 +29,11 @@ public class FunctionUnitRequest {
 
     /** 用户自定义标签（最多 20 个，每项最长 50 字符）。 */
     private List<String> tags;
+
+    /**
+     * 该功能单元允许的启动方式。null 表示不修改（创建时落 STANDALONE 缺省）。
+     */
+    private FunctionUnitStartupMode startupMode;
 
     /**
      * 创建时所属团队（虚拟组）id 列表 —— 决定 FU 的可见范围（团队 scope）。

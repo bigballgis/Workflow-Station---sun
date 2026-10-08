@@ -49,6 +49,22 @@ public class TaskApprovalCompletionComponent {
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
     private final TaskPermissionEvaluator taskPermissionEvaluator;
 
+    /**
+     * Decides COMPLETED vs REJECTED from the approval outcome. Autowired rather than constructor
+     * -injected so the many {@code new}-constructed tests keep compiling; when absent the status
+     * falls back to COMPLETED, i.e. exactly the behaviour before rejection became a real status.
+     */
+    @Autowired(required = false)
+    private ProcessTerminalStatusResolver terminalStatusResolver;
+
+    /**
+     * Keeps a request and the Function Units it called in step; null in {@code new}-constructed
+     * tests, which skips it. Lazy: it reaches back into the sync/hydration components.
+     */
+    @Lazy
+    @Autowired(required = false)
+    private CalledProcessSyncComponent calledProcessSync;
+
     /** Lazy: server-side formula columns; null in {@code new}-constructed tests skips recalculation. */
     @Lazy
     @Autowired
@@ -314,7 +330,7 @@ public class TaskApprovalCompletionComponent {
                     if (optInstance.isPresent()) {
                         ProcessInstance instance = optInstance.get();
                         if ("RUNNING".equals(instance.getStatus())) {
-                            instance.setStatus("COMPLETED");
+                            instance.setStatus(finishedStatusOf(instance));
                             LocalDateTime finishedAt = LocalDateTime.now();
                             instance.setEndTime(finishedAt);
                             instance.setCompletedAt(finishedAt);
@@ -322,8 +338,8 @@ public class TaskApprovalCompletionComponent {
                             instance.setCurrentAssignee(null);
                             clearMainCaseHandler(instance);
                             processInstanceRepository.save(instance);
-                            log.info("Process instance {} updated to COMPLETED with currentNode: {}",
-                                    processInstanceId, instance.getCurrentNode());
+                            log.info("Process instance {} updated to {} with currentNode: {}",
+                                    processInstanceId, instance.getStatus(), instance.getCurrentNode());
                         }
                     }
                 } else {
@@ -360,8 +376,8 @@ public class TaskApprovalCompletionComponent {
 
                                     // End event means process completed
                                     if ("endEvent".equals(currentActivityType) || "EndEvent".equals(currentActivityType)) {
-                                        log.info("Current activity is end event, marking process {} as COMPLETED", processInstanceId);
-                                        instance.setStatus("COMPLETED");
+                                        log.info("Current activity is end event, marking process {} as finished", processInstanceId);
+                                        instance.setStatus(finishedStatusOf(instance));
                                         LocalDateTime finishedAt = LocalDateTime.now();
                                         instance.setEndTime(finishedAt);
                                         instance.setCompletedAt(finishedAt);
@@ -376,6 +392,15 @@ public class TaskApprovalCompletionComponent {
                             }
                         }
                     }
+                }
+
+                // Function Unit calls: this completion may have started a call (the request now
+                // waits on the called unit's task) or advanced/finished one (its callers move on).
+                if (calledProcessSync != null) {
+                    if (!Boolean.TRUE.equals(isCompleted)) {
+                        calledProcessSync.recordCalledWork(processInstanceId, status);
+                    }
+                    calledProcessSync.refreshCallers(status);
                 }
             }
         } catch (PortalException e) {
@@ -408,6 +433,18 @@ public class TaskApprovalCompletionComponent {
             node = instance != null ? instance.getCurrentNode() : null;
         }
         return miOuterStepResolver.lookup(processKey, node);
+    }
+
+    /**
+     * COMPLETED or REJECTED, depending on how the approval ended.
+     *
+     * <p>Falls back to COMPLETED when the resolver is absent ({@code new}-constructed tests),
+     * which is the behaviour that existed before rejection became a distinct status.
+     */
+    private String finishedStatusOf(ProcessInstance instance) {
+        return terminalStatusResolver != null
+                ? terminalStatusResolver.resolveFinishedStatus(instance)
+                : ProcessTerminalStatusResolver.STATUS_COMPLETED;
     }
 
     private void clearMainCaseHandler(ProcessInstance instance) {

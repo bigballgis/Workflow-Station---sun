@@ -40,6 +40,9 @@ import UploadMaxFilesEditor from './components/designer/UploadMaxFilesEditor.vue
 import UploadMaxFileSizeEditor from './components/designer/UploadMaxFileSizeEditor.vue'
 import FileNetAdvancedEditor from './components/designer/FileNetAdvancedEditor.vue'
 import FormUploadDrop from './components/designer/FormUploadDrop.vue'
+// Replaces form-create's own editor/transfer/cascader/slider in place: addDragRule would add a
+// second palette entry next to the built-in one.
+import { overrideDragRule } from './utils/designerDragRules'
 import unique from '@form-create/utils/lib/unique'
 import { DEFAULT_FILE_NET_CONFIG } from '@platform-shared/upload/fileNetConfig'
 import { newUploadCountProps } from '@platform-shared/upload/uploadFieldValue'
@@ -397,7 +400,7 @@ FcDesigner.addDragRule({
 // These allow fc-designer to recognise and render editor/signature/transfer/cascader/slider
 // in the canvas and left-side menu.
 
-FcDesigner.addDragRule({
+overrideDragRule({
   name: 'editor',
   label: 'Editor',
   icon: 'icon-editor',
@@ -427,7 +430,7 @@ FcDesigner.addDragRule({
   }
 })
 
-FcDesigner.addDragRule({
+overrideDragRule({
   name: 'transfer',
   label: 'Transfer',
   icon: 'icon-transfer',
@@ -456,7 +459,7 @@ FcDesigner.addDragRule({
   }
 })
 
-FcDesigner.addDragRule({
+overrideDragRule({
   name: 'cascader',
   label: 'Cascader',
   icon: 'icon-cascader',
@@ -484,7 +487,7 @@ FcDesigner.addDragRule({
   }
 })
 
-FcDesigner.addDragRule({
+overrideDragRule({
   name: 'slider',
   label: 'Slider',
   icon: 'icon-slider',

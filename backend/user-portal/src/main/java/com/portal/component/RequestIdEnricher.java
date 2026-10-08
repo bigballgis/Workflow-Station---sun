@@ -45,7 +45,14 @@ public class RequestIdEnricher {
      */
     public static final String REQUEST_ID_FIELD = "__request_id";
 
-    private static final long SPEC_TTL_MS = 5 * 60 * 1000L;
+    /**
+     * Kept short because the config is edited in another service (DW) with no way to evict
+     * this cache. At 5 minutes, a Request ID configured just after a list was viewed stayed
+     * "not configured" for the rest of the window: requests submitted then were stamped
+     * without one and every list showed '-'. 30s still collapses a page's lookups (and
+     * rapid paging/filtering) into one query per function unit.
+     */
+    private static final long SPEC_TTL_MS = 30 * 1000L;
     private static final int MAX_CACHED_SPECS = 128;
 
     private final JdbcTemplate jdbcTemplate;
@@ -151,13 +158,58 @@ public class RequestIdEnricher {
         if (instancesById.isEmpty()) {
             return;
         }
-        Set<String> functionUnitCodes = instancesById.values().stream()
-                .map(ProcessInstance::getFunctionUnitCode)
-                .filter(code -> code != null && !code.isBlank())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, ProcessInstance> requestOf = loadRequestRoots(instancesById);
+        Set<String> functionUnitCodes = new LinkedHashSet<>();
+        for (Map<String, ProcessInstance> source : List.of(instancesById, requestOf)) {
+            source.values().stream()
+                    .map(ProcessInstance::getFunctionUnitCode)
+                    .filter(code -> code != null && !code.isBlank())
+                    .forEach(functionUnitCodes::add);
+        }
         SpecCache specs = resolveSpecs(functionUnitCodes);
         Map<String, String> names = loadFunctionUnitNames(functionUnitCodes);
-        applyRequestIdAndFunctionUnit(tasks, instancesById, specs, names);
+        applyRequestIdAndFunctionUnit(tasks, instancesById, requestOf, specs, names);
+    }
+
+    /** How many levels of Function Unit calls are walked up to find the request a task belongs to. */
+    private static final int MAX_CALL_DEPTH = 5;
+
+    /**
+     * Instance id → the top-level request it is part of, for instances started by a Function Unit
+     * call. A called unit's task is work on the caller's request, so it carries that request's ID —
+     * the called unit's own main table normally has no Request ID configured, and even when it has,
+     * the user looks for the request they submitted. One batched query per call level, no N+1.
+     */
+    private Map<String, ProcessInstance> loadRequestRoots(Map<String, ProcessInstance> instancesById) {
+        Map<String, String> pendingParentOf = new LinkedHashMap<>();
+        instancesById.values().forEach(pi -> {
+            if (pi.getParentProcessInstanceId() != null) {
+                pendingParentOf.put(pi.getId(), pi.getParentProcessInstanceId());
+            }
+        });
+        if (pendingParentOf.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, ProcessInstance> rootOf = new LinkedHashMap<>();
+        for (int depth = 0; depth < MAX_CALL_DEPTH && !pendingParentOf.isEmpty(); depth++) {
+            Map<String, ProcessInstance> parents = processInstanceRepository
+                    .findAllById(new LinkedHashSet<>(pendingParentOf.values())).stream()
+                    .collect(Collectors.toMap(ProcessInstance::getId, pi -> pi, (a, b) -> a));
+            Map<String, String> next = new LinkedHashMap<>();
+            pendingParentOf.forEach((childId, parentId) -> {
+                ProcessInstance parent = parents.get(parentId);
+                if (parent == null) {
+                    return;
+                }
+                rootOf.put(childId, parent);
+                if (parent.getParentProcessInstanceId() != null) {
+                    next.put(childId, parent.getParentProcessInstanceId());
+                }
+            });
+            pendingParentOf.clear();
+            pendingParentOf.putAll(next);
+        }
+        return rootOf;
     }
 
     private Map<String, ProcessInstance> loadInstancesByTask(List<TaskInfo> tasks) {
@@ -176,6 +228,7 @@ public class RequestIdEnricher {
     private void applyRequestIdAndFunctionUnit(
             List<TaskInfo> tasks,
             Map<String, ProcessInstance> instancesById,
+            Map<String, ProcessInstance> requestOf,
             SpecCache specs,
             Map<String, String> names) {
         for (TaskInfo task : tasks) {
@@ -189,7 +242,8 @@ public class RequestIdEnricher {
                 String name = names.get(code);
                 task.setFunctionUnitName(name != null && !name.isBlank() ? name : null);
             }
-            task.setRequestId(buildRequestId(specs, code, pi.getVariables()));
+            ProcessInstance request = requestOf.getOrDefault(pi.getId(), pi);
+            task.setRequestId(buildRequestId(specs, request.getFunctionUnitCode(), request.getVariables()));
         }
     }
 

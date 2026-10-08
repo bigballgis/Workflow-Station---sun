@@ -7,8 +7,10 @@ import {
   flowableModdleDescriptor
 } from '@/utils/customModdle'
 import { customTranslateModule } from '@/utils/customTranslate'
+import { callActivityRendererModule } from '@/utils/callActivityRenderer'
 import { isEmptyBpmnDiagram } from '@/utils/bpmnDiagramContent'
 import { fitDiagramWithPadding } from './fitDiagramWithPadding'
+import { keepNodesFittedToText } from '@platform-shared/bpmnNodeTextFit'
 
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
@@ -127,9 +129,15 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
           flowable: flowableModdleDescriptor
         },
         additionalModules: [
-          customTranslateModule
+          customTranslateModule,
+          // Draws Function Unit call steps distinctly from ordinary tasks and from
+          // multi-instance sub-processes, and shows which unit each one calls.
+          callActivityRendererModule
         ]
       })
+      // Grow nodes whose text does not fit: on every import (including Import XML)
+      // and whenever one is renamed or retargeted.
+      keepNodesFittedToText(bpmnModeler)
 
       // Load existing process or default
       await store.fetchProcess(functionUnitId)

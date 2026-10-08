@@ -3,6 +3,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import {
   applyAuditFieldDefaults,
   applyEditAuditDefaults,
+  auditFillColumns,
   buildInitialRow,
   buildRules,
   mergeFormRowWithSeed,
@@ -351,10 +352,15 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
     // Audit fields are generated at real save time (never when the dialog opens):
     // add fills created_* + updated_*, edit refreshes updated_* only.
+    // The table design decides which audit fields a row carries, not just the visible columns.
+    const auditColumns = auditFillColumns(
+      props.auditColumns ?? props.columns,
+      props.fieldDefinitions?.map(def => def.fieldName),
+    )
     if (props.mode === 'add') {
-      applyAuditFieldDefaults(row, props.auditColumns ?? props.columns)
+      applyAuditFieldDefaults(row, auditColumns)
     } else {
-      applyEditAuditDefaults(row, props.auditColumns ?? props.columns)
+      applyEditAuditDefaults(row, auditColumns)
     }
     runFormOnSubmit?.()
     saving.value = true

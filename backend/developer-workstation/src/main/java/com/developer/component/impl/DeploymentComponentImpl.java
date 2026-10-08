@@ -244,6 +244,19 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             updateStep(steps, stepMultiInstance, "SUCCESS", i18nService.getMessage("deploy.multi_instance_validate_ok"));
             response.setProgress(18);
 
+            String stepCallActivity = i18nService.getMessage("deploy.step.call_activity_validate");
+            updateStep(steps, stepCallActivity, "RUNNING", null);
+            if (pd != null && pd.getBpmnXml() != null && !pd.getBpmnXml().trim().isEmpty()) {
+                ValidationResult callResult = processDesignComponent.validateCallActivities(
+                        pd.getBpmnXml(), functionUnitId);
+                if (callResult != null && !callResult.isValid()) {
+                    throw new DeveloperBusinessException("CALL_ACTIVITY_VALIDATION_FAILED",
+                            "Function Unit call configuration validation failed: " + callResult.getErrors());
+                }
+            }
+            updateStep(steps, stepCallActivity, "SUCCESS", i18nService.getMessage("deploy.call_activity_validate_ok"));
+            response.setProgress(19);
+
             String stepLastTaskTopo = i18nService.getMessage("deploy.step.last_task_assignee_topology");
             updateStep(steps, stepLastTaskTopo, "RUNNING", null);
             if (pd != null && pd.getBpmnXml() != null && !pd.getBpmnXml().trim().isEmpty()) {

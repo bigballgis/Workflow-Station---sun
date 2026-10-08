@@ -1,5 +1,6 @@
 package com.developer.entity;
 
+import com.developer.enums.FunctionUnitStartupMode;
 import com.developer.enums.FunctionUnitStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -60,7 +61,19 @@ public class FunctionUnit {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private FunctionUnitStatus status = FunctionUnitStatus.DRAFT;
-    
+
+    /**
+     * How this unit may be started: by a user, by another Function Unit's callActivity, or both.
+     *
+     * <p>{@code @Builder.Default} is required: without it the builder leaves this null and a
+     * unit created through {@code FunctionUnit.builder()} would fail the NOT NULL column — the
+     * same trap that once made cloning drop every MI binding's link mode.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "startup_mode", nullable = false, length = 16)
+    @Builder.Default
+    private FunctionUnitStartupMode startupMode = FunctionUnitStartupMode.STANDALONE;
+
     @Column(name = "current_version", length = 20)
     private String currentVersion;
     

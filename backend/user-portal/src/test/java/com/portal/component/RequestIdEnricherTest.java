@@ -139,4 +139,41 @@ class RequestIdEnricherTest {
         assertThat(task.getFunctionUnitCode()).isEqualTo("help_pr");
         assertThat(task.getFunctionUnitName()).isEqualTo("Purchase Request");
     }
+
+    /** A called Function Unit's task is work on the caller's request, so it shows that request's ID. */
+    @Test
+    void calledUnitTaskCarriesTheCallingRequestsId() {
+        ProcessInstance request = ProcessInstance.builder()
+                .id("purchase").processDefinitionKey("fu-purchase").functionUnitCode("fu-purchase")
+                .variables(vars("dept", "HR"))
+                .build();
+        ProcessInstance vendorCheck = ProcessInstance.builder()
+                .id("vendor-check").processDefinitionKey("fu-vendor").functionUnitCode("fu-vendor")
+                .parentProcessInstanceId("purchase")
+                .variables(vars())
+                .build();
+        ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
+        when(repo.findAllById(any())).thenAnswer(inv -> {
+            Iterable<?> ids = inv.getArgument(0);
+            java.util.List<ProcessInstance> out = new java.util.ArrayList<>();
+            for (Object id : ids) {
+                if ("purchase".equals(id)) out.add(request);
+                if ("vendor-check".equals(id)) out.add(vendorCheck);
+            }
+            return out;
+        });
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.query(any(String.class), any(RowMapper.class), eq("fu-purchase")))
+                .thenReturn(List.of("{\"fieldNames\":[\"dept\"],\"separator\":\"-\"}"));
+        when(jdbc.query(any(String.class), any(RowMapper.class), eq("fu-vendor")))
+                .thenReturn(List.of());
+
+        RequestIdEnricher enricher = new RequestIdEnricher(jdbc, objectMapper, repo);
+        TaskInfo task = TaskInfo.builder().taskId("t1").processInstanceId("vendor-check").build();
+        enricher.enrichTaskRequestIds(List.of(task));
+
+        assertThat(task.getRequestId()).isEqualTo("HR");
+        // The task still belongs to the called unit.
+        assertThat(task.getFunctionUnitCode()).isEqualTo("fu-vendor");
+    }
 }

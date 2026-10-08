@@ -177,6 +177,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .tags(FunctionUnitTagUtils.normalizeTags(request.getTags()))
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
+        // Chosen at creation when the creator already knows the unit is meant to be called;
+        // otherwise the entity default (STANDALONE) stands.
+        if (request.getStartupMode() != null) {
+            functionUnit.setStartupMode(request.getStartupMode());
+        }
 
         if (request.getIconId() != null) {
             Icon icon = iconRepository.findById(request.getIconId())
@@ -241,6 +246,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         if (request.getTags() != null) {
             functionUnit.setTags(FunctionUnitTagUtils.normalizeTags(request.getTags()));
+        }
+        // Same "null means keep existing" contract as description/tags above.
+        if (request.getStartupMode() != null) {
+            functionUnit.setStartupMode(request.getStartupMode());
         }
 
         // Only update icon when iconId is provided (non-null); null means "keep existing"

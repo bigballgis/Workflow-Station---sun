@@ -142,6 +142,10 @@ public class FunctionUnitExporter {
         payload.put("code", functionUnit.getCode());
         payload.put("description", functionUnit.getDisplayName());
         payload.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
+        // Without this, a rollback or clone would silently reset the unit to STANDALONE and every
+        // call activity pointing at it would stop validating.
+        payload.put("startupMode",
+                functionUnit.getStartupMode() != null ? functionUnit.getStartupMode().name() : null);
 
         if (processDefinition != null) {
             payload.put("process", XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml()));
@@ -431,6 +435,8 @@ public class FunctionUnitExporter {
                     .code(functionUnit.getCode()) // Use actual code field
                     .version(functionUnit.getCurrentVersion())
                     .description(functionUnit.getDisplayName())
+                    .startupMode(functionUnit.getStartupMode() != null
+                            ? functionUnit.getStartupMode().name() : null)
                     .exportedAt(LocalDateTime.now())
                     .exportedBy(getCurrentOperator())
                     .platformVersion(platformVersion)
