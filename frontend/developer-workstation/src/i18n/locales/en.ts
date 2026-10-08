@@ -34,6 +34,7 @@ export default {
   common: {
     retry: 'Retry',
     save: 'Save',
+    unsavedChanges: 'You have unsaved changes.',
     cancel: 'Cancel',
     delete: 'Delete',
     edit: 'Edit',
@@ -1173,6 +1174,7 @@ export default {
     save: 'Save',
     autoSaving: 'Auto-saving...',
     autoSaved: 'Auto-saved',
+    unsavedChanges: 'Your changes have not been saved. Save or discard them before leaving.',
     justNow: 'just now',
     minutesAgo: '{count} minutes ago',
     processDebug: 'Process Debug',

@@ -34,6 +34,7 @@ export default {
   common: {
     retry: '重试',
     save: '保存',
+    unsavedChanges: '你有尚未保存的更改。',
     cancel: '取消',
     delete: '删除',
     edit: '编辑',
@@ -385,6 +386,7 @@ export default {
     save: '保存',
     autoSaving: '自动保存中...',
     autoSaved: '已自动保存',
+    unsavedChanges: '更改尚未保存，请在离开前保存或放弃更改。',
     justNow: '刚刚',
     minutesAgo: '{count}分钟前',
     processDebug: '流程调试',

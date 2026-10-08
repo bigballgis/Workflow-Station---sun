@@ -38,11 +38,11 @@
       </el-button-group>
       <div class="auto-save-status">
         <span
-          v-if="autoSaving"
-          class="auto-saving"
+          v-if="isDirty"
+          class="auto-save-blocked"
         >
-          <el-icon class="is-loading"><Loading /></el-icon>
-          {{ t('process.autoSaving') }}
+          <el-icon><WarningFilled /></el-icon>
+          {{ t('process.unsavedChanges') }}
         </span>
         <span
           v-else-if="autoSaveBlocked"
@@ -151,7 +151,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProcessImportDialog from './process-designer/ProcessImportDialog.vue'
-import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
@@ -186,8 +186,7 @@ const {
   functionUnitId: props.functionUnitId,
   canvasRef,
   store,
-  // Wrapper closure breaks the cycle: scheduleAutoSave is defined below in useProcessActions.
-  onCommandStackChanged: () => scheduleAutoSave(),
+  onCommandStackChanged: () => markDirty(),
   t,
 })
 
@@ -204,17 +203,19 @@ const {
 // Validation / export / import / save / auto-save.
 const {
   saving,
-  autoSaving,
   lastAutoSaveTime,
   autoSaveBlocked,
+  isDirty,
   exportCurrentBpmnXml,
   handleValidate,
   handleExportSVG,
   handleExportXML,
   handleImportXML,
   handleSave,
-  scheduleAutoSave,
-  clearAutoSaveTimer,
+  markDirty,
+  discardChanges,
+  initializeSavedState,
+  hasUnsavedChanges,
   formatAutoSaveTime,
 } = useProcessActions({
   functionUnitId: props.functionUnitId,
@@ -229,14 +230,21 @@ const {
 onMounted(async () => {
   await nextTick()
   await initModeler()
+  await initializeSavedState()
 })
 
 onUnmounted(() => {
   handleDebugNodeChange(null)
-  // Clear auto-save timer
-  clearAutoSaveTimer()
-
   destroyModeler()
+})
+
+defineExpose({
+  hasUnsavedChanges,
+  saveChanges: async () => {
+    await handleSave(false)
+    return !isDirty.value
+  },
+  discardChanges,
 })
 </script>
 
@@ -281,10 +289,28 @@ onUnmounted(() => {
   }
 
   .auto-save-blocked {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    color: #e6a23c;
+    gap: 7px;
+    padding: 5px 9px;
+    border: 1px solid #fecdca;
+    border-radius: 5px;
+    background: #fef3f2;
+    color: #d92d20;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+
+    .el-icon {
+      display: inline-flex;
+      width: 20px;
+      height: 20px;
+      align-items: center;
+      justify-content: center;
+      color: #d92d20;
+      font-size: 20px;
+      flex: 0 0 20px;
+    }
   }
 }
 

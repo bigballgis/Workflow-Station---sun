@@ -200,12 +200,12 @@ export function useFormSave(options: UseFormSaveOptions) {
     selectedForm.value.fieldPermissions[key] = value
   }
 
-  async function handleSaveForm(isManual = false) {
-    if (!selectedForm.value) return
+  async function handleSaveForm(isManual = false): Promise<boolean> {
+    if (!selectedForm.value) return false
     // Forms without a Main Table tab (ACTION forms with no PRIMARY binding) never mount the
     // main fc-designer, so designerRef.value is legitimately null here — not "not ready".
     const mainTablePresent = hasMainTableTab ? hasMainTableTab.value : true
-    if (mainTablePresent && !designerRef.value) return
+    if (mainTablePresent && !designerRef.value) return false
 
     // The form this save is for. If the user switches to another form while this save is
     // in flight (awaits below yield), the canvas/collected state belongs to THIS form —
@@ -235,7 +235,7 @@ export function useFormSave(options: UseFormSaveOptions) {
         if (rawRule == null) {
           console.error('[FormDesigner] getRule() returned null/undefined; aborting save to protect persisted form design')
           if (isManual) ElMessage.error(t('form.saveFailed'))
-          return
+          return false
         }
         rule = stripFormCreateRulesDisabledDeep(rawRule) as any[]
         ensureFormCreateRulesValidationDeep(rule)
@@ -261,7 +261,7 @@ export function useFormSave(options: UseFormSaveOptions) {
       const invalidPlaceholders = subTableRules.filter((r: any) => !r._bindingId)
       if (invalidPlaceholders.length > 0) {
         if (isManual) ElMessage.error(t('form.subTableBindingRequired'))
-        return
+        return false
       }
 
       // SUB-type check runs AFTER provisionAndRepairForSave: cross-FU paste may carry
@@ -271,14 +271,14 @@ export function useFormSave(options: UseFormSaveOptions) {
       const recordNoteScopes = collectRecordNoteScopes(rule)
       if (recordNoteScopes.some((scope, idx) => recordNoteScopes.indexOf(scope) !== idx)) {
         if (isManual) ElMessage.error(t('form.recordNoteDuplicateScope'))
-        return
+        return false
       }
       // RecordNote: Single Record scope is sub-table-form only — the main canvas
       // must stay whole-table (Relation Table tabs have no form-design canvas at
       // all). Backstop for configs that bypassed the disabled panel option.
       if (recordNoteScopes.includes('RECORD')) {
         if (isManual) ElMessage.error(t('form.recordNoteRecordScopeMainForm'))
-        return
+        return false
       }
 
       // Validate field names against Data_Table columns (for PROCESS and TASK forms).
@@ -441,7 +441,7 @@ export function useFormSave(options: UseFormSaveOptions) {
 
       if (selectedForm.value?.id !== targetFormId) {
         console.warn(`[FormDesigner] form switched (${targetFormId} -> ${selectedForm.value?.id ?? 'none'}) while collecting save payload; aborting to avoid saving one table's fields onto another form`)
-        return
+        return false
       }
 
       const prevConfig = (selectedForm.value.configJson || {}) as Record<string, unknown>
@@ -480,7 +480,7 @@ export function useFormSave(options: UseFormSaveOptions) {
           } catch (e: unknown) {
             console.error('[FormDesigner] provision/repair before save failed', e)
             ElMessage.error(t('form.pasteConfigFailed'))
-            return
+            return false
           }
         }
 
@@ -500,7 +500,7 @@ export function useFormSave(options: UseFormSaveOptions) {
             const bindingType = bindingMap.get(bindingId)
             if (!bindingType || (bindingType !== 'SUB' && bindingType !== 'ACTION')) {
               if (isManual) ElMessage.error(t('form.subTableOnlySubBinding'))
-              return
+              return false
             }
           }
         }
@@ -524,12 +524,12 @@ export function useFormSave(options: UseFormSaveOptions) {
             subTable: issue.subTableName,
             nodes: issue.nodeIds.join(', '),
           }))
-          return
+          return false
         }
 
         if (selectedForm.value?.id !== targetFormId) {
           console.warn(`[FormDesigner] form switched (${targetFormId} -> ${selectedForm.value?.id ?? 'none'}) while collecting save payload; aborting to avoid saving one table's fields onto another form`)
-          return
+          return false
         }
 
         if (blockingOpened) {
@@ -565,6 +565,7 @@ export function useFormSave(options: UseFormSaveOptions) {
           lastAutoSaveTime.value = new Date()
           autoSaveFailureNotified.value = false
         }
+        return true
       } finally {
         if (blockingOpened) {
           blockingProgress!.close()
@@ -582,6 +583,7 @@ export function useFormSave(options: UseFormSaveOptions) {
         autoSaveFailureNotified.value = true
         ElMessage.warning(e.response?.data?.message || t('form.saveFailed'))
       }
+      return false
     } finally {
       if (!isManual) {
         autoSaving.value = false
@@ -590,6 +592,7 @@ export function useFormSave(options: UseFormSaveOptions) {
         savingForm.value = false
       }
     }
+    return false
   }
 
   return {

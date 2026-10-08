@@ -34,6 +34,7 @@ export default {
   common: {
     retry: '重試',
     save: '儲存',
+    unsavedChanges: '你有尚未儲存的變更。',
     cancel: '取消',
     delete: '刪除',
     edit: '編輯',
@@ -385,6 +386,7 @@ export default {
     save: '儲存',
     autoSaving: '自動儲存中...',
     autoSaved: '已自動儲存',
+    unsavedChanges: '變更尚未儲存，請在離開前儲存或放棄變更。',
     justNow: '剛剛',
     minutesAgo: '{count}分鐘前',
     processDebug: '流程偵錯',
