@@ -168,6 +168,19 @@ public class ProcessStartComponent {
     @Autowired
     private ProcessComponent processComponent;
 
+    /**
+     * Builds MI collections for sub-processes reached from the auto-completed first task; null in
+     * {@code new}-constructed tests, which skips it.
+     */
+    @Lazy
+    @Autowired(required = false)
+    private MiCollectionVariableBuilder miCollectionVariableBuilder;
+
+    /** Records the Function Units a request called on submit; null in {@code new}-constructed tests. */
+    @Lazy
+    @Autowired(required = false)
+    private CalledProcessSyncComponent calledProcessSync;
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
@@ -307,6 +320,10 @@ public class ProcessStartComponent {
                     pin.code());
             updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
         });
+        if (outcome.calledWorkStatus != null) {
+            // After the caller's row is final: the called instances' rows link back to it.
+            calledProcessSync.recordCalledWork(flowableProcessInstanceId, outcome.calledWorkStatus);
+        }
 
         return buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);
@@ -333,6 +350,8 @@ public class ProcessStartComponent {
         String initiatorTaskDefKeyForHistory;
         /** Non-null when auto-completion of the first task failed; surfaced to the caller. */
         String firstStepError;
+        /** Engine status when the request went straight into a Function Unit call; else null. */
+        Map<String, Object> calledWorkStatus;
     }
 
     /**
@@ -668,6 +687,8 @@ public class ProcessStartComponent {
         // inject
         computeSubTableConditionVariables(variables);
 
+        injectMiCollectionsForFirstTask(firstTask, firstTaskDefKey, flowableProcessInstanceId, pin, variables);
+
         // Complete first task
         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                 taskId, userId, "SUBMIT", variables);
@@ -689,6 +710,30 @@ public class ProcessStartComponent {
             log.warn("Failed to complete first task: {} — {}", taskId, failure);
             outcome.firstStepError = failure;
         }
+    }
+
+    /**
+     * The collection of an MI sub-process this submission leads into, as a To Do completion would
+     * build it ({@link TaskApprovalCompletionComponent}).
+     *
+     * <p>Submitting completes the first task here, not through the To Do path, so an MI
+     * sub-process reached from it — directly, or after Function Unit calls, which cannot set this
+     * process' variables — used to get no collection, and the request failed with "Variable
+     * '...collection' was not found" when the token reached it. Only collections not already set
+     * are added: flows that prepare their own (the meeting demo above) keep theirs.
+     */
+    private void injectMiCollectionsForFirstTask(Map<String, Object> firstTask, String firstTaskDefKey,
+                                                 String processInstanceId, ActiveCatalogPin pin,
+                                                 Map<String, Object> variables) {
+        if (miCollectionVariableBuilder == null || firstTaskDefKey == null || firstTaskDefKey.isBlank()) {
+            return;
+        }
+        Object keyObj = firstTask.get("processDefinitionKey");
+        String processKey = keyObj != null && !keyObj.toString().isBlank() ? keyObj.toString() : pin.code();
+        Map<String, Object> withCollections = new HashMap<>(variables);
+        miCollectionVariableBuilder.injectMiCollectionFromBpmn(
+                processKey, firstTaskDefKey, processInstanceId, withCollections);
+        withCollections.forEach(variables::putIfAbsent);
     }
 
     /**
@@ -748,9 +793,32 @@ public class ProcessStartComponent {
                             outcome.currentNodeName,
                             outcome.nextAssigneeSnapshot.getAssigneeUserId(),
                             outcome.nextAssigneeSnapshot.getCandidateUserIds());
+                    return;
                 }
             }
         }
+        captureCalledWorkAfterAutoComplete(outcome, flowableProcessInstanceId);
+    }
+
+    /**
+     * The request has no task of its own after submit when it went straight into a Function Unit
+     * call: its current step is then the called unit's task, which the engine's status reports.
+     */
+    private void captureCalledWorkAfterAutoComplete(FirstTaskOutcome outcome, String flowableProcessInstanceId) {
+        if (calledProcessSync == null) {
+            return;
+        }
+        Optional<Map<String, Object>> status = workflowEngineClient.getProcessInstanceStatus(flowableProcessInstanceId);
+        if (status.isEmpty() || !(status.get().get("nextTaskName") instanceof String nextTaskName)) {
+            return;
+        }
+        outcome.currentNodeName = nextTaskName;
+        outcome.nextAssigneeSnapshot = new ProcessAssigneeSnapshot(
+                (String) status.get().get("nextAssignee"),
+                (String) status.get().get("nextCandidateUsers"));
+        outcome.calledWorkStatus = status.get();
+        log.info("Request {} waits on a called Function Unit: node={}, assignee={}",
+                flowableProcessInstanceId, nextTaskName, outcome.nextAssigneeSnapshot.getAssigneeUserId());
     }
 
     private void updateInstanceNodeAndRecordStartHistory(

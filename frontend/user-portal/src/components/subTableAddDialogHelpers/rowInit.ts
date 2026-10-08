@@ -77,6 +77,28 @@ export function applyAuditFieldDefaults(row: Record<string, unknown>, columns: D
 }
 
 /**
+ * The audit columns a saved row must carry: those among the given (list / dialog) columns,
+ * plus every audit field the row's table defines. The table design decides — a designer who
+ * keeps created_* / updated_* out of the dialog and list still gets them filled, as the main
+ * form's server-side filler does.
+ */
+export function auditFillColumns(
+  columns: DialogColumn[],
+  tableFieldNames: ReadonlyArray<string> | undefined,
+): DialogColumn[] {
+  const present = new Set(columns.map(col => normalizeAuditFieldName(col.field)))
+  const extra: DialogColumn[] = []
+  for (const name of tableFieldNames ?? []) {
+    if (!name || !isAuditField(name)) continue
+    const key = normalizeAuditFieldName(name)
+    if (present.has(key)) continue
+    present.add(key)
+    extra.push({ field: name, label: name })
+  }
+  return extra.length ? [...columns, ...extra] : columns
+}
+
+/**
  * Refresh {@code updated_at} / {@code updated_by} fields on an existing row during edit.
  * Only touches the "updated" family — created_at / created_by are left unchanged.
  */

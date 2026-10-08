@@ -94,6 +94,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Autowired(required = false)
     private AiAutomationFlowCatalogReader automationFlowCatalogReader;
 
+    /** 文档落库与版本编号的唯一入口（v{major}.{minor} 在这里算）。 */
+    @Autowired
+    private FunctionUnitDocumentService documentService;
+
     // AI gateway 三件套(原 Activepieces flow 的 Build Prompt / Send Http request / Parse Response
     // 三个步骤的 Java 移植)。构造器注入,缺一个就启动失败——不做可空判空。
     private final AiPromptBuilder aiPromptBuilder;
@@ -245,25 +249,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Override
     @Transactional
     public AiDocument saveDocument(Long functionUnitId, AiDocumentType documentType, String content, String summary, String userId) {
-        Integer maxVersion = aiDocumentRepository
-                .findTopByFunctionUnitIdAndDocumentTypeOrderByVersionDesc(functionUnitId, documentType)
-                .map(AiDocument::getVersion)
-                .orElse(0);
-
-        int newVersion = maxVersion + 1;
-
-        AiDocument document = AiDocument.builder()
-                .functionUnitId(functionUnitId)
-                .documentType(documentType)
-                .version(newVersion)
-                .content(content)
-                .summary(summary)
-                .createdBy(userId)
-                .build();
-
-        AiDocument saved = aiDocumentRepository.save(document);
-        log.info("Saved document: functionUnitId={}, type={}, version={}", functionUnitId, documentType, newVersion);
-        return saved;
+        return documentService.appendLatest(functionUnitId, documentType, content, summary, userId);
     }
 
     @Override

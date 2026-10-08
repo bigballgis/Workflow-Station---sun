@@ -5,16 +5,19 @@ import com.developer.enums.AiDocumentType;
 import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
+import com.developer.repository.AiStudioThreadStateRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
 import com.developer.service.impl.AiPromptBuilder;
 import com.developer.service.impl.AiResponseParser;
+import com.developer.service.impl.FunctionUnitDocumentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
 import net.jqwik.api.constraints.LongRange;
 import org.junit.jupiter.api.Tag;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.*;
@@ -41,6 +44,7 @@ class AiDocumentVersionProperties {
      * Save N documents sequentially.
      * Assert: versions are 1, 2, 3, ..., N (monotonically increasing).
      * Assert: no duplicate version numbers.
+     * Assert: display labels are v1.1, v1.2, …, v1.N (not the entity default v1.1 for every row).
      *
      * <p><b>Validates: Requirements 5.5, 5.6, 5.8</b></p>
      */
@@ -58,6 +62,8 @@ class AiDocumentVersionProperties {
         AiGenerationServiceImpl service = new AiGenerationServiceImpl(
                 aiSessionRepository, aiMessageRepository, aiDocumentRepository, functionUnitRepository,
                 new ObjectMapper(), mock(AiPromptBuilder.class), mock(AiGatewayClient.class), mock(AiResponseParser.class), 102400);
+        ReflectionTestUtils.setField(service, "documentService",
+                new FunctionUnitDocumentService(aiDocumentRepository, mock(AiStudioThreadStateRepository.class)));
 
         AiDocumentType docType = AiDocumentType.REQUIREMENTS;
         List<AiDocument> savedDocuments = new ArrayList<>();
@@ -74,7 +80,7 @@ class AiDocumentVersionProperties {
                 });
 
         // Mock save: assign id and createdAt, store in list
-        when(aiDocumentRepository.save(any(AiDocument.class))).thenAnswer(invocation -> {
+        when(aiDocumentRepository.saveAndFlush(any(AiDocument.class))).thenAnswer(invocation -> {
             AiDocument doc = invocation.getArgument(0);
             doc.setId(idCounter.getAndIncrement());
             doc.setCreatedAt(Instant.now());
@@ -92,6 +98,11 @@ class AiDocumentVersionProperties {
         assertThat(savedDocuments).hasSize(documentCount);
         for (int i = 0; i < documentCount; i++) {
             assertThat(savedDocuments.get(i).getVersion()).isEqualTo(i + 1);
+        }
+
+        // Assert: labels v1.1 … v1.N
+        for (int i = 0; i < documentCount; i++) {
+            assertThat(FunctionUnitDocumentService.label(savedDocuments.get(i))).isEqualTo("v1." + (i + 1));
         }
 
         // Assert: no duplicate version numbers

@@ -122,6 +122,43 @@ export interface ActionTableRowsResult {
   rows: Array<Record<string, unknown>>
 }
 
+/**
+ * One Function Unit sub-process started by this request's call activity, shown read-only.
+ *
+ * Several entries share a `callActivityId` when that call activity is multi-instance
+ * (one child per row of its collection).
+ */
+export interface CalledFunctionUnitInstance {
+  processInstanceId: string
+  callActivityId?: string
+  /** Label the designer gave the call step. */
+  callActivityName?: string
+  functionUnitCode?: string
+  functionUnitName?: string
+  /** Form of the called unit chosen to render `formData`; absent when unconfigured. */
+  childFormName?: string
+  /** The called unit's `childFormName` form as deployed: config (`data`) and table bindings. */
+  childForm?: {
+    name?: string
+    data?: string | Record<string, unknown>
+    tableBindings?: Array<{
+      bindingId?: number | string
+      bindingType?: string
+      tableName?: string
+      tableDisplayName?: string
+      fieldDefinitions?: Array<{ fieldName: string; displayName?: string }>
+    }>
+  }
+  /** The called unit's main-table fields in design order; sent when no form is configured. */
+  childFields?: Array<{ fieldName: string; displayName?: string }>
+  status: string
+  currentNode?: string
+  startTime?: string
+  endTime?: string
+  /** The child's own business data: scalars plus `__subTables__`, exactly like a request's. */
+  formData?: Record<string, unknown>
+}
+
 export const processApi = {
   // 获取可发起的流程定义列表
   getDefinitions(params?: { category?: string; keyword?: string }) {
@@ -171,6 +208,16 @@ export const processApi = {
   // 获取流程详情
   getProcessDetail(processId: string) {
     return request.get<ProcessInstance>(`/processes/${processId}`)
+  },
+
+  /**
+   * 本申请调用的子功能单元实例（只读）。
+   *
+   * 数据从子实例实时读取，不在主申请里存副本 —— 两者是各自独立的流程实例，
+   * 存副本会在子流程继续推进后变陈旧。
+   */
+  getCalledFunctionUnits(processId: string) {
+    return request.get<CalledFunctionUnitInstance[]>(`/processes/${processId}/called-function-units`)
   },
 
   // 撤回流程

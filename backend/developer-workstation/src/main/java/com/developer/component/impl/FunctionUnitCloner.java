@@ -17,6 +17,7 @@ import com.developer.entity.SubTableViewConfig;
 import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.TableRelation;
+import com.developer.enums.FunctionUnitStartupMode;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
@@ -111,6 +112,13 @@ class FunctionUnitCloner {
                 .tags(source.getTags() != null ? new java.util.ArrayList<>(source.getTags()) : new java.util.ArrayList<>())
                 .icon(source.getIcon())
                 .status(FunctionUnitStatus.DRAFT)
+                // Carry the source's startup mode: a clone of a callable unit is itself callable.
+                // Omitting this would let @Builder.Default quietly reset it to STANDALONE — the same
+                // trap that once made cloning drop every MI binding's link mode. Passing an explicit
+                // null would defeat that default too, so fall back to it by hand.
+                .startupMode(source.getStartupMode() != null
+                        ? source.getStartupMode()
+                        : FunctionUnitStartupMode.STANDALONE)
                 .build();
         cloned = functionUnitRepository.save(cloned);
 

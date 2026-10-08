@@ -563,6 +563,7 @@ import { createTaskDetailPrevForms } from '@/composables/taskDetail/useTaskDetai
 import { createTaskDetailFormsLoader } from '@/composables/taskDetail/useTaskDetailFormsLoader'
 import { createTaskDetailPopupHelpers } from '@/composables/taskDetail/useTaskDetailPopup'
 import { createTaskDetailLoader } from '@/composables/taskDetail/useTaskDetailLoader'
+import { useCallActivityDiagramStatus } from '@/composables/useCallActivityDiagramStatus'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -683,6 +684,14 @@ const {
 
 const bpmnParser = useBpmnParser({ taskInfo: taskInfo as any, historyRecords, isCompletedTask })
 const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml } = bpmnParser
+
+// Function Unit call steps: coloured from the calls they started (the parser cannot tell).
+useCallActivityDiagramStatus({
+  processInstanceId: computed(() => taskInfo.value?.processInstanceId),
+  bpmnXml,
+  processNodes,
+  currentNodeId,
+})
 
 /**
  * 保存时判定「这一行是不是当前参与者的」——复用 `rowBelongsToCurrentMiScope`，不另造判据。

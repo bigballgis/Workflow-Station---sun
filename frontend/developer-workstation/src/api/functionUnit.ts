@@ -94,13 +94,24 @@ functionUnitAxios.interceptors.response.use(
   }
 )
 
+/**
+ * How a Function Unit may be started.
+ * - `STANDALONE`: only a user starts it, from the Portal catalog (default).
+ * - `CALLABLE`: only another Function Unit's call activity starts it.
+ * - `BOTH`: either way.
+ */
+export type FunctionUnitStartupMode = 'STANDALONE' | 'CALLABLE' | 'BOTH'
+
 export interface FunctionUnit {
   id: number
+  /** Stable cross-environment identifier; also the deployed process definition key. */
+  code?: string
   name: string
   description?: string
   tags?: string[]
   icon?: { id: number; name: string; url: string }
   status: string
+  startupMode?: FunctionUnitStartupMode
   currentVersion?: string
   createdBy: string
   createdAt: string
@@ -116,12 +127,15 @@ export interface FunctionUnit {
 
 export interface FunctionUnitResponse {
   id: number
+  /** Stable cross-environment identifier; also the deployed process definition key. */
+  code?: string
   name: string
   description?: string
   tags?: string[]
   iconId?: number
   iconUrl?: string
   status: string
+  startupMode?: FunctionUnitStartupMode
   currentVersion?: string
   createdAt: string
   updatedAt?: string
@@ -133,6 +147,69 @@ export interface FunctionUnitResponse {
   canModify?: boolean
 }
 
+/** One Function Unit called by the unit being inspected. */
+export interface CalledUnitRelation {
+  /** BPMN element id of the call step, tying this entry back to the diagram. */
+  callActivityId: string
+  callActivityName?: string
+  /** Target code as written in `calledElement`. */
+  code?: string
+  /** Resolved name; absent when the code matches no existing unit. */
+  name?: string
+  /** Absent when the target does not exist — a dangling reference. */
+  id?: number
+  /** Whether the target's Startup Mode actually permits being called. */
+  callable: boolean
+  /** True when the call repeats once per row of a collection. */
+  multiInstance: boolean
+  /** Published version the call is pinned to; absent when it follows the latest. */
+  pinnedVersion?: string
+  /** False when the pinned version no longer exists on the target. */
+  pinnedVersionAvailable: boolean
+  /** The target's current version. */
+  currentVersion?: string
+  /** True when pinned to an older version than the target now has. */
+  newerVersionAvailable: boolean
+}
+
+/** One Function Unit that calls the unit being inspected. */
+export interface CallerUnitRelation {
+  id: number
+  code?: string
+  name: string
+  callActivityId: string
+  callActivityName?: string
+  /** Version of the inspected unit that this caller pinned to, if any. */
+  pinnedVersion?: string
+}
+
+/**
+ * Call relations in both directions, derived from design-time BPMN.
+ *
+ * "Who calls me" is the half a designer cannot see from their own diagram, and it
+ * is what makes editing a callable unit risky — hence both directions.
+ */
+export interface FunctionUnitCallRelations {
+  functionUnitId: number
+  functionUnitCode?: string
+  functionUnitName?: string
+  calls: CalledUnitRelation[]
+  calledBy: CallerUnitRelation[]
+}
+
+/** The process diagram of one published version, for read-only viewing. */
+export interface VersionedProcess {
+  functionUnitId: number
+  functionUnitName?: string
+  functionUnitCode?: string
+  versionNumber: string
+  /** The unit's current version, to show how far behind the viewed one is. */
+  currentVersion?: string
+  bpmnXml?: string
+  /** Absent when served from the current design (no snapshot yet). */
+  publishedAt?: string
+}
+
 export interface FunctionUnitRequest {
   name: string
   description?: string
@@ -142,6 +219,8 @@ export interface FunctionUnitRequest {
   tags?: string[]
   /** Team (virtual group) ids that own/see this FU. Only honoured on create. */
   virtualGroupIds?: string[]
+  /** Omit to leave unchanged; new units default to `STANDALONE`. */
+  startupMode?: FunctionUnitStartupMode
 }
 
 /** Main-table Request ID config: ordered fields + separator joined into a human-readable
@@ -563,6 +642,19 @@ export const functionUnitApi = {
 
   getTableRelations: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: TableRelationDTO[] }>(`/api/v1/function-units/${functionUnitId}/table-relations`),
+
+  /**
+   * Which Function Units this one calls, and which ones call it.
+   * Derived from design-time BPMN on request — nothing is stored.
+   */
+  getCallRelations: (functionUnitId: number) =>
+    functionUnitAxios.get<any, { data: FunctionUnitCallRelations }>(
+      `/api/v1/function-units/${functionUnitId}/call-relations`),
+
+  /** The diagram of one published version, read-only — what a pinned call runs. */
+  getVersionedProcess: (functionUnitId: number, versionNumber: string) =>
+    functionUnitAxios.get<any, { data: VersionedProcess }>(
+      `/api/v1/function-units/${functionUnitId}/versions/by-number/${encodeURIComponent(versionNumber)}/process`),
 
   // Foreign Keys
   getForeignKeys: (functionUnitId: number) =>

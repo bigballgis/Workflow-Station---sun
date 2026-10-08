@@ -565,4 +565,13 @@ public class WorkflowEngineClient {
         return processClient.getBpmnXml(processDefinitionKey);
     }
 
+    /**
+     * Child process instances started by this instance's call activities.
+     *
+     * @return one map per sub-process; empty when it calls nothing or the engine is unavailable
+     */
+    public List<Map<String, Object>> getSubProcesses(String processInstanceId) {
+        return processClient.getSubProcesses(processInstanceId);
+    }
+
 }

@@ -33,6 +33,10 @@ class ProcessEngineComponentTerminateMultiInstanceTest {
     @Mock
     private MultiInstanceCanceller multiInstanceCanceller;
 
+    /** Terminating an instance also terminates any Function Unit sub-processes it called. */
+    @Mock
+    private ProcessCallCascade processCallCascade;
+
     @InjectMocks
     private ProcessEngineComponent processEngineComponent;
 

@@ -430,3 +430,45 @@ export function setBasicProperties(
   const modeling = modeler.get('modeling')
   modeling.updateProperties(rawElement(element), props)
 }
+
+/**
+ * 读取 callActivity 调用的目标（子 Function Unit 的 code）。
+ *
+ * `calledElement` 是 BPMN 2.0 标准属性，bpmn-moddle 自带该定义，
+ * 因此不需要像自定义属性那样在 customModdle.ts 里声明。
+ */
+export function getCalledElement(element: BpmnElement): string {
+  return (element?.businessObject as { calledElement?: string })?.calledElement || ''
+}
+
+/**
+ * 设置 callActivity 的调用目标。
+ *
+ * 传入子 Function Unit 的 **code**（不是 id）：部署时流程定义 key 就等于 FU code，
+ * 且 code 跨环境稳定，而 id 会在导入时被重新映射。
+ */
+/**
+ * Makes a step run once (no loop) or once per item of a collection (a parallel multi-instance
+ * loop). Through modeling, so it is undoable and auto-saved like any other edit; the collection
+ * itself is set elsewhere (for a Function Unit call: its "Rows from" table, compiled on deploy).
+ */
+export function setRunsPerItem(modeler: BpmnModeler, element: BpmnElement, perItem: boolean): void {
+  const raw = rawElement(element)
+  const modeling = modeler.get('modeling')
+  if (!perItem) {
+    modeling.updateProperties(raw, { loopCharacteristics: undefined })
+    return
+  }
+  if (raw.businessObject?.loopCharacteristics) return
+  const loop = modeler.get('moddle').create('bpmn:MultiInstanceLoopCharacteristics', { isSequential: false })
+  modeling.updateProperties(raw, { loopCharacteristics: loop })
+}
+
+export function setCalledElement(
+  modeler: BpmnModeler,
+  element: BpmnElement,
+  functionUnitCode: string
+): void {
+  const modeling = modeler.get('modeling')
+  modeling.updateProperties(rawElement(element), { calledElement: functionUnitCode || undefined })
+}

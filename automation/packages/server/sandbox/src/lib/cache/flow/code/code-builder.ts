@@ -33,6 +33,18 @@ const TS_CONFIG_CONTENT = `
 }
 `
 
+/**
+ * Dependencies injected into EVERY code step's package.json whenever packages are allowed
+ * (any mode but SANDBOX_CODE_ONLY) — so even a step with no dependencies of its own runs a
+ * pnpm install. HERMES-PATCH-034: under AP_PIECES_OFFLINE_INSTALL that install resolves from
+ * the baked offline store only, so hermes/seed-offline-store.mjs seeds this exact set (a test
+ * keeps the two in lockstep); without it every fresh code-step build fails with
+ * ERR_PNPM_NO_OFFLINE_META.
+ */
+export const CODE_STEP_INJECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
+    '@types/node': '18.17.1',
+}
+
 const INVALID_ARTIFACT_ERROR_PLACEHOLDER = '__AP_ERROR_MESSAGE__'
 
 const INVALID_ARTIFACT_TEMPLATE = `
@@ -149,7 +161,7 @@ function getPackageJson(packageJson: string, getSettings: () => SandboxSettings)
     return JSON.stringify({
         ...packageJsonObject,
         dependencies: {
-            '@types/node': '18.17.1',
+            ...CODE_STEP_INJECTED_DEPENDENCIES,
             ...(packageJsonObject?.['dependencies'] ?? {}),
         },
     })

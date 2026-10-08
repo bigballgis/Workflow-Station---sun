@@ -1216,6 +1216,17 @@ exportWithData: '导出',
     noSubTableRows: '暂无行',
     subTableRow: '第 {n} 行',
   },
+  /** 本申请通过调用环节启动的子功能单元流程。 */
+  calledFunctionUnit: {
+    tabTitle: '子流程',
+    none: '本申请尚未启动任何子流程',
+    noData: '该子流程尚未填写数据',
+    currentStep: '当前步骤：{step}',
+    finished: '已结束',
+    instanceCount: '共 {count} 个实例',
+    untitledCall: '被调用的功能单元',
+  },
+
   changeHistory: {
     title: '变更历史',
     noRecords: '暂无变更历史记录',

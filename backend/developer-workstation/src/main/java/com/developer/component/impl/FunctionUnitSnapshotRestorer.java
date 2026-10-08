@@ -11,6 +11,7 @@ import com.developer.entity.TableDefinition;
 import com.developer.enums.ActionType;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
+import com.developer.enums.FunctionUnitStartupMode;
 import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
@@ -81,6 +82,10 @@ public class FunctionUnitSnapshotRestorer {
         if (snapshot.containsKey("description")) {
             functionUnit.setDisplayName((String) snapshot.get("description"));
         }
+        // Snapshots taken before startup mode existed simply omit the key; leaving the unit's
+        // current mode untouched is right for those, and a rollback to a newer snapshot restores
+        // whichever mode that version declared.
+        restoreStartupMode(functionUnit, snapshot);
 
         Map<Long, Long> tableIdMapping = new HashMap<>();
         Map<String, Long> importedTableNameToId = new HashMap<>();
@@ -368,6 +373,26 @@ public class FunctionUnitSnapshotRestorer {
         } catch (Exception error) {
             throw new DeveloperBusinessException("BIZ_DECISION_SNAPSHOT_INVALID",
                     "Cannot restore Decision references from saved process XML");
+        }
+    }
+
+    /**
+     * Restores how the unit may be started, when the snapshot records it.
+     *
+     * <p>An unparseable value is left alone rather than defaulted: silently resetting a unit to
+     * STANDALONE would break every call activity targeting it, and the failure would only show
+     * up at the next deployment.
+     */
+    private void restoreStartupMode(FunctionUnit functionUnit, Map<String, Object> snapshot) {
+        Object raw = snapshot.get("startupMode");
+        if (!(raw instanceof String mode) || mode.isBlank()) {
+            return;
+        }
+        try {
+            functionUnit.setStartupMode(FunctionUnitStartupMode.valueOf(mode.trim()));
+        } catch (IllegalArgumentException e) {
+            log.warn("Snapshot for function unit {} carries unknown startupMode '{}'; keeping current mode {}",
+                    functionUnit.getId(), mode, functionUnit.getStartupMode());
         }
     }
 

@@ -30,6 +30,8 @@ public class ProcessDeploymentComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final FunctionUnitContentRepository contentRepository;
     private final I18nService i18nService;
+    /** Rewrites version-pinned Function Unit calls to their exact deployed process. */
+    private final CallActivityVersionResolver callActivityVersionResolver;
 
     /**
      * Deploys process definitions stored on the function unit to the Flowable engine.
@@ -64,7 +66,12 @@ public class ProcessDeploymentComponent {
 
         for (FunctionUnitContent processContent : processContents) {
             try {
-                String bpmnXml = processContent.getContentData();
+                // Version-pinned calls are resolved to an exact deployed process here,
+                // before the engine sees the XML: the engine has no notion of published
+                // versions, and an unresolvable pin must fail the deploy rather than
+                // silently fall through to "latest".
+                String bpmnXml = callActivityVersionResolver
+                        .resolvePinnedCalls(processContent.getContentData());
                 String processKey = extractProcessKey(bpmnXml, functionUnit.getCode());
                 String processName = functionUnit.getName() + " - " + processContent.getContentName();
 
@@ -136,7 +143,10 @@ public class ProcessDeploymentComponent {
 
         for (FunctionUnitContent processContent : processContents) {
             try {
-                String bpmnXml = processContent.getContentData();
+                // Same resolution on the dry run, so a broken pin is reported by
+                // validation instead of only surfacing at the real deploy.
+                String bpmnXml = callActivityVersionResolver
+                        .resolvePinnedCalls(processContent.getContentData());
                 String processKey = extractProcessKey(bpmnXml, functionUnit.getCode());
                 String processName = functionUnit.getName() + " - " + processContent.getContentName() + " (validate)";
 
@@ -175,6 +185,12 @@ public class ProcessDeploymentComponent {
     }
 
     private static String safeDetail(Exception e) {
+        // A broken version pin describes a configuration the designer can fix, so its
+        // message is passed through; everything else stays reduced to a class name
+        // rather than leaking internal detail into a user-facing error list.
+        if (e instanceof CallActivityPinUnresolvableException) {
+            return e.getMessage();
+        }
         return e.getClass().getSimpleName();
     }
 

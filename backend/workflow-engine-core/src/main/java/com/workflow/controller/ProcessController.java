@@ -7,6 +7,7 @@ import com.workflow.dto.response.ApiResponse;
 import com.workflow.dto.response.DeploymentResult;
 import com.workflow.dto.response.ProcessDefinitionResult;
 import com.workflow.dto.response.ProcessInstanceResult;
+import com.workflow.dto.response.SubProcessInfo;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -289,6 +290,19 @@ public class ProcessController {
         log.info("Getting process instance status: {}", processInstanceId);
         Map<String, Object> status = processEngineComponent.getProcessInstanceStatus(processInstanceId);
         return ResponseEntity.ok(ApiResponse.success(status));
+    }
+
+    @GetMapping("/{processInstanceId}/sub-processes")
+    @Operation(summary = "Get Sub-Processes",
+            description = "List child process instances started by this instance's call activities, "
+                    + "plus its embedded sub-processes")
+    public ResponseEntity<ApiResponse<List<SubProcessInfo>>> getSubProcesses(
+            @Parameter(description = "Process instance ID", required = true)
+            @PathVariable String processInstanceId) {
+
+        log.info("Getting sub-processes for process instance: {}", processInstanceId);
+        List<SubProcessInfo> subProcesses = processEngineComponent.getSubProcesses(processInstanceId);
+        return ResponseEntity.ok(ApiResponse.success(subProcesses));
     }
 
     // ==================== 异常处理 ====================

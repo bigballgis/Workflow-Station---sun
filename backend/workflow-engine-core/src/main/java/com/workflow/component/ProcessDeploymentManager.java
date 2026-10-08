@@ -36,8 +36,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +55,18 @@ import java.util.stream.Collectors;
 @Component
 @Transactional
 public class ProcessDeploymentManager {
+
+    /** The attributes of one callActivity opening tag, any namespace prefix. */
+    private static final Pattern CALL_ACTIVITY_TAG_PATTERN =
+            Pattern.compile("<(?:\\w+:)?callActivity\\b([^>]*)>", Pattern.DOTALL);
+
+    /** {@code calledElement="..."}. Preceded by whitespace so it never matches calledElementType. */
+    private static final Pattern CALLED_ELEMENT_PATTERN =
+            Pattern.compile("\\scalledElement=\"([^\"]*)\"");
+
+    /** {@code flowable:calledElementType="..."} — "id" when the call is pinned to a definition. */
+    private static final Pattern CALLED_ELEMENT_TYPE_PATTERN =
+            Pattern.compile("\\s(?:\\w+:)?calledElementType=\"([^\"]*)\"");
 
     @Autowired
     private RepositoryService repositoryService;
@@ -72,10 +88,16 @@ public class ProcessDeploymentManager {
 
             // Normalize known legacy BPMN serialization issues before validation/deploy
             String normalizedBpmnXml = normalizeBpmnXml(request.getBpmnXml());
-            String enhancedBpmnXml = BpmnDeployEnhancer.enhance(normalizedBpmnXml);
+            // Function Unit call steps: the designer's row source and data mappings become
+            // Flowable's collection expression and in/out parameters.
+            String enhancedBpmnXml = com.workflow.util.CallActivityDataMappingCompiler.compile(
+                    BpmnDeployEnhancer.enhance(normalizedBpmnXml));
 
             // Validate BPMN file format
             validateBpmnFile(enhancedBpmnXml);
+
+            // Every callActivity must name a process that is already deployed here.
+            validateCalledElementsAreDeployed(enhancedBpmnXml, request.getKey());
 
             // Create deployment
             Deployment deployment = repositoryService.createDeployment()
@@ -365,6 +387,84 @@ public class ProcessDeploymentManager {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: " + e.getMessage(), bpmnContent)));
         }
+    }
+
+    /**
+     * Refuse to deploy a process whose {@code callActivity} targets a process that is not
+     * deployed in this environment.
+     *
+     * <p>Flowable resolves {@code calledElement} lazily — at the moment the token reaches the
+     * call activity — so without this check a deployment succeeds and then fails in production
+     * when a user is halfway through a request. Failing at deploy time instead mirrors how
+     * {@link #resolveApFlowRef} treats an unresolvable Activepieces flow reference (FR-C12).
+     *
+     * <p>A process may call itself neither directly nor transitively; direct self-reference is
+     * caught here, and the designer rejects longer cycles before deployment.
+     */
+    void validateCalledElementsAreDeployed(String bpmnXml, String deployingKey) {
+        if (bpmnXml == null || !bpmnXml.contains("calledElement")) {
+            // Fast path: no cross-process calls in this diagram.
+            return;
+        }
+
+        // Each call activity is read on its own because calledElement means different things
+        // depending on that element's calledElementType: a process KEY (follow the latest
+        // deployment) by default, or an exact process definition ID when the call was pinned
+        // to a published version. Treating every value as a key rejected every pinned call,
+        // since a definition id ("key:version:uuid") is never itself a key.
+        Matcher matcher = CALL_ACTIVITY_TAG_PATTERN.matcher(bpmnXml);
+        Set<String> checked = new HashSet<>();
+        while (matcher.find()) {
+            String attrs = matcher.group(1);
+            String calledElement = firstGroup(CALLED_ELEMENT_PATTERN, attrs);
+            if (calledElement == null || calledElement.isBlank()) {
+                continue;
+            }
+            boolean byId = "id".equals(firstGroup(CALLED_ELEMENT_TYPE_PATTERN, attrs));
+            if (!checked.add((byId ? "id:" : "key:") + calledElement)) {
+                continue;
+            }
+
+            // A definition id starts with its key ("key:version:uuid"), so this also catches a
+            // call pinned to a version of the very process being deployed.
+            String calledKey = byId ? keyOfDefinitionId(calledElement) : calledElement;
+            if (calledKey.equals(deployingKey)) {
+                throw new WorkflowBusinessException("CALL_TARGET_SELF_REFERENCE",
+                        "Process '" + deployingKey + "' calls itself. A self-referencing call activity "
+                                + "would start sub-process instances endlessly at runtime.");
+            }
+
+            long deployed = byId
+                    ? repositoryService.createProcessDefinitionQuery()
+                            .processDefinitionId(calledElement)
+                            .count()
+                    : repositoryService.createProcessDefinitionQuery()
+                            .processDefinitionKey(calledElement)
+                            .count();
+            if (deployed == 0) {
+                throw new WorkflowBusinessException("CALL_TARGET_NOT_DEPLOYED", byId
+                        ? "Call activity is pinned to process definition '" + calledElement
+                                + "', which does not exist in this environment. Re-deploy the pinned "
+                                + "version of '" + calledKey + "', then deploy '" + deployingKey + "'."
+                        : "Call activity targets Function Unit '" + calledElement + "', which is not "
+                                + "deployed in this environment. Deploy that Function Unit first, then "
+                                + "deploy '" + deployingKey + "'.");
+            }
+        }
+    }
+
+    /** The process key of a definition id of the form {@code key:version:uuid}. */
+    private static String keyOfDefinitionId(String definitionId) {
+        int colon = definitionId.indexOf(':');
+        return colon > 0 ? definitionId.substring(0, colon) : definitionId;
+    }
+
+    private static String firstGroup(Pattern pattern, String input) {
+        if (input == null) {
+            return null;
+        }
+        Matcher m = pattern.matcher(input);
+        return m.find() ? m.group(1) : null;
     }
 
     /**

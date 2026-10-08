@@ -33,7 +33,10 @@
             v{{ store.current.currentVersion }}
           </span>
         </div>
-        <div>
+        <!-- Every action here works on the current design. While a published version
+             is on screen they would act on something other than what is shown, so
+             they are withheld until the viewer returns to the current design. -->
+        <div v-if="!viewedVersion">
           <el-button
             v-if="AI_STUDIO_ENABLED && !isReadOnly"
             type="primary"
@@ -89,7 +92,18 @@
         style="margin-bottom: 12px;"
       />
 
+      <!-- A published version reached from a pinned call: shown read-only in place of
+           the editable designer, since that version — not the live draft — is what
+           the call runs. -->
+      <VersionedProcessViewer
+        v-if="viewedVersion"
+        :function-unit-id="functionUnitId"
+        :version="viewedVersion"
+        @open-current="openCurrentDesign"
+      />
+
       <div
+        v-else
         class="designer-workspace"
         @click.capture="onReadOnlyInteraction"
         @pointerdown.capture="onReadOnlyInteraction"
@@ -100,6 +114,7 @@
       <el-tabs
         v-model="activeTab"
         type="border-card"
+        :before-leave="beforeTabLeave"
       >
         <el-tab-pane
           :label="t('functionUnit.process')"
@@ -107,6 +122,7 @@
         >
           <ProcessDesigner
             v-if="activeTab === 'process'"
+            ref="processDesignerRef"
             :key="processDesignerReloadKey"
             :function-unit-id="functionUnitId"
           />
@@ -126,6 +142,7 @@
         >
           <FormDesigner
             v-if="activeTab === 'forms'"
+            ref="formDesignerRef"
             :function-unit-id="functionUnitId"
           />
         </el-tab-pane>
@@ -263,6 +280,28 @@
                   :value="tag"
                 />
               </el-select>
+            </el-form-item>
+            <el-form-item :label="t('functionUnit.startupMode')">
+              <el-select
+                v-model="editForm.startupMode"
+                style="width: 100%;"
+              >
+                <el-option
+                  :label="t('functionUnit.startupModeStandalone')"
+                  value="STANDALONE"
+                />
+                <el-option
+                  :label="t('functionUnit.startupModeCallable')"
+                  value="CALLABLE"
+                />
+                <el-option
+                  :label="t('functionUnit.startupModeBoth')"
+                  value="BOTH"
+                />
+              </el-select>
+              <div class="field-tip">
+                {{ t('functionUnit.startupModeTip') }}
+              </div>
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -523,12 +562,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
+import VersionedProcessViewer from '@/components/designer/VersionedProcessViewer.vue'
 import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
 import TableDesigner from '@/components/designer/TableDesigner.vue'
 import FormDesigner from '@/components/designer/FormDesigner.vue'
@@ -560,6 +600,20 @@ const router = useRouter()
 const store = useFunctionUnitStore()
 
 const functionUnitId = computed(() => Number(route.params.id))
+
+/**
+ * The published version to show read-only, when the page was opened from a pinned
+ * call. Read from the query on every change rather than once at mount: switching
+ * between a version and the current design keeps the same path, so the page is
+ * reused rather than remounted.
+ */
+const viewedVersion = computed(() =>
+  typeof route.query.version === 'string' ? route.query.version : ''
+)
+
+function openCurrentDesign() {
+  router.replace({ path: route.path })
+}
 const isReadOnly = computed(() => store.current != null && isFunctionUnitReadOnly(store.current))
 
 function onReadOnlyInteraction(event: Event): void {
@@ -570,10 +624,41 @@ function onReadOnlyInteraction(event: Event): void {
 // Back always means "up to the Function Unit list", never "the previous page": jumping
 // between function units from the sidebar's Recent list would otherwise make Back walk
 // backwards through those function units instead of leaving the designer.
-const goBack = () => {
-  router.push('/function-units')
+type DirtyDesigner = { hasUnsavedChanges: () => boolean | Promise<boolean>; saveChanges: () => Promise<boolean>; discardChanges: () => Promise<void> }
+const processDesignerRef = ref<DirtyDesigner | null>(null)
+const formDesignerRef = ref<DirtyDesigner | null>(null)
+const activeDesigner = () => activeTab.value === 'process' ? processDesignerRef.value : activeTab.value === 'forms' ? formDesignerRef.value : null
+
+async function confirmLeave(): Promise<boolean> {
+  const designer = activeDesigner()
+  if (!designer || !(await designer.hasUnsavedChanges())) return true
+  try {
+    await ElMessageBox.confirm(t('process.unsavedChanges'), t('functionUnit.documents.unsavedTitle'), {
+      type: 'warning',
+      confirmButtonText: t('common.save'),
+      cancelButtonText: t('functionUnit.documents.discard'),
+      distinguishCancelAndClose: true,
+    })
+    return await designer.saveChanges()
+  } catch (reason) {
+    if (reason === 'cancel') {
+      await designer.discardChanges()
+      return true
+    }
+    return false
+  }
+}
+
+const goBack = async () => {
+  if (await confirmLeave()) await router.push('/function-units')
 }
 const activeTab = ref('process')
+
+async function beforeTabLeave(): Promise<boolean> {
+  return confirmLeave()
+}
+
+onBeforeRouteLeave(async () => confirmLeave())
 
 watch(activeTab, (tab) => {
   if (tab === 'forms' && functionUnitId.value) {
@@ -695,6 +780,13 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.field-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
 .version-badge {
   background-color: #f0f0f0;
   padding: 2px 8px;

@@ -1,6 +1,6 @@
 {
   "name": "@activepieces/piece-content-organizer",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "displayName": "Content Organizer",
   "logoUrl": "/ap-cdn/pieces/hermes/content-organizer.svg",
   "description": "文档 OCR / 字段抽取（Content Organizer；iB2B 服务账号凭证取自部署环境）。",

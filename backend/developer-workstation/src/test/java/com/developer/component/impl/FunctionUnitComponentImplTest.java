@@ -118,6 +118,30 @@ class FunctionUnitComponentImplTest {
         lenient().when(functionUnitWorkspaceAccessService.visibleFunctionUnitIds()).thenReturn(null);
     }
 
+    /** A unit meant to be called can be marked so at creation; without a choice it stays STANDALONE. */
+    @Test
+    void create_keepsTheChosenStartupModeAndDefaultsToStandalone() {
+        when(functionUnitRepository.existsByName(any())).thenReturn(false);
+        when(functionUnitRepository.existsByCode(any())).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit fu = invocation.getArgument(0);
+            fu.setId(100L);
+            return fu;
+        });
+        when(processDefinitionRepository.save(any(ProcessDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        FunctionUnitRequest callable = new FunctionUnitRequest();
+        callable.setName("Callable Unit");
+        callable.setStartupMode(com.developer.enums.FunctionUnitStartupMode.CALLABLE);
+        assertEquals(com.developer.enums.FunctionUnitStartupMode.CALLABLE,
+                functionUnitComponent.create(callable).getStartupMode());
+
+        FunctionUnitRequest plain = new FunctionUnitRequest();
+        plain.setName("Plain Unit");
+        assertEquals(com.developer.enums.FunctionUnitStartupMode.STANDALONE,
+                functionUnitComponent.create(plain).getStartupMode());
+    }
+
     @Test
     void create_shouldPersistInitialProcessDefinitionWithUniqueProcessIdFromCode() {
         when(functionUnitRepository.existsByName("New Unit")).thenReturn(false);

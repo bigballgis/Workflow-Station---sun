@@ -70,6 +70,10 @@ public class ProcessComponent {
     @Autowired(required = false)
     private OwnerFieldComponent ownerFieldComponent;
 
+    /** Decides COMPLETED vs REJECTED; when absent, finished instances stay COMPLETED as before. */
+    @Autowired(required = false)
+    private ProcessTerminalStatusResolver terminalStatusResolver;
+
     /**
      * In-memory cache for function unit content payloads (forms + BPMN + data tables).
      * Key: resolved functionUnitId. TTL: 5 minutes (matching FunctionUnitAccessComponent).
@@ -261,6 +265,12 @@ public class ProcessComponent {
         clearMainCaseHandlerOnWithdraw(instance);
         processInstanceRepository.save(instance);
 
+        // Function Unit sub-processes this request started are withdrawn with it: the two are
+        // bound together, and a child left RUNNING would be a request nobody could finish.
+        // The engine terminates the Flowable side (ProcessCallCascade); this marks the portal
+        // rows so the child shows as withdrawn rather than stuck at its last step.
+        withdrawCalledChildInstances(processId, instance.getEndTime());
+
         // Cancel process instance via Flowable engine
         try {
             if (workflowEngineClient.isAvailable()) {
@@ -280,6 +290,85 @@ public class ProcessComponent {
         }
 
         return true;
+    }
+
+    /**
+     * Fails the caller of a child Function Unit that ended in rejection, walking up the call chain.
+     *
+     * <p>Flowable only propagates the happy path: a child that <em>completes</em> lets the parent
+     * continue. A rejected child would otherwise leave its caller parked on the call activity for
+     * good, so the rejection is carried upwards explicitly.
+     *
+     * <p>Engine-side termination of the parent's Flowable instance is handled by
+     * {@code ProcessCallCascade}; this marks the portal rows so the parent reads as rejected
+     * rather than stuck at its last step.
+     */
+    private void failCallingParentOnChildRejection(String childProcessInstanceId, LocalDateTime endTime) {
+        Optional<ProcessInstance> childOpt = processInstanceRepository.findById(childProcessInstanceId);
+        if (childOpt.isEmpty()) {
+            return;
+        }
+        String parentId = childOpt.get().getParentProcessInstanceId();
+        if (parentId == null || parentId.isBlank()) {
+            // Started directly by a user — nothing above it to fail.
+            return;
+        }
+
+        Optional<ProcessInstance> parentOpt = processInstanceRepository.findById(parentId);
+        if (parentOpt.isEmpty()) {
+            log.warn("Child {} was rejected but its calling instance {} no longer exists",
+                    childProcessInstanceId, parentId);
+            return;
+        }
+
+        ProcessInstance parent = parentOpt.get();
+        if (!ProcessTerminalStatusResolver.isRunning(parent.getStatus())) {
+            // Already ended — typically because this cascade reached it from another direction.
+            return;
+        }
+
+        parent.setStatus(ProcessTerminalStatusResolver.STATUS_REJECTED);
+        parent.setEndTime(endTime);
+        parent.setCompletedAt(endTime);
+        parent.setCurrentNode(null);
+        parent.setCurrentAssignee(null);
+        processInstanceRepository.save(parent);
+        log.info("Calling instance {} rejected because its called Function Unit instance {} was rejected",
+                parentId, childProcessInstanceId);
+
+        // Siblings started by the same parent cannot outlive it.
+        withdrawCalledChildInstances(parentId, endTime);
+        // Keep walking: the parent may itself have been called by someone else.
+        failCallingParentOnChildRejection(parentId, endTime);
+    }
+
+    /**
+     * Marks every still-running child instance started by this request as withdrawn, depth-first.
+     *
+     * <p>Deliberately an internal method rather than a call back into {@link #withdrawProcess}:
+     * that entry point requires the caller to be the instance's own starter, and a child started
+     * by a call activity has a different starter than the parent. Recursing through it would
+     * either do nothing or force that ownership check to be relaxed on a public API — the check
+     * stays strict, and only this system-initiated path bypasses it.
+     */
+    private void withdrawCalledChildInstances(String parentProcessInstanceId, LocalDateTime endTime) {
+        List<ProcessInstance> children =
+                processInstanceRepository.findByParentProcessInstanceId(parentProcessInstanceId);
+        for (ProcessInstance child : children) {
+            if (!"RUNNING".equals(child.getStatus())) {
+                continue;
+            }
+            // Depth-first: a child may itself have called further Function Units.
+            withdrawCalledChildInstances(child.getId(), endTime);
+
+            child.setStatus("WITHDRAWN");
+            child.setEndTime(endTime);
+            child.setCurrentNode(null);
+            child.setCurrentAssignee(null);
+            processInstanceRepository.save(child);
+            log.info("Child process instance {} withdrawn together with calling instance {}",
+                    child.getId(), parentProcessInstanceId);
+        }
     }
 
     private void clearMainCaseHandlerOnWithdraw(ProcessInstance instance) {
@@ -886,7 +975,13 @@ public class ProcessComponent {
 
             // Update only processes still RUNNING
             if ("RUNNING".equals(instance.getStatus())) {
-                instance.setStatus("COMPLETED");
+                // A rejection travels the same path as an approval, so the outcome comes from the
+                // approvalStatus variable rather than from lastActivityName — an end event the
+                // designer was free to name anything.
+                String finishedStatus = terminalStatusResolver != null
+                        ? terminalStatusResolver.resolveFinishedStatus(instance)
+                        : ProcessTerminalStatusResolver.STATUS_COMPLETED;
+                instance.setStatus(finishedStatus);
                 LocalDateTime finishedAt = LocalDateTime.now();
                 instance.setEndTime(finishedAt);
                 instance.setCompletedAt(finishedAt);
@@ -895,7 +990,13 @@ public class ProcessComponent {
                 // Clear current assignee
                 instance.setCurrentAssignee(null);
                 processInstanceRepository.save(instance);
-                log.info("Process instance {} marked as COMPLETED (current step cleared)", processId);
+                log.info("Process instance {} marked as {} (current step cleared)", processId, finishedStatus);
+
+                // A child that ended in rejection fails its caller: the two are bound together,
+                // and leaving the parent parked on its call activity would strand the request.
+                if (ProcessTerminalStatusResolver.STATUS_REJECTED.equals(finishedStatus)) {
+                    failCallingParentOnChildRejection(processId, finishedAt);
+                }
             } else {
                 log.info("Process instance {} already has status: {}, skipping update",
                         processId, instance.getStatus());

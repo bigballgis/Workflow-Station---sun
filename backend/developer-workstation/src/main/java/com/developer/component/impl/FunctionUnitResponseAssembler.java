@@ -89,6 +89,7 @@ class FunctionUnitResponseAssembler {
                 .iconId(entity.getIcon() != null ? entity.getIcon().getId() : null)
                 .icon(iconInfo)
                 .status(entity.getStatus())
+                .startupMode(entity.getStartupMode())
                 .currentVersion(entity.getCurrentVersion())
                 .createdBy(entity.getCreatedBy())
                 .createdAt(entity.getCreatedAt())

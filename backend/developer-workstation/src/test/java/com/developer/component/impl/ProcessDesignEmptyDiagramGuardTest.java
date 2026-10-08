@@ -103,6 +103,7 @@ class ProcessDesignEmptyDiagramGuardTest {
                 new ProcessBpmnValidator(tableDefinitionRepository, formDefinitionRepository, null),
                 new ProcessSimulationHelper(tableDefinitionRepository),
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
+                null,
                 null);
     }
 

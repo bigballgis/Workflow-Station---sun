@@ -2,12 +2,14 @@ package com.workflow.listener;
 
 import com.platform.common.util.SafeUrlInput;
 import lombok.extern.slf4j.Slf4j;
+import com.workflow.component.ProcessCallCascade;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
 import org.flowable.common.engine.api.delegate.event.FlowableEvent;
 import org.flowable.common.engine.api.delegate.event.FlowableEventListener;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.delegate.event.FlowableProcessEngineEvent;
 import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -31,6 +33,17 @@ public class ProcessCompletionListener implements FlowableEventListener {
 
     @Autowired
     private RestTemplate restTemplate;
+
+    /**
+     * Terminates the caller when a called Function Unit ends in rejection.
+     *
+     * <p>{@code @Lazy} for the same reason as {@link #historyService} below: this listener is
+     * wired into the Flowable engine's own configuration, while the cascade needs that engine's
+     * RuntimeService — injecting it eagerly closes a bean cycle and the context refuses to start.
+     */
+    @Autowired(required = false)
+    @Lazy
+    private ProcessCallCascade processCallCascade;
     
     @Autowired
     @Lazy
@@ -60,6 +73,24 @@ public class ProcessCompletionListener implements FlowableEventListener {
             try {
                 // Get last activity node name in current thread since HistoryService needs to be within a transaction
                 String lastActivityName = getLastActivityName(processInstanceId);
+
+                // A rejected Function Unit sub-process must take its caller down with it. Flowable
+                // considers a rejection a normal completion — the token simply reached a different
+                // end event — so it would otherwise leave the parent parked on its call activity.
+                // Read the outcome here, while the instance's variables are still queryable.
+                if (processCallCascade != null && endedInRejection(processInstanceId)) {
+                    try {
+                        String parent = processCallCascade.cascadeToParent(
+                                processInstanceId, "called Function Unit was rejected");
+                        if (parent != null) {
+                            log.info("Process {} was rejected; terminated its calling instance {}",
+                                    processInstanceId, parent);
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to fail the caller of rejected process {}: {}",
+                                processInstanceId, e.getMessage(), e);
+                    }
+                }
                 
                 // Async notify user-portal to update process instance status.
                 // Must be async to avoid deadlock: completeTask(@Transactional) holds ProcessInstance row lock
@@ -96,6 +127,31 @@ public class ProcessCompletionListener implements FlowableEventListener {
         }
     }
     
+    /**
+     * Whether this instance finished because it was rejected.
+     *
+     * <p>Reads the {@code approvalStatus} variable the platform writes on every approve/reject,
+     * rather than matching the end event's name against words like "Rejected" — a designer is
+     * free to name that node anything, and a wrong answer here would terminate a caller that
+     * should have carried on.
+     */
+    private boolean endedInRejection(String processInstanceId) {
+        try {
+            HistoricVariableInstance approvalStatus = historyService
+                    .createHistoricVariableInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .variableName("approvalStatus")
+                    .singleResult();
+            return approvalStatus != null
+                    && approvalStatus.getValue() instanceof String status
+                    && "REJECTED".equalsIgnoreCase(status.trim());
+        } catch (Exception e) {
+            // Unknown outcome: leave the caller running rather than terminating it on a guess.
+            log.warn("Could not read approval outcome of process {}: {}", processInstanceId, e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * Get last activity node name of the process.
      * Prioritizes returning end event name (e.g. "Approved"); falls back to last user task.

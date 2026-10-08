@@ -18,7 +18,7 @@
       @create="showCreateDialog = true"
       @refresh="loadForms"
       @import-from-table="handleImportFromTable"
-      @select-form="handleSelectForm"
+      @select-form="requestSelectForm"
       @delete-form="handleDeleteForm"
       @more-action="onFormListMoreAction"
       @set-form-bound-views="handleSetFormBoundViews"
@@ -30,7 +30,7 @@
       class="form-editor-view"
     >
       <div class="editor-header">
-        <el-button @click="handleBackToList">
+        <el-button @click="requestBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('form.backToList') }}
         </el-button>
         <el-input
@@ -72,18 +72,11 @@
         <div class="header-actions">
           <div class="auto-save-status">
             <span
-              v-if="autoSaving"
-              class="auto-saving"
+              v-if="isDirty"
+              class="auto-save-blocked"
             >
-              <el-icon class="is-loading"><Loading /></el-icon>
-              {{ t('form.autoSaving') }}
-            </span>
-            <span
-              v-else-if="lastAutoSaveTime"
-              class="auto-saved"
-            >
-              <el-icon><CircleCheck /></el-icon>
-              {{ t('form.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
+              <el-icon><WarningFilled /></el-icon>
+              {{ t('process.unsavedChanges') }}
             </span>
           </div>
           <el-button @click="handleManageBindings(selectedForm)">
@@ -126,7 +119,7 @@
             type="primary"
             :loading="savingForm"
             :disabled="savingForm"
-            @click="handleSaveForm(true)"
+            @click="saveChanges"
           >
             {{ t('common.save') }}
           </el-button>
@@ -284,6 +277,8 @@
           </template>
           <div
             class="fc-designer-wrapper"
+            @input="onDesignerContentInput"
+            @change="onDesignerContentInput"
             :style="designerZoomStyle"
           >
             <div class="form-designer-canvas-toolbar-host">
@@ -361,6 +356,8 @@
               <div v-show="subTableActiveTab === 'form'">
                 <div
                   class="fc-designer-wrapper"
+                  @input="onDesignerContentInput"
+                  @change="onDesignerContentInput"
                   :style="designerZoomStyle"
                 >
                   <div class="form-designer-canvas-toolbar-host">
@@ -408,6 +405,8 @@
           <div
             v-else
             class="fc-designer-wrapper"
+            @input="onDesignerContentInput"
+            @change="onDesignerContentInput"
             :style="designerZoomStyle"
           >
             <div class="form-designer-canvas-toolbar-host">
@@ -905,9 +904,11 @@
 <script setup lang="ts">
 import { ref, computed, provide, watch, toRef, reactive, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ArrowDown, Check, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowDown, Check, Connection, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
+import { fieldSwitchTypes } from '@/utils/designerDragRules'
 import { functionUnitApi } from '@/api/functionUnit'
 import type { MainTableViewDefinition } from '@/api/mainTableView'
 import { mainTableViewApi } from '@/api/mainTableView'
@@ -1001,9 +1002,7 @@ const linkFormComponents = ref<Array<{
   columnLabel?: string
   sortOrder: number
 }>>([])
-const autoSaving = ref(false)
 const miValidationRevision = ref(0)
-const lastAutoSaveTime = ref<Date | null>(null)
 const showCreateDialog = ref(false)
 const showRenameDialog = ref(false)
 const renameFormName = ref('')
@@ -1339,19 +1338,26 @@ function refreshSiblingLookups() {
 }
 
 function onDesignerStructureChange() {
+  refreshDirtyState()
   miValidationRevision.value++
   scheduleSyncHiddenMarkers()
   refreshSiblingLookups()
   nextTick(() => {
     patchDesignerRulesDefaultEvents()
+    refreshDirtyState()
   })
   // Assigned after useFormConfigPaste — remaps stale _bindingId from left JSON paste.
   scheduleAutoRepairStaleBindingsFn()
 }
 
 function onSubDesignerStructureChange() {
+  refreshDirtyState()
   miValidationRevision.value++
   scheduleSyncHiddenMarkers()
+}
+
+function onDesignerContentInput() {
+  nextTick(() => refreshDirtyState())
 }
 
 function collectCurrentSubFormRules(): Record<string, unknown[]> {
@@ -1521,14 +1527,10 @@ const {
 } = subTableViews
 
 // ── Auto-save ───────────────────────────────────────────────────────────────
-const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
+const { isDirty, markSaved, refreshDirtyState, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
   selectedForm,
   designerRef,
-  handleSaveForm: (isManual?: boolean) => formSave.handleSaveForm(isManual),
   relationViewState,
-  t,
-  autoSaving,
-  lastAutoSaveTime,
   getPollDesigner: () => getActiveDesignerRef() ?? designerRef.value,
 })
 
@@ -1691,8 +1693,8 @@ const formSave = useFormSave({
   getPrimaryBindingFieldDefinitions,
   syncSubTableListViewFromFormRules,
   loadForms: () => formLifecycle.loadForms(),
-  autoSaving,
-  lastAutoSaveTime,
+  autoSaving: ref(false),
+  lastAutoSaveTime: ref(null),
   provisionAndRepairForSave,
   willProvisionOnSave,
   blockingProgress,
@@ -1710,6 +1712,27 @@ const {
   handleSaveForm,
   savingForm,
 } = formSave
+
+async function saveChanges(): Promise<boolean> {
+  const saved = await handleSaveForm(true)
+  if (saved) markSaved()
+  return saved
+}
+
+async function discardChanges(): Promise<void> {
+  const current = selectedForm.value
+  if (!current) return
+  await store.fetchForms(props.functionUnitId)
+  const persisted = store.forms.find(form => form.id === current.id)
+  if (persisted) await handleSelectForm(persisted)
+  markSaved()
+}
+
+defineExpose({
+  hasUnsavedChanges: () => isDirty.value,
+  saveChanges,
+  discardChanges,
+})
 
 // ── Form ↔ BPMN node binding ────────────────────────────────────────────────
 const formNodeBinding = useFormNodeBinding({
@@ -1780,6 +1803,30 @@ const {
   handleCreateForm,
   handleCreateFormTypeChange,
 } = formLifecycle
+
+async function confirmFormLeave(): Promise<boolean> {
+  if (!isDirty.value) return true
+  try {
+    await ElMessageBox.confirm(t('process.unsavedChanges'), t('functionUnit.documents.unsavedTitle'), {
+      type: 'warning', confirmButtonText: t('common.save'), cancelButtonText: t('functionUnit.documents.discard'), distinguishCancelAndClose: true,
+    })
+    return saveChanges()
+  } catch (reason) {
+    if (reason === 'cancel') {
+      await discardChanges()
+      return true
+    }
+    return false
+  }
+}
+
+async function requestBackToList() {
+  if (await confirmFormLeave()) handleBackToList()
+}
+
+async function requestSelectForm(form: FormDefinition) {
+  if (await confirmFormLeave()) await handleSelectForm(form)
+}
 
 // ── Form CRUD actions (rename / copy / delete) ──────────────────────────────
 const { renaming, handleDeleteForm, handleConfirmRename, handleCopyForm, handleCopyProcessToTaskForm } = useFormActions({
@@ -2136,6 +2183,9 @@ const designerConfig = computed(() => ({
       },
     },
   },
+  // Lets the "Type" switcher turn any field into any other field component, Extend ones
+  // (Lookup, Owner, Advanced Upload) included — by default it only offers the same palette group.
+  switchType: [fieldSwitchTypes()],
   hiddenItemConfig: {
     // Hide the built-in Basic "Hidden" (rule-level `hidden`) — it collapses field content on the
     // canvas. The built-in top toggle (props.hide → `_hidden`) is the single Hide control.
@@ -2496,6 +2546,31 @@ onMounted(() => {
       align-items: center;
       gap: 6px;
       color: #67c23a;
+    }
+
+    .auto-save-blocked {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 9px;
+      border: 1px solid #fecdca;
+      border-radius: 5px;
+      background: #fef3f2;
+      color: #d92d20;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 20px;
+
+      .el-icon {
+        display: inline-flex;
+        width: 20px;
+        height: 20px;
+        align-items: center;
+        justify-content: center;
+        color: #d92d20;
+        font-size: 20px;
+        flex: 0 0 20px;
+      }
     }
   }
 }

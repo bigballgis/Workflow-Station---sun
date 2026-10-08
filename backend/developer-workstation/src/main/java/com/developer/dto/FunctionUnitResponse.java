@@ -1,5 +1,6 @@
 package com.developer.dto;
 
+import com.developer.enums.FunctionUnitStartupMode;
 import com.developer.enums.FunctionUnitStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +27,8 @@ public class FunctionUnitResponse {
     private List<String> tags;
     private IconInfo icon;
     private FunctionUnitStatus status;
+    /** How this unit may be started (user-initiated, called by another FU, or both). */
+    private FunctionUnitStartupMode startupMode;
     private String currentVersion;
     private String createdBy;
     private Instant createdAt;

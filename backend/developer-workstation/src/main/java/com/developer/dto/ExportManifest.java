@@ -38,7 +38,16 @@ public class ExportManifest {
     private String description;
     /** DW design labels; retained in ZIPs even though runtime catalogs do not filter by them. */
     private List<String> tags;
-    
+
+    /**
+     * 该功能单元允许的启动方式（STANDALONE / CALLABLE / BOTH）。
+     *
+     * <p>必须随包携带：否则导入到新环境后单元会退回 STANDALONE，
+     * 所有指向它的 callActivity 在部署校验时都会失败。
+     * 旧包没有该字段（null），导入时保持目标单元现有取值。
+     */
+    private String startupMode;
+
     /**
      * 导出时间
      */

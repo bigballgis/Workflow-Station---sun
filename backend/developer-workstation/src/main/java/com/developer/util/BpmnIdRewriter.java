@@ -277,6 +277,8 @@ public final class BpmnIdRewriter {
         if (isNonEmpty(sourceToNewTableName)) {
             applyTableNameRewrite("subTableName", nameToValue, sourceToNewTableName, rewrites);
             applyTableNameRewrite("tableName", nameToValue, sourceToNewTableName, rewrites);
+            // A per-row Function Unit call runs over one of the unit's own sub-tables.
+            applyTableNameRewrite("callRowsTable", nameToValue, sourceToNewTableName, rewrites);
         }
 
         if (rewrites.isEmpty()) {
