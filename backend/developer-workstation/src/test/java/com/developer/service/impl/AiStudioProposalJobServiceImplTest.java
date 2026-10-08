@@ -67,6 +67,98 @@ class AiStudioProposalJobServiceImplTest {
     }
 
     @Test
+    void successHookRunsOnceOnlyForJobsThatReallySucceeded() throws Exception {
+        java.util.List<String> hooked = new java.util.concurrent.CopyOnWriteArrayList<>();
+        AiStudioProposalJobResponse ok = service.submit(1L, "TABLE_DESIGN", "u1", "k",
+                () -> new StudioChatResult("fine", null, null), r -> hooked.add(r.reply()));
+        awaitTerminal(ok.getJobId(), "u1");
+
+        AiStudioProposalJobResponse failed = service.submit(2L, "TABLE_DESIGN", "u1", "k",
+                () -> { throw new AiGenerationException("X", "no"); }, r -> hooked.add("failed"));
+        awaitTerminal(failed.getJobId(), "u1");
+
+        // 被取消的作业：迟到的结果既不落快照，也不触发回调
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AiStudioProposalJobResponse cancelled = service.submit(3L, "TABLE_DESIGN", "u1", "k", () -> {
+            started.countDown();
+            try {
+                release.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return new StudioChatResult("late", null, null);
+        }, r -> hooked.add("late"));
+        assertTrue(started.await(2, TimeUnit.SECONDS));
+        service.cancel(cancelled.getJobId(), "u1");
+        release.countDown();
+
+        // 回调抛错不改变作业状态
+        AiStudioProposalJobResponse hookFails = service.submit(4L, "TABLE_DESIGN", "u1", "k",
+                () -> new StudioChatResult("still ok", null, null), r -> { throw new IllegalStateException("db down"); });
+        assertEquals(Status.SUCCEEDED, awaitTerminal(hookFails.getJobId(), "u1").getStatus());
+
+        Thread.sleep(50);
+        assertEquals(java.util.List.of("fine"), hooked);
+    }
+
+    @Test
+    void commitStepReplacesTheResultBeforeTheJobSettles() throws Exception {
+        java.util.List<String> order = new java.util.concurrent.CopyOnWriteArrayList<>();
+        AiStudioProposalJobResponse submitted = service.submit(
+                new com.developer.service.AiStudioProposalJobService.JobRequest(1L, "PROCESS_DESIGN", "u1", null, "k", null),
+                () -> new StudioChatResult("generated", null, null),
+                r -> {
+                    order.add("commit:" + service.get(service.findActive(1L, "u1").orElseThrow().getJobId(), "u1").getStatus());
+                    return new StudioChatResult(r.reply() + " and applied", null, null);
+                },
+                r -> order.add("hook:" + r.reply()));
+
+        AiStudioProposalJobResponse done = awaitTerminal(submitted.getJobId(), "u1");
+        Thread.sleep(50);
+
+        assertEquals(Status.SUCCEEDED, done.getStatus());
+        assertEquals("generated and applied", done.getReply());
+        // 提交步骤执行时作业还没落定；完成回调拿到的是提交后的结果
+        assertEquals(java.util.List.of("commit:RUNNING", "hook:generated and applied"), order);
+    }
+
+    @Test
+    void commitStepNeverRunsForACancelledJobAndItsFailureFailsTheJob() throws Exception {
+        AtomicInteger commits = new AtomicInteger();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AiStudioProposalJobResponse cancelled = service.submit(
+                new com.developer.service.AiStudioProposalJobService.JobRequest(1L, "PROCESS_DESIGN", "u1", null, "k", null),
+                () -> {
+                    started.countDown();
+                    try {
+                        release.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return new StudioChatResult("late", null, null);
+                },
+                r -> { commits.incrementAndGet(); return r; },
+                null);
+        assertTrue(started.await(2, TimeUnit.SECONDS));
+        service.cancel(cancelled.getJobId(), "u1");
+        release.countDown();
+
+        AiStudioProposalJobResponse failing = service.submit(
+                new com.developer.service.AiStudioProposalJobService.JobRequest(2L, "PROCESS_DESIGN", "u1", null, "k", null),
+                () -> new StudioChatResult("generated", null, null),
+                r -> { throw new AiGenerationException("AI_WRITE_NOT_FOUND", "gone"); },
+                null);
+        AiStudioProposalJobResponse done = awaitTerminal(failing.getJobId(), "u1");
+
+        assertEquals(0, commits.get());
+        assertEquals(Status.CANCELLED, service.get(cancelled.getJobId(), "u1").getStatus());
+        assertEquals(Status.FAILED, done.getStatus());
+        assertEquals("AI_WRITE_NOT_FOUND", done.getErrorCode());
+    }
+
+    @Test
     void failureKeepsErrorCodeFromAiGenerationException() throws Exception {
         AiStudioProposalJobResponse submitted = service.submit(1L, "PROCESS_DESIGN", "u1", "k", () -> {
             throw new AiGenerationException("AI_STUDIO_PROPOSAL_EMPTY", "nothing came back");

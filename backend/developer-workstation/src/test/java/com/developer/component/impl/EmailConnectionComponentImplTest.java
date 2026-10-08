@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.client.AdminCenterEnvironmentClient;
 import com.developer.client.AdminCenterSystemImapClient;
 import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.entity.EmailConnection;
@@ -12,7 +13,6 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.platform.common.i18n.I18nService;
-import com.platform.security.encryption.EncryptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,9 +46,6 @@ class EmailConnectionComponentImplTest {
     private FunctionUnitRepository functionUnitRepository;
 
     @Mock
-    private EncryptionService encryptionService;
-
-    @Mock
     private I18nService i18nService;
 
     @Mock
@@ -56,6 +53,9 @@ class EmailConnectionComponentImplTest {
 
     @Mock
     private AdminCenterSystemImapClient adminCenterSystemImapClient;
+
+    @Mock
+    private AdminCenterEnvironmentClient adminCenterEnvironmentClient;
 
     @InjectMocks
     private EmailConnectionComponentImpl emailConnectionComponent;
@@ -79,6 +79,20 @@ class EmailConnectionComponentImplTest {
 
         assertEquals("VALIDATION_RECIPIENT_REQUIRED", ex.getErrorCode());
         assertEquals("Test recipient is required", ex.getMessage());
+    }
+
+    @Test
+    void listVaultOptions_wrapsAdminFailure() {
+        when(adminCenterEnvironmentClient.listVaultVariables())
+                .thenThrow(new IllegalStateException("Unable to list VAULT environment variables"));
+        when(i18nService.getMessage("email.connection.vault_options_failed"))
+                .thenReturn("Failed to load VAULT environment variables");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> emailConnectionComponent.listVaultOptions());
+
+        assertEquals("VAULT_OPTIONS_UNAVAILABLE", ex.getErrorCode());
     }
 
     @Test
@@ -139,7 +153,7 @@ class EmailConnectionComponentImplTest {
         request.setName("notify@example.com");
         request.setConnectionType(ConnectionType.SMTP);
         request.setUsername("svc");
-        request.setPassword("pwd");
+        request.setPasswordEnvKey("email.smtp.password");
         request.setDirection(EmailConnectionDirection.OUTBOUND);
         request.setEnabled(true);
 
@@ -148,7 +162,6 @@ class EmailConnectionComponentImplTest {
                 eq(1L), eq("notify@example.com"), eq(EmailConnectionDirection.OUTBOUND))).thenReturn(false);
         when(adminCenterSystemSmtpClient.fetchSystemSmtpEndpoint())
                 .thenReturn(new AdminCenterSystemSmtpClient.SystemSmtpEndpoint("smtp.local", 587, true));
-        when(encryptionService.encrypt("pwd")).thenReturn("enc");
         when(emailConnectionRepository.save(any(EmailConnection.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -166,7 +179,7 @@ class EmailConnectionComponentImplTest {
         request.setName("inbox@example.com");
         request.setConnectionType(ConnectionType.SMTP);
         request.setUsername("svc");
-        request.setPassword("pwd");
+        request.setPasswordEnvKey("email.smtp.password");
         request.setDirection(EmailConnectionDirection.INBOUND);
         request.setEnabled(true);
 
@@ -175,7 +188,6 @@ class EmailConnectionComponentImplTest {
                 eq(1L), eq("inbox@example.com"), eq(EmailConnectionDirection.INBOUND))).thenReturn(false);
         when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
                 .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.local", 993, true));
-        when(encryptionService.encrypt("pwd")).thenReturn("enc");
         when(emailConnectionRepository.save(any(EmailConnection.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -184,7 +196,62 @@ class EmailConnectionComponentImplTest {
         assertEquals("imap.local", response.getImapHost());
         assertEquals(993, response.getImapPort());
         assertTrue(response.getImapUseSsl());
+        assertEquals("inbox@example.com", response.getMailboxAddress());
         verify(adminCenterSystemSmtpClient, never()).fetchSystemSmtpEndpoint();
+    }
+
+    @Test
+    void create_inbound_withoutMailboxAddress_defaultsToName() {
+        FunctionUnit functionUnit = FunctionUnit.builder().id(1L).name("FU").build();
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("inbox@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setUsername("svc");
+        request.setPasswordEnvKey("email.smtp.password");
+        request.setDirection(EmailConnectionDirection.INBOUND);
+        request.setEnabled(true);
+
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirection(
+                eq(1L), eq("inbox@example.com"), eq(EmailConnectionDirection.INBOUND))).thenReturn(false);
+        when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
+                .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.local", 993, true));
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.create(1L, request);
+
+        assertEquals("inbox@example.com", response.getMailboxAddress());
+    }
+
+    @Test
+    void update_inbound_withoutMailboxAddress_defaultsToEmailAddress() {
+        EmailConnection existing = sampleConnection(EmailConnectionDirection.INBOUND);
+        existing.setName("inbox@example.com");
+        existing.setFromEmail("inbox@example.com");
+        existing.setUsername("svc");
+        existing.setPasswordEnvKey("email.smtp.password");
+        existing.setMailboxAddress(null);
+
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("inbox@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setUsername("svc");
+        request.setDirection(EmailConnectionDirection.INBOUND);
+        request.setEnabled(true);
+
+        when(emailConnectionRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirectionAndIdNot(
+                eq(1L), eq("inbox@example.com"), eq(EmailConnectionDirection.INBOUND), eq(10L)))
+                .thenReturn(false);
+        when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
+                .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.local", 993, true));
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.update(1L, 10L, request);
+
+        assertEquals("inbox@example.com", response.getMailboxAddress());
     }
 
     @Test
@@ -194,7 +261,7 @@ class EmailConnectionComponentImplTest {
         request.setName("corp@example.com");
         request.setConnectionType(ConnectionType.SMTP);
         request.setUsername("svc");
-        request.setPassword("pwd");
+        request.setPasswordEnvKey("email.smtp.password");
         request.setDirection(EmailConnectionDirection.INBOUND);
         request.setEnabled(true);
 
@@ -203,7 +270,6 @@ class EmailConnectionComponentImplTest {
                 eq(1L), eq("corp@example.com"), eq(EmailConnectionDirection.INBOUND))).thenReturn(false);
         when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
                 .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("10.1.2.3", 993, true));
-        when(encryptionService.encrypt("pwd")).thenReturn("enc");
         when(emailConnectionRepository.save(any(EmailConnection.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -220,7 +286,7 @@ class EmailConnectionComponentImplTest {
         request.setName("shared@example.com");
         request.setConnectionType(ConnectionType.SMTP);
         request.setUsername("svc");
-        request.setPassword("pwd");
+        request.setPasswordEnvKey("email.smtp.password");
         request.setDirection(EmailConnectionDirection.INBOUND);
         request.setEnabled(true);
 
@@ -229,7 +295,6 @@ class EmailConnectionComponentImplTest {
                 eq(1L), eq("shared@example.com"), eq(EmailConnectionDirection.INBOUND))).thenReturn(false);
         when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
                 .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("imap.local", 993, true));
-        when(encryptionService.encrypt("pwd")).thenReturn("enc");
         when(emailConnectionRepository.save(any(EmailConnection.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -246,7 +311,7 @@ class EmailConnectionComponentImplTest {
         request.setName("inbox@example.com");
         request.setConnectionType(ConnectionType.SMTP);
         request.setUsername("svc");
-        request.setPassword("pwd");
+        request.setPasswordEnvKey("email.smtp.password");
         request.setDirection(EmailConnectionDirection.INBOUND);
         request.setEnabled(true);
 
@@ -274,7 +339,7 @@ class EmailConnectionComponentImplTest {
         request.setName("notify@example.com");
         request.setConnectionType(ConnectionType.SMTP);
         request.setUsername("svc");
-        request.setPassword("pwd");
+        request.setPasswordEnvKey("email.smtp.password");
         request.setDirection(EmailConnectionDirection.BOTH);
         request.setEnabled(true);
 

@@ -1,5 +1,6 @@
 package com.workflow.client;
 
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.util.SafeUrlInput;
 import com.workflow.config.RestTemplateConfig;
 import com.workflow.exception.AdminCenterUnavailableException;
@@ -53,6 +54,9 @@ public class AdminCenterClient {
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
+
+    @Value("${service.internal-token:}")
+    private String serviceInternalToken;
     
     /**
      * 检查用户是否是虚拟组成员
@@ -701,7 +705,7 @@ public class AdminCenterClient {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    null,
+                    internalServiceEntity(),
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -709,10 +713,20 @@ public class AdminCenterClient {
             }
             return Optional.empty();
         } catch (HttpStatusCodeException e) {
-            if (isSystemSmtpNotConfigured(e.getResponseBodyAsString())) {
-                String detail = extractErrorMessage(e.getResponseBodyAsString());
+            String body = e.getResponseBodyAsString();
+            if (isSystemSmtpNotConfigured(body)) {
+                String detail = extractErrorMessage(body);
                 throw new IllegalStateException(
                         detail != null && !detail.isBlank() ? detail : "System SMTP not configured",
+                        e);
+            }
+            if (isForbidden(e, body)) {
+                throw new IllegalStateException("Admin Center rejected service token for email credentials", e);
+            }
+            if (isVaultCredentialFailure(body)) {
+                String detail = extractErrorMessage(body);
+                throw new IllegalStateException(
+                        detail != null && !detail.isBlank() ? detail : "Vault password resolve failed",
                         e);
             }
             // FALLBACK(external): 其他凭据获取失败降级为 empty，调用方按连接不存在处理。
@@ -731,6 +745,15 @@ public class AdminCenterClient {
 
     private static boolean isSystemSmtpNotConfigured(String body) {
         return body != null && body.contains("SYSTEM_SMTP_NOT_CONFIGURED");
+    }
+
+    private static boolean isVaultCredentialFailure(String body) {
+        if (body == null) {
+            return false;
+        }
+        return body.contains("VAULT_SECRET_NOT_FOUND")
+                || body.contains("VAULT_UNAVAILABLE")
+                || body.contains("VAULT_KIND_REQUIRED");
     }
 
     private static String extractErrorMessage(String body) {
@@ -760,7 +783,7 @@ public class AdminCenterClient {
             ResponseEntity<Map<String, String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    null,
+                    internalServiceEntity(),
                     new ParameterizedTypeReference<Map<String, String>>() {}
             );
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -784,7 +807,7 @@ public class AdminCenterClient {
             ResponseEntity<Map<String, String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    null,
+                    internalServiceEntity(),
                     new ParameterizedTypeReference<Map<String, String>>() {}
             );
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -835,6 +858,21 @@ public class AdminCenterClient {
                     userId, taskId, e.getMessage());
             return false;
         }
+    }
+
+    private HttpEntity<Void> internalServiceEntity() {
+        HttpHeaders headers = new HttpHeaders();
+        if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
+            headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
+        }
+        return new HttpEntity<>(headers);
+    }
+
+    private static boolean isForbidden(HttpStatusCodeException ex, String body) {
+        if (ex.getStatusCode().value() == 403) {
+            return true;
+        }
+        return body != null && body.contains("FORBIDDEN");
     }
 
 }

@@ -140,6 +140,12 @@ public class TaskInfo {
     private String functionUnitCode;
 
     /**
+     * Admin catalog row pinned at process start ({@code up_process_instance.function_unit_catalog_id}).
+     * Task / My Request content must load this package, not the latest enabled version of the code.
+     */
+    private String functionUnitCatalogId;
+
+    /**
      * Catalog display name from {@code sys_function_units.name}. Null when lookup misses;
      * the To Do cell shows {@code functionUnitName || functionUnitCode}.
      */

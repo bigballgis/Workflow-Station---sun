@@ -3,7 +3,7 @@
     <div class="owner-config-editor__title">
       <DesignerHelpLink
         path="/form-events-extend#owner"
-        :aria-label="t('form.ownerGuideLinkAria')"
+        :ariaLabel="t('form.ownerGuideLinkAria')"
         test-id="owner-guide-link"
       />
     </div>

@@ -24,7 +24,10 @@ export interface SubTableBinding {
    * 与 {@link bindingMode} 名字相近但语义无关，FK/PK 运行时靠它识别 MI 参与者行。
    */
   bindingLinkMode?: string | null
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   foreignKeyField?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   tableName: string
   designerTableName?: string
   tableType: string
@@ -73,7 +76,10 @@ export interface NestedSubTableDescriptor {
    * `miParticipantRow`，于是嵌套的 MI collection 会被静默当成普通子表处理。
    */
   bindingLinkMode?: string | null
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   foreignKeyField?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   formFields?: FormField[]
   formOptions?: Record<string, unknown> | null
   assignmentConfig?: AssignmentConfig
@@ -144,19 +150,38 @@ export interface SubTableFieldProps {
   functionUnitId?: string
   primaryFormData?: Record<string, unknown>
   subTableBindingsForContext?: Array<{
+    bindingId?: number | string
     tableId?: number | null
     bindingType?: string
     tableName?: string
     tableDisplayName?: string
+    primaryKeyFields?: string[] | null
+    columns?: Array<{
+      field?: string
+      fieldName?: string
+      label?: string
+      displayName?: string
+      hidden?: boolean
+      type?: string
+      props?: { hidden?: boolean; [key: string]: unknown } | null
+    }> | null
+    filterFkRefTableId?: number | null
+    data?: unknown[]
   }>
   parentRow?: Record<string, unknown> | null
   parentTableId?: number | null
+  parentBindingId?: number | string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   /** PRD S6: structural FK vs MI participant row link. */
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  /** Declared filter FK parent table — unique sibling row of that table is the nested parent. */
+  filterFkRefTableId?: number | null
+  /** Declared filter FK column — default ownership column for rows created through this binding. */
+  filterFkFieldName?: string | null
   /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null

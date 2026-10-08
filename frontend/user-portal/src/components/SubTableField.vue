@@ -409,6 +409,7 @@
       :primary-key-fields="primaryKeyFields"
       :binding-id="bindingId"
       :field-permissions="fieldPermissions"
+      :parent-selection="parentSelection"
       @update:visible="dialogVisible = $event"
       :save-row="handleDialogSaveAndSyncNested"
     />
@@ -499,6 +500,14 @@
               :linked-sub-table-bindings="linkedSubTableBindings"
               :show-link-form-dialog-footer="showLinkFormDialogFooter"
               :primary-key-fields="selectedLinkBinding.primaryKeyFields"
+              :table-id="selectedLinkBinding.tableId ?? null"
+              :binding-id="selectedLinkBinding.bindingId"
+              :field-definitions="(selectedLinkBinding as any).fieldDefinitions"
+              :binding-link-mode="selectedLinkBinding.bindingLinkMode"
+              :binding-foreign-key-field="selectedLinkBinding.foreignKeyField"
+              :filter-fk-ref-table-id="selectedLinkBinding.filterFkRefTableId"
+              :filter-fk-field-name="selectedLinkBinding.filterFkFieldName"
+              :fk-fill-sources="selectedLinkBinding.fkFillSources"
               :field-permissions="fieldPermissions"
               @update:model-value="handleLinkedSubTableUpdate"
             />
@@ -681,19 +690,36 @@ const props = withDefaults(defineProps<{
   functionUnitId?: string
   primaryFormData?: Record<string, unknown>
   subTableBindingsForContext?: Array<{
+    bindingId?: number | string
     tableId?: number | null
     bindingType?: string
     tableName?: string
     tableDisplayName?: string
+    filterFkRefTableId?: number | null
+    primaryKeyFields?: string[] | null
+    columns?: Array<{
+      field?: string
+      fieldName?: string
+      label?: string
+      displayName?: string
+      hidden?: boolean
+      type?: string
+      props?: { hidden?: boolean; [key: string]: unknown } | null
+    }> | null
+    data?: unknown[]
   }>
   parentRow?: Record<string, unknown> | null
   parentTableId?: number | null
+  parentBindingId?: number | string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   /** PRD S6: structural FK vs MI participant row link. */
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -1023,6 +1049,7 @@ const {
   dialogMode,
   editingRowIndex,
   dialogInitialData,
+  parentSelection,
   subTableDialogColumns,
   listViewColumnsForAudit,
   handleAdd,
@@ -1066,8 +1093,8 @@ function syncNestedSubTableBindings() {
   }
 }
 
-async function handleDialogSaveAndSyncNested(row: Record<string, unknown>) {
-  await handleDialogSave(row)
+async function handleDialogSaveAndSyncNested(row: Record<string, unknown>, selectedParentValue?: string) {
+  await handleDialogSave(row, selectedParentValue)
   syncNestedSubTableBindings()
 }
 

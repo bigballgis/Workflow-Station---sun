@@ -30,7 +30,9 @@ public final class MainTableViewDtos {
             /** For lookup_display / fk_display: source field (widget or FK column). */
             String lookupSourceField,
             /** For lookup_display / fk_display: attribute on the related row. */
-            String lookupDisplayField
+            String lookupDisplayField,
+            /** {@code value} (default) or {@code label}: what a select-like column shows in the Portal list. */
+            String selectDisplay
     ) {}
 
     @Builder

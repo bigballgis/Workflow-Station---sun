@@ -29,7 +29,10 @@ export interface SubTableBinding {
   primaryKeyFields?: string[]
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
   foreignKeyField?: string | null
+  fkFillSources?: import('../../utils/tableFkRuntime').FkFillSourceConfig[] | null
   assignmentConfig?: AssignmentConfig
 }
 

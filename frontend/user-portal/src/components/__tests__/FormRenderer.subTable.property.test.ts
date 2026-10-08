@@ -2,11 +2,48 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import * as fc from 'fast-check'
-import { extractFieldsRecursive, parseFormConfigToTabs, extractTabsFromTabsRule, parseFormRulesLayout, collectPlacedSubTableBindingIds, collectSubTableFieldsFromLayout, mergeMissingSubTableFieldsIntoLayout, ensureSubTableBindingsOnFormLayout, removeSubTableFieldsByBindingIds, flattenAllFormFieldSegments, legacyBindingIdAliases } from '../formRendererHelpers'
+import { extractFieldsRecursive, parseFormConfigToTabs, extractTabsFromTabsRule, parseFormRulesLayout, collectPlacedSubTableBindingIds, collectSubTableFieldsFromLayout, mergeMissingSubTableFieldsIntoLayout, ensureSubTableBindingsOnFormLayout, removeSubTableFieldsByBindingIds, flattenAllFormFieldSegments, legacyBindingIdAliases, resolveSubTableWidgetTitle } from '../formRendererHelpers'
 
 // fast-check properties here run hundreds of parse/merge iterations; under full-suite parallel
 // workers they intermittently exceed the 5s default timeout (they pass in isolation).
 vi.setConfig({ testTimeout: 30_000 })
+
+describe('resolveSubTableWidgetTitle', () => {
+  it('preserves each sub-table widget title while parsing the designer rule', () => {
+    const fields = extractFieldsRecursive([
+      { type: 'subTable', _bindingId: 101, title: 'Case files' },
+      { type: 'subTable', _bindingId: 102, title: 'Party files' },
+    ], () => null)
+
+    expect(fields.map(field => field.label)).toEqual(['Case files', 'Party files'])
+  })
+
+  it('uses the Form Design widget label to distinguish same-table bindings', () => {
+    const binding = { tableName: 'P0 Dual File', tableDisplayName: 'P0 Dual File' }
+
+    expect(resolveSubTableWidgetTitle({ label: 'Case Files' }, binding)).toBe('Case Files')
+    expect(resolveSubTableWidgetTitle({ label: 'Party Files' }, binding)).toBe('Party Files')
+  })
+
+  it('falls back to the table display name when the widget has no label', () => {
+    expect(resolveSubTableWidgetTitle({ label: '  ' }, {
+      tableName: 'p0_dual_file',
+      tableDisplayName: 'P0 Dual File',
+    })).toBe('P0 Dual File')
+  })
+
+  it('adds the configured filter FK when the same physical table is bound more than once', () => {
+    const bindings = [
+      { bindingId: 201, tableId: 30, tableName: 'P0 Dual File', filterFkFieldName: 'case_id' },
+      { bindingId: 202, tableId: 30, tableName: 'P0 Dual File', filterFkFieldName: 'party_id' },
+    ]
+
+    expect(resolveSubTableWidgetTitle({ label: 'P0 Dual File' }, bindings[0], bindings))
+      .toBe('P0 Dual File (case_id)')
+    expect(resolveSubTableWidgetTitle({ label: 'P0 Dual File' }, bindings[1], { value: bindings }))
+      .toBe('P0 Dual File (party_id)')
+  })
+})
 
 // A no-op converter — regular fields are not the focus of this property test
 const noopConverter = () => null

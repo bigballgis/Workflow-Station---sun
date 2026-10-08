@@ -30,12 +30,15 @@ import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.SubTableViewConfigRepository;
+import com.developer.enums.AiDocumentType;
 import com.developer.enums.FormScene;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.service.impl.FunctionUnitDocumentService;
 import com.developer.util.XmlEncodingUtil;
+import com.developer.util.FkFillSourcesSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -85,6 +88,7 @@ public class FunctionUnitExporter {
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final FunctionUnitDocumentService documentService;
     private final ObjectMapper objectMapper;
 
     @Value("${platform.version:1.0.0}")
@@ -167,7 +171,8 @@ public class FunctionUnitExporter {
         }
 
         payload.put("forms", forms.stream()
-                .map(form -> serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of())))
+                .map(form -> serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of()),
+                        tableIdToName))
                 .toList());
 
         List<Long> relationTableIds = forms.stream()
@@ -231,6 +236,10 @@ public class FunctionUnitExporter {
                 .map(DecisionDefinition::getDmnXml)
                 .filter(xml -> xml != null && !xml.isBlank())
                 .toList());
+
+        // Requirements / Design documents: latest content only (history stays in dw_ai_documents).
+        // Legacy snapshots lack the key, and rollback then leaves the documents untouched.
+        payload.put(FunctionUnitDocumentService.PACKAGE_KEY, documentService.packagePayload(functionUnitId));
 
         return payload;
     }
@@ -309,7 +318,8 @@ public class FunctionUnitExporter {
             for (FormDefinition form : forms) {
                 String fileName = "forms/form_" + formIndex + ".json";
                 byte[] data = objectMapper.writeValueAsBytes(
-                        serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of())));
+                        serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of()),
+                                tableIdToName));
                 fileContents.put(fileName, data);
                 addZipEntry(zos, fileName, data);
                 formFiles.add(fileName);
@@ -418,6 +428,16 @@ public class FunctionUnitExporter {
                 decisionIndex++;
             }
 
+            // Export Requirements / Design documents (latest version) as Markdown
+            List<String> documentFiles = new ArrayList<>();
+            for (Map.Entry<AiDocumentType, String> doc : documentService.latestContents(functionUnitId).entrySet()) {
+                String fileName = FunctionUnitDocumentService.PACKAGE_FILES.get(doc.getKey());
+                byte[] data = doc.getValue().getBytes(StandardCharsets.UTF_8);
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                documentFiles.add(fileName);
+            }
+
             // Build manifest
             ExportManifest.IconInfo iconInfo = null;
             if (functionUnit.getIcon() != null) {
@@ -451,6 +471,7 @@ public class FunctionUnitExporter {
                             .emailMonitors(monitorFiles)
                             .emailTemplates(emailTemplateFiles)
                             .mainTableViews(viewsFile)
+                            .documents(documentFiles)
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)
@@ -526,6 +547,9 @@ public class FunctionUnitExporter {
         if (table.getRequestIdConfig() != null) {
             map.put("requestIdConfig", table.getRequestIdConfig());
         }
+        if (table.getSlaConfig() != null) {
+            map.put("slaConfig", table.getSlaConfig());
+        }
         map.put("fields", table.getFieldDefinitions().stream()
                 .map(field -> serializeField(field, tableIdToName))
                 .toList());
@@ -595,7 +619,8 @@ public class FunctionUnitExporter {
         return map;
     }
 
-    private Map<String, Object> serializeForm(FormDefinition form, List<FormStageBinding> stageBindings) {
+    private Map<String, Object> serializeForm(
+            FormDefinition form, List<FormStageBinding> stageBindings, Map<Long, String> tableIdToName) {
         Map<String, Object> map = new HashMap<>();
         map.put("formId", form.getId());
         map.put("formName", form.getFormName());
@@ -606,18 +631,20 @@ public class FunctionUnitExporter {
         map.put("showLiveValues", form.getShowLiveValues());
         map.put("fieldPermissions", form.getFieldPermissions());
         map.put("configJson", form.getConfigJson());
-        if (form.getTableBindings() != null && !form.getTableBindings().isEmpty()) {
-            map.put("tableBindings", form.getTableBindings().stream()
-                    .map(this::serializeFormTableBinding)
-                    .toList());
-        }
+        List<FormTableBinding> bindings = form.getTableBindings() == null ? List.of() : form.getTableBindings();
+        map.put("tableBindings", bindings.stream()
+                .map(binding -> serializeFormTableBinding(binding, bindings, tableIdToName))
+                .toList());
         if (stageBindings != null && !stageBindings.isEmpty()) {
             map.put("stageBindings", stageBindings.stream().map(this::serializeFormStageBinding).toList());
         }
         return map;
     }
 
-    private Map<String, Object> serializeFormTableBinding(FormTableBinding binding) {
+    private Map<String, Object> serializeFormTableBinding(
+            FormTableBinding binding,
+            List<FormTableBinding> formBindings,
+            Map<Long, String> tableIdToName) {
         Map<String, Object> map = new HashMap<>();
         map.put("bindingId", binding.getId());
         map.put("bindingType", binding.getBindingType().name());
@@ -629,6 +656,33 @@ public class FunctionUnitExporter {
         if (binding.getBindingLinkMode() != null) {
             map.put("bindingLinkMode", binding.getBindingLinkMode().name());
         }
+        if (binding.getTable() != null) {
+            if (binding.getTable().getTableDisplayName() != null) {
+                map.put("tableDisplayName", binding.getTable().getTableDisplayName());
+            }
+            if (binding.getTable().getTableType() != null) {
+                map.put("tableType", binding.getTable().getTableType().name());
+            }
+        }
+        // filterFkFieldId is a dw_field_definitions id, which means nothing in the target
+        // environment — export the field NAME instead and let the import resolve it back against
+        // the freshly written fields of this binding's own table (already exported as `tableName`).
+        String filterFkFieldName = resolveFilterFkFieldName(binding);
+        if (filterFkFieldName != null) {
+            map.put("filterFkFieldName", filterFkFieldName);
+            Long refTableId = resolveFilterFkRefTableId(binding);
+            if (refTableId != null && tableIdToName != null) {
+                String refTableName = tableIdToName.get(refTableId);
+                if (refTableName != null) {
+                    map.put("filterFkRefTableName", refTableName);
+                }
+            }
+        }
+        List<Map<String, Object>> fillSources = FkFillSourcesSupport.toPortable(
+                binding, formBindings, tableIdToName);
+        if (!fillSources.isEmpty()) {
+            map.put("fkFillSources", fillSources);
+        }
         if (binding.getSubMode() != null) {
             map.put("subMode", binding.getSubMode().name());
         }
@@ -638,6 +692,39 @@ public class FunctionUnitExporter {
                     .ifPresent(config -> map.put("subTableViewConfig", serializeSubTableViewConfig(config)));
         }
         return map;
+    }
+
+    /**
+     * The column name behind a binding's {@code filterFkFieldId}, or {@code null} when it declares
+     * none / the id no longer matches a field of its bound table (the column carries no FK
+     * constraint, matching {@code ref_table_id}, so a dangling id is possible on old data).
+     * Omitting it then is accurate: the import lands in the documented "not declared" state.
+     */
+    private String resolveFilterFkFieldName(FormTableBinding binding) {
+        Long fieldId = binding.getFilterFkFieldId();
+        if (fieldId == null || binding.getTable() == null
+                || binding.getTable().getFieldDefinitions() == null) {
+            return null;
+        }
+        return binding.getTable().getFieldDefinitions().stream()
+                .filter(f -> fieldId.equals(f.getId()))
+                .map(FieldDefinition::getFieldName)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Long resolveFilterFkRefTableId(FormTableBinding binding) {
+        Long fieldId = binding.getFilterFkFieldId();
+        if (fieldId == null || binding.getTable() == null
+                || binding.getTable().getFieldDefinitions() == null) {
+            return null;
+        }
+        return binding.getTable().getFieldDefinitions().stream()
+                .filter(f -> fieldId.equals(f.getId()))
+                .map(FieldDefinition::getRefTableId)
+                .filter(id -> id != null)
+                .findFirst()
+                .orElse(null);
     }
 
     private Map<String, Object> serializeSubTableViewConfig(SubTableViewConfig config) {
@@ -707,7 +794,7 @@ public class FunctionUnitExporter {
         map.put("host", connection.getHost());
         map.put("port", connection.getPort());
         map.put("username", connection.getUsername());
-        map.put("credentialEncrypted", connection.getCredentialEncrypted());
+        map.put("passwordEnvKey", connection.getPasswordEnvKey());
         map.put("fromEmail", connection.getFromEmail());
         map.put("fromName", connection.getFromName());
         map.put("useTls", connection.getUseTls());

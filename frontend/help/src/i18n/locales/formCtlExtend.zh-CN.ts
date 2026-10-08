@@ -11,15 +11,15 @@ export default {
     summary: '绑定的子表网格（help_pr_line）。绑定、允许增删改、List View 列。',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls · Extend · Sub-Table',
     intro:
-      '绑定 SUB 表的网格。采购申请上是 help_pr_line。和 [[/form-ctl-lookup]]（搜一行）以及 Inline Form（同一张 SUB 表单铺在原位、没有网格）不同。',
+      '绑定 SUB 表的网格。先在 [[/table-bindings]] 挂表。采购申请上是 help_pr_line。和 [[/form-ctl-lookup]]（搜一行）以及 Inline Form（同一张 SUB 表单铺在原位、没有网格）不同。',
     whatTitle: 'Sub-Table 是什么',
     whatBody:
       '表单上的 SUB 表行网格。采购申请上是 help_pr_line。Allow 开关打开时可以增删改行。事件里的 value 是改完后的行列表，空表示没有行。',
     howBody:
-      '选中占位。Sub Table Binding 选 SUB 表（help_pr_line）。按需要勾 Allow Add、Allow Edit、Allow Delete。Compact cells 让 lookup 和用户单元格保持一行。打开 List View 勾 Table Columns，并用 Extend Action 加 Link Form 或 Lookup 列。保存表单。预览网格。',
+      '选中占位。Sub Table Binding 选已在 [[/table-bindings]] 挂上的 SUB 表（help_pr_line）。按需要勾 Allow Add、Allow Edit、Allow Delete。Compact cells 让 lookup 和用户单元格保持一行。打开 List View 勾 Table Columns，并用 Extend Action 加 Link Form 或 Lookup 列。保存表单。预览网格。',
     propsFigure: '表单设计。选中 Sub-Table。右侧：Sub Table Binding、Allow Add / Edit / Delete、Compact cells。',
     catBinding: '必填。网格显示的 SUB 或 ACTION 表。空白时画布显示 No Sub Table selected，且无法保存。',
-    catSelect: 'Sub Table Binding 的下拉占位。空列表显示 No Sub Tables available — 先在表单上绑定一张 SUB 表。',
+    catSelect: 'Sub Table Binding 的下拉占位。空列表显示 No Sub Tables available — 先在 [[/table-bindings]] 绑定一张 SUB 表。',
     catAllowAdd: '打开：可以新增行。关闭则没有 Add。ACTION 绑定不显示这一行。',
     catAllowEdit: '打开：可以编辑行。关闭则只读。ACTION 绑定不显示这一行。',
     catAllowDelete: '打开：可以删除行。关闭则行保留。ACTION 绑定不显示这一行。',

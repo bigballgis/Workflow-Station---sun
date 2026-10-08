@@ -17,6 +17,14 @@ public class GuestTokenRequest {
     private String dashboardId;
 
     /**
+     * User Portal workspace context. Audience assignments for BUSINESS_UNIT and
+     * BU-scoped roles are evaluated against this exact context. The value is
+     * accepted only after the server verifies that the delegated user belongs
+     * to the business unit.
+     */
+    private String activeBusinessUnitId;
+
+    /**
      * Optional User Portal Data View context. When present, authorization is based on the
      * dashboard-to-table binding and the current user's access to this published view.
      * When absent, the legacy Audience Assignment authorization path is retained.

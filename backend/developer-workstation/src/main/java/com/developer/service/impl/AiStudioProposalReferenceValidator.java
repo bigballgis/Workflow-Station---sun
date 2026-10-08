@@ -344,7 +344,7 @@ public class AiStudioProposalReferenceValidator {
                         result.addError("REFERENCE_INVALID", path + ".connectionName",
                                 "Connection '" + connectionName + "' is not INBOUND; monitors need an inbound connection");
                     }
-                    if (c.getCredentialEncrypted() == null || c.getCredentialEncrypted().isBlank()) {
+                    if (c.getPasswordEnvKey() == null || c.getPasswordEnvKey().isBlank()) {
                         result.addError("REFERENCE_INVALID", path + ".connectionName",
                                 "Connection '" + connectionName + "' has no credentials yet; fill them in the Connection designer first");
                     }

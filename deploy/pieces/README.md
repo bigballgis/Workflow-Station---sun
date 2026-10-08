@@ -187,7 +187,8 @@ pubsub 失效；直接 psql 写表不会触发。症状：列表 `/api/v1/pieces
     `piece-json`、`piece-xml`、`piece-pdf`（extractText/合并/转图片等）、
     `piece-file-helper`（读文件/改编码/zip/unzip）、`piece-text-helper`、`piece-data-mapper`、
     `piece-postgres`
-  - 自研：`piece-biz-calendar`、`piece-hash-helper`
+  - 自研：`piece-biz-calendar`、`piece-hash-helper`、`piece-content-organizer`（OCR/字段抽取；凭证不在 flow 里，
+    取自 Automation 部署的 `IB2B_*` / `CONTENT_ORGANIZER_*` 环境变量，须列入 `AP_SANDBOX_PROPAGATED_ENV_VARS`）
   - 没有独立的离线 Excel piece——Microsoft Excel 365 / Google Sheets 都是 SaaS 连接器（要调外网 API），
     按政策不引入；Excel 场景 = file-helper 读文件 → csv.convert_excel_to_csv → csv.convert_csv_to_json。
   - `piece-approval` / `piece-todos` 的元数据仍在 `metadata/` 留档，但已按

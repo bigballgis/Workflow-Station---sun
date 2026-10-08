@@ -166,11 +166,11 @@ public class FunctionUnitPackageParser {
             }
             Object formIdObj = formData.get("formId");
             String sourceId = formIdObj != null ? String.valueOf(formIdObj) : null;
-            Object configJson = formData.get("configJson");
-            String configStr = configJson != null
-                    ? objectMapper.writeValueAsString(configJson)
-                    : utf8(file.getValue());
-            forms.add(content(ContentType.FORM, formName, fileName, configStr, sourceId));
+            // Persist the full DW form JSON (configJson + tableBindings + formType/scene).
+            // Storing only configJson dropped bindings, so assemble had to re-query live
+            // dw_form_table_bindings and could not freeze a deployed PROCESS/TASK design.
+            String contentStr = objectMapper.writeValueAsString(formData);
+            forms.add(content(ContentType.FORM, formName, fileName, contentStr, sourceId));
         }
     }
 

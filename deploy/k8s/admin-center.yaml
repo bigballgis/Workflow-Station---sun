@@ -30,6 +30,8 @@ spec:
         app.kubernetes.io/name: admin-center
         app.kubernetes.io/instance: admin-center
     spec:
+      serviceAccountName: admin-center
+      automountServiceAccountToken: true
       imagePullSecrets:
       - name: nexus3
       containers:
@@ -117,6 +119,10 @@ spec:
     labels:
       app: admin-center
 ---
+# Egress to HashiCorp Vault :8200. VAULT_ADDR is https:// (app-side TLS).
+# ServiceEntry protocol HTTPS + app HTTPS can double-wrap TLS unless the mesh
+# passes through or a DestinationRule matches cluster policy — verify login from
+# an admin-center Pod before go-live (not validated in this change).
 apiVersion: networking.istio.io/v1beta1
 kind: Sidecar
 metadata:
@@ -130,6 +136,38 @@ spec:
   - hosts:
     - ./*
     - istio-system/*
+    - "*/vault-dev.uk.hsbc"
+    - "*/vault-uat.uk.hsbc"
+    - "*/vault-prod.hk.hsbc"
+---
+# MESH_EXTERNAL Vault hosts. Port 8200 named https. Confirm with platform whether
+# Envoy should originate TLS or pass through the app's existing HTTPS.
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: hashicorp-vault
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+    - vault-dev.uk.hsbc
+    - vault-uat.uk.hsbc
+    - vault-prod.hk.hsbc
+  location: MESH_EXTERNAL
+  ports:
+    - number: 8200
+      name: https
+      protocol: HTTPS
+  resolution: DNS
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-center
+  namespace: __NAMESPACE__
+  labels:
+    app: admin-center
+imagePullSecrets:
+  - name: nexus3
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService

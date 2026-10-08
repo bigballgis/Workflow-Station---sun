@@ -1,0 +1,144 @@
+{
+  "hermesFlowExport" : 1,
+  "flowKey" : "hermes-ocr-receipt-notice",
+  "sourceFlowId" : "bVPX4ca2N0UAoEVFkza2l",
+  "displayName" : "OCR - Receipt Notice",
+  "schemaVersion" : "23",
+  "fromPublished" : true,
+  "exportedAt" : "2026-10-08T11:13:25.353478254+08:00",
+  "trigger" : {
+    "name" : "trigger",
+    "type" : "PIECE_TRIGGER",
+    "valid" : true,
+    "settings" : {
+      "input" : {
+        "authType" : "none",
+        "authFields" : { }
+      },
+      "pieceName" : "@activepieces/piece-webhook",
+      "triggerName" : "catch_webhook",
+      "pieceVersion" : "0.1.40",
+      "propertySettings" : { }
+    },
+    "nextAction" : {
+      "name" : "step_1",
+      "type" : "PIECE",
+      "valid" : true,
+      "settings" : {
+        "input" : {
+          "file" : "{{trigger.output.body.variables.document}}",
+          "fields" : [ {
+            "key" : "company_type",
+            "hint" : "the ticked option",
+            "type" : "text",
+            "label" : "Company Type"
+          }, {
+            "key" : "business_commencement_date",
+            "hint" : "printed as DD/MM/YYYY",
+            "type" : "date",
+            "label" : "Date of Business Commencement"
+          }, {
+            "key" : "incorporation_country",
+            "hint" : "",
+            "type" : "text",
+            "label" : "Country/Region / Jurisdiction of Incorporation / Registration"
+          }, {
+            "key" : "office_telephone",
+            "hint" : "",
+            "type" : "text",
+            "label" : "Office Telephone Number"
+          }, {
+            "key" : "annual_sales_turnover",
+            "hint" : "",
+            "type" : "number",
+            "label" : "Annual Sales Turnover"
+          }, {
+            "key" : "email_address",
+            "hint" : "",
+            "type" : "text",
+            "label" : "Email Address"
+          } ],
+          "staffId" : "{{trigger.output.body.context.currentUser.employeeId}}"
+        },
+        "pieceName" : "@activepieces/piece-content-organizer",
+        "actionName" : "extract_fields",
+        "sampleData" : { },
+        "pieceVersion" : "1.0.2",
+        "propertySettings" : { },
+        "errorHandlingOptions" : {
+          "retryOnFailure" : {
+            "value" : false
+          },
+          "continueOnFailure" : {
+            "value" : true
+          }
+        }
+      },
+      "nextAction" : {
+        "name" : "step_2",
+        "type" : "CODE",
+        "valid" : true,
+        "settings" : {
+          "input" : {
+            "error" : "{{step_1.error}}",
+            "result" : "{{step_1.output}}"
+          },
+          "sampleData" : { },
+          "sourceCode" : {
+            "code" : "export const code = async (inputs) => {\n  // The Content Organizer step runs with \"continue on failure\": on success its output holds\n  // {values}; on failure the output is empty and the error message explains why.\n  const values = inputs.result && inputs.result.values;\n  if (values) {\n    return { ...values, ocr_status: 'SUCCESS', ocr_message: ('Extracted by Content Organizer; please review: ' + JSON.stringify(values)).slice(0, 500) };\n  }\n  // AP wraps a piece error as a JSON string ({\"message\": ...}); show the plain message.\n  let reason = (inputs.error && inputs.error.message) || 'no result';\n  try { reason = JSON.parse(reason).message || reason; } catch (e) { /* already plain text */ }\n  return { ocr_status: 'FAILED', ocr_message: ('OCR failed: ' + reason).slice(0, 500) };\n};",
+            "packageJson" : "{}"
+          },
+          "errorHandlingOptions" : {
+            "retryOnFailure" : {
+              "value" : false
+            },
+            "continueOnFailure" : {
+              "value" : false
+            }
+          }
+        },
+        "nextAction" : {
+          "name" : "step_3",
+          "type" : "PIECE",
+          "valid" : true,
+          "settings" : {
+            "input" : {
+              "fields" : {
+                "body" : {
+                  "variables" : "{{step_2.output}}"
+                },
+                "status" : 200,
+                "headers" : { }
+              },
+              "respond" : "stop",
+              "responseType" : "json"
+            },
+            "pieceName" : "@activepieces/piece-webhook",
+            "actionName" : "return_response",
+            "sampleData" : { },
+            "pieceVersion" : "0.1.40",
+            "propertySettings" : { },
+            "errorHandlingOptions" : {
+              "retryOnFailure" : {
+                "value" : false
+              },
+              "continueOnFailure" : {
+                "value" : false
+              }
+            }
+          },
+          "displayName" : "Return Response",
+          "lastUpdatedDate" : "2026-10-08T03:13:16.031Z"
+        },
+        "displayName" : "Map to process variables",
+        "lastUpdatedDate" : "2026-10-08T03:13:16.031Z"
+      },
+      "displayName" : "Extract fields (OCR)",
+      "lastUpdatedDate" : "2026-10-08T03:13:16.030Z"
+    },
+    "displayName" : "Catch Webhook",
+    "lastUpdatedDate" : "2026-10-08T03:13:16.030Z"
+  },
+  "notes" : [ ],
+  "connections" : [ ]
+}

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ProcessFormData;
 import com.portal.dto.SubTableBindingData;
+import com.portal.dto.SubTableBindingScope;
 import com.portal.dto.SubTableChange;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
@@ -24,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriUtils;
 
+import com.platform.common.functionunit.ProcessStartForm;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 
 import java.nio.charset.StandardCharsets;
@@ -67,6 +69,20 @@ public class ProcessFormComponent {
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
+    /** Re-derives the readonly SLA due date from the case's start; the client value never survives. */
+    private void stampSlaDueDate(ProcessInstance processInstance, Map<String, Object> variables) {
+        if (slaDueDateEnricher == null) {
+            return;
+        }
+        slaDueDateEnricher.stamp(processInstance.getFunctionUnitCode(), variables,
+                processInstance.getStartTime() == null ? null : processInstance.getStartTime().toLocalDate());
+    }
+
     private RequestIdEnricher requestIdEnricher() {
         RequestIdEnricher r = requestIdEnricher;
         if (r == null) {
@@ -92,6 +108,11 @@ public class ProcessFormComponent {
     @Lazy
     @Autowired
     private MiOuterStepResolver miOuterStepResolver;
+
+    /** Lazy: Return_To_Requester writes share Save/Complete isolation; null in {@code new}-constructed tests. */
+    @Lazy
+    @Autowired
+    private SubTableWriteIsolation subTableWriteIsolation;
 
     /** Display name for audit fields; falls back to the raw user id when the resolver is unavailable. */
     private String resolveAuditUserDisplay(String userId) {
@@ -256,8 +277,12 @@ public class ProcessFormComponent {
             throw new PortalException("403", "Process form can only be updated in Return_To_Requester state. Current state: " + gate.getStatus());
         }
 
+        Map<String, Object> inbound = formData != null ? new HashMap<>(formData) : new HashMap<>();
+        List<String> emptiedKeys = takeEmptiedSubTableKeys(inbound);
+        List<SubTableBindingScope> bindingScopes = takeBindingScopes(inbound);
+        SubTableWriteIsolation.stripTransportMetadata(inbound);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
-            gate.getFunctionUnitCode(), formData, formData);
+            gate.getFunctionUnitCode(), inbound, inbound);
 
         AtomicReference<Map<String, Object>> oldValuesRef = new AtomicReference<>();
 
@@ -271,9 +296,9 @@ public class ProcessFormComponent {
             oldValuesRef.set(new HashMap<>(oldValues));
 
             Map<String, Object> updatedVariables = new HashMap<>(oldValues);
-            Map<String, Object> inbound = formData != null ? new HashMap<>(formData) : new HashMap<>();
-            // Drop forged audit keys so putAll cannot wipe created_* from insert.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
+            isolateProcessFormSubTables(inbound, emptiedKeys, bindingScopes, oldValues,
+                    processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId());
             updatedVariables.putAll(inbound);
             // Owner fields: Creator pins startUserId; Current Assignee follows snapshot.
             if (ownerFieldComponent != null) {
@@ -295,6 +320,7 @@ public class ProcessFormComponent {
             // Request ID is platform-derived: recompute it here too, so a resubmit that edits a
             // contributing field cannot persist a stale or client-supplied identifier.
             requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
+            stampSlaDueDate(processInstance, updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
 
@@ -327,6 +353,56 @@ public class ProcessFormComponent {
         } catch (RuntimeException ex) {
             log.warn("process form change-history skipped for {}: {}", processInstanceId, ex.getMessage());
         }
+    }
+
+    List<String> takeEmptiedSubTableKeys(Map<String, Object> inbound) {
+        Object raw = inbound.remove(SubTableWriteIsolation.EMPTIED_KEYS_FIELD);
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        List<String> keys = new ArrayList<>();
+        for (Object item : list) {
+            if (item != null && !String.valueOf(item).trim().isEmpty()) {
+                keys.add(String.valueOf(item).trim());
+            }
+        }
+        return keys;
+    }
+
+    List<SubTableBindingScope> takeBindingScopes(Map<String, Object> inbound) {
+        Object raw = inbound.remove(SubTableWriteIsolation.SCOPES_FIELD);
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        try {
+            List<SubTableBindingScope> scopes = objectMapper.convertValue(
+                    raw, new TypeReference<List<SubTableBindingScope>>() { });
+            return scopes == null ? List.of() : scopes;
+        } catch (IllegalArgumentException ex) {
+            throw new PortalException("400", "subTableBindingScopes is not a valid binding-scope list");
+        }
+    }
+
+    void isolateProcessFormSubTables(Map<String, Object> inbound, List<String> emptiedKeys,
+            List<SubTableBindingScope> scopes, Map<String, Object> baselineVariables,
+            String functionUnitCode) {
+        isolateProcessFormSubTables(inbound, emptiedKeys, scopes, baselineVariables, functionUnitCode, null);
+    }
+
+    void isolateProcessFormSubTables(Map<String, Object> inbound, List<String> emptiedKeys,
+            List<SubTableBindingScope> scopes, Map<String, Object> baselineVariables,
+            String functionUnitCode, String catalogId) {
+        SubTableWriteIsolation isolation = subTableWriteIsolation;
+        if (isolation == null || inbound == null) {
+            return;
+        }
+        isolation.apply(new SubTableWriteIsolation.Request(
+                inbound,
+                inbound,
+                baselineVariables == null ? Map.of() : baselineVariables,
+                emptiedKeys,
+                scopes,
+                functionUnitCode, catalogId, null));
     }
 
     @SuppressWarnings("unchecked")
@@ -424,9 +500,9 @@ public class ProcessFormComponent {
                             SELECT fd.id AS form_id, fd.form_name, fd.config_json::text AS config_json
                             FROM dw_form_definitions fd
                             INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                            WHERE fu.code = ? AND fd.form_type = 'PROCESS'
+                            WHERE fu.code = ? AND %s
                             LIMIT 1
-                            """,
+                            """.formatted(ProcessStartForm.SQL_PREDICATE),
                     (rs, rowNum) -> {
                         Map<String, Object> m = new HashMap<>();
                         m.put("formId", rs.getLong("form_id"));
@@ -471,10 +547,13 @@ public class ProcessFormComponent {
                                    ftb.binding_mode::text AS binding_mode,
                                    COALESCE(td.id, rt.id) AS table_id,
                                    COALESCE(td.table_name, rt.table_name) AS table_name,
-                                   COALESCE(td.table_display_name, rt.display_name) AS table_display_name
+                                   COALESCE(td.table_display_name, rt.display_name) AS table_display_name,
+                                   ffk.field_name AS filter_fk_field_name,
+                                   ffk.ref_table_id AS filter_fk_ref_table_id
                             FROM dw_form_table_bindings ftb
                             LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id
                             LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id
+                            LEFT JOIN dw_field_definitions ffk ON ffk.id = ftb.filter_fk_field_id
                             WHERE ftb.form_id = ?
                             ORDER BY ftb.sort_order NULLS LAST, ftb.id
                             """,
@@ -487,10 +566,17 @@ public class ProcessFormComponent {
                         b.put("bindingMode", rs.getString("binding_mode"));
                         b.put("columns", Collections.emptyList());
                         b.put("data", Collections.emptyList());
-                        // Store table_id for PK resolution below
                         long tableId = rs.getLong("table_id");
                         if (!rs.wasNull()) {
-                            b.put("_tableId", tableId);
+                            b.put("tableId", tableId);
+                        }
+                        String filterFkFieldName = rs.getString("filter_fk_field_name");
+                        if (filterFkFieldName != null && !filterFkFieldName.isBlank()) {
+                            b.put("filterFkFieldName", filterFkFieldName);
+                        }
+                        long filterRef = rs.getLong("filter_fk_ref_table_id");
+                        if (!rs.wasNull()) {
+                            b.put("filterFkRefTableId", filterRef);
                         }
                         return b;
                     },
@@ -498,8 +584,8 @@ public class ProcessFormComponent {
 
             // Batch-resolve primary key field names for all dw_ tables referenced in these bindings
             List<Long> dwTableIds = bindings.stream()
-                    .filter(b -> b.get("_tableId") instanceof Long)
-                    .map(b -> (Long) b.get("_tableId"))
+                    .filter(b -> b.get("tableId") instanceof Long)
+                    .map(b -> (Long) b.get("tableId"))
                     .distinct()
                     .toList();
             if (!dwTableIds.isEmpty()) {
@@ -514,7 +600,7 @@ public class ProcessFormComponent {
                             .add((String) row.get("field_name"));
                 }
                 for (Map<String, Object> b : bindings) {
-                    Object tid = b.remove("_tableId");
+                    Object tid = b.get("tableId");
                     if (tid instanceof Long) {
                         List<String> pkFields = pkByTable.get((Long) tid);
                         if (pkFields != null && !pkFields.isEmpty()) {
@@ -584,8 +670,7 @@ public class ProcessFormComponent {
             }
             try {
                 Map<String, Object> parsed = objectMapper.readValue(contentDataStr, new TypeReference<Map<String, Object>>() {});
-                Object ft = parsed.get("formType");
-                if (!"PROCESS".equals(ft instanceof String ? ft : Objects.toString(ft, null))) {
+                if (!ProcessStartForm.matches(parsed)) {
                     continue;
                 }
                 Map<String, Object> formDef = new HashMap<>();
@@ -651,6 +736,13 @@ public class ProcessFormComponent {
         return Collections.emptyMap();
     }
 
+    private static Long asLong(Object raw) {
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     private List<SubTableBindingData> extractSubTableBindings(Map<String, Object> formDefinition) {
         Object bindings = formDefinition.get("subTableBindings");
@@ -659,12 +751,16 @@ public class ProcessFormComponent {
             List<SubTableBindingData> result = bindingList.stream()
                     .map(b -> SubTableBindingData.builder()
                             .bindingId(b.get("bindingId") != null ? ((Number) b.get("bindingId")).longValue() : null)
+                            .tableId(asLong(b.get("tableId")))
                             .tableName((String) b.get("tableName"))
                             .tableDisplayName((String) b.get("tableDisplayName"))
                             .bindingType((String) b.get("bindingType"))
                             .bindingMode((String) b.get("bindingMode"))
+                            .filterFkFieldName((String) b.get("filterFkFieldName"))
+                            .filterFkRefTableId(asLong(b.get("filterFkRefTableId")))
                             .columns((List<Map<String, Object>>) b.get("columns"))
                             .data((List<Map<String, Object>>) b.get("data"))
+                            .primaryKeyFields((List<String>) b.get("primaryKeyFields"))
                             .build())
                     .toList();
 

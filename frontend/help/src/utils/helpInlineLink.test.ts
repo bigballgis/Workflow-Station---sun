@@ -11,6 +11,7 @@ test('resolves How to write events and Basic control paths', () => {
   assert.equal(helpInlineTitleKey('/form-upload'), 'guides.formUpload.title')
   assert.equal(helpInlineTitleKey('/form-ctl-lookup'), 'nav.formCtlLookup')
   assert.equal(helpInlineTitleKey('/table-design'), 'guides.tableDesign.title')
+  assert.equal(helpInlineTitleKey('/table-bindings'), 'guides.tableBindings.title')
   assert.equal(helpInlineTitleKey('/view-design'), 'guides.viewDesign.title')
 })
 

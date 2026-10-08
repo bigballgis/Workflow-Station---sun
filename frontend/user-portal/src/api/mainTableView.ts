@@ -40,6 +40,8 @@ export interface MainTableViewFieldColumn {
   refViewId?: number | null
   refFunctionUnitCode?: string | null
   refPrimaryKeyFields?: string[] | null
+  /** The link points at the request this SUB row lives in: open that request, not a filtered list. */
+  refOwningRequest?: boolean
   // Lookup drill-down: link to the referenced Relation Table's data, filtered by this cell's value.
   isLookup?: boolean
   lookupTableId?: number | null
@@ -58,6 +60,10 @@ export interface MainTableViewFieldColumn {
   operators: string[]
   /** Closed choices for ENUM / BOOLEAN; omitted or empty for open-value kinds. */
   options?: { value: string; label: string }[]
+  /** What a select-like column shows: the stored option value (default) or the option label. */
+  selectDisplay?: 'value' | 'label' | null
+  /** Static options of the bound form widget; sent only when {@link selectDisplay} is 'label'. */
+  selectOptions?: { value: string; label: string }[] | null
 }
 
 /** Mirrors MainTableViewQueryRequest: paging plus everything the shared header produces. */

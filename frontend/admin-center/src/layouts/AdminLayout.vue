@@ -150,6 +150,27 @@
             </el-sub-menu>
           </el-sub-menu>
 
+          <el-menu-item
+            v-if="isSystemAdmin || canSystemConfig"
+            index="/environment-variables"
+          >
+            <el-icon class="nav-anim nav-anim--wobble"><Key /></el-icon>
+            <template #title>
+              {{ t('menu.environmentVariables') }}
+            </template>
+          </el-menu-item>
+
+          <!-- SLA lead time per Function Unit: a production operation, so it lives in Admin Center. -->
+          <el-menu-item
+            v-if="canViewSla"
+            index="/sla-policies"
+          >
+            <el-icon class="nav-anim nav-anim--wobble"><Timer /></el-icon>
+            <template #title>
+              {{ t('menu.slaPolicies') }}
+            </template>
+          </el-menu-item>
+
           <!-- Automation Pieces - piece catalog + import/export/enable/delete, requires system:admin.
                Lives here (not in the Developer Workstation): DW is dev-only and is not part of the
                K8S deployment set, while piece rollout is a production-environment operation. -->
@@ -245,7 +266,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Fold, Expand,
-  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Cpu, Share, Tickets
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Key, Cpu, Share, Tickets, Timer
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
@@ -267,6 +288,9 @@ const currentTitle = computed(() => {
 
 // Permission checks
 const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
+const canSystemConfig = computed(() => hasPermission(PERMISSIONS.SYSTEM_CONFIG))
+const canViewSla = computed(() =>
+  hasPermission(PERMISSIONS.SLA_POLICY_VIEW) || hasPermission(PERMISSIONS.SLA_POLICY_EDIT))
 const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
 const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
 const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ) || hasPermission(PERMISSIONS.LOG_READ))

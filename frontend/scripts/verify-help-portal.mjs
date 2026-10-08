@@ -52,6 +52,10 @@ try {
     await page.getByTestId('help-need-table-design').isVisible(),
   )
   rec(
+    'Home lists Manage Table Bindings as its own job',
+    await page.getByTestId('help-need-table-bindings').isVisible(),
+  )
+  rec(
     'Home lists View Design as its own job',
     await page.getByTestId('help-need-view-design').isVisible(),
   )
@@ -128,9 +132,56 @@ try {
     'Table-design related links include computed-fields',
     await tableArticle.locator('.help-related a[href$="/computed-fields"]').count().then((n) => n > 0),
   )
+  rec(
+    'Table-design has the SLA Due Date section with its figure',
+    await tableArticle.locator('#sla-due-date').count().then((n) => n > 0)
+      && await tableArticle.locator('img[src*="dw-table-design-sla.png"]').evaluate((img) => img.complete && img.naturalWidth > 0),
+  )
   const tableShot = resolve(DW_SHOTS, `${DATE}_help-portal-table-design.png`)
   await page.screenshot({ path: tableShot, fullPage: true })
   console.log(`screenshot ${tableShot}`)
+
+  await page.goto('http://localhost:3000/help/sla-policies', { waitUntil: 'domcontentloaded' })
+  const slaArticle = page.getByTestId('sla-policies-guide-page')
+  await slaArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec('SLA-policies guideline is visible', await slaArticle.isVisible())
+  rec(
+    'SLA-policies catalogs Lead Time (days) and Recalculation start',
+    (await slaArticle.textContent())?.includes('Lead Time (days)') === true
+      && (await slaArticle.textContent())?.includes('Recalculation start') === true,
+  )
+  for (const fig of ['ac-sla-policies-list.png', 'ac-sla-policies-edit.png', 'ac-sla-policies-detail.png']) {
+    const img = slaArticle.locator(`img[src*="${fig}"]`)
+    await img.scrollIntoViewIfNeeded()
+    rec(`SLA-policies figure ${fig} loads`, await img.evaluate((el) => el.complete && el.naturalWidth > 0))
+  }
+  rec(
+    'SLA-policies links back to Table Design #sla-due-date',
+    await slaArticle.locator('a[href*="/table-design#sla-due-date"]').count().then((n) => n > 0),
+  )
+  const slaShot = resolve(DW_SHOTS, `${DATE}_help-portal-sla-policies.png`)
+  await page.screenshot({ path: slaShot, fullPage: true })
+  console.log(`screenshot ${slaShot}`)
+
+  await page.goto('http://localhost:3000/help/table-bindings', { waitUntil: 'domcontentloaded' })
+  const bindingsArticle = page.getByTestId('table-bindings-guide-page')
+  await bindingsArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec('Table-bindings guideline is visible', await bindingsArticle.isVisible())
+  rec(
+    'Table-bindings catalogs Filter foreign key and fill source',
+    (await bindingsArticle.textContent())?.includes('Filter foreign key') === true
+      && (await bindingsArticle.textContent())?.includes('Foreign-key fill source') === true,
+  )
+  rec(
+    'Table-bindings related links include Sub-Table',
+    await bindingsArticle.locator('.help-related a[href$="/form-ctl-sub-table"]').count().then((n) => n > 0),
+  )
+  const bindingsShot = resolve(DW_SHOTS, `${DATE}_help-portal-table-bindings.png`)
+  await page.screenshot({ path: bindingsShot, fullPage: true })
+  console.log(`screenshot ${bindingsShot}`)
+  const bindingsHelpShot = resolve(HELP_SHOTS, `${DATE}_help-portal-table-bindings.png`)
+  await page.screenshot({ path: bindingsHelpShot, fullPage: true })
+  console.log(`screenshot ${bindingsHelpShot}`)
 
   await page.goto('http://localhost:3000/help/view-design', { waitUntil: 'domcontentloaded' })
   const viewArticle = page.getByTestId('view-design-guide-page')
@@ -148,6 +199,24 @@ try {
   const viewShot = resolve(DW_SHOTS, `${DATE}_help-portal-view-design.png`)
   await page.screenshot({ path: viewShot, fullPage: true })
   console.log(`screenshot ${viewShot}`)
+
+  for (const [path, testId, mustInclude] of [
+    ['fu-documents', 'fu-documents-guide-page', ['Import', 'Version History', 'Purchase_Request-requirements-v1.2.md']],
+    ['ai-studio', 'ai-studio-guide-page', ['One-click generate', 'Replace the current design?', 'Let AI fix it']],
+  ]) {
+    await page.goto(`http://localhost:3000/help/${path}`, { waitUntil: 'domcontentloaded' })
+    const article = page.getByTestId(testId)
+    await article.waitFor({ state: 'visible', timeout: 15000 })
+    const text = (await article.textContent()) ?? ''
+    rec(`${path} guideline is visible`, await article.isVisible())
+    rec(`${path} names the real controls`, mustInclude.every((label) => text.includes(label)))
+    rec(`${path} figures load`, await article.locator('img').evaluateAll(
+      (imgs) => imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0),
+    ))
+    const shotPath = resolve(DW_SHOTS, `${DATE}_help-portal-${path}.png`)
+    await page.screenshot({ path: shotPath, fullPage: true })
+    console.log(`screenshot ${shotPath}`)
+  }
 
   await page.goto('http://localhost:3000/help/email-send', { waitUntil: 'domcontentloaded' })
   const sendArticle = page.getByTestId('email-send-guide-page')
@@ -310,7 +379,11 @@ try {
   rec('llms.txt is served', llms?.ok() === true && llmsText.includes('/help/computed-fields'))
   rec('llms.txt lists task-delegate', llmsText.includes('/help/task-delegate'))
   rec('llms.txt lists table-design', llmsText.includes('/help/table-design'))
+  rec('llms.txt lists sla-policies', llmsText.includes('/help/sla-policies'))
+  rec('llms.txt lists table-bindings', llmsText.includes('/help/table-bindings'))
   rec('llms.txt lists view-design', llmsText.includes('/help/view-design'))
+  rec('llms.txt lists fu-documents', llmsText.includes('/help/fu-documents'))
+  rec('llms.txt lists ai-studio', llmsText.includes('/help/ai-studio'))
   rec('llms.txt lists form-events', llmsText.includes('/help/form-events'))
   rec('llms.txt lists form-events-basic', llmsText.includes('/help/form-events-basic'))
   rec('llms.txt lists form-ctl-input', llmsText.includes('/help/form-ctl-input'))
@@ -588,6 +661,10 @@ try {
     'Sub-Table names help_pr_line and Sub Table Binding',
     (await subTableArticle.textContent())?.includes('help_pr_line') === true
       && (await subTableArticle.textContent())?.includes('Sub Table Binding') === true,
+  )
+  rec(
+    'Sub-Table related links include Manage Table Bindings',
+    await subTableArticle.locator('.help-related a[href$="/table-bindings"]').count().then((n) => n > 0),
   )
   const subTableShot = resolve(DW_SHOTS, `${DATE}_help-portal-form-ctl-sub-table.png`)
   await page.screenshot({ path: subTableShot, fullPage: true })

@@ -63,5 +63,10 @@
     "name": "@activepieces/piece-hash-helper",
     "version": "1.0.0",
     "tarball": "activepieces-piece-hash-helper-1.0.0.tgz"
+  },
+  {
+    "name": "@activepieces/piece-content-organizer",
+    "version": "1.0.2",
+    "tarball": "activepieces-piece-content-organizer-1.0.2.tgz"
   }
 ]

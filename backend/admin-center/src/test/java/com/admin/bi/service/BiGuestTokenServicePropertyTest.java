@@ -168,6 +168,37 @@ class BiGuestTokenServicePropertyTest {
 
     // ========== Property 11: Guest Token 授权守卫 ==========
 
+    @Example
+    void guestTokenAuthorizationUsesTheRequestedActiveBusinessUnit() {
+        String userId = "portal-user";
+        String dashboardId = "dashboard-bu";
+        String activeBuId = "bu-finance";
+        BiDashboardRegistry dashboard = BiDashboardRegistry.builder()
+                .id(dashboardId)
+                .dashboardTitle("Finance")
+                .embedId(UUID.randomUUID())
+                .status(DashboardStatus.ACTIVE)
+                .build();
+        when(dashboardRegistryRepository.findById(dashboardId)).thenReturn(Optional.of(dashboard));
+        when(assignmentService.getUserDashboards(userId, activeBuId)).thenReturn(List.of(
+                UserDashboardResponse.builder()
+                        .dashboardId(dashboardId)
+                        .dashboardTitle("Finance")
+                        .embedId(dashboard.getEmbedId())
+                        .displayOrder(0)
+                        .isDefault(false)
+                        .build()));
+        when(supersetApiClient.getGuestToken(dashboard.getEmbedId().toString()))
+                .thenReturn("bu-token");
+
+        GuestTokenRequest request = new GuestTokenRequest();
+        request.setDashboardId(dashboardId);
+        request.setActiveBusinessUnitId(activeBuId);
+
+        assertThat(service.getGuestToken(userId, request).getToken()).isEqualTo("bu-token");
+        verify(assignmentService).getUserDashboards(userId, activeBuId);
+    }
+
     /**
      * Property 11: Guest Token 授权守卫
      *

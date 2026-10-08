@@ -105,7 +105,7 @@ public class FormTableBindingRestorer {
                         staleId, form.getId(), columnFields);
                 continue;
             }
-            String fkField = resolveStructuralForeignKeyField(subTable);
+            FieldDefinition fkField = soleDeclaredForeignKeyField(subTable);
             if (fkField == null) {
                 // Every sub-table binding requires a foreign key — the Form Designer enforces this
                 // ("Sub-table binding requires a foreign key field"). A table with no field marked
@@ -115,16 +115,31 @@ public class FormTableBindingRestorer {
                 // measured in dev. Refusing to rebuild leaves a visible stale placeholder, which
                 // the designer can fix by marking the FK in Table Design — strictly better than a
                 // silently broken binding.
+                // Two or more declared keys land here for the same reason: which one this lost
+                // binding filtered by is not recorded on the table, so any pick is a guess.
                 // Log the id/name only, never the entity: TableDefinition and FieldDefinition are
                 // both @Data with a bidirectional reference, so stringifying either recurses.
-                log.warn("Skipping stale binding {} on form {} — sub-table '{}' (id {}) has no field "
-                        + "marked as a foreign key; mark the parent-referencing column in Table Design",
+                log.warn("Skipping stale binding {} on form {} — sub-table '{}' (id {}) does not "
+                        + "declare exactly one foreign key with a target; mark the single "
+                        + "parent-referencing column in Table Design",
                         staleId, form.getId(), String.valueOf(subTable.getTableName()), subTable.getId());
                 continue;
             }
             BindingLinkMode linkMode = resolveBindingLinkMode(subTable);
+            if (linkMode == null) {
+                log.warn("Skipping stale binding {} on form {} — sub-table '{}' (id {}) has "
+                        + "surviving bindings with conflicting link modes, so the lost binding's "
+                        + "own mode cannot be recovered; re-add the binding in Manage Table Bindings",
+                        staleId, form.getId(), String.valueOf(subTable.getTableName()), subTable.getId());
+                continue;
+            }
             FormTableBinding subBinding = saveBinding(form, subTable, null, BindingType.SUB,
-                    subBindingMode(form, subTable), fkField, linkMode, SubMode.FULL, sortOrder++);
+                    subBindingMode(form, subTable), fkField.getFieldName(), linkMode, SubMode.FULL, sortOrder++);
+            // Recorded as an id, not re-derived later: at this point the key is provably the table's
+            // only declared one, so writing it now keeps the rebuilt binding out of the
+            // "undeclared" set that has to fall back to scanning the table.
+            subBinding.setFilterFkFieldId(fkField.getId());
+            subBinding = formTableBindingRepository.save(subBinding);
             attachSubListView(subBinding, configJson, key);
             bindingIdMapping.put(staleId, subBinding.getId());
         }
@@ -394,19 +409,28 @@ public class FormTableBindingRestorer {
      * {@code row_id} / {@code case_id} guesses matched 2 of 15 sub-tables in dev and returned
      * {@code row_id} for the rest, naming a column those tables do not have.
      *
-     * @return the FK column, or {@code null} when the table declares none (a contract violation;
-     *         the caller must refuse to rebuild rather than invent one)
+     * @return the table's single declared FK field, or {@code null} when it declares none (a
+     *         contract violation) or declares more than one (ambiguous — which of them this lost
+     *         binding filtered by is not recorded anywhere). Either way the caller must refuse to
+     *         rebuild rather than invent or pick one.
      */
-    private static String resolveStructuralForeignKeyField(TableDefinition table) {
+    private static FieldDefinition soleDeclaredForeignKeyField(TableDefinition table) {
         if (table == null || table.getFieldDefinitions() == null) {
             return null;
         }
-        return table.getFieldDefinitions().stream()
+        List<FieldDefinition> declared = table.getFieldDefinitions().stream()
                 .filter(f -> Boolean.TRUE.equals(f.getIsForeignKey()))
-                .map(FieldDefinition::getFieldName)
-                .filter(name -> name != null && !name.isBlank())
-                .findFirst()
-                .orElse(null);
+                // ref_table_id is required, not just the flag: the flag says "points somewhere"
+                // without saying where, and rebuilding a binding around a target-less key gives the
+                // runtime a declaration it cannot read (MiSubTaskSubTableRowMerger joins on
+                // ref_table_id). Measured in dev 2026-09-16: no field is flagged without a target.
+                .filter(f -> f.getRefTableId() != null)
+                .filter(f -> f.getFieldName() != null && !f.getFieldName().isBlank())
+                .toList();
+        // Exactly one, never "the first of several": with two declared keys the table can be bound
+        // in two different roles and picking either one is a guess about which role this lost
+        // binding held. The caller refuses to rebuild instead.
+        return declared.size() == 1 ? declared.get(0) : null;
     }
 
     /**
@@ -424,18 +448,27 @@ public class FormTableBindingRestorer {
      * structuralFk — so a table that reaches here at all is not an MI collection. Replacing the old
      * test, which asked whether the FK column happened to be named {@code row_id} and so misread 7
      * of 14 MI bindings as structuralFk, silently dropping participant isolation.
+     *
+     * @return {@code null} when the surviving siblings do not agree on one mode. That only happens
+     *         once the same table is bound in two roles, and then "the first sibling" is a guess
+     *         about which role the lost binding held — getting it wrong in the
+     *         {@code miParticipantRow} direction is precisely the participant-isolation loss this
+     *         method was rewritten to stop. The caller refuses to rebuild instead.
      */
     private BindingLinkMode resolveBindingLinkMode(TableDefinition table) {
         if (table == null || table.getId() == null) {
             return BindingLinkMode.structuralFk;
         }
-        return formTableBindingRepository.findByTableId(table.getId()).stream()
+        Set<BindingLinkMode> siblingModes = formTableBindingRepository.findByTableId(table.getId()).stream()
                 .filter(b -> BindingType.SUB == b.getBindingType())
                 .filter(b -> b.getForeignKeyField() != null && !b.getForeignKeyField().isBlank())
                 .map(FormTableBinding::getBindingLinkMode)
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElse(BindingLinkMode.structuralFk);
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (siblingModes.size() > 1) {
+            return null;
+        }
+        return siblingModes.isEmpty() ? BindingLinkMode.structuralFk : siblingModes.iterator().next();
     }
 
     private static BindingMode primaryMode(FormDefinition form) {

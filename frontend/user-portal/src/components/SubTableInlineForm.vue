@@ -45,6 +45,7 @@ interface Props {
   hostTaskId?: string
   hostPrimaryFormData?: Record<string, unknown>
   hostPrimaryTableId?: number | null
+  hostBindingId?: number | string | null
   /** Inline Form widget: rows persist with the host form, so it owns no Save button. */
   hideSaveButton?: boolean
   /** Inline Form widget: renders flush in the host layout, without the el-card chrome. */
@@ -345,6 +346,7 @@ const cardTitle = computed(() =>
           :host-task-id="hostTaskId"
           :host-primary-form-data="hostPrimaryFormData"
           :host-primary-table-id="hostPrimaryTableId ?? null"
+          :host-binding-id="hostBindingId ?? null"
           :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
           :field-permissions="fieldPermissions"
           :is-field-visible="isDialogFieldVisible"

@@ -5,6 +5,7 @@ import { functionUnitApi, type FunctionUnit, type FunctionUnitResponse, type Fun
 import { sortFormsByType } from '@/utils/formDesigner'
 import i18n from '@/i18n'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import { markSlaDerivedFields } from '@/utils/formFieldMeta'
 
 export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const list = ref<FunctionUnitResponse[]>([])
@@ -117,18 +118,18 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   // Table operations
   async function fetchTables(functionUnitId: number) {
     const res = await functionUnitApi.getTables(functionUnitId)
-    tables.value = res.data
-    return res.data
+    tables.value = (res.data ?? []).map(markSlaDerivedFields)
+    return tables.value
   }
 
   async function createTable(functionUnitId: number, data: Partial<TableDefinition>) {
     const res = await functionUnitApi.createTable(functionUnitId, data)
-    return res.data
+    return markSlaDerivedFields(res.data)
   }
 
   async function updateTable(functionUnitId: number, tableId: number, data: Partial<TableDefinition>) {
     const res = await functionUnitApi.updateTable(functionUnitId, tableId, data)
-    const updated = res.data
+    const updated = markSlaDerivedFields(res.data)
     if (updated) {
       const index = tables.value.findIndex(t => t.id === tableId)
       if (index >= 0) {

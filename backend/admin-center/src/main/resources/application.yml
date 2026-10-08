@@ -80,6 +80,19 @@ user-portal:
 service:
   internal-token: ${SERVICE_INTERNAL_TOKEN:}
 
+# HashiCorp Vault (admin-center only). Kubernetes JWT login + KV v2 GET/POST.
+# Do not log VAULT_TOKEN. Local Docker may set VAULT_TOKEN; K8s uses the pod SA token.
+vault:
+  enabled: true
+  addr: ${VAULT_ADDR:}
+  namespace: ${VAULT_NAMESPACE:}
+  auth-mount: ${VAULT_AUTH_MOUNT:}
+  role: ${VAULT_ROLE:}
+  kv-mount: ${VAULT_KV_MOUNT:}
+  token-file: ${VAULT_SERVICE_ACCOUNT_TOKEN_FILE:/var/run/secrets/kubernetes.io/serviceaccount/token}
+  token: ${VAULT_TOKEN:}
+  refresh-skew-seconds: ${VAULT_LOGIN_REFRESH_SKEW_SECONDS:30}
+
 spring:
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration

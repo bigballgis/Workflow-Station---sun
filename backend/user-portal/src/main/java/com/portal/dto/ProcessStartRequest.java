@@ -40,6 +40,16 @@ public class ProcessStartRequest {
     private String remark;
 
     /**
+     * Transport metadata for table-keyed {@code __subTables__} — not a form field.
+     * Must stay off {@link #formData} so engine start cannot persist it as a process variable.
+     * Null/empty keeps the V1 table-keyed path.
+     */
+    private List<String> emptiedSubTableKeys;
+
+    /** Per-binding write claims. Same shape as {@code TaskFormSubmitRequest}. */
+    private List<SubTableBindingScope> subTableBindingScopes;
+
+    /**
      * 已废弃：服务端不再读取。流程变量 {@code activeBusinessUnitId} 仅由当前访问令牌 JWT 中的工作台上下文写入，防止客户端伪造。
      */
     @Deprecated(forRemoval = false)

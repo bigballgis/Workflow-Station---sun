@@ -36,6 +36,7 @@ const jumpLinks: GuideJump[] = [
 
 const related: GuideRelated[] = [
   { to: '/email-monitor', titleKey: 'guides.emailMonitor.title' },
+  { to: '/environment-variables', titleKey: 'guides.environmentVariables.title' },
   { to: '/computed-fields', titleKey: 'guides.computedFields.title' },
   { to: '/form-upload', titleKey: 'guides.formUpload.title' },
 ]
@@ -57,7 +58,7 @@ const sections: GuideSection[] = [
       { code: 'Sender Email (From address)', hintKey: 'emailSendGuide.fFromEmail' },
       { code: 'Sender Display Name', hintKey: 'emailSendGuide.fFromName' },
       { code: 'Username', hintKey: 'emailSendGuide.fSmtpUsername' },
-      { code: 'Password', hintKey: 'emailSendGuide.fSmtpPassword' },
+      { code: 'Password (VAULT)', hintKey: 'emailSendGuide.fSmtpPassword' },
       { code: 'SMTP Host', hintKey: 'emailSendGuide.fSmtpHost' },
       { code: 'Port', hintKey: 'emailSendGuide.fSmtpPort' },
       { code: 'Use TLS', hintKey: 'emailSendGuide.fUseTls' },

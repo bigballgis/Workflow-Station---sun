@@ -23,13 +23,35 @@ Admin Relation Tables are standalone: no MAIN/SUB lookup, no SUM related-row fun
 
 ## Tables, fields, PK and FK (/help/table-design)
 
-Function Unit tab Table Design. Create MAIN / SUB / ACTION / RELATION tables. Field Name must start with a letter. Import Table Fields on Form Design reads these columns. Views need a Main Table first.
+Function Unit tab Table Design. Create MAIN / SUB / ACTION / RELATION tables. Field Name must start with a letter. Import Table Fields on Form Design reads these columns. Attach tables to a form in /help/table-bindings. Views need a Main Table first.
 
 Order: open Table Design → create or open a table → add fields → tick Primary Key and pick a strategy → tick Foreign Key and set Ref Table → save. On a MAIN table configure Request ID first.
 
 PK strategies: UUID, Manual, Auto increment, Prefixed sequence, Date + daily sequence, Date + monthly sequence, Custom format. Primary Key cannot stay nullable.
 
-Related: /help/computed-fields , /help/view-design
+SLA Due Date (#sla-due-date, MAIN only, optional): Configure on the SLA Due Date row → Start date source (Main table field: pick a DATE/TIMESTAMP Start date field; or Submission time) → Due date field (non-formula DATE, read-only on forms) → Confirm → Save the table. Remove clears the mapping. Renaming the mapped field in the grid carries the mapping along; deleting it blocks Save with "SLA field does not exist on this table". The lead time in days is set in Admin Center (/help/sla-policies).
+
+Related: /help/computed-fields , /help/table-bindings , /help/view-design , /help/sla-policies
+
+## Manage Table Bindings (/help/table-bindings)
+
+Form Design toolbar Manage Table Bindings. Dialog title Table Binding Management. Attaches MAIN / SUB / ACTION / RELATION tables to this form. Not the Sub-Table grid (/help/form-ctl-sub-table). Lookup reads Relation Table bindings (/help/form-ctl-lookup).
+
+Screenshot tables: Purchase Request PRIMARY help_pr, SUB help_pr_line. Do not invent a second FK on help_pr_line.
+
+Order: open Form Design → Edit this form → Manage Table Bindings → Add Binding (type, table, Filter foreign key for Sub Table) → Add → Close → save the form → Sub Table Binding on the canvas picks that SUB.
+
+List columns: Table Name, Binding Type, Mode, Foreign Key Field, Link Mode, Sub Mode, Operations. Empty list: No table bindings. Primary cannot be deleted.
+
+Add Binding fields: Binding Type (Primary Table / Sub Table / Action Table / Relation Table); Sub Mode Full Mode (Form + List) or Form Only Mode; Select Table; Binding Mode Editable / Read Only; Link Mode Structural FK or MI Participant Row; Filter foreign key; Participant Row Field.
+
+Foreign-key fill source (Structural FK Sub Table, after Select Table): Auto (unique table only) / Host / parent row / Primary form / Named ancestor binding + Select ancestor binding.
+
+Same SUB table twice only when Filter foreign key differs. Primary and Relation stay one per table.
+
+Fail: Add a Primary first; A primary binding already exists; A conflicting table binding already exists; No structural FK fields; Select which declared foreign key; Please select a table; Primary table binding cannot be deleted.
+
+Related: /help/table-design , /help/form-ctl-sub-table , /help/form-ctl-lookup
 
 ## View Design (/help/view-design)
 
@@ -85,7 +107,7 @@ To Do lists direct assignments and business-unit role requests (free, held by yo
 
 Order: open To Do → Claim, Claim all, or Unclaim all → edit and submit.
 
-Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first) or Reassign the request to another member of the same role. Force Unclaim returns the request to the pool; Reassign does not. Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role. Change History and Admin Center User Portal Audit Log record claim, unclaim, force unclaim, and reassign (who / when / from / to).
+Leader of that role, the business-unit Approver, and SYS_ADMIN can Release Claim on someone else’s hold (confirm first) or Reassign the request to another member of the same role. Release Claim returns the request to the pool; Reassign does not. Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role. Change History and Admin Center User Portal Audit Log record claim, unclaim, release claim, and reassign (who / when / from / to).
 
 ## Delegate a task (/help/task-delegate)
 
@@ -180,8 +202,52 @@ Palette group Basic. Each control is /help/form-ctl-<type> (Input, Textarea, Pas
 
 ## Extend and MI events (/help/form-events-extend)
 
-Index for remaining Extend and MI shells. Sub-Table is /help/form-ctl-sub-table (bound SUB grid, help_pr_line, Allow Add/Edit/Delete). Lookup is /help/form-ctl-lookup (Relation Table, filters, cascade, Backfill; setLookupFilter then refresh). This page keeps one event sample for Inline Form, Link Form, Owner, Record Note, and Assignment Mode. Old hashes /help/form-events-extend#subTable and #lookup redirect to those articles.
+Index for remaining Extend and MI shells. Sub-Table is /help/form-ctl-sub-table (bound SUB grid, help_pr_line, Allow Add/Edit/Delete). Attach the table in /help/table-bindings first. Lookup is /help/form-ctl-lookup (Relation Table, filters, cascade, Backfill; setLookupFilter then refresh). This page keeps one event sample for Inline Form, Link Form, Owner, Record Note, and Assignment Mode. Old hashes /help/form-events-extend#subTable and #lookup redirect to those articles.
 
 ## Layout and Auxiliary events (/help/form-events-layout)
 
 Usually click plus hooks. Tabs may also list tabClick, tabChange, tabAdd, tabRemove when Create shows those names. Button click can fill requester from user.
+
+## Requirements and Function Unit Design (/help/fu-documents)
+
+Every Function Unit keeps two Markdown documents, Requirements and Function Unit Design, edited in Function Unit Settings. Each Save adds a version. AI Studio reads both and updates them after a phase is confirmed.
+
+Order: open the Function Unit → Function Unit Settings → Requirements or Function Unit Design tab → type Markdown or Import a file → check the preview → Save.
+
+Toolbar: Edit (two panes), Preview (rendered only; read-only members always), Import, Download, Version History, Save, Unsaved tag, version line (version · saver · time · source), No document yet.
+
+Import accepts .md, .markdown, .txt up to 200 KB and only loads the editor; nothing is stored until Save. With unsaved changes a dialog asks (Replace / Cancel). Download writes what the editor shows; file name example Purchase_Request-requirements-v1.2.md.
+
+Version History: Current tag, View, Compare with current, Restore (adds a new version with the old text). Sources: Manual edit, Imported, Cloned, Restored from v1.1, Rolled back to version 1.0.2, AI Studio · <phase> confirmed, AI Studio · full check, AI Studio · one-click generation. The number before the dot goes up when a new AI design is started in AI Studio; the number after the dot on every Save.
+
+Export carries both documents; importing adds them as a version marked Imported; Clone copies the latest text; a Version Management rollback writes that version's documents back. Older packages leave documents unchanged.
+
+Fail: wrong file type; file or document larger than 200 KB; empty file; Document changed (Load latest / Save anyway); read-only members have no Import, Save, Restore.
+
+Related: /help/ai-studio
+
+## Build with AI (AI Studio) (/help/ai-studio)
+
+The AI Studio button on a Function Unit opens Build with AI. Three modes: Start a new AI design (phase by phase with the copilot; asks before resetting existing progress), Continue AI draft (disabled until someone confirmed a phase or talked to the copilot), One-click generate. Read-only members do not see the button. AI Studio has eleven phases in designer-tab order, Process Design to Validation.
+
+One-click generate (#one-click). Order: AI Studio → One-click generate → describe what the Function Unit should do (up to 4000 characters; optional when a Requirements document exists, otherwise Generate is disabled) → Generate → Replace the current design? → Generate. The description, the current design and both documents go to the model. One round writes process, tables and relations, forms, actions, decisions. It does not write views, connections, email templates, email monitors or automation bindings.
+
+Result (#result): AI Studio opens on Process Design and waits, usually 7 to 15 minutes; Stop cancels without changing the design; the page can be reloaded or left. The Proposed change card groups items by phase (new N, replaces N existing). Applied means the design is written and the designers reloaded. Apply appears when it was generated but not written. Let AI fix it appears when the card lists errors and runs the whole generation again. The description is saved as a new Requirements version (source AI Studio · one-click generation; appended under Additional requirements when text existed). Phase progress returns to Process Design; review each phase and click Confirm phase.
+
+Fail: Generate disabled without description or Requirements document; AI credentials are missing, please sign in again; errors on the card mean nothing was written; a warning that it could not be applied automatically → click Apply; a red copilot message means the round failed and the design is unchanged; no Undo, roll back in Version Management.
+
+Related: /help/fu-documents , /help/table-design , /help/view-design , /help/email-send
+
+## SLA Policies (/help/sla-policies)
+
+Admin Center → SLA Policies. Due date = start date + lead time (calendar days). Fields are mapped in Table Design (/help/table-design#sla-due-date); the lead time is set here per Function Unit and per environment, never exported with the Function Unit.
+
+Order: map fields in Developer Workstation and deploy → the Function Unit appears with Lead Time Not set → Edit, Lead Time (days) 1–3650 whole number, optional Change reason (≤500) → Save → Details.
+
+Saving recalculates every open case (Running, Suspended) in the background; completed and withdrawn cases keep their due date. Recalculate re-runs it with the current lead time. Job statuses: Pending, Running, Succeeded, Partial (some cases skipped or failed), Failed, Superseded (a newer save replaced it). Details: latest 20 jobs; per job up to 500 Updated / Skipped / Failed cases with Old Due Date, New Due Date, Reason; Change history of the latest 50 saves with Recalculation start Started / Pending / Failed to start.
+
+Rules: Lead Time Not set → no due date, existing values stay. Start date empty or not a date → due date unchanged, case Skipped. The due date is written by the platform on submit and save and cannot be edited on forms.
+
+Permissions: System Administrator all; sla:policy:edit view, edit, recalculate; sla:policy:view read-only (Auditor). An Auditor never edits. Changes apply after signing in again.
+
+Related: /help/table-design#sla-due-date , /help/environment-variables

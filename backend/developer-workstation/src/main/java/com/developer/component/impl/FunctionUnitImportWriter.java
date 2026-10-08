@@ -16,6 +16,7 @@ import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.TableRelation;
 import com.developer.dto.RequestIdConfig;
+import com.developer.dto.SlaConfig;
 import com.developer.enums.ActionType;
 import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
@@ -34,6 +35,7 @@ import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailTemplateRepository;
+import com.developer.repository.FieldDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.LinkFormComponentRepository;
@@ -42,6 +44,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
+import com.developer.util.FkFillSourcesSupport;
 import com.developer.validation.DmnXmlParser;
 import com.platform.common.mail.EmailConnectionPortability;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,9 +53,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -66,6 +71,7 @@ import java.util.UUID;
 public class FunctionUnitImportWriter {
 
     private final TableDefinitionRepository tableDefinitionRepository;
+    private final FieldDefinitionRepository fieldDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
@@ -103,6 +109,7 @@ public class FunctionUnitImportWriter {
                 .tableDisplayName((String) tableData.get("tableDisplayName"))
                 .displayName((String) tableData.get("description"))
                 .requestIdConfig(parseRequestIdConfig(tableData.get("requestIdConfig")))
+                .slaConfig(parseSlaConfig(tableData.get("slaConfig")))
                 .build();
         table = tableDefinitionRepository.save(table);
 
@@ -366,6 +373,7 @@ public class FunctionUnitImportWriter {
         if (!(bindingsObj instanceof List<?> bindingsList)) {
             return bindingIdMapping;
         }
+        List<ImportedBinding> imported = new ArrayList<>();
         for (Object bindingObj : bindingsList) {
             if (!(bindingObj instanceof Map<?, ?> bindingMapRaw)) {
                 continue;
@@ -404,6 +412,8 @@ public class FunctionUnitImportWriter {
                     .foreignKeyField((String) bindingData.get("foreignKeyField"))
                     .sortOrder(sortOrder)
                     .bindingLinkMode(bindingLinkMode)
+                    .filterFkFieldId(resolveFilterFkFieldId(
+                            table, (String) bindingData.get("filterFkFieldName")))
                     .subMode(subMode);
             FormTableBinding savedBinding = formTableBindingRepository.save(bindingBuilder.build());
 
@@ -412,8 +422,61 @@ public class FunctionUnitImportWriter {
             if (bindingData.get("bindingId") instanceof Number sourceBindingId) {
                 bindingIdMapping.put(sourceBindingId.longValue(), savedBinding.getId());
             }
+            imported.add(new ImportedBinding(savedBinding, bindingData, table));
         }
+        applyImportedFkFillSources(imported);
         return bindingIdMapping;
+    }
+
+    private record ImportedBinding(
+            FormTableBinding saved, Map<String, Object> data, TableDefinition table) {
+    }
+
+    private void applyImportedFkFillSources(List<ImportedBinding> imported) {
+        Map<String, Long> ancestorKeys = new HashMap<>();
+        for (ImportedBinding item : imported) {
+            hydrateImportedTableFields(item.table());
+            String key = FkFillSourcesSupport.ancestorKey(item.saved());
+            if (key != null) {
+                ancestorKeys.put(key, item.saved().getId());
+            }
+        }
+        for (ImportedBinding item : imported) {
+            hydrateImportedTableFields(item.table());
+            item.saved().setFkFillSources(FkFillSourcesSupport.fromPortable(
+                    item.data().get("fkFillSources"), item.table(), ancestorKeys));
+            formTableBindingRepository.save(item.saved());
+        }
+    }
+
+    private void hydrateImportedTableFields(TableDefinition table) {
+        if (table == null || table.getFieldDefinitions() != null && !table.getFieldDefinitions().isEmpty()) {
+            return;
+        }
+        table.setFieldDefinitions(fieldDefinitionRepository
+                .findByTableDefinitionIdOrderBySortOrderAsc(table.getId()));
+    }
+
+    /**
+     * Resolve the exported {@code filterFkFieldName} back to a {@code dw_field_definitions.id} of
+     * the table this binding was just pointed at.
+     *
+     * <p>The package carries the column NAME because ids are environment-local; the id is what gets
+     * persisted because names get renamed. Returns {@code null} when the package declared none, the
+     * table could not be resolved, or the named column is absent from it — all of which leave the
+     * binding in the documented "not declared" state rather than pointing it at some other field.
+     */
+    private Long resolveFilterFkFieldId(TableDefinition table, String filterFkFieldName) {
+        if (table == null || filterFkFieldName == null || filterFkFieldName.isBlank()) {
+            return null;
+        }
+        return fieldDefinitionRepository
+                .findByTableDefinitionIdOrderBySortOrderAsc(table.getId()).stream()
+                .filter(f -> filterFkFieldName.equalsIgnoreCase(f.getFieldName()))
+                .map(FieldDefinition::getId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -523,6 +586,13 @@ public class FunctionUnitImportWriter {
         return objectMapper.convertValue(requestIdConfigObj, RequestIdConfig.class);
     }
 
+    private SlaConfig parseSlaConfig(Object slaConfigObj) {
+        if (slaConfigObj == null) {
+            return null;
+        }
+        return objectMapper.convertValue(slaConfigObj, SlaConfig.class);
+    }
+
     @SuppressWarnings("unchecked")
     private void applyComputedField(FieldDefinition.FieldDefinitionBuilder fieldBuilder,
                                     Map<String, Object> fieldData) {
@@ -611,7 +681,7 @@ public class FunctionUnitImportWriter {
                 .host(connectionData.get("host") != null ? (String) connectionData.get("host") : "")
                 .port(connectionData.get("port") != null ? ((Number) connectionData.get("port")).intValue() : 587)
                 .username((String) connectionData.get("username"))
-                .credentialEncrypted(EmailConnectionPortability.readEncryptedCredential(connectionData))
+                .passwordEnvKey(EmailConnectionPortability.readPasswordEnvKey(connectionData))
                 .fromEmail((String) connectionData.get("fromEmail"))
                 .fromName((String) connectionData.get("fromName"))
                 .useTls(connectionData.get("useTls") != null ? (Boolean) connectionData.get("useTls") : true)

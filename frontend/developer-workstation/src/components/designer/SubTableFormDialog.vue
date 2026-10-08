@@ -6,6 +6,34 @@
     @update:visible="emit('update:visible', $event)"
     @closed="handleClosed"
   >
+    <el-form
+      v-if="mode === 'add' && parentSelection && parentSelection.options.length > 1"
+      label-width="auto"
+      label-position="left"
+      class="parent-record-selector"
+    >
+      <el-form-item
+        :label="t('subTable.relatedParent', { tableName: parentSelection.parentTableName })"
+        required
+        :error="parentSelectionError"
+      >
+        <el-select
+          v-model="selectedParentValue"
+          :placeholder="t('subTable.selectRelatedParent', { tableName: parentSelection.parentTableName })"
+          clearable
+          filterable
+          style="width: 100%"
+          @change="parentSelectionError = ''"
+        >
+          <el-option
+            v-for="parentOption in parentSelection.options"
+            :key="parentOption.value"
+            :label="parentOption.label"
+            :value="parentOption.value"
+          />
+        </el-select>
+      </el-form-item>
+    </el-form>
     <div
       v-if="formRule && formRule.length"
       class="sub-table-form-preview form-readonly-surface"
@@ -82,6 +110,7 @@ import {
   type AssignmentConfig,
   type AssignmentMode,
 } from '@/utils/miAssignmentConfig'
+import type { BindingParentSelection } from '@/utils/tableFkRuntime'
 
 export interface SubTableFormDialogProps {
   visible: boolean
@@ -100,6 +129,8 @@ export interface SubTableFormDialogProps {
   columns?: Array<{ field: string; type?: string; props?: Record<string, unknown> }>
   /** BPMN-derived assignment contract for this Sub Table. */
   assignmentConfig?: AssignmentConfig
+  parentSelection?: BindingParentSelection | null
+  saveRow?: (rowData: Record<string, any>, selectedParentValue?: string) => boolean | void | Promise<boolean | void>
 }
 
 const props = withDefaults(defineProps<SubTableFormDialogProps>(), {
@@ -113,12 +144,14 @@ const props = withDefaults(defineProps<SubTableFormDialogProps>(), {
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
-  (e: 'save', rowData: Record<string, any>): void
+  (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
 }>()
 
 const { t } = useI18n()
 
 const formData = ref<Record<string, any>>({})
+const selectedParentValue = ref('')
+const parentSelectionError = ref('')
 const formCreateMounted = ref(false)
 const uploadSession = ref<Record<string, { url: string; name?: string }>>({})
 const assignmentConfigRef = computed(() => props.assignmentConfig)
@@ -237,6 +270,8 @@ watch(
     }
     formCreateMounted.value = false
     uploadSession.value = {}
+    selectedParentValue.value = ''
+    parentSelectionError.value = ''
     rawRule.value = (rule || []) as any[]
     if (mode === 'edit' && data) {
       seedRow.value = { ...(data as Record<string, any>) }
@@ -418,7 +453,11 @@ function handleClosed() {
   uploadSession.value = {}
 }
 
-function handleSave() {
+async function handleSave() {
+  if (props.mode === 'add' && props.parentSelection && !selectedParentValue.value) {
+    parentSelectionError.value = t('subTable.parentSelectionRequired')
+    return
+  }
   const row = mergeFormRowWithSeed(seedRow.value, formData.value)
   const uploadRules = collectUploadRulesFromTree(formRule.value)
   const uploadRuleFields = uploadRules.map((r) => r.field)
@@ -436,7 +475,12 @@ function handleSave() {
     normalizeUploadFieldsInRow(row, props.columns)
   }
 
-  emit('save', row)
+  if (props.saveRow) {
+    const saved = await props.saveRow(row, selectedParentValue.value || undefined)
+    if (saved === false) return
+  } else {
+    emit('save', row, selectedParentValue.value || undefined)
+  }
   emit('update:visible', false)
 }
 </script>

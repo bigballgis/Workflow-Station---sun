@@ -11,7 +11,10 @@ import {
   repairMisassignedPrimaryKeyFromParentId,
   seedLinkChildForeignKeysFromParentRow,
   toFieldFkMetas,
+  buildRowAddContext,
+  ensureParentRowsForChildAdd,
 } from '../subTableRowRuntime'
+import { applyFkToInitialRow } from '../tableFkRuntime'
 
 describe('filterStructuralFkMetasForBinding', () => {
   const metas = toFieldFkMetas([
@@ -44,6 +47,66 @@ describe('filterStructuralFkMetasForBinding', () => {
       bindingForeignKeyField: 'row_id',
     })
     expect(filtered.map(m => m.fieldName)).toEqual(['case_id'])
+  })
+})
+
+describe('missing structural FK feedback', () => {
+  it('names the missing FK and parent table when a child row cannot be saved', async () => {
+    const seen: Array<{ key: string; params?: Record<string, unknown> }> = []
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'alice.doc' },
+      fieldDefinitions: [{
+        fieldName: 'party_id',
+        isForeignKey: true,
+        refTableId: 50200,
+        refPrimaryKeyFields: ['id'],
+      }],
+      rowAddContext: { primaryFormData: {}, ancestorRowsByTableId: {} },
+      tableId: 50348,
+      tableDisplayName: 'Party Files',
+      parentTableDisplayNamesById: { 50200: 'P0 Dual Party' },
+      t: ((key: string, params?: Record<string, unknown>) => {
+        seen.push({ key, params })
+        return key
+      }) as any,
+    } as any)
+
+    expect(result.ok).toBe(false)
+    expect(seen).toContainEqual({
+      key: 'subTable.fkGuardMissingParents',
+      params: {
+        childTableName: 'Party Files',
+        missingDetails: 'party_id (P0 Dual Party)',
+      },
+    })
+  })
+
+  it('does not skip the binding-configured parent FK in a scoped main-form context', async () => {
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'alice.doc' },
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } },
+        { fieldName: 'case_id', isForeignKey: true, refTableId: 501, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: 502, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: buildRowAddContext(
+        { id: 'Case-1' },
+        [{ tableId: 501, bindingType: 'PRIMARY' }],
+      ),
+      tableId: 503,
+      tableDisplayName: 'Party files',
+      bindingLinkMode: 'structuralFk',
+      bindingForeignKeyField: 'party_id',
+      primaryKeyFields: ['id'],
+      parentTableDisplayNamesById: { 502: 'P0 Dual Party' },
+      allocatePrimaryKeys: vi.fn(async () => ['File-1']),
+      t: ((key: string, params?: Record<string, unknown>) =>
+        key === 'subTable.fkGuardMissingParents'
+          ? `missing ${String(params?.missingDetails)}`
+          : key) as any,
+    } as any)
+
+    expect(result).toEqual({ ok: false, message: 'missing party_id (P0 Dual Party)' })
   })
 })
 
@@ -504,5 +567,136 @@ describe('prepareSubTableAddRow miParticipantRow', () => {
       expect(result.initialRow.case_id).toBe('CASE-1')
     }
     expect(allocate).not.toHaveBeenCalled()
+  })
+})
+
+describe('dual-binding FK parent context', () => {
+  const MAIN = 50100
+  const PARTY = 50200
+  const fileFks = toFieldFkMetas([
+    { fieldName: 'case_id', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+    { fieldName: 'party_id', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['id'] },
+  ])
+
+  it('fills only the current binding filter FK unless another source is explicit', async () => {
+    const context = buildRowAddContext(
+      { id: 'Case-1' },
+      [
+        { tableId: MAIN, bindingType: 'PRIMARY' },
+        { bindingId: 50704, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-1' }] },
+      ],
+    )
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'party.doc' },
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } },
+        { fieldName: 'case_id', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: context,
+      tableId: 50348,
+      filterFkFieldName: 'party_id',
+      allocatePrimaryKeys: vi.fn(async () => ['File-1']),
+    } as any)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.row.party_id).toBe('Party-1')
+      expect(result.row.case_id).toBeUndefined()
+    }
+  })
+
+  it('also fills an additional FK when fkFillSources explicitly declares it', async () => {
+    const context = buildRowAddContext(
+      { id: 'Case-1' },
+      [
+        { tableId: MAIN, bindingType: 'PRIMARY' },
+        { bindingId: 50704, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-1' }] },
+      ],
+    )
+    const result = await finalizeSubTableRowOnSave({
+      row: { file_name: 'nested.doc' },
+      fieldDefinitions: [
+        { fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } },
+        { fieldName: 'case_id', isForeignKey: true, refTableId: MAIN, refPrimaryKeyFields: ['id'] },
+        { fieldName: 'party_id', isForeignKey: true, refTableId: PARTY, refPrimaryKeyFields: ['id'] },
+      ],
+      rowAddContext: context,
+      tableId: 50348,
+      filterFkFieldName: 'party_id',
+      fkFillSources: [{ fieldName: 'case_id', kind: 'PRIMARY' }],
+      allocatePrimaryKeys: vi.fn(async () => ['File-2']),
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.row.party_id).toBe('Party-1')
+      expect(result.row.case_id).toBe('Case-1')
+    }
+  })
+
+  it('does not copy MAIN pk onto a nested party_id when the party ancestor is absent', () => {
+    const row = applyFkToInitialRow({}, fileFks, {
+      primaryFormData: { id: 'Case-1', title: 'x' },
+      ancestorRowsByTableId: { [MAIN]: { id: 'Case-1', title: 'x' } },
+    })
+    expect(row.case_id).toBe('Case-1')
+    expect(row.party_id).toBeUndefined()
+  })
+
+  it('stamps party_id from the unique sibling party row of the current filter', () => {
+    const ctx = buildRowAddContext(
+      { id: 'Case-1' },
+      [
+        { tableId: MAIN, bindingType: 'PRIMARY' },
+        { bindingId: 50704, tableId: PARTY, bindingType: 'SUB', data: [{ id: 'Party-1' }] },
+        { bindingId: 50706, tableId: 50348, bindingType: 'SUB', filterFkRefTableId: PARTY, data: [] },
+      ],
+      null,
+      null,
+      { bindingId: 50706, tableId: 50348, filterFkRefTableId: PARTY },
+    )
+    const row = applyFkToInitialRow({}, fileFks, ctx)
+    expect(row.case_id).toBe('Case-1')
+    expect(row.party_id).toBe('Party-1')
+  })
+
+  it('does not invent a nested parent PK for a filter target that is not in context', async () => {
+    const allocate = vi.fn(async (payload: { tableId: number; fieldName: string }) => {
+      if (payload.tableId === MAIN) return ['Case-new']
+      if (payload.tableId === PARTY) return ['Party-invented']
+      return []
+    })
+    const ensured = await ensureParentRowsForChildAdd({
+      fkMetas: fileFks,
+      rowAddContext: {
+        primaryFormData: {},
+        ancestorRowsByTableId: { [MAIN]: {} },
+      },
+      parentTablesById: {
+        [MAIN]: { fieldDefinitions: [{ fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } }] },
+        [PARTY]: { fieldDefinitions: [{ fieldName: 'id', isPrimaryKey: true, pkGeneration: { strategy: 'uuid' } }] },
+      },
+      allocatePrimaryKeys: allocate,
+      primaryTableId: MAIN,
+    })
+    expect(allocate.mock.calls.every(c => c[0].tableId !== PARTY)).toBe(true)
+    expect(ensured.rowAddContext.ancestorRowsByTableId?.[PARTY]).toBeUndefined()
+  })
+
+  it('stamps party_id from the host parent when a saved sibling party is also in context', () => {
+    const ctx = buildRowAddContext(
+      { id: 'Case-1' },
+      [{ tableId: MAIN, bindingType: 'PRIMARY' }],
+      { id: 'Party-A' },
+      PARTY,
+    )
+    ctx.contextFrames = [
+      ...(ctx.contextFrames ?? []),
+      { tableId: PARTY, row: { id: 'Party-B' }, role: 'FILTER_SIBLING' },
+    ]
+    const row = applyFkToInitialRow({}, fileFks, ctx)
+    expect(row.case_id).toBe('Case-1')
+    expect(row.party_id).toBe('Party-A')
   })
 })

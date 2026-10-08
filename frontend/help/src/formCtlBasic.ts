@@ -665,6 +665,9 @@ export function formCtlRelated(def: FormCtlDef, extra: readonly FormCtlDef[] = [
   if (def.id === 'upload') {
     links.unshift({ to: '/form-upload', titleKey: 'guides.formUpload.title' })
   }
+  if (def.id === 'subTable') {
+    links.unshift({ to: '/table-bindings', titleKey: 'guides.tableBindings.title' })
+  }
   if (def.id === 'lookup') {
     links.unshift({ to: '/form-events#lookup', titleKey: 'formEventsGuide.lookupTitle' })
   }

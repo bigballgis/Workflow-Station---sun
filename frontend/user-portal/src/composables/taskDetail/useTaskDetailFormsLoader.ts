@@ -13,6 +13,7 @@ import {
   type TaskFormData as TaskFormDataDTO,
   type CompletedTaskFormData,
 } from '@/api/processForm'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import {
   findTabsRule,
@@ -28,6 +29,7 @@ import {
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
+import { buildProcessFormUpdateBody } from '@/composables/tasks/assembleScopedSubTables'
 import {
   emptyProcessFormRef,
   extractCompletedFormFromVariables,
@@ -54,6 +56,7 @@ export interface TaskDetailFormsLoaderFns {
 }
 
 export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailFormsLoaderFns {
+  let processSubTableBaseline: Record<string, unknown> = {}
   const {
     t,
     route,
@@ -77,6 +80,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     isCompletedTask,
     isReturnToRequester,
     subTableBindings,
+    primaryTableBinding,
   } = ctx
   const { formReadOnly, currentFormName } = ctx.taskForm
   const { getHistoryStatus, getHistoryAction } = ctx.display
@@ -234,6 +238,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     if (pfData) {
       processFormData.value = pfData
       processFormValues.value = pfData.fieldValues || {}
+      processSubTableBaseline = JSON.parse(JSON.stringify(pfData.fieldValues?.__subTables__ ?? {}))
 
       if (pfData.processState === 'Return_To_Requester' && pfData.editable) {
         isReturnToRequester.value = true
@@ -301,6 +306,10 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     ctx.syncFormLayoutWithSubTableBindings()
     ctx.refreshNodeFormMapFromFormData()
     ctx.rehydrateSharedProcessSubTableBindings()
+    // Task-form DTOs may omit process-level sub-table rows. Capture the baseline only after
+    // rehydration has materialized those rows, so a later parent deletion can emit versioned
+    // child-row deletion claims instead of leaving the backend with an unclaimed change.
+    ctx.taskForm.captureLoadedSubTableBaseline()
   }
 
   // Parse Process Form config into FormRenderer fields
@@ -361,16 +370,16 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
       const subFormDesign = ctx.resolveSubFormDesign({ bindingId: b.bindingId } as any, subForms)
       bindings.push({
         bindingId: b.bindingId,
-        tableId: null,
+        tableId: b.tableId ?? null,
         bindingType: b.bindingType,
         bindingMode: b.bindingMode,
         foreignKeyField: null,
-        tableName: (b as any).tableDisplayName || b.tableName,
+        tableName: (b as { tableDisplayName?: string }).tableDisplayName || b.tableName,
         designerTableName: b.tableName,
         // 关联表必须落 rt: 命名空间；缺这两个字段会被当成设计器子表存进 dw:，
         // 进而被 MI 行隔离当成某个参与者的行，导致 Save 被拒。
-        relationTableId: (b as any).relationTableId ?? null,
-        relationTableName: (b as any).relationTableName ?? null,
+        relationTableId: b.relationTableId ?? null,
+        relationTableName: b.relationTableName ?? null,
         tableType: '',
         tableDescription: '',
         columns: Array.isArray(b.columns) ? (b.columns as any[]) : [],
@@ -378,6 +387,9 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         formOptions: subFormDesign.formOptions,
         assignmentConfig: b.assignmentConfig,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, b.bindingId, cfg),
+        filterFkFieldName: b.filterFkFieldName ?? null,
+        filterFkRefTableId: b.filterFkRefTableId ?? null,
+        ...declaredFkFillSources(b),
         data: Array.isArray(b.data) ? (b.data as any[]) : [],
       } as any)
       const bid = Number(b.bindingId)
@@ -410,9 +422,20 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
     if (!taskInfo.value.processInstanceId) return
     submitting.value = true
     try {
-      await submitProcessFormUpdate(taskInfo.value.processInstanceId, processFormValues.value)
+      const primary = primaryTableBinding.value
+      const payload = buildProcessFormUpdateBody(
+        processFormValues.value as Record<string, unknown>,
+        processFormSubTableBindings.value,
+        {
+          formData: processFormValues.value as Record<string, unknown>,
+          primaryTableId: primary?.tableId ?? null,
+          primaryPkFields: primary?.primaryKeyFields ?? null,
+          primaryFieldDefinitions: primary?.fieldDefinitions ?? null,
+        },
+        processSubTableBaseline,
+      )
+      await submitProcessFormUpdate(taskInfo.value.processInstanceId, payload)
       ElMessage.success(t('task.operationSuccess'))
-      // Refresh page data
       await ctx.loadTaskDetail()
     } catch (e: any) {
       if (e.response?.status === 403) {

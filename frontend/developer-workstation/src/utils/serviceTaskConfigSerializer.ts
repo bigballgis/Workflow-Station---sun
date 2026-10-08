@@ -5,7 +5,7 @@
  * the flow's `metadata.hermesFlowKey`). The engine resolves the key to the
  * environment-local flow id at deploy/run time; webhook URL, timeout, retry and
  * variable mappings are no longer configured on the BPMN — the flow itself reads
- * `{{trigger.body.variables.<name>}}` and returns `{"variables": {...}}`.
+ * `{{trigger.output.body.variables.<name>}}` and returns `{"variables": {...}}`.
  *
  * Legacy BPMN may still carry `ap:flowId` (+ webhook/timeout/mapping keys). On
  * load the old flow id is surfaced as `legacyFlowId` so the panel can prefill it;

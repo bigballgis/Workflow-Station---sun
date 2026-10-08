@@ -145,7 +145,16 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/79-*.sql \
          /docker-entrypoint-initdb.d/00-schema/80-*.sql \
          /docker-entrypoint-initdb.d/00-schema/81-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/82-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/82-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/83-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/84-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/85-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/86-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/87-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/88-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/89-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/90-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/91-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -168,6 +177,8 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/09-remove-fu-viewer-role.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/10-add-auditor-role-type.sql
 # Fix HASE HMDC operator role code typo from 06-hase-organization-seed.sql.
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/11-rename-hmdc-operator-role.sql
+# SLA policy view/edit permissions (SYS_ADMIN both, AUDITOR view).
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/12-sla-policy-permissions.sql
 
 # Step 4 used to run 99-maintenance/00-wipe-all-function-units.sql here. Removed: this script
 # only runs when the data directory is empty, and Steps 1-3 create no function units, so the

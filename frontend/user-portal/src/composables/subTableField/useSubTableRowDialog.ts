@@ -12,7 +12,10 @@ import {
   buildRowAddContext,
   finalizeSubTableRowOnSave,
   prepareSubTableAddRow,
+  resolveBindingParentSelection,
   toFieldFkMetas,
+  type BindingParentOption,
+  type BindingParentSelection,
   type AllocatePrimaryKeysFn,
 } from '@/utils/subTableRowRuntime'
 import { unwrapPortalApiPayload, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
@@ -41,6 +44,7 @@ export function useSubTableRowDialog(
   /** 打开编辑弹窗时那一行的快照——用来在保存时按身份找回它，而不是相信下标。 */
   const editingRowSnapshot = ref<Record<string, any> | null>(null)
   const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
+  const parentSelection = ref<BindingParentSelection | null>(null)
 
   const dialogSourceColumns = computed(() =>
     (props.dialogColumns?.length ? props.dialogColumns : props.columns),
@@ -87,14 +91,75 @@ export function useSubTableRowDialog(
     }
   }
 
-  async function openAddRowDialog() {
-    if (!props.editable) return
-    const rowAddContext = buildRowAddContext(
+  function currentBindingForAdd(): {
+    bindingId?: number | string
+    tableId?: number | null
+    filterFkRefTableId?: number | null
+  } {
+    const list = (props.subTableBindingsForContext ?? props.linkedSubTableBindings ?? []) as Array<{
+      bindingId?: number | string
+      tableId?: number | null
+      filterFkRefTableId?: number | null
+    }>
+    const hit = list.find(b => props.bindingId != null && Number(b.bindingId) === Number(props.bindingId))
+    return {
+      bindingId: props.bindingId ?? undefined,
+      tableId: props.tableId ?? hit?.tableId ?? null,
+      filterFkRefTableId: props.filterFkRefTableId ?? hit?.filterFkRefTableId ?? null,
+    }
+  }
+
+  function currentFillSources() {
+    if (props.fkFillSources?.length) return props.fkFillSources
+    const list = (props.subTableBindingsForContext ?? props.linkedSubTableBindings ?? []) as Array<{
+      bindingId?: number | string
+      fkFillSources?: SubTableFieldProps['fkFillSources']
+    }>
+    return list.find(b => props.bindingId != null && Number(b.bindingId) === Number(props.bindingId))
+      ?.fkFillSources
+  }
+
+  function parentTableDisplayNamesById(): Record<number, string> {
+    const out: Record<number, string> = {}
+    if (props.primaryTableId != null && props.primaryTableDisplayName) {
+      out[Number(props.primaryTableId)] = props.primaryTableDisplayName
+    }
+    const list = (props.subTableBindingsForContext ?? props.linkedSubTableBindings ?? []) as Array<{
+      tableId?: number | null
+      tableName?: string
+      tableDisplayName?: string
+    }>
+    for (const binding of list) {
+      if (binding.tableId == null) continue
+      const name = String(binding.tableDisplayName ?? binding.tableName ?? '').trim()
+      if (name) out[Number(binding.tableId)] = name
+    }
+    return out
+  }
+
+  function rowAddContextNow(selectedParent?: BindingParentOption | null) {
+    return buildRowAddContext(
       props.primaryFormData ?? {},
       props.subTableBindingsForContext ?? props.linkedSubTableBindings,
-      props.parentRow,
-      props.parentTableId,
+      selectedParent?.row ?? props.parentRow,
+      selectedParent?.tableId ?? props.parentTableId,
+      currentBindingForAdd(),
+      selectedParent?.bindingId ?? props.parentBindingId,
     )
+  }
+
+  async function openAddRowDialog() {
+    if (!props.editable) return
+    parentSelection.value = props.parentRow
+      ? null
+      : resolveBindingParentSelection(
+          toFieldFkMetas(props.fieldDefinitions),
+          props.filterFkFieldName,
+          props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+          props.bindingId,
+        )
+    if ((parentSelection.value?.options.length ?? 0) < 2) parentSelection.value = null
+    const rowAddContext = rowAddContextNow()
     try {
       const result = await prepareSubTableAddRow({
         columns: editableColumns.value,
@@ -105,11 +170,14 @@ export function useSubTableRowDialog(
         primaryTableDisplayName: props.primaryTableDisplayName,
         primaryTableId: props.primaryTableId,
         parentTablesById: props.parentTablesById,
+        parentTableDisplayNamesById: parentTableDisplayNamesById(),
         functionUnitId: props.functionUnitId,
         autoEnsurePrimaryRecord: props.primaryFormData != null,
         deferPkAllocationUntilSave: true,
         bindingLinkMode: props.bindingLinkMode,
         bindingForeignKeyField: props.bindingForeignKeyField,
+        fkFillSources: currentFillSources(),
+        filterFkFieldName: props.filterFkFieldName,
         primaryKeyFields: props.primaryKeyFields,
         miParticipantRowId: props.miParticipantRowId,
         miParentParticipantRow: props.miParentParticipantRow,
@@ -140,6 +208,7 @@ export function useSubTableRowDialog(
   })
 
   function openEditDialog(i: number) {
+    parentSelection.value = null
     dialogMode.value = 'edit'
     editingRowIndex.value = i
     // 记住这一行**本身**，而不只是它的下标：下标会因为删除 / 重新排序 / 重新 hydrate 而指向别人。
@@ -171,7 +240,7 @@ export function useSubTableRowDialog(
     return -1
   }
 
-  async function handleDialogSave(rowData: Record<string, any>) {
+  async function handleDialogSave(rowData: Record<string, any>, selectedParentValue?: string) {
     // Add: prefer-filled seed merge keeps PK/FK when empty inputs omit them.
     // Edit: dialog values are authoritative — including intentional clears ('' / null).
     // Re-running mergeFormRowWithSeed against the pre-edit snapshot restores cleared fields.
@@ -181,13 +250,22 @@ export function useSubTableRowDialog(
         : mergeFormRowWithSeed(dialogInitialData.value, rowData)
     if (dialogMode.value === 'add') {
       const allocate = createAllocatePrimaryKeysFn()
+      if (parentSelection.value && (!allocate || props.tableId == null)) {
+        throw new Error(t('common.operationFailed'))
+      }
       if (allocate && props.tableId != null && props.fieldDefinitions?.length) {
-        const rowAddContext = buildRowAddContext(
-          props.primaryFormData ?? {},
-          props.subTableBindingsForContext ?? props.linkedSubTableBindings,
-          props.parentRow,
-          props.parentTableId,
-        )
+        let selectedParent: BindingParentOption | null = null
+        if (parentSelection.value) {
+          const latest = resolveBindingParentSelection(
+            toFieldFkMetas(props.fieldDefinitions),
+            props.filterFkFieldName,
+            props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+            props.bindingId,
+          )
+          selectedParent = latest?.options.find(option => option.value === selectedParentValue) ?? null
+          if (!selectedParent) throw new Error(t('subTable.parentSelectionStale'))
+        }
+        const rowAddContext = rowAddContextNow(selectedParent)
         const result = await finalizeSubTableRowOnSave({
           row: savedRow,
           fieldDefinitions: props.fieldDefinitions,
@@ -196,12 +274,15 @@ export function useSubTableRowDialog(
           allocatePrimaryKeys: allocate,
           functionUnitId: props.functionUnitId,
           parentTablesById: props.parentTablesById,
+          parentTableDisplayNamesById: parentTableDisplayNamesById(),
           primaryTableId: props.primaryTableId,
           primaryTableDisplayName: props.primaryTableDisplayName,
           tableDisplayName: props.title,
           autoEnsurePrimaryRecord: props.primaryFormData != null,
           bindingLinkMode: props.bindingLinkMode,
           bindingForeignKeyField: props.bindingForeignKeyField,
+          fkFillSources: currentFillSources(),
+          filterFkFieldName: props.filterFkFieldName,
           primaryKeyFields: props.primaryKeyFields,
           miParticipantRowId: props.miParticipantRowId,
           miParentParticipantRow: props.miParentParticipantRow,
@@ -344,6 +425,7 @@ export function useSubTableRowDialog(
     dialogMode,
     editingRowIndex,
     dialogInitialData,
+    parentSelection,
     subTableDialogColumns,
     listViewColumnsForAudit,
     handleAdd,

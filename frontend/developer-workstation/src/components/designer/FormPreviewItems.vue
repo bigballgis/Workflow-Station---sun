@@ -91,7 +91,7 @@
       </div>
       <!-- One design, one preview: the form being edited is the form that renders. -->
       <SubTableField
-        :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, bindingType: item.binding.bindingType }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns, bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, filterFkRefTableId: item.binding.filterFkRefTableId, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="true"
         :allow-add="item.binding.allowAdd"
@@ -127,7 +127,7 @@
       </div>
       <SubTableField
         v-if="hasSubTablePreviewSurface(item.binding)"
-        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, bindingType: item.binding.bindingType }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], bindingId: item.binding.bindingId, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, filterFkFieldName: item.binding.filterFkFieldName, filterFkRefTableId: item.binding.filterFkRefTableId, bindingType: item.binding.bindingType, fkFillSources: item.binding.fkFillSources }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="!isMyRequestsPreview"
         :allow-add="item.binding.allowAdd"
@@ -277,7 +277,7 @@ const props = defineProps<{
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: import('@/api/functionUnit').FieldDefinition[] }>
-  previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  previewTableBindings?: import('@/utils/tableFkRuntime').BindingContextInput[]
   /** Main table Request ID config — preview recomputes the readonly Request ID live from these fields. */
   requestIdConfig?: import('@/api/functionUnit').RequestIdConfig | null
 }>()
@@ -596,6 +596,17 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
   color: var(--el-text-color-regular, #606266);
 }
 
+// Lookup 字段 label 与 Portal FormRenderer 的 lookup el-form-item 一致：固定 160px，超长折行
+.lookup-preview-item :deep(.lookup-label-text) {
+  box-sizing: border-box;
+  flex: 0 0 160px;
+  width: 160px;
+  min-width: 0;
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .inline-sub-form-preview__icon {
   color: var(--el-text-color-secondary, #909399);
 }
@@ -620,10 +631,13 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
     margin-bottom: 18px;
   }
 
-  // label 不折行；保留 label-width 统一宽度使各行输入框左对齐，超长时撑开
+  // 与 Portal FormRenderer 一致：label 固定 160px，超长折行（不被输入框遮挡、各行输入框左对齐）；
+  // 覆盖全局弹窗 label 的 nowrap/max-content 规则（Form Preview 是 Portal 主表单的设计稿，不按弹窗表单处理）
   :deep(.el-form-item__label) {
-    white-space: nowrap !important;
-    min-width: max-content !important;
+    width: 160px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    min-width: 0 !important;
     max-width: none !important;
     height: auto !important;
     line-height: 1.5 !important;

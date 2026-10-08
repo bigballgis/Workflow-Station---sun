@@ -23,6 +23,10 @@ export const PERMISSIONS = {
   // System admin
   SYSTEM_ADMIN: 'system:admin',
   SYSTEM_CONFIG: 'system:config',
+
+  // SLA lead time per Function Unit
+  SLA_POLICY_VIEW: 'sla:policy:view',
+  SLA_POLICY_EDIT: 'sla:policy:edit',
   
   // Audit
   AUDIT_READ: 'audit:read',
@@ -53,14 +57,17 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/profile': [], // Everyone can access their profile
   '/relation-tables/structure': [PERMISSIONS.SYSTEM_ADMIN],
   '/relation-tables/structure/create': [PERMISSIONS.SYSTEM_ADMIN],
+  '/environment-variables': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
+  '/sla-policies': [PERMISSIONS.SLA_POLICY_VIEW, PERMISSIONS.SLA_POLICY_EDIT],
+  '/relation-tables/environment-variables': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
   '/relation-tables/data': [PERMISSIONS.SYSTEM_ADMIN]
 }
 
 // Hardcoded role -> permissions fallback for when sys_role_permissions is empty
 const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
-  SYS_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access'],
-  SUPER_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access'],
-  AUDITOR: ['audit:read', 'log:read', 'user:read', 'basic:access'],
+  SYS_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'sla:policy:view', 'sla:policy:edit', 'audit:read', 'log:read', 'basic:access'],
+  SUPER_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'sla:policy:view', 'sla:policy:edit', 'audit:read', 'log:read', 'basic:access'],
+  AUDITOR: ['audit:read', 'log:read', 'user:read', 'sla:policy:view', 'basic:access'],
 }
 
 const AUDITOR_DENIED_PERMISSIONS = new Set([
@@ -70,6 +77,7 @@ const AUDITOR_DENIED_PERMISSIONS = new Set([
   'role:delete',
   'system:admin',
   'system:config',
+  'sla:policy:edit',
   'tenant:admin',
 ])
 

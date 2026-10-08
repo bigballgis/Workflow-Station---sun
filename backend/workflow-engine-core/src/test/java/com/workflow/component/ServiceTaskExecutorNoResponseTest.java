@@ -1,6 +1,7 @@
 package com.workflow.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.request.ServiceTaskActionRequest;
 import com.workflow.dto.response.ServiceTaskExecutionResult;
 import com.workflow.entity.ServiceTaskExecutionRecord;
@@ -53,12 +54,15 @@ class ServiceTaskExecutorNoResponseTest {
     private RestTemplate restTemplate;
     @Mock
     private PlatformTransactionManager transactionManager;
+    @Mock
+    private AdminCenterClient adminCenterClient;
 
     private ServiceTaskExecutor executor;
 
     @BeforeEach
     void setUp() {
-        executor = new ServiceTaskExecutor(recordRepository, restTemplate, new ObjectMapper(), transactionManager);
+        executor = new ServiceTaskExecutor(recordRepository, restTemplate, new ObjectMapper(), transactionManager,
+                adminCenterClient);
         ReflectionTestUtils.setField(executor, "webhookBaseUrl", "http://activepieces:80");
         ReflectionTestUtils.setField(executor, "fileServiceBaseUrl", "http://developer-workstation:8080");
         when(recordRepository.save(any(ServiceTaskExecutionRecord.class)))

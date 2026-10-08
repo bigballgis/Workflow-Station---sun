@@ -58,4 +58,15 @@ public class MainTableViewField {
     /** For {@code lookup_display} / {@code fk_display}: attribute on the related row. */
     @Column(name = "lookup_display_field", length = 100)
     private String lookupDisplayField;
+
+    /**
+     * What a select-like field column shows in the Portal list: {@code value} (default, the stored
+     * option value) or {@code label} (the option label from the bound form widget's static options).
+     */
+    @Column(name = "select_display", nullable = false, length = 10)
+    @Builder.Default
+    private String selectDisplay = SELECT_DISPLAY_VALUE;
+
+    public static final String SELECT_DISPLAY_VALUE = "value";
+    public static final String SELECT_DISPLAY_LABEL = "label";
 }

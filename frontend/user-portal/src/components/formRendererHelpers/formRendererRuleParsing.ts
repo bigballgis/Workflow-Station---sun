@@ -253,7 +253,7 @@ export function extractFieldsRecursive(
     if (item.type === 'subTable' && bindingId != null) {
       const subTableField: FormField = {
         key: `__subTable_${bindingId}`,
-        label: '',
+        label: getLayoutLabel(item),
         type: 'subTable',
         _bindingId: Number(bindingId),
         // 逐操作权限：仅在显式为 false 时下发（undefined 由 SubTableField 回退到 editable）
@@ -274,7 +274,7 @@ export function extractFieldsRecursive(
     if (item.type === 'inlineSubForm' && bindingId != null) {
       const inlineSubFormField: FormField = {
         key: `__inlineSubForm_${bindingId}`,
-        label: '',
+        label: getLayoutLabel(item),
         type: 'inlineSubForm',
         _bindingId: Number(bindingId),
         span: 24,

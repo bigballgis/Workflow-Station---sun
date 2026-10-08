@@ -217,6 +217,37 @@ async function clickExtendWidget(paletteName) {
   return false
 }
 
+async function captureTableBindingFigures() {
+  const manageBtn = page.getByRole('button', { name: 'Manage Table Bindings', exact: true })
+  await manageBtn.waitFor({ state: 'visible', timeout: 15000 })
+  await manageBtn.click()
+  const manager = page.locator('.table-binding-manager')
+  await manager.waitFor({ state: 'visible', timeout: 15000 })
+  await page.waitForTimeout(600)
+  const list = manager.locator('.binding-list').first()
+  await shot('dw-table-bindings-list.png', (await list.count()) ? list : manager)
+  const subRow = manager
+    .locator('.el-table__row')
+    .filter({ hasText: /help_pr_line|Line items|Sub Table/i })
+    .first()
+  if (await subRow.count()) {
+    await subRow.getByRole('button', { name: 'Edit' }).click()
+  } else {
+    await manager.getByRole('button', { name: 'Add Binding', exact: true }).click()
+  }
+  const addDlg = page
+    .locator('.el-dialog')
+    .filter({ hasText: /Add Binding|Edit Table Binding/ })
+    .last()
+  await addDlg.waitFor({ state: 'visible', timeout: 8000 })
+  await page.waitForTimeout(500)
+  await shot('dw-table-bindings-add-dialog.png', addDlg)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+}
+
 async function captureExtendControlFigures() {
   const extendPropsShots = [
     ['Sub-Table', 'dw-form-ctl-sub-table-props.png', /Sub-Table|help_pr_line/],
@@ -471,6 +502,12 @@ try {
     await formEdit.click()
     await page.locator('.fc-designer-wrapper').first().waitFor({ state: 'visible', timeout: 15000 })
     await page.waitForTimeout(800)
+
+    try {
+      await captureTableBindingFigures()
+    } catch (bindErr) {
+      console.warn('skip table-binding screenshots', bindErr)
+    }
 
     try {
       await captureBasicControlFigures()

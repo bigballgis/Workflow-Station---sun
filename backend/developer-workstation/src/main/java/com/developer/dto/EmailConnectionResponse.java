@@ -22,6 +22,7 @@ public class EmailConnectionResponse {
     private Boolean useTls;
     private Boolean enabled;
     private boolean hasPassword;
+    private String passwordEnvKey;
     private EmailConnectionDirection direction;
     private String mailboxAddress;
     private String imapHost;
@@ -41,7 +42,8 @@ public class EmailConnectionResponse {
                 .fromName(entity.getFromName())
                 .useTls(entity.getUseTls())
                 .enabled(entity.getEnabled())
-                .hasPassword(entity.getCredentialEncrypted() != null && !entity.getCredentialEncrypted().isBlank())
+                .hasPassword(entity.getPasswordEnvKey() != null && !entity.getPasswordEnvKey().isBlank())
+                .passwordEnvKey(entity.getPasswordEnvKey())
                 .direction(entity.getDirection())
                 .mailboxAddress(entity.getMailboxAddress())
                 .imapHost(entity.getImapHost())

@@ -49,6 +49,9 @@ public interface FormTableBindingRepository extends JpaRepository<FormTableBindi
      */
     @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.table.id = :tableId")
     boolean existsByFormIdAndTableId(@Param("formId") Long formId, @Param("tableId") Long tableId);
+
+    @Query("SELECT b FROM FormTableBinding b WHERE b.form.id = :formId AND b.table.id = :tableId")
+    List<FormTableBinding> findByFormIdAndTableId(@Param("formId") Long formId, @Param("tableId") Long tableId);
     
     /**
      * Check if a table is bound by any form.

@@ -287,6 +287,9 @@ export function useTableEditor(options: UseTableEditorOptions) {
         requestIdConfig: selectedTable.value.tableType === 'MAIN'
           ? (selectedTable.value.requestIdConfig ?? null)
           : null,
+        slaConfig: selectedTable.value.tableType === 'MAIN'
+          ? (selectedTable.value.slaConfig ?? null)
+          : null,
         fields: fields
       }
 

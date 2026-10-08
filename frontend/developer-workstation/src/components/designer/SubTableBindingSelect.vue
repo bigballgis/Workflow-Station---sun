@@ -3,7 +3,7 @@ import { inject, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { CopyDocument } from '@element-plus/icons-vue'
-import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
+import { formatSubTableBindingOptionLabel, normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 import { lookupStore } from './lookupStore'
 
 interface DesignerSubBinding {
@@ -12,6 +12,8 @@ interface DesignerSubBinding {
   tableDisplayName?: string
   tableDescription: string
   bindingType: string
+  foreignKeyField?: string | null
+  bindingLinkMode?: string | null
 }
 
 interface SubTableBindingSelectProps {
@@ -81,9 +83,7 @@ async function copyText(text: string): Promise<void> {
         v-for="b in subBindings"
         :key="b.id"
         :value="b.id"
-        :label="b.tableDescription
-          ? `${b.tableDisplayName || b.tableName}（${b.tableDescription}）`
-          : (b.tableDisplayName || b.tableName)"
+        :label="formatSubTableBindingOptionLabel(b)"
       />
       <template
         v-if="subBindings.length === 0"

@@ -1,5 +1,6 @@
 package com.admin.bi.controller;
 
+import com.admin.bi.component.BiAdminAccessGuard;
 import com.admin.bi.dto.request.DataViewAssignmentRequest;
 import com.admin.bi.dto.request.DataViewAssignmentBatchRequest;
 import com.admin.bi.dto.response.DataViewAssignmentResponse;
@@ -7,7 +8,6 @@ import com.admin.bi.dto.response.DataViewDashboardResponse;
 import com.admin.bi.dto.response.DataViewFunctionUnitOptionResponse;
 import com.admin.bi.dto.response.DataViewTableOptionResponse;
 import com.admin.bi.service.BiDataViewAssignmentService;
-import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,6 +34,7 @@ import java.util.List;
 public class BiDataViewAssignmentController {
 
     private final BiDataViewAssignmentService assignmentService;
+    private final BiAdminAccessGuard adminAccessGuard;
 
     @PostMapping
     @Operation(summary = "Create a Data View Assignment")
@@ -90,9 +91,7 @@ public class BiDataViewAssignmentController {
     @Operation(summary = "List the dashboards bound to an accessible User Portal Data View")
     public ResponseEntity<List<DataViewDashboardResponse>> getDashboardsForView(
             @PathVariable Long viewId) {
-        String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new org.springframework.security.authentication.AuthenticationCredentialsNotFoundException(
-                        "Unauthenticated"));
+        String userId = adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentService.getDashboardsForView(userId, viewId));
     }
 }

@@ -1,5 +1,6 @@
 package com.admin.config;
 
+import com.platform.security.vault.VaultSecretClientImpl;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -40,6 +41,9 @@ public class RestTemplateConfig {
 
     /** Qualifier for {@link #activepiecesRestTemplate}. */
     public static final String AP_REST_TEMPLATE = "activepiecesRestTemplate";
+
+    /** Qualifier for {@link #vaultRestTemplate}. */
+    public static final String VAULT_REST_TEMPLATE = VaultSecretClientImpl.REST_TEMPLATE_BEAN;
 
     @Bean
     @Primary
@@ -83,6 +87,32 @@ public class RestTemplateConfig {
                 .slowCallRateThreshold(80f)
                 .build();
         CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("admin-activepieces-http", apConfig);
+        restTemplate.getInterceptors().add(circuitBreakerInterceptor(breaker));
+        return restTemplate;
+    }
+
+    /**
+     * HashiCorp Vault Kubernetes login + KV v2 reads.
+     *
+     * <p>Cannot share {@link #restTemplate}: Vault 403 (unbound SA) or :8200 unreachable would
+     * open {@code admin-outbound-http} and fail-fast workflow-engine calls for 30s.
+     */
+    @Bean(VAULT_REST_TEMPLATE)
+    public RestTemplate vaultRestTemplate(RestTemplateBuilder builder,
+                                          CircuitBreakerRegistry circuitBreakerRegistry) {
+        RestTemplate restTemplate = builder
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(10))
+                .build();
+        CircuitBreakerConfig vaultConfig = CircuitBreakerConfig.custom()
+                .slidingWindowSize(10)
+                .failureRateThreshold(50f)
+                .waitDurationInOpenState(Duration.ofSeconds(30))
+                .permittedNumberOfCallsInHalfOpenState(3)
+                .slowCallDurationThreshold(Duration.ofSeconds(8))
+                .slowCallRateThreshold(80f)
+                .build();
+        CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("admin-vault-http", vaultConfig);
         restTemplate.getInterceptors().add(circuitBreakerInterceptor(breaker));
         return restTemplate;
     }

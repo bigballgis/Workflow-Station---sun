@@ -6,6 +6,7 @@ import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.EmailTemplateRepository;
+import com.developer.repository.FieldDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FormTableBindingRepository;
@@ -33,6 +34,13 @@ public final class ExportImportTestComponents {
     private ExportImportTestComponents() {
     }
 
+    /** 没有任何文档的文档服务（仓库全部返回空）。 */
+    static com.developer.service.impl.FunctionUnitDocumentService documentService() {
+        return new com.developer.service.impl.FunctionUnitDocumentService(
+                Mockito.mock(com.developer.repository.AiDocumentRepository.class),
+                Mockito.mock(com.developer.repository.AiStudioThreadStateRepository.class));
+    }
+
     public static FunctionUnitExporter exporter(
             FunctionUnitRepository functionUnitRepository,
             TableDefinitionRepository tableDefinitionRepository,
@@ -43,6 +51,22 @@ public final class ExportImportTestComponents {
             TableRelationRepository tableRelationRepository,
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
             ObjectMapper objectMapper) {
+        return exporter(functionUnitRepository, tableDefinitionRepository, formDefinitionRepository,
+                actionDefinitionRepository, decisionDefinitionRepository, formStageBindingRepository,
+                tableRelationRepository, functionUnitWorkspaceAccessService, objectMapper, documentService());
+    }
+
+    public static FunctionUnitExporter exporter(
+            FunctionUnitRepository functionUnitRepository,
+            TableDefinitionRepository tableDefinitionRepository,
+            FormDefinitionRepository formDefinitionRepository,
+            ActionDefinitionRepository actionDefinitionRepository,
+            DecisionDefinitionRepository decisionDefinitionRepository,
+            FormStageBindingRepository formStageBindingRepository,
+            TableRelationRepository tableRelationRepository,
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+            ObjectMapper objectMapper,
+            com.developer.service.impl.FunctionUnitDocumentService documentService) {
         EmailConnectionRepository emailConnectionRepository = Mockito.mock(EmailConnectionRepository.class);
         Mockito.lenient().when(emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
                 .thenReturn(java.util.List.of());
@@ -78,6 +102,7 @@ public final class ExportImportTestComponents {
                 relationTablePortability,
                 mainTableViewPortability,
                 functionUnitWorkspaceAccessService,
+                documentService,
                 objectMapper);
         ReflectionTestUtils.setField(exporter, "platformVersion", "1.0.0");
         return exporter;
@@ -125,6 +150,36 @@ public final class ExportImportTestComponents {
             ObjectMapper objectMapper,
             DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
             AdminCenterAutomationFlowClient automationFlowClient) {
+        return build(functionUnitRepository, processDefinitionRepository, tableDefinitionRepository,
+                formDefinitionRepository, actionDefinitionRepository, decisionDefinitionRepository,
+                formTableBindingRepository, formStageBindingRepository, tableRelationRepository,
+                dmnXmlParser, functionUnitWorkspaceAccessService, functionUnitDevGroupAssignmentRepository,
+                entityManager, objectMapper, sequenceSynchronizer, automationFlowClient,
+                Mockito.mock(FieldDefinitionRepository.class));
+    }
+
+    /**
+     * 需要断言导入把 binding 的 {@code filterFkFieldName} 解回 {@code dw_field_definitions.id} 时，
+     * 传入受控的字段仓库（包内导出的是列名，id 由导入侧就地解析）。
+     */
+    public static ExportImportComponentImpl build(
+            FunctionUnitRepository functionUnitRepository,
+            ProcessDefinitionRepository processDefinitionRepository,
+            TableDefinitionRepository tableDefinitionRepository,
+            FormDefinitionRepository formDefinitionRepository,
+            ActionDefinitionRepository actionDefinitionRepository,
+            DecisionDefinitionRepository decisionDefinitionRepository,
+            FormTableBindingRepository formTableBindingRepository,
+            FormStageBindingRepository formStageBindingRepository,
+            TableRelationRepository tableRelationRepository,
+            DmnXmlParser dmnXmlParser,
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+            FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
+            EntityManager entityManager,
+            ObjectMapper objectMapper,
+            DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
+            AdminCenterAutomationFlowClient automationFlowClient,
+            FieldDefinitionRepository fieldDefinitionRepository) {
 
         ExportImportPackageParser packageParser = new ExportImportPackageParser(objectMapper);
 
@@ -141,6 +196,7 @@ public final class ExportImportTestComponents {
 
         FunctionUnitImportWriter importWriter = new FunctionUnitImportWriter(
                 tableDefinitionRepository,
+                fieldDefinitionRepository,
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
@@ -173,7 +229,10 @@ public final class ExportImportTestComponents {
                 Mockito.mock(RelationTableStructurePortability.class),
                 Mockito.mock(MainTableViewPortability.class),
                 Mockito.mock(com.developer.service.MainTableViewService.class),
-                automationFlowClient);
+                automationFlowClient,
+                documentService(),
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository);
 
         return new ExportImportComponentImpl(
                 functionUnitRepository,

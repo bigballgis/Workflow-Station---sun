@@ -88,7 +88,7 @@ class AiStudioProposalReferenceValidatorTest {
         c.setName(name);
         c.setDirection(direction);
         c.setEnabled(enabled);
-        c.setCredentialEncrypted(credential);
+        c.setPasswordEnvKey(credential);
         c.setConnectionUid("uid-" + name + "-" + direction);
         return c;
     }

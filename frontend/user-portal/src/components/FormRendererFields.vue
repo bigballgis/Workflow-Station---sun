@@ -11,6 +11,7 @@ import RecordNoteField from './RecordNoteField.vue'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import type { FormField } from './formRendererHelpers'
+import { resolveSubTableWidgetTitle } from './formRendererHelpers'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { isDisplayOnlyLayoutField } from './formRendererHelpers'
 
@@ -278,13 +279,13 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
       >
         <SubTableField
           v-if="ctx.resolveBinding(field._bindingId)"
-          :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
+          :title="resolveSubTableWidgetTitle(field, ctx.resolveBinding(field._bindingId), ctx.subTableBindings)"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :assignment-config="ctx.resolveBinding(field._bindingId)?.assignmentConfig"
-          :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
+          :model-value="(ctx.displayedSubTableRows(field._bindingId) as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
           :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
           :mi-parent-table-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentTableId ?? null"
@@ -312,6 +313,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
           :binding-link-mode="ctx.resolveBinding(field._bindingId)?.bindingLinkMode"
           :binding-foreign-key-field="ctx.resolveBinding(field._bindingId)?.foreignKeyField"
+          :filter-fk-ref-table-id="ctx.resolveBinding(field._bindingId)?.filterFkRefTableId"
+          :filter-fk-field-name="ctx.resolveBinding(field._bindingId)?.filterFkFieldName"
+          :fk-fill-sources="ctx.resolveBinding(field._bindingId)?.fkFillSources"
           :table-id="ctx.resolveBinding(field._bindingId)?.tableId"
           :binding-id="field._bindingId"
           :binding-type="ctx.resolveBinding(field._bindingId)?.bindingType"
@@ -335,13 +339,13 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
       >
         <SubTableField
           v-if="ctx.resolveBinding(field._bindingId)"
-          :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
+          :title="resolveSubTableWidgetTitle(field, ctx.resolveBinding(field._bindingId), ctx.subTableBindings)"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :assignment-config="ctx.resolveBinding(field._bindingId)?.assignmentConfig"
-          :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
+          :model-value="(ctx.displayedSubTableRows(field._bindingId) as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
           :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
           :mi-parent-table-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentTableId ?? null"
@@ -369,6 +373,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
           :binding-link-mode="ctx.resolveBinding(field._bindingId)?.bindingLinkMode"
           :binding-foreign-key-field="ctx.resolveBinding(field._bindingId)?.foreignKeyField"
+          :filter-fk-ref-table-id="ctx.resolveBinding(field._bindingId)?.filterFkRefTableId"
+          :filter-fk-field-name="ctx.resolveBinding(field._bindingId)?.filterFkFieldName"
+          :fk-fill-sources="ctx.resolveBinding(field._bindingId)?.fkFillSources"
           :table-id="ctx.resolveBinding(field._bindingId)?.tableId"
           :binding-id="field._bindingId"
           :binding-type="ctx.resolveBinding(field._bindingId)?.bindingType"

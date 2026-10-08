@@ -34,6 +34,15 @@
  *   2. Our bumps are local. `@activepieces/shared@0.78.2` does not exist on npmjs and
  *      never will, so `pnpm install` at that version 404s and the whole image build dies.
  *
+ * HERMES-PATCH-034: the store has a SECOND client — code steps. Whenever packages are allowed
+ * (any AP_EXECUTION_MODE but SANDBOX_CODE_ONLY, including the UNSANDBOXED default) the sandbox's
+ * code-builder injects `@types/node` into every step's package.json, so even a dependency-free
+ * code step runs an offline install of it. UAT runs with no AP_EXECUTION_MODE set, and every
+ * freshly built code step failed with ERR_PNPM_NO_OFFLINE_META. CODE_STEP_INJECTED_DEPENDENCIES
+ * below mirrors the constant of the same name in code-builder.ts (a sandbox test keeps them in
+ * lockstep) and is seeded unconditionally. A code step's OWN npm dependencies still miss offline
+ * — that stays a loud per-step failure.
+ *
  * KNOWN GAP (fail-loud by design): a self-developed piece rebuilt against a locally
  * bumped `packages/shared` pins that unpublished version, and seeding it here will fail
  * with ERR_PNPM_NO_MATCHING_VERSION. There is no registry that can serve it — the fix
@@ -48,6 +57,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const REGISTRY = 'https://registry.npmjs.org/'
+
+// Mirror of CODE_STEP_INJECTED_DEPENDENCIES in
+// packages/server/sandbox/src/lib/cache/flow/code/code-builder.ts — see HERMES-PATCH-034 above.
+const CODE_STEP_INJECTED_DEPENDENCIES = {
+    '@types/node': '18.17.1',
+}
 
 const hermesDir = process.argv[2]
 if (!hermesDir) {
@@ -69,11 +84,14 @@ if (unvendoredPieces.length > 0) {
     console.warn(`[seed-offline-store] WARNING: no "tarball" in pieces.json for ${names} — their dependencies are NOT in the offline store, and an offline install of them fails with ERR_PNPM_NO_OFFLINE_META. Vendor the .tgz into hermes/tarballs/ and add the field.`)
 }
 if (vendoredPieces.length === 0) {
-    console.log('[seed-offline-store] no tarball-bearing pieces in pieces.json — nothing to seed')
-    process.exit(0)
+    console.log('[seed-offline-store] no tarball-bearing pieces in pieces.json — seeding the code-step dependencies only')
 }
 
 const dependencies = {}
+for (const [name, range] of Object.entries(CODE_STEP_INJECTED_DEPENDENCIES)) {
+    dependencies[aliasFor({ name, range })] = `npm:${name}@${range}`
+}
+console.log(`[seed-offline-store] code steps pin ${JSON.stringify(CODE_STEP_INJECTED_DEPENDENCIES)}`)
 for (const piece of vendoredPieces) {
     const tarballPath = join(hermesDir, 'tarballs', piece.tarball)
     const manifest = JSON.parse(execFileSync('tar', ['-xzOf', tarballPath, 'package/package.json'], {

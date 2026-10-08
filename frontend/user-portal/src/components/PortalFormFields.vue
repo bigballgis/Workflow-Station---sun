@@ -8,6 +8,7 @@ import FieldRenderer from './FieldRenderer.vue'
 import SubTableField from './SubTableField.vue'
 import { computed, defineAsyncComponent, provide, ref, watch } from 'vue'
 import type { FormField } from './formRendererHelpers'
+import { resolveSubTableWidgetTitle } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
   isDisplayOnlyLayoutField,
@@ -68,6 +69,8 @@ export interface PortalSubTableBindingLite {
    * (attachment.main_id → the main record), which decides whether rows get scoped to the host row.
    */
   foreignKeyField?: string | null
+  filterFkFieldName?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
 }
 
 const props = withDefaults(
@@ -98,6 +101,7 @@ const props = withDefaults(
     hostTaskId?: string
     hostPrimaryFormData?: Record<string, unknown>
     hostPrimaryTableId?: number | null
+    hostBindingId?: number | string | null
     /**
      * inlineSubForm bindingIds already resolved along this render path (this component's own
      * ancestor chain, not just its direct parent) — accumulated by
@@ -556,7 +560,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
     >
       <SubTableField
         v-if="resolveBinding(field._bindingId)"
-        :title="resolveBinding(field._bindingId)!.tableName || ''"
+        :title="resolveSubTableWidgetTitle(field, resolveBinding(field._bindingId), subTableBindings)"
         :columns="resolveBinding(field._bindingId)!.columns"
         :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
         :form-fields="resolveBinding(field._bindingId)!.formFields"
@@ -578,10 +582,13 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :task-id="hostTaskId"
         :binding-link-mode="resolveBinding(field._bindingId)?.bindingLinkMode"
         :binding-foreign-key-field="resolveBinding(field._bindingId)?.foreignKeyField"
+        :filter-fk-field-name="resolveBinding(field._bindingId)?.filterFkFieldName"
         :binding-id="field._bindingId"
         :field-permissions="fieldPermissions"
         :parent-row="model"
         :parent-table-id="hostTableId ?? null"
+        :parent-binding-id="hostBindingId ?? null"
+        :fk-fill-sources="resolveBinding(field._bindingId)?.fkFillSources"
         :parent-tables-by-id="nestedParentTablesById"
         :primary-form-data="hostPrimaryFormData"
         :primary-table-id="hostPrimaryTableId ?? null"
@@ -612,6 +619,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :host-task-id="hostTaskId"
         :host-primary-form-data="hostPrimaryFormData"
         :host-primary-table-id="hostPrimaryTableId ?? null"
+        :host-binding-id="field._bindingId"
         :visited-inline-sub-form-binding-ids="nextVisitedInlineSubFormBindingIds(field._bindingId)"
         :field-permissions="fieldPermissions"
         :form-options="resolveBinding(field._bindingId)!.formOptions"

@@ -1,7 +1,11 @@
 import formEventMessages from './formEvents.en'
 import formCtlMessages from './formCtl.en'
 import tableDesignMessages from './tableDesign.en'
+import tableBindingsMessages from './tableBindings.en'
 import viewDesignMessages from './viewDesign.en'
+import fuDocumentsMessages from './fuDocuments.en'
+import aiStudioMessages from './aiStudio.en'
+import slaPoliciesMessages from './slaPolicies.en'
 
 export default {
   app: {
@@ -107,6 +111,8 @@ export default {
     emailMonitors: 'Email Monitors',
     decisionDesign: 'Decision Design',
     versionManagement: 'Version Management',
+    functionUnitSettings: 'Function Unit Settings',
+    aiStudio: 'AI Studio',
     automation: 'Automation',
     admin: 'Admin Center',
     acDashboard: 'Dashboard',
@@ -149,6 +155,14 @@ export default {
     upProfileSetup: 'User Profile Setup',
   },
   guides: {
+    fuDocuments: {
+      title: 'Requirements and Function Unit Design',
+      summary: 'The two Markdown documents of a Function Unit: edit, import, download, versions, and where AI Studio writes to them.',
+    },
+    aiStudio: {
+      title: 'Build with AI (AI Studio)',
+      summary: 'The three ways into AI Studio, and One-click generate: what it writes, what it leaves out, and what to do when it fails.',
+    },
     computedFields: {
       title: 'Computed field formulas',
       summary: 'How computed columns fill themselves, which functions exist, and what happens when a formula fails.',
@@ -171,6 +185,16 @@ export default {
       summary:
         'Inbound mailbox, monitor template, field extraction, and Start Event binding — every field, before Deploy.',
     },
+    environmentVariables: {
+      title: 'Environment variables',
+      summary:
+        'Admin Environment variables catalog: TEXT current/default values, and VAULT keys for Email Connection passwords. A new Vault path is written only when it does not already exist.',
+    },
+    slaPolicies: {
+      title: 'SLA Policies',
+      summary:
+        'Admin SLA Policies: lead time in days per Function Unit, recalculation of open cases\' due dates, job and change history. Fields are mapped in Table Design.',
+    },
     upTasksToClaim: {
       title: 'To Do — claim pool',
       summary:
@@ -179,6 +203,10 @@ export default {
     taskDelegate: {
       title: 'Delegate a task',
       summary: 'Hand this one To Do to a person or a BU+Role pair without changing Current Assignee.',
+    },
+    tableBindings: {
+      title: 'Manage Table Bindings',
+      summary: 'Attach MAIN, SUB, ACTION, and RELATION tables to a form. Filter foreign key and fill source live here; the Sub-Table grid is a separate article.',
     },
     formUpload: {
       title: 'Form Design — Advanced Upload',
@@ -272,7 +300,7 @@ export default {
       "Process Design: Send task selected. Click {'{'} {'}'} beside To to insert a main-table field as ${\'{'}fieldName{\'}'}.",
     connectionTitle: 'First: an Outbound connection',
     connectionBody:
-      'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and password. Host, port, and Use TLS come from Admin Center → System Config. Use Test to send a trial message before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead.',
+      'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and Password (VAULT) — pick a VAULT key from Admin Center → Environment variables. Host, port, and Use TLS come from System Config. Use Test before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead.',
     connectionCatalogLead: 'Field catalog — every control on New / Edit Connection (Outbound) and Test.',
     fDirection:
       'Required. Outbound (send) for this job; Inbound (monitor) is for Email Monitor. A legacy Both row must be saved as one of those two.',
@@ -286,7 +314,7 @@ export default {
     fSmtpUsername:
       'SMTP login (service account). Usually different from the sender email. Leave blank only for an anonymous relay that does not use SMTP AUTH.',
     fSmtpPassword:
-      'Required when Username is set (new row). SMTP password or provider app password. On edit, leave blank to keep the stored password.',
+      'Required when Username is set. Select a VAULT environment variable (not TEXT). The mailbox password stays in Vault. See [[/environment-variables]].',
     fSmtpHost:
       'Not typed here. SMTP hostname comes from Admin Center → System Config (Outbound connections).',
     fSmtpPort:
@@ -390,16 +418,16 @@ export default {
     startEventFigure: 'Start event StartEvent_Email: Vendor quote to PR bound, Subject Filter Quote, extraction configured.',
     inboundTitle: 'First: an Inbound connection',
     inboundBody:
-      'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address and IMAP username and password. IMAP host, port, and SSL come from Admin Center → System Config. There is no inbound connection until Direction is Inbound.',
+      'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address, IMAP username, and Password (VAULT) from Admin Center → Environment variables. IMAP host, port, and SSL come from System Config. There is no inbound connection until Direction is Inbound.',
     inboundCatalogLead: 'Field catalog — every control on New / Edit Connection (Inbound).',
     fDirection: 'Required. Must be Inbound (monitor) or this mailbox never appears under Email Monitors.',
     fDirectionInbound: 'Choice: poll this mailbox with IMAP. Outbound (send) is for Send email, not this page.',
     fMailboxEmail:
-      'Required. Mailbox to poll; also used as the connection name. Blank blocks save.',
+      'Required. Mailbox to poll; also the connection name. When IMAP Username is a service account, the monitor will try to open this mailbox (the mail server must support that). Blank blocks save.',
     fImapUsername:
-      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row.',
+      'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row. Authenticates the session; Mailbox Email is the inbox the monitor will try to read.',
     fImapPassword:
-      'IMAP password or provider app password. Required on create when username is set. On edit, leave blank to keep the stored password.',
+      'IMAP password is a VAULT environment variable. Required when username is set. Ciphertext is no longer stored; re-select a VAULT key on old rows. See [[/environment-variables]].',
     fImapHost:
       'Not typed here. IMAP hostname comes from Admin Center → System Config (Inbound connections).',
     fImapPort:
@@ -584,6 +612,42 @@ export default {
     deleteBody:
       'A template bound to one or more Start Events cannot be deleted. Unbind it in Process Design first, then delete the template.',
   },
+  environmentVariablesGuide: {
+    pageTitle: 'Environment variables',
+    crumb: 'Admin Center',
+    intro:
+      'Admin Center → Environment variables holds TEXT values and VAULT catalog keys. Creating a VAULT variable writes the password into HashiCorp Vault only when that path does not already exist. Edit and delete never change Vault. Email Connection passwords only bind a VAULT key.',
+    flowTitle: 'Order of work',
+    flow1: 'Create a VAULT variable: key and optional password',
+    flow2: 'On Connections, pick that key as Password (VAULT)',
+    flow3: 'Test send or Deploy the inbound monitor',
+    catalogTitle: 'Catalog fields',
+    catalogBody:
+      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the field under ame-hase-hermes/env-var is new, Admin writes it. If that field already exists, Admin only creates the catalog row. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
+    catalogLead: 'Field catalog — Add / Edit variable.',
+    fKindText:
+      'TEXT. Default value is required. Current value is optional; blank or whitespace uses the default.',
+    fKindVault:
+      'VAULT. Enter the key. Password is needed only when that field does not exist yet under ame-hase-hermes/env-var. No current/default text. Runtime reads that field from HashiCorp Vault.',
+    fKey: 'Required. Stable key (for example email.qq.inbound.password). Connections and ZIP export store this key, not the secret. Duplicate keys are rejected.',
+    fDisplayName: 'Required. Label in the Connections dropdown.',
+    fDefault: 'Required for TEXT. Used when current value is blank or whitespace.',
+    fCurrent: 'Optional for TEXT. Non-blank current value wins over default.',
+    fPath: 'Not shown. Secret path is always ame-hase-hermes/env-var under mount secrets/kv_v2/wsit in namespace ITID/12139042_HERMES. The catalog key is a field name in that secret.',
+    fPassword: 'On create: required only if Vault does not already have this key. Existing secrets are reused and never overwritten. Edit never writes Vault. Delete removes only the catalog row.',
+    bindTitle: 'Bind on a Connection',
+    bindBody:
+      'In Developer Workstation → Connections, Username plus Password (VAULT) select a VAULT key from this catalog. Host still comes from System Config SMTP/IMAP. See [[/email-send#connection]] and [[/email-monitor]].',
+    fBindPassword:
+      'Required when Username is set. Only VAULT keys are listed. Opening an old connection after this change: re-select a VAULT key; ciphertext is gone.',
+    failTitle: 'What fails',
+    failBody: 'Fix the catalog or the Connection binding, then Test or Deploy again.',
+    failTextBlank: 'TEXT default empty — save is blocked. Whitespace current value falls back to default.',
+    failDuplicateKey: 'Duplicate catalog key — save is blocked. Use the existing environment variable. Do not operate Vault.',
+    failVaultWrite: 'Vault write failed (connectivity, login, or permissions) — save is blocked and a toast shows the error.',
+    failVault404: 'Vault 404 — IMAP/SMTP does not treat this as “no password”; the poll/send fails with a Vault error.',
+    failTextForMail: 'Email password bound to TEXT — Admin rejects it; pick a VAULT key.',
+  },
   upTasksToClaimGuide: {
     pageTitle: 'To Do — claiming role requests',
     crumb: 'User Portal · Task · To Do',
@@ -597,6 +661,13 @@ export default {
     listTitle: 'What the list shows',
     listBody:
       'Open User Portal → Task → To Do. Direct-user, department-role, and delegated requests appear with their Assignment Type colour. Role-pool requests use the BU + role colour. Current Assignee shows the assigned person on those rows. On a role request it stays empty until someone holds it; after a claim it shows You for your own hold, or the other person’s name (Held). Click the Request ID to open the form.',
+    rowActionsTitle: 'Action-column buttons',
+    rowActionsBody:
+      'The buttons in the Action column change with the request state and your permissions. Claim appears when a role request is free; it makes you the Current Assignee so you can edit and submit it. Unclaim appears when you hold the request; it removes you as Current Assignee and returns the request to the role pool. Release Claim appears only to a Leader of the same role, the business-unit Approver, or a System Administrator when another member holds the request; after confirmation, it clears that member’s hold and leaves the request free for any eligible member to Claim. Reassign appears to the same privileged users; it opens a dialog and moves the request directly to a selected member of the same role instead of returning it to the pool. These buttons only change who holds the request—they do not approve, reject, or complete it.',
+    claimButtonSample: 'free role request → assigns it to you and enables editing',
+    unclaimButtonSample: 'request held by you → returns it to the role pool',
+    releaseClaimButtonSample: 'request held by another member → clears their hold after confirmation; privileged users only',
+    reassignButtonSample: 'free or held role request → assigns it directly to another member; privileged users only',
     claimTitle: 'Claim, Unclaim, Claim all, and Unclaim all',
     claimBody:
       'Claim locks the request to you. Other members of the role can only view it until you Unclaim or complete it. Completing the task does not need a second Claim if you already hold it. Claim all (top right) confirms once, then claims every free request in batches of 100 until none remain. After a search, tick rows and use Claim or Unclaim on the bar between “N selected” and Batch Urge: those buttons always show; they are disabled when none of the ticked rows can be claimed or released. The confirm dialog shows how many of the selection will be processed. Unclaim all confirms once, then releases every role request you hold, in the same batch size. Selection Unclaim and Unclaim all never force-release a colleague’s hold. If some rows fail, the toast shows claimed / skipped / failed counts.',
@@ -606,7 +677,7 @@ export default {
     claimAllSample: 'top-right button; one confirm, then automatic batches',
     unclaimAllSample: 'next to Claim all; releases only your holds, never a colleague’s',
     claimSelectedSample: 'on the selection bar after you tick rows; confirms “Claim N of M selected”',
-    unclaimSelectedSample: 'next to selection Claim; only your holds in the ticks, never Force Unclaim',
+    unclaimSelectedSample: 'next to selection Claim; only your holds in the ticks, never Release Claim',
     forceUnclaimSample: 'on the row and the task banner; returns the request to the pool',
     reassignSample: 'on the row and the task banner; pick another member of the same role',
     autoClaimTitle: 'Auto-claim on open',
@@ -619,14 +690,14 @@ export default {
     autoPreviewSample: 'switch on To Do and User Profile; default off',
     filePreviewTitle: 'File preview',
     filePreviewBody:
-      'Click a file name on the form, a sub-table cell, or a note attachment to open preview in a new browser tab, so the form stays visible. If the browser blocks the tab, preview stays in a dialog. Images and TIFF have Zoom in, Zoom out, 100%, and Fit. Fit is the default. Hold Ctrl (⌘ on Mac) and scroll the mouse wheel to zoom around the cursor. 100% shows the original pixels and uses scroll bars. TIFF ignores thumbnail IFDs so a scanned page is not shown as a tiny preview. When the request has several previewable files, Previous file and Next file stay in the same tab and walk main-table uploads, then each sub-table row, then nested sub-tables. Note attachments walk only that note’s files.',
-    filePreviewSample: 'new tab; Ctrl + scroll zoom; Fit / 100%; Previous file / Next file',
+      'Click a file name on the form, a sub-table cell, or a note attachment to open preview in a new browser window, so the form stays visible. Clicking another file opens another window; windows already open keep their file. If the browser blocks the window, preview stays in a dialog. Images and TIFF have Zoom in, Zoom out, 100%, and Fit. Fit is the default. Hold Ctrl (⌘ on Mac) and scroll the mouse wheel to zoom around the cursor. 100% shows the original pixels and uses scroll bars. TIFF ignores thumbnail IFDs so a scanned page is not shown as a tiny preview. Previous file and Next file stay in that window and walk main-table uploads, then each sub-table row, then nested sub-tables. Note attachments walk only that note’s files.',
+    filePreviewSample: 'a new window each click; Ctrl + scroll zoom; Fit / 100%; Previous file / Next file',
     detailTitle: 'On the task page',
     detailBody:
-      'If nobody holds the role request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the list also show Force Unclaim and Reassign.',
+      'If nobody holds the role request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the list also show Release Claim and Reassign.',
     leaderTitle: 'Leader, Approver, and Admin',
     leaderBody:
-      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. A Leader of that same role can Force Unclaim a hold taken by someone else, or Reassign the request to another member of the same role (including a free request or one already held). The business unit Approver and a System Administrator (SYS_ADMIN) have the same Force Unclaim and Reassign rights. An Auditor cannot. Force Unclaim and Reassign are separate: Force Unclaim returns the request to the pool; Reassign assigns it to a chosen member and does not send it back to the pool. Confirm before Force Unclaim: Current Assignee becomes empty, and another Member can Claim it. Reassign opens a dialog to pick a member of the same role; Change History and Admin Center → User Portal Audit Log record who assigned, when, from whom, and to whom. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release or reassign a stuck hold.',
+      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. A Leader of that same role can Release Claim on a request held by someone else, or Reassign the request to another member of the same role (including a free request or one already held). The business unit Approver and a System Administrator (SYS_ADMIN) have the same Release Claim and Reassign rights. An Auditor cannot. Release Claim and Reassign are separate: Release Claim returns the request to the pool; Reassign assigns it to a chosen member and does not send it back to the pool. Confirm before Release Claim: Current Assignee becomes empty, and another Member can Claim it. Reassign opens a dialog to pick a member of the same role; Change History and Admin Center → User Portal Audit Log record who assigned, when, from whom, and to whom. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release or reassign a stuck hold.',
     applyTitle: 'Apply as Member or Leader',
     applyBody:
       'Open User Profile Setup → Apply Permission. Choose the business unit and role, then Member or Leader. The approver’s Approve Request dialog shows that Member or Leader choice and the role. If you already have that role as a Member, you can apply to become Leader. After approval, the User Profile Setup card and Admin user page show Leader on that role.',
@@ -635,7 +706,7 @@ export default {
       'Tasks to Claim is no longer a separate menu. Free role requests, your holds, and colleague holds all appear on To Do. Assignment Type no longer offers Virtual Group as a filter; use BU + role for the claim pool. Older bookmarks to /tasks/to-claim open To Do.',
     failTitle: 'When Claim fails',
     failBody:
-      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Current Assignee column shows the current holder. Unclaim fails if you are not the holder. Unclaim all skips colleague holds and reports skipped or failed counts. Force Unclaim and Reassign fail if you are not a Leader of that role, a BU Approver of that business unit, or a System Administrator. Reassign also fails if the chosen user is not in the same role pool, or is already the holder. Claim all continues after a failed row and reports the failed count at the end.',
+      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Current Assignee column shows the current holder. Unclaim fails if you are not the holder. Unclaim all skips colleague holds and reports skipped or failed counts. Release Claim and Reassign fail if you are not a Leader of that role, a BU Approver of that business unit, or a System Administrator. Reassign also fails if the chosen user is not in the same role pool, or is already the holder. Claim all continues after a failed row and reports the failed count at the end.',
   },
   taskDelegateGuide: {
     pageTitle: 'Delegate a task',
@@ -721,5 +792,9 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
+  ...fuDocumentsMessages,
+  ...aiStudioMessages,
+  ...slaPoliciesMessages,
 }

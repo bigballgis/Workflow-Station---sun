@@ -81,6 +81,33 @@ describe('flattenNestedSubTableRowsIntoPayload — enriched flat copy dedupe', (
     expect(st['pkg'] as any[]).toEqual([{ pkg_no: 'P-1' }])
   })
 
+  it('keeps the flat row version when the nested copy of the same file has a stale one', () => {
+    const parentLink = {
+      tableIdBySliceKey: { 'dw:party': 1, 'dw:file': 2 },
+      fieldDefinitionsBySliceKey: {
+        'dw:file': [{ fieldName: 'party_id', isForeignKey: true, refTableId: 1 }],
+      },
+    }
+    const st = {
+      'dw:party': [{
+        id: 'P-A',
+        __subTables__: {
+          'dw:file': [{
+          id: 'F1', party_id: 'P-A', file_name: 'bob file', _wsRowVersion: 1, platformRowUuid: 'u1',
+        }],
+        },
+      }],
+      'dw:file': [{
+        id: 'F1', party_id: 'P-A', file_name: 'bob file', _wsRowVersion: 2, platformRowUuid: 'u1',
+      }],
+    } as Record<string, unknown>
+    flattenNestedSubTableRowsIntoPayload(st, 8, { 'dw:party': ['id'] }, parentLink)
+    const rows = st['dw:file'] as Array<Record<string, unknown>>
+    expect(rows).toHaveLength(1)
+    expect(rows[0]._wsRowVersion).toBe(2)
+    expect(rows[0].platformRowUuid).toBe('u1')
+  })
+
   it('still collapses thin id-keyed nested rows into the matching flat row (MI link-child shape)', () => {
     const st = {
       parent: [{ id: 7, __subTables__: { child: [{ id: 5 }] } }],

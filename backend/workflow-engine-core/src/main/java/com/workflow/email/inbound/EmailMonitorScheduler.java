@@ -1,6 +1,6 @@
 package com.workflow.email.inbound;
 
-import com.platform.security.encryption.EncryptionService;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.client.AdminCenterSystemImapClient;
 import com.workflow.email.extract.EmailMessage;
 import com.workflow.email.inbound.entity.ProcessedEmailMessage;
@@ -24,7 +24,8 @@ import java.util.List;
  * "when a new email arrives") and dispatches them to {@link EmailMonitorProcessor}.
  *
  * <p>The mailbox provider and credentials are entirely connection-determined: IMAP host comes
- * from the connection type preset, and the app password is decrypted from the synced connection.
+ * from Admin Center System Config, and the mailbox password is resolved from a VAULT
+ * environment variable via Admin Center (Vault KV v2 {@code data.data.password}).
  * Per-rule poll cadence is throttled by {@code pollIntervalSeconds}; IMAP/config failures use
  * exponential backoff so a down mailbox is not hit on every scheduler tick. Idempotency is
  * guaranteed by the processor's ledger, and multi-replica polling is serialized by
@@ -41,7 +42,7 @@ public class EmailMonitorScheduler {
     private final SysEmailConnectionRepository connectionRepository;
     private final InboundMailClient imapClient;
     private final EmailMonitorProcessor processor;
-    private final EncryptionService encryptionService;
+    private final AdminCenterClient adminCenterClient;
     private final AdminCenterSystemImapClient adminCenterSystemImapClient;
     private final EmailMonitorPollBackoff pollBackoff = new EmailMonitorPollBackoff();
 
@@ -213,15 +214,47 @@ public class EmailMonitorScheduler {
         log.info("[EMAIL-MONITOR] rule {} using system IMAP endpoint: host={} port={} ssl={}",
                 rule.getId(), host, port, ssl);
 
-        String username = StringUtils.hasText(connection.getMailboxAddress())
-                ? connection.getMailboxAddress() : connection.getUsername();
-        String password = decrypt(rule.getId(), connection.getCredentialEncrypted());
-        if (!StringUtils.hasText(username) || password == null) {
-            log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} missing IMAP credentials (username/password)",
+        ImapIdentities identities = resolveIdentities(connection);
+        String password;
+        try {
+            password = resolvePassword(rule, connection);
+        } catch (IllegalStateException ex) {
+            log.warn("[EMAIL-MONITOR] rule {} skipped: Vault password resolve failed: {}",
+                    rule.getId(), ex.getMessage());
+            return null;
+        }
+        if (!StringUtils.hasText(identities.login()) || password == null) {
+            log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} missing IMAP credentials (username/passwordEnvKey)",
                     rule.getId(), rule.getConnectionUid());
             return null;
         }
-        return new MailboxAccess(host, port, ssl, username, password);
+        return new MailboxAccess(host, port, ssl, identities.login(), password, identities.mailbox());
+    }
+
+    /**
+     * Login is the service account; mailbox is the bound inbox to open (Mailbox Email / from_email).
+     */
+    static ImapIdentities resolveIdentities(SysEmailConnection connection) {
+        String login = firstNonBlank(
+                connection.getUsername(), connection.getMailboxAddress(), connection.getFromEmail());
+        String mailbox = firstNonBlank(
+                connection.getMailboxAddress(), connection.getFromEmail(), login);
+        return new ImapIdentities(login, mailbox);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    record ImapIdentities(String login, String mailbox) {
     }
 
     /**
@@ -253,16 +286,17 @@ public class EmailMonitorScheduler {
         ruleRepository.save(rule);
     }
 
-    private String decrypt(String ruleId, String encrypted) {
-        if (!StringUtils.hasText(encrypted)) {
+    private String resolvePassword(SysEmailMonitorRule rule, SysEmailConnection connection) {
+        if (!StringUtils.hasText(rule.getFunctionUnitId())) {
+            log.warn("[EMAIL-MONITOR] rule {} skipped: functionUnitId missing for credential lookup",
+                    rule.getId());
             return null;
         }
-        try {
-            return encryptionService.decrypt(encrypted);
-        } catch (Exception e) {
-            log.warn("[EMAIL-MONITOR] rule {} skipped: mailbox password decrypt failed: {}",
-                    ruleId, e.getMessage());
-            return null;
-        }
+        return adminCenterClient.getEmailConnectionCredentials(rule.getFunctionUnitId(), connection.getId())
+                .map(creds -> creds.get("password"))
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .filter(StringUtils::hasText)
+                .orElse(null);
     }
 }

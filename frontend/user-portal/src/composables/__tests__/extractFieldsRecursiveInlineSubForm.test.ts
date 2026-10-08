@@ -83,6 +83,15 @@ describe.each([
     return (items: unknown[]) => extractFieldsRecursive(items as never)
   }],
 ])('%s extractFieldsRecursive — inlineSubForm', (_name, makeExtract) => {
+  it('preserves designer titles for binding-backed widgets', () => {
+    const fields = makeExtract()([
+      { type: 'subTable', _bindingId: 65, title: 'Case files' },
+      { type: 'inlineSubForm', _bindingId: 66, title: 'Party files' },
+    ])
+
+    expect(fields.map(field => field.label)).toEqual(['Case files', 'Party files'])
+  })
+
   it('emits an inlineSubForm field from a top-level _bindingId', () => {
     const fields = makeExtract()(topLevelRule())
     const found = fields.find(f => f.type === 'inlineSubForm')

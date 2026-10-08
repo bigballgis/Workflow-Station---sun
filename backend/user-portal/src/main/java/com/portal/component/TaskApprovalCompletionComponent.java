@@ -75,6 +75,11 @@ public class TaskApprovalCompletionComponent {
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private SlaDueDateEnricher slaDueDateEnricher;
+
     /** Lazy: Case Handler Complete/terminal writes; null in {@code new}-constructed tests skips Owner. */
     @Lazy
     @Autowired
@@ -84,6 +89,14 @@ public class TaskApprovalCompletionComponent {
     @Lazy
     @Autowired
     private MiOuterStepResolver miOuterStepResolver;
+
+    /**
+     * Lazy: MI row merge + binding Guard on Complete. Null in {@code new}-constructed
+     * tests keeps the previous putAll path.
+     */
+    @Lazy
+    @Autowired
+    private SubTableWriteIsolation subTableWriteIsolation;
 
     /**
      * Handles approval completion
@@ -145,6 +158,7 @@ public class TaskApprovalCompletionComponent {
         // Approval submit is often incremental; __subTables__ may only exist on TaskInfo (merged ProcessInstance).
         // Without merge here, injectMiCollectionFromBpmn sees no sub-table rows → empty MI collection → zero child tasks.
         miCollectionVariableBuilder.mergeSubTablesFromTaskInfoForMi(task, variables);
+        isolateOutboundSubTables(task, request, variables);
         Object subTablesAfterMerge = variables.get("__subTables__");
         if (!(subTablesAfterMerge instanceof Map<?, ?> subMap) || subMap.isEmpty()) {
             log.warn("[MI] After TaskInfo merge, variables have no __subTables__ (taskId={}, processInstanceId={}). "
@@ -230,6 +244,10 @@ public class TaskApprovalCompletionComponent {
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
                 stampRequestId(syncInstance.getFunctionUnitCode(), mergedVars);
+                if (slaDueDateEnricher != null) {
+                    slaDueDateEnricher.stamp(syncInstance.getFunctionUnitCode(), mergedVars,
+                            syncInstance.getStartTime() == null ? null : syncInstance.getStartTime().toLocalDate());
+                }
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);
@@ -456,6 +474,32 @@ public class TaskApprovalCompletionComponent {
                 : new HashMap<>(instance.getVariables());
         ownerFieldComponent.clearMainCaseHandler(instance.getFunctionUnitCode(), vars);
         instance.setVariables(vars);
+    }
+
+    /**
+     * Runs the same Save isolation on Complete so a thin MI {@code __subTables__}
+     * cannot {@code putAll} over sibling rows, then so binding scopes Guard the claim.
+     * No-op when the helper is not injected (unit tests that construct this class).
+     */
+    void isolateOutboundSubTables(TaskInfo task, TaskCompleteRequest request,
+                                  Map<String, Object> variables) {
+        SubTableWriteIsolation isolation = subTableWriteIsolation;
+        if (isolation == null || task == null || request == null || variables == null) {
+            return;
+        }
+        String processId = task.getProcessInstanceId();
+        Optional<ProcessInstance> process = processInstanceRepository != null && processId != null
+                ? processInstanceRepository.findById(processId)
+                : Optional.empty();
+        Map<String, Object> baselineVars = process.map(ProcessInstance::getVariables)
+                .orElseGet(() -> task.getVariables() != null ? task.getVariables() : Map.of());
+        String functionUnitCode = process.map(ProcessInstance::getFunctionUnitCode).orElse(null);
+        Map<String, Object> formData = request.getFormData() != null ? request.getFormData() : variables;
+        isolation.apply(new SubTableWriteIsolation.Request(
+                formData, variables, baselineVars,
+                request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),
+                functionUnitCode, process.map(ProcessInstance::getFunctionUnitCatalogId).orElse(null),
+                task.getTaskDefinitionKey()));
     }
 
     /**

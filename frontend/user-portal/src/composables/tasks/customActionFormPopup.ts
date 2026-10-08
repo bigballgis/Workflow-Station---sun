@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import { processApi } from '@/api/process'
 import { submitActionFormPopup } from '@/api/processForm'
 import { warnIfUploadsBlocking } from '@platform-shared/upload/uploadSubmitGate'
+import { pinnedCatalogContentRef } from '@/utils/pinnedCatalogContentRef'
 import type { TaskActionInfo } from '@/api/task'
 import type { FormField, FormTab, PortalViewContext } from '@/components/formRendererHelpers'
 import type { PreparedFormPopupContext } from './customActionTypes'
@@ -94,14 +95,19 @@ export function createCustomActionFormPopup(deps: {
         formContent = resolveFormPopupContent(action, config)
       }
 
-      // Fallback for hosts that don't supply a resolver — fetch full FU content directly
-      // (legacy parity; still returns tableBindings on each form despite slim TS types).
+      // Fallback for hosts that don't supply a resolver — fetch the instance's pinned
+      // catalog (not latest enabled by process key) so superseded packages stay readable.
       if (!formContent) {
-        const functionUnitId = taskInfo.value.processDefinitionKey
-        if (functionUnitId) {
+        const contentRef = pinnedCatalogContentRef(taskInfo.value)
+        if (contentRef) {
           try {
             const popupTaskId = taskInfo.value.taskId || taskInfo.value.id
-            const res = await processApi.getFunctionUnitContent(functionUnitId, popupTaskId)
+            const processInstanceId = taskInfo.value.processInstanceId
+            const res = await processApi.getFunctionUnitContent(
+              contentRef,
+              popupTaskId,
+              processInstanceId,
+            )
             const content = ('data' in (res as any) ? (res as any).data : res) as any
             const forms = content?.forms || []
             formContent =

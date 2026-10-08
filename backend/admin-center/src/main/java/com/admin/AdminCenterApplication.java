@@ -24,7 +24,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
  */
 @SpringBootApplication
 @ComponentScan(
-    basePackages = {"com.admin", "com.platform.common", "com.platform.messaging", "com.platform.security.filter", "com.platform.security.config"},
+    basePackages = {"com.admin", "com.platform.common", "com.platform.messaging", "com.platform.security.filter", "com.platform.security.config", "com.platform.security.vault"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class, AesEncryptionService.class},
     excludeFilters = {
         // 排除platform-security中的repository，由单独的配置类处理

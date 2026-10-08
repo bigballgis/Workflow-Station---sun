@@ -11,7 +11,7 @@
       />
       <DesignerHelpLink
         path="/form-upload#max-files"
-        :aria-label="t('form.uploadGuideLinkAria')"
+        :ariaLabel="t('form.uploadGuideLinkAria')"
         test-id="upload-max-files-guide-link"
       />
     </div>

@@ -12,7 +12,7 @@ export default {
     flow5: 'Save. On a MAIN table, configure Request ID first',
     whatTitle: 'What Table Design is',
     whatBody:
-      'Function Unit tab Table Design. Table Type is Main Table, Sub Table, Action Table, or Relation Table. Field Name must start with a letter. Form Design Import Table Fields reads these columns. Views in [[/view-design]] need a Main Table first.',
+      'Function Unit tab Table Design. Table Type is Main Table, Sub Table, Action Table, or Relation Table. Field Name must start with a letter. Form Design Import Table Fields reads these columns. Attach tables to a form in [[/table-bindings]]. Views in [[/view-design]] need a Main Table first.',
     fieldsTitle: 'Fields',
     fieldsBody:
       'Open a table. Each row is a column. Data Type choices are VARCHAR, INTEGER, BIGINT, DECIMAL, BOOLEAN, DATE, TIMESTAMP, TEXT, FILE. VARCHAR uses Length. DECIMAL uses Precision and Scale.',
@@ -52,6 +52,20 @@ export default {
     requestIdBody:
       'MAIN tables only. Combines chosen fields into the identifier shown on forms and portal lists. Configure before Save.',
     catRequestId: 'Pick at least one main-table field and a separator. Preview shows the shape. Blank blocks Save on a MAIN table.',
+    slaTitle: 'SLA Due Date',
+    slaBody:
+      'MAIN tables only, optional. The platform fills a DATE field with start date + the SLA lead time in calendar days. Here you only pick the two fields; Admin Center sets the number of days per environment on [[/sla-policies]]. Click Configure on the SLA Due Date row under the fields, pick the fields, Confirm, then Save the table. If the due date field is already on a form, save that form once in Form Design so it shows read-only in the portal.',
+    slaFigure: 'Purchase Request (help_pr). SLA Due Date row and Configure SLA Due Date dialog: Start date (start_date) as the start, Need-by date (end_date) as the due date.',
+    slaLead: 'Field catalog — SLA Due Date row and Configure SLA Due Date dialog.',
+    catSlaRow: 'Virtual row under the MAIN table fields. Shows due field = start + SLA lead time, or Not configured (no due date is derived). Configure opens the dialog.',
+    catSlaSource: 'Required. Main table field: the start date is a field you pick next. Submission time: the start date is the day the request was submitted.',
+    catSlaStart: 'Shown only for Main table field. Required. Lists DATE and TIMESTAMP fields (TIMESTAMP uses the date part). Empty list: No Date / Timestamp fields on this table.',
+    catSlaDue: 'Required. Lists DATE fields that are not formula fields. The value is written by the platform and is read-only on forms. Confirm stays disabled until it is picked.',
+    catSlaRemove: 'Shown when a mapping exists. Clears it; after Save no due date is derived for this Function Unit.',
+    catSlaRename: 'Renaming the start or due field in the grid moves the mapping to the new name. Deleting it does not: Save names the missing field.',
+    failSlaField: 'SLA field does not exist on this table: the mapped field was deleted. Open Configure and pick another field.',
+    failSlaDueType: 'SLA due date field … must be a Date field, or cannot be a formula field. Change the field or pick another one.',
+    failSlaSame: 'SLA start date and due date must be different fields.',
     failTitle: 'When it fails',
     failDisplayName: 'Table display name is required.',
     failTableName:

@@ -147,7 +147,16 @@ $migrations = @(
     "00-schema/78-dw-icons-name-not-unique.sql",
     "00-schema/80-rename-email-connection-credential.sql",
     "00-schema/81-bi-data-view-assignment.sql",
-    "00-schema/82-bi-dashboard-registry-superset-roles.sql"
+    "00-schema/82-bi-dashboard-registry-superset-roles.sql",
+    "00-schema/83-dw-ai-studio-shared-thread.sql",
+    "00-schema/84-dw-ai-studio-proposal-jobs.sql",
+    "00-schema/85-dw-ai-document-major-minor.sql",
+    "00-schema/86-ac-environment-variables.sql",
+    "00-schema/87-dw-main-table-view-select-display.sql",
+    "00-schema/88-ac-sla-policies.sql",
+    "00-schema/89-dw-table-sla-config.sql",
+    "00-schema/90-up-sla-recalc-jobs.sql",
+    "00-schema/91-dw-ai-document-minor-renumber.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
@@ -165,6 +174,7 @@ Exec-Sql -File (Join-Path $ScriptDir "01-admin/04-admin-permissions.sql") -Desc 
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/05-e2e-test-users-and-business-units.sql") -Desc "E2E business units and users" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/06-hase-organization-seed.sql") -Desc "HASE organization + HMDC roles" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/10-add-auditor-role-type.sql") -Desc "AUDITOR role type + DW view clamp" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/12-sla-policy-permissions.sql") -Desc "SLA policy permissions" | Out-Null
 
 # Step 4: Wipe all function units (matches Docker init path)
 Write-Step "Step 4/6: Wiping all function units (developer + deployed catalog)..."

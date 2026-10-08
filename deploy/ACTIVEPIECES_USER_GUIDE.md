@@ -54,8 +54,11 @@ AP 界面不是直接打开的,要**从管理中心带着平台登录态跳进�
 3. 往后加积木(你的实际自动化逻辑:调 API、查库、识别…)。
 4. **最后一步必须加 `Return Response`**(Webhook 积木里的"返回响应"),设置返回内容,例如:
    ```json
-   { "echo": "{{trigger.body.text}}" }
+   { "echo": "{{trigger.output.body.text}}" }
    ```
+   > ⚠️ 引用前序步骤的数据必须带 `.output`:触发器写 `{{trigger.output.body.<字段>}}`,
+   > 第 N 步写 `{{step_N.output}}` / `{{step_N.output.body}}`。漏掉 `.output`(如 `{{trigger.body.text}}`)
+   > 不报错,而是**静默解析成空字符串**;裸 `{{step_N}}` 拿到的是 `{output, error}` 整体。
    > ⚠️ **没有 Return Response,平台就拿不到结果**,流程会等到超时。这是同步调用的硬要求。
 5. 右上角点 **Publish(发布)**,把 flow 状态变成 **ENABLED**。没发布的 flow 不会被触发。
 6. 记下这条 flow 的 **Flow ID**(在 webhook 地址里,形如 `.../api/v1/webhooks/WIkVuyWuQuBcTblpChUeS`)。

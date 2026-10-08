@@ -18,7 +18,7 @@
       @create="showCreateDialog = true"
       @refresh="loadForms"
       @import-from-table="handleImportFromTable"
-      @select-form="handleSelectForm"
+      @select-form="requestSelectForm"
       @delete-form="handleDeleteForm"
       @more-action="onFormListMoreAction"
       @set-form-bound-views="handleSetFormBoundViews"
@@ -30,7 +30,7 @@
       class="form-editor-view"
     >
       <div class="editor-header">
-        <el-button @click="handleBackToList">
+        <el-button @click="requestBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('form.backToList') }}
         </el-button>
         <el-input
@@ -51,7 +51,7 @@
         >{{ selectedForm.formName }}</span>
         <DesignerHelpLink
           :path="selectedControlHelpPath"
-          :aria-label="t('form.controlGuideLinkAria')"
+          :ariaLabel="t('form.controlGuideLinkAria')"
           test-id="form-control-guide-link"
         />
         <el-tag
@@ -72,23 +72,21 @@
         <div class="header-actions">
           <div class="auto-save-status">
             <span
-              v-if="autoSaving"
-              class="auto-saving"
+              v-if="isDirty"
+              class="auto-save-blocked"
             >
-              <el-icon class="is-loading"><Loading /></el-icon>
-              {{ t('form.autoSaving') }}
-            </span>
-            <span
-              v-else-if="lastAutoSaveTime"
-              class="auto-saved"
-            >
-              <el-icon><CircleCheck /></el-icon>
-              {{ t('form.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
+              <el-icon><WarningFilled /></el-icon>
+              {{ t('process.unsavedChanges') }}
             </span>
           </div>
           <el-button @click="handleManageBindings(selectedForm)">
             {{ t('form.manageBindings') }}
           </el-button>
+          <DesignerHelpLink
+            path="/table-bindings"
+            :ariaLabel="t('tableBinding.guideLinkAria')"
+            test-id="manage-table-bindings-guide-link"
+          />
           <el-button
             :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
             @click="handleImportFieldsToDesigner"
@@ -107,7 +105,7 @@
             </el-button>
             <DesignerHelpLink
               path="/form-upload#scenes"
-              :aria-label="t('form.uploadGuideLinkAria')"
+              :ariaLabel="t('form.uploadGuideLinkAria')"
               test-id="add-advanced-upload-guide-link"
             />
           </span>
@@ -121,7 +119,7 @@
             type="primary"
             :loading="savingForm"
             :disabled="savingForm"
-            @click="handleSaveForm(true)"
+            @click="saveChanges"
           >
             {{ t('common.save') }}
           </el-button>
@@ -178,7 +176,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -214,7 +212,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -250,7 +248,7 @@
                   >
                     <Check />
                   </el-icon>
-                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                  <span class="dropdown-item-label">{{ formatSubTableBindingOptionLabel(b) }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -279,6 +277,8 @@
           </template>
           <div
             class="fc-designer-wrapper"
+            @input="onDesignerContentInput"
+            @change="onDesignerContentInput"
             :style="designerZoomStyle"
           >
             <div class="form-designer-canvas-toolbar-host">
@@ -356,6 +356,8 @@
               <div v-show="subTableActiveTab === 'form'">
                 <div
                   class="fc-designer-wrapper"
+                  @input="onDesignerContentInput"
+                  @change="onDesignerContentInput"
                   :style="designerZoomStyle"
                 >
                   <div class="form-designer-canvas-toolbar-host">
@@ -403,6 +405,8 @@
           <div
             v-else
             class="fc-designer-wrapper"
+            @input="onDesignerContentInput"
+            @change="onDesignerContentInput"
             :style="designerZoomStyle"
           >
             <div class="form-designer-canvas-toolbar-host">
@@ -601,8 +605,9 @@
       :option="previewRowDialog.formOption"
       :columns="previewRowDialog.columns"
       :assignment-config="previewRowDialog.assignmentConfig"
+      :parent-selection="previewRowDialog.parentSelection"
+      :save-row="handlePreviewRowDialogSave"
       @update:visible="onPreviewRowDialogVisibleChange"
-      @save="handlePreviewRowDialogSave"
     />
     <SubTableAddDialog
       :visible="previewRowDialog.visible && !previewRowDialog.useFormRule"
@@ -610,8 +615,9 @@
       :title="previewRowDialog.title"
       :mode="previewRowDialog.mode"
       :initial-data="previewRowDialog.initialData"
+      :parent-selection="previewRowDialog.parentSelection"
+      :save-row="handlePreviewRowDialogSave"
       @update:visible="onPreviewRowDialogVisibleChange"
-      @save="handlePreviewRowDialogSave"
     />
 
     <!-- Bind node dialog -->
@@ -898,7 +904,8 @@
 <script setup lang="ts">
 import { ref, computed, provide, watch, toRef, reactive, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ArrowDown, Check, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowDown, Check, Connection, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
 import { fieldSwitchTypes } from '@/utils/designerDragRules'
@@ -938,6 +945,7 @@ import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
+import { formatSubTableBindingOptionLabel } from '@/utils/bindingDisplayHelpers'
 import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
 import TableBindingManager from './TableBindingManager.vue'
 import FormRenameDialog from './form-designer/FormRenameDialog.vue'
@@ -994,9 +1002,7 @@ const linkFormComponents = ref<Array<{
   columnLabel?: string
   sortOrder: number
 }>>([])
-const autoSaving = ref(false)
 const miValidationRevision = ref(0)
-const lastAutoSaveTime = ref<Date | null>(null)
 const showCreateDialog = ref(false)
 const showRenameDialog = ref(false)
 const renameFormName = ref('')
@@ -1083,6 +1089,8 @@ const designerSubBindings = computed(() => {
       tableId: b.tableId,
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
+      foreignKeyField: b.foreignKeyField,
+      bindingLinkMode: b.bindingLinkMode,
       subMode: (b.subMode === 'FORM_ONLY') ? 'FORM_ONLY' : 'FULL',
     }
   })
@@ -1330,19 +1338,26 @@ function refreshSiblingLookups() {
 }
 
 function onDesignerStructureChange() {
+  refreshDirtyState()
   miValidationRevision.value++
   scheduleSyncHiddenMarkers()
   refreshSiblingLookups()
   nextTick(() => {
     patchDesignerRulesDefaultEvents()
+    refreshDirtyState()
   })
   // Assigned after useFormConfigPaste — remaps stale _bindingId from left JSON paste.
   scheduleAutoRepairStaleBindingsFn()
 }
 
 function onSubDesignerStructureChange() {
+  refreshDirtyState()
   miValidationRevision.value++
   scheduleSyncHiddenMarkers()
+}
+
+function onDesignerContentInput() {
+  nextTick(() => refreshDirtyState())
 }
 
 function collectCurrentSubFormRules(): Record<string, unknown[]> {
@@ -1512,17 +1527,10 @@ const {
 } = subTableViews
 
 // ── Auto-save ───────────────────────────────────────────────────────────────
-const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
+const { isDirty, markSaved, refreshDirtyState, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
   selectedForm,
   designerRef,
-  handleSaveForm: (isManual?: boolean) => formSave.handleSaveForm(isManual),
   relationViewState,
-  t,
-  autoSaving,
-  lastAutoSaveTime,
-  flushPendingCanvasEdits: () => {
-    flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
-  },
   getPollDesigner: () => getActiveDesignerRef() ?? designerRef.value,
 })
 
@@ -1685,8 +1693,8 @@ const formSave = useFormSave({
   getPrimaryBindingFieldDefinitions,
   syncSubTableListViewFromFormRules,
   loadForms: () => formLifecycle.loadForms(),
-  autoSaving,
-  lastAutoSaveTime,
+  autoSaving: ref(false),
+  lastAutoSaveTime: ref(null),
   provisionAndRepairForSave,
   willProvisionOnSave,
   blockingProgress,
@@ -1704,6 +1712,27 @@ const {
   handleSaveForm,
   savingForm,
 } = formSave
+
+async function saveChanges(): Promise<boolean> {
+  const saved = await handleSaveForm(true)
+  if (saved) markSaved()
+  return saved
+}
+
+async function discardChanges(): Promise<void> {
+  const current = selectedForm.value
+  if (!current) return
+  await store.fetchForms(props.functionUnitId)
+  const persisted = store.forms.find(form => form.id === current.id)
+  if (persisted) await handleSelectForm(persisted)
+  markSaved()
+}
+
+defineExpose({
+  hasUnsavedChanges: () => isDirty.value,
+  saveChanges,
+  discardChanges,
+})
 
 // ── Form ↔ BPMN node binding ────────────────────────────────────────────────
 const formNodeBinding = useFormNodeBinding({
@@ -1774,6 +1803,30 @@ const {
   handleCreateForm,
   handleCreateFormTypeChange,
 } = formLifecycle
+
+async function confirmFormLeave(): Promise<boolean> {
+  if (!isDirty.value) return true
+  try {
+    await ElMessageBox.confirm(t('process.unsavedChanges'), t('functionUnit.documents.unsavedTitle'), {
+      type: 'warning', confirmButtonText: t('common.save'), cancelButtonText: t('functionUnit.documents.discard'), distinguishCancelAndClose: true,
+    })
+    return saveChanges()
+  } catch (reason) {
+    if (reason === 'cancel') {
+      await discardChanges()
+      return true
+    }
+    return false
+  }
+}
+
+async function requestBackToList() {
+  if (await confirmFormLeave()) handleBackToList()
+}
+
+async function requestSelectForm(form: FormDefinition) {
+  if (await confirmFormLeave()) await handleSelectForm(form)
+}
 
 // ── Form CRUD actions (rename / copy / delete) ──────────────────────────────
 const { renaming, handleDeleteForm, handleConfirmRename, handleCopyForm, handleCopyProcessToTaskForm } = useFormActions({
@@ -2159,6 +2212,7 @@ const previewRowDialog = reactive({
   formOption: {} as Record<string, any>,
   columns: [] as any[],
   assignmentConfig: undefined as import('@/utils/miAssignmentConfig').AssignmentConfig | undefined,
+  parentSelection: null as import('@/utils/tableFkRuntime').BindingParentSelection | null,
   useFormRule: false,
   onSave: null as PreviewSubTableRowDialogOpen['onSave'] | null,
 })
@@ -2180,6 +2234,7 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
       : {}
     previewRowDialog.columns = payload.columns.map((col) => ({ ...col }))
     previewRowDialog.assignmentConfig = payload.assignmentConfig
+    previewRowDialog.parentSelection = payload.parentSelection ?? null
     previewRowDialog.useFormRule = previewRowDialog.formRule.length > 0
     previewRowDialog.onSave = payload.onSave
     previewRowDialog.visible = false
@@ -2207,10 +2262,12 @@ function onPreviewRowDialogVisibleChange(visible: boolean) {
   }
 }
 
-function handlePreviewRowDialogSave(row: Record<string, any>) {
-  previewRowDialog.onSave?.(row)
+async function handlePreviewRowDialogSave(row: Record<string, any>, selectedParentValue?: string) {
+  const saved = await previewRowDialog.onSave?.(row, selectedParentValue)
+  if (saved === false) return false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null
+  return true
 }
 
 // ── Provides for fc-designer property-panel components ──────────────────────
@@ -2222,6 +2279,8 @@ provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
   tableId: b.tableId,
   tableDescription: b.tableDescription,
   bindingType: b.bindingType,
+  foreignKeyField: b.foreignKeyField,
+  bindingLinkMode: b.bindingLinkMode,
 })))
 
 // Provide relation bindings for LookupBindingSelect
@@ -2487,6 +2546,31 @@ onMounted(() => {
       align-items: center;
       gap: 6px;
       color: #67c23a;
+    }
+
+    .auto-save-blocked {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 9px;
+      border: 1px solid #fecdca;
+      border-radius: 5px;
+      background: #fef3f2;
+      color: #d92d20;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 20px;
+
+      .el-icon {
+        display: inline-flex;
+        width: 20px;
+        height: 20px;
+        align-items: center;
+        justify-content: center;
+        color: #d92d20;
+        font-size: 20px;
+        flex: 0 0 20px;
+      }
     }
   }
 }
@@ -2791,10 +2875,13 @@ onMounted(() => {
       margin-bottom: 18px;
     }
 
-    // label 不折行；保留 label-width 统一宽度使各行输入框左对齐，超长时撑开
+    // 与 Portal FormRenderer 一致：label 固定 160px，超长折行（不被输入框遮挡、各行输入框左对齐）；
+    // 覆盖全局弹窗 label 的 nowrap/max-content 规则（Form Preview 是 Portal 主表单的设计稿，不按弹窗表单处理）
     :deep(.el-form-item__label) {
-      white-space: nowrap !important;
-      min-width: max-content !important;
+      width: 160px !important;
+      white-space: normal !important;
+      overflow-wrap: anywhere;
+      min-width: 0 !important;
       max-width: none !important;
       height: auto !important;
       line-height: 1.5 !important;

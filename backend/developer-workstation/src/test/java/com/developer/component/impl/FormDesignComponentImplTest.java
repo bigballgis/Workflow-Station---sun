@@ -68,6 +68,9 @@ class FormDesignComponentImplTest {
     @Mock
     private SubTableViewService subTableViewService;
 
+    @Mock
+    private FormTableBindingUniquenessGuard formTableBindingUniquenessGuard;
+
     @InjectMocks
     private FormDesignComponentImpl formDesignComponent;
     

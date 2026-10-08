@@ -122,14 +122,14 @@ class AiEmailProposalWriterTest {
         assertEquals(EmailConnectionDirection.OUTBOUND, req.getValue().getDirection());
         assertEquals("Workflow Bot", req.getValue().getFromName());
         assertNull(req.getValue().getUsername());
-        assertNull(req.getValue().getPassword());
+        assertNull(req.getValue().getPasswordEnvKey());
     }
 
     @Test
     void existingConnectionKeepsItsCredentialAndBypassesComponentUpdate() {
         EmailConnection existing = EmailConnection.builder()
                 .id(11L).name("notify@x.com").direction(EmailConnectionDirection.OUTBOUND)
-                .connectionType(ConnectionType.GMAIL).username("bot").credentialEncrypted("ENC")
+                .connectionType(ConnectionType.GMAIL).username("bot").passwordEnvKey("email.bot")
                 .fromName("Old Name").enabled(true).build();
         when(emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(7L)).thenReturn(List.of(existing));
 
@@ -145,7 +145,7 @@ class AiEmailProposalWriterTest {
         verify(emailConnectionRepository).save(existing);
         assertEquals("New Name", existing.getFromName());
         assertFalse(existing.getEnabled());
-        assertEquals("ENC", existing.getCredentialEncrypted());
+        assertEquals("email.bot", existing.getPasswordEnvKey());
         assertEquals("bot", existing.getUsername());
     }
 

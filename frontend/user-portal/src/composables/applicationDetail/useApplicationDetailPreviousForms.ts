@@ -7,6 +7,8 @@ import {
   enrichChildBindingRowsFromParentsNestedSubTables,
   applySharedAttachmentFinalizeAndMaterialize,
 } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import { getSavedSubTableRowsFromVariables } from './subTableRowHelpers'
 import type { PreviousFormEntry } from './useApplicationDetailState'
 import type { ApplicationDetailCtx } from './context'
@@ -55,6 +57,8 @@ export function createApplicationDetailPreviousForms(ctx: ApplicationDetailCtx):
         foreignKeyField: b.foreignKeyField,
         // 分类判据（MI collection / child / shared）读它 —— 漏传就判不出 MI。
         bindingLinkMode: (b as { bindingLinkMode?: string | null }).bindingLinkMode ?? null,
+        ...declaredFilterFkFields(b),
+        ...declaredFkFillSources(b),
         tableName: b.tableDisplayName || b.tableName,
         designerTableName: b.tableName,
         // 规范 key 的命名空间靠这两个字段判定 DW / RT；不带上则 rt: 切片解析不到

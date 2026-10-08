@@ -27,6 +27,9 @@ export interface SubTableConfig {
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
+  fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
   /**
    * ACTION 绑定（FORM_POPUP 弹窗写入的记录表）语义上是操作留痕，恒只读——SubTableField 据此
    * 强制 editable=false，不依赖 allowAdd/allowEdit/allowDelete props 的值。
@@ -54,7 +57,7 @@ export interface SubTableFieldProps {
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
-  previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  previewTableBindings?: import('@/utils/tableFkRuntime').BindingContextInput[]
   assignmentConfig?: AssignmentConfig
 }
 

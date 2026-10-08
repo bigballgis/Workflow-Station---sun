@@ -90,6 +90,7 @@ public final class AdminAuditColumnSpec {
                 new ListColumnMeta.Option("RELATION_TABLE", "menu.tableStructure"),
                 new ListColumnMeta.Option("RELATION_TABLE_ROW", "menu.tableData"),
                 new ListColumnMeta.Option("ROLE", "menu.roleManagement"),
+                new ListColumnMeta.Option("SLA_POLICY", "menu.slaPolicies"),
                 new ListColumnMeta.Option("USER", "menu.userList"),
                 new ListColumnMeta.Option("VIRTUAL_GROUP", "menu.virtualGroup")
         );

@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { withSubTableBindingIdInProps } from '../formDesigner'
 
 /**
- * Persisted rules keep `_bindingId` only at top level (parseRule strips props._bindingId on
- * save), while SubTablePlaceholderWidget reads props._bindingId — preview surfaces must
- * restore the props copy or nested sub-table placeholders render "unconfigured".
+ * Persisted rules keep `_bindingId` and display `title` at top level, while placeholder
+ * widgets read designer-only props. Preview surfaces must restore those props without
+ * mutating configJson.
  */
 describe('withSubTableBindingIdInProps', () => {
   it('copies top-level _bindingId into props for subTable rules', () => {
@@ -15,6 +15,31 @@ describe('withSubTableBindingIdInProps', () => {
     const out = withSubTableBindingIdInProps(rules)
     expect(out[1].props._bindingId).toBe(50114)
     expect(out[1].props.portalViews.assigneeTodo).toBe('tableOnly')
+  })
+
+  it('hydrates the persisted display title for subTable preview widgets', () => {
+    const rules = [
+      { type: 'subTable', title: 'Case files', _bindingId: 50114, props: {} },
+    ]
+
+    const out = withSubTableBindingIdInProps(rules)
+
+    expect(out[0].props._displayTitle).toBe('Case files')
+    expect(rules[0].props).toEqual({})
+  })
+
+  it('keeps the live designer display title instead of overwriting it', () => {
+    const rule = {
+      type: 'subTable',
+      title: 'Saved title',
+      _bindingId: 7,
+      props: { _displayTitle: 'Editing title' },
+    }
+
+    const out = withSubTableBindingIdInProps([rule])
+
+    expect(out[0].props._displayTitle).toBe('Editing title')
+    expect(out[0].props._bindingId).toBe(7)
   })
 
   it('does not mutate the source rules (persisted configJson stays clean)', () => {

@@ -128,6 +128,7 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
                 "/api/portal/notifications",
                 "/api/portal/preferences",
                 "/api/portal/my-permissions",
+                "/api/portal/bi/",
                 "/api/portal/exit/")) {
             return true;
         }

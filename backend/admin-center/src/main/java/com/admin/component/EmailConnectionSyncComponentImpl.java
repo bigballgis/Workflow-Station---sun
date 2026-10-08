@@ -26,6 +26,7 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
     private final FunctionUnitRepository functionUnitRepository;
     private final EncryptionService encryptionService;
     private final SystemSmtpConfigResolver systemSmtpConfigResolver;
+    private final EnvironmentVariableComponent environmentVariableComponent;
 
     @Override
     @Transactional
@@ -50,8 +51,7 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
                     .host((String) conn.get("host"))
                     .port(conn.get("port") != null ? ((Number) conn.get("port")).intValue() : 587)
                     .username((String) conn.get("username"))
-                    .credentialEncrypted(usableSecret(
-                            EmailConnectionPortability.readEncryptedCredential(conn), connectionUid, "credential"))
+                    .passwordEnvKey(EmailConnectionPortability.readPasswordEnvKey(conn))
                     .fromEmail((String) conn.get("fromEmail"))
                     .fromName((String) conn.get("fromName"))
                     .useTls(conn.get("useTls") != null ? (Boolean) conn.get("useTls") : true)
@@ -147,8 +147,8 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
         creds.put("username", conn.getUsername());
         creds.put("fromEmail", conn.getFromEmail());
         creds.put("fromName", conn.getFromName());
-        if (conn.getCredentialEncrypted() != null) {
-            creds.put("password", encryptionService.decrypt(conn.getCredentialEncrypted()));
+        if (conn.getPasswordEnvKey() != null && !conn.getPasswordEnvKey().isBlank()) {
+            creds.put("password", environmentVariableComponent.resolveVaultPassword(conn.getPasswordEnvKey()));
         }
 
         if (SystemSmtpConfigResolver.isOutboundCapable(conn.getDirection())) {

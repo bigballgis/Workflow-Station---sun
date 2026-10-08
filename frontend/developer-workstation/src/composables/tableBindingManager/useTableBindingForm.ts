@@ -2,6 +2,13 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import { type FormInstance, type FormRules } from 'element-plus'
 import { type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType, type BindingLinkMode } from '@/api/functionUnit'
 import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
+import {
+  declaredFilterFkFields,
+  firstUnusedStructuralFkName,
+  siblingSubBindingsOnTable,
+  subTableStillBindable,
+  usedStructuralFkNames,
+} from './tableBindingUniqueness'
 
 interface UseTableBindingFormOptions {
   getTables: () => TableDefinition[]
@@ -44,7 +51,8 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
       bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
       foreignKeyField: undefined,
       bindingLinkMode: defaultType === 'SUB' ? 'structuralFk' : undefined,
-      subMode: defaultType === 'SUB' ? 'FULL' : undefined
+      subMode: defaultType === 'SUB' ? 'FULL' : undefined,
+      fkFillSources: undefined,
     }
   }
 
@@ -64,6 +72,10 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
       } else if (structuralFkFieldNames.value.length === 0) {
         base.foreignKeyField = [
           { required: true, message: t('tableBinding.structuralFkRequired'), trigger: 'change' }
+        ]
+      } else {
+        base.foreignKeyField = [
+          { required: true, message: t('tableBinding.structuralFkFilterRequired'), trigger: 'change' }
         ]
       }
     }
@@ -140,8 +152,10 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     return table?.fieldDefinitions || []
   })
 
+  const structuralFkSelectFields = computed(() => declaredFilterFkFields(selectedTableFields.value))
+
   const structuralFkFieldNames = computed(() =>
-    selectedTableFields.value.filter(f => (f as { isForeignKey?: boolean }).isForeignKey).map(f => f.fieldName),
+    structuralFkSelectFields.value.map(f => f.fieldName),
   )
 
   function bindingLinkModeLabel(mode?: BindingLinkMode | string | null): string {
@@ -156,15 +170,46 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     }
   }
 
-  // Check if table is already bound
+  // Check if table is already bound. SUB tables with unused declared FKs stay selectable.
   function isTableBound(tableId: number): boolean {
     if (editingBinding.value?.tableId === tableId) return false
-    return bindings.value.some(b => {
-      if (bindingForm.value.bindingType === 'RELATED' && b.bindingType === 'RELATED') {
-        return toRelationTableOptionId(b.tableId) === tableId
-      }
-      return b.tableId === tableId
-    })
+    if (bindingForm.value.bindingType === 'RELATED') {
+      return bindings.value.some(b =>
+        b.bindingType === 'RELATED' && toRelationTableOptionId(b.tableId) === tableId,
+      )
+    }
+    if (bindingForm.value.bindingType === 'SUB') {
+      const table = getTables().find(t => t.id === tableId)
+      return !subTableStillBindable(
+        bindings.value,
+        tableId,
+        table?.fieldDefinitions ?? [],
+        editingBinding.value?.id,
+      )
+    }
+    return bindings.value.some(b => b.tableId === tableId)
+  }
+
+  function usedFkNamesOnSelectedTable(): Set<string> {
+    const tableId = bindingForm.value.tableId
+    if (!tableId || tableId < 0) return new Set()
+    const table = getTables().find(t => t.id === tableId)
+    return usedStructuralFkNames(
+      siblingSubBindingsOnTable(bindings.value, tableId, editingBinding.value?.id),
+      table?.fieldDefinitions ?? [],
+    )
+  }
+
+  function isStructuralFkUsed(fieldName: string): boolean {
+    if (bindingForm.value.foreignKeyField === fieldName) return false
+    return usedFkNamesOnSelectedTable().has(fieldName)
+  }
+
+  function firstUnusedFkOnSelectedTable(): string | undefined {
+    const tableId = bindingForm.value.tableId
+    if (!tableId || tableId < 0) return undefined
+    const table = getTables().find(t => t.id === tableId)
+    return firstUnusedStructuralFkName(table?.fieldDefinitions ?? [], usedFkNamesOnSelectedTable())
   }
 
   // Handle binding type change - reset table selection
@@ -181,6 +226,7 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     } else {
       bindingForm.value.subMode = undefined
       bindingForm.value.bindingLinkMode = undefined
+      bindingForm.value.fkFillSources = undefined
     }
     // RELATED type must be READONLY
     if (bindingForm.value.bindingType === 'RELATED') {
@@ -222,7 +268,9 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
       if (bindingForm.value.bindingLinkMode === 'miParticipantRow') {
         suggestParticipantRowField()
       } else if (bindingForm.value.bindingLinkMode === 'structuralFk') {
-        bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
+        bindingForm.value.foreignKeyField = firstUnusedFkOnSelectedTable()
+          || structuralFkFieldNames.value[0]
+          || undefined
       }
     }
   }
@@ -237,7 +285,8 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
       foreignKeyField: binding.foreignKeyField,
       bindingLinkMode: binding.bindingType === 'SUB' ? (binding.bindingLinkMode || 'structuralFk') : undefined,
       sortOrder: binding.sortOrder,
-      subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined
+      subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined,
+      fkFillSources: binding.fkFillSources ? [...binding.fkFillSources] : undefined,
     }
     showAddDialog.value = true
   }
@@ -272,7 +321,9 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     if (mode === 'miParticipantRow') {
       suggestParticipantRowField()
     } else if (mode === 'structuralFk') {
-      bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
+      bindingForm.value.foreignKeyField = firstUnusedFkOnSelectedTable()
+        || structuralFkFieldNames.value[0]
+        || undefined
     }
   }
 
@@ -291,9 +342,11 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     emptyTableListHint,
     selectedTableFields,
     structuralFkFieldNames,
+    structuralFkSelectFields,
     toRelationTableOptionId,
     bindingLinkModeLabel,
     isTableBound,
+    isStructuralFkUsed,
     handleBindingTypeChange,
     handleBindingLinkModeChange,
     loadDeployedRelationTables,

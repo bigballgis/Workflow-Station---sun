@@ -12,7 +12,7 @@
                     <span class="el-dialog__title">{{ t('event.title') }}</span>
                     <DesignerHelpLink
                         path="/form-events#when"
-                        :aria-label="eventGuideAria"
+                        :ariaLabel="eventGuideAria"
                         test-id="form-events-guide-link"
                     />
                 </div>

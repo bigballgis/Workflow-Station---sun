@@ -26,7 +26,44 @@ import {
   getSavedSubTableRowsFromVariables,
   type SubTableBindingAlignable,
 } from './subTableRowHelpers'
+import {
+  isCanonicalStoreKey,
+  subTableStoreKey,
+  type SubTableStoreBindingLike,
+} from '@/composables/tasks/subTableStore'
 import type { ApplicationDetailCtx } from './context'
+
+function finiteTableId(value: number | string | null | undefined): number | null {
+  if (value == null || String(value).trim() === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+/**
+ * Overlap backfill may adopt a slice only when it is this binding's table.
+ * Canonical keys are `dw:` / `rt:` plus the designer table name. A numeric key is a
+ * legacy per-binding copy and belongs here only when the binding-id map names the
+ * same table id. Another table's canonical key is never a match: two tables can
+ * both store the parent record's business key without being the same store.
+ */
+export function savedSliceBelongsToBindingTable(
+  sliceKey: string,
+  binding: SubTableStoreBindingLike & { bindingId?: number | null },
+  bindingTableById: Map<number, number | null> | null | undefined,
+): boolean {
+  const storeKey = subTableStoreKey(binding)
+  if (storeKey != null && sliceKey === storeKey) return true
+  if (isCanonicalStoreKey(sliceKey)) return false
+  const sliceBindingId = Number(sliceKey)
+  if (!Number.isFinite(sliceBindingId)) return false
+  const fromMap = binding.bindingId != null
+    ? finiteTableId(bindingTableById?.get(Number(binding.bindingId)) ?? null)
+    : null
+  const selfTableId = finiteTableId(binding.tableId) ?? fromMap
+  if (selfTableId == null) return false
+  const sliceTableId = finiteTableId(bindingTableById?.get(sliceBindingId) ?? null)
+  return sliceTableId != null && sliceTableId === selfTableId
+}
 
 export interface ApplicationDetailMiHydrationFns {
   applySharedAttachmentHydrationToAllBindings: (
@@ -155,8 +192,9 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
    */
   /**
    * My Request initiator: link-form child bindings (People / subtable2) often have a stale per-bindingId slice
-   * (COMPLETED placeholders without age) while richer rows live under sibling __subTables__ keys (e.g. 30 vs 69).
-   * Union all overlapping variable slices so Details modal can resolve payload by parent sub_task_id.
+   * (COMPLETED placeholders without age) while richer rows live under sibling __subTables__ keys of the SAME
+   * table (e.g. 30 vs 69). Union those slices so Details can resolve payload by parent sub_task_id.
+   * Slices of another table are left alone, even when a parent business key appears on both.
    */
   function hydrateMiLinkChildBindingsForInitiatorMyRequest() {
     if (!isInitiatorMyRequestView.value) return
@@ -179,8 +217,9 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
       merged = mergeSubTableRowsByRowId(merged, ownSlice, pk)
       const threshold =
         fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
-      for (const val of Object.values(savedMap)) {
+      for (const [sliceKey, val] of Object.entries(savedMap)) {
         if (!Array.isArray(val) || val.length === 0) continue
+        if (!savedSliceBelongsToBindingTable(sliceKey, binding, lastBindingRelationTableMap.value)) continue
         const overlap = val.filter(row => {
           if (!row || typeof row !== 'object') return false
           let score = 0

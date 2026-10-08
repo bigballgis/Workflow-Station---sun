@@ -15,6 +15,11 @@ import {
   prepareSubTableAddRow,
   toFieldFkMetas,
 } from '@/utils/subTableRowRuntime'
+import {
+  resolveBindingParentSelection,
+  type BindingParentOption,
+  type BindingParentSelection,
+} from '@/utils/tableFkRuntime'
 import type { ColumnConfig, SubTableFieldEmit, SubTableFieldProps } from './types'
 
 interface UseSubTableRowDialogOptions {
@@ -53,6 +58,29 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
   const editingRowIndex = ref<number | null>(null)
   const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
   const dialogAddColumns = ref<DialogColumn[] | null>(null)
+  const parentSelection = ref<BindingParentSelection | null>(null)
+
+  const allocatePrimaryKeys = props.functionUnitId != null && props.config.tableId != null
+    ? async (payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string }) => {
+        const res = await functionUnitApi.allocatePrimaryKeys(props.functionUnitId!, payload)
+        return res?.data?.values ?? []
+      }
+    : undefined
+
+  function rowAddContext(selectedParent?: BindingParentOption | null) {
+    return buildRowAddContext(
+      props.primaryFormData ?? {},
+      props.previewTableBindings,
+      selectedParent?.row ?? null,
+      selectedParent?.tableId ?? null,
+      {
+        bindingId: props.config.bindingId,
+        tableId: props.config.tableId,
+        filterFkRefTableId: props.config.filterFkRefTableId,
+      },
+      selectedParent?.bindingId,
+    )
+  }
 
   // 是否使用 form-create 对话框（当有 formRule 时优先使用）
   const hasFormRule = computed(() => props.formRule && props.formRule.length > 0)
@@ -92,6 +120,13 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
 
     if (mode === 'add') {
       const fkMetas = toFieldFkMetas(props.config.fieldDefinitions)
+      parentSelection.value = resolveBindingParentSelection(
+        fkMetas,
+        props.config.filterFkFieldName,
+        props.previewTableBindings,
+        props.config.bindingId,
+      )
+      if ((parentSelection.value?.options.length ?? 0) < 2) parentSelection.value = null
       const baseCols = fkMetas.length
         ? applyFkPresentationToDialogColumns(
             displayColumns.value.map(toDialogColumn),
@@ -100,15 +135,12 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
           ).visibleColumns
         : undefined
 
-      const rowAddContext = buildRowAddContext(
-        props.primaryFormData ?? {},
-        props.previewTableBindings,
-      )
+      const addContext = rowAddContext()
       try {
         const result = await prepareSubTableAddRow({
           columns: baseCols ?? dialogColumns.value,
           fieldDefinitions: props.config.fieldDefinitions,
-          rowAddContext,
+          rowAddContext: addContext,
           tableId: props.config.tableId,
           tableDisplayName: props.config.title,
           primaryTableDisplayName: props.primaryTableDisplayName,
@@ -116,15 +148,12 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
           parentTablesById: props.parentTablesById,
           functionUnitId: props.functionUnitId != null ? String(props.functionUnitId) : undefined,
           autoEnsurePrimaryRecord: props.primaryFormData != null,
+          requireFkGuard: parentSelection.value == null,
           bindingLinkMode: props.config.bindingLinkMode,
           bindingForeignKeyField: props.config.bindingForeignKeyField,
-          allocatePrimaryKeys:
-            props.functionUnitId != null && props.config.tableId != null
-              ? async (payload) => {
-                  const res = await functionUnitApi.allocatePrimaryKeys(props.functionUnitId!, payload)
-                  return res?.data?.values ?? []
-                }
-              : undefined,
+          filterFkFieldName: props.config.filterFkFieldName,
+          fkFillSources: props.config.fkFillSources,
+          allocatePrimaryKeys: parentSelection.value ? undefined : allocatePrimaryKeys,
           t,
         })
         if (!result.ok) {
@@ -142,6 +171,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
         return
       }
     } else {
+      parentSelection.value = null
       dialogInitialData.value =
         index != null ? { ...tableData.value[index] } : undefined
     }
@@ -156,7 +186,8 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
         formOption: props.formOption,
         columns: dialogColumns.value,
         assignmentConfig: props.assignmentConfig,
-        onSave: (rowData) => handleDialogSave(rowData),
+        parentSelection: parentSelection.value,
+        onSave: (rowData, selectedParentValue) => handleDialogSave(rowData, selectedParentValue),
       })
       return
     }
@@ -183,8 +214,51 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
   }
 
   // Dialog 保存回调
-  function handleDialogSave(rowData: Record<string, any>) {
-    const savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
+  async function handleDialogSave(rowData: Record<string, any>, selectedParentValue?: string) {
+    let savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
+    if (dialogMode.value === 'add' && parentSelection.value) {
+      const latest = resolveBindingParentSelection(
+        toFieldFkMetas(props.config.fieldDefinitions),
+        props.config.filterFkFieldName,
+        props.previewTableBindings,
+        props.config.bindingId,
+      )
+      const selectedParent = latest?.options.find(option => option.value === selectedParentValue) ?? null
+      if (!selectedParent) {
+        ElMessage.warning(t('subTable.parentSelectionStale'))
+        return false
+      }
+      if (!allocatePrimaryKeys || props.config.tableId == null) {
+        ElMessage.warning(t('common.error'))
+        return false
+      }
+      const finalized = await prepareSubTableAddRow({
+        columns: dialogColumns.value,
+        fieldDefinitions: props.config.fieldDefinitions,
+        rowAddContext: rowAddContext(selectedParent),
+        tableId: props.config.tableId,
+        allocatePrimaryKeys,
+        functionUnitId: props.functionUnitId != null ? String(props.functionUnitId) : undefined,
+        parentTablesById: props.parentTablesById,
+        primaryTableId: props.primaryTableId,
+        primaryTableDisplayName: props.primaryTableDisplayName,
+        tableDisplayName: props.config.title,
+        autoEnsurePrimaryRecord: props.primaryFormData != null,
+        bindingLinkMode: props.config.bindingLinkMode,
+        bindingForeignKeyField: props.config.bindingForeignKeyField,
+        filterFkFieldName: props.config.filterFkFieldName,
+        fkFillSources: props.config.fkFillSources,
+        t,
+      })
+      if (!finalized.ok) {
+        ElMessage.warning(finalized.message)
+        return false
+      }
+      savedRow = mergeFormRowWithSeed(finalized.initialRow, rowData)
+      if (finalized.primaryFormDataPatch && Object.keys(finalized.primaryFormDataPatch).length > 0) {
+        emit('update:primaryFormData', finalized.primaryFormDataPatch)
+      }
+    }
     if (hasFormRule.value && props.formRule?.length) {
       const uploadRuleFields = collectUploadRulesFromTree(props.formRule).map((r) => r.field)
       alignUploadFieldsToColumns(savedRow, displayColumns.value, uploadRuleFields)
@@ -204,6 +278,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
     emit('update:modelValue', [...tableData.value])
     formDialogVisible.value = false
     simpleDialogVisible.value = false
+    return true
   }
 
   // 删除行
@@ -224,6 +299,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
     dialogInitialData,
     hasFormRule,
     dialogColumns,
+    parentSelection,
     openRowDialog,
     handleAdd,
     openEditDialog,

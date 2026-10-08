@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,4 +40,16 @@ public class TaskCompleteRequest {
 
     /** 回退目标节点ID */
     private String returnActivityId;
+
+    /**
+     * Participant slices the user deliberately emptied. Transport metadata — not a form field.
+     * Same field as {@link TaskFormSubmitRequest#emptiedSubTableKeys}.
+     */
+    private List<String> emptiedSubTableKeys;
+
+    /**
+     * Per-binding write claims. Transport metadata — not a form field.
+     * Same field as {@link TaskFormSubmitRequest#subTableBindingScopes}.
+     */
+    private List<SubTableBindingScope> subTableBindingScopes;
 }

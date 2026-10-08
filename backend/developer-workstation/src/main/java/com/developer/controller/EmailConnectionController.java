@@ -1,9 +1,10 @@
 package com.developer.controller;
 
 import com.developer.component.EmailConnectionComponent;
-import com.platform.common.dto.ApiResponse;
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
+import com.developer.dto.VaultEnvOption;
+import com.platform.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,6 +22,14 @@ import java.util.Map;
 public class EmailConnectionController {
 
     private final EmailConnectionComponent emailConnectionComponent;
+
+    @GetMapping("/vault-options")
+    @Operation(summary = "列出当前环境可用的 VAULT 环境变量")
+    public ResponseEntity<ApiResponse<List<VaultEnvOption>>> vaultOptions(
+            @PathVariable Long functionUnitId) {
+        emailConnectionComponent.listByFunctionUnitId(functionUnitId);
+        return ResponseEntity.ok(ApiResponse.success(emailConnectionComponent.listVaultOptions()));
+    }
 
     @GetMapping
     @Operation(summary = "列出功能单元的邮件连接")

@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.dto.RequestIdConfig;
+import com.developer.dto.SlaConfig;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.EmailConnection;
@@ -36,9 +37,12 @@ import com.developer.component.TableDesignComponent;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.MainTableViewService;
+import com.developer.service.impl.FunctionUnitDocumentService;
+import com.platform.security.util.SecurityContextUtils;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
+import com.developer.util.FkFillSourcesSupport;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -82,6 +86,7 @@ class FunctionUnitCloner {
     private final FunctionUnitCodeGenerator codeGenerator;
     private final MainTableViewService mainTableViewService;
     private final TableDesignComponent tableDesignComponent;
+    private final FunctionUnitDocumentService documentService;
 
     @Transactional
     FunctionUnit clone(Long id, String newName) {
@@ -147,6 +152,24 @@ class FunctionUnitCloner {
             }
             clonedFieldLookup.put(entry.getKey(), fieldMap);
         }
+
+        // Source field id -> cloned field id, so a binding's filterFkFieldId survives the clone.
+        // That column records a dw_field_definitions row rather than a column name (names get
+        // renamed; ids do not), which means it cannot be copied verbatim the way bindingLinkMode is
+        // -- the source id belongs to the source FU's table. Correspondence is by field NAME within
+        // the same source table, the same relation the dw_foreign_keys pass above relies on, and
+        // cloneTable copies names verbatim so it always resolves.
+        Map<Long, Long> fieldIdMapping = new HashMap<>();
+        for (TableDefinition sourceTable : sourceTables) {
+            Map<String, FieldDefinition> clonedFields =
+                    clonedFieldLookup.getOrDefault(sourceTable.getId(), Map.of());
+            for (FieldDefinition sourceField : sourceTable.getFieldDefinitions()) {
+                FieldDefinition clonedField = clonedFields.get(sourceField.getFieldName());
+                if (sourceField.getId() != null && clonedField != null && clonedField.getId() != null) {
+                    fieldIdMapping.put(sourceField.getId(), clonedField.getId());
+                }
+            }
+        }
         for (TableDefinition sourceTable : sourceTables) {
             if (sourceTable.getForeignKeys() != null) {
                 TableDefinition clonedTable = tableMapping.get(sourceTable.getId());
@@ -182,7 +205,7 @@ class FunctionUnitCloner {
         Map<Long, Long> formIdMapping = new HashMap<>();
         Map<Long, Long> bindingIdMapping = new HashMap<>();
         for (FormDefinition sourceForm : sourceForms) {
-            FormDefinition clonedForm = cloneForm(sourceForm, cloned, tableMapping, bindingIdMapping);
+            FormDefinition clonedForm = cloneForm(sourceForm, cloned, tableMapping, fieldIdMapping, bindingIdMapping);
             formIdMapping.put(sourceForm.getId(), clonedForm.getId());
         }
 
@@ -204,6 +227,11 @@ class FunctionUnitCloner {
         Map<Long, Long> emailTemplateIdMapping = cloneEmailTemplates(id, cloned);
         emailMonitorRulePortability.cloneAll(
                 id, cloned, formIdMapping, bindingIdMapping, connectionUidMapping);
+
+        // Requirements / Design documents: the source's latest content becomes the clone's v1
+        documentService.appendFromPackage(cloned.getId(), documentService.latestContents(id),
+                FunctionUnitDocumentService.SUMMARY_CLONED,
+                SecurityContextUtils.getCurrentUsername().orElse("system"));
 
         // Clone process definition last; rewrite BPMN ID references
         if (source.getProcessDefinition() != null) {
@@ -297,6 +325,7 @@ class FunctionUnitCloner {
                 .tableDisplayName(source.getTableDisplayName())
                 .displayName(source.getDisplayName())
                 .requestIdConfig(copyRequestIdConfig(source.getRequestIdConfig()))
+                .slaConfig(copySlaConfig(source.getSlaConfig()))
                 .build();
         cloned = tableDefinitionRepository.save(cloned);
 
@@ -336,6 +365,32 @@ class FunctionUnitCloner {
         return tableDefinitionRepository.save(cloned);
     }
 
+    /**
+     * The cloned counterpart of a binding's {@code filterFkFieldId}.
+     *
+     * <p>{@code fieldIdMapping} covers every field of every table this Function Unit owns, and a
+     * binding can only declare a field of its own bound table, so a source id missing from the map
+     * means that {@code dw_field_definitions} row no longer exists — the declaration was already
+     * dangling before the clone (the column carries no FK constraint, matching
+     * {@code ref_table_id}). Carrying nothing forward is then accurate rather than lossy: the clone
+     * lands in the documented "not declared" state and falls back to the table-level scan, exactly
+     * as the source already did. A warn is still emitted because a dangling id is a data defect
+     * worth seeing.
+     */
+    private Long remapFilterFkFieldId(FormTableBinding sourceBinding, Map<Long, Long> fieldIdMapping) {
+        Long sourceFieldId = sourceBinding.getFilterFkFieldId();
+        if (sourceFieldId == null) {
+            return null;
+        }
+        Long clonedFieldId = fieldIdMapping.get(sourceFieldId);
+        if (clonedFieldId == null) {
+            log.warn("Binding {} declares filterFkFieldId {} which matches no field definition of "
+                    + "the source Function Unit; cloning it as undeclared",
+                    sourceBinding.getId(), sourceFieldId);
+        }
+        return clonedFieldId;
+    }
+
     private RequestIdConfig copyRequestIdConfig(RequestIdConfig source) {
         if (source == null) {
             return null;
@@ -343,6 +398,17 @@ class FunctionUnitCloner {
         return RequestIdConfig.builder()
                 .fieldNames(source.getFieldNames() != null ? new ArrayList<>(source.getFieldNames()) : null)
                 .separator(source.getSeparator())
+                .build();
+    }
+
+    private SlaConfig copySlaConfig(SlaConfig source) {
+        if (source == null) {
+            return null;
+        }
+        return SlaConfig.builder()
+                .startDateSource(source.getStartDateSource())
+                .startDateField(source.getStartDateField())
+                .dueDateField(source.getDueDateField())
                 .build();
     }
 
@@ -406,6 +472,7 @@ class FunctionUnitCloner {
 
     private FormDefinition cloneForm(FormDefinition source, FunctionUnit target,
                                      Map<Long, TableDefinition> tableMapping,
+                                     Map<Long, Long> fieldIdMapping,
                                      Map<Long, Long> bindingIdMapping) {
         Map<String, Object> configJson = deepCopyMap(source.getConfigJson());
         Map<String, String> fieldPermissions = source.getFieldPermissions() != null
@@ -448,6 +515,9 @@ class FunctionUnitCloner {
                     // (subListViewId is deliberately NOT copied: it is re-pointed at the cloned
                     // sub-table view config below, since the source id would dangle.)
                     .bindingLinkMode(sourceBinding.getBindingLinkMode())
+                    .filterFkFieldId(remapFilterFkFieldId(sourceBinding, fieldIdMapping))
+                    .fkFillSources(FkFillSourcesSupport.remapFieldIds(
+                            sourceBinding.getFkFillSources(), fieldIdMapping))
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -455,6 +525,13 @@ class FunctionUnitCloner {
             formBindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
             bindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
             cloneSubTableViewConfigIfPresent(sourceBinding, savedBinding);
+        }
+        for (Long newId : formBindingIdMapping.values()) {
+            formTableBindingRepository.findById(newId).ifPresent(binding -> {
+                binding.setFkFillSources(FkFillSourcesSupport.remapAncestorBindingIds(
+                        binding.getFkFillSources(), formBindingIdMapping));
+                formTableBindingRepository.save(binding);
+            });
         }
 
         for (FormStageBinding sourceStage : formStageBindingRepository.findByFormId(source.getId())) {
@@ -495,7 +572,7 @@ class FunctionUnitCloner {
                     .host(source.getHost() != null ? source.getHost() : "")
                     .port(source.getPort())
                     .username(source.getUsername())
-                    .credentialEncrypted(source.getCredentialEncrypted())
+                    .passwordEnvKey(source.getPasswordEnvKey())
                     .fromEmail(source.getFromEmail())
                     .fromName(source.getFromName())
                     .useTls(source.getUseTls())

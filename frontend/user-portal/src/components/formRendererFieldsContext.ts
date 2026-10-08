@@ -70,6 +70,7 @@ export interface FormRendererFieldsContext {
   }
   handlePrimaryFormDataPatch?: (patch: Record<string, unknown>) => void
   handleSubTableUpdate: (bindingId: number, rows: unknown[]) => void
+  displayedSubTableRows: (bindingId?: number) => unknown[]
   handleLookupSelect: (key: string, row: unknown) => void
   /** Multi LOOKUP model sync (tag remove / toggle) — optional for older inject sites. */
   handleLookupModelUpdate?: (key: string, value: unknown) => void

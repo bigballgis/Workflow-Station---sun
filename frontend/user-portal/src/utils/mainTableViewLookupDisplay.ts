@@ -94,5 +94,21 @@ export function formatLookupAwareMainTableViewCell(
     if (text && text !== '-') return text
   }
 
-  return formatMainTableViewCell(rawValue)
+  return formatMainTableViewCell(selectDisplayValue(col, rawValue))
+}
+
+/**
+ * A column designed to show option labels maps each stored value through the bound widget's
+ * static options. A value outside those options is real data (an option removed later, a
+ * free-typed value) and stays as stored.
+ */
+export function selectDisplayValue(col: MainTableViewFieldColumn, rawValue: unknown): unknown {
+  if (col.selectDisplay !== 'label' || !col.selectOptions?.length || rawValue == null) return rawValue
+  const labelOf = (v: unknown): unknown => {
+    if (v == null) return v
+    const key = String(v)
+    const hit = col.selectOptions!.find(o => o.value === key)
+    return hit ? hit.label : v
+  }
+  return Array.isArray(rawValue) ? rawValue.map(labelOf) : labelOf(rawValue)
 }

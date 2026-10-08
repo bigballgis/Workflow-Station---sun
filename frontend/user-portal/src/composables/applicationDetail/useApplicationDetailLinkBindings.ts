@@ -6,6 +6,8 @@ import {
   filterLinkOnlyStandaloneSubTableFields,
 } from '@/components/formRendererHelpers'
 import { resolveSubTablePrimaryKeyFields } from '@/composables/tasks/shared'
+import { declaredFilterFkFields } from '@/composables/tasks/miBindingKindFromConfig'
+import { declaredFkFillSources } from '@/utils/tableFkRuntime'
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailLinkBindingsFns {
@@ -272,6 +274,8 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
             ),
             fieldDefinitions: raw.fieldDefinitions ?? [],
             bindingLinkMode: raw.bindingLinkMode,
+            ...declaredFilterFkFields(raw),
+            ...declaredFkFillSources(raw),
             data: []
           })
           known.add(Number(raw.bindingId))

@@ -2,34 +2,24 @@ package com.platform.common.mail;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class EmailConnectionPortabilityTest {
 
     @Test
-    void readEncryptedCredential_prefersNewKey() {
-        Map<String, Object> data = Map.of(
-                "credentialEncrypted", "enc-new",
-                "passwordEncrypted", "enc-legacy");
-
-        assertEquals("enc-new", EmailConnectionPortability.readEncryptedCredential(data));
+    void readPasswordEnvKey_readsBoundVariable() {
+        assertEquals("email.qq.inbound.password",
+                EmailConnectionPortability.readPasswordEnvKey(Map.of(
+                        "passwordEnvKey", "email.qq.inbound.password",
+                        "credentialEncrypted", "should-ignore")));
     }
 
     @Test
-    void readEncryptedCredential_fallsBackWhenNewKeyBlank() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("credentialEncrypted", null);
-        data.put("passwordEncrypted", "enc-legacy");
-
-        assertEquals("enc-legacy", EmailConnectionPortability.readEncryptedCredential(data));
-    }
-
-    @Test
-    void readEncryptedCredential_legacyOnly() {
-        assertEquals("enc-legacy", EmailConnectionPortability.readEncryptedCredential(
-                Map.of("passwordEncrypted", "enc-legacy")));
+    void readPasswordEnvKey_ignoresLegacyCiphertext() {
+        assertNull(EmailConnectionPortability.readPasswordEnvKey(
+                Map.of("credentialEncrypted", "enc-new")));
     }
 }

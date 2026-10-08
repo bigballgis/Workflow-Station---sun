@@ -149,7 +149,8 @@ public class AiViewProposalWriter {
                     m.get("systemField") instanceof Boolean b ? b : Boolean.FALSE,
                     null, null, null, null,
                     "field", // 结构校验只放行 field；lookup/fk 列留后续
-                    null, null));
+                    null, null,
+                    null));
             order++;
         }
         return out;

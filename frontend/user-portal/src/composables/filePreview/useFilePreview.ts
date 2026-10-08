@@ -1,7 +1,7 @@
 import { reactive, type InjectionKey } from 'vue'
 import {
   isFilePreviewRoute,
-  postFilePreviewBroadcast,
+  newFilePreviewId,
   readStoredPreviewSnapshot,
   tryOpenPreviewWindow,
   writeStoredPreviewSnapshot,
@@ -26,6 +26,7 @@ export const FILE_PREVIEW_PLAYLIST_KEY: InjectionKey<FilePreviewPlaylistApi> = S
 
 const state = reactive({
   visible: false,
+  previewId: '',
   url: '',
   name: '',
   cannotDownload: false,
@@ -58,32 +59,38 @@ export function applyFilePreviewPayload(payload: FilePreviewPayload, show: boole
   return true
 }
 
-function persistCurrentPreview(): void {
-  const payload: FilePreviewPayload = {
+function currentPayload(): FilePreviewPayload {
+  return {
     url: state.url,
     name: state.name,
     cannotDownload: state.cannotDownload,
     items: state.items,
     index: state.index,
   }
-  writeStoredPreviewSnapshot(payload)
-  postFilePreviewBroadcast(payload)
 }
 
-export function hydrateFilePreviewFromStorage(): boolean {
-  const snap = readStoredPreviewSnapshot()
+function persistCurrentPreview(): void {
+  if (!state.previewId) return
+  writeStoredPreviewSnapshot(state.previewId, currentPayload())
+}
+
+export function hydrateFilePreviewFromStorage(id: string | null): boolean {
+  if (!id) return false
+  const snap = readStoredPreviewSnapshot(id)
   if (!snap) return false
+  state.previewId = id
   return applyFilePreviewPayload(snap, true)
 }
 
 export function openFilePreview(payload: FilePreviewPayload): void {
   if (!applyFilePreviewPayload(payload, false)) return
+  state.previewId = newFilePreviewId()
   persistCurrentPreview()
   if (isFilePreviewRoute()) {
     state.visible = true
     return
   }
-  if (tryOpenPreviewWindow()) return
+  if (tryOpenPreviewWindow(state.previewId)) return
   state.visible = true
 }
 

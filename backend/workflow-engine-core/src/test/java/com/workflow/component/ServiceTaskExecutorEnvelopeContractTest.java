@@ -1,6 +1,7 @@
 package com.workflow.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.entity.ServiceTaskExecutionRecord;
 import com.workflow.repository.ServiceTaskExecutionRecordRepository;
 import org.flowable.bpmn.model.ExtensionAttribute;
@@ -62,13 +63,16 @@ class ServiceTaskExecutorEnvelopeContractTest {
     @Mock
     private PlatformTransactionManager transactionManager;
     @Mock
+    private AdminCenterClient adminCenterClient;
+    @Mock
     private DelegateExecution execution;
 
     private ServiceTaskExecutor executor;
 
     @BeforeEach
     void setUp() {
-        executor = new ServiceTaskExecutor(recordRepository, restTemplate, new ObjectMapper(), transactionManager);
+        executor = new ServiceTaskExecutor(recordRepository, restTemplate, new ObjectMapper(), transactionManager,
+                adminCenterClient);
         ReflectionTestUtils.setField(executor, "webhookBaseUrl", "http://activepieces:80");
         ReflectionTestUtils.setField(executor, "fileServiceBaseUrl", "http://developer-workstation:8080");
 
@@ -144,6 +148,44 @@ class ServiceTaskExecutorEnvelopeContractTest {
                 .containsEntry("activityId", "ServiceTask_1")
                 .containsEntry("flowKey", FLOW_KEY)
                 .containsEntry("flowId", FLOW_ID);
+    }
+
+    @Test
+    @DisplayName("context.initiator / currentUser 带工号：取自 initiator / currentUserId 变量，没有该变量就不出现")
+    void contextCarriesUserIdentitiesWithEmployeeId() {
+        Map<String, Object> vars = new LinkedHashMap<>();
+        vars.put("initiator", "user-a");
+        vars.put("currentUserId", "user-b");
+        when(execution.getVariables()).thenReturn(vars);
+        when(adminCenterClient.getUserInfo("user-a")).thenReturn(Map.of("id", "user-a", "employeeId", "45349679"));
+        Map<String, Object> noEmployeeId = new HashMap<>();
+        noEmployeeId.put("id", "user-b");
+        noEmployeeId.put("employeeId", null);
+        when(adminCenterClient.getUserInfo("user-b")).thenReturn(noEmployeeId);
+        stubWebhook(ResponseEntity.ok(Map.of("variables", Map.of())));
+
+        executor.execute(execution);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> context = (Map<String, Object>) sentBody().get("context");
+        assertThat(context.get("initiator")).isEqualTo(Map.of("userId", "user-a", "employeeId", "45349679"));
+        Map<String, Object> currentUser = new HashMap<>();
+        currentUser.put("userId", "user-b");
+        currentUser.put("employeeId", null);
+        assertThat(context.get("currentUser")).isEqualTo(currentUser);
+    }
+
+    @Test
+    @DisplayName("没有 initiator / currentUserId 变量：context 不带用户、也不查 admin-center")
+    void noUserVariablesMeansNoUserContext() {
+        stubWebhook(ResponseEntity.ok(Map.of("variables", Map.of())));
+
+        executor.execute(execution);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> context = (Map<String, Object>) sentBody().get("context");
+        assertThat(context).doesNotContainKeys("initiator", "currentUser");
+        verify(adminCenterClient, never()).getUserInfo(any());
     }
 
     @Test

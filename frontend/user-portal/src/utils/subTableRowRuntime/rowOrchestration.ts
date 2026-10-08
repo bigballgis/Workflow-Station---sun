@@ -6,9 +6,13 @@ import type { DialogColumn } from '../../components/subTableAddDialogHelpers'
 import { buildInitialRow } from '../../components/subTableAddDialogHelpers'
 import {
   type RowAddContext,
+  applyFkFillSources,
   applyFkToInitialRow,
   guardBeforeChildRowAdd,
   resolveForeignKeyValues,
+  selectBindingOwnedFkMetas,
+  type FieldFkMeta,
+  type FkFillSourceConfig,
 } from '../tableFkRuntime'
 import { applyFkPresentationToDialogColumns } from './columnPresentation'
 import { ensureRowIdentity } from '../subTableRowIdentity'
@@ -24,6 +28,51 @@ import {
   filterStructuralFkMetasForBinding,
   toFieldFkMetas,
 } from './types'
+
+function missingParentMessage(
+  fkMetas: FieldFkMeta[],
+  missingFields: string[],
+  childTableName: string,
+  parentTableDisplayNamesById: Record<number, string> | undefined,
+  t: (key: string, params?: Record<string, unknown>) => string,
+): string {
+  const missingDetails = [...new Set(missingFields)].map(fieldName => {
+    const meta = fkMetas.find(candidate => candidate.fieldName === fieldName)
+    const parentName = meta?.refTableId == null
+      ? ''
+      : String(parentTableDisplayNamesById?.[Number(meta.refTableId)] ?? '').trim()
+    return parentName ? `${fieldName} (${parentName})` : fieldName
+  }).join(', ')
+  return t('subTable.fkGuardMissingParents', { childTableName, missingDetails })
+}
+
+function missingFkFieldsForBinding(
+  fkMetas: FieldFkMeta[],
+  rowAddContext: RowAddContext,
+  options: {
+    bindingLinkMode?: BindingLinkMode | string | null
+    bindingForeignKeyField?: string | null
+    primaryKeyFields?: string[] | null
+    fieldDefinitions?: BindingFieldDefinition[] | null
+  },
+): string[] {
+  const missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+  const configuredField = String(options.bindingForeignKeyField ?? '').trim()
+  if (
+    !configuredField
+    || options.bindingLinkMode === 'miParticipantRow'
+    || bindingForeignKeyFieldIsRowPrimaryKey(configuredField, options)
+  ) {
+    return missing
+  }
+  const configuredMeta = fkMetas.find(meta => meta.isForeignKey && meta.fieldName === configuredField)
+  if (!configuredMeta) return missing
+  const configuredValue = resolveForeignKeyValues([configuredMeta], rowAddContext)[configuredField]
+  if (configuredValue == null || String(configuredValue).trim() === '') {
+    missing.push(configuredField)
+  }
+  return [...new Set(missing)]
+}
 
 /** Seed MI link-child FK columns (designer structural FKs e.g. sub_task_id; not row PK id). */
 export function seedLinkChildForeignKeysFromParentRow(
@@ -130,6 +179,7 @@ export async function prepareSubTableAddRow(options: {
   primaryTableDisplayName?: string
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  parentTableDisplayNamesById?: Record<number, string>
   functionUnitId?: string | null
   allocatePrimaryKeys?: AllocatePrimaryKeysFn
   requireFkGuard?: boolean
@@ -143,6 +193,8 @@ export async function prepareSubTableAddRow(options: {
   deferChildPkAllocationUntilSave?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
+  fkFillSources?: FkFillSourceConfig[] | null
+  filterFkFieldName?: string | null
   primaryKeyFields?: string[] | null
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -166,10 +218,18 @@ export async function prepareSubTableAddRow(options: {
 
   let rowAddContext = initialRowAddContext
 
-  const fkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
-    bindingLinkMode: options.bindingLinkMode,
-    bindingForeignKeyField: options.bindingForeignKeyField,
-  })
+  const structuralFkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+    })
+  const fkMetas = applyFkFillSources(
+    selectBindingOwnedFkMetas(
+      structuralFkMetas,
+      options.filterFkFieldName,
+      options.fkFillSources,
+    ),
+    options.fkFillSources,
+  )
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
 
@@ -178,7 +238,12 @@ export async function prepareSubTableAddRow(options: {
     || options.deferChildPkAllocationUntilSave === true
 
   if (requireFkGuard && fkMetas.length > 0 && !deferPkUntilSave) {
-    let missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+    let missing = missingFkFieldsForBinding(fkMetas, rowAddContext, {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+      primaryKeyFields: options.primaryKeyFields,
+      fieldDefinitions,
+    })
     if (
       missing.length > 0
       && autoEnsurePrimaryRecord
@@ -196,19 +261,27 @@ export async function prepareSubTableAddRow(options: {
       })
       rowAddContext = ensured.rowAddContext
       primaryFormDataPatch = ensured.primaryFormDataPatch
-      missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+      missing = missingFkFieldsForBinding(fkMetas, rowAddContext, {
+        bindingLinkMode: options.bindingLinkMode,
+        bindingForeignKeyField: options.bindingForeignKeyField,
+        primaryKeyFields: options.primaryKeyFields,
+        fieldDefinitions,
+      })
     }
     if (missing.length > 0) {
-      const parentName = options.primaryTableDisplayName || t('subTable.mainTableDefault')
       const childName = options.tableDisplayName || t('subTable.childTableDefault')
       return {
         ok: false,
-        message: t('subTable.fkGuardMainNotReady', { parentTableName: parentName, childTableName: childName }),
+        message: missingParentMessage(fkMetas, missing, childName, options.parentTableDisplayNamesById, t),
       }
     }
   }
 
-  const { visibleColumns, allColumns } = applyFkPresentationToDialogColumns(columns, fkMetas, fieldDefinitions)
+  const { visibleColumns, allColumns } = applyFkPresentationToDialogColumns(
+    columns,
+    structuralFkMetas,
+    fieldDefinitions,
+  )
   let row = buildInitialRow(allColumns)
   row = applyFkToInitialRow(row, fkMetas, rowAddContext)
   row = applyMiParticipantRowSeedToInitialRow(row, {
@@ -267,12 +340,15 @@ export async function finalizeSubTableRowOnSave(options: {
   allocatePrimaryKeys: AllocatePrimaryKeysFn
   functionUnitId?: string
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  parentTableDisplayNamesById?: Record<number, string>
   primaryTableId?: number | null
   primaryTableDisplayName?: string
   tableDisplayName?: string
   autoEnsurePrimaryRecord?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
+  fkFillSources?: FkFillSourceConfig[] | null
+  filterFkFieldName?: string | null
   primaryKeyFields?: string[] | null
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
@@ -305,16 +381,29 @@ export async function finalizeSubTableRowOnSave(options: {
   } = options
 
   let rowAddContext = options.rowAddContext
-  const fkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
-    bindingLinkMode: options.bindingLinkMode,
-    bindingForeignKeyField: options.bindingForeignKeyField,
-  })
+  const structuralFkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+    })
+  const fkMetas = applyFkFillSources(
+    selectBindingOwnedFkMetas(
+      structuralFkMetas,
+      options.filterFkFieldName,
+      options.fkFillSources,
+    ),
+    options.fkFillSources,
+  )
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
   let parentRowPatch: Record<string, unknown> | undefined
 
   if (fkMetas.length > 0) {
-    let missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+    let missing = missingFkFieldsForBinding(fkMetas, rowAddContext, {
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+      primaryKeyFields: options.primaryKeyFields,
+      fieldDefinitions,
+    })
     if (
       missing.length > 0
       && autoEnsurePrimaryRecord
@@ -340,14 +429,18 @@ export async function finalizeSubTableRowOnSave(options: {
           parentRowPatch = { ...parentRowAfter }
         }
       }
-      missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+      missing = missingFkFieldsForBinding(fkMetas, rowAddContext, {
+        bindingLinkMode: options.bindingLinkMode,
+        bindingForeignKeyField: options.bindingForeignKeyField,
+        primaryKeyFields: options.primaryKeyFields,
+        fieldDefinitions,
+      })
     }
     if (missing.length > 0) {
-      const parentName = options.primaryTableDisplayName || t('subTable.mainTableDefault')
       const childName = options.tableDisplayName || t('subTable.childTableDefault')
       return {
         ok: false,
-        message: t('subTable.fkGuardMainNotReady', { parentTableName: parentName, childTableName: childName }),
+        message: missingParentMessage(fkMetas, missing, childName, options.parentTableDisplayNamesById, t),
       }
     }
   }

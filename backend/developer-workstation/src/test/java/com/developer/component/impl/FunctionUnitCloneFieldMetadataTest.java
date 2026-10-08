@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.dto.RequestIdConfig;
+import com.developer.dto.SlaConfig;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
@@ -92,7 +93,10 @@ class FunctionUnitCloneFieldMetadataTest {
                 tableDesignComponent,
                 mock(com.developer.repository.EmailConnectionRepository.class),
                 mock(com.developer.repository.EmailMonitorRuleRepository.class),
-                mock(com.developer.repository.EmailTemplateRepository.class));
+                mock(com.developer.repository.EmailTemplateRepository.class),
+                new com.developer.service.impl.FunctionUnitDocumentService(
+                org.mockito.Mockito.mock(com.developer.repository.AiDocumentRepository.class),
+                org.mockito.Mockito.mock(com.developer.repository.AiStudioThreadStateRepository.class)));
     }
 
     @Test
@@ -115,6 +119,10 @@ class FunctionUnitCloneFieldMetadataTest {
                 .requestIdConfig(RequestIdConfig.builder()
                         .fieldNames(new ArrayList<>(List.of("order_no", "customer")))
                         .separator("-")
+                        .build())
+                .slaConfig(SlaConfig.builder()
+                        .startDateSource(SlaConfig.StartDateSource.SUBMITTED_AT)
+                        .dueDateField("due_date")
                         .build())
                 .build();
         orderTable.setFieldDefinitions(new ArrayList<>(List.of(
@@ -186,6 +194,12 @@ class FunctionUnitCloneFieldMetadataTest {
         assertEquals(List.of("order_no", "customer"), clonedOrder.getRequestIdConfig().getFieldNames());
         assertEquals("-", clonedOrder.getRequestIdConfig().getSeparator());
         assertNotSame(orderTable.getRequestIdConfig(), clonedOrder.getRequestIdConfig());
+
+        // SLA due date mapping survives as a copy.
+        assertNotNull(clonedOrder.getSlaConfig());
+        assertEquals(SlaConfig.StartDateSource.SUBMITTED_AT, clonedOrder.getSlaConfig().getStartDateSource());
+        assertEquals("due_date", clonedOrder.getSlaConfig().getDueDateField());
+        assertNotSame(orderTable.getSlaConfig(), clonedOrder.getSlaConfig());
 
         // PK generation strategy survives (prefixedSequence + autoIncrement), deep-copied.
         FieldDefinition clonedOrderNo = field(clonedOrder, "order_no");

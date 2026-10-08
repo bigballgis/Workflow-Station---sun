@@ -1,9 +1,14 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
-import { writeSubTableRows, subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
+import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
+import {
+  stampCanonicalStoreRows,
+  storeKeysSharedByMultipleBindings,
+} from './subTableCanonicalStamp'
+import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { completeTask, delegateTask, transferTask, urgeTask, type TaskActionInfo } from '@/api/task'
+import { completeTask, delegateTask, transferTask, urgeTask, type TaskActionInfo, type TaskCompleteRequest } from '@/api/task'
 import {
   actionRequiresComment,
   tryParseActionConfigJson,
@@ -19,6 +24,28 @@ import {
 } from '@/utils/miAssignmentConfig'
 import { ensureSubTableMapIdentities } from '@/utils/subTableRowIdentity'
 import { warnIfUploadsBlocking } from '@platform-shared/upload/uploadSubmitGate'
+function unwrapCompleteFormPayload(built: Record<string, any>): {
+  formData: Record<string, any>
+  emptiedSubTableKeys?: string[]
+  subTableBindingScopes?: TaskCompleteRequest['subTableBindingScopes']
+} {
+  if (
+    built != null
+    && typeof built === 'object'
+    && 'formData' in built
+    && 'emptiedSubTableKeys' in built
+    && built.formData != null
+    && typeof built.formData === 'object'
+    && !Array.isArray(built.formData)
+  ) {
+    return {
+      formData: built.formData as Record<string, any>,
+      emptiedSubTableKeys: built.emptiedSubTableKeys,
+      subTableBindingScopes: built.subTableBindingScopes,
+    }
+  }
+  return { formData: built }
+}
 function resolveProcessTaskId(source: MaybeRef<string>): string {
   const v = unref(source)
   return typeof v === 'string' ? v.trim() : ''
@@ -97,6 +124,8 @@ export function useTaskActions(options: {
   validateTaskForm?: () => Promise<boolean>
   /** MI Save parity: seed FK / merge participant scalars before complete. */
   prepareBeforeComplete?: () => Promise<void>
+  /** Runs after Submit finishes, including when Complete fails. */
+  onSubmitSettled?: () => void
   /**
    * Build Task Form payload for complete (clone rows, flatten nested __subTables__, MI scrub).
    * When omitted, falls back to legacy merge from formData + bindings (tests only).
@@ -215,9 +244,17 @@ export function useTaskActions(options: {
     // re-stamp that binding's own key after the loop, and it identified the table by the literal
     // name `participants`, which is not how the MI collection table is configured (Sub-Task Config
     // names it) and misses any table called something else.
+    const sharedKeys = storeKeysSharedByMultipleBindings(options.subTableBindings.value)
+    const stamped: Record<string, Array<Record<string, unknown>>> = {}
     for (const b of options.subTableBindings.value) {
-      writeSubTableRows(mergedSub, b, Array.isArray(b.data) ? b.data : [])
+      stampCanonicalStoreRows(mergedSub, stamped, b, Array.isArray(b.data) ? b.data : [], sharedKeys)
     }
+    removeRowsWithMissingParentsFromCanonicalStore(
+      mergedSub,
+      options.subTableBindings.value,
+      { formData: options.formData.value },
+      sharedKeys,
+    )
     currentFormData.__subTables__ = mergedSub
     return currentFormData
   }
@@ -273,9 +310,11 @@ export function useTaskActions(options: {
       if (options.approveForm.comment) {
         variables.approval_comment = options.approveForm.comment
       }
-      const built = options.buildFormPayloadForComplete
+      const rawBuilt = options.buildFormPayloadForComplete
         ? options.buildFormPayloadForComplete()
         : buildLegacyCompleteFormData()
+      const { formData: built, emptiedSubTableKeys, subTableBindingScopes } =
+        unwrapCompleteFormPayload(rawBuilt)
       const engineFormData: Record<string, any> = { ...built }
       engineFormData.__subTables__ = canonicalizeSubTablesForSubmit(
         (built.__subTables__ as Record<string, any>) || {},
@@ -293,7 +332,9 @@ export function useTaskActions(options: {
         action: options.currentApproveAction.value,
         comment: options.approveForm.comment,
         variables,
-        formData: submittedFormData
+        formData: submittedFormData,
+        emptiedSubTableKeys,
+        subTableBindingScopes,
       })
       ElMessage.success(t('task.operationSuccess'))
       options.approveDialogVisible.value = false
@@ -306,6 +347,7 @@ export function useTaskActions(options: {
       }
     } finally {
       options.submitting.value = false
+      options.onSubmitSettled?.()
     }
   }
   async function submitAction() {

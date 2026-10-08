@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,6 +33,9 @@ class EmailConnectionSyncCredentialsTest {
 
     @Mock
     private EncryptionService encryptionService;
+
+    @Mock
+    private EnvironmentVariableComponent environmentVariableComponent;
 
     @Mock
     private SystemSmtpConfigResolver systemSmtpConfigResolver;
@@ -54,12 +56,12 @@ class EmailConnectionSyncCredentialsTest {
                 .fromName("From")
                 .enabled(true)
                 .direction("OUTBOUND")
-                .credentialEncrypted("enc")
+                .passwordEnvKey("email.smtp.password")
                 .build();
 
         when(emailConnectionRepository.findByFunctionUnitIdAndId("fu-1", "conn-1"))
                 .thenReturn(Optional.of(conn));
-        when(encryptionService.decrypt("enc")).thenReturn("secret");
+        when(environmentVariableComponent.resolveVaultPassword("email.smtp.password")).thenReturn("secret");
         when(systemSmtpConfigResolver.requireSystemSmtpEndpoint())
                 .thenReturn(new SystemSmtpConfigResolver.SystemSmtpEndpoint("smtp.system.local", 587, true));
 
@@ -71,6 +73,26 @@ class EmailConnectionSyncCredentialsTest {
         assertEquals(true, creds.get().get("useTls"));
         assertEquals("user", creds.get().get("username"));
         assertEquals("secret", creds.get().get("password"));
+    }
+
+    @Test
+    void getCredentials_vaultNotFound_propagates() {
+        EmailConnection conn = EmailConnection.builder()
+                .id("conn-v")
+                .connectionType("SMTP")
+                .enabled(true)
+                .direction("INBOUND")
+                .passwordEnvKey("email.missing")
+                .build();
+
+        when(emailConnectionRepository.findByFunctionUnitIdAndId("fu-1", "conn-v"))
+                .thenReturn(Optional.of(conn));
+        when(environmentVariableComponent.resolveVaultPassword("email.missing"))
+                .thenThrow(new com.platform.common.exception.BusinessException(
+                        com.platform.common.enums.ErrorCode.RESOURCE_NOT_FOUND, "Vault secret not found"));
+
+        assertThrows(com.platform.common.exception.BusinessException.class,
+                () -> syncComponent.getCredentials("fu-1", "conn-v"));
     }
 
     @Test
@@ -123,7 +145,7 @@ class EmailConnectionSyncCredentialsTest {
                 .fromEmail("from@example.com")
                 .enabled(true)
                 .direction("OUTBOUND")
-                .credentialEncrypted("enc")
+                .passwordEnvKey("email.smtp.password")
                 .build();
 
         when(emailConnectionRepository.findByFunctionUnitIdAndId(
@@ -133,7 +155,7 @@ class EmailConnectionSyncCredentialsTest {
                 .thenReturn(Optional.of(conn));
         when(functionUnitRepository.findById("26f58e33-9d20-4aa4-8ee3-db32de999b15"))
                 .thenReturn(Optional.of(requestFu));
-        when(encryptionService.decrypt("enc")).thenReturn("secret");
+        when(environmentVariableComponent.resolveVaultPassword("email.smtp.password")).thenReturn("secret");
         when(systemSmtpConfigResolver.requireSystemSmtpEndpoint())
                 .thenReturn(new SystemSmtpConfigResolver.SystemSmtpEndpoint("smtp.qq.com", 465, true));
 
@@ -207,7 +229,7 @@ class EmailConnectionSyncCredentialsTest {
     }
 
     @Test
-    void syncConnections_clearsSecretThatCannotBeDecrypted() {
+    void syncConnections_ignoresLegacyCiphertextAndStoresPasswordEnvKey() {
         FunctionUnit fu = FunctionUnit.builder()
                 .id("fu-1")
                 .code("pr")
@@ -215,7 +237,6 @@ class EmailConnectionSyncCredentialsTest {
                 .version("1.0.0")
                 .build();
         when(functionUnitRepository.findById("fu-1")).thenReturn(Optional.of(fu));
-        when(encryptionService.decrypt("ENC:bad")).thenThrow(new RuntimeException("Decryption failed"));
         when(emailConnectionRepository.save(any(EmailConnection.class))).thenAnswer(inv -> inv.getArgument(0));
 
         syncComponent.syncConnections("fu-1", List.of(Map.of(
@@ -223,37 +244,13 @@ class EmailConnectionSyncCredentialsTest {
                 "name", "Mail",
                 "host", "smtp.example.com",
                 "fromEmail", "from@example.com",
-                "credentialEncrypted", "ENC:bad")));
+                "credentialEncrypted", "ENC:bad",
+                "passwordEnvKey", "email.smtp.password")));
 
         org.mockito.ArgumentCaptor<EmailConnection> captor =
                 org.mockito.ArgumentCaptor.forClass(EmailConnection.class);
         verify(emailConnectionRepository).save(captor.capture());
-        assertNull(captor.getValue().getCredentialEncrypted());
+        assertEquals("email.smtp.password", captor.getValue().getPasswordEnvKey());
         assertEquals("smtp.example.com", captor.getValue().getHost());
-    }
-
-    @Test
-    void syncConnections_acceptsLegacyPasswordEncryptedKey() {
-        FunctionUnit fu = FunctionUnit.builder()
-                .id("fu-1")
-                .code("pr")
-                .name("Purchase Request")
-                .version("1.0.0")
-                .build();
-        when(functionUnitRepository.findById("fu-1")).thenReturn(Optional.of(fu));
-        when(encryptionService.decrypt("enc-legacy")).thenReturn("secret");
-        when(emailConnectionRepository.save(any(EmailConnection.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        syncComponent.syncConnections("fu-1", List.of(Map.of(
-                "connectionUid", "conn-x",
-                "name", "Mail",
-                "host", "smtp.example.com",
-                "fromEmail", "from@example.com",
-                "passwordEncrypted", "enc-legacy")));
-
-        org.mockito.ArgumentCaptor<EmailConnection> captor =
-                org.mockito.ArgumentCaptor.forClass(EmailConnection.class);
-        verify(emailConnectionRepository).save(captor.capture());
-        assertEquals("enc-legacy", captor.getValue().getCredentialEncrypted());
     }
 }

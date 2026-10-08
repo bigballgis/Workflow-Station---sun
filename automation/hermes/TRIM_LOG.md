@@ -1435,3 +1435,38 @@ PATCH-032 已就位，无需改动）。与 piece 侧同一处方：每次安装
 - `prewarm-pieces.sh` 构建期仍在 `cache/v13/common` 的 workspace 根安装 —— 那里有 installer 写的
   `pnpm-workspace.yaml` 围栏，不会上溯到 monorepo，维持原状。
 - 气隙环境要支持"带外部依赖的 CODE 步"，需要另外的 store 烘焙策略（本次不涉及；现状是按步响亮失败）。
+
+## 2026-10-07　HERMES-PATCH-034：离线 store 补烘 CODE 步固定注入的 `@types/node`
+
+UAT 首次真实跑 OCR flow（`hermes-ocr-receipt-notice`）时，第 2 步 CODE 构建失败：
+`ERR_PNPM_NO_OFFLINE_META Failed to resolve @types/node@18.17.1 in package mirror …/metadata-v1.3/registry.npmjs.org/@types/node.json`。
+
+### 机制
+
+- `code-builder.ts#getPackageJson` 只要执行模式允许装包（除 `SANDBOX_CODE_ONLY` 外的所有模式，**含未设置时的默认
+  `UNSANDBOXED`**），就给每个 CODE 步的 package.json 注入 `@types/node@18.17.1` —— 自身零依赖的步骤也照样跑一次 pnpm install。
+- `AP_PIECES_OFFLINE_INSTALL=true` 下这次安装只认烘焙的离线 store，而 `seed-offline-store.mjs` 只烘 piece tarball 的依赖闭包，
+  从没烘过它 ⇒ 气隙环境里**任何一次新构建的 CODE 步**都失败（已缓存的旧构建不受影响，所以长期没暴露）。
+- dev compose 与本仓库 `deploy/k8s/activepieces.yaml` 都是 `SANDBOX_CODE_ONLY`（D6 基线），不装包，所以本地复现不出来；
+  UAT 的 IKP `activepieces.yaml` **从首次提交起就没有 `AP_EXECUTION_MODE`**（同时也没有 `AP_NETWORK_MODE`），实际跑的是默认 `UNSANDBOXED`。
+
+### 改法
+
+- `code-builder.ts` 把注入集合提成导出常量 `CODE_STEP_INJECTED_DEPENDENCIES`。
+- `seed-offline-store.mjs` 镜像同名常量并**无条件**烘进 store（pieces.json 没有 tarball 件时也烘）。
+- `code-builder.test.ts` 新增 2 个用例：零依赖步骤写出的 package.json 恰为注入集合；seed 脚本里的常量与 code-builder 的逐项相等
+  （已做变异验证：把 seed 改成 18.17.2，该用例变红）。
+
+### 验证
+
+| 场景 | 结果 |
+|---|---|
+| 空 store + 与 pkg-runner 相同参数离线装 `{"@types/node":"18.17.1"}` | `ERR_PNPM_NO_OFFLINE_META`（与 UAT 报错逐字一致） |
+| 用改后的 seed 脚本烘 store（pieces.json 为空）后再离线装 | 成功，`node_modules/@types/node` 就位 |
+| `packages/server/sandbox` 全量 | **230 passed**（PATCH-033 的 228 + 本次 2） |
+
+### 仍未做
+
+- 气隙下 CODE 步**自带**的 npm 依赖仍会离线 miss（按步响亮失败），维持原判。
+- UAT 未设 `AP_EXECUTION_MODE`（实际 `UNSANDBOXED`）偏离 D6 沙箱基线，属环境配置问题，本补丁不改；
+  切 `SANDBOX_CODE_ONLY` 会影响同事依赖挂载模块（xlsx / csv-* / safe-flat）的代码步，需另行评估。

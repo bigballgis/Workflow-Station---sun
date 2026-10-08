@@ -1,7 +1,11 @@
 import formEventMessages from './formEvents.zh-TW'
 import formCtlMessages from './formCtl.zh-TW'
 import tableDesignMessages from './tableDesign.zh-TW'
+import tableBindingsMessages from './tableBindings.zh-TW'
 import viewDesignMessages from './viewDesign.zh-TW'
+import fuDocumentsMessages from './fuDocuments.zh-TW'
+import aiStudioMessages from './aiStudio.zh-TW'
+import slaPoliciesMessages from './slaPolicies.zh-TW'
 
 export default {
   app: {
@@ -107,6 +111,8 @@ export default {
     emailMonitors: '郵件監聽',
     decisionDesign: '決策設計',
     versionManagement: '版本管理',
+    functionUnitSettings: 'Function Unit Settings',
+    aiStudio: 'AI Studio',
     automation: '自動化',
     admin: '管理中心',
     acDashboard: '儀表板',
@@ -149,6 +155,14 @@ export default {
     upProfileSetup: '用戶檔案設置',
   },
   guides: {
+    fuDocuments: {
+      title: 'Requirements 與 Function Unit Design',
+      summary: '功能單元的兩份 Markdown 文件：編輯、匯入、下載、版本，以及 AI Studio 在哪裡寫入它們。',
+    },
+    aiStudio: {
+      title: 'Build with AI（AI Studio）',
+      summary: '進入 AI Studio 的三種方式，以及 One-click generate：會寫什麼、不寫什麼、失敗時怎麼辦。',
+    },
     computedFields: {
       title: '計算欄位公式',
       summary: '計算欄如何自動填值、可用函數，以及公式失敗時的處理方式。',
@@ -169,6 +183,15 @@ export default {
       title: '郵件監聽',
       summary: '入站信箱、監聽範本、欄位擷取與開始事件綁定：每個欄位的含義，以及 Deploy 前檢查。',
     },
+    environmentVariables: {
+      title: '環境變數',
+      summary: '管理中心環境變數目錄：TEXT 目前/預設值，以及郵件連線用的 VAULT 鍵。Vault 路徑不存在時才寫入密碼。',
+    },
+    slaPolicies: {
+      title: 'SLA 策略',
+      summary:
+        '管理中心 SLA 策略：按功能單元設定時效天數，重算未結案件的到期日，查看任務與修改歷史。欄位對應在 Table Design。',
+    },
     upTasksToClaim: {
       title: '待辦 — 角色認領',
       summary:
@@ -177,6 +200,10 @@ export default {
     taskDelegate: {
       title: '委託任務',
       summary: '把這一條待辦交給指定使用者或一對 BU+Role，不改目前處理人。',
+    },
+    tableBindings: {
+      title: '管理表綁定',
+      summary: '把 MAIN、SUB、ACTION、RELATION 表掛到表單。Filter foreign key 和填入來源在這裡；Sub-Table 網格另有專文。',
     },
     formUpload: {
       title: '表單設計 — 進階上傳',
@@ -265,7 +292,7 @@ export default {
       "流程設計：選取 Send 任務。To 旁點 {'{'} {'}'} 可插入主表欄位 ${\'{'}fieldName{\'}'}。",
     connectionTitle: '先設出站連線',
     connectionBody:
-      '開啟「連線」，方向選「出站（寄信）」。填寫寄件人地址、SMTP 使用者名稱與密碼。主機、連接埠與是否 TLS 來自管理中心 → 系統設定。先用「測試」寄一封試信，再接到流程上。同一信箱在同一方向不能建兩條連線——請編輯既有列，或改用入站。',
+      '開啟「連線」，方向選「出站（寄信）」。填寫寄件人地址、SMTP 使用者名稱，並在「密碼（VAULT）」選擇管理中心 → 環境變數裡的 VAULT 鍵。主機、連接埠與是否 TLS 來自系統設定。先用「測試」寄一封試信，再接到流程上。同一信箱在同一方向不能建兩條連線——請編輯既有列，或改用入站。',
     connectionCatalogLead: '欄位目錄 —「新增/編輯連線」（出站）與「測試連線」上的每一個控制項。',
     fDirection:
       '必填。本頁選出站（寄信）；入站（監聽）給郵件監聽用。舊的「雙向」列必須存成這兩個之一。',
@@ -277,7 +304,7 @@ export default {
     fSmtpUsername:
       'SMTP 登入（服務帳號）。通常和寄件信箱不同。僅當中繼不需要 SMTP AUTH 時才可留空。',
     fSmtpPassword:
-      '填了使用者名稱時新增必填。SMTP 密碼或信箱授權碼。編輯時留空表示不改已存密碼。',
+      '填了使用者名稱時必填。選擇 VAULT 環境變數（不能選 TEXT）。信箱密碼留在 Vault。見 [[/environment-variables]]。',
     fSmtpHost: '本頁不能填。SMTP 主機來自管理中心 → 系統設定（出站連線）。',
     fSmtpPort: '本頁不能填。常見 25/587（STARTTLS）或 465（SSL）。與「使用 TLS」一起在系統設定裡設。',
     fUseTls: '本頁不能填。465 用 SSL、25/587 用 STARTTLS 時選是。在管理中心 → 系統設定中設定。',
@@ -366,14 +393,14 @@ export default {
     startEventFigure: '開始事件 StartEvent_Email：已綁定 Vendor quote to PR，主旨過濾 Quote，已設定擷取。',
     inboundTitle: '先設入站連線',
     inboundBody:
-      '開啟「連線」，方向選「入站（監聽）」。填寫信箱地址以及 IMAP 使用者名稱與密碼。IMAP 主機、連接埠與 SSL 來自管理中心 → 系統設定。方向未設為入站時，監聽頁會提示尚無入站連線。',
+      '開啟「連線」，方向選「入站（監聽）」。填寫信箱地址、IMAP 使用者名稱，並在「密碼（VAULT）」選擇管理中心 → 環境變數。IMAP 主機、連接埠與 SSL 來自系統設定。方向未設為入站時，監聽頁會提示尚無入站連線。',
     inboundCatalogLead: '欄位目錄 —「新增/編輯連線」（入站）上的每一個控制項。',
     fDirection: '必填。必須是入站（監聽），否則這個信箱不會出現在郵件監聽裡。',
     fDirectionInbound: '選項：用 IMAP 輪詢此信箱。出站（寄信）給「傳送郵件」用，不是本頁。',
-    fMailboxEmail: '必填。要輪詢的信箱，同時作為連線名稱。空白無法儲存。',
-    fImapUsername: 'IMAP 登入（服務帳號）。通常和信箱地址不同。新增時與密碼一起必填。',
+    fMailboxEmail: '必填。要輪詢的信箱，同時作為連線名稱。IMAP 使用者名稱是服務帳號時，監聽會嘗試用該帳號開啟這個信箱（需郵件伺服器支援）。空白無法儲存。',
+    fImapUsername: 'IMAP 登入（服務帳號）。通常和信箱地址不同。新增時與密碼一起必填。用來認證；監聽信箱是將嘗試讀取的收件匣。',
     fImapPassword:
-      'IMAP 密碼或信箱授權碼。新增且填了使用者名稱時必填。編輯時留空表示不改已存密碼。',
+      'IMAP 密碼改為 VAULT 環境變數。填了使用者名稱時必填。不再儲存密文；舊連線需重新選擇 VAULT 鍵。見 [[/environment-variables]]。',
     fImapHost: '本頁不能填。IMAP 主機來自管理中心 → 系統設定（入站連線）。',
     fImapPort: '本頁不能填。常見 993（SSL）或 143（STARTTLS/明文）。在系統設定裡設。',
     fImapSsl: '本頁不能填。是：imaps，通常 993。否：明文或 STARTTLS imap，通常 143。在系統設定裡設。',
@@ -534,6 +561,39 @@ export default {
     deleteTitle: '刪除範本',
     deleteBody: '已綁到一個或多個開始事件的範本無法刪除。先在流程設計裡解除綁定，再刪除範本。',
   },
+  environmentVariablesGuide: {
+    pageTitle: '環境變數',
+    crumb: '管理中心',
+    intro:
+      '管理中心 → 環境變數保存 TEXT 取值和 VAULT 目錄鍵。新增時僅當 Vault 還沒有該路徑才寫入密碼。編輯和刪除都不會改 Vault。郵件連線密碼只綁定 VAULT 變數鍵。',
+    flowTitle: '操作順序',
+    flow1: '新增 VAULT 變數：填寫鍵，密碼可選',
+    flow2: '在「連線」把密碼選成該 VAULT 鍵',
+    flow3: '測試寄信或部署入站監聽',
+    catalogTitle: '目錄欄位',
+    catalogBody:
+      '開啟管理中心左側的「環境變數」。TEXT 用於普通字串（預設值必填、目前值可選），VAULT 只建目錄鍵。欄位在 Vault 中不存在時才寫入密碼；已有欄位只建目錄行。郵件密碼必須是 VAULT — TEXT 不會出現在連線的密碼下拉。',
+    catalogLead: '欄位目錄 — 新增/編輯變數。',
+    fKindText: 'TEXT。預設值必填。目前值可選；空白或只有空白字元時用預設值。',
+    fKindVault: 'VAULT。填寫鍵。僅當 ame-hase-hermes/env-var 下還沒有該欄位時才需要密碼。不填目前/預設文字。執行時讀取該欄位。',
+    fKey: '必填。穩定鍵（如 email.qq.inbound.password）。連線與 ZIP 只存這個鍵，不存密文。鍵重複會被拒絕。',
+    fDisplayName: '必填。會出現在連線下拉的顯示名稱。',
+    fDefault: 'TEXT 必填。目前值為空或空白時使用。',
+    fCurrent: 'TEXT 選填。非空白目前值優先於預設值。',
+    fPath: '介面不填。密鑰路徑固定為 ame-hase-hermes/env-var，mount 為 secrets/kv_v2/wsit，namespace 為 ITID/12139042_HERMES。目錄鍵是該 secret 下的欄位名。',
+    fPassword: '新增時：僅當 Vault 沒有該鍵才必填。已有密鑰會復用且不覆蓋。編輯不會寫 Vault。刪除只去掉目錄行。',
+    bindTitle: '綁到連線',
+    bindBody:
+      '開發工作站 → 連線：填了使用者名稱就必須在「密碼（VAULT）」選本目錄的 VAULT 鍵。主機仍來自系統設定 SMTP/IMAP。見 [[/email-send#connection]] 與 [[/email-monitor]]。',
+    fBindPassword: '填了使用者名稱時必填。清單只有 VAULT。舊連線開啟後必須重新選擇 VAULT 鍵，密文欄已刪除。',
+    failTitle: '失敗時',
+    failBody: '改目錄或連線綁定後再測試或 Deploy。',
+    failTextBlank: 'TEXT 預設值為空 — 無法儲存。目前值只有空白字元時回退預設值。',
+    failDuplicateKey: '目錄鍵已存在 — 無法儲存。請直接使用已有環境變數，不必操作 Vault。',
+    failVaultWrite: '寫入 Vault 失敗（連通、登入或權限）— 無法儲存，頁面會提示錯誤原因。',
+    failVault404: 'Vault 404 — 不會當成「沒有密碼」略過；收信/寄信會明確回報 Vault 錯誤。',
+    failTextForMail: '郵件密碼綁了 TEXT — 管理中心拒絕；請改選 VAULT。',
+  },
   upTasksToClaimGuide: {
     pageTitle: '待辦 — 認領角色請求',
     crumb: '使用者入口 · 任務 · 待辦',
@@ -547,6 +607,13 @@ export default {
     listTitle: '清單裡有什麼',
     listBody:
       '開啟使用者入口 → 任務 → 待辦。指定到人、部門角色、委派請求用各自的分配類型顏色。角色池請求用「BU + 角色」顏色。這些列的「目前處理人」顯示被指派的人。角色請求尚未有人持有時該欄為空；認領後自己持有顯示「我」，他人持有顯示對方姓名（已被認領）。點選申請編號開啟表單。',
+    rowActionsTitle: '操作欄按鈕說明',
+    rowActionsBody:
+      '操作欄顯示哪些按鈕，取決於請求目前狀態和你的權限。「Claim」在角色請求無人持有時出現，點選後你會成為目前處理人，並可編輯和提交。「Unclaim」在請求由你持有時出現，點選後會清空目前處理人，並把請求退回角色認領池。「Release Claim」僅在請求由其他成員持有、且你是同角色 Leader、該業務單元審批人或系統管理員時出現；確認後會釋放對方的持有，讓符合條件的成員重新認領。「Reassign」對相同的管理角色顯示，點選後可從同一角色中選擇成員，並把請求直接交給該成員，而不是退回認領池。這些按鈕只改變請求由誰持有，不會批准、拒絕或完成請求。',
+    claimButtonSample: '空閒角色請求 → 認領到你名下並允許編輯',
+    unclaimButtonSample: '你持有的請求 → 釋放並退回角色認領池',
+    releaseClaimButtonSample: '他人持有的請求 → 確認後釋放對方持有；僅限有權限的使用者',
+    reassignButtonSample: '空閒或已持有的角色請求 → 直接交給同角色另一成員；僅限有權限的使用者',
     claimTitle: '認領、取消認領、一鍵認領與一鍵取消認領',
     claimBody:
       '認領後請求鎖定在你名下，同角色其他人只能檢視，直到你取消認領或辦完。若你已經持有，完成任務不需要再認領一次。右上角一鍵認領只需確認一次，然後每批最多 100 筆，自動循環直到沒有可認領的。搜尋後勾選列，在「已選擇 N 項」和「批次催辦」之間的認領 / 取消認領只處理勾選中真正能認領或你持有的列；兩個按鈕一直顯示，沒有資格時停用。確認框會寫出「已選 M 筆中的 N 筆」。一鍵取消認領同樣確認一次、按 100 筆分批，只釋放你自己持有的。勾選取消認領和一鍵取消認領都不會強制釋放同事的持有。若部分失敗，提示裡會彙總成功 / 跳過 / 失敗筆數。',
@@ -569,8 +636,8 @@ export default {
     autoPreviewSample: '待辦和個人中心的開關；預設關閉',
     filePreviewTitle: '檔案預覽',
     filePreviewBody:
-      '點選表單上的檔名、子表儲存格或備註附件，會在新的瀏覽器分頁開啟預覽，表單不被擋住。若瀏覽器攔截了新分頁，則仍使用對話框。圖片和 TIFF 提供縮小、放大、100%、適應視窗。預設適應視窗。按住 Ctrl（Mac 上為 ⌘）並滾動滑鼠滾輪，會以指標位置為中心縮放。100% 依原始像素顯示，超出部分用捲軸檢視。TIFF 會忽略縮圖 IFD，避免把掃描件當成很小的圖。同一筆申請有多個可預覽檔案時，可在預覽頁用上一個/下一個檔案切換，順序為主表上傳、再按子表列、再巢狀子表。備註附件只在該則備註的檔案之間切換。',
-    filePreviewSample: '新分頁；Ctrl + 滾輪縮放；適應視窗 / 100%；上一個/下一個檔案',
+      '點選表單上的檔名、子表儲存格或備註附件，會新開一個瀏覽器視窗預覽，表單不被擋住。再點另一個檔案會再開一個視窗，已經開啟的視窗保持原來的檔案。若瀏覽器攔截了新視窗，則仍使用對話框。圖片和 TIFF 提供縮小、放大、100%、適應視窗。預設適應視窗。按住 Ctrl（Mac 上為 ⌘）並滾動滑鼠滾輪，會以指標位置為中心縮放。100% 依原始像素顯示，超出部分用捲軸檢視。TIFF 會忽略縮圖 IFD，避免把掃描件當成很小的圖。同一視窗裡有多個可預覽檔案時，可用上一個/下一個檔案切換，順序為主表上傳、再按子表列、再巢狀子表。備註附件只在該則備註的檔案之間切換。',
+    filePreviewSample: '每次新開視窗；Ctrl + 滾輪縮放；適應視窗 / 100%；上一個/下一個檔案',
     detailTitle: '任務詳情頁',
     detailBody:
       '無人持有或他人持有時，表單唯讀，操作列隱藏。頂部橫幅會說明尚未認領、你已認領、或已被他人認領。只有持有人能看到「你已認領」、可以取消認領、編輯和提交。若你是該角色的 Leader、該業務單元的審批人、或系統管理員，橫幅與清單還會顯示「強制釋放」和「重新分配」。',
@@ -671,5 +738,9 @@ export default {
   ...formEventMessages,
   ...formCtlMessages,
   ...tableDesignMessages,
+  ...tableBindingsMessages,
   ...viewDesignMessages,
+  ...fuDocumentsMessages,
+  ...aiStudioMessages,
+  ...slaPoliciesMessages,
 }

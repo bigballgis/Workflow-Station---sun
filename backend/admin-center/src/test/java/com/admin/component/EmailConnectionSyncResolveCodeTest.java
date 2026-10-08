@@ -25,7 +25,8 @@ class EmailConnectionSyncResolveCodeTest {
                 mock(EmailConnectionRepository.class),
                 functionUnitRepository,
                 mock(EncryptionService.class),
-                mock(SystemSmtpConfigResolver.class));
+                mock(SystemSmtpConfigResolver.class),
+                mock(EnvironmentVariableComponent.class));
     }
 
     @Test

@@ -2,8 +2,11 @@ package com.admin.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.handler.AbstractHandlerMapping;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -20,6 +23,8 @@ import org.springframework.web.util.pattern.PathPatternParser;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final OrganizationMutationAccessInterceptor organizationMutationAccessInterceptor;
+    private final ConfigMutationAccessInterceptor configMutationAccessInterceptor;
+    private final SlaPolicyAccessInterceptor slaPolicyAccessInterceptor;
     
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
@@ -39,6 +44,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/virtual-groups/*/tasks/*/claim",
                         "/virtual-groups/tasks/*/delegate");
+        registry.addInterceptor(configMutationAccessInterceptor)
+                .addPathPatterns("/configs", "/configs/**")
+                // Read-only impact preview that happens to be a POST.
+                .excludePathPatterns("/configs/*/assess-impact");
+        registry.addInterceptor(slaPolicyAccessInterceptor)
+                .addPathPatterns("/sla-policies", "/sla-policies/**");
     }
 
     @Override
@@ -65,5 +76,21 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);
+    }
+
+    /**
+     * {@code /**} still matches the catalog, so the processor drops CORS for those paths.
+     */
+    @Bean
+    public static BeanPostProcessor vaultCatalogCorsProcessor() {
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) {
+                if (bean instanceof AbstractHandlerMapping mapping) {
+                    mapping.setCorsProcessor(new VaultCatalogCorsProcessor());
+                }
+                return bean;
+            }
+        };
     }
 }

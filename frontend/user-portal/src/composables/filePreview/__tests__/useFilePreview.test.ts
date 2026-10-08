@@ -85,19 +85,39 @@ describe('file preview playlist', () => {
     const state = useFilePreviewState()
     expect(state.visible).toBe(false)
     expect(state.name).toBe('a.pdf')
-    expect(window.open).toHaveBeenCalled()
+    expect(window.open).toHaveBeenCalledWith(
+      expect.stringContaining(`id=${state.previewId}`),
+      '_blank',
+      expect.stringContaining('popup=yes'),
+    )
     expect(localStorage.getItem(FILE_PREVIEW_STORAGE_KEY)).toContain('/a.pdf')
   })
 
-  it('hydrates the preview page from the stored snapshot', () => {
+  it('opens a second file in another window and keeps the first snapshot', () => {
     vi.mocked(window.open).mockReturnValue({ closed: false } as Window)
     openFilePreview({ url: '/a.pdf', name: 'a.pdf' })
+    const idA = useFilePreviewState().previewId
+    openFilePreview({ url: '/b.pdf', name: 'b.pdf' })
+    const idB = useFilePreviewState().previewId
+    expect(idA).not.toBe(idB)
+    expect(window.open).toHaveBeenCalledTimes(2)
+    expect(hydrateFilePreviewFromStorage(idA)).toBe(true)
+    expect(useFilePreviewState().url).toBe('/a.pdf')
+    expect(hydrateFilePreviewFromStorage(idB)).toBe(true)
+    expect(useFilePreviewState().url).toBe('/b.pdf')
+  })
+
+  it('hydrates the preview page from its own snapshot id', () => {
+    vi.mocked(window.open).mockReturnValue({ closed: false } as Window)
+    openFilePreview({ url: '/a.pdf', name: 'a.pdf' })
+    const id = useFilePreviewState().previewId
     const state = useFilePreviewState()
     state.url = ''
     state.name = ''
     state.visible = false
-    expect(hydrateFilePreviewFromStorage()).toBe(true)
+    expect(hydrateFilePreviewFromStorage(id)).toBe(true)
     expect(state.url).toBe('/a.pdf')
     expect(state.visible).toBe(true)
+    expect(hydrateFilePreviewFromStorage(null)).toBe(false)
   })
 })

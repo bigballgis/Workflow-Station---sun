@@ -23,6 +23,7 @@ import com.admin.bi.service.impl.BiDashboardRegistryServiceImpl;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRoleRepository;
 import com.admin.service.UserBusinessUnitService;
 import net.jqwik.api.*;
@@ -63,6 +64,7 @@ class BiAuditLogPropertyTest {
     private RoleRepository roleRepository;
     private BusinessUnitRepository businessUnitRepository;
     private UserRoleRepository userRoleRepository;
+    private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private UserBusinessUnitService userBusinessUnitService;
     private BiDashboardAssignmentServiceImpl assignmentService;
 
@@ -79,11 +81,12 @@ class BiAuditLogPropertyTest {
         roleRepository = mock(RoleRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
         userRoleRepository = mock(UserRoleRepository.class);
+        userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         userBusinessUnitService = mock(UserBusinessUnitService.class);
         assignmentService = new BiDashboardAssignmentServiceImpl(
                 assignmentRepository, registryRepository,
                 userRepository, roleRepository, businessUnitRepository,
-                userRoleRepository, userBusinessUnitService,
+                userRoleRepository, userBusinessUnitRoleRepository, userBusinessUnitService,
                 new DashboardRoleGate(mock(BiRbacMappingService.class), new BiProperties(), userRoleRepository));
     }
 

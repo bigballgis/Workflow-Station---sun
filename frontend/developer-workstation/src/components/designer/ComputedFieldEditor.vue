@@ -43,7 +43,7 @@
           <span class="el-dialog__title">{{ t('table.computedField.dialogTitle') }}</span>
           <DesignerHelpLink
             path="/computed-fields"
-            :aria-label="t('table.computedField.guideLinkAria')"
+            :ariaLabel="t('table.computedField.guideLinkAria')"
             test-id="computed-field-guide-link"
           />
         </div>

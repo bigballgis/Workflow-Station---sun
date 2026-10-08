@@ -40,10 +40,8 @@ describe('commitDesignerPanelEditsBeforePreview', () => {
     expect(blur).toHaveBeenCalled()
   })
 
-  // Regression: the auto-save poll calls this on every tick. Blurring a control whose popper
-  // is open makes Element Plus set expanded=false, so every property-panel dropdown (Sub Table
-  // Binding, Lookup, Link Form ...) shut itself within one poll interval of opening and could
-  // not be used. Such controls commit on `change`, not on blur — skipping loses no edit.
+  // Explicit Save/Preview calls this helper. Blurring a control whose popper is open makes
+  // Element Plus set expanded=false, so the author could not complete the current selection.
   it('leaves a control with an open popper focused so its dropdown stays open', () => {
     const input = mountPanelControl(true)
     const blur = vi.spyOn(input, 'blur')

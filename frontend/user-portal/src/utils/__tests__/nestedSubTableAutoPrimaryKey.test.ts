@@ -93,6 +93,37 @@ describe('nested sub-table row save (sub-table in sub-table)', () => {
     expect(result.parentRowPatch).toMatchObject({ shipment_name: 'SHP-A', id_idw: '9' })
   })
 
+  it('allocates the open parent key when one saved sibling row is already in the list', async () => {
+    const allocate = allocator({ [PARENT_TABLE_ID]: ['9'], [CHILD_TABLE_ID]: ['4'] })
+    const result = await finalizeSubTableRowOnSave({
+      row: { package_label: 'PKG-2' },
+      fieldDefinitions: packageFields,
+      rowAddContext: buildRowAddContext(
+        { id: 'Case-1' },
+        [
+          { bindingId: 1, tableId: PARENT_TABLE_ID, bindingType: 'SUB', data: [{ id_idw: '7', shipment_name: 'alice' }] },
+          { bindingId: 2, tableId: CHILD_TABLE_ID, bindingType: 'SUB', filterFkRefTableId: PARENT_TABLE_ID, data: [] },
+        ],
+        { shipment_name: 'ciri' },
+        PARENT_TABLE_ID,
+        { bindingId: 2, tableId: CHILD_TABLE_ID, filterFkRefTableId: PARENT_TABLE_ID },
+        1,
+      ),
+      tableId: CHILD_TABLE_ID,
+      allocatePrimaryKeys: allocate,
+      autoEnsurePrimaryRecord: true,
+      parentTablesById: { [PARENT_TABLE_ID]: { fieldDefinitions: shipmentFields } },
+      parentTableId: PARENT_TABLE_ID,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.row.shipment_id).toBe('9')
+    expect(result.row.id_idw).toBe('4')
+    expect(result.parentRowPatch).toMatchObject({ shipment_name: 'ciri', id_idw: '9' })
+    expect(result.row.shipment_id).not.toBe('7')
+  })
+
   it('leaves an already-keyed parent row untouched (no second allocation)', async () => {
     const allocate = allocator({ [PARENT_TABLE_ID]: ['99'], [CHILD_TABLE_ID]: ['5'] })
     const result = await finalizeSubTableRowOnSave({

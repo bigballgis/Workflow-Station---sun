@@ -14,7 +14,8 @@ import java.util.Map;
 
 /**
  * Process Instance entity for developer workstation.
- * Represents a running or completed process instance bound to a specific function unit version.
+ * Represents a running or completed process instance.
+ * Runtime form freeze is {@code function_unit_catalog_id}; {@code function_unit_version_id} is the live DW row.
  * 
  * Requirements: 5.1, 5.2, 5.4, 5.5
  */
@@ -107,15 +108,9 @@ public class ProcessInstance {
     private Long lockVersion;
 
     /**
-     * Reference to the specific version of the function unit this process instance is bound to.
-     * This binding is immutable - once set at creation time, it never changes.
-     * 
-     * Requirements: 5.1 - WHEN a Process_Instance is created, THE System SHALL bind it to 
-     *                     the current Active_Version
-     *               5.2 - WHEN a new version is deployed, THE System SHALL ensure existing 
-     *                     Process_Instance records continue using their bound version
-     *               5.4 - THE System SHALL maintain the version binding for the entire 
-     *                     lifecycle of each Process_Instance
+     * Live Designer row ({@code dw_function_units.id}) used as a BPMN join helper.
+     * It is not an immutable version pack: that table is one row per code and is updated in place.
+     * Runtime freeze for forms/bindings is {@code function_unit_catalog_id} → Admin catalog contents.
      */
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)

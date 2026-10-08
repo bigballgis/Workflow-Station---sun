@@ -20,7 +20,11 @@ export interface MainTableViewField {
   lookupSourceField?: string | null
   /** For lookup_display / fk_display: attribute on the target row. */
   lookupDisplayField?: string | null
+  /** What a select-like column shows in the Portal list: stored option value (default) or option label. */
+  selectDisplay?: MainTableViewSelectDisplay | null
 }
+
+export type MainTableViewSelectDisplay = 'value' | 'label'
 
 export interface MainTableLookupCatalogGroup {
   sourceField: string

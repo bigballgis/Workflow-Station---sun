@@ -10,14 +10,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +38,8 @@ class ProcessInstanceHydrationComponentTest {
     private UserDisplayNameResolver userDisplayNameResolver;
     @Mock
     private RestTemplate restTemplate;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     private ProcessInstanceHydrationComponent hydrationComponent;
@@ -108,5 +113,29 @@ class ProcessInstanceHydrationComponentTest {
         assertThat(result.getVariables()).containsEntry("subject", "hello");
         verify(workflowEngineClient, never()).getProcessInstance(any());
         verify(processInstanceRepository).save(any(ProcessInstance.class));
+    }
+
+    @Test
+    void pinsLiveDesignerIdWhenFunctionUnitCodeIsKnown() {
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.empty());
+        when(userDisplayNameResolver.resolve("system")).thenReturn("system");
+        when(jdbcTemplate.queryForList(
+                eq("SELECT id FROM dw_function_units WHERE code = ?"),
+                eq(Long.class),
+                eq("FU-MCY"))).thenReturn(List.of(48L));
+        when(processInstanceRepository.save(any(ProcessInstance.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> snapshot = Map.of(
+                "processDefinitionKey", "Process_MCY",
+                "startUserId", "system",
+                "status", "RUNNING",
+                "variables", Map.of(
+                        "functionUnitId", "cat-uuid",
+                        "functionUnitCode", "FU-MCY"));
+
+        ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID, snapshot);
+
+        assertThat(result.getFunctionUnitVersionId()).isEqualTo(48L);
+        assertThat(result.getFunctionUnitCode()).isEqualTo("FU-MCY");
     }
 }

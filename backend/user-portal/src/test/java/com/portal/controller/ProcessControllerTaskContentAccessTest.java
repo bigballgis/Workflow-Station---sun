@@ -5,6 +5,7 @@ import com.portal.component.ProcessComponent;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.platform.common.dto.ApiResponse;
+import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.TaskInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -74,7 +75,7 @@ class ProcessControllerTaskContentAccessTest {
         when(processComponent.getFunctionUnitContent(FU_KEY)).thenReturn(Map.of("forms", java.util.List.of()));
 
         ApiResponse<Map<String, Object>> response =
-                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID);
+                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null);
 
         assertThat(response.isSuccess()).isTrue();
         // Role gate must NOT run when the task grant succeeds — that's the whole point of the bypass.
@@ -86,7 +87,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("denied"))
                 .when(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, null))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, null, null))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
 
         verify(taskQueryComponent, never()).getTaskById(anyString());
@@ -101,7 +102,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("denied"))
                 .when(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
 
         verify(taskProcessComponent, never()).canViewTaskForm(any(TaskInfo.class), anyString(), any());
@@ -115,7 +116,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("denied"))
                 .when(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
     }
 
@@ -125,7 +126,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitDisabledException("Function unit is disabled"))
                 .when(functionUnitAccessComponent).requireEnabledFunctionUnit(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitDisabledException.class);
 
         verify(processComponent, never()).getFunctionUnitContent(anyString());
@@ -138,9 +139,50 @@ class ProcessControllerTaskContentAccessTest {
         when(processComponent.getFunctionUnitContent(FU_KEY)).thenReturn(Map.of());
 
         ApiResponse<Map<String, Object>> response =
-                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID);
+                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null);
 
         assertThat(response.isSuccess()).isTrue();
         verify(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
+    }
+
+    @Test
+    void pinnedDisabledCatalogIsReadableViaTaskId() {
+        String pin = "116e5204-de07-41d9-9344-e74c8d697cda";
+        TaskInfo task = TaskInfo.builder()
+                .taskId(TASK_ID)
+                .processDefinitionKey("p0-dual-binding-test")
+                .functionUnitCatalogId(pin)
+                .build();
+        when(taskQueryComponent.getTaskById(TASK_ID)).thenReturn(Optional.of(task));
+        when(taskProcessComponent.canViewTaskForm(any(TaskInfo.class), eq(USER_ID), isNull())).thenReturn(true);
+        when(processComponent.getFunctionUnitContent(pin)).thenReturn(Map.of("version", "1.0.1"));
+
+        ApiResponse<Map<String, Object>> response =
+                processController.getFunctionUnitContent(USER_ID, pin, TASK_ID, null);
+
+        assertThat(response.isSuccess()).isTrue();
+        verify(functionUnitAccessComponent, never()).requireEnabledFunctionUnit(anyString(), anyString());
+        verify(functionUnitAccessComponent, never()).checkFunctionUnitAccess(anyString(), anyString());
+    }
+
+    @Test
+    void pinnedDisabledCatalogIsReadableViaProcessInstance() {
+        String pin = "116e5204-de07-41d9-9344-e74c8d697cda";
+        String processId = "pi-old";
+        ProcessInstanceInfo detail = ProcessInstanceInfo.builder()
+                .id(processId)
+                .processDefinitionKey("p0-dual-binding-test")
+                .functionUnitCatalogId(pin)
+                .build();
+        when(processComponent.getProcessDetail(processId)).thenReturn(detail);
+        when(processComponent.canAuditProcessDetail(USER_ID, detail)).thenReturn(true);
+        when(processComponent.getFunctionUnitContent(pin)).thenReturn(Map.of("version", "1.0.1"));
+
+        ApiResponse<Map<String, Object>> response =
+                processController.getFunctionUnitContent(USER_ID, pin, null, processId);
+
+        assertThat(response.isSuccess()).isTrue();
+        verify(functionUnitAccessComponent, never()).requireEnabledFunctionUnit(anyString(), anyString());
+        verify(functionUnitAccessComponent, never()).checkFunctionUnitAccess(anyString(), anyString());
     }
 }

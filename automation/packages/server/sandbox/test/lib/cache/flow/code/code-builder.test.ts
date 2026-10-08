@@ -14,7 +14,7 @@ vi.mock('../../../../../src/lib/utils/pkg-runner', () => ({
 }))
 
 // eslint-disable-next-line import/first
-import { codeBuilder } from '../../../../../src/lib/cache/flow/code/code-builder'
+import { CODE_STEP_INJECTED_DEPENDENCIES, codeBuilder } from '../../../../../src/lib/cache/flow/code/code-builder'
 // eslint-disable-next-line import/first
 import { codeCache } from '../../../../../src/lib/cache/flow/code/code-cache'
 // eslint-disable-next-line import/first
@@ -273,5 +273,38 @@ describe('codeBuilder.processCodeStep', () => {
         await expect(builder.processCodeStep({ artifact, codesFolderPath })).resolves.toBe('success')
 
         expect(installMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('writes the injected dependencies into a dependency-free step\'s package.json', async () => {
+        const codesFolderPath = uniqueFolder()
+        const artifact = buildArtifact('{}')
+        installMock.mockResolvedValue({ stdout: '', stderr: '' })
+        buildMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+        await codeBuilder(noopLog, getSettings).processCodeStep({ artifact, codesFolderPath })
+
+        const stepDir = codeCache(codesFolderPath).stepDir({
+            flowVersionId: artifact.flowVersionId,
+            stepName: artifact.name,
+        })
+        const written = JSON.parse(await readFile(join(stepDir, 'package.json'), 'utf8'))
+        expect(written.dependencies).toEqual(CODE_STEP_INJECTED_DEPENDENCIES)
+    })
+})
+
+// HERMES-PATCH-034: in the air-gapped cluster (AP_PIECES_OFFLINE_INSTALL=true) the injected
+// dependencies resolve from the baked offline store only. A version bump here that the seed
+// script does not follow ships an image whose every fresh code-step build fails with
+// ERR_PNPM_NO_OFFLINE_META — exactly what happened in UAT.
+describe('offline store seed', () => {
+    it('seeds exactly the dependencies the code builder injects', async () => {
+        const seedScript = await readFile(
+            join(__dirname, '../../../../../../../../hermes/seed-offline-store.mjs'),
+            'utf8',
+        )
+        const literal = /const CODE_STEP_INJECTED_DEPENDENCIES = (\{[^}]*\})/.exec(seedScript)?.[1]
+        expect(literal).toBeDefined()
+        const seeded = new Function(`return ${literal}`)()
+        expect(seeded).toEqual(CODE_STEP_INJECTED_DEPENDENCIES)
     })
 })

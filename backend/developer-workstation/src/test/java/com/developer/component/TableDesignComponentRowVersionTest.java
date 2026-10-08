@@ -86,7 +86,8 @@ class TableDesignComponentRowVersionTest {
             fieldFkPkSyncService,
             new com.developer.service.ComputedFieldValidator(),
             jdbcTemplate,
-            mainTableViewService
+            mainTableViewService,
+            new com.developer.service.SlaConfigValidator(i18nService)
         );
     }
     

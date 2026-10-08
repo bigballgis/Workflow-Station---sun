@@ -15,6 +15,7 @@ import {
 } from './subTableRowUtils'
 import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
 import { settleHistoryThenRefreshOwnerOverlay } from '@/composables/owner/overlayOwnerFromCompletedSnapshot'
+import { pinnedCatalogContentRef } from '@/utils/pinnedCatalogContentRef'
 import type { TaskDetailCtx } from './context'
 
 /**
@@ -120,9 +121,10 @@ export function createTaskDetailLoader(
           if (bpmnXml.value) parseBpmnXml(bpmnXml.value)
           ctx.refreshNodeFormMapFromFormData()
         })
-        const fuFetchPromise = data.processDefinitionKey
+        const contentRef = pinnedCatalogContentRef(data)
+        const fuFetchPromise = contentRef
           ? processApi
-              .getFunctionUnitContent(data.processDefinitionKey, taskId)
+              .getFunctionUnitContent(contentRef, taskId)
               .then(r => (r as { data?: unknown }).data ?? r)
               .catch((err: unknown) => {
                 console.error('Failed to prefetch function unit content:', err)
@@ -139,10 +141,10 @@ export function createTaskDetailLoader(
         const preFlattenedSubTables = processSubTablesSnapshot
           ? cloneAndFlattenSubTablesMap(processSubTablesSnapshot)
           : undefined
-        if (data.processDefinitionKey) {
-          functionUnitIdRef.value = String(data.processDefinitionKey)
+        if (contentRef) {
+          functionUnitIdRef.value = contentRef
           await ctx.loadFunctionUnitContent(
-            data.processDefinitionKey,
+            contentRef,
             prefetchedFu ?? undefined,
             preFlattenedSubTables,
           )
@@ -289,6 +291,7 @@ export function createTaskDetailLoader(
                 taskName: String(route.query.snapshotTaskName || ''),
                 processInstanceId: p.id,
                 processDefinitionKey: p.processDefinitionKey || (route.query.processDefinitionKey as any),
+                functionUnitCatalogId: p.functionUnitCatalogId,
                 variables: p.variables || {}
               } as any
               isCompletedTask.value = true
@@ -303,18 +306,19 @@ export function createTaskDetailLoader(
                 if (bpmnXml.value) parseBpmnXml(bpmnXml.value)
                 ctx.refreshNodeFormMapFromFormData()
               })
-              const key = (taskInfo.value as any).processDefinitionKey
-              const fuFetchPromise = key
+              const contentRef = pinnedCatalogContentRef(p)
+              const fuFetchPromise = contentRef
                 ? processApi
-                    .getFunctionUnitContent(String(key), taskId)
+                    .getFunctionUnitContent(String(contentRef), taskId)
                     .then(r => (r as { data?: unknown }).data ?? r)
                     .catch(() => null)
                 : Promise.resolve(null)
               const fallbackTask = { ...(taskInfo.value as any), processInstanceId: p.id, id: taskId }
               const formPrefetchPromise = ctx.prefetchProcessAndTaskFormData(fallbackTask)
               const prefetchedFu = await fuFetchPromise
-              if (key) {
-                await ctx.loadFunctionUnitContent(String(key), prefetchedFu ?? undefined)
+              if (contentRef) {
+                functionUnitIdRef.value = String(contentRef)
+                await ctx.loadFunctionUnitContent(String(contentRef), prefetchedFu ?? undefined)
               }
               await ctx.loadProcessAndTaskFormData(fallbackTask, await formPrefetchPromise)
               await historyPromise

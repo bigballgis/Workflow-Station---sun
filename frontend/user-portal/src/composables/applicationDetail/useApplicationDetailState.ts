@@ -139,7 +139,12 @@ export function createApplicationDetailState(options: {
     fieldDefinitions?: BindingFieldDefinition[]
   }>>([])
 
-  const primaryTableBinding = ref<{ tableId?: number | null; tableName?: string } | null>(null)
+  const primaryTableBinding = ref<{
+    tableId?: number | null
+    tableName?: string
+    primaryKeyFields?: string[]
+    fieldDefinitions?: BindingFieldDefinition[]
+  } | null>(null)
   const functionUnitIdRef = ref('')
 
   /** Cached from loadFunctionUnitContent — shared attachment slice merge (parity with tasks/detail.vue). */

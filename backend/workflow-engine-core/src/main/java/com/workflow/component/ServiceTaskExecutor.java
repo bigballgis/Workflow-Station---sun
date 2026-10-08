@@ -2,6 +2,7 @@ package com.workflow.component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.request.ServiceTaskActionRequest;
 import com.workflow.dto.response.ServiceTaskExecutionResult;
 import com.workflow.entity.ServiceTaskExecutionRecord;
@@ -41,9 +42,12 @@ import java.util.*;
  * per-task input/output mapping any more:
  * <ul>
  *   <li><b>Request</b>: {@code {"envelopeVersion":1, "variables":{...all process variables...},
- *       "context":{"processInstanceId","executionId","activityId","flowKey","flowId"}}}.
+ *       "context":{"processInstanceId","executionId","activityId","flowKey","flowId",
+ *       "initiator","currentUser"}}}.
  *       {@code context} is always populated, so a pure-trigger flow that ignores the payload
- *       still receives a valid, non-empty envelope (FR-C06).</li>
+ *       still receives a valid, non-empty envelope (FR-C06). {@code initiator} / {@code currentUser}
+ *       are {@code {"userId","employeeId"}} for the process variables {@code initiator} /
+ *       {@code currentUserId} (present only when the variable is set) — see {@link #putUserContext}.</li>
  *   <li><b>Response</b>: the flow's "Return Response" step must return
  *       {@code {"variables":{...}}}. Only the {@code variables} object is written back to the
  *       process (an empty object is legal and writes nothing). A response without a top-level
@@ -93,10 +97,16 @@ public class ServiceTaskExecutor implements JavaDelegate {
     /** Fixed request/response envelope contract version (FR-C). */
     private static final int ENVELOPE_VERSION = 1;
 
+    /** Process variable holding a platform user id → envelope {@code context} key. */
+    private static final Map<String, String> USER_CONTEXT_VARIABLES = Map.of(
+            "initiator", "initiator",
+            "currentUserId", "currentUser");
+
     private final ServiceTaskExecutionRecordRepository executionRecordRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final PlatformTransactionManager transactionManager;
+    private final AdminCenterClient adminCenterClient;
 
     /** REQUIRES_NEW template for the failure record — see {@link #persistFailureOutsideCallerTx}. */
     private volatile TransactionTemplate failureTx;
@@ -277,6 +287,7 @@ public class ServiceTaskExecutor implements JavaDelegate {
         context.put("activityId", activityId);
         context.put("flowKey", flowKey);
         context.put("flowId", flowId);
+        putUserContext(context, variables);
 
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("envelopeVersion", ENVELOPE_VERSION);
@@ -289,6 +300,29 @@ public class ServiceTaskExecutor implements JavaDelegate {
             throw new ApEmptyEnvelopeException(flowKey, flowId);
         }
         return envelope;
+    }
+
+    /**
+     * {@code context.initiator} / {@code context.currentUser} = {@code {"userId","employeeId"}}.
+     *
+     * <p>Platform user ids are UUIDs; services that audit by staff id (Content Organizer called
+     * with an iB2B service token must be told whose request it is) need the employee id, and a flow
+     * has no way to look it up itself. {@code employeeId} is {@code null} when the user has none.
+     * An admin-center outage propagates ({@link AdminCenterClient#getUserInfo}) so the task fails
+     * and retries instead of calling the flow without an identity.
+     */
+    private void putUserContext(Map<String, Object> context, Map<String, Object> variables) {
+        for (Map.Entry<String, String> e : USER_CONTEXT_VARIABLES.entrySet()) {
+            Object userId = variables.get(e.getKey());
+            if (userId == null || userId.toString().isBlank()) {
+                continue;
+            }
+            Map<String, Object> info = adminCenterClient.getUserInfo(userId.toString());
+            Map<String, Object> user = new LinkedHashMap<>();
+            user.put("userId", userId.toString());
+            user.put("employeeId", info != null ? info.get("employeeId") : null);
+            context.put(e.getValue(), user);
+        }
     }
 
     /**

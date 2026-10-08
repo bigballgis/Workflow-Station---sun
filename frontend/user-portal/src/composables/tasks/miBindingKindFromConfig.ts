@@ -24,9 +24,14 @@
  * 那样一个 FK 元数据缺失的 child 会被静默判成 shared，导致跨参与者串数据。
  *
  * <p><b>为什么这些判据不是"又一种猜"。</b>它们全部来自用户在 Developer Workstation 里的显式配置
- * （{@code dw_form_table_bindings.binding_link_mode} + {@code dw_field_definitions} 的
+ * （{@code dw_form_table_bindings.binding_link_mode} + 本 binding 声明的
+ * {@code filterFkRefTableId}，未声明时才扫 {@code dw_field_definitions} 的
  * {@code is_foreign_key}/{@code ref_table_id}），改名字段、改表名都不影响 —— 而旧启发式在
  * demo FU 把 {@code sub_task_id} 改成 {@code sub_task_idq} 后两个方向都答错了。
+ *
+ * <p><b>同表两条 binding 必须读 {@code filterFkRefTableId}。</b>表级扫描对同一张表的每条
+ * binding 给出同一个答案；给共享附件表再加一个指向 collection 的 FK 列，会让存量 shared
+ * binding 静默翻成 participant-child。已声明的过滤关系优先于扫描。
  *
  * <p><b>解析不出时返回 {@code null}</b>（"我不知道"），由调用方决定退回旧启发式还是报错，
  * 本模块**绝不猜**。
@@ -52,7 +57,36 @@ export interface MiKindBindingLike {
   tableId?: number | null
   /** {@code dw_form_table_bindings.binding_link_mode}。 */
   bindingLinkMode?: string | null
+  /**
+   * 本 binding 声明的过滤 FK 所指向的表 id（Admin {@code TableBindingDTO.filterFkRefTableId}）。
+   * {@code null}/{@code undefined} = 未声明，分类才允许回落扫 {@link fieldDefinitions}。
+   */
+  filterFkRefTableId?: number | null
+  /** 该过滤 FK 的列名（展示 / 调试）；分类只认 {@link filterFkRefTableId}。 */
+  filterFkFieldName?: string | null
   fieldDefinitions?: MiKindFieldDef[] | null
+}
+
+/**
+ * Copy onto reconstructed binding objects so {@link resolveMiBindingKindFromConfig} still sees the
+ * per-binding declaration. Omitting these fields silently reverts classification to a table-level
+ * FK scan — two bindings of the same table then always get the same kind.
+ */
+export function declaredFilterFkFields(b: {
+  filterFkRefTableId?: number | null
+  filterFkFieldName?: string | null
+} | null | undefined): { filterFkRefTableId: number | null; filterFkFieldName: string | null } {
+  const raw = b?.filterFkRefTableId
+  const refTableId = raw != null && Number.isFinite(Number(raw)) ? Number(raw) : null
+  const name = typeof b?.filterFkFieldName === 'string' && b.filterFkFieldName.trim()
+    ? b.filterFkFieldName.trim()
+    : null
+  return { filterFkRefTableId: refTableId, filterFkFieldName: name }
+}
+
+/** The target table of this binding's declared filter FK, or {@code null} when undeclared. */
+export function declaredFilterFkRefTableId(binding: MiKindBindingLike | null | undefined): number | null {
+  return declaredFilterFkFields(binding).filterFkRefTableId
 }
 
 /**
@@ -155,10 +189,19 @@ export function resolveMiBindingKindFromConfig(
     return 'collection'
   }
 
-  // 2) participant-child —— 字段级 FK 指向 collection。
+  // 2/3) 本 binding 声明了过滤 FK 时，只认那一列的目标 —— 不再扫表上其它 FK。
+  //      同表两条 binding（会议附件 vs 参与者附件）靠这一条区分；扫表会给出同一个答案。
+  const declaredRef = declaredFilterFkRefTableId(binding)
+  if (declaredRef != null) {
+    if (collectionTid != null && declaredRef === Number(collectionTid)) return 'participant-child'
+    if (resolved.primaryTableId != null && declaredRef === Number(resolved.primaryTableId)) return 'shared'
+    return null
+  }
+
+  // 未声明：回落表级扫描。这只在一张表恰好声明一个 FK 时无歧义（Batch 1 回填窗口的前提）。
   if (collectionTid != null && hasFieldFkTo(binding, collectionTid)) return 'participant-child'
 
-  // 3) shared —— 字段级 FK 指向主表。
+  // shared —— 字段级 FK 指向主表。
   //    注意这是**正面判据**，不是 else 兜底：FK 元数据缺失时必须返回 null 让调用方处理，
   //    静默判成 shared 会让一个 child 失去参与者隔离（跨子任务串数据）。
   if (resolved.primaryTableId != null && hasFieldFkTo(binding, resolved.primaryTableId)) return 'shared'

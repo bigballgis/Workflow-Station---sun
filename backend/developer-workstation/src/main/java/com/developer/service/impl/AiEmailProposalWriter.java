@@ -150,7 +150,7 @@ public class AiEmailProposalWriter {
                 request.setEnabled(enabled);
                 // username / password 刻意留空：凭证只能由用户在 Connection 设计器里填写
                 request.setUsername(null);
-                request.setPassword(null);
+                request.setPasswordEnvKey(null);
                 emailConnectionComponent.create(functionUnitId, request);
                 created++;
             }

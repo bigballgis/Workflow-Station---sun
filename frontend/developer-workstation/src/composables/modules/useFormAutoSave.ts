@@ -11,22 +11,8 @@ export interface FormAutoSaveOptions {
   selectedForm: Ref<any>
   /** Template ref to the main fc-designer component */
   designerRef: Ref<{ getRule: () => any[]; getOption?: () => Record<string, unknown> } | undefined>
-  /** The save function to call on auto-save (should set autoSaving appropriately) */
-  handleSaveForm: (isManual: boolean) => Promise<void>
   /** Reactive state for relation table views (triggers auto-save on change) */
   relationViewState: Ref<Record<string, any>>
-  /** i18n translate function */
-  t: (key: string, options?: Record<string, any>) => string
-  /** External ref for autoSaving — mutated by handleSaveForm, read by polling */
-  autoSaving: Ref<boolean>
-  /** External ref for lastAutoSaveTime — set after successful save */
-  lastAutoSaveTime: Ref<Date | null>
-  /**
-   * Copy pending right-panel edits (Validate / props) onto the live canvas rule
-   * before snapshotting. Auto-save polls getRule(), which otherwise misses
-   * Validation+ rows that have not been blurred/emitted yet.
-   */
-  flushPendingCanvasEdits?: () => void
   /**
    * Designer whose getRule()/getOption() feed the poll snapshot. Defaults to
    * designerRef (main canvas). Pass the active tab instance so sub-table
@@ -44,12 +30,12 @@ const POLL_INTERVAL_MS = 3000
 
 export function useFormAutoSave(options: FormAutoSaveOptions) {
   const {
-    selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving,
-    flushPendingCanvasEdits, getPollDesigner,
+    selectedForm, designerRef, relationViewState,
+    getPollDesigner,
   } = options
 
   // --- State ---
-  let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+  const isDirty = ref(false)
 
   // While a form switch is in flight (cleanup called, new rules not yet loaded) the canvas
   // still holds the PREVIOUS form's rules but selectedForm already points at the new one —
@@ -58,65 +44,63 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   let suspended = false
 
   // Polling state
-  const lastDesignerState = ref<string>('')
+  const savedState = ref<string>('')
   const pollTimerRef = ref<ReturnType<typeof setInterval> | null>(null)
 
   // --- Functions ---
 
-  function cancelPendingAutoSave() {
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer)
-      autoSaveTimer = null
-    }
-  }
-
-  function scheduleAutoSave() {
-    if (suspended) return
-    cancelPendingAutoSave()
-    autoSaveTimer = setTimeout(() => {
-      console.log('[FormDesigner] Auto-save triggered')
-      handleSaveForm(false)
-    }, 5000)
-  }
-
-  function formatAutoSaveTime(time: Date): string {
-    const now = new Date()
-    const diff = Math.floor((now.getTime() - time.getTime()) / 1000)
-    if (diff < 60) {
-      return t('process.justNow')
-    } else if (diff < 3600) {
-      const minutes = Math.floor(diff / 60)
-      return t('process.minutesAgo', { count: minutes })
-    } else {
-      return time.toLocaleTimeString()
+  function markSaved() {
+    try {
+      savedState.value = buildDesignerPollSnapshot()
+      isDirty.value = false
+    } catch {
+      savedState.value = ''
+      isDirty.value = false
     }
   }
 
   function cleanupAutoSavePolling() {
-    // Cancel the pending debounce too and refuse new schedules: a timer armed by edits on
-    // the previous form must never fire after selectedForm has moved to another form.
+    // Refuse new dirty checks while a different form is being hydrated.
     suspended = true
-    cancelPendingAutoSave()
     if (pollTimerRef.value) {
       clearInterval(pollTimerRef.value)
       pollTimerRef.value = null
     }
-    lastDesignerState.value = ''
+    savedState.value = ''
+    isDirty.value = false
   }
 
   function resolvePollDesigner() {
     return getPollDesigner?.() ?? designerRef.value
   }
 
+  function isDesignerPanelInputFocused(): boolean {
+    if (typeof document === 'undefined') return false
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement)) return false
+    if (!active.matches('input, textarea, [contenteditable="true"]')) return false
+    return !!active.closest('._fc-m-con, ._fc-r, ._fd-config, .form-editor-view')
+  }
+
   function buildDesignerPollSnapshot(): string {
-    flushPendingCanvasEdits?.()
     const designer = resolvePollDesigner()
     const rawRule = stripFormCreateRulesDisabledDeep(designer?.getRule?.() || [])
     prepareFormCreateRulesForPersist(rawRule)
     const formOptions = serializeFormCreateOptionsForPersist(
       designer?.getOption?.() as Record<string, unknown> | undefined,
     )
-    return JSON.stringify({ rule: rawRule, options: formOptions })
+    return JSON.stringify({
+      rule: rawRule,
+      options: formOptions,
+      relationViews: relationViewState.value,
+    })
+  }
+
+  function refreshDirtyState() {
+    if (suspended || !selectedForm.value) return
+    try {
+      isDirty.value = buildDesignerPollSnapshot() !== savedState.value
+    } catch { /* silently ignore */ }
   }
 
   function setupAutoSavePolling() {
@@ -131,32 +115,27 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
 
     // Initialize the state tracker with current rule + form-level options (events)
     try {
-      lastDesignerState.value = buildDesignerPollSnapshot()
-      console.log('[FormDesigner] Auto-save polling started, initial state length:', lastDesignerState.value.length)
+      savedState.value = buildDesignerPollSnapshot()
+      isDirty.value = false
+      console.log('[FormDesigner] Change tracking started, initial state length:', savedState.value.length)
     } catch {
-      lastDesignerState.value = ''
+      savedState.value = ''
     }
 
     // Poll for changes every 3 seconds
     pollTimerRef.value = setInterval(() => {
-      if (!selectedForm.value || autoSaving.value) return
+      if (!selectedForm.value) return
+      // A property-panel input is still being edited. Do not blur it or snapshot its
+      // transient value; the next tick after the user clicks elsewhere will detect and save it.
+      if (isDesignerPanelInputFocused()) return
       try {
-        const currentState = buildDesignerPollSnapshot()
-        if (currentState !== lastDesignerState.value) {
-          lastDesignerState.value = currentState
-          console.log('[FormDesigner] Change detected, scheduling auto-save')
-          scheduleAutoSave()
-        }
+        refreshDirtyState()
       } catch { /* silently ignore */ }
     }, POLL_INTERVAL_MS)
   }
 
   // --- Cleanup ---
   onUnmounted(() => {
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer)
-      autoSaveTimer = null
-    }
     cleanupAutoSavePolling()
   })
 
@@ -164,16 +143,15 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   watch(
     relationViewState,
     () => {
-      if (selectedForm.value) {
-        scheduleAutoSave()
-      }
+      refreshDirtyState()
     },
     { deep: true }
   )
 
   return {
-    formatAutoSaveTime,
-    scheduleAutoSave,
+    isDirty,
+    markSaved,
+    refreshDirtyState,
     setupAutoSavePolling,
     cleanupAutoSavePolling,
   }

@@ -33,6 +33,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalMainTableViewService;
 import com.portal.service.UserDisplayNameResolver;
+import com.portal.util.MainTableViewSelectDisplay;
 import com.portal.util.PortalMainTableViewCsvUtils;
 import com.portal.util.PortalMainTableViewDetailValues;
 import com.portal.util.PortalMainTableViewNestedSubTables;
@@ -82,6 +83,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     @Lazy
     @Autowired
     private RequestIdEnricher requestIdEnricher;
+
+    /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
+    @Lazy
+    @Autowired
+    private com.portal.component.SlaDueDateEnricher slaDueDateEnricher;
 
     @Override
     @Transactional(readOnly = true)
@@ -368,7 +374,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 sb.append(',');
             }
             sb.append(columns.stream()
-                    .map(c -> PortalMainTableViewCsvUtils.csvEscape(PortalMainTableViewCsvUtils.formatCell(values.get(c.fieldName()))))
+                    .map(c -> PortalMainTableViewCsvUtils.csvEscape(PortalMainTableViewCsvUtils.formatCell(
+                            MainTableViewSelectDisplay.display(c, values.get(c.fieldName())))))
                     .collect(Collectors.joining(",")));
             sb.append('\n');
         }
@@ -471,6 +478,10 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 // identifier keeps matching the row it names.
                 if (requestIdEnricher != null) {
                     requestIdEnricher.stampRequestId(pi.getFunctionUnitCode(), vars);
+                }
+                if (slaDueDateEnricher != null) {
+                    slaDueDateEnricher.stamp(pi.getFunctionUnitCode(), vars,
+                            pi.getStartTime() == null ? null : pi.getStartTime().toLocalDate());
                 }
                 pi.setVariables(vars);
                 processInstanceRepository.save(pi);
@@ -718,20 +729,26 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
     private List<MainTableViewFieldColumn> visibleColumns(ViewDefinition view) {
         Map<String, FkColumnMeta> resolvedFk = loadFkColumnMeta(view.id());
-        // SUB views: the main-id column is a FK back to the owning MAIN table. That linkage lives on the
-        // form-table binding (foreign_key_field), not in dw_field_definitions, so resolve it separately.
+        // SUB views: the declared FK back to the owning MAIN table is already a field-level FK above;
+        // mark it so the portal opens the row's own request. A view that hides it has no such link.
         if ("SUB".equalsIgnoreCase(view.tableType()) && view.mainTableId() != null) {
             Map<String, FkColumnMeta> merged = new LinkedHashMap<>(resolvedFk);
-            loadSubMainFkMeta(view.mainTableId())
-                    .ifPresent(m -> merged.putIfAbsent(m.fieldName(), m.meta()));
+            loadOwningMainFkField(view.mainTableId()).ifPresent(field -> merged.computeIfPresent(field,
+                    (k, m) -> new FkColumnMeta(m.refViewId(), m.refFunctionUnitCode(), m.refPrimaryKeyFields(), true)));
             resolvedFk = merged;
         }
         final Map<String, FkColumnMeta> fkMeta = resolvedFk;
         final Map<String, FkSourceMeta> fkSourceMeta = loadFkSourceMeta(view.id());
         // Lookup columns reference a Relation Table (via the form's lookupConfig), not a DW table.
         final Map<String, LookupColumnMeta> lookupMeta = loadLookupColumnMeta(view.mainTableId());
+        // Only a column designed to show option labels needs the bound forms' static options.
+        boolean anyLabelDisplay = view.fields().stream()
+                .anyMatch(f -> MainTableViewSelectDisplay.showsLabel(f.selectDisplay()));
+        final Map<String, List<ListColumnMeta.Option>> selectOptions = anyLabelDisplay
+                ? loadSelectOptionMeta(view.mainTableId())
+                : Map.of();
         ColumnMetaBundle bundle = new ColumnMetaBundle(
-                fkMeta, fkSourceMeta, lookupMeta, declaredCapabilities(view));
+                fkMeta, fkSourceMeta, lookupMeta, declaredCapabilities(view), selectOptions);
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
@@ -761,6 +778,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .isForeignKey(fk != null)
                 .refViewId(fk != null ? fk.refViewId() : null)
                 .refFunctionUnitCode(fk != null ? fk.refFunctionUnitCode() : null)
+                .refOwningRequest(fk != null && fk.owningRequest())
                 .refPrimaryKeyFields(fk != null ? fk.refPrimaryKeyFields()
                         : (fkSrc != null ? fkSrc.refPrimaryKeyFields() : null))
                 .isLookup(lookupTableId != null)
@@ -770,7 +788,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .lookupDisplayField(derived ? f.lookupDisplayField() : null)
                 .lookupSelectedDisplayField(lookup != null ? lookup.selectedDisplayField() : null)
                 .lookupSearchFields(lookup != null ? lookup.searchFields() : null)
-                .fkRefTableId(fkSrc != null ? fkSrc.refTableId() : null);
+                .fkRefTableId(fkSrc != null ? fkSrc.refTableId() : null)
+                .selectDisplay(MainTableViewSelectDisplay.showsLabel(f.selectDisplay())
+                        ? MainTableViewSelectDisplay.LABEL : MainTableViewSelectDisplay.VALUE)
+                .selectOptions(MainTableViewSelectDisplay.showsLabel(f.selectDisplay())
+                        ? meta.selectOptions().get(f.fieldName()) : null);
         return MainTableViewFieldColumn.applyListCapabilities(column, capability).build();
     }
 
@@ -790,7 +812,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private List<MainTableViewColumnSpec.FieldSource> queryableFieldSources(ViewDefinition view) {
         Map<String, String> dataTypes = fieldDataTypes(view);
         Map<String, LookupColumnMeta> lookupMeta = loadLookupColumnMeta(view.mainTableId());
-        Map<String, FkSourceMeta> fkMeta = fkSourceMetaFor(view);
+        Map<String, FkSourceMeta> fkMeta = loadFkSourceMeta(view.id());
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
@@ -836,16 +858,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 fkPks);
     }
 
-    private Map<String, FkSourceMeta> fkSourceMetaFor(ViewDefinition view) {
-        Map<String, FkSourceMeta> fkSource = new LinkedHashMap<>(loadFkSourceMeta(view.id()));
-        if (isSubView(view) && view.mainTableId() != null) {
-            loadSubMainFkMeta(view.mainTableId()).ifPresent(m -> fkSource.putIfAbsent(
-                    m.fieldName(),
-                    new FkSourceMeta(null, m.meta().refPrimaryKeyFields())));
-        }
-        return fkSource;
-    }
-
     /**
      * Types for designed view columns. The bound table wins; other tables in the same Function
      * Unit fill names the bound table does not declare so a SUB view can still type a parent MAIN
@@ -887,7 +899,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Map<String, FkColumnMeta> fk,
             Map<String, FkSourceMeta> fkSource,
             Map<String, LookupColumnMeta> lookup,
-            Map<String, ListColumnMeta> capabilities) {
+            Map<String, ListColumnMeta> capabilities,
+            Map<String, List<ListColumnMeta.Option>> selectOptions) {
     }
 
     /**
@@ -947,6 +960,40 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             log.warn("Failed to load lookup column metadata for table {}: {}", tableId, e.getMessage());
             return Map.of();
         }
+    }
+
+    /**
+     * Static options of the select-like widgets that render this table, keyed by field. Each form
+     * binding of the table contributes the part of its form that draws the table: the top-level
+     * rules for a PRIMARY binding, the {@code subForms} entry for a sub-table binding. A widget
+     * whose options are fetched at runtime declares none here and its column keeps showing values.
+     */
+    private Map<String, List<ListColumnMeta.Option>> loadSelectOptionMeta(Long tableId) {
+        if (tableId == null) {
+            return Map.of();
+        }
+        List<Map<String, Object>> bindings = jdbcTemplate.queryForList("""
+                SELECT b.id AS binding_id, b.binding_type, f.config_json::text AS cfg
+                FROM dw_form_table_bindings b
+                INNER JOIN dw_form_definitions f ON f.id = b.form_id
+                WHERE b.table_id = ? AND f.config_json IS NOT NULL
+                ORDER BY b.id
+                """, tableId);
+        Map<String, List<ListColumnMeta.Option>> meta = new LinkedHashMap<>();
+        for (Map<String, Object> binding : bindings) {
+            String cfg = stringVal(binding.get("cfg"));
+            if (cfg == null || cfg.isBlank()) {
+                continue;
+            }
+            long bindingId = ((Number) binding.get("binding_id")).longValue();
+            boolean primary = "PRIMARY".equalsIgnoreCase(stringVal(binding.get("binding_type")));
+            try {
+                MainTableViewSelectDisplay.collectOptionsForBinding(objectMapper.readTree(cfg), bindingId, primary, meta);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalStateException("Form config for table " + tableId + " is not valid JSON", e);
+            }
+        }
+        return meta;
     }
 
     /** Walk a form config JSON tree, recording each lookup widget's field → lookup metadata. */
@@ -1043,7 +1090,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 meta.put(fieldName, new FkColumnMeta(
                         ((Number) row.get("ref_view_id")).longValue(),
                         stringVal(row.get("ref_fu_code")),
-                        parseStringList(stringVal(row.get("ref_pk_fields")))));
+                        parseStringList(stringVal(row.get("ref_pk_fields"))),
+                        false));
             }
             return meta;
         } catch (Exception e) {
@@ -1053,47 +1101,38 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     /**
-     * Resolve the FK metadata for a SUB table's main-id column. The SUB→MAIN link is stored on the
-     * form-table binding ({@code foreign_key_field}); the MAIN table is the PRIMARY-bound table on the
-     * same form(s). Returns the main-id field name + the MAIN table's published default view, or empty
-     * when no such published default view exists (graceful degrade to plain text).
+     * The SUB table's declared FK column that references the MAIN table bound PRIMARY on the same
+     * form — the MAIN row this SUB row lives in. Read from {@code dw_field_definitions}
+     * ({@code is_foreign_key} + {@code ref_table_id}), narrowed by the binding's
+     * {@code filter_fk_field_id} when set. {@code foreign_key_field} is not consulted: on legacy SUB
+     * bindings it holds the sub-table's own primary key. Empty when none is declared or more than
+     * one column qualifies (no guessing between them).
      */
-    private Optional<SubMainFk> loadSubMainFkMeta(Long subTableId) {
+    private Optional<String> loadOwningMainFkField(Long subTableId) {
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                    SELECT sub.foreign_key_field AS fk_field,
-                           rv.id AS ref_view_id,
-                           rfu.code AS ref_fu_code
+            List<String> fields = jdbcTemplate.queryForList("""
+                    SELECT DISTINCT fd.field_name
                     FROM dw_form_table_bindings sub
                     INNER JOIN dw_form_table_bindings main
                             ON main.form_id = sub.form_id
                            AND main.binding_type = 'PRIMARY'
-                    INNER JOIN dw_table_definitions rt ON rt.id = main.table_id
-                    INNER JOIN dw_function_units rfu ON rfu.id = rt.function_unit_id
-                    INNER JOIN dw_main_table_view_configs rv
-                            ON rv.main_table_id = main.table_id
-                           AND rv.is_default = TRUE
-                           AND rv.status = 'PUBLISHED'
+                    INNER JOIN dw_field_definitions fd
+                            ON fd.table_id = sub.table_id
+                           AND fd.is_foreign_key = TRUE
+                           AND fd.ref_table_id = main.table_id
+                           AND (sub.filter_fk_field_id IS NULL OR fd.id = sub.filter_fk_field_id)
                     WHERE sub.table_id = ?
                       AND sub.binding_type = 'SUB'
-                      AND sub.foreign_key_field IS NOT NULL
-                    LIMIT 1
-                    """, subTableId);
-            if (rows.isEmpty()) {
+                    """, String.class, subTableId);
+            if (fields.size() > 1) {
+                log.warn("SUB table {} declares several FK columns to its MAIN table ({}); set the binding's "
+                        + "filter FK field in Form Design so the portal knows which one links the owning request",
+                        subTableId, fields);
                 return Optional.empty();
             }
-            Map<String, Object> row = rows.get(0);
-            String fkField = stringVal(row.get("fk_field"));
-            if (fkField == null || fkField.isBlank()) {
-                return Optional.empty();
-            }
-            FkColumnMeta meta = new FkColumnMeta(
-                    ((Number) row.get("ref_view_id")).longValue(),
-                    stringVal(row.get("ref_fu_code")),
-                    List.of());
-            return Optional.of(new SubMainFk(fkField, meta));
+            return fields.stream().findFirst();
         } catch (Exception e) {
-            log.warn("Failed to resolve SUB main FK metadata for table {}: {}", subTableId, e.getMessage());
+            log.warn("Failed to resolve SUB owning-request FK for table {}: {}", subTableId, e.getMessage());
             return Optional.empty();
         }
     }
@@ -1174,7 +1213,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         List<ViewFieldDef> fields = jdbcTemplate.query("""
                         SELECT field_name, display_label, column_width, sort_order, visible, is_system_field,
                                COALESCE(column_type, 'field') AS column_type,
-                               lookup_source_field, lookup_display_field
+                               lookup_source_field, lookup_display_field,
+                               COALESCE(select_display, 'value') AS select_display
                         FROM dw_main_table_view_fields
                         WHERE view_config_id = ?
                         ORDER BY sort_order
@@ -1188,7 +1228,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                         rs.getBoolean("is_system_field"),
                         rs.getString("column_type"),
                         rs.getString("lookup_source_field"),
-                        rs.getString("lookup_display_field")),
+                        rs.getString("lookup_display_field"),
+                        rs.getString("select_display")),
                 viewId);
 
         Long mainTableId = row.get("main_table_id") != null
@@ -1383,15 +1424,18 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return Boolean.parseBoolean(String.valueOf(val));
     }
 
+    /**
+     * @param owningRequest the column links a SUB row to the MAIN row it lives in — that row is the
+     *                      row's own process instance, so the portal opens it without a lookup
+     */
     private record FkColumnMeta(
             Long refViewId,
             String refFunctionUnitCode,
-            List<String> refPrimaryKeyFields) {}
+            List<String> refPrimaryKeyFields,
+            boolean owningRequest) {}
 
     /** Structural FK on the owning table — used to hydrate {@code fk_display} columns. */
     private record FkSourceMeta(Long refTableId, List<String> refPrimaryKeyFields) {}
-
-    private record SubMainFk(String fieldName, FkColumnMeta meta) {}
 
     private record LookupColumnMeta(
             Long tableId,
@@ -1407,7 +1451,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Boolean systemField,
             String columnType,
             String lookupSourceField,
-            String lookupDisplayField) {}
+            String lookupDisplayField,
+            String selectDisplay) {}
 
     private record ViewDefinition(
             Long id,

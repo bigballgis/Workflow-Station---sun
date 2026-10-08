@@ -14,7 +14,7 @@ import { useUserPreferenceStore } from '@/stores/userPreference'
 import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
-export const CLAIM_ACTION_WIDTH = 280
+export const CLAIM_ACTION_WIDTH = 224
 /** Uppercase "Current Assignee" is wider than the TEXT header-fit floor (168). */
 const CURRENT_ASSIGNEE_COL_WIDTH = 220
 
@@ -143,6 +143,7 @@ export function useTodoTasksPage() {
 
   const handleSelectionChange = (selection: TaskInfo[]) => {
     selectedTasks.value = selection
+    grid.handleGridSelectionChange(selection)
   }
 
   const selectedClaimableIds = computed(() =>

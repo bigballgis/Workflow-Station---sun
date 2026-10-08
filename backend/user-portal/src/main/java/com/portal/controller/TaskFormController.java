@@ -78,7 +78,7 @@ public class TaskFormController {
             formData.put("__subTables__", subTables);
         }
         taskFormComponent.submitTaskForm(taskId, userId, formData, request.getBaselineValues(),
-                request.getEmptiedSubTableKeys());
+                request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes());
         return ApiResponse.success(null);
     }
 
@@ -144,6 +144,7 @@ public class TaskFormController {
             case "404" -> HttpStatus.NOT_FOUND.value();
             case "403" -> HttpStatus.FORBIDDEN.value();
             case "400" -> HttpStatus.BAD_REQUEST.value();
+            case "409" -> HttpStatus.CONFLICT.value();
             default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
         };
         response.setStatus(statusCode);

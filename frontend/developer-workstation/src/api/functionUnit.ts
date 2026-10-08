@@ -229,6 +229,16 @@ export interface RequestIdConfig {
   separator: string
 }
 
+/** Main-table SLA due date mapping: due date = start date + the Function Unit's lead time
+ *  (maintained per environment in Admin Center). The due date is server-derived. MAIN tables only. */
+export interface SlaConfig {
+  startDateSource: 'FIELD' | 'SUBMITTED_AT'
+  /** Required when startDateSource is FIELD (DATE / TIMESTAMP field). */
+  startDateField?: string | null
+  /** DATE field that receives the derived due date. */
+  dueDateField: string
+}
+
 export interface TableDefinition {
   id: number
   tableName: string
@@ -236,6 +246,7 @@ export interface TableDefinition {
   tableType: string
   description?: string
   requestIdConfig?: RequestIdConfig | null
+  slaConfig?: SlaConfig | null
   fieldDefinitions: FieldDefinition[]
 }
 
@@ -260,6 +271,8 @@ export interface FieldDefinition {
   isComputed?: boolean
   computedField?: Record<string, unknown>
   computedFieldJson?: Record<string, unknown>
+  /** Client-only: this field is the table's SLA due date (server-derived, always read-only). */
+  slaDerived?: boolean
 }
 
 export type FormType = 'PROCESS' | 'TASK' | 'ACTION' | 'DETAIL'
@@ -323,9 +336,18 @@ export interface TableBinding {
   bindingMode: BindingMode
   foreignKeyField?: string
   bindingLinkMode?: BindingLinkMode
+  filterFkFieldId?: number
+  fkFillSources?: FkFillSource[]
   sortOrder: number
   subListViewId?: number
   subMode?: SubBindingMode
+}
+
+export interface FkFillSource {
+  fieldId: number
+  fieldName?: string
+  kind: 'PARENT' | 'PRIMARY' | 'ANCESTOR'
+  ancestorBindingId?: number
 }
 
 // Table binding request
@@ -336,6 +358,8 @@ export interface TableBindingRequest {
   bindingMode?: BindingMode
   foreignKeyField?: string
   bindingLinkMode?: BindingLinkMode
+  filterFkFieldId?: number
+  fkFillSources?: FkFillSource[]
   sortOrder?: number
   subMode?: SubBindingMode
 }

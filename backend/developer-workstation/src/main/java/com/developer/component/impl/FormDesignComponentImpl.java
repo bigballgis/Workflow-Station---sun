@@ -32,6 +32,7 @@ import com.developer.service.SubTableViewService;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
 import com.developer.util.FormConfigJsonPasteBindingMapper;
+import com.developer.util.FkFillSourcesSupport;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -83,6 +84,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final I18nService i18nService;
     private final JdbcTemplate jdbcTemplate;
     private final SubTableViewService subTableViewService;
+    private final FormTableBindingUniquenessGuard formTableBindingUniquenessGuard;
     
     /**
      * Suffix that distinguishes the My Requests row of a scene pair. Form names are unique per
@@ -423,20 +425,6 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (!isRelationTable) {
             table = tableDefinitionRepository.findById(request.getTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
-            
-            // Reject duplicate binding to the same TableDefinition.
-            if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
-                throw new DeveloperBusinessException("BINDING_EXISTS", 
-                        i18nService.getMessage("form.binding_exists"),
-                        i18nService.getMessage("form.no_duplicate_binding"));
-            }
-        } else {
-            // Reject duplicate binding to the same deployed Relation Table.
-            if (formTableBindingRepository.existsByFormIdAndRelationTableId(formId, request.getRelationTableId())) {
-                throw new DeveloperBusinessException("BINDING_EXISTS", 
-                        i18nService.getMessage("form.binding_exists"),
-                        i18nService.getMessage("form.no_duplicate_binding"));
-            }
         }
         
         // PRIMARY binding must be unique per form.
@@ -454,6 +442,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && table != null) {
             validateForeignKeyField(table, request.getForeignKeyField());
         }
+
+        Long resolvedFilterFk = request.getFilterFkFieldId() != null
+                ? request.getFilterFkFieldId()
+                : resolveFilterFkFieldId(table, request.getForeignKeyField());
+        formTableBindingUniquenessGuard.assertCreate(
+                formId, request, isRelationTable, resolvedFilterFk);
         
         // Default binding mode when omitted.
         BindingMode bindingMode = request.getBindingMode();
@@ -483,6 +477,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .foreignKeyField(request.getForeignKeyField())
                 .bindingLinkMode(request.getBindingLinkMode() != null
                         ? request.getBindingLinkMode() : BindingLinkMode.structuralFk)
+                .filterFkFieldId(resolvedFilterFk)
+                .fkFillSources(FkFillSourcesSupport.stampFieldNames(request.getFkFillSources(), table))
                 .sortOrder(sortOrder)
                 .build();
 
@@ -547,11 +543,29 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (request.getBindingLinkMode() != null) {
             binding.setBindingLinkMode(request.getBindingLinkMode());
         }
+        // Keep the existing declaration when neither the request nor the (possibly changed) FK
+        // column yields one. Overwriting with null here would erase a legacy binding's backfilled
+        // declaration the moment a designer edits an unrelated attribute: for those bindings
+        // `foreignKeyField` names the table's own primary key rather than a parent reference (43
+        // measured in dev), so it resolves to nothing, while the backfill had already recorded the
+        // table's one declared FK correctly.
+        Long resolvedFilterFk = request.getFilterFkFieldId() != null
+                ? request.getFilterFkFieldId()
+                : resolveFilterFkFieldId(binding.getTable(), request.getForeignKeyField());
+        Long nextFilterFk = resolvedFilterFk != null ? resolvedFilterFk : binding.getFilterFkFieldId();
+        formTableBindingUniquenessGuard.assertUpdate(binding, request, nextFilterFk);
+        if (resolvedFilterFk != null) {
+            binding.setFilterFkFieldId(resolvedFilterFk);
+        }
         if (request.getSortOrder() != null) {
             binding.setSortOrder(request.getSortOrder());
         }
         if (request.getSubMode() != null) {
             binding.setSubMode(request.getSubMode());
+        }
+        if (request.getFkFillSources() != null) {
+            binding.setFkFillSources(FkFillSourcesSupport.stampFieldNames(
+                    request.getFkFillSources(), binding.getTable()));
         }
 
         binding = formTableBindingRepository.save(binding);
@@ -596,14 +610,50 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
     }
 
-    /** True when {@code fieldName} is a column this table declares as a foreign key. */
+    /**
+     * True when {@code fieldName} is a column this table declares as a foreign key.
+     *
+     * <p>{@code refTableId} must be present too, not just the {@code isForeignKey} flag: the flag
+     * alone says "this points somewhere" without saying where, and every runtime consumer needs the
+     * target. {@code MiSubTaskSubTableRowMerger.foreignKeyTargetsMainTable} for instance joins on
+     * {@code ref_table_id}, so a flag-only field is invisible to it — accepting one here would let
+     * a designer satisfy this check with a declaration the runtime cannot read. Measured in dev on
+     * 2026-09-16: zero fields have {@code is_foreign_key = true AND ref_table_id IS NULL}, so this
+     * rejects nothing that exists today.
+     */
     private boolean isDeclaredForeignKey(TableDefinition table, String fieldName) {
         if (table.getFieldDefinitions() == null || fieldName == null) {
             return false;
         }
         return table.getFieldDefinitions().stream()
                 .anyMatch(f -> Boolean.TRUE.equals(f.getIsForeignKey())
+                        && f.getRefTableId() != null
                         && fieldName.equalsIgnoreCase(f.getFieldName()));
+    }
+
+    /**
+     * The {@code dw_field_definitions.id} of the declared FK column a SUB binding filters rows by.
+     *
+     * <p>Resolved from the FK column the designer already supplied
+     * ({@code request.foreignKeyField}) so the declaration is recorded as an id rather than left
+     * for the runtime to rediscover by scanning the table — which is only unambiguous while a table
+     * declares exactly one FK. Returns {@code null} for anything that is not a declared FK on this
+     * table (including {@code miParticipantRow} bindings, where the field names the collection's
+     * own primary key rather than a parent reference); {@code null} means "not declared" and leaves
+     * the existing table-level fallback in charge.
+     */
+    private Long resolveFilterFkFieldId(TableDefinition table, String fieldName) {
+        if (table == null || table.getFieldDefinitions() == null || fieldName == null) {
+            return null;
+        }
+        return table.getFieldDefinitions().stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsForeignKey())
+                        && f.getRefTableId() != null
+                        && fieldName.equalsIgnoreCase(f.getFieldName()))
+                .map(FieldDefinition::getId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -791,6 +841,13 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     // substituted the default instead of copying the source value, turning
                     // every copied MI participant binding into a structural-FK one.
                     .bindingLinkMode(sourceBinding.getBindingLinkMode())
+                    // Copied verbatim, no id remap: this path copies the FORM only and reuses
+                    // `sourceBinding.getTable()` above, so the copy points at the same
+                    // dw_table_definitions row and therefore the same dw_field_definitions ids.
+                    // (FunctionUnitCloner differs — it clones the tables, so there the id must be
+                    // remapped through the cloned fields.)
+                    .filterFkFieldId(sourceBinding.getFilterFkFieldId())
+                    .fkFillSources(FkFillSourcesSupport.copy(sourceBinding.getFkFillSources()))
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -835,6 +892,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
+        remapCopiedFkFillAncestors(bindingIdMapping);
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         savedCopy.setConfigJson(copiedConfig);
@@ -902,6 +960,13 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     // substituted the default instead of copying the source value, turning
                     // every copied MI participant binding into a structural-FK one.
                     .bindingLinkMode(sourceBinding.getBindingLinkMode())
+                    // Copied verbatim, no id remap: this path copies the FORM only and reuses
+                    // `sourceBinding.getTable()` above, so the copy points at the same
+                    // dw_table_definitions row and therefore the same dw_field_definitions ids.
+                    // (FunctionUnitCloner differs — it clones the tables, so there the id must be
+                    // remapped through the cloned fields.)
+                    .filterFkFieldId(sourceBinding.getFilterFkFieldId())
+                    .fkFillSources(FkFillSourcesSupport.copy(sourceBinding.getFkFillSources()))
                     .sortOrder(sourceBinding.getSortOrder())
                     .subMode(sourceBinding.getSubMode())
                     .build();
@@ -946,6 +1011,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
+        remapCopiedFkFillAncestors(bindingIdMapping);
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         savedCopy.setConfigJson(copiedConfig);
@@ -1094,5 +1160,15 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .applied(applied)
                 .createdTableNames(createdTables)
                 .build();
+    }
+
+    private void remapCopiedFkFillAncestors(Map<Long, Long> bindingIdMapping) {
+        for (Long newId : bindingIdMapping.values()) {
+            formTableBindingRepository.findById(newId).ifPresent(binding -> {
+                binding.setFkFillSources(FkFillSourcesSupport.remapAncestorBindingIds(
+                        binding.getFkFillSources(), bindingIdMapping));
+                formTableBindingRepository.save(binding);
+            });
+        }
     }
 }

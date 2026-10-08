@@ -4373,3 +4373,342 @@ ALTER TABLE bi_dashboard_registry ADD COLUMN IF NOT EXISTS superset_role_ids TEX
 
 COMMENT ON COLUMN bi_dashboard_registry.superset_role_ids IS
     'Sorted CSV of Superset role IDs from superset.dashboard_roles; NULL = unrestricted';
+
+-- =============================================================================
+-- 83-dw-ai-studio-shared-thread.sql
+-- Source file: deploy/init-scripts/00-schema/83-dw-ai-studio-shared-thread.sql
+-- =============================================================================
+-- AI Studio shared state per function unit: confirmed phases + copilot thread messages.
+-- Threads are shared by everyone who can open the function unit (same dev group); the phase a
+-- user currently sits on stays in that user's browser. Undo tokens are never stored here.
+-- Not reusing dw_ai_sessions / dw_ai_messages: their phase CHECK is the 3-phase AI Generate enum.
+-- Idempotent: safe to re-run.
+-- NOTE for existing environments: init-scripts only run on FIRST container start.
+-- Apply manually:
+--   docker exec -i platform-postgres-dev psql -U <user> -d <db> \
+--     -f /docker-entrypoint-initdb.d/00-schema/83-dw-ai-studio-shared-thread.sql
+
+CREATE TABLE IF NOT EXISTS dw_ai_studio_thread_states (
+    function_unit_id BIGINT PRIMARY KEY,
+    completed_phases JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_by VARCHAR(64),
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_studio_state_function_unit FOREIGN KEY (function_unit_id)
+        REFERENCES dw_function_units(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS dw_ai_studio_messages (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL,
+    phase VARCHAR(30) NOT NULL,
+    role VARCHAR(10) NOT NULL,
+    content TEXT NOT NULL,
+    proposal JSONB,
+    applied_by VARCHAR(64),
+    applied_by_name VARCHAR(100),
+    applied_at TIMESTAMP,
+    author_user_id VARCHAR(64),
+    author_name VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_studio_message_function_unit FOREIGN KEY (function_unit_id)
+        REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    CONSTRAINT chk_ai_studio_message_role CHECK (role IN ('USER', 'ASSISTANT'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_ai_studio_messages_thread
+    ON dw_ai_studio_messages(function_unit_id, phase, id);
+
+COMMENT ON TABLE dw_ai_studio_thread_states IS
+    'AI Studio progress shared per function unit (confirmed phases)';
+COMMENT ON TABLE dw_ai_studio_messages IS
+    'AI Studio copilot thread messages shared per function unit and phase (latest 50 kept per phase)';
+COMMENT ON COLUMN dw_ai_studio_messages.proposal IS
+    'Structured change proposal {scope, data, preview}; applied state lives in applied_* columns';
+
+-- =============================================================================
+-- 84-dw-ai-studio-proposal-jobs.sql
+-- Source file: deploy/init-scripts/00-schema/84-dw-ai-studio-proposal-jobs.sql
+-- =============================================================================
+-- AI Studio copilot proposal jobs: status and result survive a DW restart.
+-- Jobs still PENDING/RUNNING when DW starts are marked FAILED / AI_STUDIO_PROPOSAL_INTERRUPTED:
+-- the model call cannot be resumed because the user's gateway token is never stored.
+-- Terminal rows are purged after ai-generation.studio.proposal-db-retention-hours (default 24).
+-- Idempotent: safe to re-run.
+-- NOTE for existing environments: init-scripts only run on FIRST container start.
+-- Apply manually:
+--   docker exec -i platform-postgres-dev psql -U <user> -d <db> \
+--     -f /docker-entrypoint-initdb.d/00-schema/84-dw-ai-studio-proposal-jobs.sql
+
+CREATE TABLE IF NOT EXISTS dw_ai_studio_proposal_jobs (
+    job_id VARCHAR(36) PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL,
+    phase VARCHAR(30) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    author_name VARCHAR(100),
+    request_key TEXT,
+    message TEXT,
+    status VARCHAR(20) NOT NULL,
+    error_code VARCHAR(100),
+    error_message TEXT,
+    reply TEXT,
+    proposal JSONB,
+    proposal_scope VARCHAR(40),
+    preview JSONB,
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    CONSTRAINT fk_ai_studio_job_function_unit FOREIGN KEY (function_unit_id)
+        REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    CONSTRAINT chk_ai_studio_job_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_ai_studio_jobs_owner
+    ON dw_ai_studio_proposal_jobs(function_unit_id, user_id, submitted_at);
+CREATE INDEX IF NOT EXISTS idx_dw_ai_studio_jobs_status
+    ON dw_ai_studio_proposal_jobs(status, finished_at);
+
+COMMENT ON TABLE dw_ai_studio_proposal_jobs IS
+    'AI Studio copilot proposal jobs (status + result); no credentials are stored';
+
+-- =====================================================
+-- Function unit document major.minor versions (see init-scripts/00-schema/85-*)
+-- =====================================================
+ALTER TABLE dw_ai_documents ADD COLUMN IF NOT EXISTS major_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE dw_ai_documents ADD COLUMN IF NOT EXISTS minor_version INTEGER;
+UPDATE dw_ai_documents SET minor_version = version WHERE minor_version IS NULL;
+ALTER TABLE dw_ai_documents ALTER COLUMN minor_version SET NOT NULL;
+ALTER TABLE dw_ai_documents ALTER COLUMN minor_version SET DEFAULT 1;
+COMMENT ON COLUMN dw_ai_documents.major_version IS 'Design round; advances only when a new AI design is started';
+COMMENT ON COLUMN dw_ai_documents.minor_version IS 'Version within the design round, starting at 1 (shown as v<major>.<minor>)';
+
+ALTER TABLE dw_ai_studio_thread_states ADD COLUMN IF NOT EXISTS document_major INTEGER NOT NULL DEFAULT 1;
+COMMENT ON COLUMN dw_ai_studio_thread_states.document_major IS
+    'Current design round for this function unit''s documents; +1 when a new AI design is started';
+
+-- =============================================================================
+-- 86-ac-environment-variables.sql
+-- Source file: deploy/init-scripts/00-schema/86-ac-environment-variables.sql
+-- =============================================================================
+-- Environment variable catalog (Admin) + email connection Vault binding.
+-- TEXT: default_value required; current_value optional (blank falls back to default).
+-- VAULT: vault_secret_path only; admin-center reads HashiCorp KV v2 data.data.password.
+
+CREATE TABLE IF NOT EXISTS ac_environment_variables (
+    id VARCHAR(36) PRIMARY KEY,
+    var_key VARCHAR(100) NOT NULL,
+    deploy_env VARCHAR(16) NOT NULL,
+    value_kind VARCHAR(16) NOT NULL,
+    display_name VARCHAR(150) NOT NULL,
+    description VARCHAR(500),
+    default_value TEXT,
+    current_value TEXT,
+    vault_secret_path VARCHAR(512),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(64),
+    CONSTRAINT uq_ac_env_var_key_env UNIQUE (var_key, deploy_env),
+    CONSTRAINT chk_ac_env_deploy_env CHECK (deploy_env IN ('dev', 'sit', 'uat', 'prod')),
+    CONSTRAINT chk_ac_env_value_kind CHECK (value_kind IN ('TEXT', 'VAULT')),
+    CONSTRAINT chk_ac_env_kind_payload CHECK (
+        (value_kind = 'TEXT'
+            AND default_value IS NOT NULL
+            AND btrim(default_value) <> ''
+            AND vault_secret_path IS NULL)
+        OR
+        (value_kind = 'VAULT'
+            AND vault_secret_path IS NOT NULL
+            AND btrim(vault_secret_path) <> ''
+            AND default_value IS NULL
+            AND current_value IS NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_ac_env_var_kind ON ac_environment_variables (value_kind);
+CREATE INDEX IF NOT EXISTS idx_ac_env_var_deploy ON ac_environment_variables (deploy_env);
+
+COMMENT ON TABLE ac_environment_variables IS
+    'Admin environment catalog: TEXT (current/default) or VAULT (KV v2 secret path)';
+COMMENT ON COLUMN ac_environment_variables.var_key IS
+    'Stable key referenced by Email Connection password_env_key and ZIP export';
+COMMENT ON COLUMN ac_environment_variables.vault_secret_path IS
+    'Vault KV v2 path for VAULT rows (under VAULT_KV_MOUNT), e.g. workflow/email/qq-inbound';
+
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS password_env_key VARCHAR(100);
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS password_env_key VARCHAR(100);
+
+COMMENT ON COLUMN dw_email_connections.password_env_key IS
+    'References ac_environment_variables.var_key (VAULT kind) for mailbox password';
+COMMENT ON COLUMN sys_email_connections.password_env_key IS
+    'References ac_environment_variables.var_key (VAULT kind) for mailbox password';
+
+
+-- =============================================================================
+-- 87. Main Table View: select column display (value | label)
+-- =============================================================================
+
+ALTER TABLE dw_main_table_view_fields
+    ADD COLUMN IF NOT EXISTS select_display VARCHAR(10) NOT NULL DEFAULT 'value';
+
+COMMENT ON COLUMN dw_main_table_view_fields.select_display IS
+    'value = show the stored option value; label = show the option label from the bound form widget';
+
+-- =============================================================================
+-- 88-ac-sla-policies.sql
+-- Source file: deploy/init-scripts/00-schema/88-ac-sla-policies.sql
+-- =============================================================================
+-- SLA policy (Admin): per Function Unit lead time in calendar days, maintained in production by
+-- authorised admins. The portal derives each case's due date = start date + lead_time_days on every
+-- write path, and a recalculation job re-stamps open cases after a change.
+-- Which fields hold the start / due date is design-time config: dw_table_definitions.sla_config.
+-- The lead time itself is environment data and is NOT exported with the Function Unit.
+-- Idempotent: safe to re-run.
+-- NOTE for existing environments: init-scripts only run on FIRST container start.
+-- Apply manually:
+--   docker exec -i platform-postgres-dev psql -U <user> -d <db> \
+--     -f /docker-entrypoint-initdb.d/00-schema/88-ac-sla-policies.sql
+
+CREATE TABLE IF NOT EXISTS ac_sla_policies (
+    function_unit_code VARCHAR(100) PRIMARY KEY,
+    lead_time_days INTEGER NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(64),
+    CONSTRAINT chk_ac_sla_lead_time_days CHECK (lead_time_days BETWEEN 1 AND 3650)
+);
+
+CREATE TABLE IF NOT EXISTS ac_sla_policy_history (
+    id VARCHAR(36) PRIMARY KEY,
+    function_unit_code VARCHAR(100) NOT NULL,
+    old_lead_time_days INTEGER,
+    new_lead_time_days INTEGER NOT NULL,
+    old_version INTEGER,
+    new_version INTEGER NOT NULL,
+    change_reason VARCHAR(500),
+    changed_by VARCHAR(64),
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    recalc_job_id VARCHAR(36),
+    dispatch_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    dispatch_error VARCHAR(1000),
+    CONSTRAINT chk_ac_sla_history_dispatch CHECK (dispatch_status IN ('PENDING', 'DISPATCHED', 'DISPATCH_FAILED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_ac_sla_history_fu
+    ON ac_sla_policy_history (function_unit_code, changed_at DESC);
+
+COMMENT ON TABLE ac_sla_policies IS
+    'Per Function Unit SLA lead time (calendar days); due date = start date + lead_time_days';
+COMMENT ON TABLE ac_sla_policy_history IS
+    'SLA lead time change history with the recalculation job it dispatched';
+
+-- =============================================================================
+-- 89-dw-table-sla-config.sql
+-- Source file: deploy/init-scripts/00-schema/89-dw-table-sla-config.sql
+-- =============================================================================
+-- SLA due date mapping on the PRIMARY main table:
+--   {"startDateSource": "FIELD" | "SUBMITTED_AT", "startDateField": "...", "dueDateField": "..."}
+-- The lead time lives in ac_sla_policies (per environment); this column only says which fields to use.
+-- Idempotent: safe to re-run.
+
+ALTER TABLE dw_table_definitions ADD COLUMN IF NOT EXISTS sla_config JSONB;
+
+COMMENT ON COLUMN dw_table_definitions.sla_config IS
+    'SLA due date mapping (start date source/field + due date field) for the main table';
+
+-- =============================================================================
+-- 90-up-sla-recalc-jobs.sql
+-- Source file: deploy/init-scripts/00-schema/90-up-sla-recalc-jobs.sql
+-- =============================================================================
+-- SLA due date recalculation jobs (user-portal). One job re-stamps the due date of every open case
+-- (status RUNNING / SUSPENDED) of one Function Unit after its lead time changed.
+-- Items record only UPDATED / SKIPPED / FAILED cases; unchanged cases are counted, not stored.
+-- Jobs whose heartbeat went stale while PENDING/RUNNING are marked FAILED when a portal instance starts.
+-- Idempotent: safe to re-run.
+-- NOTE for existing environments: init-scripts only run on FIRST container start.
+-- Apply manually:
+--   docker exec -i platform-postgres-dev psql -U <user> -d <db> \
+--     -f /docker-entrypoint-initdb.d/00-schema/90-up-sla-recalc-jobs.sql
+-- Run it with plain `psql -f` (autocommit), NOT `-1` / `--single-transaction`: the index on
+-- up_process_instance is built CONCURRENTLY so a live table is not write-locked during the build.
+
+CREATE TABLE IF NOT EXISTS up_sla_recalc_jobs (
+    id VARCHAR(36) PRIMARY KEY,
+    function_unit_code VARCHAR(100) NOT NULL,
+    policy_version INTEGER,
+    lead_time_days INTEGER,
+    triggered_by VARCHAR(64),
+    status VARCHAR(20) NOT NULL,
+    total_count INTEGER NOT NULL DEFAULT 0,
+    updated_count INTEGER NOT NULL DEFAULT 0,
+    unchanged_count INTEGER NOT NULL DEFAULT 0,
+    skipped_count INTEGER NOT NULL DEFAULT 0,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    error_message VARCHAR(1000),
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMPTZ,
+    heartbeat_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+    CONSTRAINT chk_up_sla_job_status CHECK (status IN
+        ('PENDING', 'RUNNING', 'SUCCEEDED', 'PARTIAL', 'FAILED', 'SUPERSEDED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_up_sla_jobs_fu
+    ON up_sla_recalc_jobs (function_unit_code, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_up_sla_jobs_status
+    ON up_sla_recalc_jobs (status, finished_at);
+
+CREATE TABLE IF NOT EXISTS up_sla_recalc_job_items (
+    id BIGSERIAL PRIMARY KEY,
+    job_id VARCHAR(36) NOT NULL REFERENCES up_sla_recalc_jobs(id) ON DELETE CASCADE,
+    process_instance_id VARCHAR(64) NOT NULL,
+    outcome VARCHAR(20) NOT NULL,
+    old_due_date VARCHAR(32),
+    new_due_date VARCHAR(32),
+    reason VARCHAR(1000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_up_sla_item_outcome CHECK (outcome IN ('UPDATED', 'SKIPPED', 'FAILED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_up_sla_items_job
+    ON up_sla_recalc_job_items (job_id, outcome);
+
+-- Keyset scan of one Function Unit's open cases. CONCURRENTLY: up_process_instance is the largest
+-- runtime table and a plain CREATE INDEX blocks every case write until it finishes. If a concurrent
+-- build is interrupted it leaves an INVALID index that IF NOT EXISTS then skips; check with
+--   SELECT indisvalid FROM pg_index WHERE indexrelid = 'idx_up_pi_fu_status_id'::regclass;
+-- and DROP INDEX CONCURRENTLY + re-run if it is false.
+-- GUI bundle only: plain CREATE INDEX. This file targets an empty database, where there is nothing
+-- to lock, and GUI clients run a pasted script as one transaction block, which CONCURRENTLY rejects.
+CREATE INDEX IF NOT EXISTS idx_up_pi_fu_status_id
+    ON up_process_instance (function_unit_code, status, id);
+
+COMMENT ON TABLE up_sla_recalc_jobs IS
+    'SLA due date recalculation jobs (one per lead time change / manual retrigger)';
+COMMENT ON TABLE up_sla_recalc_job_items IS
+    'Per-case outcome of an SLA recalculation job (UPDATED / SKIPPED / FAILED only)';
+
+-- =============================================================================
+-- 91-dw-ai-document-minor-renumber.sql
+-- Source file: deploy/init-scripts/00-schema/91-dw-ai-document-minor-renumber.sql
+-- =============================================================================
+-- Function unit Requirements / Design documents: repair duplicate v<major>.<minor> labels.
+-- The old AI Generate save path (chat-produced documents and its "User manual edit") never set
+-- major_version / minor_version, so every row it wrote kept the column defaults and showed as v1.1.
+-- Renumber minor_version within each (function unit, document type, major) by the internal
+-- version order, so the labels are unique again (v1.1, v1.2, v1.3 …). major_version is left as is.
+-- Idempotent: safe to re-run (rows already numbered correctly are not touched).
+-- NOTE for existing environments: init-scripts only run on FIRST container start.
+-- Apply manually:
+--   docker exec -i platform-postgres-dev psql -U <user> -d <db> \
+--     -f /docker-entrypoint-initdb.d/00-schema/91-dw-ai-document-minor-renumber.sql
+
+UPDATE dw_ai_documents d
+SET minor_version = r.minor
+FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (PARTITION BY function_unit_id, document_type, major_version
+                              ORDER BY version) AS minor
+    FROM dw_ai_documents
+) r
+WHERE d.id = r.id
+  AND d.minor_version <> r.minor;

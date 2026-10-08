@@ -66,7 +66,8 @@ public class BiGuestTokenServiceImpl implements BiGuestTokenService {
                     && dataViewAssignmentService.canAccessDashboardForView(
                     userId, dashboardId, request.getDataViewId());
         } else {
-            List<UserDashboardResponse> userDashboards = assignmentService.getUserDashboards(userId, null);
+            List<UserDashboardResponse> userDashboards = assignmentService.getUserDashboards(
+                    userId, request.getActiveBusinessUnitId());
             isAssigned = userDashboards.stream()
                     .anyMatch(d -> dashboardId.equals(d.getDashboardId()));
         }

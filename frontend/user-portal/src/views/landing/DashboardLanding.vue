@@ -116,7 +116,7 @@ import {
   type UserDashboardResponse,
   type GuestTokenResponse,
 } from '@/api/biDashboard'
-import { getStoredUser, USER_ID_KEY, USER_KEY } from '@/api/auth'
+import { getStoredUser } from '@/api/auth'
 
 // NOTE: Install required package: npm install @superset-ui/embedded-sdk
 // import { embedDashboard } from '@superset-ui/embedded-sdk'
@@ -130,7 +130,7 @@ const activeTab = ref('')
 const fullscreenVisible = ref(false)
 const fullscreenDashboard = ref<UserDashboardResponse | null>(null)
 const supersetDomain = ref('')
-const currentUserId = ref('')
+const currentActiveBusinessUnitId = ref('')
 
 // Track embedded dashboard instances for cleanup
 const embeddedInstances = new Map<string, { unmount?: () => void }>()
@@ -139,31 +139,22 @@ function getContainerId(dashboardId: string): string {
   return `superset-embed-${dashboardId}`
 }
 
-function getUserId(): string {
-  const userId = localStorage.getItem(USER_ID_KEY)
-  if (userId) return userId
-  const userStr = localStorage.getItem(USER_KEY)
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr)
-      return user.userId || user.id || ''
-    } catch {
-      return ''
-    }
-  }
-  return ''
-}
-
 async function fetchGuestTokenPayload(dashboardId: string): Promise<GuestTokenResponse> {
   try {
-    const res = await biDashboardApi.getGuestToken({ dashboardId }, currentUserId.value || undefined)
-    // The response interceptor unwraps the data, so res should be GuestTokenResponse directly
-    return ((res as any).data || res) as GuestTokenResponse
-  } catch (err: any) {
+    const res = await biDashboardApi.getGuestToken({
+      dashboardId,
+      activeBusinessUnitId: currentActiveBusinessUnitId.value || undefined,
+    })
+    return res
+  } catch (err: unknown) {
+    const error = err as {
+      response?: { data?: { message?: string; details?: string } }
+      message?: string
+    }
     const backendMsg =
-      err?.response?.data?.message ||
-      err?.response?.data?.details ||
-      err?.message ||
+      error.response?.data?.message ||
+      error.response?.data?.details ||
+      error.message ||
       'Unknown error'
     console.error(`Failed to fetch guest token for dashboard ${dashboardId}:`, err)
     console.error(`Guest token API error details: ${backendMsg}`)
@@ -320,17 +311,10 @@ function onFullscreenClosed(): void {
 onMounted(async () => {
   try {
     const storedUser = getStoredUser()
-    const userId = storedUser?.userId || getUserId()
-    if (!userId) {
-      console.warn('No userId found, cannot load dashboards')
-      loading.value = false
-      return
-    }
-    currentUserId.value = userId
+    currentActiveBusinessUnitId.value = storedUser?.activeBusinessUnitId || ''
 
-    const res = await biDashboardApi.getUserDashboards(userId, storedUser?.activeBusinessUnitId)
-    // The response interceptor unwraps, so res could be the data directly or wrapped
-    const list: UserDashboardResponse[] = (res as any).data || res || []
+    const res = await biDashboardApi.getUserDashboards(storedUser?.activeBusinessUnitId)
+    const list: UserDashboardResponse[] = res || []
     dashboards.value = list
 
     if (list.length > 0) {

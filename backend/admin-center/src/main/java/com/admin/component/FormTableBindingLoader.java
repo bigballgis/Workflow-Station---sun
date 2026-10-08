@@ -1,8 +1,10 @@
 package com.admin.component;
 
 import com.admin.dto.response.FormContentDTO;
+import com.admin.dto.response.FkFillSourceDTO;
 import com.admin.dto.response.TableBindingDTO;
 import com.admin.dto.response.TableFieldDefinitionDTO;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,12 +36,44 @@ public class FormTableBindingLoader {
     private final ObjectMapper objectMapper;
 
     /**
-     * Attach tableBindings to each form DTO by querying dw_form_table_bindings.
-     * Prefers sourceId match; falls back to form_name match for forms without sourceId.
+     * Attach tableBindings to each form DTO.
+     *
+     * <p>Forms that already have {@code tableBindings != null} came from a catalog FORM snapshot
+     * (PROCESS/TASK/ACTION freeze). Those lists are kept; live {@code dw_form_table_bindings} is
+     * not queried for them. Field definitions and missing table ids are still resolved from live
+     * DW by stable table name. Legacy / DETAIL forms ({@code tableBindings == null}) load live.
      */
     public void attachTableBindings(List<FormContentDTO> forms) {
-        if (forms.isEmpty()) return;
+        if (forms.isEmpty()) {
+            return;
+        }
+        List<FormContentDTO> live = new ArrayList<>();
+        List<FormContentDTO> frozen = new ArrayList<>();
+        for (FormContentDTO form : forms) {
+            if (form.getTableBindings() != null) {
+                frozen.add(form);
+            } else {
+                live.add(form);
+            }
+        }
+        if (!live.isEmpty()) {
+            attachLiveBindings(live);
+            omitUndeclaredFillSources(live);
+        }
+        for (FormContentDTO form : frozen) {
+            try {
+                new CatalogFormBindingEnricher(jdbcTemplate, bindings -> {
+                    enrichBindingsWithFieldDefinitions(bindings);
+                    resolveFillSourceFieldNames(bindings);
+                }).enrich(form.getTableBindings());
+            } catch (Exception e) {
+                // FALLBACK(ux): keep the frozen binding list; live name/field lookup is enrichment only.
+                log.warn("Failed to enrich catalog snapshot tableBindings: {}", e.getMessage());
+            }
+        }
+    }
 
+    private void attachLiveBindings(List<FormContentDTO> forms) {
         try {
             List<String> formSourceIds = forms.stream()
                     .map(FormContentDTO::getSourceId)
@@ -64,6 +99,8 @@ public class FormTableBindingLoader {
                 String sql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.binding_link_mode, ftb.sort_order, " +
+                        "       ffk.field_name AS filter_fk_field_name, ffk.ref_table_id AS filter_fk_ref_table_id, " +
+                        "       ftb.fk_fill_sources, " +
                         "       COALESCE(td.id, rt.id) as table_id, " +
                         "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
                         "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
@@ -76,6 +113,7 @@ public class FormTableBindingLoader {
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
                         "LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id " +
                         "LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id " +
+                        "LEFT JOIN dw_field_definitions ffk ON ffk.id = ftb.filter_fk_field_id " +
                         "WHERE fd.id::text IN (" + placeholders + ") " +
                         "ORDER BY fd.id, ftb.sort_order";
                 jdbcTemplate.query(sql, rs -> {
@@ -89,6 +127,8 @@ public class FormTableBindingLoader {
                 String sql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.binding_link_mode, ftb.sort_order, " +
+                        "       ffk.field_name AS filter_fk_field_name, ffk.ref_table_id AS filter_fk_ref_table_id, " +
+                        "       ftb.fk_fill_sources, " +
                         "       COALESCE(td.id, rt.id) as table_id, " +
                         "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
                         "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
@@ -102,6 +142,7 @@ public class FormTableBindingLoader {
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
                         "LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id " +
                         "LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id " +
+                        "LEFT JOIN dw_field_definitions ffk ON ffk.id = ftb.filter_fk_field_id " +
                         "ORDER BY latest.form_name, ftb.sort_order";
                 jdbcTemplate.query(sql, rs -> {
                     String formName = rs.getString("form_name");
@@ -111,9 +152,11 @@ public class FormTableBindingLoader {
 
             for (List<TableBindingDTO> list : bindingsBySourceId.values()) {
                 enrichBindingsWithFieldDefinitions(list);
+                resolveFillSourceFieldNames(list);
             }
             for (List<TableBindingDTO> list : bindingsByFormName.values()) {
                 enrichBindingsWithFieldDefinitions(list);
+                resolveFillSourceFieldNames(list);
             }
 
             // Attach bindings: prefer sourceId match, fallback to form_name
@@ -135,6 +178,28 @@ public class FormTableBindingLoader {
         }
     }
 
+    /**
+     * Legacy PROCESS/TASK/ACTION snapshots never declared fill sources. Live attach would otherwise
+     * copy current DW {@code fk_fill_sources} onto old catalog packages (D05). DETAIL stays live.
+     */
+    void omitUndeclaredFillSources(List<FormContentDTO> forms) {
+        if (forms == null || forms.isEmpty()) {
+            return;
+        }
+        for (FormContentDTO form : forms) {
+            if ("DETAIL".equals(form.getFormType())) {
+                continue;
+            }
+            List<TableBindingDTO> bindings = form.getTableBindings();
+            if (bindings == null) {
+                continue;
+            }
+            for (TableBindingDTO binding : bindings) {
+                binding.setFkFillSources(null);
+            }
+        }
+    }
+
     private TableBindingDTO mapBindingRow(java.sql.ResultSet rs) throws java.sql.SQLException {
         return TableBindingDTO.builder()
                 .bindingId(rs.getLong("binding_id"))
@@ -144,6 +209,9 @@ public class FormTableBindingLoader {
                 .subMode(rs.getString("sub_mode"))
                 .foreignKeyField(rs.getString("foreign_key_field"))
                 .bindingLinkMode(rs.getString("binding_link_mode"))
+                .filterFkFieldName(rs.getString("filter_fk_field_name"))
+                .filterFkRefTableId(readNullableLong(rs, "filter_fk_ref_table_id"))
+                .fkFillSources(readFillSources(rs))
                 .sortOrder(rs.getInt("sort_order"))
                 .tableName(rs.getString("table_name"))
                 .tableDisplayName(rs.getString("table_display_name"))
@@ -154,6 +222,114 @@ public class FormTableBindingLoader {
                 // names are known (needed for the collision guard).
                 .primaryKeyFields(readTextArrayColumn(rs, "primary_key_fields"))
                 .build();
+    }
+
+    private List<FkFillSourceDTO> readFillSources(java.sql.ResultSet rs) throws java.sql.SQLException {
+        String json = rs.getString("fk_fill_sources");
+        if (json == null || json.isBlank() || objectMapper == null) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> raw = objectMapper.readValue(json, new TypeReference<>() {});
+            List<FkFillSourceDTO> out = new ArrayList<>();
+            for (Map<String, Object> map : raw) {
+                if (map == null) {
+                    continue;
+                }
+                String kind = asFillString(map.get("kind"));
+                if (kind == null) {
+                    continue;
+                }
+                out.add(FkFillSourceDTO.builder()
+                        .fieldId(asFillLong(map.get("fieldId")))
+                        .fieldName(asFillString(map.get("fieldName")))
+                        .kind(kind)
+                        .ancestorBindingId(asFillLong(map.get("ancestorBindingId")))
+                        .ancestorTableName(asFillString(map.get("ancestorTableName")))
+                        .ancestorFilterFkFieldName(asFillString(map.get("ancestorFilterFkFieldName")))
+                        .build());
+            }
+            return out.isEmpty() ? null : out;
+        } catch (Exception e) {
+            log.warn("Failed to parse fk_fill_sources JSON: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void resolveFillSourceFieldNames(List<TableBindingDTO> bindings) {
+        if (bindings == null || bindings.isEmpty() || jdbcTemplate == null) {
+            return;
+        }
+        Set<Long> fieldIds = new HashSet<>();
+        for (TableBindingDTO binding : bindings) {
+            if (binding.getFkFillSources() == null) {
+                continue;
+            }
+            for (FkFillSourceDTO source : binding.getFkFillSources()) {
+                if (source.getFieldId() != null
+                        && (source.getFieldName() == null || source.getFieldName().isBlank())) {
+                    fieldIds.add(source.getFieldId());
+                }
+            }
+        }
+        if (fieldIds.isEmpty()) {
+            return;
+        }
+        Map<Long, String> names = loadFieldNamesById(fieldIds);
+        for (TableBindingDTO binding : bindings) {
+            if (binding.getFkFillSources() == null) {
+                continue;
+            }
+            for (FkFillSourceDTO source : binding.getFkFillSources()) {
+                if ((source.getFieldName() == null || source.getFieldName().isBlank())
+                        && source.getFieldId() != null) {
+                    source.setFieldName(names.get(source.getFieldId()));
+                }
+            }
+        }
+    }
+
+    private Map<Long, String> loadFieldNamesById(Set<Long> fieldIds) {
+        Map<Long, String> names = new HashMap<>();
+        String placeholders = fieldIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        Object[] args = fieldIds.toArray();
+        org.springframework.jdbc.core.RowCallbackHandler handler = rs ->
+                names.put(rs.getLong("id"), rs.getString("field_name"));
+        jdbcTemplate.query(
+                "SELECT id, field_name FROM dw_field_definitions WHERE id IN (" + placeholders + ")",
+                handler,
+                args);
+        jdbcTemplate.query(
+                "SELECT id, field_name FROM rt_field_definitions WHERE id IN (" + placeholders + ")",
+                handler,
+                args);
+        return names;
+    }
+
+    private static String asFillString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String s = String.valueOf(value).trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private static Long asFillLong(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        String s = String.valueOf(value).trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
@@ -203,7 +379,7 @@ public class FormTableBindingLoader {
         return List.of(generated);
     }
 
-    private void enrichBindingsWithFieldDefinitions(List<TableBindingDTO> bindings) {
+    void enrichBindingsWithFieldDefinitions(List<TableBindingDTO> bindings) {
         if (bindings == null || bindings.isEmpty()) {
             return;
         }

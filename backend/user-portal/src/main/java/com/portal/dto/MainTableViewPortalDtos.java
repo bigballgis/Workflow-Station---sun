@@ -50,6 +50,11 @@ public final class MainTableViewPortalDtos {
             Long refViewId,
             String refFunctionUnitCode,
             List<String> refPrimaryKeyFields,
+            /**
+             * The referenced row is the one this SUB row lives in (its own process instance), so
+             * the portal opens that request directly instead of searching {@code refViewId}.
+             */
+            Boolean refOwningRequest,
             // Lookup drill-down: when isLookup, the portal links to the referenced Relation Table's data
             // (lookupTableId), pre-filtered by this cell's value. Resolved from the form's lookupConfig.
             Boolean isLookup,
@@ -74,7 +79,18 @@ public final class MainTableViewPortalDtos {
             Boolean sortable,
             List<String> operators,
             /** Closed choices for ENUM / BOOLEAN; empty for open-value kinds. */
-            List<ListColumnMeta.Option> options
+            List<ListColumnMeta.Option> options,
+            /**
+             * {@code value} (stored option value, the default) or {@code label}: what a select-like
+             * column shows. Designed per column in the DW View Design column settings.
+             */
+            String selectDisplay,
+            /**
+             * Static options of the form widget bound to this field, sent only when
+             * {@link #selectDisplay} is {@code label}; the portal maps each cell value to its label.
+             * Row values stay raw so detail forms, FK links and lookup hydration keep working.
+             */
+            List<ListColumnMeta.Option> selectOptions
     ) {
         /**
          * Copies the list-header contract onto a view column. {@code options} must travel:

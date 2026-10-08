@@ -5,7 +5,7 @@
         {{ t('emailMonitor.startEvent.panelTitle') }}
         <DesignerHelpLink
           path="/email-monitor"
-          :aria-label="t('emailMonitor.startEvent.guideLinkAria')"
+          :ariaLabel="t('emailMonitor.startEvent.guideLinkAria')"
           test-id="start-event-monitor-guide-link"
         />
       </span>

@@ -69,6 +69,29 @@ public class FormTableBinding {
     private BindingLinkMode bindingLinkMode = BindingLinkMode.structuralFk;
 
     /**
+     * 本 binding 按哪个已声明外键过滤自己的行（{@code dw_field_definitions.id}）。
+     *
+     * <p>存 id 而非列名：列名会被设计器改掉，靠名字匹配的判断已经因此答错过
+     * （demo FU 把 {@code sub_task_id} 改成 {@code sub_task_idq} 后运行时两个方向都判错）。
+     *
+     * <p>{@code null} = 未声明，运行时退回扫描该表的全部外键 —— 而那只在一张表恰好声明
+     * 一个外键时无歧义。故意**不加** {@code @Builder.Default}：{@link #bindingLinkMode}
+     * 的 {@code @Builder.Default} 正是 Clone / Copy Form 三处静默丢值的成因
+     * （见 {@code FunctionUnitCloner} 里的说明），不重复同一个坑。
+     */
+    @Column(name = "filter_fk_field_id")
+    private Long filterFkFieldId;
+
+    /**
+     * Per declared FK: PARENT / PRIMARY / ANCESTOR. Null = runtime unique-table fallback.
+     * No {@code @Builder.Default}: omitting it on Clone/Copy must not invent an empty list
+     * that looks like an explicit "clear".
+     */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "fk_fill_sources", columnDefinition = "jsonb")
+    private java.util.List<com.developer.dto.FkFillSource> fkFillSources;
+
+    /**
      * 排序顺序
      */
     @Column(name = "sort_order")

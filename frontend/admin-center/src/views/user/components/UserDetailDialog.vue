@@ -143,7 +143,7 @@
               {{ t('user.buRoleAssignments') }}
               <DesignerHelpLink
                 path="/up-tasks-to-claim#leader"
-                :aria-label="t('user.ubrLeaderGuideLinkAria')"
+                :ariaLabel="t('user.ubrLeaderGuideLinkAria')"
                 test-id="user-ubr-leader-guide-link"
               />
             </div>

@@ -331,7 +331,7 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         }
         String username = StringUtils.hasText(connection.getMailboxAddress())
                 ? connection.getMailboxAddress() : connection.getUsername();
-        if (!StringUtils.hasText(username) || !StringUtils.hasText(connection.getCredentialEncrypted())) {
+        if (!StringUtils.hasText(username) || !StringUtils.hasText(connection.getPasswordEnvKey())) {
             throw connectionError("VALIDATION_CONNECTION_CREDENTIALS",
                     "email.monitor.connection_missing_credentials", templateName);
         }
