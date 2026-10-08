@@ -6,13 +6,16 @@ import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.FunctionUnitDevGroupAssignment;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.MainTableViewService;
 import com.developer.service.impl.FunctionUnitDocumentService;
 import com.developer.util.BpmnIdRewriter;
@@ -21,6 +24,7 @@ import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.BpmnServiceTaskFlowRefs;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.XmlEncodingUtil;
+import com.platform.security.util.SecurityContextUtils;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +67,8 @@ public class FunctionUnitImporter {
     private final MainTableViewService mainTableViewService;
     private final AdminCenterAutomationFlowClient automationFlowClient;
     private final FunctionUnitDocumentService documentService;
+    private final FunctionUnitWorkspaceAccessService workspaceAccessService;
+    private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
 
     /**
      * 导入功能单元。无冲突策略选项：
@@ -112,6 +118,14 @@ public class FunctionUnitImporter {
         // increments. Otherwise create a new function unit.
         FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
         final boolean versioned = existing != null;
+        // A new unit must land in a workspace, resolved exactly as on create (the selected team,
+        // or the admin's choice). Without it the unit has no dev-group assignment and no workspace
+        // lists it. Resolved before any content is written so an import with no team selected
+        // (e.g. an admin on "All Groups") fails instead of leaving an orphan behind. A new version
+        // of an existing unit keeps the unit's assignments.
+        List<String> creationGroupIds = versioned
+                ? List.of()
+                : workspaceAccessService.resolveCreationTeamGroupIds(null);
         FunctionUnit functionUnit;
         if (versioned) {
             functionUnit = existing;
@@ -131,6 +145,7 @@ public class FunctionUnitImporter {
                     .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
                     .build();
             functionUnit = functionUnitRepository.save(functionUnit);
+            assignDevGroups(functionUnit.getId(), creationGroupIds);
         }
 
         Map<Long, Long> tableIdMapping = new HashMap<>();
@@ -390,6 +405,18 @@ public class FunctionUnitImporter {
             return com.platform.security.util.SecurityContextUtils.getCurrentUsername().orElse("system");
         } catch (Exception e) {
             return "system";
+        }
+    }
+
+    private void assignDevGroups(Long functionUnitId, List<String> groupIds) {
+        String operator = SecurityContextUtils.getCurrentUsername().orElse("system");
+        for (String groupId : groupIds) {
+            devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                    .functionUnitId(functionUnitId)
+                    .virtualGroupId(groupId)
+                    .createdAt(Instant.now())
+                    .createdBy(operator)
+                    .build());
         }
     }
 
