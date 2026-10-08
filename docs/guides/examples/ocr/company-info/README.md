@@ -2,7 +2,7 @@
 
 The same Function Unit and Automation flow as `../` (FU code `receipt-notice-ocr-20261007-2tuhin`,
 flow key `hermes-ocr-receipt-notice`), re-pointed at a company information form so the extraction can be
-checked against a real test document. Version 1.0.2 of the FU replaces the nine receipt-notice fields with:
+checked against a real test document. Version 1.0.3 of the FU replaces the nine receipt-notice fields with:
 
 | key | label | type |
 |---|---|---|
@@ -20,3 +20,6 @@ Import order in a target environment (same as `../README.md`): flow JSON in Admi
 Migration → Import Flow (json), same workspace as the existing flow; FU zip in Admin Center → Function Unit →
 Import (new version), then Validate → Deploy. Where portal needs the DW tables (no Admin write-back), import the
 same zip in Developer Workstation as well. To go back to the receipt notice, re-import the files in `../`.
+
+The upload step's action must be of type `PROCESS_SUBMIT`: the portal start page submits only on that type and
+shows "Unknown action type" for anything else (packages before 1.0.3 shipped it as `APPROVE`).
