@@ -27,6 +27,7 @@ export interface FormAutoSaveOptions {
  * keep it comfortably above a keystroke and well under the save debounce below.
  */
 const POLL_INTERVAL_MS = 3000
+const DIRTY_CHECK_DEBOUNCE_MS = 250
 
 export function useFormAutoSave(options: FormAutoSaveOptions) {
   const {
@@ -46,10 +47,12 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   // Polling state
   const savedState = ref<string>('')
   const pollTimerRef = ref<ReturnType<typeof setInterval> | null>(null)
+  let dirtyCheckTimer: ReturnType<typeof setTimeout> | null = null
 
   // --- Functions ---
 
   function markSaved() {
+    clearDirtyCheckTimer()
     try {
       savedState.value = buildDesignerPollSnapshot()
       isDirty.value = false
@@ -66,6 +69,7 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
       clearInterval(pollTimerRef.value)
       pollTimerRef.value = null
     }
+    clearDirtyCheckTimer()
     savedState.value = ''
     isDirty.value = false
   }
@@ -101,6 +105,31 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
     try {
       isDirty.value = buildDesignerPollSnapshot() !== savedState.value
     } catch { /* silently ignore */ }
+  }
+
+  function clearDirtyCheckTimer() {
+    if (dirtyCheckTimer) {
+      clearTimeout(dirtyCheckTimer)
+      dirtyCheckTimer = null
+    }
+  }
+
+  /** Marks the UI immediately, then coalesces the expensive snapshot comparison. */
+  function markDirty() {
+    if (suspended || !selectedForm.value) return
+    isDirty.value = true
+    clearDirtyCheckTimer()
+    dirtyCheckTimer = setTimeout(() => {
+      dirtyCheckTimer = null
+      refreshDirtyState()
+    }, DIRTY_CHECK_DEBOUNCE_MS)
+  }
+
+  /** Navigation must decide against the latest snapshot, not a pending debounce. */
+  function hasUnsavedChanges(): boolean {
+    clearDirtyCheckTimer()
+    refreshDirtyState()
+    return isDirty.value
   }
 
   function setupAutoSavePolling() {
@@ -143,7 +172,7 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   watch(
     relationViewState,
     () => {
-      refreshDirtyState()
+      markDirty()
     },
     { deep: true }
   )
@@ -151,6 +180,8 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   return {
     isDirty,
     markSaved,
+    markDirty,
+    hasUnsavedChanges,
     refreshDirtyState,
     setupAutoSavePolling,
     cleanupAutoSavePolling,
