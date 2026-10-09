@@ -40,7 +40,6 @@
                 </el-option-group>
               </template>
             </el-select>
-            <span class="erb-hint">{{ t('emailTemplate.insertVariableHint') }}</span>
           </div>
           <el-input
             ref="htmlInputRef"
@@ -199,12 +198,6 @@ onMounted(async () => {
   flex: 1 1 180px;
   min-width: 160px;
   max-width: 280px;
-}
-.erb-hint {
-  flex: 1 1 140px;
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.4;
 }
 .ebs-html-input {
   flex: 1;

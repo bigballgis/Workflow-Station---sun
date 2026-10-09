@@ -22,7 +22,6 @@
           :loading="variablesLoading"
           @update:model-value="onRecipientFieldChange('emailTo', $event)"
         />
-        <div class="form-tip">{{ t('properties.emailToHint', { button: '{ }' }) }}</div>
       </div>
 
       <div class="email-field-block">
@@ -44,7 +43,6 @@
             :value="conn.connectionUid"
           />
         </el-select>
-        <div class="form-tip">{{ t('properties.emailConnectionHint') }}</div>
       </div>
 
       <div class="email-field-block">
@@ -58,7 +56,6 @@
           :loading="variablesLoading"
           @update:model-value="onRecipientFieldChange('emailFrom', $event)"
         />
-        <div class="form-tip">{{ t('properties.emailFromHint') }}</div>
       </div>
 
       <div class="email-field-block">
@@ -80,7 +77,6 @@
             :value="String(tpl.id)"
           />
         </el-select>
-        <div class="form-tip">{{ t('properties.emailTemplateHint') }}</div>
       </div>
 
       <div class="email-advanced-toggle">
@@ -463,13 +459,6 @@ onMounted(() => {
 .email-required-mark {
   color: #f56c6c;
   margin-left: 2px;
-}
-
-.form-tip {
-  font-size: 11px;
-  color: #909399;
-  margin-top: 4px;
-  line-height: 1.4;
 }
 
 .email-advanced-toggle {

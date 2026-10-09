@@ -94,14 +94,6 @@
               </template>
             </el-select>
           </div>
-          <div class="form-tip">
-            {{
-              t('emailTemplate.subjectHint', {
-                pattern: EMAIL_FIELD_VAR_PATTERN,
-                example: EMAIL_SUBJECT_VAR_EXAMPLE,
-              })
-            }}
-          </div>
         </el-form-item>
         <el-form-item :label="t('emailTemplate.body')">
           <EmailBodySplitEditor
@@ -136,7 +128,6 @@ import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 import {
-  EMAIL_FIELD_VAR_PATTERN,
   EMAIL_SUBJECT_VAR_EXAMPLE,
   resolveEmailVariableGroupLabel,
   useEmailTemplateVariables,
@@ -334,12 +325,6 @@ onMounted(() => {
 .template-form {
   :deep(.el-form-item) {
     margin-bottom: 16px;
-  }
-  .form-tip {
-    margin-top: 4px;
-    font-size: 12px;
-    line-height: 1.4;
-    color: #909399;
   }
 }
 .subject-field-row {

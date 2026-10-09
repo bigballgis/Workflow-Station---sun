@@ -16,9 +16,8 @@ export interface EmailVariableGroup {
   options: EmailVariableOption[]
 }
 
-/** Shown in Subject placeholder/hint UI — pass as vue-i18n param, not inside locale strings. */
+/** Shown in the Subject placeholder — pass as a vue-i18n param, not inside locale strings. */
 export const EMAIL_SUBJECT_VAR_EXAMPLE = '${name}'
-export const EMAIL_FIELD_VAR_PATTERN = '${fieldName}'
 
 /** Group label sentinel — mapped to i18n in EmailTemplateDesigner. */
 export const EMAIL_VAR_GROUP_SUBTABLES = '__SUBTABLES__'

@@ -93,14 +93,11 @@
             <el-option :label="t('connection.directionOutbound')" value="OUTBOUND" />
             <el-option :label="t('connection.directionInbound')" value="INBOUND" />
           </el-select>
-          <div v-if="legacyBothEditing" class="form-tip">{{ t('connection.directionLegacyBothHint') }}</div>
-          <div class="form-tip">{{ directionHint }}</div>
         </el-form-item>
 
         <!-- Monitor-only: mailbox + IMAP credentials; server from System Config -->
         <template v-if="isInboundOnly">
           <p class="connection-section-title">{{ t('connection.monitorSection') }}</p>
-          <p class="form-tip connection-system-imap-hint">{{ t('connection.systemImapFromAdminHint') }}</p>
           <el-form-item
             prop="senderEmail"
             class="connection-sender-email-item"
@@ -112,7 +109,6 @@
               autocomplete="off"
               :placeholder="t('connection.monitorMailboxEmailPlaceholder')"
             />
-            <div class="form-tip">{{ t('connection.monitorMailboxEmailHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('connection.monitorUsername')">
             <el-input
@@ -120,7 +116,6 @@
               autocomplete="off"
               :placeholder="t('connection.monitorUsernamePlaceholder')"
             />
-            <div class="form-tip">{{ t('connection.monitorUsernameHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('connection.monitorPassword')" :required="!!form.username?.trim()">
             <el-select
@@ -138,7 +133,6 @@
                 :value="opt.varKey"
               />
             </el-select>
-            <div class="form-tip">{{ t('connection.monitorPasswordHint') }}</div>
           </el-form-item>
         </template>
 
@@ -155,20 +149,17 @@
               autocomplete="off"
               :placeholder="t('connection.emailAddressPlaceholder')"
             />
-            <div class="form-tip">{{ t('connection.fromEmailHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('connection.fromName')">
             <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
           </el-form-item>
           <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
-          <p class="form-tip connection-system-smtp-hint">{{ t('connection.systemSmtpFromAdminHint') }}</p>
           <el-form-item :label="t('connection.username')">
             <el-input
               v-model="form.username"
               autocomplete="off"
               :placeholder="t('connection.usernamePlaceholder')"
             />
-            <div class="form-tip">{{ t('connection.usernameHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('connection.password')" :required="!!form.username?.trim()">
             <el-select
@@ -186,7 +177,6 @@
                 :value="opt.varKey"
               />
             </el-select>
-            <div class="form-tip">{{ t('connection.passwordHint') }}</div>
           </el-form-item>
         </template>
 
@@ -274,11 +264,6 @@ const vaultOptions = ref<VaultEnvOption[]>([])
 const vaultOptionsLoading = ref(false)
 
 const isInboundOnly = computed(() => form.direction === 'INBOUND')
-const legacyBothEditing = ref(false)
-
-const directionHint = computed(() =>
-  isInboundOnly.value ? t('connection.directionHintMonitor') : t('connection.directionHintOutbound'),
-)
 
 function isOutboundCapableRow(row: EmailConnection): boolean {
   const direction = row.direction || 'OUTBOUND'
@@ -390,7 +375,6 @@ function scrollConnectionDialogToTop() {
 
 function openCreateDialog() {
   editingId.value = null
-  legacyBothEditing.value = false
   Object.assign(form, defaultForm())
   showFormDialog.value = true
   clearConnectionFormValidation()
@@ -400,7 +384,6 @@ function openCreateDialog() {
 function openEditDialog(row: EmailConnection) {
   editingId.value = row.id
   const rowDirection = row.direction || 'OUTBOUND'
-  legacyBothEditing.value = rowDirection === 'BOTH'
   Object.assign(form, {
     senderEmail: row.fromEmail || row.name || '',
     connectionType: SMTP_CONNECTION_TYPE,
@@ -547,13 +530,6 @@ onMounted(loadConnections)
 
   .connection-sender-email-item {
     margin-bottom: 18px;
-  }
-
-  .form-tip {
-    margin-top: 4px;
-    font-size: 12px;
-    line-height: 1.4;
-    color: #909399;
   }
 
   :deep(.el-form-item__error) {

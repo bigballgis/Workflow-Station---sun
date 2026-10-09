@@ -3,15 +3,16 @@
     class="action-post-email"
     data-testid="action-post-email-config"
   >
-  <el-divider>{{ t('action.postEmail.title') }}</el-divider>
-  <div class="post-email-title-row">
-    <span class="post-email-hint">{{ t('action.postEmail.hint') }}</span>
-    <DesignerHelpLink
-      path="/action-email"
-      :ariaLabel="t('action.postEmail.guideLinkAria')"
-      test-id="action-post-email-guide-link"
-    />
-  </div>
+  <el-divider>
+    <span class="post-email-title-row">
+      {{ t('action.postEmail.title') }}
+      <DesignerHelpLink
+        path="/action-email"
+        :ariaLabel="t('action.postEmail.guideLinkAria')"
+        test-id="action-post-email-guide-link"
+      />
+    </span>
+  </el-divider>
   <el-alert
     v-if="unsupported"
     type="info"
@@ -209,13 +210,8 @@ onMounted(loadLookups)
 
 <style scoped>
 .post-email-title-row {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: -8px 0 12px;
-}
-.post-email-hint {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
 }
 </style>

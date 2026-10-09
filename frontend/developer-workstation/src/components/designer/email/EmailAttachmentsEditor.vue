@@ -9,9 +9,6 @@
     >
       {{ t('properties.emailAttachments') }}
     </div>
-    <div class="form-tip email-attachments-hint">
-      {{ t('properties.emailAttachmentsHint') }}
-    </div>
     <div
       v-for="(att, index) in emailAttachments"
       :key="index"
@@ -145,12 +142,6 @@ watch(
   font-weight: 600;
   color: #606266;
   margin-bottom: 4px;
-}
-
-.email-attachments-hint {
-  margin-bottom: 8px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 
 .email-attachments-empty {
