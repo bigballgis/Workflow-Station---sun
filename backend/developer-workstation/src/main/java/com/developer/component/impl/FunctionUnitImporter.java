@@ -68,6 +68,7 @@ public class FunctionUnitImporter {
     private final MainTableViewService mainTableViewService;
     private final AdminCenterAutomationFlowClient automationFlowClient;
     private final FunctionUnitDocumentService documentService;
+    private final FunctionUnitBasicPortability basicPortability;
     private final FunctionUnitWorkspaceAccessService workspaceAccessService;
     private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
 
@@ -151,6 +152,7 @@ public class FunctionUnitImporter {
             assignDevGroups(functionUnit.getId(), creationGroupIds);
         }
 
+        basicPortability.restore(functionUnit, manifest);
         Map<Long, Long> tableIdMapping = new HashMap<>();
         Map<String, Long> importedTableNameToId = new HashMap<>();
         Map<String, Map<String, FieldDefinition>> importedFieldLookup = new HashMap<>();

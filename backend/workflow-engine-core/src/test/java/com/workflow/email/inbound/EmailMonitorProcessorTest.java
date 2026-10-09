@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -136,18 +137,63 @@ class EmailMonitorProcessorTest {
                 .containsEntry("date", "2026-09-08T10:00:00Z");
     }
 
+    /**
+     * admin-center being unavailable is transient: recording FAILED would make
+     * {@code existsByRuleUidAndMessageId} skip this email forever, so the case would never be
+     * created even after admin-center recovered.
+     */
     @Test
-    void unresolvedFunctionUnitCodeFailsBeforePortalStart() {
+    void unresolvedFunctionUnitCodeIsRetriedWithoutTouchingTheLedger() {
         SysEmailMonitorRule rule = rule(labelRule("case_number", "Case No: ", true));
         rule.setFunctionUnitId("fu-missing");
         when(adminCenterClient.resolveFunctionUnitCodeById("fu-missing")).thenReturn(Optional.empty());
         EmailMessage email = new EmailMessage("m4", "s", "a@b.com", "Case No: ABC-7", null, Map.of());
 
+        assertThatThrownBy(() -> processor.process(rule, email))
+                .isInstanceOf(EmailMonitorRetryableException.class)
+                .hasMessageContaining("functionUnitCode could not be resolved");
+
+        verify(portalSyncComponent, never()).startPortalProcess(any(), any(), any(), any(), any());
+        verify(processedRepository, never()).save(any());
+    }
+
+    /** A user-portal restart must cost a retry, not the case. */
+    @Test
+    void transientPortalStartFailureIsRetriedWithoutTouchingTheLedger() {
+        SysEmailMonitorRule rule = rule(labelRule("case_number", "Case No: ", true));
+        EmailMessage email = new EmailMessage("m-transient", "s", "a@b.com", "Case No: ABC-7", null, Map.of());
+        when(portalSyncComponent.startPortalProcess(any(), any(), any(), any(), any()))
+                .thenReturn(ProcessInstanceResult.builder().success(false).message("portal down").build());
+
+        assertThatThrownBy(() -> processor.process(rule, email))
+                .isInstanceOf(EmailMonitorRetryableException.class)
+                .hasMessageContaining("portal down");
+
+        verify(processedRepository, never()).save(any());
+    }
+
+    /** The cap exists so a permanently broken target cannot block every later email behind it. */
+    @Test
+    void transientFailureIsRecordedFailedOnlyAfterTheAttemptCap() {
+        SysEmailMonitorRule rule = rule(labelRule("case_number", "Case No: ", true));
+        EmailMessage email = new EmailMessage("m-cap", "s", "a@b.com", "Case No: ABC-7", null, Map.of());
+        when(portalSyncComponent.startPortalProcess(any(), any(), any(), any(), any()))
+                .thenReturn(ProcessInstanceResult.builder().success(false).message("portal down").build());
+
+        for (int attempt = 1; attempt < EmailMonitorDeliveryRetry.MAX_ATTEMPTS; attempt++) {
+            assertThatThrownBy(() -> processor.process(rule, email))
+                    .isInstanceOf(EmailMonitorRetryableException.class);
+        }
+        verify(processedRepository, never()).save(any());
+
         String status = processor.process(rule, email);
 
         assertThat(status).isEqualTo(ProcessedEmailMessage.STATUS_FAILED);
-        verify(portalSyncComponent, never()).startPortalProcess(any(), any(), any(), any(), any());
-        verify(processedRepository).save(any());
+        ArgumentCaptor<ProcessedEmailMessage> row = ArgumentCaptor.forClass(ProcessedEmailMessage.class);
+        verify(processedRepository).save(row.capture());
+        assertThat(row.getValue().getErrorMessage())
+                .contains("after " + EmailMonitorDeliveryRetry.MAX_ATTEMPTS + " attempts")
+                .contains("portal down");
     }
 
     @Test

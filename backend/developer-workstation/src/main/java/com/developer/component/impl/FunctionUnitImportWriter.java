@@ -766,4 +766,21 @@ public class FunctionUnitImportWriter {
                 .build();
         decisionDefinitionRepository.save(decision);
     }
+
+    /** Complete snapshot record; XML may be absent for a persisted designer draft. */
+    DecisionDefinition importDecisionRecord(FunctionUnit functionUnit, Map<String, Object> record) {
+        if (!(record.get("decisionKey") instanceof String key) || key.isBlank()) {
+            throw new DeveloperBusinessException("BIZ_DECISION_SNAPSHOT_INVALID", "Decision snapshot is missing its key");
+        }
+        for (String field : List.of("decisionName", "description", "hitPolicy", "dmnXml")) {
+            if (record.get(field) != null && !(record.get(field) instanceof String)) {
+                throw new DeveloperBusinessException("BIZ_DECISION_SNAPSHOT_INVALID", "Decision snapshot has invalid metadata");
+            }
+        }
+        DecisionDefinition decision = DecisionDefinition.builder().functionUnit(functionUnit)
+                .decisionKey(key).decisionName((String) record.get("decisionName"))
+                .description((String) record.get("description")).hitPolicy((String) record.get("hitPolicy"))
+                .dmnXml((String) record.get("dmnXml")).build();
+        return decisionDefinitionRepository.save(decision);
+    }
 }

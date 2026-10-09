@@ -7,6 +7,7 @@ import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.dto.VersionResponse;
+import com.developer.dto.VersionCompareResponse;
 import com.developer.entity.FunctionUnit;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -162,6 +163,16 @@ public class FunctionUnitController extends BaseController {
             @RequestParam Long versionId1,
             @RequestParam Long versionId2) {
         return handleRequest(() -> functionUnitComponent.compareVersions(id, versionId1, versionId2));
+    }
+
+    @GetMapping("/{id}/versions/compare-v2")
+    @Operation(summary = "Compare two Function Unit versions by design module")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<VersionCompareResponse>> compareVersionsV2(
+            @PathVariable Long id,
+            @RequestParam Long versionId1,
+            @RequestParam Long versionId2) {
+        return handleRequest(() -> functionUnitComponent.compareVersionsV2(id, versionId1, versionId2));
     }
 
     @GetMapping("/{id}/versions/{versionId}/export")

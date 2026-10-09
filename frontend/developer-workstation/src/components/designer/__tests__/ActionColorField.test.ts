@@ -3,11 +3,18 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createI18n } from 'vue-i18n'
 import ActionColorField from '@/components/designer/action-designer/ActionColorField.vue'
+import { defaultActionButtonColor } from '@platform-shared/actionButtonPresentation'
 
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
-  messages: { en: { action: { buttonColorPlaceholder: 'RRGGBB' } } },
+  messages: {
+    en: {
+      action: {
+        buttonColorPlaceholder: 'RRGGBB',
+      },
+    },
+  },
 })
 
 let wrapper: VueWrapper | null = null
@@ -94,5 +101,26 @@ describe('ActionColorField', () => {
   it('opens a palette button next to the input', () => {
     const w = mountField('#1F5C4A')
     expect(w.find('.el-color-picker').exists()).toBe(true)
+  })
+
+  it('keeps the Color field compact without AUTO state or a preview button', () => {
+    const w = mountField('#1F5C4A')
+    expect(w.find('.button-preview').exists()).toBe(false)
+    expect(w.find('.el-tag').exists()).toBe(false)
+    expect(w.find('button.el-button.is-link').exists()).toBe(false)
+  })
+})
+
+describe('defaultActionButtonColor', () => {
+  it('returns the exact HEX value that Action Design writes when Action Type changes', () => {
+    expect(defaultActionButtonColor('APPROVE')).toBe('#67C23A')
+    expect(defaultActionButtonColor('REJECT')).toBe('#F56C6C')
+    expect(defaultActionButtonColor('PROCESS_REJECT')).toBe('#F56C6C')
+    expect(defaultActionButtonColor('URGE')).toBe('#E6A23C')
+    expect(defaultActionButtonColor('TRANSFER')).toBe('#909399')
+    expect(defaultActionButtonColor('DELEGATE')).toBe('#909399')
+    expect(defaultActionButtonColor('PROCESS_SUBMIT')).toBe('#DB0011')
+    expect(defaultActionButtonColor('SAVE')).toBe('#DB0011')
+    expect(defaultActionButtonColor('FORM_POPUP')).toBe('#DB0011')
   })
 })

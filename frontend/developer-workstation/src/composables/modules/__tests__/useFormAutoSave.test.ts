@@ -59,7 +59,29 @@ describe('useFormAutoSave dirty tracking', () => {
     wrapper.unmount()
   })
 
+  it('coalesces rapid edit events while marking the form dirty immediately', async () => {
+    vi.useFakeTimers()
+    const getRule = vi.fn(() => [{ field: 'name', title: 'Name' }])
+    const wrapper = mountDirtyTracker({
+      selectedForm: ref({ id: 1 }),
+      designerRef: ref({ getRule, getOption: () => ({}) }),
+      relationViewState: ref({}),
+    })
+    getRule.mockClear()
+
+    wrapper.vm.markDirty()
+    wrapper.vm.markDirty()
+    wrapper.vm.markDirty()
+
+    expect(wrapper.vm.isDirty).toBe(true)
+    expect(getRule).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(250)
+    expect(getRule).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('tracks relation-view changes against the same saved baseline', async () => {
+    vi.useFakeTimers()
     const relationViewState = ref({ customer: { visible: true } })
     const wrapper = mountDirtyTracker({
       selectedForm: ref({ id: 1 }),
@@ -73,6 +95,7 @@ describe('useFormAutoSave dirty tracking', () => {
 
     relationViewState.value.customer.visible = true
     await wrapper.vm.$nextTick()
+    await vi.advanceTimersByTimeAsync(250)
     expect(wrapper.vm.isDirty).toBe(false)
     wrapper.unmount()
   })

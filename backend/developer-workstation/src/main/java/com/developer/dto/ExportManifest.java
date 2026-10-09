@@ -36,6 +36,8 @@ public class ExportManifest {
      * 描述
      */
     private String description;
+    /** DW design labels; retained in ZIPs even though runtime catalogs do not filter by them. */
+    private List<String> tags;
 
     /**
      * 该功能单元允许的启动方式（STANDALONE / CALLABLE / BOTH）。

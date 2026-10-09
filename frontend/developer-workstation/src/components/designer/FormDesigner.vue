@@ -1338,26 +1338,26 @@ function refreshSiblingLookups() {
 }
 
 function onDesignerStructureChange() {
-  refreshDirtyState()
+  markDirty()
   miValidationRevision.value++
   scheduleSyncHiddenMarkers()
   refreshSiblingLookups()
   nextTick(() => {
     patchDesignerRulesDefaultEvents()
-    refreshDirtyState()
+    markDirty()
   })
   // Assigned after useFormConfigPaste — remaps stale _bindingId from left JSON paste.
   scheduleAutoRepairStaleBindingsFn()
 }
 
 function onSubDesignerStructureChange() {
-  refreshDirtyState()
+  markDirty()
   miValidationRevision.value++
   scheduleSyncHiddenMarkers()
 }
 
 function onDesignerContentInput() {
-  nextTick(() => refreshDirtyState())
+  markDirty()
 }
 
 function collectCurrentSubFormRules(): Record<string, unknown[]> {
@@ -1527,7 +1527,7 @@ const {
 } = subTableViews
 
 // ── Auto-save ───────────────────────────────────────────────────────────────
-const { isDirty, markSaved, refreshDirtyState, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
+const { isDirty, markSaved, markDirty, hasUnsavedChanges, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
   selectedForm,
   designerRef,
   relationViewState,
@@ -1729,7 +1729,7 @@ async function discardChanges(): Promise<void> {
 }
 
 defineExpose({
-  hasUnsavedChanges: () => isDirty.value,
+  hasUnsavedChanges,
   saveChanges,
   discardChanges,
 })
@@ -2553,10 +2553,10 @@ onMounted(() => {
       align-items: center;
       gap: 7px;
       padding: 5px 9px;
-      border: 1px solid #fecdca;
+      border: 1px solid #fedf89;
       border-radius: 5px;
-      background: #fef3f2;
-      color: #d92d20;
+      background: #fffaeb;
+      color: #b54708;
       font-size: 15px;
       font-weight: 600;
       line-height: 20px;
@@ -2567,7 +2567,7 @@ onMounted(() => {
         height: 20px;
         align-items: center;
         justify-content: center;
-        color: #d92d20;
+        color: #b54708;
         font-size: 20px;
         flex: 0 0 20px;
       }

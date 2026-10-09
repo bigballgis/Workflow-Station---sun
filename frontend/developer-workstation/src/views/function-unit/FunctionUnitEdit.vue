@@ -562,11 +562,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { registerUnsavedDesignerLeaveConfirmation } from '@/composables/useUnsavedDesignerNavigation'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
 import VersionedProcessViewer from '@/components/designer/VersionedProcessViewer.vue'
 import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
@@ -659,6 +660,11 @@ async function beforeTabLeave(): Promise<boolean> {
 }
 
 onBeforeRouteLeave(async () => confirmLeave())
+onBeforeRouteUpdate(async (to, from) =>
+  to.params.id === from.params.id ? true : confirmLeave()
+)
+
+const unregisterUnsavedDesignerLeaveConfirmation = registerUnsavedDesignerLeaveConfirmation(confirmLeave)
 
 watch(activeTab, (tab) => {
   if (tab === 'forms' && functionUnitId.value) {
@@ -775,6 +781,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  unregisterUnsavedDesignerLeaveConfirmation()
   stopDeployPolling()
 })
 </script>

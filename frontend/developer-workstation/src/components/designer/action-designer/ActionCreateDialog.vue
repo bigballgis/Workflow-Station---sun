@@ -18,7 +18,10 @@
         <el-input v-model="createForm.actionName" />
       </el-form-item>
       <el-form-item :label="$t('action.actionType')">
-        <el-select v-model="createForm.actionType">
+        <el-select
+          v-model="createForm.actionType"
+          @change="$emit('action-type-change', $event)"
+        >
           <el-option-group :label="$t('action.approvalOperations')">
             <el-option
               :label="$t('action.approve')"
@@ -121,6 +124,7 @@ defineProps<{
 
 defineEmits<{
   'update:modelValue': [value: boolean]
+  'action-type-change': [value: string]
   confirm: []
 }>()
 </script>

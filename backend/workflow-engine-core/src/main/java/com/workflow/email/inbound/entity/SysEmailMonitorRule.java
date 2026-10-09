@@ -84,4 +84,8 @@ public class SysEmailMonitorRule {
 
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
+
+    /** When Admin Center last deployed this rule; owned by Admin, never written by the engine. */
+    @Column(name = "synced_at", insertable = false, updatable = false)
+    private Instant syncedAt;
 }

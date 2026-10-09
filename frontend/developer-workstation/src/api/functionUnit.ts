@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { VersionCompareResponse } from '@/types/versionCompare'
 import { getUser } from './auth'
 import i18n from '@/i18n'
 import { getActiveGroupHeaderValue } from '@/utils/devGroupContext'
@@ -213,6 +214,8 @@ export interface FunctionUnitRequest {
   name: string
   description?: string
   iconId?: number
+  /** Explicit clearing; absent iconId alone means keep the existing icon. */
+  clearIcon?: boolean
   tags?: string[]
   /** Team (virtual group) ids that own/see this FU. Only honoured on create. */
   virtualGroupIds?: string[]
@@ -617,6 +620,12 @@ export const functionUnitApi = {
     functionUnitAxios.get<any, { data: any }>(`/api/v1/function-units/${functionUnitId}/versions/compare`, {
       params: { versionId1, versionId2 }
     }),
+
+  compareVersionsV2: (functionUnitId: number, versionId1: number, versionId2: number) =>
+    functionUnitAxios.get<unknown, { data: VersionCompareResponse }>(
+      `/api/v1/function-units/${functionUnitId}/versions/compare-v2`,
+      { params: { versionId1, versionId2 } }
+    ),
 
   // Table DDL
   generateDDL: (functionUnitId: number, tableId: number, dialect: string) =>

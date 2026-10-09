@@ -134,7 +134,8 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                     mock(com.developer.service.MainTableViewService.class),
                     mock(jakarta.persistence.EntityManager.class),
                     mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
-                    mock(com.developer.component.impl.FormTableBindingRestorer.class));
+                    mock(com.developer.component.impl.FormTableBindingRestorer.class),
+                    new com.developer.component.impl.FunctionUnitBasicPortability(mock(com.developer.repository.IconRepository.class)));
 
             // Build a fresh FunctionUnit to restore into
             FunctionUnit restored = FunctionUnit.builder()
