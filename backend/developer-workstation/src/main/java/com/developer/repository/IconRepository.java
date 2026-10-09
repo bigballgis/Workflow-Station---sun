@@ -28,4 +28,5 @@ public interface IconRepository extends JpaRepository<Icon, Long>, JpaSpecificat
      * Callers that match by name take the oldest row when several share it.
      */
     Optional<Icon> findFirstByNameOrderByIdAsc(String name);
+    Optional<Icon> findFirstByNameAndCategoryAndSvgContentOrderByIdAsc(String name, IconCategory category, String svgContent);
 }

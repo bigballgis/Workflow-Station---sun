@@ -1,6 +1,9 @@
 package com.developer.component.impl;
 
 import com.developer.component.VersionComponent;
+import com.developer.component.impl.compare.SnapshotSensitiveDataFilter;
+import com.developer.component.impl.compare.VersionCompareEngine;
+import com.developer.dto.VersionCompareResponse;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.Version;
@@ -29,6 +32,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,6 +59,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final EntityManager entityManager;
     private final FunctionUnitDocumentService documentService;
+    private final VersionCompareEngine versionCompareEngine;
     
     /**
      * Resolves current operator username.
@@ -164,8 +169,10 @@ public class VersionComponentImpl implements VersionComponent {
         ));
         
         try {
-            Map<String, Object> snapshot1 = objectMapper.readValue(version1.getSnapshotData(), Map.class);
-            Map<String, Object> snapshot2 = objectMapper.readValue(version2.getSnapshotData(), Map.class);
+            Map<String, Object> snapshot1 = objectMapper.convertValue(SnapshotSensitiveDataFilter.redactForLegacyCompare(
+                    objectMapper.readTree(version1.getSnapshotData()), objectMapper), Map.class);
+            Map<String, Object> snapshot2 = objectMapper.convertValue(SnapshotSensitiveDataFilter.redactForLegacyCompare(
+                    objectMapper.readTree(version2.getSnapshotData()), objectMapper), Map.class);
             
             Map<String, Object> differences = findDifferences(snapshot1, snapshot2);
             result.put("differences", differences);
@@ -175,6 +182,12 @@ public class VersionComponentImpl implements VersionComponent {
         }
         
         return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VersionCompareResponse compareV2(Long versionId1, Long versionId2) {
+        return versionCompareEngine.compare(getById(versionId1), getById(versionId2));
     }
     
     @Override
@@ -407,16 +420,26 @@ public class VersionComponentImpl implements VersionComponent {
             Object value1 = map1.get(key);
             Object value2 = map2.get(key);
             
-            if (value2 == null) {
-                differences.put(key, Map.of("type", "removed", "oldValue", value1));
-            } else if (!value1.equals(value2)) {
-                differences.put(key, Map.of("type", "modified", "oldValue", value1, "newValue", value2));
+            if (!map2.containsKey(key)) {
+                Map<String, Object> change = new LinkedHashMap<>();
+                change.put("type", "removed");
+                change.put("oldValue", value1);
+                differences.put(key, change);
+            } else if (!java.util.Objects.equals(value1, value2)) {
+                Map<String, Object> change = new LinkedHashMap<>();
+                change.put("type", "modified");
+                change.put("oldValue", value1);
+                change.put("newValue", value2);
+                differences.put(key, change);
             }
         }
         
         for (String key : map2.keySet()) {
             if (!map1.containsKey(key)) {
-                differences.put(key, Map.of("type", "added", "newValue", map2.get(key)));
+                Map<String, Object> change = new LinkedHashMap<>();
+                change.put("type", "added");
+                change.put("newValue", map2.get(key));
+                differences.put(key, change);
             }
         }
         

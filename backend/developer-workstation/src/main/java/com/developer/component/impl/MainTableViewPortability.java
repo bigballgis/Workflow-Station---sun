@@ -56,10 +56,23 @@ public class MainTableViewPortability {
     public List<Map<String, Object>> export(Long functionUnitId,
                                             Map<Long, String> tableIdToName,
                                             Map<Long, String> formIdToName) {
+        return serialize(functionUnitId, tableIdToName, formIdToName, false);
+    }
+
+    /** Saved identity is compare metadata only; ZIP export must remain environment-portable. */
+    public List<Map<String, Object>> snapshot(Long functionUnitId,
+                                             Map<Long, String> tableIdToName,
+                                             Map<Long, String> formIdToName) {
+        return serialize(functionUnitId, tableIdToName, formIdToName, true);
+    }
+
+    private List<Map<String, Object>> serialize(Long functionUnitId, Map<Long, String> tableIdToName,
+                                                Map<Long, String> formIdToName, boolean savedIdentity) {
         List<MainTableViewConfig> views = mainTableViewConfigRepository.findByFunctionUnitIdWithFields(functionUnitId);
         List<Map<String, Object>> out = new ArrayList<>();
         for (MainTableViewConfig view : views) {
             Map<String, Object> m = new LinkedHashMap<>();
+            if (savedIdentity) m.put("viewId", view.getId());
             m.put("mainTableName", view.getMainTableId() != null ? tableIdToName.get(view.getMainTableId()) : null);
             m.put("detailFormName",
                     view.getDetailFormId() != null ? formIdToName.get(view.getDetailFormId()) : null);
@@ -367,4 +380,3 @@ public class MainTableViewPortability {
         return value != null ? String.valueOf(value) : null;
     }
 }
-

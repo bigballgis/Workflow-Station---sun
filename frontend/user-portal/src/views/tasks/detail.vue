@@ -430,7 +430,6 @@
         :saving-task-form="savingTaskForm"
         :actions="taskInfo.actions"
         :can-delegate="!!String(taskInfo.assignee || '').trim()"
-        :get-button-type="getButtonType"
         :get-icon-component="getIconComponent"
         :get-action-label="getActionLabel"
         @save="saveCurrentTaskFormWithMiPersist"
@@ -679,7 +678,6 @@ const {
   getDelegationStatusDisplay,
   getPriorityLabel,
   getPriorityType,
-  getButtonType,
   getActionLabel,
   getIconComponent
 } = taskDisplay

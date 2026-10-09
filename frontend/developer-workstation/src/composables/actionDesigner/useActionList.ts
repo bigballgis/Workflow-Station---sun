@@ -2,6 +2,7 @@ import { ref, reactive } from 'vue'
 import type { Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ActionDefinition } from '@/api/functionUnit'
+import { defaultActionButtonColor } from '@platform-shared/actionButtonPresentation'
 
 interface UseActionListOptions {
   functionUnitId: number
@@ -29,7 +30,12 @@ export function useActionList(options: UseActionListOptions) {
 
   const loading = ref(false)
   const showCreateDialog = ref(false)
-  const createForm = reactive({ actionName: '', actionType: 'APPROVE', buttonColor: '', description: '' })
+  const createForm = reactive({
+    actionName: '',
+    actionType: 'APPROVE',
+    buttonColor: defaultActionButtonColor('APPROVE'),
+    description: '',
+  })
 
   const actionTypeLabel = (type: string) => {
     const map: Record<string, string> = {
@@ -66,7 +72,23 @@ export function useActionList(options: UseActionListOptions) {
   }
 
   function handleSelectAction(row: ActionDefinition) {
-    selectedAction.value = { ...row }
+    selectedAction.value = {
+      ...row,
+      buttonColor: String(row.buttonColor || '').trim()
+        ? row.buttonColor
+        : defaultActionButtonColor(row.actionType),
+    }
+  }
+
+  function handleSelectedActionTypeChange(actionType: string) {
+    if (!selectedAction.value) return
+    selectedAction.value.actionType = actionType
+    selectedAction.value.buttonColor = defaultActionButtonColor(actionType)
+  }
+
+  function handleCreateActionTypeChange(actionType: string) {
+    createForm.actionType = actionType
+    createForm.buttonColor = defaultActionButtonColor(actionType)
   }
 
   function handleBackToList() {
@@ -84,7 +106,12 @@ export function useActionList(options: UseActionListOptions) {
       })
       ElMessage.success(t('action.createSuccess'))
       showCreateDialog.value = false
-      Object.assign(createForm, { actionName: '', actionType: 'APPROVE', buttonColor: '', description: '' })
+      Object.assign(createForm, {
+        actionName: '',
+        actionType: 'APPROVE',
+        buttonColor: defaultActionButtonColor('APPROVE'),
+        description: '',
+      })
       loadActions()
     } catch (e: any) {
       ElMessage.error(e.response?.data?.message || t('action.createFailed'))
@@ -127,6 +154,8 @@ export function useActionList(options: UseActionListOptions) {
     actionTypeLabel,
     loadActions,
     handleSelectAction,
+    handleSelectedActionTypeChange,
+    handleCreateActionTypeChange,
     handleBackToList,
     handleCreateAction,
     handleSaveAction,

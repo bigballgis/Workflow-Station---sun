@@ -6,6 +6,7 @@ import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.MyDevGroupsResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.dto.VersionResponse;
+import com.developer.dto.VersionCompareResponse;
 import com.developer.entity.FunctionUnit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -93,6 +94,9 @@ public interface FunctionUnitComponent {
      * Compare snapshot differences between two versions
      */
     Map<String, Object> compareVersions(Long functionUnitId, Long versionId1, Long versionId2);
+
+    /** Typed, module-oriented comparison with the same workspace and ownership checks. */
+    VersionCompareResponse compareVersionsV2(Long functionUnitId, Long versionId1, Long versionId2);
 
     /**
      * Export the snapshot content of a specific historical version
