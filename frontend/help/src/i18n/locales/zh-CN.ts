@@ -179,6 +179,10 @@ export default {
       title: '发送邮件',
       summary: '出站连接、邮件模板与发送任务：每个字段的含义，以及发送失败时怎么查。',
     },
+    actionEmail: {
+      title: '动作执行后发送邮件',
+      summary: '动作设计里可选的按钮邮件：收件人、出站连接、模板。仅在 Portal 中该动作成功后发送。',
+    },
     emailMonitor: {
       title: '邮件监听',
       summary: '入站邮箱、监听模板、字段提取与开始事件绑定：每个字段的含义，以及 Deploy 前检查。',
@@ -323,7 +327,7 @@ export default {
     fTemplateSubject:
       "发送时必填。用「插入变量」（与正文相同的标记）。不要写 $\'name\' 或给字段名加引号。若发送时全部标记都空，流程会失败。",
     fInsertVariable:
-      '下拉。选主表字段、Lookup/关联属性，或子表（正文里渲染成表格）。插入标记，不要给名称加引号。',
+      "下拉。选主表字段、Lookup/关联属性、子表（正文里渲染成表格），或管理中心 TEXT 环境变量（${\'{\'}env:key{\'}'}）。不列出 VAULT。插入标记，不要给名称加引号。",
     fTemplateBody: '邮件 HTML。在下方可视化或 HTML 中编写。只要变量填完后主题非空，正文为空仍会发出。',
     bodyTitle: '可视化与 HTML',
     bodyBody:
@@ -340,7 +344,7 @@ export default {
     fTo:
       "必填。一个地址、分号分隔的多个地址，或主表 ${\'{'}fieldName{\'}'}（例如 ${\'{'}to{\'}'}）。不要把主题写在这里。空白则发送失败。",
     fInsertField:
-      "插入字段。打开可搜索列表。只插入主表 ${\'{'}fieldName{\'}'}，不是 Lookup 或子表标记。From、抄送、密送、回复地址同样可用。",
+      "插入字段。打开可搜索列表。可插入主表 ${\'{'}fieldName{\'}'}，或管理中心 TEXT 环境变量 ${\'{'}env:key{\'}'}。不是 Lookup、子表或 VAULT。From、抄送、密送、回复地址同样可用。",
     fInsertSearch: '过滤插入列表。没有结果时显示「没有匹配的字段」。',
     fProcessVars: '插入列表中的分组，放流程变量（不是主表列）。',
     fInitiator:
@@ -376,6 +380,70 @@ export default {
     failSmtp: '管理中心未配置出站全局 SMTP（主机 / 端口 / TLS）。',
     failRunning:
       '你完成的是发送任务之后的用户任务，或该实例是 Deploy 之前启动的。先完成发送任务之前的用户任务，再发起新实例。',
+  },
+  actionEmailGuide: {
+    pageTitle: '动作执行后发送邮件',
+    crumb: '开发工作站 · 功能单元 · 动作设计',
+    intro:
+      '在动作设计里可以为某一个动作打开邮件。Portal 只在该动作成功后发送。连接和模板与 [[/email-send]] 相同。',
+    flowTitle: '操作顺序',
+    flow1: '建一条出站连接',
+    flow2: '写一封邮件模板并启用',
+    flow3: '打开动作设计，编辑该动作',
+    flow4: '打开「成功后发送邮件」，填收件人、邮件连接、邮件模板，然后保存',
+    flow5: '把动作绑到用户任务，再在 Portal 点这个动作',
+    relatedSendTask: '发送任务',
+    openTitle: '打开动作',
+    openBody:
+      '打开功能单元 → 动作设计。点该动作的编辑。邮件区块在流程配置下面、节点绑定上面。',
+    openFigure: '动作设计：动作执行后发送邮件。先关着开关，填好收件人、连接、模板再打开。',
+    openTab: '功能单元页签。本文挂在帮助侧栏的动作设计下。',
+    openEdit: '打开动作。邮件开关在这张表单上，不在流程设计里。',
+    fieldsTitle: '动作上的字段',
+    fieldsBody:
+      '这个动作不发信就保持开关关闭。打开后，收件人、邮件连接、邮件模板必填。主题和正文来自模板，不在这张表单上。',
+    fieldsCatalogLead: '字段目录 — 「动作执行后发送邮件」下的每个控件。',
+    fTitle: '分区标题。动作上可选。红色 ? 打开本页。',
+    fEnabled:
+      '开关。关（默认）：这个动作不发信。开：保存时必须填收件人、邮件连接、邮件模板。',
+    fTo:
+      "打开开关后必填。一个邮箱，或字段令牌如 ${\'{'}initiator{\'}'}。占位：邮箱或 ${\'{'}initiator{\'}'}。留空会拦保存。",
+    fInsertField:
+      "插入字段。与发送任务收件人相同的 {'{'} {'}'} 选择器，含管理中心 TEXT 环境变量（${\'{\'}env:key{\'}'}）。不列出 VAULT。收件人、发件人、抄送、密送都用它。",
+    fInsertSearch: '在选择器里过滤字段。没有匹配时显示无匹配字段。',
+    fInitiator:
+      "常插入到收件人的流程变量。例如 ${\'{'}initiator{\'}'}。",
+    fConnection:
+      '打开开关后必填。来自 [[/email-send#connection]] 的出站或双向连接。占位：选择连接。列表为空时先建出站连接。留空会拦保存。',
+    fTemplate:
+      '打开开关后必填。来自 [[/email-send#template]] 的已启用模板。占位：选择模板。未启用的模板不出现。留空会拦保存。',
+    fShowAdvanced: '链接。展开发件人、抄送、密送、附件。',
+    fHideAdvanced: '链接。收起高级项。已填的值仍留在动作上。',
+    fFrom: '可选发件人覆盖。与收件人同一选择器。留空则用连接上的发件人。',
+    fCc: '可选抄送。与收件人同一选择器。留空则不抄送。',
+    fBcc: '可选密送。与收件人同一选择器。留空则不密送。',
+    fAttachments:
+      '可选。与发送任务相同的 FILE 字段选择器：主表、子表或 Lookup 目标表的上传（FILE）字段。见 [[/email-send#extra]]。留空则不带附件。',
+    typesTitle: '哪些动作类型能发',
+    typesBody:
+      'Portal 必须真正执行该动作。API调用、自定义脚本、组合动作会显示提示条，并保持开关关闭。对这些类型打开邮件后保存会被拦住。',
+    typesCatalogLead: '会接受或拒绝邮件开关的动作类型。',
+    fSupportedTypes:
+      '可以发信：批准、拒绝、转办、委托、催办、回退、撤回、退回起草、保存、流程提交、流程驳回、表单弹窗。',
+    fApiCall: '提示：Portal 尚未执行此动作类型，因此不会发信。开关保持关闭。',
+    fCustomScript: '与 API调用 相同的提示和保存拦截。',
+    fComposite: '与 API调用 相同的提示和保存拦截。',
+    failTitle: '保存或发送失败时',
+    failBody:
+      '改好动作并保存，再在 Portal 点一次这个动作。自动保存、以及不是这个动作按钮的点击都不会发信。',
+    failIncomplete:
+      '保存：执行后邮件配置不完整。补齐邮件连接、收件人、邮件模板，或关掉开关。',
+    failUnsupported:
+      '保存：该动作类型不支持执行后发送邮件。改类型，或保持开关关闭。',
+    failConnection: '邮件连接列表为空。先建一条出站连接。',
+    failTemplate: '邮件模板列表为空。写好模板并勾选启用。',
+    failUnbound: '动作没有绑到用户任务。在节点绑定里绑上，再在 Portal 执行。',
+    failAutosave: 'Portal 里不是这个动作按钮的保存不会发信。',
   },
   emailMonitorGuide: {
     pageTitle: '邮件监听',

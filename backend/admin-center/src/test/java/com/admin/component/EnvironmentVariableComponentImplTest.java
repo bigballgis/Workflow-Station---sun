@@ -64,6 +64,22 @@ class EnvironmentVariableComponentImplTest {
     }
 
     @Test
+    void resolveTextValue_rejectsVaultKind() {
+        EnvironmentVariable entity = EnvironmentVariable.builder()
+                .id("1")
+                .varKey("email.qq.password")
+                .deployEnv("dev")
+                .valueKind(EnvironmentValueKind.VAULT)
+                .displayName("Password")
+                .vaultSecretPath("ame-hase-hermes/env-var")
+                .build();
+        when(repository.findByVarKeyAndDeployEnv("email.qq.password", "dev")).thenReturn(Optional.of(entity));
+
+        assertThrows(BusinessException.class, () -> component.resolveTextValue("email.qq.password"));
+        verify(vaultSecretClient, never()).readPassword(any());
+    }
+
+    @Test
     void resolveVaultPassword_rejectsTextKind() {
         EnvironmentVariable entity = EnvironmentVariable.builder()
                 .id("1")

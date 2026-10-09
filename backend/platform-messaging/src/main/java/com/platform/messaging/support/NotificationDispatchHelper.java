@@ -1,5 +1,6 @@
 package com.platform.messaging.support;
 
+import com.platform.messaging.event.BaseEvent;
 import com.platform.messaging.event.NotificationEvent;
 import com.platform.messaging.service.EventPublisher;
 import jakarta.annotation.PreDestroy;
@@ -97,6 +98,31 @@ public class NotificationDispatchHelper {
         runAfterCommit(() -> {
             for (String uid : distinct) {
                 sendOne(uid, notificationType, title, content, link, sourceService);
+            }
+        });
+    }
+
+    /**
+     * Publish any platform event after commit (or immediately if no transaction) on the same
+     * best-effort pool. Publish failures are logged at ERROR with the event id and never reach
+     * the caller.
+     */
+    public void publishEventAfterCommit(BaseEvent event) {
+        if (event == null) {
+            return;
+        }
+        event.initializeDefaults();
+        runAfterCommit(() -> {
+            try {
+                eventPublisher.publish(event).whenComplete((ok, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish event {} to topic {}: {}",
+                                event.getEventId(), event.getTopic(), ex.getMessage());
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Failed to publish event {} to topic {}: {}",
+                        event.getEventId(), event.getTopic(), e.getMessage(), e);
             }
         });
     }

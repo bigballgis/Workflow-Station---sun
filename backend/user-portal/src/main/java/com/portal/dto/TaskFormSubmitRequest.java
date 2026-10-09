@@ -41,4 +41,10 @@ public class TaskFormSubmitRequest {
      * Transport metadata — not a form field.
      */
     private List<SubTableBindingScope> subTableBindingScopes;
+
+    /**
+     * Developer Workstation Action id when the user clicked a SAVE Action.
+     * Autosave omits this so no post-action email is sent.
+     */
+    private String actionId;
 }

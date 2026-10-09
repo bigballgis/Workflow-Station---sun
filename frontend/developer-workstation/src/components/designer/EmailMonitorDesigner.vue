@@ -109,7 +109,6 @@
         </el-form-item>
 
         <el-divider>{{ t('emailMonitor.wizard.title') }}</el-divider>
-        <div class="form-tip" style="margin-bottom: 8px;">{{ t('emailMonitor.templateFiltersHint') }}</div>
         <EmailExtractionWizard
           ref="wizardRef"
           v-model="form.extractionRules"

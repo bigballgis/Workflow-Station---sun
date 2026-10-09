@@ -35,8 +35,16 @@ public class AdminCenterEnvironmentClient {
         this.serviceInternalToken = serviceInternalToken;
     }
 
+    public List<VaultEnvOption> listTextVariables() {
+        return listByKind("TEXT");
+    }
+
     public List<VaultEnvOption> listVaultVariables() {
-        String url = adminBaseUrl + "/api/v1/admin/internal/environment-variables?kind=VAULT";
+        return listByKind("VAULT");
+    }
+
+    private List<VaultEnvOption> listByKind(String kind) {
+        String url = adminBaseUrl + "/api/v1/admin/internal/environment-variables?kind=" + kind;
         try {
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
@@ -55,8 +63,8 @@ public class AdminCenterEnvironmentClient {
                                     : String.valueOf(row.get("varKey"))))
                     .toList();
         } catch (RestClientException ex) {
-            log.warn("Failed to list VAULT environment variables: {}", ex.getMessage());
-            throw new IllegalStateException("Unable to list VAULT environment variables from Admin Center", ex);
+            log.warn("Failed to list {} environment variables: {}", kind, ex.getMessage());
+            throw new IllegalStateException("Unable to list " + kind + " environment variables from Admin Center", ex);
         }
     }
 

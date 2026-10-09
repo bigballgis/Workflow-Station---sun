@@ -33,7 +33,7 @@ export interface TaskDetailMiPersistFns {
   getPrimaryTableFieldNames: () => Set<string>
   protectMainRecordScalarsInSubmitPayload: (payload: { formData: Record<string, unknown> }) => void
   mergeMiParticipantScalarsFromForm: () => Promise<void>
-  saveCurrentTaskFormWithMiPersist: () => Promise<void>
+  saveCurrentTaskFormWithMiPersist: (actionId?: string) => Promise<void>
   openMiFillDialog: (row: any) => void
   syncMiFillSubTableRows: (bindingId: number, rows: any[]) => void
   saveMiFillDialog: () => Promise<void>
@@ -148,13 +148,13 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     ctx.patchFormDataSubTablesFromCurrentBindings()
   }
 
-  async function saveCurrentTaskFormWithMiPersist() {
+  async function saveCurrentTaskFormWithMiPersist(actionId?: string) {
     if (formReadOnly.value || !effectiveTaskId.value) return
     // The task-form save copies the server row version back onto the open rows.
     // This button used to submit on its own and skip that, so the next Save still
     // carried the previous version and the server rejected it.
     if (!isMiSubTaskMode.value) {
-      await ctx.taskForm.saveCurrentTaskForm()
+      await ctx.taskForm.saveCurrentTaskForm(actionId)
       return
     }
     await mergeMiParticipantScalarsFromForm()
@@ -162,7 +162,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     try {
       const payload = buildCurrentTaskFormSubmitPayload()
       protectMainRecordScalarsInSubmitPayload(payload)
-      await apiSubmitTaskForm(effectiveTaskId.value, payload)
+      await apiSubmitTaskForm(effectiveTaskId.value, { ...payload, actionId })
       ElMessage.success(t('task.operationSuccess'))
       await ctx.loadTaskDetail()
       // #1446: deterministic last write — re-apply the server-confirmed saved link-form rows

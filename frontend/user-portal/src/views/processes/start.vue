@@ -783,14 +783,15 @@ const handleAction = async (action: { id: string; label: string; action?: string
     ElMessage.warning(t('processStart.workspaceGuardToast'))
     return
   }
+  const startActionId = action.id === 'submit' ? undefined : action.id
   switch (action.actionType) {
     case 'PROCESS_SUBMIT':
-      await handleSubmit()
+      await handleSubmit(startActionId)
       break
     default:
       // 对于未知类型，尝试作为提交处理
       if (action.action === 'submit') {
-        await handleSubmit()
+        await handleSubmit(startActionId)
       } else {
         ElMessage.warning(t('process.unknownActionType', { type: action.actionType || action.action }))
       }
@@ -838,7 +839,7 @@ const ensureMainPrimaryKey = async () => {
 }
 
 // 提交流程
-const handleSubmit = async () => {
+const handleSubmit = async (actionId?: string) => {
   if (workspaceStartBlocked.value) {
     ElMessage.warning(t('processStart.workspaceGuardToast'))
     return
@@ -883,7 +884,8 @@ const handleSubmit = async () => {
       },
       emptiedSubTableKeys: assembled.emptiedSubTableKeys,
       subTableBindingScopes: assembled.subTableBindingScopes,
-      priority: 'NORMAL'
+      priority: 'NORMAL',
+      actionId,
     })
 
     // Re-anchor draft notes onto the new instance (best-effort; notes must not

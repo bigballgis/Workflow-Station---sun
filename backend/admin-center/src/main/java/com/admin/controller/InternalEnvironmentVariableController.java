@@ -49,6 +49,34 @@ public class InternalEnvironmentVariableController {
         return ResponseEntity.ok(environmentVariableComponent.list(kind));
     }
 
+    @GetMapping("/text-value")
+    @Operation(summary = "解析 TEXT 环境变量的当前值或默认值")
+    public ResponseEntity<Map<String, String>> textValue(
+            @RequestHeader(value = PlatformConstants.HEADER_SERVICE_TOKEN, required = false) String serviceToken,
+            @RequestParam String varKey) {
+        if (!isValidServiceToken(serviceToken)) {
+            return ResponseEntity.status(403).body(Map.of("error", "FORBIDDEN"));
+        }
+        try {
+            return ResponseEntity.ok(Map.of("value", environmentVariableComponent.resolveTextValue(varKey)));
+        } catch (ResourceNotFoundException ex) {
+            log.warn("TEXT environment variable missing varKey={}", varKey);
+            return ResponseEntity.status(404).body(Map.of(
+                    "error", "ENV_VAR_NOT_FOUND",
+                    "message", "TEXT environment variable not found"));
+        } catch (BusinessException ex) {
+            if (ex.getErrorCode() == ErrorCode.VALIDATION_FIELD_INVALID) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "error", "TEXT_KIND_REQUIRED",
+                        "message", "Only TEXT environment variables can be inserted into email"));
+            }
+            log.warn("TEXT environment variable resolve failed varKey={} errorCode={}", varKey, ex.getErrorCode());
+            return ResponseEntity.status(404).body(Map.of(
+                    "error", "ENV_VAR_NOT_FOUND",
+                    "message", "TEXT environment variable not found"));
+        }
+    }
+
     @GetMapping("/vault-password")
     @Operation(summary = "解析 VAULT 环境变量的 data.password")
     public ResponseEntity<Map<String, String>> vaultPassword(

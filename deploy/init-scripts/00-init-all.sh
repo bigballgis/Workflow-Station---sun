@@ -154,7 +154,8 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/88-*.sql \
          /docker-entrypoint-initdb.d/00-schema/89-*.sql \
          /docker-entrypoint-initdb.d/00-schema/90-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/91-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/91-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/92-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -268,18 +269,11 @@ fi
 
 echo ""
 echo "[4g/7] Loading Function Unit call demo (one FU calling another)..."
-# The callee (00-03) must be seeded before the caller (04-07): the caller's
-# callActivity references the callee by code.
-for f in /docker-entrypoint-initdb.d/21-fu-call-demo/00-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/01-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/02-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/03-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/04-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/05-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/06-*.sql \
-         /docker-entrypoint-initdb.d/21-fu-call-demo/07-*.sql; do
-  [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
-done
+# One snapshot holds both units, callee before caller.
+if [ -f /docker-entrypoint-initdb.d/24-fu-call-demo/00-init.sql ]; then
+  echo "  Running 00-init.sql..."
+  $PSQL -f /docker-entrypoint-initdb.d/24-fu-call-demo/00-init.sql
+fi
 
 # --- Step 5f: Post-seed alignment ---
 # Scripts under 90-post-seed/ run on every init, AFTER all seed packages above.

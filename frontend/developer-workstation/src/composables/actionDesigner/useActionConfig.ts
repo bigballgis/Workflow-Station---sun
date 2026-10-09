@@ -58,12 +58,25 @@ export function useActionConfig(options: UseActionConfigOptions) {
     // Visibility, roles & sort order
     visibilityCondition: null as ConditionExpression[] | null,
     allowedRoles: [] as string[],
-    sortOrder: 0
+    sortOrder: 0,
+    postEmail: {
+      enabled: false,
+      connectionId: '',
+      emailTo: '',
+      emailCc: '',
+      emailBcc: '',
+      emailFrom: '',
+      emailTemplateId: '',
+      emailAttachments: '',
+    },
   })
 
   watch(selectedAction, (action) => {
     if (action?.configJson) {
       Object.assign(actionConfig, action.configJson)
+      if (!actionConfig.postEmail || typeof actionConfig.postEmail !== 'object') {
+        actionConfig.postEmail = { enabled: false }
+      }
     } else {
       // Reset to defaults
       Object.assign(actionConfig, {
@@ -83,7 +96,17 @@ export function useActionConfig(options: UseActionConfigOptions) {
         // Visibility, roles & sort order
         visibilityCondition: null as ConditionExpression[] | null,
         allowedRoles: [] as string[],
-        sortOrder: 0
+        sortOrder: 0,
+        postEmail: {
+          enabled: false,
+          connectionId: '',
+          emailTo: '',
+          emailCc: '',
+          emailBcc: '',
+          emailFrom: '',
+          emailTemplateId: '',
+          emailAttachments: '',
+        },
       })
     }
 

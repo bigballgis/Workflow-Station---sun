@@ -14,6 +14,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/fu-documents — Requirements and Function Unit Design documents (Function Unit Settings; Edit / Preview / Import .md .markdown .txt up to 200 KB / Download / Version History / Save; import only loads the editor until Save; versions vMajor.Minor with source labels; Compare with current, Restore; documents travel with Export, Clone and Version Management rollback; #editor #import #history #travel)
 - /help/ai-studio — Build with AI dialog and AI Studio entry (Start a new AI design, Continue AI draft, One-click generate #one-click: requirements box up to 4000 characters, optional when a Requirements document exists; Replace the current design? confirmation every time; writes process, tables, forms, actions, decisions; not views, connections, email templates, email monitors, automation bindings; result card Applied / Apply / Let AI fix it #result; no Undo, roll back in Version Management)
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task; field catalog for every control)
+- /help/action-email — Send email after this Action (Action Design switch, To / connection / template, types that cannot send; field catalog for every control)
 - /help/email-monitor — Email Monitor (inbound connection, monitor template, extraction wizard, attachments → FILE #extract-attachments, original email .eml → FILE #extract-raw-eml, Start Event #start-event; field catalog for every control)
 - /help/environment-variables — Admin Environment variables (TEXT current/default; VAULT catalog key; password written only when the Vault path does not already exist)
 - /help/sla-policies — Admin SLA Policies (due date = start date + lead time in calendar days; Lead Time (days) 1–3650 per Function Unit and environment; Save recalculates open Running/Suspended cases; Recalculate; Details: jobs Pending/Running/Succeeded/Partial/Failed/Superseded, Updated/Skipped/Failed cases, change history; sla:policy:view / sla:policy:edit). Field mapping is /help/table-design#sla-due-date
@@ -66,6 +67,7 @@ Emails in figures are redacted to user@example.com.
 - /help/guides/dw-email-extraction-sample.png
 - /help/guides/dw-email-field-mapping.png
 - /help/guides/dw-send-task.png
+- /help/guides/dw-action-email.png
 - /help/guides/dw-start-event.png
 - /help/guides/dw-form-events.png
 - /help/guides/dw-form-events-canvas.png

@@ -112,6 +112,17 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
 
     @Override
     @Transactional(readOnly = true)
+    public String resolveTextValue(String varKey) {
+        EnvironmentVariable entity = requireByKey(varKey);
+        if (entity.getValueKind() != EnvironmentValueKind.TEXT) {
+            throw new BusinessException(ErrorCode.VALIDATION_FIELD_INVALID,
+                    "Only TEXT environment variables can be inserted into email");
+        }
+        return EnvironmentVariablePayloads.resolvedText(entity.getCurrentValue(), entity.getDefaultValue());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public String resolveVaultPassword(String varKey) {
         EnvironmentVariable entity = requireByKey(varKey);
         if (entity.getValueKind() != EnvironmentValueKind.VAULT) {

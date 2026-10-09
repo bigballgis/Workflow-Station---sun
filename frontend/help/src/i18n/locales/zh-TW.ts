@@ -179,6 +179,10 @@ export default {
       title: '傳送郵件',
       summary: '出站連線、郵件範本與傳送任務：每個欄位的含義，以及傳送失敗時怎麼查。',
     },
+    actionEmail: {
+      title: '動作執行後發送郵件',
+      summary: '動作設計裡可選的按鈕郵件：收件人、出站連線、範本。僅在 Portal 中該動作成功後發送。',
+    },
     emailMonitor: {
       title: '郵件監聽',
       summary: '入站信箱、監聽範本、欄位擷取與開始事件綁定：每個欄位的含義，以及 Deploy 前檢查。',
@@ -323,7 +327,7 @@ export default {
     fTemplateSubject:
       "傳送時必填。用「插入變數」（與內文相同的標記）。不要寫 $\'name\' 或替欄位名加引號。若傳送時全部標記都空，流程會失敗。",
     fInsertVariable:
-      '下拉。選主表欄位、Lookup/關聯屬性，或子表（內文裡渲染成表格）。插入標記，不要替名稱加引號。',
+      "下拉。選主表欄位、Lookup/關聯屬性、子表（內文裡渲染成表格），或管理中心 TEXT 環境變數（${\'{\'}env:key{\'}'}）。不列出 VAULT。插入標記，不要替名稱加引號。",
     fTemplateBody: '郵件 HTML。在下方視覺化或 HTML 中撰寫。只要變數填完後主旨非空，內文為空仍會寄出。',
     bodyTitle: '視覺化與 HTML',
     bodyBody:
@@ -340,7 +344,7 @@ export default {
     fTo:
       "必填。一個地址、分號分隔的多個地址，或主表 ${\'{'}fieldName{\'}'}（例如 ${\'{'}to{\'}'}）。不要把主旨寫在這裡。空白則傳送失敗。",
     fInsertField:
-      "插入欄位。開啟可搜尋清單。只插入主表 ${\'{'}fieldName{\'}'}，不是 Lookup 或子表標記。From、副本、密件副本、回覆地址同樣可用。",
+      "插入欄位。開啟可搜尋清單。可插入主表 ${\'{'}fieldName{\'}'}，或管理中心 TEXT 環境變數 ${\'{'}env:key{\'}'}。不是 Lookup、子表或 VAULT。From、副本、密件副本、回覆地址同樣可用。",
     fInsertSearch: '過濾插入清單。沒有結果時顯示「沒有符合的欄位」。',
     fProcessVars: '插入清單中的分組，放流程變數（不是主表欄）。',
     fInitiator:
@@ -376,6 +380,70 @@ export default {
     failSmtp: '管理中心未設定出站全域 SMTP（主機 / 連接埠 / TLS）。',
     failRunning:
       '你完成的是傳送任務之後的使用者任務，或該執行個體是 Deploy 之前啟動的。先完成傳送任務之前的使用者任務，再發起新執行個體。',
+  },
+  actionEmailGuide: {
+    pageTitle: '動作執行後發送郵件',
+    crumb: '開發工作站 · 功能單元 · 動作設計',
+    intro:
+      '在動作設計裡可以為某一個動作打開郵件。Portal 只在該動作成功後發送。連線和範本與 [[/email-send]] 相同。',
+    flowTitle: '操作順序',
+    flow1: '建一條出站連線',
+    flow2: '寫一封郵件範本並啟用',
+    flow3: '打開動作設計，編輯該動作',
+    flow4: '打開「成功後發送郵件」，填收件人、郵件連線、郵件範本，然後儲存',
+    flow5: '把動作綁到使用者任務，再在 Portal 點這個動作',
+    relatedSendTask: '傳送任務',
+    openTitle: '打開動作',
+    openBody:
+      '打開功能單元 → 動作設計。點該動作的編輯。郵件區塊在流程設定下面、節點繫結上面。',
+    openFigure: '動作設計：動作執行後發送郵件。先關著開關，填好收件人、連線、範本再開。',
+    openTab: '功能單元頁籤。本文掛在說明側欄的動作設計下。',
+    openEdit: '打開動作。郵件開關在這張表單上，不在流程設計裡。',
+    fieldsTitle: '動作上的欄位',
+    fieldsBody:
+      '這個動作不發信就保持開關關閉。打開後，收件人、郵件連線、郵件範本必填。主旨和正文來自範本，不在這張表單上。',
+    fieldsCatalogLead: '欄位目錄 — 「動作執行後發送郵件」下的每個控制項。',
+    fTitle: '分區標題。動作上可選。紅色 ? 打開本頁。',
+    fEnabled:
+      '開關。關（預設）：這個動作不發信。開：儲存時必須填收件人、郵件連線、郵件範本。',
+    fTo:
+      "打開開關後必填。一個信箱，或欄位權杖如 ${\'{'}initiator{\'}'}。占位：信箱或 ${\'{'}initiator{\'}'}。留空會擋儲存。",
+    fInsertField:
+      "插入欄位。與傳送任務收件人相同的 {'{'} {'}'} 選擇器，含管理中心 TEXT 環境變數（${\'{\'}env:key{\'}'}）。不列出 VAULT。收件人、寄件人、副本、密件副本都用它。",
+    fInsertSearch: '在選擇器裡過濾欄位。沒有符合時顯示無符合欄位。',
+    fInitiator:
+      "常插入到收件人的流程變數。例如 ${\'{'}initiator{\'}'}。",
+    fConnection:
+      '打開開關後必填。來自 [[/email-send#connection]] 的出站或雙向連線。占位：選擇連線。清單為空時先建出站連線。留空會擋儲存。',
+    fTemplate:
+      '打開開關後必填。來自 [[/email-send#template]] 的已啟用範本。占位：選擇範本。未啟用的範本不出現。留空會擋儲存。',
+    fShowAdvanced: '連結。展開寄件人、副本、密件副本、附件。',
+    fHideAdvanced: '連結。收起進階項。已填的值仍留在動作上。',
+    fFrom: '可選寄件人覆寫。與收件人同一選擇器。留空則用連線上的寄件人。',
+    fCc: '可選副本。與收件人同一選擇器。留空則不抄送。',
+    fBcc: '可選密件副本。與收件人同一選擇器。留空則不密送。',
+    fAttachments:
+      '可選。與傳送任務相同的 FILE 欄位選擇器：主表、子表或 Lookup 目標表的上傳（FILE）欄位。見 [[/email-send#extra]]。留空則不帶附件。',
+    typesTitle: '哪些動作類型能發',
+    typesBody:
+      'Portal 必須真正執行該動作。API呼叫、自訂腳本、組合動作會顯示提示條，並保持開關關閉。對這些類型打開郵件後儲存會被擋住。',
+    typesCatalogLead: '會接受或拒絕郵件開關的動作類型。',
+    fSupportedTypes:
+      '可以發信：批准、拒絕、轉辦、委託、催辦、回退、撤回、退回起草、儲存、流程提交、流程駁回、表單彈窗。',
+    fApiCall: '提示：Portal 尚未執行此動作類型，因此不會發信。開關保持關閉。',
+    fCustomScript: '與 API呼叫 相同的提示和儲存攔截。',
+    fComposite: '與 API呼叫 相同的提示和儲存攔截。',
+    failTitle: '儲存或發送失敗時',
+    failBody:
+      '改好動作並儲存，再在 Portal 點一次這個動作。自動儲存、以及不是這個動作按鈕的點擊都不會發信。',
+    failIncomplete:
+      '儲存：執行後郵件設定不完整。補齊郵件連線、收件人、郵件範本，或關掉開關。',
+    failUnsupported:
+      '儲存：該動作類型不支援執行後發送郵件。改類型，或保持開關關閉。',
+    failConnection: '郵件連線清單為空。先建一條出站連線。',
+    failTemplate: '郵件範本清單為空。寫好範本並勾選啟用。',
+    failUnbound: '動作沒有綁到使用者任務。在節點繫結裡綁上，再在 Portal 執行。',
+    failAutosave: 'Portal 裡不是這個動作按鈕的儲存不會發信。',
   },
   emailMonitorGuide: {
     pageTitle: '郵件監聽',

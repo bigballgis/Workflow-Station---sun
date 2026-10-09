@@ -105,6 +105,7 @@ export function useTaskActions(options: {
   approveDialogVisible: Ref<boolean>
   approveDialogTitle: Ref<string>
   currentApproveAction: Ref<string>
+  currentActionId?: Ref<string>
   approveForm: { comment: string }
   actionDialogVisible: Ref<boolean>
   actionDialogTitle: Ref<string>
@@ -197,6 +198,9 @@ export function useTaskActions(options: {
   }
   function handleDelegate(action?: TaskActionInfo) {
     if (!applyActionReasonRequired(action)) return
+    if (options.currentActionId) {
+      options.currentActionId.value = action?.actionId || ''
+    }
     options.currentAction.value = 'delegate'
     options.actionDialogTitle.value = t('task.delegate')
     options.actionForm.targetUserId = ''
@@ -210,6 +214,9 @@ export function useTaskActions(options: {
   }
   function handleTransfer(action?: TaskActionInfo) {
     if (!applyActionReasonRequired(action)) return
+    if (options.currentActionId) {
+      options.currentActionId.value = action?.actionId || ''
+    }
     options.currentAction.value = 'transfer'
     options.actionDialogTitle.value = t('task.transfer')
     options.actionForm.targetUserId = ''
@@ -217,8 +224,11 @@ export function useTaskActions(options: {
     options.userOptions.value = []
     options.actionDialogVisible.value = true
   }
-  function handleUrge() {
+  function handleUrge(action?: TaskActionInfo) {
     actionReasonRequired.value = false
+    if (options.currentActionId) {
+      options.currentActionId.value = action?.actionId || ''
+    }
     options.currentAction.value = 'urge'
     options.actionDialogTitle.value = t('task.urge')
     options.actionForm.reason = ''
@@ -330,6 +340,7 @@ export function useTaskActions(options: {
       await completeTask(pid, {
         taskId: pid,
         action: options.currentApproveAction.value,
+        actionId: options.currentActionId?.value || undefined,
         comment: options.approveForm.comment,
         variables,
         formData: submittedFormData,
@@ -384,21 +395,24 @@ export function useTaskActions(options: {
             delegatedTargetType: 'BU_ROLE',
             delegatedBuCode: options.actionForm.delegatedBuCode,
             delegatedRoleCode: options.actionForm.delegatedRoleCode,
-            reason: options.actionForm.reason
+            reason: options.actionForm.reason,
+            actionId: options.currentActionId?.value || undefined,
           })
         } else {
           await delegateTask(pid, {
             delegatedTargetType: 'USER',
             delegatedTo: String(options.actionForm.targetUserId),
-            reason: options.actionForm.reason
+            reason: options.actionForm.reason,
+            actionId: options.currentActionId?.value || undefined,
           })
         }
         ElMessage.success(t('task.delegateSuccess'))
       } else if (options.currentAction.value === 'transfer') {
-        await transferTask(pid, options.actionForm.targetUserId, options.actionForm.reason)
+        await transferTask(pid, options.actionForm.targetUserId, options.actionForm.reason,
+          options.currentActionId?.value || undefined)
         ElMessage.success(t('task.transferSuccess'))
       } else if (options.currentAction.value === 'urge') {
-        await urgeTask(pid, options.actionForm.reason)
+        await urgeTask(pid, options.actionForm.reason, options.currentActionId?.value || undefined)
         ElMessage.success(t('task.urgeSuccess'))
       }
       options.actionDialogVisible.value = false

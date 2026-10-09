@@ -1,5 +1,6 @@
-import { ref } from 'vue'
+import { ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { functionUnitApi, type TableDefinition, type FormDefinition, type TableBinding } from '@/api/functionUnit'
+import { connectionApi } from '@/api/connection'
 import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
 import { buildLookupCatalogGroups } from '@/utils/mainTableViewLookupCatalog'
 
@@ -15,13 +16,48 @@ export interface EmailVariableGroup {
   options: EmailVariableOption[]
 }
 
-/** Shown in Subject placeholder/hint UI — pass as vue-i18n param, not inside locale strings. */
+/** Shown in the Subject placeholder — pass as a vue-i18n param, not inside locale strings. */
 export const EMAIL_SUBJECT_VAR_EXAMPLE = '${name}'
-export const EMAIL_FIELD_VAR_PATTERN = '${fieldName}'
 
 /** Group label sentinel — mapped to i18n in EmailTemplateDesigner. */
 export const EMAIL_VAR_GROUP_SUBTABLES = '__SUBTABLES__'
 export const EMAIL_VAR_GROUP_LOOKUP = '__LOOKUP__'
+export const EMAIL_VAR_GROUP_ENV_TEXT = '__ENV_TEXT__'
+
+const TEXT_ENV_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
+
+async function loadOptionalFormCatalog(
+  functionUnitId: number,
+): Promise<{ forms: FormDefinition[]; relationTables: RelationTableDTO[] }> {
+  try {
+    const [formsRes, rtRes] = await Promise.all([
+      functionUnitApi.getForms(functionUnitId),
+      relationTableBindingApi.getAvailableTables().catch(() => ({ data: [] as RelationTableDTO[] })),
+    ])
+    const relationTables = ((rtRes as { data?: RelationTableDTO[] })?.data
+      || (Array.isArray(rtRes) ? rtRes : [])) as RelationTableDTO[]
+    return { forms: formsRes.data || [], relationTables }
+  } catch {
+    return { forms: [], relationTables: [] }
+  }
+}
+
+async function loadTextEnvGroup(functionUnitId: number): Promise<EmailVariableGroup | null> {
+  try {
+    const res = await connectionApi.textOptions(functionUnitId)
+    const options = (res.data || [])
+      .filter(row => TEXT_ENV_KEY.test(row.varKey || ''))
+      .map(row => ({
+        token: `\${env:${row.varKey}}`,
+        label: `${row.displayName || row.varKey} (${row.varKey})`,
+      }))
+    if (!options.length) return null
+    return { label: EMAIL_VAR_GROUP_ENV_TEXT, options }
+  } catch {
+    // FALLBACK(ux): TEXT catalog unavailable — main-table tokens still insert.
+    return null
+  }
+}
 
 /**
  * Loads insertable email-template variables for a Function Unit:
@@ -30,7 +66,7 @@ export const EMAIL_VAR_GROUP_LOOKUP = '__LOOKUP__'
  * - sub-table tables   -> ${subTableHtml:<bindingId>:<col=Header,...>} (one row per record)
  * - lookup/related RT  -> ${lookupField:<sourceField>:<targetAttr>}
  */
-export function useEmailTemplateVariables(functionUnitId: number) {
+export function useEmailTemplateVariables(functionUnitId: MaybeRefOrGetter<number>) {
   const groups = ref<EmailVariableGroup[]>([])
   const loading = ref(false)
 
@@ -68,7 +104,7 @@ export function useEmailTemplateVariables(functionUnitId: number) {
 
   function buildMainFieldGroups(tables: TableDefinition[]): EmailVariableGroup[] {
     return tables
-      .filter(tbl => tbl.tableType === 'MAIN'
+      .filter(tbl => String(tbl.tableType || '').toUpperCase() === 'MAIN'
         && Array.isArray(tbl.fieldDefinitions)
         && tbl.fieldDefinitions.length > 0)
       .map(tbl => ({
@@ -144,28 +180,27 @@ export function useEmailTemplateVariables(functionUnitId: number) {
   }
 
   async function load() {
+    const id = Number(toValue(functionUnitId))
+    if (!Number.isFinite(id) || id <= 0) {
+      groups.value = []
+      return
+    }
     loading.value = true
     try {
-      const [tablesRes, formsRes, rtRes] = await Promise.all([
-        functionUnitApi.getTables(functionUnitId),
-        functionUnitApi.getForms(functionUnitId),
-        // FALLBACK(ux): RT catalog unavailable — still offer MAIN/SUB variables.
-        relationTableBindingApi.getAvailableTables().catch(() => ({ data: [] as RelationTableDTO[] })),
-      ])
+      const tablesRes = await functionUnitApi.getTables(id)
       const tables = tablesRes.data || []
-      const forms = formsRes.data || []
-      const relationTables = ((rtRes as { data?: RelationTableDTO[] })?.data
-        || (Array.isArray(rtRes) ? rtRes : [])) as RelationTableDTO[]
+      // FALLBACK(ux): forms/RT catalog is only needed for sub-table and lookup tokens.
+      // Send Task To/From still need MAIN ${fieldName} when those calls fail.
+      const { forms, relationTables } = await loadOptionalFormCatalog(id)
       const subBindings = pickRepresentativeSubBindings(forms)
-      const mainGroups = buildMainFieldGroups(tables)
-      const subFieldGroups = buildSubTableFieldGroups(tables, subBindings)
-      const lookupGroups = buildLookupFieldGroups(forms, relationTables)
       const subHtmlGroup = buildSubTableHtmlGroup(tables, subBindings)
+      const envGroup = await loadTextEnvGroup(id)
       groups.value = [
-        ...mainGroups,
-        ...lookupGroups,
-        ...subFieldGroups,
+        ...buildMainFieldGroups(tables),
+        ...buildLookupFieldGroups(forms, relationTables),
+        ...buildSubTableFieldGroups(tables, subBindings),
         ...(subHtmlGroup ? [subHtmlGroup] : []),
+        ...(envGroup ? [envGroup] : []),
       ]
     } catch {
       groups.value = []
@@ -217,6 +252,9 @@ export function resolveEmailVariableGroupLabel(
   const lookupPrefix = `${EMAIL_VAR_GROUP_LOOKUP}:`
   if (label.startsWith(lookupPrefix)) {
     return t('emailTemplate.lookupGroup', { source: label.slice(lookupPrefix.length) })
+  }
+  if (label === EMAIL_VAR_GROUP_ENV_TEXT) {
+    return t('emailTemplate.envTextGroup')
   }
   return label
 }

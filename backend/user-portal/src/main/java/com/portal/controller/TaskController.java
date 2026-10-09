@@ -1,5 +1,7 @@
 package com.portal.controller;
 
+import com.portal.component.ActionPostEmailComponent;
+import com.portal.component.ActionPostEmailContext;
 import com.portal.component.ClaimBatchComponent;
 import com.portal.component.UnclaimBatchComponent;
 import com.portal.component.TaskProcessComponent;
@@ -48,6 +50,7 @@ public class TaskController {
     private final ClaimBatchComponent claimBatchComponent;
     private final UnclaimBatchComponent unclaimBatchComponent;
     private final TaskReassignComponent taskReassignComponent;
+    private final ActionPostEmailComponent actionPostEmailComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final I18nService i18nService;
     private final RestTemplate restTemplate;
@@ -196,8 +199,14 @@ public class TaskController {
             throw new PortalException("401", "Authentication required");
         }
         request.setTaskId(taskId);
-        taskProcessComponent.completeTask(request, userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null));
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(request.getActionId())
+                .operation(completeOperation(request.getAction()))
+                .taskId(taskId)
+                .operatorId(userId)
+                .comment(request.getComment())
+                .build(), () -> taskProcessComponent.completeTask(request, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null)));
         return ApiResponse.success();
     }
 
@@ -213,7 +222,13 @@ public class TaskController {
             throw new PortalException("401", "Authentication required");
         }
         TaskDelegateRequest effective = resolveDelegateBody(body, delegateId, reason);
-        taskProcessComponent.delegateTask(taskId, userId, effective);
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(effective.getActionId())
+                .operation(ActionPostEmailContext.OP_DELEGATE)
+                .taskId(taskId)
+                .operatorId(userId)
+                .comment(effective.getReason())
+                .build(), () -> taskProcessComponent.delegateTask(taskId, userId, effective));
         return ApiResponse.success();
     }
 
@@ -223,8 +238,15 @@ public class TaskController {
             @PathVariable String taskId,
             @CurrentUserId String userId,
             @RequestParam String toUserId,
-            @RequestParam(required = false) String reason) {
-        taskProcessComponent.transferTask(taskId, userId, toUserId, reason);
+            @RequestParam(required = false) String reason,
+            @RequestParam(required = false) String actionId) {
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(actionId)
+                .operation(ActionPostEmailContext.OP_TRANSFER)
+                .taskId(taskId)
+                .operatorId(userId)
+                .comment(reason)
+                .build(), () -> taskProcessComponent.transferTask(taskId, userId, toUserId, reason));
         return ApiResponse.success();
     }
 
@@ -233,8 +255,15 @@ public class TaskController {
     public ApiResponse<Void> urgeTask(
             @PathVariable String taskId,
             @CurrentUserId String userId,
-            @RequestParam(required = false) String message) {
-        taskProcessComponent.urgeTask(taskId, userId, message);
+            @RequestParam(required = false) String message,
+            @RequestParam(required = false) String actionId) {
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(actionId)
+                .operation(ActionPostEmailContext.OP_URGE)
+                .taskId(taskId)
+                .operatorId(userId)
+                .comment(message)
+                .build(), () -> taskProcessComponent.urgeTask(taskId, userId, message));
         return ApiResponse.success();
     }
 
@@ -321,6 +350,18 @@ public class TaskController {
                 .delegatedTo(delegateId)
                 .reason(reason)
                 .build();
+    }
+
+    static String completeOperation(String action) {
+        if (action == null) {
+            return ActionPostEmailContext.OP_APPROVE;
+        }
+        return switch (action.trim().toUpperCase()) {
+            case "REJECT" -> ActionPostEmailContext.OP_REJECT;
+            case "RETURN" -> ActionPostEmailContext.OP_RETURN;
+            case "DRAFT" -> ActionPostEmailContext.OP_DRAFT;
+            default -> ActionPostEmailContext.OP_APPROVE;
+        };
     }
 
     private static boolean isEmptyDelegateBody(TaskDelegateRequest body) {

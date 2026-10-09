@@ -3,13 +3,13 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-07)
+## 统计 (截至 2026-10-09)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **23** | `index.yaml` |
+| 🔓 Open | **25** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
-| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658 等） |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
@@ -40,6 +40,8 @@
 | 1657 | major | architecture | `we_email_processed_messages` 的 REVIEW/FAILED 没有任何 API/UI/告警 → 「转人工复核」实为静默丢弃（2026-10-07 已实现又按用户要求撤销，暂不做） |
 | 1659 | major | deploy | init-scripts 注册表漂移：00-schema 下 4 个 SQL 不会在全新库执行（87 两处都漏，83/84/85 的 dw-binding 三个文件漏在 init-database.ps1） |
 | 1660 | minor | quality | workflow-engine-core 基线红：TaskManagerComponentMultiInstanceTest 5 个用例因 taskClaimSupport 未注入 NPE（已在 HEAD worktree 证实非新引入） |
+| 1661 | major | bug | FU 克隆/导入/回滚时 FORM_POPUP Action 的 `configJson.formId` 不重映射，弹窗仍指向源 FU 表单 |
+| 1662 | major | bug | platform-messaging `DefaultErrorHandler` recoverer 空实现，Kafka 重试用尽后消息静默丢弃（DLT 从未写入） |
 ### Wontfix
 
 | ID | 分类 | 描述 |

@@ -55,6 +55,12 @@ public class ProcessStartRequest {
     @Deprecated(forRemoval = false)
     private String activeBusinessUnitId;
 
+    /**
+     * Developer Workstation Action id of the start-page Process Submit button.
+     * Optional; used only to send a configured post-action email.
+     */
+    private String actionId;
+
     @Data
     @Builder
     @NoArgsConstructor

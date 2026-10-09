@@ -20,7 +20,6 @@
           </el-option-group>
         </template>
       </el-select>
-      <span class="erb-hint">{{ t('emailTemplate.insertVariableHint') }}</span>
     </div>
 
     <div class="erb-editor-shell">
@@ -75,7 +74,7 @@ const editorConfig = computed(() =>
   buildEmailRichEditorConfig(props.placeholder || t('emailTemplate.bodyPlaceholder'))
 )
 
-const { groups, load } = useEmailTemplateVariables(props.functionUnitId)
+const { groups, load } = useEmailTemplateVariables(() => props.functionUnitId)
 
 function groupLabel(label: string): string {
   return resolveEmailVariableGroupLabel(label, t)
@@ -145,12 +144,6 @@ onBeforeUnmount(() => {
   flex: 1 1 180px;
   min-width: 160px;
   max-width: 280px;
-}
-.erb-hint {
-  flex: 1 1 140px;
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.4;
 }
 .erb-editor-shell {
   flex: 1;

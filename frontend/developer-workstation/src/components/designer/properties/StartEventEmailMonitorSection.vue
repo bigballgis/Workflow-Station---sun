@@ -25,7 +25,6 @@
             :model-value="enabled"
             @change="onEnabledChange"
           />
-          <div class="form-tip">{{ t('emailMonitor.startEvent.enableHint') }}</div>
         </el-form-item>
 
         <template v-if="enabled">
@@ -49,7 +48,6 @@
                 :value="rule.id"
               />
             </el-select>
-            <div class="form-tip">{{ t('emailMonitor.startEvent.configureInMonitorsTab') }}</div>
           </el-form-item>
 
           <el-form-item v-if="selectedTemplate" :label="t('emailMonitor.connection')">
@@ -132,13 +130,5 @@ const {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.start-email-monitor {
-  .form-tip {
-    font-size: 11px;
-    color: #909399;
-    margin-top: 4px;
-    line-height: 1.4;
-  }
 }
 </style>

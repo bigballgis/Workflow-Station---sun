@@ -4685,3 +4685,75 @@
     Tests run: 5, Failures: 1, Errors: 4、同一个 NPE 栈。
     与 #1638（developer-workstation 基线红）同类问题，不同模块。
     影响：该模块无法用「全量测试全绿」做提交门禁，只能对比基线。
+
+- id: "1661"
+  status: open
+  severity: major
+  category: bug
+  summary: "FU 克隆/导入/版本回滚时 FORM_POPUP Action 的 configJson.formId 不重映射，弹窗仍指向源 FU 的表单"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitCloner.java"
+  detail: |
+    FunctionUnitCloner.cloneAction（configJson 用 new HashMap<>(source.getConfigJson()) 原样复制）、
+    FunctionUnitImportWriter.importAction、FunctionUnitSnapshotRestorer 都不改写 Action configJson。
+    formIdMapping 在三条路径里都已算好，但只用于 BPMN 和表单，没有回写到 FORM_POPUP 的 formId。
+    后果：克隆或导入出的 FU，Portal 点 Form Popup 打开的是源 FU 的表单 id；源 FU 删除后弹窗报「表单不存在」。
+    修复方向：Action 克隆/导入后补一遍 configJson 重写（formId → formIdMapping），与 BpmnIdRewriter 同口径。
+    发现于 Action 执行后发邮件的设计调研（2026-10-09），用户选择本轮只记录不修。
+
+- id: "1662"
+  status: open
+  severity: major
+  category: bug
+  summary: "platform-messaging KafkaConfig 的 DefaultErrorHandler recoverer 为空实现，重试 60s 用尽后消息被静默丢弃（注释称送 DLT 但未实现）"
+  file: "backend/platform-messaging/src/main/java/com/platform/messaging/config/KafkaConfig.java"
+  detail: |
+    kafkaListenerContainerFactory 里 DefaultErrorHandler 的 recoverer lambda 只有注释
+    「Send to dead letter topic」，没有任何代码；retryListener 同样为空。
+    ExponentialBackOff 最长 60s 用尽后，Spring Kafka 视为已恢复并提交 offset → 消息永久丢失，且无日志。
+    KafkaTopics 里定义的 *.dlt 主题实际上从未被写入；DeadLetterHandler 监听的是空主题。
+    影响所有使用 kafkaListenerContainerFactory 的消费者（当前为 user-portal NotificationKafkaConsumer）。
+    修复方向：recoverer 改为 DeadLetterPublishingRecoverer（写 *.dlt）+ ERROR 日志带 topic/offset/key；
+    改 platform-messaging 需重建所有依赖它的服务。
+    发现于 Action 执行后发邮件的设计调研（2026-10-09）。
+
+- id: "1663"
+  status: fixed
+  fixed_at: "2026-10-09"
+  severity: major
+  category: bug
+  summary: "ActionEmailRequestedEvent JSON 带上 topic，引擎消费/账本反序列化失败"
+  file: "backend/platform-messaging/src/main/java/com/platform/messaging/event/BaseEvent.java"
+  detail: |
+    BaseEvent.getTopic() 是 Kafka 路由方法，子类 override 后 Jackson 仍把它写成 payload 字段。
+    引擎用 ObjectMapper 读账本/消息时 FAIL_ON_UNKNOWN_PROPERTIES 会直接失败。
+    修复：抽象方法与 ActionEmailRequestedEvent.getTopic() 标 @JsonIgnore，事件类 ignoreUnknown；
+    ActionEmailRequestedEventJsonTest 覆盖序列化不含 topic、反序列化容忍旧 payload。
+    验证：messaging/engine/portal/DW 定向测试绿；dev 库已执行 92-we-action-email-deliveries.sql。
+
+- id: "1664"
+  status: fixed
+  fixed_at: "2026-10-09"
+  severity: major
+  category: bug
+  summary: "Email Inbound Reply 种子 FU 无开发组归属，Developer Workstation 列表不可见"
+  file: "deploy/init-scripts/20-email-inbound-reply/init.sql"
+  detail: |
+    工作区可见性只按 dw_function_unit_dev_groups 计算，未分配的 FU 在选了任意团队后从列表消失。
+    20-email-inbound-reply 种子（及手工灌入的 fu-20260910-emlrep）未写归属；90-post-seed 只在全新库 init 时跑。
+    修复：dev 库将 id=50015 挂到 vg-dev-public；种子 INSERT 后补同一行。DW 需切到 Public 或 All groups 后刷新。
+    同库仍有孤儿 MCY Debit Card_20260525（id=50006），本轮未改。
+
+- id: "1665"
+  status: fixed
+  fixed_at: "2026-10-09"
+  severity: major
+  category: bug
+  summary: "Send Task / Action 邮件 { } 变量选择器只剩 ${initiator}，主表字段选不到"
+  file: "frontend/developer-workstation/src/composables/email/useEmailTemplateVariables.ts"
+  detail: |
+    RecipientExpressionField 的主表 ${fieldName} 来自 useEmailTemplateVariables.load()。
+    getTables/getForms/RT 走 Promise.all，任一失败整个 catch 把 groups 清空；filter 再补上
+    内置 ${initiator}，所以 To/From/Cc 看起来「选不到变量」。functionUnitId 还按 setup 时的
+    快照闭包，后续 id 变化仍打旧值。
+    修复：先独立拉 tables；forms/RT 失败仍保留 MAIN 字段；id 改为 MaybeRefOrGetter。
+    验证：useEmailTemplateVariables.test.ts 覆盖 forms 失败仍有 ${sender_email}。

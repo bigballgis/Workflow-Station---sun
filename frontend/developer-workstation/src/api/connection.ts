@@ -66,6 +66,11 @@ export const connectionApi = {
       `/api/v1/function-units/${functionUnitId}/connections/vault-options`
     )
   },
+  textOptions(functionUnitId: number) {
+    return functionUnitAxios.get<any, { data: VaultEnvOption[] }>(
+      `/api/v1/function-units/${functionUnitId}/connections/text-options`
+    )
+  },
   create(functionUnitId: number, data: EmailConnectionRequest) {
     return functionUnitAxios.post<any, { data: EmailConnection }>(
       `/api/v1/function-units/${functionUnitId}/connections`,

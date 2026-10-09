@@ -40,7 +40,6 @@ const i18n = createI18n({
     en: {
       emailTemplate: {
         insertVariable: 'Insert Variable',
-        insertVariableHint: 'hint',
         bodyPlaceholder: 'body',
       },
     },

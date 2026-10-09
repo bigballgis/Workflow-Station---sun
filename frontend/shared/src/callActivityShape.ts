@@ -16,7 +16,7 @@
  * Built with the DOM API so it needs no SVG helper library from either app.
  */
 
-/** Only the call glyph and the per-row bars use the accent; the frame matches other tasks. */
+/** Only the call glyph uses the accent; the frame and per-row bars match other tasks. */
 export const CALL_ACTIVITY_ACCENT = '#7C3AED'
 /** bpmn-js' own frame for a task: black 2px stroke on white. */
 const FRAME_STROKE = '#000000'
@@ -122,14 +122,15 @@ export function drawCallActivityShape(
     parentNode.appendChild(text)
   }
 
-  // Multi-instance call: the standard three bars, inside the lower edge.
+  // Multi-instance call: the standard three bars, inside the lower edge, black like the
+  // multi-instance marker on any other step.
   if (content.multiInstance) {
     const bars = svg('g', {
       transform: `translate(${width / 2 - 7}, ${height - 14})`,
       class: CALL_ACTIVITY_DECOR_CLASS,
     })
     for (let i = 0; i < 3; i++) {
-      bars.appendChild(svg('rect', { x: i * 5, y: 0, width: 2, height: 10, fill: CALL_ACTIVITY_ACCENT }))
+      bars.appendChild(svg('rect', { x: i * 5, y: 0, width: 2, height: 10, fill: FRAME_STROKE }))
     }
     parentNode.appendChild(bars)
   }

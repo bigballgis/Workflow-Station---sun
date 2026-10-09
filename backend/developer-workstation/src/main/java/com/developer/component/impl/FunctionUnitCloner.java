@@ -39,6 +39,7 @@ import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.MainTableViewService;
 import com.developer.service.impl.FunctionUnitDocumentService;
 import com.platform.security.util.SecurityContextUtils;
+import com.developer.util.ActionConfigIdRewriter;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
@@ -225,6 +226,11 @@ class FunctionUnitCloner {
         Map<String, String> connectionUidMapping = new HashMap<>();
         cloneEmailConnections(id, cloned, connectionIdMapping, connectionUidMapping);
         Map<Long, Long> emailTemplateIdMapping = cloneEmailTemplates(id, cloned);
+        ActionConfigIdRewriter.rewritePersistedActions(
+                actionDefinitionRepository.findByFunctionUnitId(cloned.getId()),
+                emailTemplateIdMapping,
+                connectionUidMapping,
+                actionDefinitionRepository::save);
         emailMonitorRulePortability.cloneAll(
                 id, cloned, formIdMapping, bindingIdMapping, connectionUidMapping);
 

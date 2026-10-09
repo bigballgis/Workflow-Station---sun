@@ -52,4 +52,10 @@ public class TaskCompleteRequest {
      * Same field as {@link TaskFormSubmitRequest#subTableBindingScopes}.
      */
     private List<SubTableBindingScope> subTableBindingScopes;
+
+    /**
+     * Developer Workstation Action id that triggered this complete.
+     * Optional; used only to send a configured post-action email.
+     */
+    private String actionId;
 }

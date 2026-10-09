@@ -1,9 +1,7 @@
 package com.workflow.delegate;
 
 import com.platform.common.i18n.I18nService;
-import com.workflow.client.AdminCenterClient;
-import com.workflow.client.DeveloperWorkstationEmailTemplateClient;
-import com.workflow.service.EmailSenderService;
+import com.workflow.service.ConfiguredEmailSender;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.Process;
@@ -32,11 +30,7 @@ class SendEmailTaskDelegateFlowElementTest {
     @Mock
     private RepositoryService repositoryService;
     @Mock
-    private AdminCenterClient adminCenterClient;
-    @Mock
-    private DeveloperWorkstationEmailTemplateClient emailTemplateClient;
-    @Mock
-    private EmailSenderService emailSenderService;
+    private ConfiguredEmailSender configuredEmailSender;
     @Mock
     private I18nService i18nService;
 

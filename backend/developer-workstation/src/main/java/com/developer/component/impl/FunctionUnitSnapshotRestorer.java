@@ -18,6 +18,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.service.MainTableViewService;
+import com.developer.util.ActionConfigIdRewriter;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.BpmnProcessIdRewriter;
@@ -196,6 +197,12 @@ public class FunctionUnitSnapshotRestorer {
                         emailTemplateIdMapping);
             }
         }
+
+        ActionConfigIdRewriter.rewritePersistedActions(
+                importWriter.findActionsByFunctionUnit(functionUnit.getId()),
+                emailTemplateIdMapping,
+                connectionUidMapping,
+                importWriter::saveAction);
 
         if (snapshot.containsKey("emailMonitors")) {
             List<Map<String, Object>> monitors = (List<Map<String, Object>>) snapshot.get("emailMonitors");

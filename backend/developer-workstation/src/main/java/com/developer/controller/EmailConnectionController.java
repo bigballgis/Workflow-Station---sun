@@ -23,6 +23,14 @@ public class EmailConnectionController {
 
     private final EmailConnectionComponent emailConnectionComponent;
 
+    @GetMapping("/text-options")
+    @Operation(summary = "列出当前环境可用的 TEXT 环境变量")
+    public ResponseEntity<ApiResponse<List<VaultEnvOption>>> textOptions(
+            @PathVariable Long functionUnitId) {
+        emailConnectionComponent.listByFunctionUnitId(functionUnitId);
+        return ResponseEntity.ok(ApiResponse.success(emailConnectionComponent.listTextOptions()));
+    }
+
     @GetMapping("/vault-options")
     @Operation(summary = "列出当前环境可用的 VAULT 环境变量")
     public ResponseEntity<ApiResponse<List<VaultEnvOption>>> vaultOptions(

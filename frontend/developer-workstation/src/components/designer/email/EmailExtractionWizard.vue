@@ -33,7 +33,6 @@
               :placeholder="t('emailMonitor.wizard.sampleTextPlaceholder')"
               @mouseup="captureSelection"
             />
-            <div class="wizard-hint">{{ t('emailMonitor.wizard.selectionHint') }}</div>
           </el-form-item>
           <el-form-item :label="t('emailMonitor.wizard.sampleHtml')">
             <el-input
@@ -48,7 +47,6 @@
               v-model="sample.attachmentNames"
               :placeholder="t('emailMonitor.wizard.sampleAttachmentsPlaceholder')"
             />
-            <div class="wizard-hint">{{ t('emailMonitor.wizard.sampleAttachmentsHint') }}</div>
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -69,8 +67,7 @@
 
       <!-- Sub-table (HTML) mapping -->
       <el-tab-pane :label="t('emailMonitor.wizard.subTableMapping')" name="subtable">
-        <div class="wizard-hint">{{ t('emailMonitor.wizard.subTableHint') }}</div>
-        <div class="wizard-toolbar" style="margin-top: 8px;">
+        <div class="wizard-toolbar">
           <el-button
             size="small"
             type="primary"
@@ -112,11 +109,9 @@
               </el-form-item>
               <el-form-item :label="t('emailMonitor.wizard.tableIndex')" class="subtable-index-item">
                 <el-input-number v-model="st.tableIndex" :min="0" size="small" controls-position="right" />
-                <div class="wizard-hint">{{ t('emailMonitor.wizard.tableIndexHint') }}</div>
               </el-form-item>
               <el-form-item :label="t('emailMonitor.wizard.tableSelector')" class="subtable-selector-item">
                 <el-input v-model="st.tableSelector" size="small" placeholder="table" />
-                <div class="wizard-hint">{{ t('emailMonitor.wizard.tableSelectorHint') }}</div>
               </el-form-item>
               <el-form-item label=" " class="subtable-header-item">
                 <el-checkbox v-model="st.headerRow">{{ t('emailMonitor.wizard.headerRow') }}</el-checkbox>

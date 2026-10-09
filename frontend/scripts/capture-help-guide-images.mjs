@@ -653,6 +653,24 @@ try {
     await page.waitForTimeout(400)
   }
 
+  await clickTab('Action Design')
+  await page.waitForTimeout(800)
+  const actionEdit = page.getByRole('button', { name: 'Edit' }).first()
+  if (await actionEdit.count()) {
+    await actionEdit.click()
+    const postEmail = page.getByTestId('action-post-email-config')
+    await postEmail.waitFor({ state: 'visible', timeout: 15000 })
+    const enabled = postEmail.getByTestId('action-post-email-enabled')
+    const switchIsOn = await enabled.evaluate((el) => el.classList.contains('is-checked') || el.getAttribute('aria-checked') === 'true')
+    if (!switchIsOn) {
+      await enabled.click()
+      await page.waitForTimeout(400)
+    }
+    await shot('dw-action-email.png', postEmail)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+  }
+
   await clickTab('Process Design')
   await page.waitForTimeout(1500)
   await clickBpmnNode('Send approval notice')

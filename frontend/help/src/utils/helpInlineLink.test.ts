@@ -13,6 +13,10 @@ test('resolves How to write events and Basic control paths', () => {
   assert.equal(helpInlineTitleKey('/table-design'), 'guides.tableDesign.title')
   assert.equal(helpInlineTitleKey('/table-bindings'), 'guides.tableBindings.title')
   assert.equal(helpInlineTitleKey('/view-design'), 'guides.viewDesign.title')
+  assert.equal(helpInlineTitleKey('/email-send'), 'guides.emailSend.title')
+  assert.equal(helpInlineTitleKey('/email-send#connection'), 'nav.connections')
+  assert.equal(helpInlineTitleKey('/action-email'), 'guides.actionEmail.title')
+  assert.equal(helpInlineTitleKey('/environment-variables'), 'guides.environmentVariables.title')
 })
 
 test('rejects unsafe or unknown tokens', () => {

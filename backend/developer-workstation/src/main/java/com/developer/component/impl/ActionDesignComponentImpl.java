@@ -64,6 +64,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                 .build();
         
         validateFormPopupType(actionDefinition);
+        validatePostEmail(actionDefinition);
         
         return actionDefinitionRepository.save(actionDefinition);
     }
@@ -88,6 +89,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         actionDefinition.setDisplayName(request.getDescription());
         
         validateFormPopupType(actionDefinition);
+        validatePostEmail(actionDefinition);
         
         return actionDefinitionRepository.save(actionDefinition);
     }
@@ -342,5 +344,38 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                     i18nService.getMessage("action.invalid_popup_form_type"),
                     i18nService.getMessage("action.popup_must_use_action_form"));
         }
+    }
+
+    private static final java.util.Set<ActionType> POST_EMAIL_TYPES = java.util.Set.of(
+            ActionType.APPROVE, ActionType.REJECT, ActionType.TRANSFER, ActionType.DELEGATE,
+            ActionType.URGE, ActionType.ROLLBACK, ActionType.WITHDRAW, ActionType.DRAFT,
+            ActionType.SAVE, ActionType.PROCESS_SUBMIT, ActionType.PROCESS_REJECT, ActionType.FORM_POPUP);
+
+    @SuppressWarnings("unchecked")
+    private void validatePostEmail(ActionDefinition action) {
+        Map<String, Object> config = action.getConfigJson();
+        if (config == null || !(config.get("postEmail") instanceof Map<?, ?> raw)) {
+            return;
+        }
+        Map<String, Object> postEmail = (Map<String, Object>) raw;
+        Object enabled = postEmail.get("enabled");
+        if (!Boolean.TRUE.equals(enabled) && !"true".equalsIgnoreCase(String.valueOf(enabled))) {
+            return;
+        }
+        if (!POST_EMAIL_TYPES.contains(action.getActionType())) {
+            throw new DeveloperBusinessException("ACTION_EMAIL_TYPE_UNSUPPORTED",
+                    i18nService.getMessage("action.email_type_unsupported"),
+                    i18nService.getMessage("action.email_type_unsupported_hint"));
+        }
+        if (!hasText(postEmail.get("connectionId")) || !hasText(postEmail.get("emailTo"))
+                || !hasText(postEmail.get("emailTemplateId"))) {
+            throw new DeveloperBusinessException("ACTION_EMAIL_INCOMPLETE",
+                    i18nService.getMessage("action.email_incomplete"),
+                    i18nService.getMessage("action.email_incomplete_hint"));
+        }
+    }
+
+    private static boolean hasText(Object value) {
+        return value != null && !value.toString().isBlank();
     }
 }

@@ -25,13 +25,10 @@ function translate(
 }
 
 describe('send task email To / Cc / Bcc i18n literals', () => {
-  it.each(locales)('%s shows ${assigneeEmail} in To placeholder and ${fieldName} in hint', (locale, messages) => {
+  it.each(locales)('%s shows ${assigneeEmail} in the To placeholder', (locale, messages) => {
     const placeholder = translate(locale, messages, 'properties.emailToPlaceholder')
-    const hint = translate(locale, messages, 'properties.emailToHint', { button: '{ }' })
     expect(placeholder).toContain('${assigneeEmail}')
     expect(placeholder).not.toMatch(/\$'assigneeEmail/)
-    expect(hint).toContain('${fieldName}')
-    expect(hint).not.toMatch(/\$'fieldName/)
   })
 
   it.each(locales)('%s shows ${variable} in Cc and Bcc placeholders', (locale, messages) => {

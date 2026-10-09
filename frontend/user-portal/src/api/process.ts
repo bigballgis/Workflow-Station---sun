@@ -72,6 +72,8 @@ export interface ProcessStartRequest {
     emptied: boolean
     deletedRows?: Array<Record<string, unknown>>
   }>
+  /** Start-page Process Submit Action id; omitted for the default submit button. */
+  actionId?: string
 }
 
 /** A function unit the current user may review. */
@@ -221,8 +223,8 @@ export const processApi = {
   },
 
   // 撤回流程
-  withdrawProcess(processId: string, reason: string) {
-    return request.post(`/processes/${processId}/withdraw`, { reason })
+  withdrawProcess(processId: string, reason: string, actionId?: string, taskId?: string) {
+    return request.post(`/processes/${processId}/withdraw`, { reason, actionId, taskId })
   },
 
   // 催办流程

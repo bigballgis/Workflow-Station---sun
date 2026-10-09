@@ -23,4 +23,7 @@ public interface EnvironmentVariableComponent {
 
     /** Mailbox password: {@code varKey} must be VAULT in the current deploy_env. */
     String resolveVaultPassword(String varKey);
+
+    /** Current or default TEXT value. Rejects VAULT keys so mail cannot read secrets. */
+    String resolveTextValue(String varKey);
 }

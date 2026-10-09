@@ -43,10 +43,14 @@ DECLARE
   v_seq  TEXT;
   v_next BIGINT;
 BEGIN
+  -- Only tables that have an `id` column: pg_get_serial_sequence raises (rather
+  -- than returning NULL) when the column is missing, e.g. dw_ai_studio_proposal_jobs
+  -- keys on job_id.
   FOR v_tbl IN
     SELECT table_name
-    FROM information_schema.tables
+    FROM information_schema.columns
     WHERE table_schema = 'public'
+      AND column_name = 'id'
       AND (table_name LIKE 'dw\_%' ESCAPE '\'
         OR table_name LIKE 'rt\_%' ESCAPE '\')
     ORDER BY table_name

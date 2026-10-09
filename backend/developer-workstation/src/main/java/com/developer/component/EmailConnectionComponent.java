@@ -22,4 +22,6 @@ public interface EmailConnectionComponent {
     Map<String, Object> testConnection(Long functionUnitId, Long connectionId, String testRecipient);
 
     List<VaultEnvOption> listVaultOptions();
+
+    List<VaultEnvOption> listTextOptions();
 }

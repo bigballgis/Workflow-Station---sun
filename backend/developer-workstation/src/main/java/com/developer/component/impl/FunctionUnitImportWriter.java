@@ -668,6 +668,14 @@ public class FunctionUnitImportWriter {
         return actionDefinitionRepository.save(action);
     }
 
+    List<ActionDefinition> findActionsByFunctionUnit(Long functionUnitId) {
+        return actionDefinitionRepository.findByFunctionUnitId(functionUnitId);
+    }
+
+    void saveAction(ActionDefinition action) {
+        actionDefinitionRepository.save(action);
+    }
+
     EmailConnection importEmailConnection(FunctionUnit functionUnit, Map<String, Object> connectionData) {
         EmailConnection.EmailConnectionBuilder builder = EmailConnection.builder()
                 .connectionUid(connectionData.get("connectionUid") != null

@@ -1,5 +1,7 @@
 package com.portal.controller;
 
+import com.portal.component.ActionPostEmailComponent;
+import com.portal.component.ActionPostEmailContext;
 import com.portal.component.CalledFunctionUnitComponent;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.FunctionUnitAuditScopeComponent;
@@ -45,6 +47,7 @@ public class ProcessController {
     private final com.portal.component.MyApplicationListQueryComponent myApplicationListQueryComponent;
     private final com.portal.component.AuditApplicationListQueryComponent auditApplicationListQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
+    private final ActionPostEmailComponent actionPostEmailComponent;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -363,7 +366,15 @@ public class ProcessController {
         if (!StringUtils.hasText(request.getProcessDefinitionKey())) {
             request.setProcessDefinitionKey(processKey);
         }
-        ProcessInstanceInfo instance = processComponent.startProcess(userId, processKey, request);
+        ProcessInstanceInfo instance = actionPostEmailComponent.runWithPostEmail(
+                ActionPostEmailContext.builder()
+                        .actionId(request.getActionId())
+                        .operation(ActionPostEmailContext.OP_START)
+                        .functionUnitCode(processKey)
+                        .operatorId(userId)
+                        .comment(request.getRemark())
+                        .build(),
+                () -> processComponent.startProcess(userId, processKey, request));
         return ApiResponse.success(instance);
     }
 
@@ -499,6 +510,18 @@ public class ProcessController {
             @RequestBody Map<String, String> body) {
         String reason = body.get("reason");
         boolean success = processComponent.withdrawProcess(userId, processId, reason);
+        if (success) {
+            actionPostEmailComponent.runWithPostEmail(
+                    ActionPostEmailContext.builder()
+                            .actionId(body.get("actionId"))
+                            .operation(ActionPostEmailContext.OP_WITHDRAW)
+                            .taskId(body.get("taskId"))
+                            .processInstanceId(processId)
+                            .operatorId(userId)
+                            .comment(reason)
+                            .build(),
+                    () -> { });
+        }
         if (success) {
             return ApiResponse.success(null);
         }

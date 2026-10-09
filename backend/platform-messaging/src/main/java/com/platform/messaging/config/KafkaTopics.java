@@ -13,6 +13,8 @@ public final class KafkaTopics {
     public static final String PERMISSION_EVENTS = "platform.permission.events";
     public static final String DEPLOYMENT_EVENTS = "platform.deployment.events";
     public static final String NOTIFICATION_EVENTS = "platform.notification.events";
+    /** Post-action email requests: user-portal publishes, workflow-engine-core sends. */
+    public static final String ACTION_EMAIL_REQUESTS = "platform.action-email.requests";
     
     // Dead letter topics
     public static final String PROCESS_EVENTS_DLT = "platform.process.events.dlt";
