@@ -8,6 +8,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -33,6 +34,20 @@ public class WorkspaceExceptionHandler {
             "CONFLICT_CONNECTION_NAME",
             "PROCESS_FORM_ALREADY_EXISTS"
     );
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<?>> handleMissingRequestParameter(
+            MissingServletRequestParameterException ex, WebRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("VAL_INVALID_INPUT")
+                .message("Required parameter '" + ex.getParameterName() + "' is missing")
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
+    }
 
     @ExceptionHandler(FunctionUnitWorkspaceAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> onWorkspaceDenied(FunctionUnitWorkspaceAccessDeniedException ex) {

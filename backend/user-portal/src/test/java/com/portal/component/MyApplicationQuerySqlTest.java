@@ -70,6 +70,15 @@ class MyApplicationQuerySqlTest {
         assertThat(pageSql()).contains("LIMIT ?").contains("OFFSET ?").contains("pi.start_user_id = ?");
     }
 
+    /** A Function Unit started by a call is part of the calling request, not a request of its own. */
+    @Test
+    void calledFunctionUnitInstancesAreNotListedAsRequests() {
+        component.query("user-1", request(null, List.of()));
+
+        assertThat(preparedSql.get(0)).contains("pi.parent_process_instance_id IS NULL");
+        assertThat(pageSql()).contains("pi.parent_process_instance_id IS NULL");
+    }
+
     @Test
     void statusTabIsInsideTheSharedPredicate() {
         component.query("user-1", request("RUNNING", List.of()));

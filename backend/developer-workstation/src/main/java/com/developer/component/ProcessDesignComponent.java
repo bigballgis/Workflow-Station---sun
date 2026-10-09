@@ -64,6 +64,15 @@ public interface ProcessDesignComponent {
     ValidationResult validateMultiInstance(String bpmnXml, Long functionUnitId);
 
     /**
+     * Validates cross-Function-Unit calls ({@code callActivity}): target exists, is callable,
+     * its form belongs to the called unit, and the call chain has no cycle.
+     *
+     * @param bpmnXml        plain (already decoded) BPMN XML
+     * @param functionUnitId the unit that owns this process
+     */
+    ValidationResult validateCallActivities(String bpmnXml, Long functionUnitId);
+
+    /**
      * 校验 LAST_TASK_ASSIGNEE 锚点与用户任务顺序流入线条数（必须恰好 1 条）。
      */
     ValidationResult validateLastTaskAssigneeTopology(String bpmnXml);

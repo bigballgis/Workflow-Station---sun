@@ -145,7 +145,13 @@ public class FunctionUnitExporter {
         payload.put("name", functionUnit.getName());
         payload.put("code", functionUnit.getCode());
         payload.put("description", functionUnit.getDisplayName());
+        payload.put("tags", com.developer.util.FunctionUnitTagUtils.normalizeTags(functionUnit.getTags()));
+        payload.put("icon", FunctionUnitBasicPortability.iconData(functionUnit.getIcon()));
         payload.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
+        // Without this, a rollback or clone would silently reset the unit to STANDALONE and every
+        // call activity pointing at it would stop validating.
+        payload.put("startupMode",
+                functionUnit.getStartupMode() != null ? functionUnit.getStartupMode().name() : null);
 
         if (processDefinition != null) {
             payload.put("process", XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml()));
@@ -189,7 +195,7 @@ public class FunctionUnitExporter {
                 .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
 
         List<Map<String, Object>> mainTableViews =
-                mainTableViewPortability.export(functionUnitId, tableIdToName, formIdToName);
+                mainTableViewPortability.snapshot(functionUnitId, tableIdToName, formIdToName);
         if (!mainTableViews.isEmpty()) {
             payload.put("mainTableViews", mainTableViews);
         }
@@ -232,6 +238,17 @@ public class FunctionUnitExporter {
                 .map(DecisionDefinition::getDmnXml)
                 .filter(xml -> xml != null && !xml.isBlank())
                 .toList());
+        // Additive snapshot-only metadata. Keep the XML list for historical readers and ZIP consumers.
+        payload.put("decisionDefinitions", decisions.stream().map(decision -> {
+            Map<String, Object> record = new LinkedHashMap<>();
+            record.put("decisionId", decision.getId());
+            record.put("decisionKey", decision.getDecisionKey());
+            record.put("decisionName", decision.getDecisionName());
+            record.put("description", decision.getDescription());
+            record.put("hitPolicy", decision.getHitPolicy());
+            record.put("dmnXml", decision.getDmnXml());
+            return record;
+        }).toList());
 
         // Requirements / Design documents: latest content only (history stays in dw_ai_documents).
         // Legacy snapshots lack the key, and rollback then leaves the documents untouched.
@@ -435,22 +452,17 @@ public class FunctionUnitExporter {
             }
 
             // Build manifest
-            ExportManifest.IconInfo iconInfo = null;
-            if (functionUnit.getIcon() != null) {
-                iconInfo = ExportManifest.IconInfo.builder()
-                        .name(functionUnit.getIcon().getName())
-                        .category(functionUnit.getIcon().getCategory() != null ?
-                                functionUnit.getIcon().getCategory().name() : null)
-                        .color(null)
-                        .svgContent(functionUnit.getIcon().getSvgContent())
-                        .build();
-            }
+            ExportManifest.IconInfo iconInfo = objectMapper.convertValue(
+                    FunctionUnitBasicPortability.iconData(functionUnit.getIcon()), ExportManifest.IconInfo.class);
 
             ExportManifest manifest = ExportManifest.builder()
                     .name(functionUnit.getName())
                     .code(functionUnit.getCode()) // Use actual code field
                     .version(functionUnit.getCurrentVersion())
                     .description(functionUnit.getDisplayName())
+                    .tags(com.developer.util.FunctionUnitTagUtils.normalizeTags(functionUnit.getTags()))
+                    .startupMode(functionUnit.getStartupMode() != null
+                            ? functionUnit.getStartupMode().name() : null)
                     .exportedAt(LocalDateTime.now())
                     .exportedBy(getCurrentOperator())
                     .platformVersion(platformVersion)

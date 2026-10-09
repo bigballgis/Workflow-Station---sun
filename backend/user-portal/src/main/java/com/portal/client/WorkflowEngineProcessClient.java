@@ -13,7 +13,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -174,6 +176,48 @@ public class WorkflowEngineProcessClient {
             log.warn("Failed to get process instance status from workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
+    }
+
+    /**
+     * Child process instances started by this instance's call activities.
+     *
+     * <p>Flowable owns the caller/callee relation, so it is asked rather than reconstructed. One
+     * call returns every child, which keeps a detail page at a single round-trip no matter how
+     * many Function Units it calls.
+     *
+     * @return one map per sub-process; empty when the instance calls nothing or the engine is down
+     */
+    public List<Map<String, Object>> getSubProcesses(String processInstanceId) {
+        if (!engine.isAvailable()) {
+            return List.of();
+        }
+        try {
+            String url = engine.engineUrl() + "/api/v1/processes/"
+                    + SafeUrlInput.requirePathToken(processInstanceId) + "/sub-processes";
+
+            ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
+                url, HttpMethod.GET, engine.authorizedGetEntity(),
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Object data = response.getBody().get("data");
+                if (data instanceof List<?> list) {
+                    List<Map<String, Object>> out = new ArrayList<>(list.size());
+                    for (Object item : list) {
+                        if (item instanceof Map<?, ?> map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> typed = (Map<String, Object>) map;
+                            out.add(typed);
+                        }
+                    }
+                    return out;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get sub-processes of {} from workflow engine: {}",
+                    processInstanceId, e.getMessage());
+        }
+        return List.of();
     }
 
     /**

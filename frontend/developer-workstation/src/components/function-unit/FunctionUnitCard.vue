@@ -12,8 +12,24 @@
       {{ statusLabel }}
     </el-tag>
     
+    <!-- Startup Mode badge, top left: a unit that only ever runs when another one
+         calls it behaves very differently from one users start, and that is
+         invisible from the name alone. Shown only when it is not the default. -->
+    <el-tag
+      v-if="startupModeLabel"
+      class="startup-mode-badge"
+      :type="startupModeTagType"
+      size="small"
+      effect="dark"
+    >
+      {{ startupModeLabel }}
+    </el-tag>
+
     <!-- Icon Area - Larger -->
-    <div class="card-icon">
+    <div
+      class="card-icon"
+      :class="{ 'card-icon--callable': isCallable }"
+    >
       <IconPreview
         :icon-id="item.iconId"
         size="large"
@@ -163,6 +179,44 @@ const statusLabel = computed(() => {
   return map[props.item.status] || props.item.status
 })
 
+/**
+ * Whether another Function Unit is allowed to call this one.
+ *
+ * Read from the explicitly declared Startup Mode, never guessed from role grants
+ * or from whether anything happens to call it today.
+ */
+const isCallable = computed(() =>
+  props.item.startupMode === 'CALLABLE' || props.item.startupMode === 'BOTH'
+)
+
+/**
+ * The badge in the card's top-left corner.
+ *
+ * Reads only the declared Startup Mode, which is a plain column on the unit.
+ * Marking the opposite role — "this unit calls others" — is deliberately NOT
+ * done here: no column records it, so every card would have to be answered by
+ * parsing that unit's BPMN, and the list is not worth that cost. The call chain
+ * is shown where it is cheap and more useful anyway: inside Process Design.
+ *
+ * Empty for a plain STANDALONE unit, so ordinary cards stay exactly as they were.
+ */
+const startupModeLabel = computed(() => {
+  switch (props.item.startupMode) {
+    case 'CALLABLE':
+      return t('functionUnit.badgeCallableOnly')
+    case 'BOTH':
+      return t('functionUnit.badgeCallableAndStandalone')
+    default:
+      return ''
+  }
+})
+
+const startupModeTagType = computed(() =>
+  // CALLABLE-only never appears in the Portal catalog at all, so it is the one
+  // worth the stronger colour.
+  props.item.startupMode === 'CALLABLE' ? 'danger' : 'warning'
+)
+
 // 后端 delete 是两段式：未归档的调用只是软删（置为 ARCHIVED），已归档的才真删。
 // 菜单文案必须跟着状态走，否则第一次点「Delete」弹出的却是归档确认框。
 const isArchived = computed(() => props.item.status === 'ARCHIVED')
@@ -204,13 +258,27 @@ function handleClick() {
   z-index: 2;
 }
 
+/* Opposite corner from the status badge so the two never collide. */
+.startup-mode-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+}
+
 .card-icon {
   height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  
+
+  /* Tinted with the same accent the process canvas uses for a call step, so a
+     callable unit is recognisable at a glance in a grid of cards. */
+  &--callable {
+    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  }
+
   :deep(.icon-preview) {
     width: 80px;
     height: 80px;

@@ -33,7 +33,10 @@
             v{{ store.current.currentVersion }}
           </span>
         </div>
-        <div>
+        <!-- Every action here works on the current design. While a published version
+             is on screen they would act on something other than what is shown, so
+             they are withheld until the viewer returns to the current design. -->
+        <div v-if="!viewedVersion">
           <el-button
             v-if="AI_STUDIO_ENABLED && !isReadOnly"
             type="primary"
@@ -89,7 +92,18 @@
         style="margin-bottom: 12px;"
       />
 
+      <!-- A published version reached from a pinned call: shown read-only in place of
+           the editable designer, since that version — not the live draft — is what
+           the call runs. -->
+      <VersionedProcessViewer
+        v-if="viewedVersion"
+        :function-unit-id="functionUnitId"
+        :version="viewedVersion"
+        @open-current="openCurrentDesign"
+      />
+
       <div
+        v-else
         class="designer-workspace"
         @click.capture="onReadOnlyInteraction"
         @pointerdown.capture="onReadOnlyInteraction"
@@ -266,6 +280,28 @@
                   :value="tag"
                 />
               </el-select>
+            </el-form-item>
+            <el-form-item :label="t('functionUnit.startupMode')">
+              <el-select
+                v-model="editForm.startupMode"
+                style="width: 100%;"
+              >
+                <el-option
+                  :label="t('functionUnit.startupModeStandalone')"
+                  value="STANDALONE"
+                />
+                <el-option
+                  :label="t('functionUnit.startupModeCallable')"
+                  value="CALLABLE"
+                />
+                <el-option
+                  :label="t('functionUnit.startupModeBoth')"
+                  value="BOTH"
+                />
+              </el-select>
+              <div class="field-tip">
+                {{ t('functionUnit.startupModeTip') }}
+              </div>
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -533,6 +569,7 @@ import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { registerUnsavedDesignerLeaveConfirmation } from '@/composables/useUnsavedDesignerNavigation'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
+import VersionedProcessViewer from '@/components/designer/VersionedProcessViewer.vue'
 import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
 import TableDesigner from '@/components/designer/TableDesigner.vue'
 import FormDesigner from '@/components/designer/FormDesigner.vue'
@@ -564,6 +601,20 @@ const router = useRouter()
 const store = useFunctionUnitStore()
 
 const functionUnitId = computed(() => Number(route.params.id))
+
+/**
+ * The published version to show read-only, when the page was opened from a pinned
+ * call. Read from the query on every change rather than once at mount: switching
+ * between a version and the current design keeps the same path, so the page is
+ * reused rather than remounted.
+ */
+const viewedVersion = computed(() =>
+  typeof route.query.version === 'string' ? route.query.version : ''
+)
+
+function openCurrentDesign() {
+  router.replace({ path: route.path })
+}
 const isReadOnly = computed(() => store.current != null && isFunctionUnitReadOnly(store.current))
 
 function onReadOnlyInteraction(event: Event): void {
@@ -736,6 +787,13 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.field-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
 .version-badge {
   background-color: #f0f0f0;
   padding: 2px 8px;

@@ -6,6 +6,7 @@ import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.dto.VersionResponse;
+import com.developer.dto.VersionCompareResponse;
 import com.developer.entity.*;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.exception.DeveloperBusinessException;
@@ -180,6 +181,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .tags(FunctionUnitTagUtils.normalizeTags(request.getTags()))
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
+        // Chosen at creation when the creator already knows the unit is meant to be called;
+        // otherwise the entity default (STANDALONE) stands.
+        if (request.getStartupMode() != null) {
+            functionUnit.setStartupMode(request.getStartupMode());
+        }
 
         if (request.getIconId() != null) {
             Icon icon = iconRepository.findById(request.getIconId())
@@ -244,6 +250,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         if (request.getTags() != null) {
             functionUnit.setTags(FunctionUnitTagUtils.normalizeTags(request.getTags()));
+        }
+        // Same "null means keep existing" contract as description/tags above.
+        if (request.getStartupMode() != null) {
+            functionUnit.setStartupMode(request.getStartupMode());
         }
 
         // Only update icon when iconId is provided (non-null); null means "keep existing"
@@ -464,6 +474,13 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             newVersion = snapshotFactory.calculateNextVersion(newVersion);
         }
 
+        // A Publish version describes the committed published design, not the draft just before
+        // publication. Keep the state transition and snapshot in this transaction so a failure
+        // rolls both back together.
+        functionUnit.setStatus(FunctionUnitStatus.PUBLISHED);
+        mainTableViewService.publishViewsForFunctionUnit(id);
+        functionUnitRepository.flush();
+
         try {
             byte[] snapshotData = createSnapshot(functionUnit);
             Version version = Version.builder()
@@ -481,10 +498,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             throw new DeveloperBusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
         }
 
-        // Update function unit status
-        functionUnit.setStatus(FunctionUnitStatus.PUBLISHED);
         functionUnit.setCurrentVersion(newVersion);
-        mainTableViewService.publishViewsForFunctionUnit(id);
 
         return functionUnitRepository.save(functionUnit);
     }
@@ -547,6 +561,16 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         assertVersionBelongsToFunctionUnit(functionUnitId, versionId1);
         assertVersionBelongsToFunctionUnit(functionUnitId, versionId2);
         return versionComponent.compare(versionId1, versionId2);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VersionCompareResponse compareVersionsV2(
+            Long functionUnitId, Long versionId1, Long versionId2) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
+        assertVersionBelongsToFunctionUnit(functionUnitId, versionId1);
+        assertVersionBelongsToFunctionUnit(functionUnitId, versionId2);
+        return versionComponent.compareV2(versionId1, versionId2);
     }
 
     @Override

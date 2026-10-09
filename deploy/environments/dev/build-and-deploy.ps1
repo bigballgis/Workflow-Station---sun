@@ -442,7 +442,15 @@ function Remove-IdeUnresolvedClassFiles {
         if (-not (Test-Path -LiteralPath $targetDir)) { continue }
         $removed = 0
         foreach ($classFile in @(Get-ChildItem -Path $targetDir -Recurse -Filter *.class -ErrorAction SilentlyContinue)) {
-            $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($classFile.FullName))
+            # The IDE's Java language server rebuilds target/classes in the background, deleting
+            # and rewriting files while this loop runs. A file gone (or locked) since the listing
+            # is not an IDE stub to drop, so skip it instead of aborting the whole deploy.
+            try {
+                $bytes = [System.IO.File]::ReadAllBytes($classFile.FullName)
+            } catch [System.IO.FileNotFoundException], [System.IO.DirectoryNotFoundException], [System.IO.IOException] {
+                continue
+            }
+            $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
             if ($ascii.Contains("Unresolved compilation")) {
                 Remove-Item -LiteralPath $classFile.FullName -Force -ErrorAction SilentlyContinue
                 $removed++

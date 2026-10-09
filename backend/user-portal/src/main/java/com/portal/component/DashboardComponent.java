@@ -391,17 +391,17 @@ public class DashboardComponent {
                     .build();
         }
 
-        long overallCount = processInstanceRepository.countByStartUserIdIn(teamMemberIds);
-        long runningCount = processInstanceRepository.countByStartUserIdInAndStatus(teamMemberIds, "RUNNING");
-        long completedCount = processInstanceRepository.countByStartUserIdInAndStatus(teamMemberIds, "COMPLETED");
-        long withdrawnCount = processInstanceRepository.countByStartUserIdInAndStatus(teamMemberIds, "WITHDRAWN");
+        long overallCount = processInstanceRepository.countByStartUserIdInAndParentProcessInstanceIdIsNull(teamMemberIds);
+        long runningCount = processInstanceRepository.countByStartUserIdInAndStatusAndParentProcessInstanceIdIsNull(teamMemberIds, "RUNNING");
+        long completedCount = processInstanceRepository.countByStartUserIdInAndStatusAndParentProcessInstanceIdIsNull(teamMemberIds, "COMPLETED");
+        long withdrawnCount = processInstanceRepository.countByStartUserIdInAndStatusAndParentProcessInstanceIdIsNull(teamMemberIds, "WITHDRAWN");
 
         Pageable pageable = PageRequest.of(page, size);
         Page<ProcessInstance> resultPage;
         if (status == null || status.isBlank()) {
-            resultPage = processInstanceRepository.findByStartUserIdInOrderByStartTimeDesc(teamMemberIds, pageable);
+            resultPage = processInstanceRepository.findByStartUserIdInAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(teamMemberIds, pageable);
         } else {
-            resultPage = processInstanceRepository.findByStartUserIdInAndStatusOrderByStartTimeDesc(teamMemberIds, status, pageable);
+            resultPage = processInstanceRepository.findByStartUserIdInAndStatusAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(teamMemberIds, status, pageable);
         }
 
         List<ProcessInstance> pageContent = resultPage.getContent();

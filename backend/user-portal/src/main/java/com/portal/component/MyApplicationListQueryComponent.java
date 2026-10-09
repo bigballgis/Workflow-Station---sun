@@ -62,7 +62,10 @@ public class MyApplicationListQueryComponent {
         ListFilterSql filterSql = MyApplicationColumnSpec.sql();
         List<Object> params = new ArrayList<>();
         params.add(userId);
-        StringBuilder where = new StringBuilder(" FROM up_process_instance pi WHERE pi.start_user_id = ?");
+        // Instances started by a Function Unit call are part of the calling request, not requests of
+        // their own, even though the engine records the caller's user as their starter.
+        StringBuilder where = new StringBuilder(
+                " FROM up_process_instance pi WHERE pi.start_user_id = ? AND pi.parent_process_instance_id IS NULL");
         appendStatus(where, params, request.status());
         where.append(filterSql.whereClause(request.filters(), params));
 

@@ -17,9 +17,12 @@ import java.util.List;
 @Repository
 public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance, String> {
 
-    Page<ProcessInstance> findByStartUserIdOrderByStartTimeDesc(String startUserId, Pageable pageable);
+    // "Requests started by a user" excludes Function Unit instances started by a call activity:
+    // the engine records the caller's user as their starter, but they are part of the calling
+    // request, not requests of their own.
+    Page<ProcessInstance> findByStartUserIdAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(String startUserId, Pageable pageable);
 
-    Page<ProcessInstance> findByStartUserIdAndStatusOrderByStartTimeDesc(String startUserId, String status, Pageable pageable);
+    Page<ProcessInstance> findByStartUserIdAndStatusAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(String startUserId, String status, Pageable pageable);
 
     List<ProcessInstance> findByStartUserIdAndStatus(String startUserId, String status);
 
@@ -29,15 +32,32 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
 
     List<ProcessInstance> findByFunctionUnitCatalogId(String functionUnitCatalogId);
 
+    // ── Cross-Function-Unit calls (callActivity) ──
+
+    /**
+     * Child instances started by this instance's call activities.
+     *
+     * <p>Batch by parent rather than resolving one child at a time: a detail page that asked the
+     * engine per call activity would reintroduce the N+1 shape that has bitten portal hot paths.
+     */
+    List<ProcessInstance> findByParentProcessInstanceId(String parentProcessInstanceId);
+
+    /** Children of one specific call activity — several when that call activity is multi-instance. */
+    List<ProcessInstance> findByParentProcessInstanceIdAndCallActivityId(
+            String parentProcessInstanceId, String callActivityId);
+
+    /** One query for a whole page of parents; avoids a per-row lookup when rendering lists. */
+    List<ProcessInstance> findByParentProcessInstanceIdIn(Collection<String> parentProcessInstanceIds);
+
     // ── Team requests (by multiple start user IDs) ──
 
-    Page<ProcessInstance> findByStartUserIdInOrderByStartTimeDesc(Collection<String> startUserIds, Pageable pageable);
+    Page<ProcessInstance> findByStartUserIdInAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(Collection<String> startUserIds, Pageable pageable);
 
-    Page<ProcessInstance> findByStartUserIdInAndStatusOrderByStartTimeDesc(Collection<String> startUserIds, String status, Pageable pageable);
+    Page<ProcessInstance> findByStartUserIdInAndStatusAndParentProcessInstanceIdIsNullOrderByStartTimeDesc(Collection<String> startUserIds, String status, Pageable pageable);
 
-    long countByStartUserIdIn(Collection<String> startUserIds);
+    long countByStartUserIdInAndParentProcessInstanceIdIsNull(Collection<String> startUserIds);
 
-    long countByStartUserIdInAndStatus(Collection<String> startUserIds, String status);
+    long countByStartUserIdInAndStatusAndParentProcessInstanceIdIsNull(Collection<String> startUserIds, String status);
 
     /**
      * Find active process instances assigned to the specified user.

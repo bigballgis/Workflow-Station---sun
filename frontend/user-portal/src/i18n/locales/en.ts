@@ -1222,6 +1222,17 @@ exportWithData: 'Export',
     noSubTableRows: 'No rows',
     subTableRow: 'Row {n}',
   },
+  /** Function Unit sub-processes started by this request's call activities. */
+  calledFunctionUnit: {
+    tabTitle: 'Sub-processes',
+    none: 'This request has not started any sub-process yet',
+    noData: 'No data has been entered in this sub-process yet',
+    currentStep: 'Current step: {step}',
+    finished: 'Finished',
+    instanceCount: '{count} instances',
+    untitledCall: 'Called Function Unit',
+  },
+
   changeHistory: {
     title: 'Change History',
     noRecords: 'No change history records',

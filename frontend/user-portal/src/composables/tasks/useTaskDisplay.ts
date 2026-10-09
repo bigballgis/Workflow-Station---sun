@@ -114,17 +114,6 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
     return map[taskPriorityBand(priority)]
   }
 
-  function getButtonType(buttonColor?: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' | '' {
-    const colorMap: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
-      'primary': 'primary',
-      'success': 'success',
-      'warning': 'warning',
-      'danger': 'danger',
-      'info': 'info'
-    }
-    return colorMap[buttonColor || ''] || 'primary'
-  }
-
   function getActionLabel(action: TaskActionInfo): string {
     return (action.actionType || '').trim().toUpperCase() === 'SAVE' ? t('common.save') : action.actionName
   }
@@ -154,7 +143,6 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
     getDelegationStatusDisplay,
     getPriorityLabel,
     getPriorityType,
-    getButtonType,
     getActionLabel,
     getIconComponent
   }

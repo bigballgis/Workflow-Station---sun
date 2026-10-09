@@ -64,6 +64,24 @@
         </span>
       </div>
       <el-button-group>
+        <!-- Call relations open on demand rather than occupying the canvas: the
+             chain matters when you go looking for it, not on every edit. -->
+        <el-button
+          v-if="showCallRelationButton"
+          data-read-only-allowed
+          class="call-relation-button"
+          :disabled="!modelerReady"
+          @click="showCallRelations = true"
+        >
+          <el-icon><Connection /></el-icon>
+          {{ t('callRelation.buttonLabel') }}
+          <el-icon class="call-relation-button__external"><TopRight /></el-icon>
+          <span
+            v-if="outdatedPinCount > 0"
+            class="call-relation-button__badge"
+            :title="t('callRelation.outdatedPinsHint', { count: outdatedPinCount })"
+          >{{ outdatedPinCount }}</span>
+        </el-button>
         <el-button
           data-read-only-allowed
           :disabled="!modelerReady"
@@ -111,15 +129,46 @@
         class="bpmn-canvas"
         tabindex="0"
       />
-      <div class="properties-panel-container">
-        <NodePropertiesPanel 
-          v-if="bpmnModelerRef" 
-          :modeler="bpmnModelerRef" 
-          :function-unit-id="functionUnitId" 
-        />
+      <div
+        class="properties-panel-container"
+        :class="{ collapsed: propertiesCollapsed }"
+      >
+        <!-- Collapses the panel to give the diagram the full width. -->
+        <button
+          type="button"
+          class="properties-panel-toggle"
+          :title="propertiesCollapsed ? t('process.expandProperties') : t('process.collapseProperties')"
+          :aria-label="propertiesCollapsed ? t('process.expandProperties') : t('process.collapseProperties')"
+          :aria-expanded="!propertiesCollapsed"
+          @click="togglePropertiesPanel"
+        >
+          <el-icon>
+            <ArrowLeft v-if="propertiesCollapsed" />
+            <ArrowRight v-else />
+          </el-icon>
+        </button>
+        <div
+          v-show="!propertiesCollapsed"
+          class="properties-panel-body"
+        >
+          <NodePropertiesPanel
+            v-if="bpmnModelerRef"
+            :modeler="bpmnModelerRef"
+            :function-unit-id="functionUnitId"
+          />
+        </div>
       </div>
     </div>
     
+    <!-- Function Unit call relations, opened from the toolbar -->
+    <CallRelationDialog
+      v-model="showCallRelations"
+      :function-unit-id="functionUnitId"
+      :modeler="bpmnModelerRef"
+      :read-only="designerReadOnly"
+      @repinned="loadCallRelations"
+    />
+
     <!-- Debug Panel Drawer -->
     <el-drawer
       v-model="showDebugPanel"
@@ -148,13 +197,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProcessImportDialog from './process-designer/ProcessImportDialog.vue'
-import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, CircleCheck, WarningFilled, Connection, TopRight, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { functionUnitApi, type FunctionUnitCallRelations } from '@/api/functionUnit'
+import { isFunctionUnitReadOnly } from '@/utils/permission'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
+import CallRelationDialog from '@/components/designer/CallRelationDialog.vue'
 import { useProcessModeler } from '@/composables/processDesigner/useProcessModeler'
 import { useProcessCanvasControls } from '@/composables/processDesigner/useProcessCanvasControls'
 import { useProcessActions } from '@/composables/processDesigner/useProcessActions'
@@ -170,6 +222,9 @@ const props = defineProps<{ functionUnitId: number }>()
 const store = useFunctionUnitStore()
 const canvasRef = ref<HTMLElement>()
 const showDebugPanel = ref(false)
+
+/** Bumped on every diagram change so call-step-dependent UI re-evaluates. */
+const diagramRevision = ref(0)
 const debugDrawerExpanded = ref(false)
 const showImportDialog = ref(false)
 const importXml = ref('')
@@ -186,9 +241,41 @@ const {
   functionUnitId: props.functionUnitId,
   canvasRef,
   store,
-  onCommandStackChanged: () => markDirty(),
+  onCommandStackChanged: () => {
+    markDirty()
+    // Also re-evaluate whether the diagram now has a call step, so the call
+    // relations button appears or disappears as one is added or deleted.
+    diagramRevision.value++
+  },
   t,
 })
+
+// Right-hand properties panel: collapsible, remembered per browser (a viewing preference).
+const PROPERTIES_COLLAPSED_KEY = 'dw.processDesigner.propertiesCollapsed'
+function readPropertiesCollapsed(): boolean {
+  try {
+    return localStorage.getItem(PROPERTIES_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const propertiesCollapsed = ref(readPropertiesCollapsed())
+function togglePropertiesPanel() {
+  propertiesCollapsed.value = !propertiesCollapsed.value
+  try {
+    localStorage.setItem(PROPERTIES_COLLAPSED_KEY, propertiesCollapsed.value ? '1' : '0')
+  } catch {
+    // Storage unavailable (private window etc.): the toggle still works for this visit.
+  }
+  // The canvas changed width; bpmn-js caches its size and would otherwise draw distorted.
+  nextTick(() => {
+    try {
+      getModeler()?.get('canvas').resized()
+    } catch {
+      // Modeler not ready yet; it measures itself when it mounts.
+    }
+  })
+}
 
 // Canvas viewport controls + debug-node highlight marker.
 const {
@@ -228,6 +315,83 @@ const {
   t,
 })
 
+const showCallRelations = ref(false)
+
+/**
+ * Whether this diagram calls another Function Unit, which decides if the call
+ * relations button is offered at all.
+ *
+ * Read from the live canvas rather than the saved XML so the button appears the
+ * moment a call step is added, without waiting for a save. Recomputed on every
+ * diagram change via {@link diagramRevision}.
+ */
+const hasCallActivities = computed(() => {
+  // Touch both so this re-evaluates when the modeler finishes loading and on
+  // every subsequent diagram edit — neither is reachable through getModeler().
+  void diagramRevision.value
+  if (!modelerReady.value) return false
+  const modeler = getModeler()
+  if (!modeler) return false
+  try {
+    return modeler.get('elementRegistry')
+      .filter((el: any) => el.businessObject?.$type === 'bpmn:CallActivity')
+      .length > 0
+  } catch {
+    return false
+  }
+})
+
+watch(() => store.process?.bpmnXml, () => {
+  diagramRevision.value++
+  void loadCallRelations()
+})
+
+/**
+ * The call dialog is teleported to <body>, outside the editor's read-only
+ * interaction blocker, so its one editing action has to be guarded explicitly.
+ */
+const designerReadOnly = computed(() => isFunctionUnitReadOnly(store.current))
+
+/**
+ * This unit's call relations, in both directions.
+ *
+ * Loaded for every unit, not only ones whose diagram has a call step: a unit that
+ * is only ever *called* has no call step of its own, yet "who calls me" is exactly
+ * what its designer needs before changing it. One request for this unit alone.
+ */
+const callRelations = ref<FunctionUnitCallRelations | null>(null)
+
+async function loadCallRelations() {
+  try {
+    const res = await functionUnitApi.getCallRelations(props.functionUnitId)
+    callRelations.value = (res as { data?: FunctionUnitCallRelations })?.data ?? null
+  } catch {
+    // Informational only; the designer works without it.
+    callRelations.value = null
+  }
+}
+
+/** Callers of this unit, from the server (a diagram cannot show them). */
+const calledByCount = computed(() => callRelations.value?.calledBy?.length ?? 0)
+
+/**
+ * Whether to offer the call relations button: this unit calls something or is
+ * called by something. The live canvas check keeps it responsive while a call step
+ * is being added, before that edit has been saved and re-derived on the server.
+ */
+const showCallRelationButton = computed(() =>
+  hasCallActivities.value || calledByCount.value > 0
+)
+
+/** Call steps pinned to a version older than their callee now has. */
+const outdatedPinCount = computed(() =>
+  (callRelations.value?.calls ?? []).filter((c) => c.newerVersionAvailable).length
+)
+
+watch(modelerReady, (ready) => {
+  if (ready) void loadCallRelations()
+})
+
 onMounted(async () => {
   await nextTick()
   await initModeler()
@@ -251,6 +415,20 @@ defineExpose({
 </script>
 
 <style lang="scss" scoped>
+/* Count of call steps pinned to a superseded version of their callee. */
+.call-relation-button__badge {
+  margin-left: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--el-color-warning);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
 .process-designer {
   height: calc(100vh - 280px);
   min-height: 500px;
@@ -371,11 +549,49 @@ defineExpose({
 }
 
 .properties-panel-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 320px;
   border-left: 1px solid #e6e6e6;
   background: #fff;
-  overflow-y: auto;
   flex-shrink: 0;
+  transition: width 0.2s ease;
+
+  &.collapsed {
+    width: 12px;
+  }
+}
+
+.properties-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* A tab on the panel's left edge, half over the canvas so it stays reachable when collapsed. */
+.properties-panel-toggle {
+  position: absolute;
+  top: 50%;
+  left: -14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 48px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid #e6e6e6;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  background: #fff;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--el-color-primary);
+  }
 }
 
 :deep(.process-debug-drawer.el-drawer) {

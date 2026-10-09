@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -115,6 +116,30 @@ class FunctionUnitComponentImplTest {
         lenient().doNothing().when(functionUnitWorkspaceAccessService)
                 .assertCanAccess(any(Long.class), any(WorkspaceAccessAction.class));
         lenient().when(functionUnitWorkspaceAccessService.visibleFunctionUnitIds()).thenReturn(null);
+    }
+
+    /** A unit meant to be called can be marked so at creation; without a choice it stays STANDALONE. */
+    @Test
+    void create_keepsTheChosenStartupModeAndDefaultsToStandalone() {
+        when(functionUnitRepository.existsByName(any())).thenReturn(false);
+        when(functionUnitRepository.existsByCode(any())).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit fu = invocation.getArgument(0);
+            fu.setId(100L);
+            return fu;
+        });
+        when(processDefinitionRepository.save(any(ProcessDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        FunctionUnitRequest callable = new FunctionUnitRequest();
+        callable.setName("Callable Unit");
+        callable.setStartupMode(com.developer.enums.FunctionUnitStartupMode.CALLABLE);
+        assertEquals(com.developer.enums.FunctionUnitStartupMode.CALLABLE,
+                functionUnitComponent.create(callable).getStartupMode());
+
+        FunctionUnitRequest plain = new FunctionUnitRequest();
+        plain.setName("Plain Unit");
+        assertEquals(com.developer.enums.FunctionUnitStartupMode.STANDALONE,
+                functionUnitComponent.create(plain).getStartupMode());
     }
 
     @Test
@@ -223,6 +248,30 @@ class FunctionUnitComponentImplTest {
         verify(versionRepository).save(saved.capture());
         assertEquals("1.0.1", saved.getValue().getVersionNumber());
         assertEquals("1.0.1", result.getCurrentVersion());
+        assertEquals(FunctionUnitStatus.PUBLISHED, result.getStatus());
+    }
+
+    @Test
+    void publishSnapshotsThePublishedFunctionUnitAndViews() throws Exception {
+        FunctionUnit functionUnit = FunctionUnit.builder()
+                .id(1L).name("Test Function").status(FunctionUnitStatus.DRAFT).build();
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitExporter.buildVersionSnapshotPayload(1L)).thenAnswer(inv -> {
+            assertEquals(FunctionUnitStatus.PUBLISHED, functionUnit.getStatus());
+            verify(mainTableViewService).publishViewsForFunctionUnit(1L);
+            return Map.of("status", functionUnit.getStatus().name());
+        });
+        when(objectMapper.writeValueAsBytes(any())).thenReturn("published".getBytes());
+        when(versionRepository.save(any(Version.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(functionUnitRepository.save(functionUnit)).thenReturn(functionUnit);
+
+        FunctionUnit result = functionUnitComponent.publish(1L, "First publish");
+
+        InOrder order = inOrder(mainTableViewService, functionUnitExporter, versionRepository);
+        order.verify(mainTableViewService).publishViewsForFunctionUnit(1L);
+        order.verify(functionUnitExporter).buildVersionSnapshotPayload(1L);
+        order.verify(versionRepository).save(any(Version.class));
+        assertEquals("1.0.0", result.getCurrentVersion());
         assertEquals(FunctionUnitStatus.PUBLISHED, result.getStatus());
     }
 

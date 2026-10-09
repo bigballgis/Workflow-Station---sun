@@ -58,29 +58,20 @@ import { computed } from 'vue'
 import { Check, Close } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 import type { TaskActionInfo } from '@/api/task'
-import { actionButtonStyle, isCustomButtonColor } from '@/utils/actionButtonColor'
+import { actionButtonStyle, resolveActionButtonType } from '@/utils/actionButtonColor'
 
 /**
  * Delegate / Transfer / Urge are no longer hardcoded here: they are Action
  * definitions configured in the Developer Workstation Action Designer and bound
  * to the user task node in Process Design, exactly like every other Action.
- * These maps only supply the look the built-in buttons used to have, for Actions
- * whose designer-configured colour is unset (the Action Designer does not expose
- * an icon picker yet).
+ * This map only supplies the icons the built-in buttons used to have. Button
+ * presentation is resolved centrally from actionType + buttonColor.
  */
 const BUILT_IN_ICONS: Record<string, string> = {
   DELEGATE: 'user',
   TRANSFER: 'switch',
   URGE: 'bell'
 }
-type ElButtonType = '' | 'default' | 'text' | 'primary' | 'success' | 'warning' | 'info' | 'danger'
-
-const BUILT_IN_BUTTON_TYPES: Record<string, ElButtonType> = {
-  DELEGATE: '',
-  TRANSFER: '',
-  URGE: 'warning'
-}
-
 const props = defineProps<{
   isCompletedTask: boolean
   /** BU Role pool task the signed-in user does not hold: view only until they claim it. */
@@ -89,7 +80,6 @@ const props = defineProps<{
   savingTaskForm: boolean
   actions: TaskActionInfo[] | undefined | null
   canDelegate: boolean
-  getButtonType: (color?: string) => ElButtonType
   getIconComponent: (iconName?: string) => Component
   getActionLabel: (action: TaskActionInfo) => string
 }>()
@@ -116,13 +106,8 @@ function resolveIconName(action: TaskActionInfo): string | undefined {
   return action.icon || BUILT_IN_ICONS[actionTypeOf(action)]
 }
 
-function resolveButtonType(action: TaskActionInfo): ElButtonType {
-  // A designer-picked hex colour is applied as inline CSS variables instead of an
-  // Element Plus semantic type, so the button renders exactly that colour.
-  if (isCustomButtonColor(action.buttonColor)) return 'primary'
-  if (action.buttonColor) return props.getButtonType(action.buttonColor)
-  const builtIn = BUILT_IN_BUTTON_TYPES[actionTypeOf(action)]
-  return builtIn === undefined ? props.getButtonType(undefined) : builtIn
+function resolveButtonType(action: TaskActionInfo) {
+  return resolveActionButtonType(action.actionType, action.buttonColor)
 }
 
 function resolveButtonStyle(action: TaskActionInfo): Record<string, string> | undefined {

@@ -246,6 +246,10 @@ public class MiCollectionVariableBuilder {
 
                 Element flowNode = BpmnMiXmlSupport.findElementByBpmnId(document, nodeId);
                 if (flowNode != null) {
+                    // Any node is walked through, a Function Unit callActivity included: a call
+                    // runs in its own process instance and cannot set this one's variables, so an
+                    // MI sub-process after it only gets its collection if it is injected here,
+                    // with the variables of the last task this process completes before the call.
                     List<String> outs = BpmnMiXmlSupport.getDirectChildTextValues(flowNode, "outgoing");
                     if (outs.isEmpty()) {
                         outs = BpmnMiXmlSupport.listSequenceFlowIdsWithSourceRef(document, nodeId);

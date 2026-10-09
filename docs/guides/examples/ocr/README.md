@@ -13,5 +13,8 @@ engine resolves to the target environment's flow id at deploy time, so neither f
 Prerequisites in the target environment: content-organizer piece 1.0.2 installed, Content Organizer configuration and
 `IB2B_SECRET` in place, and the smoke test passing — see [content-organizer-ocr-guide.md](../../content-organizer-ocr-guide.md) §8.
 
+The main table's `id` is generated as `RN-yyyyMMdd-NNNN` (daily reset) and configured as the Request ID, so the
+portal's Request ID column shows e.g. `RN-20261008-0001` instead of `-`.
+
 The real Content Organizer only accepts PDFs that carry a valid classification label; the dev sample
 (`Receipt Notice.pdf`, not in the repo) has none, so use a labelled PDF in UAT and above.

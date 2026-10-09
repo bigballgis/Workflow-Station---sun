@@ -6,13 +6,17 @@ import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.FunctionUnitDevGroupAssignment;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.FunctionUnitStartupMode;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.MainTableViewService;
 import com.developer.service.impl.FunctionUnitDocumentService;
 import com.developer.util.BpmnIdRewriter;
@@ -21,6 +25,7 @@ import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.BpmnServiceTaskFlowRefs;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.XmlEncodingUtil;
+import com.platform.security.util.SecurityContextUtils;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +68,9 @@ public class FunctionUnitImporter {
     private final MainTableViewService mainTableViewService;
     private final AdminCenterAutomationFlowClient automationFlowClient;
     private final FunctionUnitDocumentService documentService;
+    private final FunctionUnitBasicPortability basicPortability;
+    private final FunctionUnitWorkspaceAccessService workspaceAccessService;
+    private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
 
     /**
      * 导入功能单元。无冲突策略选项：
@@ -112,12 +120,21 @@ public class FunctionUnitImporter {
         // increments. Otherwise create a new function unit.
         FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
         final boolean versioned = existing != null;
+        // A new unit must land in a workspace, resolved exactly as on create (the selected team,
+        // or the admin's choice). Without it the unit has no dev-group assignment and no workspace
+        // lists it. Resolved before any content is written so an import with no team selected
+        // (e.g. an admin on "All Groups") fails instead of leaving an orphan behind. A new version
+        // of an existing unit keeps the unit's assignments.
+        List<String> creationGroupIds = versioned
+                ? List.of()
+                : workspaceAccessService.resolveCreationTeamGroupIds(null);
         FunctionUnit functionUnit;
         if (versioned) {
             functionUnit = existing;
             // Snapshot current content into dw_versions and clear it; currentVersion stays unchanged.
             versionComponent.snapshotAndClearForReimport(functionUnit, changeLog);
             functionUnit.setDisplayName(description);
+            applyImportedStartupMode(functionUnit, manifest);
             functionUnit = functionUnitRepository.save(functionUnit);
             // Re-sync sequences after the snapshot/clear writes before rebuilding content.
             sequenceSynchronizer.synchronizeAll();
@@ -130,9 +147,12 @@ public class FunctionUnitImporter {
                     .currentVersion(version)
                     .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
                     .build();
+            applyImportedStartupMode(functionUnit, manifest);
             functionUnit = functionUnitRepository.save(functionUnit);
+            assignDevGroups(functionUnit.getId(), creationGroupIds);
         }
 
+        basicPortability.restore(functionUnit, manifest);
         Map<Long, Long> tableIdMapping = new HashMap<>();
         Map<String, Long> importedTableNameToId = new HashMap<>();
         Map<String, Map<String, FieldDefinition>> importedFieldLookup = new HashMap<>();
@@ -393,10 +413,43 @@ public class FunctionUnitImporter {
         }
     }
 
+    private void assignDevGroups(Long functionUnitId, List<String> groupIds) {
+        String operator = SecurityContextUtils.getCurrentUsername().orElse("system");
+        for (String groupId : groupIds) {
+            devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                    .functionUnitId(functionUnitId)
+                    .virtualGroupId(groupId)
+                    .createdAt(Instant.now())
+                    .createdBy(operator)
+                    .build());
+        }
+    }
+
     /**
      * Resolve the code for a brand-new imported function unit (name is known not to exist).
      * Reuse the manifest code when it is free; otherwise generate a unique one from the name.
      */
+    /**
+     * Applies the package's declared startup mode, when it carries one.
+     *
+     * <p>Packages exported before startup mode existed omit the key; those units keep whatever
+     * mode they already have (a newly created one gets the STANDALONE default). An unrecognised
+     * value is logged and ignored rather than defaulted, since silently resetting a unit to
+     * STANDALONE would break every call activity targeting it.
+     */
+    private void applyImportedStartupMode(FunctionUnit functionUnit, Map<String, Object> manifest) {
+        Object raw = manifest.get("startupMode");
+        if (!(raw instanceof String mode) || mode.isBlank()) {
+            return;
+        }
+        try {
+            functionUnit.setStartupMode(FunctionUnitStartupMode.valueOf(mode.trim()));
+        } catch (IllegalArgumentException e) {
+            log.warn("Imported package for function unit '{}' declares unknown startupMode '{}'; keeping {}",
+                    functionUnit.getName(), mode, functionUnit.getStartupMode());
+        }
+    }
+
     private String resolveNewImportCode(String name, String manifestCode) {
         String normalized = manifestCode != null && !manifestCode.isBlank() ? manifestCode : null;
         if (normalized != null && !functionUnitRepository.existsByCode(normalized)) {

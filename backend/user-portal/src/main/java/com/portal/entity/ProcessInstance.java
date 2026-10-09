@@ -64,6 +64,23 @@ public class ProcessInstance {
     @Column(nullable = false, length = 32)
     private String status;
 
+    /**
+     * 调用方（父）流程实例 id —— 本实例由父流程的 callActivity 启动时才有值；
+     * 用户自己发起的实例为 null。
+     *
+     * <p>父子关系的真相源是 Flowable（{@code superProcessInstanceId}）；这里镜像一份，
+     * 让「列出某父实例的全部子实例」变成一次带索引的查询，而不是每个请求都穿透到引擎。
+     */
+    @Column(name = "parent_process_instance_id", length = 64)
+    private String parentProcessInstanceId;
+
+    /**
+     * 启动本实例的 callActivity 的 BPMN 元素 id。
+     * 当该 callActivity 是多实例时，用它把同一个调用点产生的兄弟实例归为一组。
+     */
+    @Column(name = "call_activity_id", length = 255)
+    private String callActivityId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "variables", columnDefinition = "jsonb")
     private Map<String, Object> variables;

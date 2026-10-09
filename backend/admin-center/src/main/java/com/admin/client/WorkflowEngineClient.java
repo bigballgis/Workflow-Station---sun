@@ -24,6 +24,10 @@ public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
 
+    /** Reads engine error bodies; independent of how the RestTemplate is configured. */
+    private static final com.fasterxml.jackson.databind.ObjectMapper ERROR_BODY_READER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
     @Value("${workflow-engine.url:http://localhost:8081}")
     private String workflowEngineUrl;
 
@@ -103,8 +107,23 @@ public class WorkflowEngineClient {
             
             log.warn("Failed to deploy process: unexpected response");
             return Optional.empty();
-            
+
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // A 4xx from the deploy endpoint is the engine's verdict on this definition
+            // (e.g. a call activity targeting a process that is not deployed), written to
+            // be read by the designer. Returning empty here used to reduce it to a generic
+            // "Deployment failed for this definition", leaving nothing to act on.
+            log.error("Workflow engine rejected process {}: {}", processKey, e.getMessage());
+            String engineMessage = engineMessageOf(e);
+            if (engineMessage == null) {
+                return Optional.empty();
+            }
+            ProcessDeploymentResult rejected = new ProcessDeploymentResult();
+            rejected.setSuccess(false);
+            rejected.setMessage(engineMessage);
+            return Optional.of(rejected);
         } catch (Exception e) {
+            // Outages and 5xx stay generic: their text can carry internal detail.
             log.error("Failed to deploy process to workflow engine: {}", e.getMessage(), e);
             return Optional.empty();
         }
@@ -203,5 +222,32 @@ public class WorkflowEngineClient {
         private int version;
         private boolean success;
         private String message;
+    }
+
+    /**
+     * The {@code message} field of an engine error body, or null when there is none.
+     *
+     * <p>Strips the engine's generic "Failed to deploy process definition: " prefix so the
+     * designer sees the reason itself rather than a restatement of the failure.
+     */
+    @SuppressWarnings("unchecked")
+    private static String engineMessageOf(org.springframework.web.client.HttpClientErrorException e) {
+        try {
+            // Parsed from the raw body rather than via getResponseBodyAs(), which only works
+            // when the RestTemplate's error handler installed a body converter.
+            String raw = e.getResponseBodyAsString();
+            if (raw == null || raw.isBlank()) {
+                return null;
+            }
+            Map<String, Object> body = ERROR_BODY_READER.readValue(raw, Map.class);
+            Object message = body != null ? body.get("message") : null;
+            if (!(message instanceof String text) || text.isBlank()) {
+                return null;
+            }
+            String prefix = "Failed to deploy process definition: ";
+            return text.startsWith(prefix) ? text.substring(prefix.length()) : text;
+        } catch (Exception parseFailure) {
+            return null;
+        }
     }
 }

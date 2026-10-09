@@ -335,6 +335,29 @@
             />
           </el-select>
         </el-form-item>
+        <!-- Creating and editing alike; a new unit defaults to STANDALONE. -->
+        <el-form-item :label="t('functionUnit.startupMode')">
+          <el-select
+            v-model="basicForm.startupMode"
+            style="width: 100%;"
+          >
+            <el-option
+              :label="t('functionUnit.startupModeStandalone')"
+              value="STANDALONE"
+            />
+            <el-option
+              :label="t('functionUnit.startupModeCallable')"
+              value="CALLABLE"
+            />
+            <el-option
+              :label="t('functionUnit.startupModeBoth')"
+              value="BOTH"
+            />
+          </el-select>
+          <div class="field-tip">
+            {{ t('functionUnit.startupModeTip') }}
+          </div>
+        </el-form-item>
         <el-form-item
           v-if="showTeamSelector"
           :label="t('functionUnit.team')"
@@ -731,6 +754,13 @@ onMounted(() => {
 
 
 <style lang="scss" scoped>
+.field-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
 .filter-panel {
   display: flex;
   justify-content: space-between;

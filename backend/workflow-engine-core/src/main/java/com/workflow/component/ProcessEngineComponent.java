@@ -74,6 +74,9 @@ public class ProcessEngineComponent {
     private MultiInstanceCanceller multiInstanceCanceller;
 
     @Autowired
+    private ProcessCallCascade processCallCascade;
+
+    @Autowired
     private NotificationDispatchHelper notificationDispatchHelper;
 
     @Autowired
@@ -299,6 +302,14 @@ public class ProcessEngineComponent {
                         log.error("Failed to cancel multi-instance tasks for process instance {}: {}",
                             request.getProcessInstanceId(), e.getMessage(), e);
                         // Continue with termination even if cancellation fails
+                    }
+
+                    // Terminate any Function Unit sub-processes this instance called. Unlike the
+                    // multi-instance cancellation above, a failure here is NOT swallowed: leaving a
+                    // child running after its caller is gone strands a request nobody can finish.
+                    if (processCallCascade != null) {
+                        processCallCascade.cascadeToChildren(
+                            request.getProcessInstanceId(), request.getReason());
                     }
 
                     runtimeService.deleteProcessInstance(

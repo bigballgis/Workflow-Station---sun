@@ -1,7 +1,12 @@
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { functionUnitApi, type FunctionUnitResponse, type DevGroupOption } from '@/api/functionUnit'
+import {
+  functionUnitApi,
+  type FunctionUnitResponse,
+  type DevGroupOption,
+  type FunctionUnitStartupMode
+} from '@/api/functionUnit'
 import { adminCenterApi, type VirtualGroupInfo } from '@/api/adminCenter'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
 import { normalizeTags } from '@/utils/tagStorage'
@@ -30,7 +35,12 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     description: '',
     iconId: null as number | null,
     tags: [] as string[],
-    teamGroupIds: [] as string[]
+    teamGroupIds: [] as string[],
+    /**
+     * Only meaningful when editing: a new unit is created STANDALONE, and whether it should be
+     * callable is typically decided later, once its process exists.
+     */
+    startupMode: 'STANDALONE' as FunctionUnitStartupMode
   })
 
   const teamOptions = ref<VirtualGroupInfo[]>([])
@@ -122,6 +132,7 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     basicForm.iconId = null
     basicForm.tags = []
     basicForm.teamGroupIds = []
+    basicForm.startupMode = 'STANDALONE'
   }
 
   function openCreateDialog() {
@@ -156,6 +167,7 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     basicForm.iconId = item.iconId ?? null
     basicForm.tags = [...normalizeTags(item.tags)]
     basicForm.teamGroupIds = []
+    basicForm.startupMode = item.startupMode ?? 'STANDALONE'
     currentTeamNames.value = ''
     showFormDialog.value = true
     // Load names/options, then the FU's current team assignment for display / editing.
@@ -188,10 +200,13 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
         // Editable creators (admin/tech-lead) choose the team; regular creators inherit the
         // currently selected team server-side (backend resolves from the X-Dev-Group-Id header).
         const virtualGroupIds = teamEditable.value ? basicForm.teamGroupIds : undefined
-        await store.create({ ...payload, virtualGroupIds })
+        await store.create({ ...payload, startupMode: basicForm.startupMode, virtualGroupIds })
         ElMessage.success(t('functionUnit.createSuccess'))
       } else if (settingsItemId.value != null) {
-        await store.update(settingsItemId.value, payload)
+        await store.update(settingsItemId.value, {
+          ...payload,
+          startupMode: basicForm.startupMode
+        })
         // Only editable users may reassign the team.
         if (teamEditable.value) {
           await functionUnitApi.replaceDevGroups(settingsItemId.value, basicForm.teamGroupIds)

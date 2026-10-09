@@ -190,6 +190,17 @@ public class FunctionUnitDocumentService {
         return insert(functionUnitId, type, current + 1, clean, summary, userId);
     }
 
+    /**
+     * 旧 AI Generate（对话产出的文档、面板里的手动保存）：不带基准版本，直接追加在最新版本之后。
+     * 版本标签与其他来源走同一套编号，否则这条路径写出的每一版都是默认的 v1.1。
+     */
+    @Transactional
+    public AiDocument appendLatest(Long functionUnitId, AiDocumentType type, String content, String summary,
+                                   String userId) {
+        String clean = PgText.clean(Objects.requireNonNull(content, "content"));
+        return insert(functionUnitId, type, currentVersion(functionUnitId, type) + 1, clean, summary, userId);
+    }
+
     /** 以历史版本 {@code version} 的内容追加一个新版本。 */
     @Transactional
     public AiDocument restore(Long functionUnitId, AiDocumentType type, int version, int baseVersion, String userId) {

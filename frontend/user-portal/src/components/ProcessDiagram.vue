@@ -74,6 +74,8 @@ import Viewer from 'bpmn-js/lib/Viewer'
 // 这样滚动鼠标时图不会跟着移动/缩放，但仍可用鼠标拖拽平移。
 // @ts-ignore
 import MoveCanvasModule from 'diagram-js/lib/navigation/movecanvas'
+import { callActivityRendererModule, CALL_ACTIVITY_DECOR_CLASS } from '@/utils/callActivityRenderer'
+import { keepNodesFittedToText } from '@platform-shared/bpmnNodeTextFit'
 
 // bpmn-js CSS must be imported in JS for Vite bundling compatibility
 import 'bpmn-js/dist/assets/diagram-js.css'
@@ -152,7 +154,15 @@ const applyStatusColors = () => {
   if (!viewer) return
   const elementRegistry = viewer.get('elementRegistry')
 
-  props.nodes.forEach(node => {
+  // Call steps a page's parser does not list (e.g. the New Request page) would keep their
+  // raw renderer frame and stand out against the grey pending steps around them; give them
+  // the same pending styling as any other step not yet reached.
+  const listed = new Set(props.nodes.map(n => n.id))
+  const unlistedCallSteps: ProcessNode[] = elementRegistry
+    .filter((el: any) => el.type === 'bpmn:CallActivity' && !el.labelTarget && !listed.has(el.id))
+    .map((el: any) => ({ id: el.id, name: el.businessObject?.name || '', type: 'task', status: 'pending' }))
+
+  ;[...props.nodes, ...unlistedCallSteps].forEach(node => {
     const element = elementRegistry.get(node.id)
     if (!element) return
 
@@ -181,13 +191,16 @@ const applyStatusColors = () => {
     if (!visual) return
 
     const bpmnType = typeof element.type === 'string' ? element.type : ''
+
     const isEmailTaskShape = bpmnType === 'bpmn:SendTask' || bpmnType === 'bpmn:ServiceTask'
     const isStatusColored = node.status === 'rejected'
       || node.status === 'completed'
       || props.completedNodeIds.includes(node.id)
 
-    // Apply to shape primitives, skip label backgrounds
-    const shapes = visual.querySelectorAll('rect, circle, polygon, polyline, ellipse')
+    // Apply to shape primitives, skip label backgrounds. A call step's glyph and
+    // multi-instance bars keep their accent colour; only its frame shows status.
+    const notDecor = (el: Element) => !el.closest(`.${CALL_ACTIVITY_DECOR_CLASS}`)
+    const shapes = Array.from(visual.querySelectorAll('rect, circle, polygon, polyline, ellipse')).filter(notDecor)
     shapes.forEach(shape => {
       const el = shape as SVGElement
       el.style.fill = fill
@@ -195,7 +208,7 @@ const applyStatusColors = () => {
       el.style.strokeWidth = '2px'
     })
     // Path shapes: end event circles, XOR bodies, and inner X strokes (gateways often use stroke-only paths)
-    const paths = visual.querySelectorAll('path')
+    const paths = Array.from(visual.querySelectorAll('path')).filter(notDecor)
     paths.forEach(path => {
       const el = path as SVGElement
       const attrFill = path.getAttribute('fill')
@@ -284,8 +297,11 @@ const renderBpmn = async () => {
   el.style.height = '400px'
   viewer = new Viewer({
     container: el,
-    additionalModules: [MoveCanvasModule]
+    additionalModules: [MoveCanvasModule, callActivityRendererModule]
   })
+  // Runs on import, before the canvas is sized below: a node grown for its text can
+  // change the diagram's extent.
+  keepNodesFittedToText(viewer)
 
   try {
     await viewer.importXML(props.bpmnXml)

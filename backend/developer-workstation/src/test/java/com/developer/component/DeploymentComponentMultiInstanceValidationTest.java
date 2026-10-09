@@ -111,18 +111,22 @@ class DeploymentComponentMultiInstanceValidationTest {
             .thenReturn(processDefinition);
         when(processDesignComponent.validateMultiInstance(anyString(), eq(FUNCTION_UNIT_ID)))
             .thenReturn(validResult);
+        when(processDesignComponent.validateCallActivities(anyString(), eq(FUNCTION_UNIT_ID)))
+            .thenReturn(validResult);
         when(processDesignComponent.validateLastTaskAssigneeTopology(anyString()))
             .thenReturn(validResult);
-        
+
         DeployRequest request = new DeployRequest();
         request.setChangeLog("Test deployment");
-        
+
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
-        
-        // Then: 应该调用 validateMultiInstance、LAST_TASK 拓扑与邮件监控 Deploy 校验
+
+        // Then: 应该调用 validateMultiInstance、跨 FU 调用校验、LAST_TASK 拓扑与邮件监控 Deploy 校验
         verify(processDesignComponent, timeout(2000).times(1))
             .validateMultiInstance(processDefinition.getBpmnXml(), FUNCTION_UNIT_ID);
+        verify(processDesignComponent, timeout(2000).times(1))
+            .validateCallActivities(processDefinition.getBpmnXml(), FUNCTION_UNIT_ID);
         verify(processDesignComponent, timeout(2000).times(1))
             .validateLastTaskAssigneeTopology(processDefinition.getBpmnXml());
         verify(emailMonitorRuleComponent, timeout(2000).times(1))

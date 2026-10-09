@@ -12,6 +12,10 @@ import java.util.concurrent.ConcurrentMap;
  * with a null or stale {@code lastSyncedAt} would retry on every scheduler tick (30s) and
  * hammer the mailbox provider.
  *
+ * <p>A failure belongs to the mailbox it happened on, not to the rule id: a redeploy that
+ * rebinds the rule to another connection or folder keeps the id, and the new mailbox must be
+ * polled right away instead of inheriting the old one's delay.
+ *
  * <p>State is process-local: ShedLock already serializes polling to one replica; a failover
  * resets the circuit, which is acceptable (ops still get ERROR logs and exponential delay
  * on the active node).
@@ -24,8 +28,16 @@ final class EmailMonitorPollBackoff {
 
     private final ConcurrentMap<String, FailureState> failures = new ConcurrentHashMap<>();
 
-    boolean shouldPoll(String ruleId, Instant now, Integer pollIntervalSeconds, Instant lastSyncedAt) {
+    /**
+     * @param mailbox identity of the mailbox the rule currently targets (connection + folder)
+     */
+    boolean shouldPoll(String ruleId, String mailbox, Instant now, Integer pollIntervalSeconds,
+                       Instant lastSyncedAt) {
         FailureState state = failures.get(ruleId);
+        if (state != null && !state.mailbox().equals(mailbox)) {
+            failures.remove(ruleId, state);
+            state = null;
+        }
         if (state != null && now.isBefore(state.retryAfter())) {
             return false;
         }
@@ -39,13 +51,12 @@ final class EmailMonitorPollBackoff {
         failures.remove(ruleId);
     }
 
-    FailureState recordFailure(String ruleId, Instant now, Integer pollIntervalSeconds) {
-        FailureState next = failures.compute(ruleId, (id, prev) -> {
-            int count = prev == null ? 1 : prev.consecutiveFailures() + 1;
+    FailureState recordFailure(String ruleId, String mailbox, Instant now, Integer pollIntervalSeconds) {
+        return failures.compute(ruleId, (id, prev) -> {
+            int count = prev == null || !prev.mailbox().equals(mailbox) ? 1 : prev.consecutiveFailures() + 1;
             int delay = backoffSeconds(count, pollIntervalSeconds);
-            return new FailureState(count, now.plusSeconds(delay));
+            return new FailureState(mailbox, count, now.plusSeconds(delay));
         });
-        return next;
     }
 
     int consecutiveFailures(String ruleId) {
@@ -67,7 +78,7 @@ final class EmailMonitorPollBackoff {
         return (int) Math.min(delay, MAX_BACKOFF_SECONDS);
     }
 
-    record FailureState(int consecutiveFailures, Instant retryAfter) {
+    record FailureState(String mailbox, int consecutiveFailures, Instant retryAfter) {
         boolean atCap() {
             return consecutiveFailures >= MAX_CONSECUTIVE_FAILURES;
         }

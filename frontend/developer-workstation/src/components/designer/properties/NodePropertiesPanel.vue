@@ -40,6 +40,17 @@
         :function-unit-id="functionUnitId"
       />
 
+      <!-- Call activity — invokes another Function Unit as a sub-process.
+           Distinct from SubProcessProperties above: that one configures multi-instance
+           expansion *within* this Function Unit, this one calls a different unit. -->
+      <CallActivityProperties
+        v-else-if="isCallActivityElement"
+        :key="selectedElement.id"
+        :modeler="modeler"
+        :element="selectedElement"
+        :function-unit-id="functionUnitId"
+      />
+
       <!-- Send task (email) — dedicated panel; avoids generic TaskProperties async/chunk issues -->
       <SendTaskProperties
         v-else-if="isSendTaskElement"
@@ -130,6 +141,7 @@ import TaskProperties from './TaskProperties.vue'
 import UserTaskProperties from './UserTaskProperties.vue'
 import ServiceTaskProperties from './ServiceTaskProperties.vue'
 import SubProcessProperties from './SubProcessProperties.vue'
+import CallActivityProperties from './CallActivityProperties.vue'
 import SendTaskProperties from './SendTaskProperties.vue'
 import GatewayProperties from './GatewayProperties.vue'
 import SequenceFlowProperties from './SequenceFlowProperties.vue'
@@ -224,6 +236,13 @@ const isSubProcessElement = computed(() => {
   if (!selectedElement.value) return false
   const type = getElementType(selectedElement.value)
   return type === 'bpmn:SubProcess' || type === 'bpmn:AdHocSubProcess' || type === 'bpmn:Transaction'
+})
+
+// A call activity is NOT a sub-process: it hands control to another Function Unit's own
+// process rather than expanding inline, so it gets its own panel.
+const isCallActivityElement = computed(() => {
+  if (!selectedElement.value) return false
+  return getElementType(selectedElement.value) === 'bpmn:CallActivity'
 })
 
 const isSendTaskElement = computed(() => {
@@ -321,7 +340,7 @@ const panelTitle = computed(() => {
     'bpmn:IntermediateThrowEvent': t('properties.eventTypeIntermediateThrowEvent'),
     'bpmn:BoundaryEvent': t('properties.eventTypeBoundaryEvent'),
     'bpmn:SubProcess': t('properties.subProcessConfig'),
-    'bpmn:CallActivity': t('properties.elementProperties')
+    'bpmn:CallActivity': t('properties.callActivityConfig')
   }
   
   return typeMap[type] || t('properties.elementProperties')
