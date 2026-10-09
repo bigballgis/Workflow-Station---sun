@@ -141,25 +141,24 @@ const currentName = computed(() => {
   return t('devGroup.noTeam')
 })
 
-async function applyAndReload(groupId: string) {
-  if (!(await confirmUnsavedDesignerBeforeReload())) return
+function applyAndReturnToFunctionUnitList(groupId: string) {
   setActiveGroup(groupId)
-  window.location.reload()
+  window.location.assign(`${import.meta.env.BASE_URL}function-units`)
 }
 
 async function onSwitch(groupId: string) {
   if (groupId === currentId.value) return
   const opt = switchOptions.value.find((o) => o.id === groupId)
   if (opt && isOptionDisabled(opt)) return
-  await applyAndReload(groupId)
+  if (!(await confirmUnsavedDesignerBeforeReload())) return
+  applyAndReturnToFunctionUnitList(groupId)
 }
 
 async function confirmSelection() {
   if (!pendingGroupId.value || !isPendingSelectable.value) return
   if (!(await confirmUnsavedDesignerBeforeReload())) return
   selectDialogVisible.value = false
-  setActiveGroup(pendingGroupId.value)
-  window.location.reload()
+  applyAndReturnToFunctionUnitList(pendingGroupId.value)
 }
 
 async function resolveContext() {

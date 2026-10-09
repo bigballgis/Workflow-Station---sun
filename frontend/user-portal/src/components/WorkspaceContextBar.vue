@@ -98,7 +98,7 @@ async function onSwitch(c: WorkspaceContextOption) {
       user.value = resp.user
       localStorage.setItem(USER_ID_KEY, resp.user.userId)
       ElMessage.success(t('workspace.switched'))
-      window.location.reload()
+      window.location.assign(`${import.meta.env.BASE_URL}dashboard`)
     }
   } catch {
     ElMessage.error(t('workspace.switchFailed'))

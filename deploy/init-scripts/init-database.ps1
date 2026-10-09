@@ -258,23 +258,10 @@ if (-not (Test-Path $atmInit)) { Write-Fail "Missing: 19-ATM/init.sql"; exit 1 }
 if (-not (Exec-Sql -File $atmInit -Desc "init.sql")) { exit 1 }
 
 Write-Step "Step 5h/6: Loading Function Unit call demo (one FU calling another)..."
-# The callee (00-03) must be seeded before the caller (04-07): the caller's
-# callActivity references the callee by code.
-$fuCallDemoScripts = @(
-    "21-fu-call-demo/00-callee-function-unit.sql",
-    "21-fu-call-demo/01-callee-tables.sql",
-    "21-fu-call-demo/02-callee-bpmn.sql",
-    "21-fu-call-demo/03-callee-bindings.sql",
-    "21-fu-call-demo/04-caller-function-unit.sql",
-    "21-fu-call-demo/05-caller-tables.sql",
-    "21-fu-call-demo/06-caller-bpmn.sql",
-    "21-fu-call-demo/07-caller-bindings.sql"
-)
-foreach ($f in $fuCallDemoScripts) {
-    $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) {
-        if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
-    }
+# One snapshot holds both units, callee before caller.
+$fuCallDemoInit = Join-Path $ScriptDir "24-fu-call-demo/00-init.sql"
+if (Test-Path $fuCallDemoInit) {
+    if (-not (Exec-Sql -File $fuCallDemoInit -Desc "00-init.sql")) { exit 1 }
 }
 
 Write-Step "Step 5f/6: Running post-seed alignment scripts (90-post-seed/)..."
