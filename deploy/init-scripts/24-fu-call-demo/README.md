@@ -1,4 +1,4 @@
-# 21-fu-call-demo — one Function Unit calling another
+# 24-fu-call-demo — one Function Unit calling another
 
 Two Function Units that together exercise every part of the cross-Function-Unit
 call feature.
@@ -56,17 +56,17 @@ Start
 
 ## Loading it
 
-The scripts are idempotent (`ON CONFLICT (code)`), so re-running them is safe.
+`00-init.sql` holds both units, exported from the dev DB (2026-10-09). It is a
+snapshot: it deletes the units' design rows and writes them back, so re-running
+it is safe. When the design changes, regenerate the file from the DB instead of
+editing rows by hand.
 
 ```bash
-# Fresh database: the runners pick these up automatically.
-# Existing database: apply by hand, in order.
-for f in 00-callee-function-unit 01-callee-tables 02-callee-bpmn 03-callee-bindings \
-         04-caller-function-unit 05-caller-tables 06-caller-bpmn 07-caller-bindings; do
-  docker cp "deploy/init-scripts/21-fu-call-demo/$f.sql" platform-postgres-dev:/tmp/$f.sql
-  MSYS_NO_PATHCONV=1 docker exec platform-postgres-dev \
-    psql -U platform_dev -d workflow_platform_dev -v ON_ERROR_STOP=1 -f /tmp/$f.sql
-done
+# Fresh database: the runners pick it up automatically.
+# Existing database: apply by hand.
+docker cp deploy/init-scripts/24-fu-call-demo/00-init.sql platform-postgres-dev:/tmp/24-fu-call-demo.sql
+MSYS_NO_PATHCONV=1 docker exec platform-postgres-dev \
+  psql -U platform_dev -d workflow_platform_dev -v ON_ERROR_STOP=1 -f /tmp/24-fu-call-demo.sql
 docker compose -f deploy/environments/dev/docker-compose.dev.yml restart developer-workstation
 ```
 
