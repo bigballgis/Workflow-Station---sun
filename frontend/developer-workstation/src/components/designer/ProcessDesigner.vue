@@ -303,6 +303,7 @@ const {
   discardChanges,
   initializeSavedState,
   hasUnsavedChanges,
+  clearAutoSaveTimer,
   formatAutoSaveTime,
 } = useProcessActions({
   functionUnitId: props.functionUnitId,
@@ -399,6 +400,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   handleDebugNodeChange(null)
+  clearAutoSaveTimer()
   destroyModeler()
 })
 
@@ -471,10 +473,10 @@ defineExpose({
     align-items: center;
     gap: 7px;
     padding: 5px 9px;
-    border: 1px solid #fecdca;
+    border: 1px solid #fedf89;
     border-radius: 5px;
-    background: #fef3f2;
-    color: #d92d20;
+    background: #fffaeb;
+    color: #b54708;
     font-size: 15px;
     font-weight: 600;
     line-height: 20px;
@@ -485,7 +487,7 @@ defineExpose({
       height: 20px;
       align-items: center;
       justify-content: center;
-      color: #d92d20;
+      color: #b54708;
       font-size: 20px;
       flex: 0 0 20px;
     }

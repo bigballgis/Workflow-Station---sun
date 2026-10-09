@@ -8,6 +8,7 @@ import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 /** 后端拒绝「空图覆盖非空流程」时的错误码（ProcessDesignComponentImpl#save）。 */
 const EMPTY_PROCESS_OVERWRITE_BLOCKED = 'EMPTY_PROCESS_OVERWRITE_BLOCKED'
+const DIRTY_CHECK_DEBOUNCE_MS = 250
 
 interface UseProcessActionsOptions {
   functionUnitId: number
@@ -49,6 +50,9 @@ export function useProcessActions(options: UseProcessActionsOptions) {
   const isDirty = ref(false)
 
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+  let dirtyCheckTimer: ReturnType<typeof setTimeout> | null = null
+  let dirtyCheckInFlight: Promise<void> | null = null
+  let dirtyCheckQueued = false
   /** bpmn-js canonicalizes XML on import, so this baseline must come from saveXML(). */
   let savedBpmnXml: string | null = null
   /** Guards an older asynchronous XML serialization from overwriting a newer edit. */
@@ -84,8 +88,44 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     return isCurrentDirty
   }
 
+  function clearDirtyCheckTimer() {
+    if (dirtyCheckTimer) {
+      clearTimeout(dirtyCheckTimer)
+      dirtyCheckTimer = null
+    }
+  }
+
+  function scheduleDirtyCheck() {
+    clearDirtyCheckTimer()
+    dirtyCheckTimer = setTimeout(() => {
+      dirtyCheckTimer = null
+      void runScheduledDirtyCheck()
+    }, DIRTY_CHECK_DEBOUNCE_MS)
+  }
+
+  async function runScheduledDirtyCheck(): Promise<void> {
+    if (dirtyCheckInFlight) {
+      dirtyCheckQueued = true
+      return
+    }
+
+    const expectedVersion = dirtyVersion
+    const check = refreshDirtyState(expectedVersion)
+    dirtyCheckInFlight = check.then(() => undefined)
+    try {
+      await dirtyCheckInFlight
+    } finally {
+      dirtyCheckInFlight = null
+      if (dirtyCheckQueued || expectedVersion !== dirtyVersion) {
+        dirtyCheckQueued = false
+        scheduleDirtyCheck()
+      }
+    }
+  }
+
   /** Captures bpmn-js's canonical XML after the initial import or a discard. */
   async function initializeSavedState(): Promise<void> {
+    clearDirtyCheckTimer()
     savedBpmnXml = await serializeCurrentBpmnXml()
     dirtyVersion += 1
     isDirty.value = false
@@ -93,6 +133,8 @@ export function useProcessActions(options: UseProcessActionsOptions) {
 
   /** Always serializes the latest canvas before a navigation decision. */
   async function hasUnsavedChanges(): Promise<boolean> {
+    clearDirtyCheckTimer()
+    if (dirtyCheckInFlight) await dirtyCheckInFlight
     while (true) {
       const version = dirtyVersion
       const dirty = await refreshDirtyState(version)
@@ -295,6 +337,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
 
     try {
       // allowEmpty 只在用户确认后传，后端据此放行同一条护栏。
+      const versionAtSave = dirtyVersion
       await store.saveProcess(functionUnitId, { bpmnXml: xml }, { allowEmpty: wipesDiagram })
 
       autoSaveBlocked.value = false
@@ -310,8 +353,11 @@ export function useProcessActions(options: UseProcessActionsOptions) {
         ElMessage.success(t('process.saveSuccess'))
       }
       savedBpmnXml = xml
+      if (dirtyVersion === versionAtSave) {
+        isDirty.value = false
+      }
       dirtyVersion += 1
-      void refreshDirtyState(dirtyVersion)
+      scheduleDirtyCheck()
     } catch (e) {
       const code = (e as { response?: { data?: { error?: { code?: string } } } })?.response?.data
         ?.error?.code
@@ -346,7 +392,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
   function markDirty() {
     dirtyVersion += 1
     isDirty.value = true
-    void refreshDirtyState(dirtyVersion)
+    scheduleDirtyCheck()
   }
 
   async function discardChanges(): Promise<void> {
@@ -363,6 +409,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
       clearTimeout(autoSaveTimer)
       autoSaveTimer = null
     }
+    clearDirtyCheckTimer()
   }
 
   function formatAutoSaveTime(time: Date): string {

@@ -82,6 +82,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
 import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup } from '@/utils/devGroupContext'
+import { confirmUnsavedDesignerBeforeReload } from '@/composables/useUnsavedDesignerNavigation'
 
 const { t } = useI18n()
 const emit = defineEmits<{ ready: [] }>()
@@ -140,22 +141,25 @@ const currentName = computed(() => {
   return t('devGroup.noTeam')
 })
 
-function applyAndReload(groupId: string) {
+async function applyAndReload(groupId: string) {
+  if (!(await confirmUnsavedDesignerBeforeReload())) return
   setActiveGroup(groupId)
   window.location.reload()
 }
 
-function onSwitch(groupId: string) {
+async function onSwitch(groupId: string) {
   if (groupId === currentId.value) return
   const opt = switchOptions.value.find((o) => o.id === groupId)
   if (opt && isOptionDisabled(opt)) return
-  applyAndReload(groupId)
+  await applyAndReload(groupId)
 }
 
-function confirmSelection() {
+async function confirmSelection() {
   if (!pendingGroupId.value || !isPendingSelectable.value) return
+  if (!(await confirmUnsavedDesignerBeforeReload())) return
   selectDialogVisible.value = false
-  applyAndReload(pendingGroupId.value)
+  setActiveGroup(pendingGroupId.value)
+  window.location.reload()
 }
 
 async function resolveContext() {
