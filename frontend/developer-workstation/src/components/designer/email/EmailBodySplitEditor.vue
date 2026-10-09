@@ -106,7 +106,7 @@ const { t } = useI18n()
 const mode = computed(() => parseEmailBodyEditorMode(props.mode))
 const htmlInputRef = ref<{ textarea?: HTMLTextAreaElement } | null>(null)
 const variableGroups = ref<EmailVariableGroup[]>([])
-const { groups, load } = useEmailTemplateVariables(props.functionUnitId)
+const { groups, load } = useEmailTemplateVariables(() => props.functionUnitId)
 
 const previewDoc = computed(() => wrapEmailPreviewDocument(props.modelValue || ''))
 

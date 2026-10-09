@@ -1,5 +1,7 @@
 package com.portal.controller;
 
+import com.portal.component.ActionPostEmailComponent;
+import com.portal.component.ActionPostEmailContext;
 import com.portal.component.ActionFormPopupSubmitComponent;
 import com.portal.component.ActionTableReadComponent;
 import com.portal.component.TaskFormComponent;
@@ -43,6 +45,7 @@ public class TaskFormController {
     private final TaskProcessComponent taskProcessComponent;
     private final ActionFormPopupSubmitComponent actionFormPopupSubmitComponent;
     private final ActionTableReadComponent actionTableReadComponent;
+    private final ActionPostEmailComponent actionPostEmailComponent;
 
     @GetMapping("/{taskId}/form-data")
     @Operation(summary = "获取 Task Form 布局 + 当前流程变量值（字段子集）")
@@ -77,8 +80,14 @@ public class TaskFormController {
             request.getSubTableData().forEach(subTables::put);
             formData.put("__subTables__", subTables);
         }
-        taskFormComponent.submitTaskForm(taskId, userId, formData, request.getBaselineValues(),
-                request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes());
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(request.getActionId())
+                .operation(ActionPostEmailContext.OP_SAVE)
+                .taskId(taskId)
+                .operatorId(userId)
+                .build(), () -> taskFormComponent.submitTaskForm(taskId, userId, formData,
+                request.getBaselineValues(),
+                request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes()));
         return ApiResponse.success(null);
     }
 
@@ -95,7 +104,12 @@ public class TaskFormController {
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {
             throw new PortalException("403", "You do not have permission to submit this action form");
         }
-        actionFormPopupSubmitComponent.submit(task, actionId, request.getFormData(), userId);
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(actionId)
+                .operation(ActionPostEmailContext.OP_FORM_POPUP)
+                .taskId(taskId)
+                .operatorId(userId)
+                .build(), () -> actionFormPopupSubmitComponent.submit(task, actionId, request.getFormData(), userId));
         return ApiResponse.success(null);
     }
 

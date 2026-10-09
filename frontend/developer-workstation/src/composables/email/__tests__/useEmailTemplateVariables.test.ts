@@ -1,12 +1,39 @@
-import { describe, expect, it } from 'vitest'
-import type { FormDefinition } from '@/api/functionUnit'
+import { describe, expect, it, vi } from 'vitest'
+import type { FormDefinition, TableDefinition } from '@/api/functionUnit'
 import type { RelationTableDTO } from '@/api/relationTable'
 import {
   EMAIL_VAR_GROUP_LOOKUP,
   EMAIL_VAR_GROUP_SUBTABLES,
   buildEmailLookupVariableGroups,
   resolveEmailVariableGroupLabel,
+  useEmailTemplateVariables,
 } from '../useEmailTemplateVariables'
+
+const { getTables, getForms, getAvailableTables, textOptions } = vi.hoisted(() => ({
+  getTables: vi.fn(),
+  getForms: vi.fn(),
+  getAvailableTables: vi.fn(),
+  textOptions: vi.fn(),
+}))
+
+vi.mock('@/api/functionUnit', () => ({
+  functionUnitApi: {
+    getTables,
+    getForms,
+  },
+}))
+
+vi.mock('@/api/relationTable', () => ({
+  relationTableBindingApi: {
+    getAvailableTables,
+  },
+}))
+
+vi.mock('@/api/connection', () => ({
+  connectionApi: {
+    textOptions,
+  },
+}))
 
 describe('buildEmailLookupVariableGroups', () => {
   const relationTables: RelationTableDTO[] = [
@@ -81,5 +108,49 @@ describe('resolveEmailVariableGroupLabel', () => {
     expect(resolveEmailVariableGroupLabel(EMAIL_VAR_GROUP_SUBTABLES, t)).toBe('Sub-tables')
     expect(resolveEmailVariableGroupLabel(`${EMAIL_VAR_GROUP_LOOKUP}:User`, t)).toBe('Lookup — User')
     expect(resolveEmailVariableGroupLabel('Main Table', t)).toBe('Main Table')
+  })
+})
+
+describe('useEmailTemplateVariables.load', () => {
+  const mainTable = {
+    id: 1,
+    tableName: 'email_inbound_case',
+    tableDisplayName: 'Inbound Email Case',
+    tableType: 'MAIN',
+    fieldDefinitions: [
+      { fieldName: 'sender_email', displayName: 'From', dataType: 'VARCHAR', nullable: true, isPrimaryKey: false },
+    ],
+  } as TableDefinition
+
+  it('keeps MAIN field tokens when forms catalog fails', async () => {
+    getTables.mockResolvedValue({ data: [mainTable] })
+    getForms.mockRejectedValue(new Error('forms unavailable'))
+    getAvailableTables.mockRejectedValue(new Error('rt unavailable'))
+    textOptions.mockResolvedValue({ data: [] })
+
+    const { groups, load } = useEmailTemplateVariables(50015)
+    await load()
+
+    expect(groups.value.some(g => g.options.some(o => o.token === '${sender_email}'))).toBe(true)
+  })
+
+  it('reads functionUnitId from a getter so later ids are not stuck at setup', async () => {
+    let functionUnitId = 0
+    getTables.mockImplementation(async (id: number) => {
+      expect(id).toBe(50015)
+      return { data: [mainTable] }
+    })
+    getForms.mockResolvedValue({ data: [] })
+    getAvailableTables.mockResolvedValue({ data: [] })
+    textOptions.mockResolvedValue({
+      data: [{ varKey: 'smtp.from', displayName: 'SMTP From' }],
+    })
+
+    const { groups, load } = useEmailTemplateVariables(() => functionUnitId)
+    functionUnitId = 50015
+    await load()
+
+    expect(groups.value[0]?.options[0]?.token).toBe('${sender_email}')
+    expect(groups.value.some(g => g.options.some(o => o.token === '${env:smtp.from}'))).toBe(true)
   })
 })

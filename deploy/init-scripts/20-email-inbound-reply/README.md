@@ -14,6 +14,8 @@
 
 种子只写 Developer Workstation 的 `dw_*`。不写 `sys_function_units`、不写 `dw_versions` 快照、不提交真实 IMAP/SMTP 密文。
 
+灌完本种子后执行 `90-post-seed/02-assign-email-inbound-reply-to-public.sql`，把 FU 挂到 Public 开发组（`vg-dev-public`）。Developer Workstation 顶部工作区若选了某个团队，列表里看不到它；切到 **Public** 或管理员的 **All groups** 后再刷新。
+
 ## 流程
 
 ```

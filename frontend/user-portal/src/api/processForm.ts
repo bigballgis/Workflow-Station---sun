@@ -87,6 +87,8 @@ export interface TaskFormSubmitRequest {
     emptied: boolean
     deletedRows?: Array<Record<string, unknown>>
   }>
+  /** Present only when the user clicked a SAVE Action (autosave omits this). */
+  actionId?: string
 }
 
 export interface ChangeHistoryRecord {

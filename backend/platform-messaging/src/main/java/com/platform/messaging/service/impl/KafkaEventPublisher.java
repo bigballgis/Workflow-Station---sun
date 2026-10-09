@@ -93,6 +93,8 @@ public class KafkaEventPublisher implements EventPublisher {
             return de.getDeploymentId();
         } else if (event instanceof NotificationEvent ne) {
             return ne.getTargetUserId();
+        } else if (event instanceof ActionEmailRequestedEvent ae) {
+            return ae.getProcessInstanceId() != null ? ae.getProcessInstanceId() : ae.getEventId();
         }
         return event.getEventId();
     }

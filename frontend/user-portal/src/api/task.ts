@@ -149,6 +149,8 @@ export interface TaskCompleteRequest {
   returnActivityId?: string
   /** Transport metadata — not a form field. Same as Task Form submit. */
   emptiedSubTableKeys?: string[]
+  /** Developer Workstation Action id that triggered this complete. */
+  actionId?: string
   /** Per-binding write claims. Transport metadata — not a form field. */
   subTableBindingScopes?: Array<{
     bindingId: string
@@ -303,6 +305,7 @@ export interface TaskDelegateRequest {
   delegatedBuCode?: string
   delegatedRoleCode?: string
   reason?: string
+  actionId?: string
 }
 
 // Delegate task
@@ -311,16 +314,16 @@ export function delegateTask(taskId: string, body: TaskDelegateRequest) {
 }
 
 // Transfer task
-export function transferTask(taskId: string, toUserId: string, reason?: string) {
+export function transferTask(taskId: string, toUserId: string, reason?: string, actionId?: string) {
   return request.post(`/tasks/${taskId}/transfer`, null, {
-    params: { toUserId, reason }
+    params: { toUserId, reason, actionId }
   })
 }
 
 // Urge task
-export function urgeTask(taskId: string, message?: string) {
+export function urgeTask(taskId: string, message?: string, actionId?: string) {
   return request.post(`/tasks/${taskId}/urge`, null, {
-    params: { message }
+    params: { message, actionId }
   })
 }
 

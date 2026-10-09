@@ -425,12 +425,12 @@ export function useTaskForm(options: {
     }
   }
 
-  async function saveCurrentTaskForm() {
+  async function saveCurrentTaskForm(actionId?: string) {
     if (formReadOnly.value || !options.effectiveTaskId.value) return
     savingTaskForm.value = true
     try {
       const payload = buildCurrentTaskFormSubmitPayload()
-      await submitTaskForm(options.effectiveTaskId.value, payload)
+      await submitTaskForm(options.effectiveTaskId.value, { ...payload, actionId })
       // #1446: align local slices with what was just persisted; otherwise post-save
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.

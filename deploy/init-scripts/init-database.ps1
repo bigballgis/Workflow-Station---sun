@@ -156,7 +156,8 @@ $migrations = @(
     "00-schema/88-ac-sla-policies.sql",
     "00-schema/89-dw-table-sla-config.sql",
     "00-schema/90-up-sla-recalc-jobs.sql",
-    "00-schema/91-dw-ai-document-minor-renumber.sql"
+    "00-schema/91-dw-ai-document-minor-renumber.sql",
+    "00-schema/92-we-action-email-deliveries.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
@@ -278,7 +279,8 @@ foreach ($f in $fuCallDemoScripts) {
 
 Write-Step "Step 5f/6: Running post-seed alignment scripts (90-post-seed/)..."
 $postSeedScripts = @(
-    "90-post-seed/00-align-id-sequences.sql"
+    "90-post-seed/00-align-id-sequences.sql",
+    "90-post-seed/02-assign-email-inbound-reply-to-public.sql"
 )
 foreach ($f in $postSeedScripts) {
     $path = Join-Path $ScriptDir $f

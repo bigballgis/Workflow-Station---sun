@@ -1,5 +1,6 @@
 package com.platform.messaging.event;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -50,7 +51,9 @@ public abstract class BaseEvent implements Serializable {
     }
     
     /**
-     * Get the topic name for this event.
+     * Get the topic name for this event. Not a payload field — Kafka routing uses this,
+     * and including it in JSON breaks consumers (unknown property {@code topic}).
      */
+    @JsonIgnore
     public abstract String getTopic();
 }

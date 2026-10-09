@@ -695,6 +695,38 @@ public class AdminCenterClient {
      *
      * @throws IllegalStateException when admin-center reports system SMTP is not configured
      */
+    /**
+     * Current or default value of a TEXT environment variable. VAULT keys are rejected.
+     *
+     * @throws com.workflow.exception.AdminCenterUnavailableException admin-center is unreachable
+     * @throws IllegalStateException the key is missing or is not TEXT
+     */
+    public String resolveTextEnvironmentValue(String varKey) {
+        String url = adminCenterUrl + "/api/v1/admin/internal/environment-variables/text-value?varKey="
+                + com.platform.common.util.SafeUrlInput.encodeQueryValue(varKey);
+        try {
+            ResponseEntity<Map<String, String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    internalServiceEntity(),
+                    new ParameterizedTypeReference<Map<String, String>>() {});
+            Map<String, String> body = response.getBody();
+            if (response.getStatusCode().is2xxSuccessful() && body != null && body.get("value") != null) {
+                return body.get("value");
+            }
+            throw new IllegalStateException("TEXT environment variable response empty");
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().is5xxServerError()) {
+                throw new com.workflow.exception.AdminCenterUnavailableException(
+                        "Admin Center unavailable resolving TEXT environment variable", ex);
+            }
+            throw new IllegalStateException("TEXT environment variable not found or not TEXT", ex);
+        } catch (RestClientException ex) {
+            throw new com.workflow.exception.AdminCenterUnavailableException(
+                    "Admin Center unavailable resolving TEXT environment variable", ex);
+        }
+    }
+
     public Optional<Map<String, Object>> getEmailConnectionCredentials(String functionUnitId, String connectionId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/internal/function-units/"

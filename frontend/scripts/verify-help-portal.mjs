@@ -243,9 +243,41 @@ try {
     (await sendArticle.locator('[data-testid="help-copy-btn"]').count()) === 0,
   )
   rec('URL is /help/email-send', page.url().includes('/help/email-send'), page.url())
+  rec(
+    'Send-email related links include Action email',
+    await sendArticle.locator('.help-related a[href$="/action-email"]').count().then((n) => n > 0),
+  )
   const sendShot = resolve(DW_SHOTS, `${DATE}_help-portal-email-send.png`)
   await page.screenshot({ path: sendShot, fullPage: true })
   console.log(`screenshot ${sendShot}`)
+
+  await page.goto('http://localhost:3000/help/action-email', { waitUntil: 'domcontentloaded' })
+  const actionEmailArticle = page.getByTestId('action-email-guide-page')
+  await actionEmailArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec('Action-email guideline is visible', await actionEmailArticle.isVisible())
+  rec(
+    'Action-email intro links Send email (no raw wiki token)',
+    (await actionEmailArticle.locator('.help-intro a[href$="/email-send"]').count()) > 0
+      && (await actionEmailArticle.locator('.help-intro').textContent())?.includes('[[') !== true,
+  )
+  rec(
+    'Action-email field catalog names Send email after success',
+    (await actionEmailArticle.textContent())?.includes('Send email after success') === true,
+  )
+  rec(
+    'Action-email names API Call as unsupported',
+    (await actionEmailArticle.textContent())?.includes('API Call') === true,
+  )
+  rec(
+    'Action-email figures load',
+    await actionEmailArticle.locator('img').evaluateAll(
+      (imgs) => imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0),
+    ),
+  )
+  rec('URL is /help/action-email', page.url().includes('/help/action-email'), page.url())
+  const actionEmailShot = resolve(DW_SHOTS, `${DATE}_help-portal-action-email.png`)
+  await page.screenshot({ path: actionEmailShot, fullPage: true })
+  console.log(`screenshot ${actionEmailShot}`)
 
   const monitorErrors = []
   const onMonitorPageError = (err) => monitorErrors.push(String(err))

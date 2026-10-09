@@ -24,4 +24,7 @@ public class TaskDelegateRequest {
     private String delegatedRoleCode;
 
     private String reason;
+
+    /** Developer Workstation Action id when the user clicked a DELEGATE Action. */
+    private String actionId;
 }

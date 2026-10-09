@@ -107,17 +107,12 @@ const filteredGroups = computed(() => {
   const groups = props.groups
   if (!q) return groups
   return groups
-    .map(group => {
-      if (!group.options) {
-        throw new Error(`Send task variable group "${group.label}" is missing options`)
-      }
-      return {
-        label: group.label,
-        options: group.options.filter(opt =>
-          optionLabel(opt.label).toLowerCase().includes(q) || opt.token.toLowerCase().includes(q),
-        ),
-      }
-    })
+    .map(group => ({
+      label: group.label,
+      options: (group.options ?? []).filter(opt =>
+        optionLabel(opt.label).toLowerCase().includes(q) || opt.token.toLowerCase().includes(q),
+      ),
+    }))
     .filter(group => group.options.length > 0)
 })
 

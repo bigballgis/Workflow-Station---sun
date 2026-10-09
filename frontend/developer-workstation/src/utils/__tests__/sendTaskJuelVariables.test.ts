@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EMAIL_VAR_GROUP_ENV_TEXT,
   EMAIL_VAR_GROUP_LOOKUP,
   EMAIL_VAR_GROUP_SUBTABLES,
   type EmailVariableGroup,
@@ -38,6 +39,17 @@ describe('filterGroupsForSendTaskRecipient', () => {
     expect(out.some(g => g.options.some(o => o.token === '${assigneeEmail}'))).toBe(true)
     expect(out.some(g => g.options.some(o => o.token.includes('subTable')))).toBe(false)
     expect(out.some(g => g.options.some(o => o.token.includes('lookupField')))).toBe(false)
+  })
+
+  it('keeps TEXT environment-variable tokens', () => {
+    const out = filterGroupsForSendTaskRecipient([
+      {
+        label: EMAIL_VAR_GROUP_ENV_TEXT,
+        options: [{ token: '${env:smtp.from}', label: 'SMTP From (smtp.from)' }],
+      },
+    ])
+    expect(out.some(g => g.label === EMAIL_VAR_GROUP_ENV_TEXT
+      && g.options.some(o => o.token === '${env:smtp.from}'))).toBe(true)
   })
 
   it('returns only the process group when input is empty', () => {

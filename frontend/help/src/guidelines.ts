@@ -80,6 +80,13 @@ export const GUIDELINES: Guideline[] = [
     load: () => import('@/views/EmailSendGuide.vue'),
   },
   {
+    id: 'action-email',
+    path: '/action-email',
+    titleKey: 'guides.actionEmail.title',
+    summaryKey: 'guides.actionEmail.summary',
+    load: () => import('@/views/ActionEmailGuide.vue'),
+  },
+  {
     id: 'email-monitor',
     path: '/email-monitor',
     titleKey: 'guides.emailMonitor.title',
@@ -310,7 +317,19 @@ export const NAV_TREE: NavNode[] = [
           },
           FORM_DESIGN_NAV,
           { kind: 'leaf', id: 'dw-view', titleKey: 'nav.viewDesign', to: '/view-design' },
-          { kind: 'leaf', id: 'dw-action', titleKey: 'nav.actionDesign' },
+          {
+            kind: 'group',
+            id: 'dw-action',
+            titleKey: 'nav.actionDesign',
+            children: [
+              {
+                kind: 'leaf',
+                id: 'dw-action-email',
+                titleKey: 'guides.actionEmail.title',
+                to: '/action-email',
+              },
+            ],
+          },
           { kind: 'leaf', id: 'dw-fu-automation', titleKey: 'nav.fuAutomation' },
           {
             kind: 'leaf',

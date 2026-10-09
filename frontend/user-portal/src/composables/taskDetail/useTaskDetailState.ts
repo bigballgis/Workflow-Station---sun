@@ -186,6 +186,7 @@ export function createTaskDetailState(options: { taskId: string }) {
   const approveDialogVisible = ref(false)
   const approveDialogTitle = ref('')
   const currentApproveAction = ref('')
+  const currentActionId = ref('')
   const approveForm = reactive({
     comment: ''
   })
@@ -323,6 +324,7 @@ export function createTaskDetailState(options: { taskId: string }) {
     approveDialogVisible,
     approveDialogTitle,
     currentApproveAction,
+    currentActionId,
     approveForm,
     actionDialogVisible,
     actionDialogTitle,

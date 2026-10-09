@@ -19,6 +19,7 @@ import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.MainTableViewService;
 import com.developer.service.impl.FunctionUnitDocumentService;
+import com.developer.util.ActionConfigIdRewriter;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.BpmnProcessIdRewriter;
@@ -298,6 +299,11 @@ public class FunctionUnitImporter {
                         emailTemplateIdMapping);
             }
         }
+        ActionConfigIdRewriter.rewritePersistedActions(
+                importWriter.findActionsByFunctionUnit(functionUnit.getId()),
+                emailTemplateIdMapping,
+                connectionUidMapping,
+                importWriter::saveAction);
 
         if (packageData.containsKey("emailMonitors")) {
             @SuppressWarnings("unchecked")

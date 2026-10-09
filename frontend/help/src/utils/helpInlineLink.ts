@@ -23,6 +23,14 @@ const PATH_TITLE: Record<string, string> = {
   '/table-design': 'guides.tableDesign.title',
   '/table-bindings': 'guides.tableBindings.title',
   '/view-design': 'guides.viewDesign.title',
+  '/email-send': 'guides.emailSend.title',
+  '/email-send#connection': 'nav.connections',
+  '/email-send#template': 'nav.emailTemplates',
+  '/email-send#send-task': 'emailSendGuide.sendTaskTitle',
+  '/email-send#extra': 'emailSendGuide.extraTitle',
+  '/email-monitor': 'guides.emailMonitor.title',
+  '/environment-variables': 'guides.environmentVariables.title',
+  '/action-email': 'guides.actionEmail.title',
 }
 
 for (const ctl of BASIC_FORM_CONTROLS) {

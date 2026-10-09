@@ -1,5 +1,6 @@
 package com.workflow.delegate;
 
+import com.workflow.service.ConfiguredEmailSender;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -29,7 +30,7 @@ class SendEmailTaskDelegateDwRefTest {
 
     @SuppressWarnings("unchecked")
     private static String invoke(Map<String, Object> variables) throws Exception {
-        Method method = SendEmailTaskDelegate.class.getDeclaredMethod("resolveDwFunctionUnitRef", Map.class);
+        Method method = ConfiguredEmailSender.class.getDeclaredMethod("resolveDwFunctionUnitRef", Map.class);
         method.setAccessible(true);
         return (String) method.invoke(null, variables);
     }

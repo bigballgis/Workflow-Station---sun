@@ -180,6 +180,11 @@ export default {
       summary:
         'Outbound connection, email template, and Send Task — every field, what it means, and why a send can fail.',
     },
+    actionEmail: {
+      title: 'Send email after this Action',
+      summary:
+        'Optional mail on an Action Design button: To, outbound connection, and template. Sent only after that Action succeeds in Portal.',
+    },
     emailMonitor: {
       title: 'Email Monitor',
       summary:
@@ -337,7 +342,7 @@ export default {
     fTemplateSubject:
       "Required at send time. Use Insert Variable (same tokens as Body). Do not type $\'name\' or quoted field names. If every token is empty at send, the run fails.",
     fInsertVariable:
-      'Dropdown. Pick a main field, a Lookup / Related attribute, or a sub-table (rendered as a table in the body). Inserts a token; do not wrap the name in quotes.',
+      "Dropdown. Pick a main field, a Lookup / Related attribute, a sub-table (rendered as a table in the body), or an Admin Center TEXT environment variable (${\'{\'}env:key{\'}'}). VAULT keys are not listed. Inserts a token; do not wrap the name in quotes.",
     fTemplateBody:
       'HTML of the message. Compose in Visual or HTML below. Empty body still sends if Subject is non-empty after variables.',
     bodyTitle: 'Visual and HTML',
@@ -358,7 +363,7 @@ export default {
     fTo:
       "Required. One address, semicolon-separated addresses, or ${\'{'}fieldName{\'}'} from the main table (for example ${\'{'}to{\'}'}). Do not put the subject here. Blank: send fails.",
     fInsertField:
-      "Insert field. Opens a searchable list. Picks a main-table field as ${\'{'}fieldName{\'}'} only — not Lookup or sub-table tokens. Also available on From, Cc, Bcc, and Reply-To.",
+      "Insert field. Opens a searchable list. Picks a main-table field as ${\'{'}fieldName{\'}'}, or an Admin Center TEXT environment variable as ${\'{'}env:key{\'}'}. Not Lookup, sub-table, or VAULT keys. Also available on From, Cc, Bcc, and Reply-To.",
     fInsertSearch: 'Filters the insert list. Empty result: No matching fields.',
     fProcessVars: 'Group in the insert list for process variables (not main-table columns).',
     fInitiator:
@@ -401,6 +406,72 @@ export default {
     failSmtp: 'Admin Center has no global SMTP (host / port / TLS) for outbound.',
     failRunning:
       'You completed a user task after the Send Task, or this instance started before Deploy. Complete the user task before the Send Task, then start a new instance.',
+  },
+  actionEmailGuide: {
+    pageTitle: 'Send email after this Action',
+    crumb: 'Developer Workstation · Function Units · Action Design',
+    intro:
+      'On Action Design you can turn on mail for one Action. Portal sends it only after that Action succeeds. Connection and template are the same ones used for [[/email-send]].',
+    flowTitle: 'Order of work',
+    flow1: 'Create an Outbound connection',
+    flow2: 'Write an Email Template and enable it',
+    flow3: 'Open Action Design and edit the Action',
+    flow4: 'Turn on Send email after success, fill To, Email connection, and Email template, then save',
+    flow5: 'Bind the Action to the user task, then run that Action in Portal',
+    relatedSendTask: 'Send Task',
+    openTitle: 'Open the Action',
+    openBody:
+      'Open the Function Unit → Action Design. Click Edit on the Action. The mail block sits below Process Configuration and above Node Binding.',
+    openFigure:
+      'Action Design: Send email after this Action. Switch off until you fill To, connection, and template.',
+    openTab: 'Function Unit tab. This article hangs under Action Design in the help sidebar.',
+    openEdit: 'Opens the Action. The mail switch is on this form, not on Process Design.',
+    fieldsTitle: 'Fields on the Action',
+    fieldsBody:
+      'Leave the switch off if this Action should not send mail. When it is on, To, Email connection, and Email template are required. Subject and body come from the template — not from this form.',
+    fieldsCatalogLead: 'Field catalog — every control under Send email after this Action.',
+    fTitle: 'Section heading. Optional for the Action. The red ? opens this page.',
+    fEnabled:
+      'Switch. Off (default): no mail after this Action. On: To, Email connection, and Email template are required to save.',
+    fTo:
+      "Required when the switch is on. One address, or a field token such as ${\'{'}initiator{\'}'}. Placeholder: Address or ${\'{'}initiator{\'}'}. Blank blocks save.",
+    fInsertField:
+      "Insert field. Same {'{'} {'}'} picker as Send Task To, including Admin Center TEXT environment variables (${\'{\'}env:key{\'}'}). VAULT keys are not listed. Use for To, From, Cc, and Bcc.",
+    fInsertSearch: 'Filters the field list in the picker. Empty: no matching fields.',
+    fInitiator:
+      "Process variable commonly inserted as To. Example: ${\'{'}initiator{\'}'}.",
+    fConnection:
+      'Required when the switch is on. Outbound or Both connections from [[/email-send#connection]]. Placeholder: Select a connection. Empty list: create an Outbound connection first. Blank blocks save.',
+    fTemplate:
+      'Required when the switch is on. Enabled templates from [[/email-send#template]]. Placeholder: Select a template. Off templates do not appear. Blank blocks save.',
+    fShowAdvanced: 'Link. Reveals From, Cc, Bcc, and Attachments.',
+    fHideAdvanced: 'Link. Hides the advanced fields. Values already typed stay on the Action.',
+    fFrom: 'Optional From override. Same picker as To. Blank: the connection sender is used.',
+    fCc: 'Optional Cc. Same picker as To. Blank: no Cc.',
+    fBcc: 'Optional Bcc. Same picker as To. Blank: no Bcc.',
+    fAttachments:
+      'Optional. Same FILE-field picker as Send Task: choose an Upload (FILE) field on the main table, a sub-table, or a Lookup target table. See [[/email-send#extra]]. Blank: no files.',
+    typesTitle: 'Which Action types can send',
+    typesBody:
+      'Portal must actually run the Action. API Call, Custom Script, and Composite Action show an info banner and keep the switch off. Saving with mail on for those types is blocked.',
+    typesCatalogLead: 'Action Type values that accept or refuse the mail switch.',
+    fSupportedTypes:
+      'These types can send: Approve, Reject, Transfer, Delegate, Urge, Rollback, Withdraw, Draft, Save, Process Submit, Process Reject, Form Popup.',
+    fApiCall:
+      'Banner: Portal does not execute this Action type, so it will not send email. Switch stays off.',
+    fCustomScript: 'Same banner and save block as API Call.',
+    fComposite: 'Same banner and save block as API Call.',
+    failTitle: 'When save or send fails',
+    failBody:
+      'Fix the Action, save it, then run that Action again in Portal. Autosave and a click that is not this Action do not send.',
+    failIncomplete:
+      'Save: Post-action email is missing required fields. Fill Email connection, To, and Email template, or turn the switch off.',
+    failUnsupported:
+      'Save: Post-action email is not available for this Action type. Change the type, or leave the switch off.',
+    failConnection: 'Email connection list is empty. Create an Outbound connection first.',
+    failTemplate: 'Email template list is empty. Write a template and tick Enabled.',
+    failUnbound: 'The Action is not bound to the user task. Bind it under Node Binding, then run it in Portal.',
+    failAutosave: 'Portal Save that is not this Action button does not send mail.',
   },
   emailMonitorGuide: {
     pageTitle: 'Email Monitor',

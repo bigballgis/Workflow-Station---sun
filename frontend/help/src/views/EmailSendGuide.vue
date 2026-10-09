@@ -35,6 +35,7 @@ const jumpLinks: GuideJump[] = [
 ]
 
 const related: GuideRelated[] = [
+  { to: '/action-email', titleKey: 'guides.actionEmail.title' },
   { to: '/email-monitor', titleKey: 'guides.emailMonitor.title' },
   { to: '/environment-variables', titleKey: 'guides.environmentVariables.title' },
   { to: '/computed-fields', titleKey: 'guides.computedFields.title' },

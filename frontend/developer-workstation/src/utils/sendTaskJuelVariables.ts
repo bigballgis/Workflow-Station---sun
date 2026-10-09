@@ -1,4 +1,5 @@
 import {
+  EMAIL_VAR_GROUP_ENV_TEXT,
   EMAIL_VAR_GROUP_LOOKUP,
   EMAIL_VAR_GROUP_SUBTABLES,
   type EmailVariableGroup,
@@ -26,6 +27,7 @@ export function filterGroupsForSendTaskRecipient(
 ): EmailVariableGroup[] {
   const mainGroups = (groups ?? [])
     .filter(g => g?.label && g.label !== EMAIL_VAR_GROUP_SUBTABLES)
+    .filter(g => g.label !== EMAIL_VAR_GROUP_ENV_TEXT)
     .filter(g => !g.label.startsWith(`${EMAIL_VAR_GROUP_LOOKUP}:`))
     .map(g => ({
       label: g.label,
@@ -33,12 +35,15 @@ export function filterGroupsForSendTaskRecipient(
     }))
     .filter(g => g.options.length > 0)
 
+  const envGroups = (groups ?? []).filter(g => g?.label === EMAIL_VAR_GROUP_ENV_TEXT && (g.options?.length ?? 0) > 0)
+
   return [
     {
       label: SEND_TASK_PROCESS_VAR_GROUP,
       options: PROCESS_VARIABLE_OPTIONS.map(o => ({ ...o })),
     },
     ...mainGroups,
+    ...envGroups,
   ]
 }
 
@@ -61,6 +66,9 @@ export function resolveSendTaskVariableGroupLabel(
 ): string {
   if (label === SEND_TASK_PROCESS_VAR_GROUP) {
     return t('properties.sendTaskProcessVariableGroup')
+  }
+  if (label === EMAIL_VAR_GROUP_ENV_TEXT) {
+    return t('properties.envTextGroup')
   }
   return label
 }

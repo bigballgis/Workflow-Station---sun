@@ -120,61 +120,12 @@
             @update:model-value="onRecipientFieldChange('emailBcc', $event)"
           />
         </div>
-        <div class="email-attachments-block">
-          <div class="email-attachments-label">{{ t('properties.emailAttachments') }}</div>
-          <div class="form-tip email-attachments-hint">{{ t('properties.emailAttachmentsHint') }}</div>
-          <div
-            v-for="(att, index) in emailAttachments"
-            :key="index"
-            class="email-attachment-item"
-          >
-            <div class="email-field-block">
-              <label class="email-field-label">{{ t('properties.emailAttachmentField') }}</label>
-              <el-select
-                :model-value="selectedOptionValue(att)"
-                :placeholder="t('properties.emailAttachmentFieldPlaceholder')"
-                :loading="loadingFieldOptions"
-                filterable
-                clearable
-                style="width: 100%"
-                @change="(val) => onAttachmentFieldChange(index, val)"
-              >
-                <el-option-group
-                  v-for="group in attachmentOptionGroups"
-                  :key="group.label"
-                  :label="group.label"
-                >
-                  <el-option
-                    v-for="opt in group.options"
-                    :key="opt.value"
-                    :label="opt.label"
-                    :value="opt.value"
-                  />
-                </el-option-group>
-              </el-select>
-            </div>
-            <el-button
-              link
-              type="danger"
-              @click="removeAttachment(index)"
-            >
-              {{ t('properties.emailAttachmentRemove') }}
-            </el-button>
-          </div>
-          <el-button
-            size="small"
-            :disabled="fieldOptions.length === 0 || loadingFieldOptions"
-            @click="addAttachment"
-          >
-            {{ t('properties.emailAddAttachment') }}
-          </el-button>
-          <div
-            v-if="!loadingFieldOptions && fieldOptions.length === 0"
-            class="form-tip email-attachments-empty"
-          >
-            {{ t('properties.emailAttachmentsEmpty') }}
-          </div>
-        </div>
+        <EmailAttachmentsEditor
+          :model-value="emailAttachmentsJson"
+          :function-unit-id="functionUnitId"
+          show-title
+          @update:model-value="onEmailAttachmentsChange"
+        />
         <div class="email-field-block">
           <label class="email-field-label">{{ t('properties.emailSensitivity') }}</label>
           <el-select
@@ -257,6 +208,7 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
+import EmailAttachmentsEditor from '@/components/designer/email/EmailAttachmentsEditor.vue'
 import RecipientExpressionField from '@/components/designer/email/RecipientExpressionField.vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties } from '@/utils/bpmnExtensions'
@@ -264,8 +216,7 @@ import { useEmailTemplateVariables } from '@/composables/email/useEmailTemplateV
 import { filterGroupsForSendTaskRecipient } from '@/utils/sendTaskJuelVariables'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
-import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
-import { useSendTaskAttachmentFieldOptions } from '@/composables/taskProperties/useSendTaskAttachmentFieldOptions'
+import { parseAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
 import { resolveOwnedSendTaskConnectionUid } from '@/composables/taskProperties/resolveOwnedSendTaskConnectionUid'
 
 const { t } = useI18n()
@@ -323,23 +274,10 @@ const emailSensitivityOptions = computed(() => [
   { value: 'confidential', label: t('properties.emailSensitivityConfidential') }
 ])
 
-const {
-  emailAttachments,
-  loadFromExtension: loadEmailAttachments,
-  addAttachment,
-  removeAttachment,
-  setAttachmentFromOption,
-  selectedOptionValue
-} = useSendTaskEmailAttachments(updateExtProp)
-
-const {
-  fieldOptions,
-  loadingFieldOptions,
-  loadFieldOptions
-} = useSendTaskAttachmentFieldOptions()
+const emailAttachmentsJson = ref('')
 
 const { groups: templateVariableGroups, loading: variablesLoading, load: loadTemplateVariables } =
-  useEmailTemplateVariables(props.functionUnitId)
+  useEmailTemplateVariables(() => props.functionUnitId)
 
 const recipientVariableGroups = computed(() =>
   filterGroupsForSendTaskRecipient(templateVariableGroups.value),
@@ -356,30 +294,6 @@ function onRecipientFieldChange(
   else if (key === 'emailReplyTo') emailReplyTo.value = value
   onEmailConfigChange(key, value)
 }
-
-const attachmentOptionGroups = computed(() => {
-  const byGroup = new Map<string, typeof fieldOptions.value>()
-  for (const opt of fieldOptions.value) {
-    const list = byGroup.get(opt.group) || []
-    list.push(opt)
-    byGroup.set(opt.group, list)
-  }
-  // Ensure already-saved refs remain visible/selectable even if catalog reload lags.
-  const known = new Set(fieldOptions.value.map(o => o.value))
-  for (const att of emailAttachments.value) {
-    const value = selectedOptionValue(att)
-    if (!value || known.has(value)) continue
-    const label = value.startsWith('lookup:')
-      ? value.slice('lookup:'.length)
-      : (att.fieldName || value)
-    const group = t('properties.emailAttachments')
-    const list = byGroup.get(group) || []
-    list.push({ value, label, group, ref: { ...att } })
-    byGroup.set(group, list)
-    known.add(value)
-  }
-  return Array.from(byGroup.entries()).map(([label, options]) => ({ label, options }))
-})
 
 const {
   emailConnections,
@@ -405,20 +319,33 @@ async function loadEmailConnectionsAndBind() {
   bindOwnedEmailConnection()
 }
 
+function attachmentRawToString(raw: unknown): string {
+  if (typeof raw === 'string') {
+    return raw
+  }
+  if (raw == null) {
+    return ''
+  }
+  if (Array.isArray(raw)) {
+    return JSON.stringify(raw)
+  }
+  return ''
+}
+
+function onEmailAttachmentsChange(value: string) {
+  emailAttachmentsJson.value = value
+  updateExtProp('emailAttachments', value)
+}
+
 function loadSendTaskProperties() {
   loadProperties()
   if (!props.element) return
   const ext = getExtensionProperties(props.element)
-  loadEmailAttachments(ext.emailAttachments)
-  // Keep advanced panel open when attachments already configured so they stay visible.
-  if (emailAttachments.value.length > 0) {
+  emailAttachmentsJson.value = attachmentRawToString(ext.emailAttachments)
+  if (parseAttachments(ext.emailAttachments).length > 0) {
     emailAdvancedOpen.value = true
   }
   bindOwnedEmailConnection()
-}
-
-function onAttachmentFieldChange(index: number, val: unknown) {
-  setAttachmentFromOption(index, val != null ? String(val) : '', fieldOptions.value)
 }
 
 /**
@@ -445,7 +372,6 @@ watch(
   () => props.functionUnitId,
   (id) => {
     if (id) {
-      loadFieldOptions(id)
       void loadTemplateVariables()
     }
   },
@@ -564,32 +490,4 @@ onMounted(() => {
   border-top: 1px dashed #e4e7ed;
 }
 
-.email-attachments-block {
-  margin-bottom: 12px;
-  padding: 0 4px;
-}
-
-.email-attachments-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #606266;
-  margin-bottom: 4px;
-}
-
-.email-attachments-hint {
-  margin-bottom: 8px;
-}
-
-.email-attachments-empty {
-  color: #e6a23c;
-  margin-top: 6px;
-}
-
-.email-attachment-item {
-  padding: 8px;
-  margin-bottom: 8px;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  background: #fafafa;
-}
 </style>

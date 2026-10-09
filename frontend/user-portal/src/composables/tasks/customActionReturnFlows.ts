@@ -88,6 +88,7 @@ export function createCustomActionReturnFlows(deps: {
       await completeTask(taskId, {
         taskId,
         action: completeAction,
+        actionId: action.actionId,
         comment,
         returnActivityId: target.activityId,
       })
@@ -182,7 +183,12 @@ export function createCustomActionReturnFlows(deps: {
     }
     submitting.value = true
     try {
-      await processApi.withdrawProcess(processId, reason)
+      await processApi.withdrawProcess(
+        processId,
+        reason,
+        action.actionId,
+        taskInfo.value?.taskId as string | undefined,
+      )
       const successMsg =
         (typeof config.successMessage === 'string' && config.successMessage.trim())
           ? config.successMessage

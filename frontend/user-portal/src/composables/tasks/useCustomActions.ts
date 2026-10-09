@@ -20,7 +20,8 @@ export function useCustomActions(options: {
   subTableBindings: Ref<any[]>
   formData: Ref<Record<string, any>>
   submitting: Ref<boolean>
-  saveCurrentTaskForm: () => Promise<void>
+  saveCurrentTaskForm: (actionId?: string) => Promise<void>
+  currentActionId?: Ref<string>
   validateSubTableAssigneesForComplete: () => boolean
   approveDialogVisible: Ref<boolean>
   approveDialogTitle: Ref<string>
@@ -47,7 +48,7 @@ export function useCustomActions(options: {
   /** Open the Transfer dialog for a TRANSFER Action bound to this task node. */
   onTransfer?: (action: TaskActionInfo) => void
   /** Open the Urge dialog for an URGE Action bound to this task node. */
-  onUrge?: () => void
+  onUrge?: (action: TaskActionInfo) => void
 }) {
   const { t } = useI18n()
   const router = useRouter()
@@ -129,6 +130,9 @@ export function useCustomActions(options: {
     if (!(await confirmIfNeeded(config))) return
     if (completeAction === 'APPROVE' && !options.validateSubTableAssigneesForComplete()) return
     approveCommentRequired.value = actionRequiresComment(config)
+    if (options.currentActionId) {
+      options.currentActionId.value = action.actionId
+    }
     options.currentApproveAction.value = completeAction
     options.approveDialogTitle.value = action.actionName
     options.approveForm.comment = ''
@@ -139,7 +143,7 @@ export function useCustomActions(options: {
     const actionType = (action.actionType || '').trim().toUpperCase()
     switch (actionType) {
       case 'SAVE':
-        options.saveCurrentTaskForm()
+        void options.saveCurrentTaskForm(action.actionId)
         break
       case 'APPROVE':
       case 'PROCESS_SUBMIT':
@@ -182,7 +186,7 @@ export function useCustomActions(options: {
         break
       case 'URGE':
         if (options.onUrge) {
-          options.onUrge()
+          options.onUrge(action)
         } else {
           ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
         }

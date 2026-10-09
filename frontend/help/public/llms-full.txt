@@ -79,7 +79,21 @@ Send Task fields: To (required, address or ${fieldName}; multiple addresses semi
 
 Template example: PR Approved Notice. Failures: missing/inbound/disabled connection; empty To; missing/disabled template; empty subject after variables; attachment not FILE; no global SMTP; instance started before Deploy or user task after the Send Task not completed first.
 
-Related: /help/email-monitor , /help/computed-fields , /help/form-upload
+Related: /help/action-email , /help/email-monitor , /help/computed-fields , /help/form-upload
+
+## Send email after this Action (/help/action-email)
+
+Optional mail on one Action Design button. Portal sends only after that Action succeeds. Connection and template are the same as /help/email-send.
+
+Order: Outbound connection → enabled Email Template → Action Design → Edit Action → Send email after success → To + Email connection + Email template → save → bind Action to the user task → run that Action in Portal.
+
+Fields: Send email after this Action (section); Send email after success (off = no mail); To (required when on; address or ${initiator}; { } Insert field / Search fields…); Email connection (required when on; Outbound or Both); Email template (required when on; Enabled only); Show / Hide advanced; From, Cc, Bcc (optional); Attachments (optional FILE-field picker, same as Send Task emailAttachments).
+
+Types that send: Approve, Reject, Transfer, Delegate, Urge, Rollback, Withdraw, Draft, Save, Process Submit, Process Reject, Form Popup. API Call, Custom Script, Composite Action show “Portal does not execute this Action type, so it will not send email” and block save if the switch is on.
+
+Failures: missing To / connection / template; unsupported type; empty connection or template list; Action not bound to the user task; Portal save that is not this Action button.
+
+Related: /help/email-send#connection , /help/email-send#template , /help/email-send#send-task
 
 ## Email Monitor (/help/email-monitor)
 

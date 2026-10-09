@@ -75,7 +75,7 @@ const editorConfig = computed(() =>
   buildEmailRichEditorConfig(props.placeholder || t('emailTemplate.bodyPlaceholder'))
 )
 
-const { groups, load } = useEmailTemplateVariables(props.functionUnitId)
+const { groups, load } = useEmailTemplateVariables(() => props.functionUnitId)
 
 function groupLabel(label: string): string {
   return resolveEmailVariableGroupLabel(label, t)

@@ -411,6 +411,14 @@
           </el-form-item>
         </template>
 
+        <ActionPostEmailConfig
+          v-if="selectedAction"
+          :model-value="actionConfig.postEmail || {}"
+          :action-type="selectedAction.actionType"
+          :function-unit-id="functionUnitId"
+          @update:model-value="actionConfig.postEmail = $event"
+        />
+
         <!-- 节点绑定配置 -->
         <el-divider>{{ t('action.nodeBinding') }}</el-divider>
         <el-form-item :label="t('action.bindingType')">
@@ -520,6 +528,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import ActionColorField from './action-designer/ActionColorField.vue'
+import ActionPostEmailConfig from './action-designer/ActionPostEmailConfig.vue'
 import ActionCreateDialog from './action-designer/ActionCreateDialog.vue'
 import ActionTestDialog from './action-designer/ActionTestDialog.vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'

@@ -75,6 +75,17 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<VaultEnvOption> listTextOptions() {
+        try {
+            return adminCenterEnvironmentClient.listTextVariables();
+        } catch (IllegalStateException ex) {
+            throw new DeveloperBusinessException("TEXT_OPTIONS_UNAVAILABLE",
+                    i18nService.getMessage("email.connection.text_options_failed"));
+        }
+    }
+
+    @Override
     @Transactional
     public EmailConnectionResponse create(Long functionUnitId, EmailConnectionRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)

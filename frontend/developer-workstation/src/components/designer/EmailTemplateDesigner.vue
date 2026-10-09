@@ -164,7 +164,7 @@ const bodyEditorMode = ref<EmailBodyEditorMode>('visual')
 const subjectInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 const variableGroups = ref<EmailVariableGroup[]>([])
 const { groups, loading: variablesLoading, load: loadTemplateVariables } =
-  useEmailTemplateVariables(props.functionUnitId)
+  useEmailTemplateVariables(() => props.functionUnitId)
 
 const defaultForm = (): EmailTemplateRequest => ({
   name: '',
