@@ -99,19 +99,11 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     }
     if (teamEditable.value) {
       try {
-        // ADMIN may target any team (CUSTOM + DEVELOPER). TECH_LEAD: own teams + Public.
-        // Must include DEVELOPER — otherwise pre-selected DEVELOPER team IDs render as raw UUIDs.
+        // ADMIN may target any Developer workspace. TECH_LEAD: own workspaces + Public.
         // Reload every open so newly created teams appear without a full page refresh.
         if (canSeeAll.value) {
-          const [custom, developer] = await Promise.all([
-            adminCenterApi.getVirtualGroups('CUSTOM', 'ACTIVE'),
-            adminCenterApi.getVirtualGroups('DEVELOPER', 'ACTIVE'),
-          ])
-          const byId = new Map<string, VirtualGroupInfo>()
-          for (const g of [...custom, ...developer]) {
-            if (g?.id) byId.set(g.id, g)
-          }
-          teamOptions.value = [...byId.values()].sort((a, b) =>
+          const developer = await adminCenterApi.getVirtualGroups('DEVELOPER', 'ACTIVE')
+          teamOptions.value = developer.sort((a, b) =>
             (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
           )
         } else {
