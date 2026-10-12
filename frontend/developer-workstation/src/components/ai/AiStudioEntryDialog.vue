@@ -325,14 +325,16 @@ async function startOneClick() {
   }
   submitting.value = true
   try {
+    const oneClick = { requirements: requirements.value.trim() }
     const { data: job } = await aiGenerationApi.studioStartOneClick({
       functionUnitId: props.functionUnitId,
-      requirements: requirements.value.trim()
+      ...oneClick
     })
     saveAiStudioPendingProposal(props.functionUnitId, {
       jobId: job.jobId,
       phase: AI_STUDIO_ONE_CLICK_PHASE,
-      submittedAt: Date.now()
+      submittedAt: Date.now(),
+      oneClick
     })
     requirements.value = ''
     emit('open', { mode: 'generate', draft: null })
