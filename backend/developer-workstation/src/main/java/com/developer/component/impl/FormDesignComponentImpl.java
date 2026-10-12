@@ -895,6 +895,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         remapCopiedFkFillAncestors(bindingIdMapping);
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
+        FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(copiedConfig);
         savedCopy.setConfigJson(copiedConfig);
         savedCopy = formDefinitionRepository.save(savedCopy);
         
@@ -1014,6 +1015,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         remapCopiedFkFillAncestors(bindingIdMapping);
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
+        FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(copiedConfig);
         savedCopy.setConfigJson(copiedConfig);
         savedCopy = formDefinitionRepository.save(savedCopy);
         

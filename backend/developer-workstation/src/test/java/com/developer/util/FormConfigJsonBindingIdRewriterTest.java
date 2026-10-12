@@ -106,6 +106,25 @@ class FormConfigJsonBindingIdRewriterTest {
     }
 
     @Test
+    void regenerateBatchControlIds_changesOnlySubTableControlIdentities() {
+        Map<String, Object> nested = new LinkedHashMap<>(Map.of(
+                "type", "subTable", "batchControlId", "stbc-old",
+                "children", List.of()));
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>(List.of(new LinkedHashMap<>(Map.of(
+                "type", "fcRow", "children", List.of(nested))))));
+        configJson.put("batchForms", Map.of("101", Map.of("rule", List.of(
+                new LinkedHashMap<>(Map.of("type", "input", "field", "name"))))));
+
+        FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(configJson);
+
+        assertNotEquals("stbc-old", nested.get("batchControlId"));
+        assertTrue(((String) nested.get("batchControlId")).startsWith("stbc_"));
+        assertEquals("input", ((Map<?, ?>) ((List<?>) ((Map<?, ?>) ((Map<?, ?>) configJson.get("batchForms"))
+                .get("101")).get("rule")).get(0)).get("type"));
+    }
+
+    @Test
     void remapBindingIds_remapsLookupConfigBindingIdOnLookupNode() {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("lookupConfig",
