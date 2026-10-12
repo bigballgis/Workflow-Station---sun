@@ -27,7 +27,13 @@ const BATCH_OPERATION_FIELDS = [
 
 type RuleLike = {
   batchControlId?: unknown
+  _bindingId?: unknown
   props?: Record<string, unknown>
+}
+
+type BatchFormLike = {
+  schemaVersion?: unknown
+  rule?: unknown
 }
 
 /** Batch permissions are opt-in: legacy strings such as "true" never enable one. */
@@ -48,6 +54,27 @@ export function validateEnabledBatchControlIds(rules: RuleLike[]): boolean {
     const rawId = rule.batchControlId ?? rule.props?.batchControlId
     if (typeof rawId !== 'string' || rawId.trim() === '' || ids.has(rawId)) return false
     ids.add(rawId)
+  }
+  return true
+}
+
+/**
+ * A batch capability is never publishable without its separate batch form.
+ * `subForms` is deliberately not inspected: it remains the legacy single-row
+ * editor and cannot become an implicit batch configuration.
+ */
+export function validateEnabledBatchForms(
+  rules: RuleLike[],
+  batchForms: Record<string, BatchFormLike> | undefined,
+): boolean {
+  for (const rule of rules) {
+    if (!hasEnabledBatchOperation(rule)) continue
+    const rawBindingId = rule._bindingId ?? rule.props?._bindingId
+    if (rawBindingId === null || rawBindingId === undefined || String(rawBindingId).trim() === '') return false
+    const batchForm = batchForms?.[String(rawBindingId)]
+    if (batchForm?.schemaVersion !== 1 || !Array.isArray(batchForm.rule) || batchForm.rule.length === 0) {
+      return false
+    }
   }
   return true
 }

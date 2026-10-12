@@ -7,7 +7,7 @@ import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
-import { validateEnabledBatchControlIds } from '@/utils/batchSubTableConfig'
+import { validateEnabledBatchControlIds, validateEnabledBatchForms } from '@/utils/batchSubTableConfig'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -267,6 +267,14 @@ export function useFormSave(options: UseFormSaveOptions) {
 
       if (!validateEnabledBatchControlIds(subTableRules)) {
         if (isManual) ElMessage.error(t('form.batchControlIdInvalid'))
+        return false
+      }
+
+      if (!validateEnabledBatchForms(
+        subTableRules,
+        selectedForm.value.configJson?.batchForms as Record<string, { schemaVersion?: unknown; rule?: unknown }> | undefined,
+      )) {
+        if (isManual) ElMessage.error(t('form.batchFormInvalid'))
         return false
       }
 

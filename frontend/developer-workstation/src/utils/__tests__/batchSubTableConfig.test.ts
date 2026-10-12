@@ -3,6 +3,7 @@ import {
   createBatchControlId,
   hasEnabledBatchOperation,
   validateEnabledBatchControlIds,
+  validateEnabledBatchForms,
 } from '../batchSubTableConfig'
 
 describe('createBatchControlId', () => {
@@ -31,5 +32,19 @@ describe('createBatchControlId', () => {
       { props: { allowBatchAdd: true, batchControlId: 'same' } },
       { props: { allowBatchDelete: true, batchControlId: 'same' } },
     ])).toBe(false)
+  })
+
+  it('requires a versioned, non-empty independent batch form for enabled controls', () => {
+    const enabled = [{ _bindingId: 101, props: { allowBatchEdit: true } }]
+    expect(validateEnabledBatchForms(enabled, {
+      '101': { schemaVersion: 1, rule: [{ type: 'input', field: 'name' }] },
+    })).toBe(true)
+    expect(validateEnabledBatchForms(enabled, undefined)).toBe(false)
+    expect(validateEnabledBatchForms(enabled, {
+      '101': { schemaVersion: 2, rule: [{ type: 'input' }] },
+    })).toBe(false)
+    expect(validateEnabledBatchForms(enabled, {
+      '101': { schemaVersion: 1, rule: [] },
+    })).toBe(false)
   })
 })
