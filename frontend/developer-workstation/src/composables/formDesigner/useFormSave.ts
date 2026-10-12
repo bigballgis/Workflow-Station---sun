@@ -7,6 +7,7 @@ import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
+import { validateEnabledBatchControlIds } from '@/utils/batchSubTableConfig'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -261,6 +262,11 @@ export function useFormSave(options: UseFormSaveOptions) {
       const invalidPlaceholders = subTableRules.filter((r: any) => !r._bindingId)
       if (invalidPlaceholders.length > 0) {
         if (isManual) ElMessage.error(t('form.subTableBindingRequired'))
+        return false
+      }
+
+      if (!validateEnabledBatchControlIds(subTableRules)) {
+        if (isManual) ElMessage.error(t('form.batchControlIdInvalid'))
         return false
       }
 

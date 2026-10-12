@@ -17,3 +17,36 @@ export function createBatchControlId(): string {
   }
   return `stbc_${suffix}`
 }
+
+const BATCH_OPERATION_FIELDS = [
+  'allowBatchAdd',
+  'allowBatchEdit',
+  'allowBatchDelete',
+  'allowBatchAssign',
+] as const
+
+type RuleLike = {
+  batchControlId?: unknown
+  props?: Record<string, unknown>
+}
+
+/** Batch permissions are opt-in: legacy strings such as "true" never enable one. */
+export function hasEnabledBatchOperation(rule: RuleLike): boolean {
+  return BATCH_OPERATION_FIELDS.some((field) => rule.props?.[field] === true)
+}
+
+/**
+ * A batch-enabled SubTable is addressed by a stable control ID, never by a
+ * binding ID or its array position. The props slot is accepted while the
+ * form-create panel is editing a rule; the parser persists the same identity.
+ */
+export function validateEnabledBatchControlIds(rules: RuleLike[]): boolean {
+  const ids = new Set<string>()
+  for (const rule of rules) {
+    if (!hasEnabledBatchOperation(rule)) continue
+    const rawId = rule.batchControlId ?? rule.props?.batchControlId
+    if (typeof rawId !== 'string' || rawId.trim() === '' || ids.has(rawId)) return false
+    ids.add(rawId)
+  }
+  return true
+}

@@ -828,6 +828,7 @@ export default {
     // Other
     unknownTable: 'Unknown Table',
     subTableBindingRequired: 'All Sub-Table placeholders must have a binding selected before saving',
+    batchControlIdInvalid: 'Each Sub-Table with batch operations enabled must have a unique control identifier. Recreate the control if the problem persists.',
     subTableSelectPlaceholder: 'Select Sub Table',
     subTableSelectEmpty: 'No Sub Tables available',
     subTableGoToDesigner: 'Go To Designer',

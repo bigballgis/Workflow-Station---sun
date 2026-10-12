@@ -875,6 +875,7 @@ export default {
     // Other
     unknownTable: '未知表',
     subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定',
+    batchControlIdInvalid: '啟用批次操作的每個子表都必須具有唯一的控制項識別碼。若問題持續，請重新建立該控制項。',
     subTableSelectPlaceholder: '請選擇 Sub Table',
     subTableSelectEmpty: '暫無可用 Sub Table',
     subTableGoToDesigner: 'Go To Designer',
