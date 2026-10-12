@@ -124,12 +124,14 @@ public class TaskApprovalCompletionComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+        SubTableWriteIsolation.stripTransportMetadata(variables);
         Map<String, Object> submittedSnapshot = taskFormComponent.copyChangeHistorySubmission(request.getFormData());
         if (submittedSnapshot == null) {
             submittedSnapshot = request.getFormData() == null
                 ? new HashMap<>()
                 : new HashMap<>(request.getFormData());
         }
+        SubTableWriteIsolation.stripTransportMetadata(submittedSnapshot);
         // Only a sub-table explicitly submitted through formData and authorized by the current
         // Task Form contract can represent user intent. variables may contain engine/MI state.
         Map<String, Object> initialFilteredSubmission = taskFormComponent.filterTaskSubmissionForChangeHistory(

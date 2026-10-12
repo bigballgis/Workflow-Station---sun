@@ -733,6 +733,7 @@ public class TaskFormComponent {
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
             Map<String, Object> inbound = new HashMap<>(editableData);
+            SubTableWriteIsolation.stripTransportMetadata(inbound);
             // Defense in depth: strip even if filterEditableFields missed a case variant.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
             // The MI loop variable is EXECUTION-scoped in Flowable: each participant's sub-task has

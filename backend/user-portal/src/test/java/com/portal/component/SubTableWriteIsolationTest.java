@@ -31,6 +31,18 @@ import static org.mockito.Mockito.when;
 
 class SubTableWriteIsolationTest {
 
+    @Test
+    void stripTransportMetadataRemovesServerOwnedBatchRuntimeSnapshot() {
+        Map<String, Object> values = new HashMap<>();
+        values.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1));
+        values.put("businessField", "kept");
+
+        SubTableWriteIsolation.stripTransportMetadata(values);
+
+        assertThat(values).containsEntry("businessField", "kept")
+                .doesNotContainKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+    }
+
     private static final String FU = "fu-test";
     private static final String STORE = "dw:attachment";
 
