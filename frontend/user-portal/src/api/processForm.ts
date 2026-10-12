@@ -46,6 +46,8 @@ export interface TaskFormData {
   subTableBindings: SubTableBindingData[]
   processFormRef: ProcessFormData
   formReadOnly?: boolean
+  /** Current form's server-filtered frozen batch controls, keyed by batchControlId. */
+  subTableBatchCapabilities?: Record<string, unknown>
   requestIdConfig?: RequestIdConfig | null
 }
 

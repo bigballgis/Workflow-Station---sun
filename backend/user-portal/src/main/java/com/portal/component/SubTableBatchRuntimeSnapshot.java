@@ -81,6 +81,35 @@ final class SubTableBatchRuntimeSnapshot {
         return Optional.of(snapshot);
     }
 
+    /**
+     * Returns only the frozen controls belonging to one rendered form.  The browser
+     * never receives the instance-wide snapshot (or controls for other stages).
+     */
+    static Map<String, Object> projectForForm(Map<String, Object> variables, Object formSourceId,
+                                              ObjectMapper objectMapper) {
+        if (variables == null || formSourceId == null || objectMapper == null) {
+            return Map.of();
+        }
+        Map<String, Object> snapshot = mapValue(variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
+        if (!(snapshot.get("schemaVersion") instanceof Number version) || version.intValue() != SCHEMA_VERSION) {
+            return Map.of();
+        }
+        Map<String, Object> forms = mapValue(snapshot.get("forms"));
+        Map<String, Object> form = mapValue(forms.get(String.valueOf(formSourceId)));
+        if (form.isEmpty() || !(form.get("controls") instanceof List<?> controls)) {
+            return Map.of();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Object control : controls) {
+            if (!(control instanceof Map<?, ?> map)) continue;
+            Map<String, Object> safe = stringKeyMap(map);
+            Object controlId = safe.get("batchControlId");
+            if (controlId == null || controlId.toString().isBlank()) continue;
+            result.put(controlId.toString(), deepCopy(safe, objectMapper));
+        }
+        return result;
+    }
+
     @SuppressWarnings("unchecked")
     private static void collectControls(Object value, Map<String, Object> batchForms,
                                         List<Map<String, Object>> controls, Set<String> controlIds,

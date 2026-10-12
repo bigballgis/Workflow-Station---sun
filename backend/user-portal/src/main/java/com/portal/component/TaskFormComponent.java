@@ -521,6 +521,8 @@ public class TaskFormComponent {
         Boolean formReadOnly = formDefinition.get("readOnly") instanceof Boolean
                 ? (Boolean) formDefinition.get("readOnly")
                 : false;
+        Map<String, Object> subTableBatchCapabilities = SubTableBatchRuntimeSnapshot.projectForForm(
+                allVariables, formDefinition.get("sourceId"), objectMapper);
 
         // Which field values to send down: the form's DESIGNED fields, not the permission keys.
         //
@@ -593,6 +595,7 @@ public class TaskFormComponent {
                 .subTableBindings(Collections.emptyList())
                 .processFormRef(processFormRef)
                 .formReadOnly(formReadOnly)
+                .subTableBatchCapabilities(subTableBatchCapabilities)
                 .requestIdConfig(processFormRef != null ? processFormRef.getRequestIdConfig() : null)
                 .build();
     }

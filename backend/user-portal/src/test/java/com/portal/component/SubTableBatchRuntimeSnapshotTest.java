@@ -82,6 +82,19 @@ class SubTableBatchRuntimeSnapshotTest {
                 .containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
     }
 
+    @Test
+    void projectsOnlyTheCurrentFormsFrozenControls() {
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
+                .orElseThrow();
+        Map<String, Object> projected = SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper);
+
+        assertThat(projected).containsOnlyKeys("ctl-1");
+        assertThat(projected.get("ctl-1")).isInstanceOf(Map.class);
+        assertThat(SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "other-form", objectMapper)).isEmpty();
+    }
+
     private Map<String, Object> content(Map<String, Object> config) {
         return Map.of("forms", List.of(form("form-1", config)));
     }
