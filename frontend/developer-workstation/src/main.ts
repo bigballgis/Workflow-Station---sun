@@ -182,6 +182,9 @@ FcDesigner.addDragRule({
     if (rule._bindingId !== undefined) {
       rule.props._bindingId = rule._bindingId
     }
+    if (rule.batchControlId !== undefined) {
+      rule.props.batchControlId = rule.batchControlId
+    }
     rule.props._displayTitle = typeof rule.title === 'string' ? rule.title : ''
   },
   // Move temporary props-panel values back to their canonical top-level fields.
@@ -199,6 +202,10 @@ FcDesigner.addDragRule({
         : ''
       delete rule.props._displayTitle
     }
+    if (rule.props && rule.props.batchControlId !== undefined) {
+      rule.batchControlId = rule.props.batchControlId
+      delete rule.props.batchControlId
+    }
   },
   // Keep canonical top-level fields in sync while the props panel is being edited.
   watch: {
@@ -213,11 +220,11 @@ FcDesigner.addDragRule({
     const r = {
       type: 'subTable',
       _bindingId: null,
+      batchControlId: createBatchControlId(),
       title: 'Sub-Table',
       props: {
         _bindingId: null,
         _displayTitle: 'Sub-Table',
-        batchControlId: createBatchControlId(),
       }
     }
     ensureEmptyRuleComponentEvents(r)

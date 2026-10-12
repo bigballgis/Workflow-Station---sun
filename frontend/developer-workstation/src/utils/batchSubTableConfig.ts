@@ -38,7 +38,8 @@ export function hasEnabledBatchOperation(rule: RuleLike): boolean {
 /**
  * A batch-enabled SubTable is addressed by a stable control ID, never by a
  * binding ID or its array position. The props slot is accepted while the
- * form-create panel is editing a rule; the parser persists the same identity.
+ * form-create panel is editing a rule; the SubTable parser persists it at the
+ * rule's top level.
  */
 export function validateEnabledBatchControlIds(rules: RuleLike[]): boolean {
   const ids = new Set<string>()
