@@ -32,6 +32,7 @@ public final class FormConfigJsonBindingIdRewriter {
 
     private static final String[] BINDING_KEYED_FIELDS = {
             "subForms",
+            "batchForms",
             "subListViews",
             "relationViews",
             "subTablePortalViews"
@@ -72,6 +73,7 @@ public final class FormConfigJsonBindingIdRewriter {
         }
         remapRuleBindingIds(configJson.get("rule"), ctx);
         remapSubFormRules(configJson.get("subForms"), ctx);
+        remapSubFormRules(configJson.get("batchForms"), ctx);
         remapSubListViewColumnBindingRefs(configJson.get("subListViews"), ctx);
         remapPortalViewsValues(configJson.get("subTablePortalViews"), ctx);
     }

@@ -81,6 +81,31 @@ class FormConfigJsonBindingIdRewriterTest {
     }
 
     @Test
+    void remapBindingIds_remapsBatchFormKeysAndNestedRule() {
+        List<Map<String, Object>> batchFormRule = new ArrayList<>(List.of(
+                new LinkedHashMap<>(Map.of("type", "subTable", "_bindingId", 101))
+        ));
+        Map<String, Object> batchForms = new LinkedHashMap<>();
+        batchForms.put("101", Map.of("rule", batchFormRule));
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("batchForms", batchForms);
+
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, Map.of(101L, 501L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> remappedBatchForms = (Map<String, Object>) configJson.get("batchForms");
+        assertTrue(remappedBatchForms.containsKey("501"));
+        assertFalse(remappedBatchForms.containsKey("101"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> batchForm = (Map<String, Object>) remappedBatchForms.get("501");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> node = (Map<String, Object>) ((List<?>) batchForm.get("rule")).get(0);
+        assertEquals(501L, ((Number) node.get("_bindingId")).longValue());
+    }
+
+    @Test
     void remapBindingIds_remapsLookupConfigBindingIdOnLookupNode() {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("lookupConfig",
