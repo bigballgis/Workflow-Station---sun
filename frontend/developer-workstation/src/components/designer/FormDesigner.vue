@@ -2145,6 +2145,10 @@ const designerConfig = computed(() => ({
         }
 
         return [
+          { type: 'switch', field: 'allowBatchAdd', title: t('form.subTablePermission.allowBatchAdd'), value: false },
+          { type: 'switch', field: 'allowBatchEdit', title: t('form.subTablePermission.allowBatchEdit'), value: false },
+          { type: 'switch', field: 'allowBatchDelete', title: t('form.subTablePermission.allowBatchDelete'), value: false },
+          { type: 'switch', field: 'allowBatchAssign', title: t('form.subTablePermission.allowBatchAssign'), value: false },
           { type: 'switch', field: 'allowAdd', title: t('form.subTablePermission.allowAdd'), value: true },
           { type: 'switch', field: 'allowEdit', title: t('form.subTablePermission.allowEdit'), value: true },
           { type: 'switch', field: 'allowDelete', title: t('form.subTablePermission.allowDelete'), value: true },

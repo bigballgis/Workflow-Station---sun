@@ -961,6 +961,10 @@ export default {
       detailsTitle: 'File details',
     },
     subTablePermission: {
+      allowBatchAdd: 'Allow Batch Add',
+      allowBatchEdit: 'Allow Batch Edit',
+      allowBatchDelete: 'Allow Batch Delete',
+      allowBatchAssign: 'Allow Batch Assign',
       allowAdd: 'Allow Add',
       allowEdit: 'Allow Edit',
       allowDelete: 'Allow Delete',

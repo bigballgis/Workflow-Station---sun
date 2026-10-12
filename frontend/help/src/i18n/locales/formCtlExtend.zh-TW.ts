@@ -8,7 +8,7 @@ export default {
   catalogExtendBody:
     '下列標籤對應此控制項 Component 屬性。設計器介面是英文。空白表示該列寫明的預設值，除非標明必填。',
   subTable: {
-    summary: '繫結的子表網格（help_pr_line）。繫結、允許增刪改、List View 欄。',
+    summary: '繫結的子表網格（help_pr_line）。逐列與批次權限、List View 欄。',
     crumb: '開發工作站 · 功能單元 · 表單設計 · Controls · Extend · Sub-Table',
     intro:
       '繫結 SUB 表的網格。先在 [[/table-bindings]] 掛表。採購申請上是 help_pr_line。和 [[/form-ctl-lookup]]（搜一行）以及 Inline Form（同一張 SUB 表單鋪在原位、沒有網格）不同。',
@@ -16,10 +16,14 @@ export default {
     whatBody:
       '表單上的 SUB 表列網格。採購申請上是 help_pr_line。Allow 開關開啟時可以增刪改列。事件裡的 value 是改完後的列清單，空表示沒有列。',
     howBody:
-      '選取占位。Sub Table Binding 選已在 [[/table-bindings]] 掛上的 SUB 表（help_pr_line）。依需要勾 Allow Add、Allow Edit、Allow Delete。Compact cells 讓 lookup 與使用者儲存格保持一行。開啟 List View 勾 Table Columns，並用 Extend Action 加 Link Form 或 Lookup 欄。儲存表單。預覽網格。',
-    propsFigure: '表單設計。選取 Sub-Table。右側：Sub Table Binding、Allow Add / Edit / Delete、Compact cells。',
+      '選取占位。Sub Table Binding 選已在 [[/table-bindings]] 掛上的 SUB 表（help_pr_line）。Batch 四個開關只用於已另行設計批次表單的子表，預設全關；Batch Add、Edit、Delete、Assign 相互獨立，也不改變既有 Allow Add、Allow Edit、Allow Delete。再依需要勾逐列操作的 Allow 開關。Compact cells 讓 lookup 與使用者儲存格保持一行。開啟 List View 勾 Table Columns，並用 Extend Action 加 Link Form 或 Lookup 欄。儲存表單。預覽網格。',
+    propsFigure: '表單設計。選取 Sub-Table。右側：批次權限、逐列 Allow Add / Edit / Delete、Compact cells。',
     catBinding: '必填。網格顯示的 SUB 或 ACTION 表。空白時畫布顯示 No Sub Table selected，且無法儲存。',
     catSelect: 'Sub Table Binding 的下拉占位。空清單顯示 No Sub Tables available — 先在 [[/table-bindings]] 繫結一張 SUB 表。',
+    catAllowBatchAdd: '預設關閉。只有批次表單與執行時授權皆有效時，允許 Batch Edit 工作區新增業務列；不改變 Allow Add。',
+    catAllowBatchEdit: '預設關閉。只有執行時授權允許時，允許 Batch Edit 工作區修改獨立批次表單包含的欄位；不改變 Allow Edit。',
+    catAllowBatchDelete: '預設關閉。允許 Batch Edit 工作區刪除已授權的業務列；不改變 Allow Delete。',
+    catAllowBatchAssign: '預設關閉。只有關聯子任務尚未產生時，允許 Batch Edit 工作區設定初次辦理人或 BU+Role；絕不改派既有任務。',
     catAllowAdd: '開啟：可以新增列。關閉則沒有 Add。ACTION 繫結不顯示這一列。',
     catAllowEdit: '開啟：可以編輯列。關閉則唯讀。ACTION 繫結不顯示這一列。',
     catAllowDelete: '開啟：可以刪除列。關閉則列保留。ACTION 繫結不顯示這一列。',

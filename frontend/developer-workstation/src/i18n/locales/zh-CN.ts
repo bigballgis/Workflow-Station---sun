@@ -1008,6 +1008,10 @@ export default {
       detailsTitle: '文件详情',
     },
     subTablePermission: {
+      allowBatchAdd: '允许批量新增',
+      allowBatchEdit: '允许批量编辑',
+      allowBatchDelete: '允许批量删除',
+      allowBatchAssign: '允许批量分派',
       allowAdd: '允许新增',
       allowEdit: '允许编辑',
       allowDelete: '允许删除',

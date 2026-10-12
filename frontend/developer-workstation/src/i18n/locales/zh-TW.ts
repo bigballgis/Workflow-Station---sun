@@ -1008,6 +1008,10 @@ export default {
     uploadWaitUntilComplete: '請等待檔案上傳完成後再儲存。',
     uploadFixFailedBeforeSubmit: '有檔案上傳失敗。請刪除或重新上傳後再儲存。',
     subTablePermission: {
+      allowBatchAdd: '允許批量新增',
+      allowBatchEdit: '允許批量編輯',
+      allowBatchDelete: '允許批量刪除',
+      allowBatchAssign: '允許批量分派',
       allowAdd: '允許新增',
       allowEdit: '允許編輯',
       allowDelete: '允許刪除',

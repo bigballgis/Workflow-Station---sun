@@ -8,7 +8,7 @@ export default {
   catalogExtendBody:
     '下列标签对应该控件 Component 属性。设计器界面是英文。空白表示该行写明的默认值，除非标明必填。',
   subTable: {
-    summary: '绑定的子表网格（help_pr_line）。绑定、允许增删改、List View 列。',
+    summary: '绑定的子表网格（help_pr_line）。逐行与批量权限、List View 列。',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls · Extend · Sub-Table',
     intro:
       '绑定 SUB 表的网格。先在 [[/table-bindings]] 挂表。采购申请上是 help_pr_line。和 [[/form-ctl-lookup]]（搜一行）以及 Inline Form（同一张 SUB 表单铺在原位、没有网格）不同。',
@@ -16,10 +16,14 @@ export default {
     whatBody:
       '表单上的 SUB 表行网格。采购申请上是 help_pr_line。Allow 开关打开时可以增删改行。事件里的 value 是改完后的行列表，空表示没有行。',
     howBody:
-      '选中占位。Sub Table Binding 选已在 [[/table-bindings]] 挂上的 SUB 表（help_pr_line）。按需要勾 Allow Add、Allow Edit、Allow Delete。Compact cells 让 lookup 和用户单元格保持一行。打开 List View 勾 Table Columns，并用 Extend Action 加 Link Form 或 Lookup 列。保存表单。预览网格。',
-    propsFigure: '表单设计。选中 Sub-Table。右侧：Sub Table Binding、Allow Add / Edit / Delete、Compact cells。',
+      '选中占位。Sub Table Binding 选已在 [[/table-bindings]] 挂上的 SUB 表（help_pr_line）。Batch 四项开关只用于已单独设计批量表单的子表，默认都关闭；Batch Add、Edit、Delete、Assign 相互独立，也不改变原有 Allow Add、Allow Edit、Allow Delete。再按需要勾逐行操作的 Allow 开关。Compact cells 让 lookup 和用户单元格保持一行。打开 List View 勾 Table Columns，并用 Extend Action 加 Link Form 或 Lookup 列。保存表单。预览网格。',
+    propsFigure: '表单设计。选中 Sub-Table。右侧：批量权限、逐行 Allow Add / Edit / Delete、Compact cells。',
     catBinding: '必填。网格显示的 SUB 或 ACTION 表。空白时画布显示 No Sub Table selected，且无法保存。',
     catSelect: 'Sub Table Binding 的下拉占位。空列表显示 No Sub Tables available — 先在 [[/table-bindings]] 绑定一张 SUB 表。',
+    catAllowBatchAdd: '默认关闭。仅在批量表单和运行时授权均有效时，允许 Batch Edit 工作区新增业务行；不改变 Allow Add。',
+    catAllowBatchEdit: '默认关闭。仅在运行时授权允许时，允许 Batch Edit 工作区修改独立批量表单包含的字段；不改变 Allow Edit。',
+    catAllowBatchDelete: '默认关闭。允许 Batch Edit 工作区删除已授权的业务行；不改变 Allow Delete。',
+    catAllowBatchAssign: '默认关闭。仅在关联子任务尚未生成时，允许 Batch Edit 工作区配置初次办理人或 BU+Role；绝不改派已有任务。',
     catAllowAdd: '打开：可以新增行。关闭则没有 Add。ACTION 绑定不显示这一行。',
     catAllowEdit: '打开：可以编辑行。关闭则只读。ACTION 绑定不显示这一行。',
     catAllowDelete: '打开：可以删除行。关闭则行保留。ACTION 绑定不显示这一行。',

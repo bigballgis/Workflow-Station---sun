@@ -8,7 +8,7 @@ export default {
   catalogExtendBody:
     'Labels below match this control’s Component props. Designer locale is English. Blank means the listed default unless the row says required.',
   subTable: {
-    summary: 'Bound child grid (help_pr_line). Binding, Allow Add/Edit/Delete, List View columns.',
+    summary: 'Bound child grid (help_pr_line). Individual and batch permissions, List View columns.',
     crumb: 'Developer Workstation · Function Units · Form Design · Controls · Extend · Sub-Table',
     intro:
       'Grid of a bound SUB table. Attach the table in [[/table-bindings]] first. On Purchase Request this is help_pr_line. Differs from [[/form-ctl-lookup]] (search-and-pick one row) and Inline Form (the same SUB form in place, no grid).',
@@ -16,10 +16,14 @@ export default {
     whatBody:
       'A grid of SUB table rows on the form. On Purchase Request that is help_pr_line. The person adds, edits, and deletes rows when those Allow switches are on. Event value is the row list after those edits; empty means no rows.',
     howBody:
-      'Select the placeholder. Sub Table Binding: choose the SUB already attached in [[/table-bindings]] (help_pr_line). Tick Allow Add, Allow Edit, Allow Delete as needed. Compact cells keeps lookup and user cells on one line. Open List View to pick Table Columns and Extend Action (Link Form or Lookup columns). Save the form. Preview the grid.',
-    propsFigure: 'Form Design. Sub-Table selected. Right panel: Sub Table Binding, Allow Add / Edit / Delete, Compact cells.',
+      'Select the placeholder. Sub Table Binding: choose the SUB already attached in [[/table-bindings]] (help_pr_line). Set the Batch switches only for a separately designed batch form; all four are off by default. Batch Add, Edit, Delete, and Assign are independent and do not change the existing Allow Add, Allow Edit, or Allow Delete switches. Then tick the individual-row Allow switches as needed. Compact cells keeps lookup and user cells on one line. Open List View to pick Table Columns and Extend Action (Link Form or Lookup columns). Save the form. Preview the grid.',
+    propsFigure: 'Form Design. Sub-Table selected. Right panel: batch permissions, individual-row Allow Add / Edit / Delete, Compact cells.',
     catBinding: 'Required. The SUB or ACTION table this grid shows. Blank: the canvas reads No Sub Table selected, and save is blocked.',
     catSelect: 'Dropdown placeholder on Sub Table Binding. Empty list reads No Sub Tables available — bind a SUB table in [[/table-bindings]] first.',
+    catAllowBatchAdd: 'Off by default. Allows the Batch Edit workspace to add business rows only when the batch form and runtime authorization are valid. It does not change Allow Add.',
+    catAllowBatchEdit: 'Off by default. Allows the Batch Edit workspace to change the fields included in its separate batch form, subject to runtime authorization. It does not change Allow Edit.',
+    catAllowBatchDelete: 'Off by default. Allows the Batch Edit workspace to delete authorized business rows. It does not change Allow Delete.',
+    catAllowBatchAssign: 'Off by default. Allows the Batch Edit workspace to configure an initial assignee or BU and Role only before the related subtask exists. It never reassigns an existing task.',
     catAllowAdd: 'On: people can add rows. Off hides Add. ACTION bindings omit this row.',
     catAllowEdit: 'On: people can edit rows. Off is view-only. ACTION bindings omit this row.',
     catAllowDelete: 'On: people can delete rows. Off keeps rows. ACTION bindings omit this row.',
