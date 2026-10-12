@@ -271,9 +271,7 @@ public class ProcessStartComponent {
         isolateStartSubTables(variables, request, pin.code(), pin.catalogId());
         // Build the capability contract before Flowable starts, from this exact
         // catalog response. It stays only in local ProcessInstance.variables.
-        Map<String, Object> persistedVariables = new HashMap<>(variables);
-        SubTableBatchRuntimeSnapshot.capture(def.catalogContent(), pin, new ObjectMapper())
-                .ifPresent(snapshot -> persistedVariables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot));
+        Map<String, Object> persistedVariables = withBatchRuntimeSnapshot(variables, def.catalogContent(), pin);
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
@@ -377,6 +375,19 @@ public class ProcessStartComponent {
         variables.put("initiator", userId);
         variables.put("functionUnitId", catalogId);
         variables.put("functionUnitCode", catalogCode);
+    }
+
+    /**
+     * Copies engine variables into the local persistence representation and adds
+     * the catalog-pinned batch contract only there. Keeping this boundary explicit
+     * prevents a future engine call from accidentally receiving the reserved key.
+     */
+    static Map<String, Object> withBatchRuntimeSnapshot(
+            Map<String, Object> engineVariables, Map<String, Object> catalogContent, ActiveCatalogPin pin) {
+        Map<String, Object> persistedVariables = new HashMap<>(engineVariables);
+        SubTableBatchRuntimeSnapshot.capture(catalogContent, pin, new ObjectMapper())
+                .ifPresent(snapshot -> persistedVariables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot));
+        return persistedVariables;
     }
 
     private ActiveCatalogPin resolveActiveCatalogPin(String userId, String processKey, boolean internal) {

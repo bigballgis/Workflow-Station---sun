@@ -70,6 +70,18 @@ class SubTableBatchRuntimeSnapshotTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Duplicate batchControlId");
     }
 
+    @Test
+    void addsSnapshotOnlyToTheLocalPersistenceCopy() {
+        Map<String, Object> engineVariables = new java.util.LinkedHashMap<>(Map.of("businessValue", "keep"));
+
+        Map<String, Object> localVariables = ProcessStartComponent.withBatchRuntimeSnapshot(
+                engineVariables, content(config(true, "ctl-1")), pin);
+
+        assertThat(engineVariables).containsOnly(Map.entry("businessValue", "keep"));
+        assertThat(localVariables).containsEntry("businessValue", "keep")
+                .containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+    }
+
     private Map<String, Object> content(Map<String, Object> config) {
         return Map.of("forms", List.of(form("form-1", config)));
     }
