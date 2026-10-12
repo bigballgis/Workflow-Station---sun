@@ -7,6 +7,7 @@ import '@fontsource-variable/inter'
 import FcDesigner from '@form-create/designer'
 import formCreateMenus from '@form-create/designer/src/config/menu'
 import { ensureEmptyRuleComponentEvents } from '@/utils/formCreateDefaultEvents'
+import { createBatchControlId } from '@/utils/batchSubTableConfig'
 // Import form-create styles
 import '@form-create/designer/src/style/index.css'
 import '@form-create/designer/src/style/icon.css'
@@ -216,6 +217,7 @@ FcDesigner.addDragRule({
       props: {
         _bindingId: null,
         _displayTitle: 'Sub-Table',
+        batchControlId: createBatchControlId(),
       }
     }
     ensureEmptyRuleComponentEvents(r)
