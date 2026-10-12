@@ -38,6 +38,13 @@ export type NavNode = NavGroup | NavLeaf
 /** Add a guideline: append here, then add the view + i18n keys + a NAV_TREE leaf. */
 export const GUIDELINES: Guideline[] = [
   {
+    id: 'table-data',
+    path: '/table-data',
+    titleKey: 'guides.tableData.title',
+    summaryKey: 'guides.tableData.summary',
+    load: () => import('@/views/TableDataGuide.vue'),
+  },
+  {
     id: 'computed-fields',
     path: '/computed-fields',
     titleKey: 'guides.computedFields.title',
@@ -405,7 +412,7 @@ export const NAV_TREE: NavNode[] = [
             titleKey: 'nav.acTableStructure',
             to: '/computed-fields#relation',
           },
-          { kind: 'leaf', id: 'ac-rt-data', titleKey: 'nav.acTableData' },
+          { kind: 'leaf', id: 'ac-rt-data', titleKey: 'nav.acTableData', to: '/table-data' },
         ],
       },
       {

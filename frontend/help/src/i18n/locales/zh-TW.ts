@@ -1,3 +1,4 @@
+import tableDataMessages from './tableData.zh-TW'
 import formEventMessages from './formEvents.zh-TW'
 import formCtlMessages from './formCtl.zh-TW'
 import tableDesignMessages from './tableDesign.zh-TW'
@@ -155,6 +156,7 @@ export default {
     upProfileSetup: '用戶檔案設置',
   },
   guides: {
+    tableData: { title: "表資料管理", summary: "按功能單元尋找已部署的表並瀏覽記錄。" },
     fuDocuments: {
       title: 'Requirements 與 Function Unit Design',
       summary: '功能單元的兩份 Markdown 文件：編輯、匯入、下載、版本，以及 AI Studio 在哪裡寫入它們。',
@@ -811,4 +813,5 @@ export default {
   ...fuDocumentsMessages,
   ...aiStudioMessages,
   ...slaPoliciesMessages,
+  ...tableDataMessages,
 }

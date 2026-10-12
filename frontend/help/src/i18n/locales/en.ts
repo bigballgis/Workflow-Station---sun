@@ -1,3 +1,4 @@
+import tableDataMessages from './tableData.en'
 import formEventMessages from './formEvents.en'
 import formCtlMessages from './formCtl.en'
 import tableDesignMessages from './tableDesign.en'
@@ -155,6 +156,7 @@ export default {
     upProfileSetup: 'User Profile Setup',
   },
   guides: {
+    tableData: { title: "Table Data", summary: "Find deployed tables by Function Unit and browse their records." },
     fuDocuments: {
       title: 'Requirements and Function Unit Design',
       summary: 'The two Markdown documents of a Function Unit: edit, import, download, versions, and where AI Studio writes to them.',
@@ -868,4 +870,5 @@ export default {
   ...fuDocumentsMessages,
   ...aiStudioMessages,
   ...slaPoliciesMessages,
+  ...tableDataMessages,
 }
