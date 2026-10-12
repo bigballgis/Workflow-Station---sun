@@ -206,6 +206,11 @@ public class ProcessInstanceHydrationComponent {
                     out.put(String.valueOf(k), v);
                 }
             });
+            // This metadata is generated only by the portal's catalog-pinned start
+            // path. An engine-only/hydrated instance must remain batch-disabled;
+            // it must never smuggle a client or engine supplied replacement into
+            // the local runtime snapshot namespace.
+            out.remove(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
             return out;
         }
         return new HashMap<>();
