@@ -269,6 +269,11 @@ public class ProcessStartComponent {
         }
         processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables);
         isolateStartSubTables(variables, request, pin.code(), pin.catalogId());
+        // Build the capability contract before Flowable starts, from this exact
+        // catalog response. It stays only in local ProcessInstance.variables.
+        Map<String, Object> persistedVariables = new HashMap<>(variables);
+        SubTableBatchRuntimeSnapshot.capture(def.catalogContent(), pin, new ObjectMapper())
+                .ifPresent(snapshot -> persistedVariables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot));
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
@@ -296,9 +301,17 @@ public class ProcessStartComponent {
         // behaviour, where the
         // row was not visible until the whole method committed after all the engine
         // round-trips.
-        tx().executeWithoutResult(status -> persistRunningProcessInstance(
-                flowableProcessInstanceId, data, processKey, def.processName(), request,
-                userId, startUserDisplayName, variables, pin));
+        try {
+            tx().executeWithoutResult(status -> persistRunningProcessInstance(
+                    flowableProcessInstanceId, data, processKey, def.processName(), request,
+                    userId, startUserDisplayName, persistedVariables, pin));
+        } catch (RuntimeException persistFailure) {
+            boolean compensated = compensateUnpersistedEngineStart(flowableProcessInstanceId);
+            log.error("Failed to persist local process instance {} after Flowable start; engine compensationSucceeded={}",
+                    flowableProcessInstanceId, compensated, persistFailure);
+            throw new IllegalStateException("Could not persist process start; the engine instance was "
+                    + (compensated ? "cancelled" : "flagged for operator remediation"), persistFailure);
+        }
         // Engine HTTP (claim/complete first task, query next) — runs with NO ambient tx
         // / no connection held.
         // Its own internal writes are individually transactional
@@ -336,7 +349,8 @@ public class ProcessStartComponent {
      * Process name / BPMN XML / deployed process key loaded from FU content for one
      * start request.
      */
-    private record LoadedStartDefinition(String processName, String bpmnXml, String flowableProcessKey) {
+    private record LoadedStartDefinition(
+            String processName, String bpmnXml, String flowableProcessKey, Map<String, Object> catalogContent) {
     }
 
     /**
@@ -391,6 +405,7 @@ public class ProcessStartComponent {
         // Load process definition name and BPMN XML
         String processName = processKey;
         String bpmnXml = null;
+        Map<String, Object> catalogContent = null;
 
         // Prefer deployed process definition key from API response (most reliable).
         // admin-center API returns this in
@@ -400,6 +415,7 @@ public class ProcessStartComponent {
         try {
             Map<String, Object> content = processComponent.getFunctionUnitContent(pin.catalogId());
             if (content != null) {
+                catalogContent = content;
                 if (content.get("name") != null) {
                     processName = (String) content.get("name");
                 }
@@ -425,7 +441,7 @@ public class ProcessStartComponent {
         if (bpmnXml == null) {
             throw new IllegalStateException("Cannot obtain process definition BPMN: " + processKey);
         }
-        return new LoadedStartDefinition(processName, bpmnXml, flowableProcessKey);
+        return new LoadedStartDefinition(processName, bpmnXml, flowableProcessKey, catalogContent);
     }
 
     private String deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
@@ -598,6 +614,29 @@ public class ProcessStartComponent {
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);
     }
 
+    /**
+     * A Flowable start precedes the local ProcessInstance insert. If that insert
+     * fails, remove the engine instance synchronously so it cannot become an
+     * orphan that later hydrates against a newer catalog definition.
+     */
+    private boolean compensateUnpersistedEngineStart(String processInstanceId) {
+        try {
+            if (workflowEngineClient.cancelProcessInstance(processInstanceId,
+                    "Portal ProcessInstance persistence failed").isPresent()) {
+                return true;
+            }
+        } catch (RuntimeException ex) {
+            log.error("Engine cancellation failed for unpersisted process instance {}", processInstanceId, ex);
+        }
+        try {
+            // Last-resort cleanup is intentionally scoped to the just-created ID.
+            return workflowEngineClient.purgeProcessInstance(processInstanceId);
+        } catch (RuntimeException ex) {
+            log.error("Engine purge failed for unpersisted process instance {}", processInstanceId, ex);
+            return false;
+        }
+    }
+
     private FirstTaskOutcome autoCompleteFirstTask(
             String flowableProcessInstanceId, String userId, Map<String, Object> variables, ActiveCatalogPin pin) {
         // Auto-complete only when the first user task is a true initiator / start-form
@@ -674,7 +713,12 @@ public class ProcessStartComponent {
             meetingParticipantVariablesPersistence.persistIfApplicable(
                     flowableProcessInstanceId, variables, pin.code());
             processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(pi -> {
-                pi.setVariables(new HashMap<>(variables));
+                Map<String, Object> mergedVariables = new HashMap<>();
+                if (pi.getVariables() != null) {
+                    mergedVariables.putAll(pi.getVariables());
+                }
+                mergedVariables.putAll(variables);
+                pi.setVariables(mergedVariables);
                 processInstanceRepository.save(pi);
             });
         }
