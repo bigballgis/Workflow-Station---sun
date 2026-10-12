@@ -2148,6 +2148,7 @@ export default {
   },
   subTableView: {
     formDesign: '表单设计',
+    batchForm: '批量表单',
     listView: '列表视图',
     tableColumns: '表字段',
     extendAction: 'Extend Action',

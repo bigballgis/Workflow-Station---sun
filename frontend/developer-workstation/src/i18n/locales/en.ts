@@ -2159,6 +2159,7 @@ export default {
   },
   subTableView: {
     formDesign: 'Form Design',
+    batchForm: 'Batch Form',
     listView: 'List View',
     tableColumns: 'Table Columns',
     extendAction: 'Extend Action',
