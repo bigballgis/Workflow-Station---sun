@@ -22,6 +22,8 @@ CONDITIONAL。本次 P3 代码批次已补齐工作区混合操作、冻结行�
 - `SubTableBatchAddedRowGuard`：新增 canonical 行必须验证完整字段和不在批量表单中的额外字段，不能只验证声明字段名。
   - 影响：可伪造隐藏业务字段、非法值或重复身份。
   - 处置：完整新行按冻结字段类型、必填、范围、表单规则和允许列校验；拒绝非空计算字段赋值、未授权额外列及重复身份。新增负例通过。
+- numeric/string 行身份匹配与既有 scope 契约不一致，可能让同一已有身份被声明成 ADD。
+  - 处置：前后端都按既有 scope 的身份值语义比较；新增 number/string 等价身份的重复 ADD 负例。
 
 ### Major
 
@@ -36,6 +38,8 @@ CONDITIONAL。本次 P3 代码批次已补齐工作区混合操作、冻结行�
   - 处置：DW 保存校验配置完整性，服务器捕获时再次检查必填用户字段。三语错误文案同步。
 - Add-only/Delete-only 入口、读取混合 Assignment 表单、过期弹窗与重复 PK。
   - 处置：统一工作区按独立能力禁用普通编辑；专用 Assignment 不作为普通列解析；应用前后复核基线；重复 PK 全批拒绝；删除及编辑列表分页，单次最多 200 个受影响行。
+- 批量工作区缺少帮助入口。
+  - 处置：新增/编辑和删除弹窗复用既有红色 `?` 组件；扩展现有 Sub-Table 文章的 `#batch`，三语及 llms 索引同步，不新增第二个文档站点。布局截图仍未验证。
 
 ### Minor
 
@@ -66,14 +70,16 @@ CONDITIONAL。本次 P3 代码批次已补齐工作区混合操作、冻结行�
 - `mvn -q -pl backend/user-portal -am package -DskipTests`：通过。
 - `pnpm -C frontend/developer-workstation run build`：通过。
 - `pnpm -C frontend/user-portal run build`：通过；现有 Sass / chunk-size warning 未隐藏。
+- `pnpm -C frontend/help run build`：通过。
 - Portal 全量 `typecheck`：未通过，不能宣称全仓类型门禁通过。触及链上的剩余输出为存量 `SubTableField.vue` 的 null bindingLinkMode 类型和未使用 FieldRenderer；本批新增文件/函数的类型错误已消除。
 - `git diff --cached --check`：通过。
 
 ## 测试与运行证据
 
 - 后端实际执行：SubTableBatchRuntimeSnapshotTest、SubTableBatchRowDesignTest、SubTableBatchScopeDesignTest、SubTableBatchAddedRowGuardTest、SubTableBatchMembershipGuardTest、SubTableBatchSubmittedRowsTest、SubTableBatchDeleteReferenceGuardTest、SubTableBatchFormRulesTest、PortalBatchPrimaryKeyAllocationComponentTest、SubTableBindingScopeGuardTest、TaskApprovalCompletionSubTableGuardTest：通过。
-- Portal 批量 helpers、工作区、保存串行、真实 submit payload 及 projection：本次组合命令 10 个文件、59 个测试通过；其后加入 mixed Assignment 解析测试，单独重跑相关两个文件，13 个测试通过。
+- Portal 批量 helpers、工作区、保存串行、真实 submit payload 及 projection：最终组合命令 10 个文件、61 个测试通过。
 - DW batchSubTableMembership / batchSubTableConfig：2 个文件、8 个测试通过。
+- Help：22 个测试及 typecheck 通过。
 - 完整 `pnpm -C frontend run regression:mi` 已执行，但 Playwright 打开 `http://localhost:3000/portal/` 30 秒超时，整体失败；不得用单元阶段通过代替完整门禁。
 - Docker Desktop 报无法启动；未部署本批新产物、未取得新运行截图，未进行双 FU/多操作者 UAT 或真实数据库事务回滚测试。
 

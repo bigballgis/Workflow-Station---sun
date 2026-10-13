@@ -1163,6 +1163,7 @@ export default {
     batchEdit: 'Batch Edit',
     batchAssign: 'Batch Assign',
     batchAddCount: 'Rows to add',
+    batchGuideLinkAria: 'Open the batch workspace guide',
     batchLimit: 'A batch can change up to 200 rows. Reduce the selection or split the changes.',
     batchInvalidField: 'Check {label} in row {row}. The batch has not been applied.',
     batchDuplicateIdentity: 'A new row has a missing or duplicate primary key. The batch has not been applied.',

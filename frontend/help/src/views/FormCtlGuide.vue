@@ -90,6 +90,9 @@ const sections = computed((): GuideSection[] => {
       samples: [...basis, ...def.value.catalog],
     },
   ]
+  if (def.value.id === 'subTable') {
+    out.push(batchWorkspaceSection(p))
+  }
   if (def.value.includeStyle !== false) {
     out.push({
       anchor: 'style',
@@ -120,4 +123,15 @@ const sections = computed((): GuideSection[] => {
   )
   return out
 })
+
+function batchWorkspaceSection(prefix: string): GuideSection {
+  return { anchor: 'batch', titleKey: `${prefix}.batchTitle`, bodyKey: `${prefix}.batchBody`,
+    sampleLayout: 'block', samples: [
+      { code: 'Rows to add · Add', hintKey: `${prefix}.batchAddHint` },
+      { code: 'Selection · Delete', hintKey: `${prefix}.batchDeleteHint` },
+      { code: 'Set selected · No change / Set value / Clear value', hintKey: `${prefix}.batchSetHint` },
+      { code: 'Apply', hintKey: `${prefix}.batchApplyHint` },
+      { code: 'Cancel', hintKey: `${prefix}.batchCancelHint` },
+    ] }
+}
 </script>

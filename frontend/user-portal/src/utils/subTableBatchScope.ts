@@ -1,5 +1,12 @@
 import { parseSubTableBatchCapability } from './subTableBatchCapability'
 import type { SubTableBatchChange } from './subTableBatchChanges'
+import { rowKeyForScope } from '@/composables/tasks/subTableCanonicalStamp'
+
+export function batchScopeIdentity(row: Record<string, unknown>, primaryKeyFields?: string[] | null): string | null {
+  const key = rowKeyForScope(row, primaryKeyFields)
+  return key ? JSON.stringify(Object.entries(key).map(([field, value]) => [field, String(value)])
+    .sort(([left], [right]) => left!.localeCompare(right!))) : null
+}
 
 /** Freeze transport identity/FK semantics only for bindings carrying membership changes. */
 export function batchMembershipBindings<T extends { bindingId?: number | string }>(

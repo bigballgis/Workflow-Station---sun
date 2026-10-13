@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { batchMembershipBindings } from '../subTableBatchScope'
+import { batchMembershipBindings, batchScopeIdentity } from '../subTableBatchScope'
 import type { SubTableBatchChange } from '../subTableBatchChanges'
 
 const change: SubTableBatchChange = { batchControlId: 'grid', bindingId: '101', operation: 'DELETE', rowPatches: [] }
@@ -11,6 +11,10 @@ const capability = { batchControlId: 'grid', bindingId: '101', capabilities: { a
 }
 
 describe('batch membership scope transport', () => {
+  it('matches numeric and string identities consistently with the server scope contract', () => {
+    expect(batchScopeIdentity({ code: 7 }, ['code'])).toBe(batchScopeIdentity({ code: '7' }, ['code']))
+    expect(batchScopeIdentity({ code: '8' }, ['code'])).not.toBe(batchScopeIdentity({ code: 7 }, ['code']))
+  })
   it('uses frozen PK/FK while keeping live page rows private and unchanged', () => {
     const [result] = batchMembershipBindings([binding], [change], { grid: capability })
     expect(result?.primaryKeyFields).toEqual(['published_key'])

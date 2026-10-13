@@ -8,6 +8,13 @@ export default {
   catalogExtendBody:
     '下列标签对应该控件 Component 属性。设计器界面是英文。空白表示该行写明的默认值，除非标明必填。',
   subTable: {
+    batchTitle: 'User Portal 批量工作区',
+    batchBody: '点击 Export 左侧的 Batch Edit。可用命令由批量开关和当前任务权限决定。仅新增模式下已有行只读；仅删除模式下可选行，不能改字段。设计器后来开启批量功能不会让旧申请获得此工作区。点击 Apply 前，弹窗中的草稿不写回页面。',
+    batchAddHint: '输入 1–200 行并点击 Add，再填写新增行。显示父记录下拉框时需选择父记录。必填字段和人工主键必须完整。自动主键在 Apply 时准备；Cancel 不分配主键。',
+    batchDeleteHint: '选中当前页的行并确认 Delete。删除刚新增的草稿只移除草稿。关联子数据或已变化的保存行会阻止删除，不会取消子任务。',
+    batchSetHint: '仅影响选中行。No change 保留各行原值；Set value 可设置字段允许的零、false 和空串；Clear value 仍需通过必填校验。已有主键、外键和计算字段只读。',
+    batchApplyHint: '整批校验最多 200 个受影响行，成功后一次更新页面。报错时先修正再应用；弹窗打开后表格已变化时需重新打开。原有 Save 或自动保存仍须成功。Apply 不创建任务。',
+    batchCancelHint: '丢弃独立草稿；有未应用修改时关闭需确认。原页面数据不变。',
     summary: '绑定的子表网格（help_pr_line）。逐行与批量权限、List View 列。',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls · Extend · Sub-Table',
     intro:

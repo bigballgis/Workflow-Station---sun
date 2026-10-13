@@ -1158,6 +1158,7 @@ export default {
     batchEdit: '批量编辑',
     batchAssign: '批量分派',
     batchAddCount: '新增行数',
+    batchGuideLinkAria: '打开批量工作区使用指南',
     batchLimit: '单次批量操作最多修改 200 行，请减少选择或分批操作。',
     batchInvalidField: '请检查第 {row} 行的 {label}，本批次尚未应用。',
     batchDuplicateIdentity: '新增行的主键缺失或重复，本批次尚未应用。',

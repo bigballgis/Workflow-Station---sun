@@ -658,6 +658,7 @@ import { rowKeyForScope } from '@/composables/tasks/subTableCanonicalStamp'
 import { allowsFrozenBatchAdd, allowsFrozenBatchAssign, allowsFrozenBatchDelete, allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
 import type { SubTableBatchChange } from '@/utils/subTableBatchChanges'
+import { batchScopeIdentity } from '@/utils/subTableBatchScope'
 import { pkNeedsAllocation } from '@/utils/subTableRowRuntime/pkPredicates'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
@@ -838,8 +839,8 @@ const batchWorkspaceCapability = computed(() => batchEditCapability.value ?? bat
 
 /** Batch edit never falls back to legacy id/name guesses: it requires a server rowKey or one configured PK. */
 function resolveBatchRowIdentity(row: Record<string, unknown>): string | null {
-  const key = resolveBatchRowScopeKey(row)
-  return key ? JSON.stringify(Object.entries(key).sort(([left], [right]) => left.localeCompare(right))) : null
+  const frozen = parseSubTableBatchCapability(props.batchCapability)?.rowDesign?.binding.primaryKeyFields
+  return batchScopeIdentity(row, frozen ?? props.primaryKeyFields)
 }
 
 function resolveBatchRowScopeKey(row: Record<string, unknown>): Record<string, unknown> | null {

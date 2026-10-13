@@ -2,7 +2,7 @@ import { finalizeSubTableRowOnSave, type AllocatePrimaryKeysFn } from './subTabl
 import { pkNeedsAllocation } from './subTableRowRuntime/pkPredicates'
 import { ensureRowIdentity } from './subTableRowIdentity'
 import { replaceAncestorRow } from './tableFkRuntime'
-import { rowKeyForScope } from '@/composables/tasks/subTableCanonicalStamp'
+import { batchScopeIdentity } from './subTableBatchScope'
 
 type FinalizeOptions = Parameters<typeof finalizeSubTableRowOnSave>[0]
 export type BatchAddOptions = Omit<FinalizeOptions, 'row'> & { rows: Array<Record<string, unknown>> }
@@ -68,6 +68,6 @@ function validateManualKeys(options: BatchAddOptions): void {
     }
   }
   if (!fields.length || fields.length !== options.primaryKeyFields?.length) return
-  const keys = options.rows.map(row => JSON.stringify(rowKeyForScope(row, options.primaryKeyFields)))
+  const keys = options.rows.map(row => batchScopeIdentity(row, options.primaryKeyFields))
   if (new Set(keys).size !== keys.length) throw new Error('Batch add contains duplicate manual primary keys')
 }

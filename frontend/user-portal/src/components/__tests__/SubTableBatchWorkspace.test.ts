@@ -33,7 +33,8 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
     visible: true, rows: initialRows, capability, showAdd: true, showDelete: true,
     rowIdentity: row => String(row.line_key), prepareRows,
   }, global: { stubs: {
-    ElDialog: { template: '<div><slot/><slot name="footer"/></div>' },
+    ElDialog: { template: '<div><slot name="header"/><slot/><slot name="footer"/></div>' },
+    DesignerHelpLink: { props: ['path', 'ariaLabel', 'testId'], template: '<a :href="path" :data-testid="testId"/>' },
     ElTable: true, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' },
     ElFormItem: { template: '<div><slot/></div>' }, ElInputNumber: true, ElButton: { template: '<button><slot/></button>' },
     ElPagination: true, ElDivider: true, ElSelect: true, ElOption: true, ElInput: true,
@@ -42,6 +43,11 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
 }
 
 describe('batch workspace Add/Delete transaction', () => {
+  it('links its header to the existing Sub-Table batch guideline', () => {
+    const { wrapper } = workspace()
+    expect(wrapper.get('[data-testid="batch-workspace-guide-link"]').attributes('href')).toBe('/form-ctl-sub-table#batch')
+    wrapper.unmount()
+  })
   it('keeps saved rows read-only in Add-only mode while accepting new rows', async () => {
     const { wrapper, state } = workspace()
     await wrapper.setProps({ allowEdit: false, showDelete: false })

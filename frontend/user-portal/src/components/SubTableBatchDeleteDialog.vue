@@ -1,5 +1,11 @@
 <template>
   <el-dialog :model-value="visible" :title="t('subTable.batchEdit')" width="min(760px, calc(100vw - 32px))" append-to-body :close-on-click-modal="false" @update:model-value="emit('update:visible', $event)">
+    <template #header>
+      <div class="batch-delete-dialog__title">
+        <span class="el-dialog__title">{{ t('subTable.batchEdit') }}</span>
+        <DesignerHelpLink path="/form-ctl-sub-table#batch" :aria-label="t('subTable.batchGuideLinkAria')" test-id="batch-delete-guide-link" />
+      </div>
+    </template>
     <p class="batch-delete-dialog__hint">{{ t('subTable.batchDeleteHint') }}</p>
     <el-table :data="pageRows" border size="small" max-height="420" @selection-change="onSelectionChange">
       <el-table-column type="selection" width="48" />
@@ -20,6 +26,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import type { Column } from '@/composables/subTableField/subTableFieldTypes'
 import type { SubTableBatchChange } from '@/utils/subTableBatchChanges'
+import DesignerHelpLink from './DesignerHelpLink.vue'
 
 const props = defineProps<{ visible: boolean; rows: Array<Record<string, unknown>>; columns: Column[]; batchControlId: string; bindingId: string; rowIdentity: (row: Record<string, unknown>) => string | null; rowScopeKey: (row: Record<string, unknown>) => Record<string, unknown> | null }>()
 const emit = defineEmits<{ (event: 'update:visible', value: boolean): void; (event: 'apply', rows: Array<Record<string, unknown>>, change: SubTableBatchChange): void }>()
@@ -51,4 +58,8 @@ async function apply() {
 }
 </script>
 
-<style scoped>.batch-delete-dialog__hint { margin-top: 0; color: var(--el-text-color-secondary); }</style>
+<style scoped>
+.batch-delete-dialog__hint { margin-top: 0; color: var(--el-text-color-secondary); }
+.batch-delete-dialog__title { display: flex; align-items: center; gap: 8px; }
+.batch-delete-dialog__title :deep(.designer-help-link) { color: var(--el-color-danger); }
+</style>

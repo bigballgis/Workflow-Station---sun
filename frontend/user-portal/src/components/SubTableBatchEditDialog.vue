@@ -7,6 +7,12 @@
     :close-on-click-modal="false"
     @update:model-value="close"
   >
+    <template #header>
+      <div class="batch-edit-dialog__title">
+        <span class="el-dialog__title">{{ t('subTable.batchEdit') }}</span>
+        <DesignerHelpLink path="/form-ctl-sub-table#batch" :aria-label="t('subTable.batchGuideLinkAria')" test-id="batch-workspace-guide-link" />
+      </div>
+    </template>
     <p class="batch-edit-dialog__hint">{{ t('subTable.batchEditDraftHint') }}</p>
     <el-form v-if="showAdd" label-width="auto" class="batch-edit-dialog__add">
       <el-form-item v-if="parentSelection && parentSelection.options.length > 1" :label="t('subTable.relatedParent', { tableName: parentSelection.parentTableName })" required>
@@ -76,6 +82,7 @@ import { firstBatchFieldError } from '@/utils/subTableBatchValidation'
 import { extractBatchEditableFields, type SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { applyBatchDraft } from '@/utils/subTableBatchDraft'
+import DesignerHelpLink from './DesignerHelpLink.vue'
 
 type BatchField = NonNullable<ReturnType<typeof extractBatchEditableFields>>[number]
 
@@ -298,6 +305,8 @@ function freshRows(): Array<Record<string, unknown>> {
 </script>
 
 <style scoped>
+.batch-edit-dialog__title { display: flex; align-items: center; gap: 8px; }
+.batch-edit-dialog__title :deep(.designer-help-link) { color: var(--el-color-danger); }
 .batch-edit-dialog__hint { margin-top: 0; color: var(--el-text-color-secondary); }
 .batch-edit-dialog__table { overflow-x: auto; }
 .batch-edit-dialog__uniform { max-width: 760px; }

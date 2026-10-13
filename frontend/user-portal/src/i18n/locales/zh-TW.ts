@@ -1158,6 +1158,7 @@ export default {
     batchEdit: '批次編輯',
     batchAssign: '批次分派',
     batchAddCount: '新增列數',
+    batchGuideLinkAria: '開啟批次工作區使用指南',
     batchLimit: '單次批次操作最多修改 200 列，請減少選取或分批操作。',
     batchInvalidField: '請檢查第 {row} 列的 {label}，此批次尚未套用。',
     batchDuplicateIdentity: '新增列的主鍵缺失或重複，此批次尚未套用。',
