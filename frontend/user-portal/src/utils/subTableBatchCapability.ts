@@ -4,6 +4,26 @@
  * never fall back to the live form rule.
  */
 import { isAssignmentConfigured, normalizeAssignmentConfig, type AssignmentConfig } from './miAssignmentConfig'
+import type { BindingFieldDefinition } from './subTableRowRuntime'
+import type { FkFillSourceConfig } from './tableFkRuntime'
+
+export interface BatchRowDesign {
+  binding: {
+    tableId: number
+    tableName?: string
+    bindingType: string
+    bindingMode: string
+    bindingLinkMode: string
+    primaryKeyFields: string[]
+    fieldDefinitions: BindingFieldDefinition[]
+    filterFkFieldName?: string
+    filterFkRefTableId?: number
+    foreignKeyField?: string
+    fkFillSources?: FkFillSourceConfig[]
+  }
+  fields: Array<{ fieldName: string; dataType?: string; nullable?: boolean; defaultValue?: unknown }>
+  parentTablesById: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+}
 
 export interface SubTableBatchCapability {
   batchControlId: string
@@ -26,6 +46,7 @@ export interface SubTableBatchCapability {
   }
   /** Present only for a frozen, BPMN-backed Batch Assign control. */
   assignmentConfig?: AssignmentConfig
+  rowDesign?: BatchRowDesign
 }
 
 export type BatchEditableField = {
@@ -33,6 +54,12 @@ export type BatchEditableField = {
   label: string
   type: string
   options: Array<{ label: string; value: unknown }>
+  required: boolean
+  defaultValue?: unknown
+  min?: number
+  max?: number
+  maxlength?: number
+  validators?: Array<{ type?: string; min?: number; max?: number; len?: number }>
 }
 
 const supportedEditTypes = new Set(['input', 'text', 'inputNumber', 'number', 'switch', 'select', 'date', 'datePicker', 'datetime'])
@@ -41,6 +68,17 @@ function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null
+}
+
+function parseRowDesign(value: unknown): BatchRowDesign | null {
+  const raw = record(value)
+  const binding = record(raw?.binding)
+  if (!raw || !binding || typeof binding.tableId !== 'number' || !Number.isInteger(binding.tableId)
+    || !Array.isArray(binding.primaryKeyFields) || !binding.primaryKeyFields.every(field => typeof field === 'string')
+    || !Array.isArray(binding.fieldDefinitions) || !binding.fieldDefinitions.every(field => typeof record(field)?.fieldName === 'string')
+    || !Array.isArray(raw.fields) || !raw.fields.every(field => typeof record(field)?.fieldName === 'string')
+    || !record(raw.parentTablesById)) return null
+  return raw as unknown as BatchRowDesign
 }
 
 /** Parse schema v1 exactly; absent values are never treated as enabled. */
@@ -66,6 +104,8 @@ export function parseSubTableBatchCapability(value: unknown): SubTableBatchCapab
   if (!batchForm.rule.every(item => record(item) !== null)) return null
   const assignmentConfig = normalizeAssignmentConfig(raw.assignmentConfig)
   if (flags.allowBatchAssign && !isAssignmentConfigured(assignmentConfig)) return null
+  const rowDesign = parseRowDesign(raw.rowDesign)
+  if ((flags.allowBatchAdd || flags.allowBatchDelete) && !rowDesign) return null
 
   return {
     batchControlId: raw.batchControlId.trim(),
@@ -78,6 +118,7 @@ export function parseSubTableBatchCapability(value: unknown): SubTableBatchCapab
       ...(record(batchForm.options) ? { options: batchForm.options as Record<string, unknown> } : {}),
     },
     ...(assignmentConfig ? { assignmentConfig } : {}),
+    ...(rowDesign ? { rowDesign } : {}),
   }
 }
 
@@ -99,6 +140,18 @@ export function allowsFrozenBatchDelete(capability: SubTableBatchCapability | nu
   return capability?.capabilities.allowBatchDelete === true
     && capability.bindingId === String(bindingId ?? '')
     && capability.originalCrud.allowDelete !== false
+    && capability.rowDesign?.binding.bindingType === 'SUB'
+    && capability.rowDesign.binding.bindingMode === 'EDITABLE'
+    && capability.rowDesign.binding.bindingLinkMode === 'structuralFk'
+}
+
+export function allowsFrozenBatchAdd(capability: SubTableBatchCapability | null, bindingId: number | null | undefined): boolean {
+  return capability?.capabilities.allowBatchAdd === true
+    && capability.bindingId === String(bindingId ?? '')
+    && capability.originalCrud.allowAdd !== false
+    && capability.rowDesign?.binding.bindingType === 'SUB'
+    && capability.rowDesign.binding.bindingMode === 'EDITABLE'
+    && capability.rowDesign.binding.bindingLinkMode === 'structuralFk'
 }
 
 function optionList(value: unknown): Array<{ label: string; value: unknown }> {
@@ -126,6 +179,7 @@ export function extractBatchEditableFields(capability: SubTableBatchCapability):
     if (Array.isArray(value)) return value.forEach(visit)
     const rule = record(value)
     if (!rule) return
+    if (rule.type === 'miAssignment') return // Dedicated Assignment intent, never an ordinary editable column.
     const field = typeof rule.field === 'string' ? rule.field.trim() : ''
     if (field) {
       const type = typeof rule.type === 'string' ? rule.type : 'input'
@@ -140,6 +194,12 @@ export function extractBatchEditableFields(capability: SubTableBatchCapability):
         type,
         label: typeof rule.title === 'string' && rule.title.trim() ? rule.title : field,
         options: optionList(props?.options ?? rule.options),
+        required: rule.required === true || (Array.isArray(rule.validate) && rule.validate.some(item => record(item)?.required === true)),
+        defaultValue: rule.value,
+        ...(Array.isArray(rule.validate) ? { validators: rule.validate as NonNullable<BatchEditableField['validators']> } : {}),
+        ...(typeof props?.min === 'number' ? { min: props.min } : {}),
+        ...(typeof props?.max === 'number' ? { max: props.max } : {}),
+        ...(typeof props?.maxlength === 'number' ? { maxlength: props.maxlength } : {}),
       })
     }
     Object.values(rule).forEach(child => {

@@ -94,6 +94,7 @@ export interface NestedSubTableDescriptor {
 
 /** Structural mirror of SubTableField.vue props — composables accept the component's props object. */
 export interface SubTableFieldProps {
+  batchCapability?: unknown
   title: string
   columns: Column[]
   /** Form-design canvas columns for Add/Edit row dialog (Designer parity). */

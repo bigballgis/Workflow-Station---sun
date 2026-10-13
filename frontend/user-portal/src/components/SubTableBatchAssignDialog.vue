@@ -102,11 +102,12 @@ import { permissionApi, type BusinessUnit } from '@/api/permission'
 import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 import { applyBatchAssignment, type BatchAssignmentIntent } from '@/utils/subTableBatchDraft'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
+import type { SubTableBatchChange } from '@/utils/subTableBatchChanges'
 
 type IntentState = { mode: 'person' | 'role'; assigneeId: string; businessUnitId: string; businessUnitCode: string; roleCode: string }
 type RoleOption = { label: string; value: string }
 const props = defineProps<{ visible: boolean; rows: Array<Record<string, unknown>>; capability: SubTableBatchCapability; rowIdentity: (row: Record<string, unknown>) => string | null; rowScopeKey: (row: Record<string, unknown>) => Record<string, unknown> | null }>()
-const emit = defineEmits<{ (event: 'update:visible', value: boolean): void; (event: 'apply', rows: Array<Record<string, unknown>>, change: unknown): void }>()
+const emit = defineEmits<{ (event: 'update:visible', value: boolean): void; (event: 'apply', rows: Array<Record<string, unknown>>, change: SubTableBatchChange): void }>()
 const { t } = useI18n()
 const config = props.capability.assignmentConfig as AssignmentConfig
 const draftRows = ref<Array<Record<string, unknown>>>([])
@@ -140,7 +141,36 @@ function fieldsFor() { return [config.assigneeField, config.roleField, config.bu
 function onSelectionChange(rows: Array<Record<string, unknown>>) { selected.value = new Set(rows.map(rowKey).filter(Boolean)) }
 function reset() { draftRows.value = props.rows.map(row => ({ ...row })); for (const key of Object.keys(rowIntent)) delete rowIntent[key]; for (const row of draftRows.value) { const key = rowKey(row); rowIntent[key] = { mode: configuredMode(row), assigneeId: config.assigneeField ? String(row[config.assigneeField] ?? '') : '', businessUnitId: '', businessUnitCode: config.buField ? String(row[config.buField] ?? '') : '', roleCode: config.roleField ? String(row[config.roleField] ?? '') : '' } } selected.value = new Set(); uniform.mode = 'none'; uniform.assigneeId = ''; uniform.businessUnitId = ''; uniform.businessUnitCode = ''; uniform.roleCode = ''; loadBusinessUnits(); loadUnboundRoles() }
 watch(() => props.visible, visible => { if (visible) reset() })
-function apply() { const intents = new Map<string, BatchAssignmentIntent>(); for (const row of draftRows.value) { const key = rowKey(row); const intent = intentFor(rowIntent[key]); if (intent) intents.set(key, intent) } if (uniform.mode !== 'none') { const intent = intentFor(uniform as IntentState); if (!intent) { ElMessage.error(t('subTable.requiredField')); return } for (const key of selected.value) intents.set(key, intent) } if (!intents.size) return; const nextRows = props.rows.map(row => { const intent = intents.get(rowKey(row)); return intent ? applyBatchAssignment(row, config, intent) : row }); const rowPatches = nextRows.flatMap((row, index) => { const rowId = rowKey(props.rows[index]); const intent = intents.get(rowId); const rowKeyValue = props.rowScopeKey(props.rows[index]); if (!intent || !rowId || !rowKeyValue) return []; return [{ rowId, rowKey: rowKeyValue, fields: fieldsFor(), assignment: intent.mode === 'person' ? { mode: 'PERSON', assigneeId: intent.assigneeId } : { mode: 'ROLE', roleCode: intent.roleCode, ...(intent.businessUnitCode ? { businessUnitCode: intent.businessUnitCode } : {}) } }]; }); if (!rowPatches.length) { ElMessage.error(t('subTable.batchEditDraftHint')); return } emit('apply', nextRows, { batchControlId: props.capability.batchControlId, bindingId: props.capability.bindingId, operation: 'ASSIGN', rowPatches }); emit('update:visible', false) }
+function apply() {
+  const intents = new Map<string, BatchAssignmentIntent>()
+  for (const row of draftRows.value) {
+    const key = rowKey(row)
+    const intent = intentFor(rowIntent[key])
+    if (intent) intents.set(key, intent)
+  }
+  if (uniform.mode !== 'none') {
+    const intent = intentFor(uniform as IntentState)
+    if (!intent) { ElMessage.error(t('subTable.requiredField')); return }
+    for (const key of selected.value) intents.set(key, intent)
+  }
+  if (!intents.size) return
+  const nextRows = props.rows.map(row => {
+    const intent = intents.get(rowKey(row))
+    return intent ? applyBatchAssignment(row, config, intent) : row
+  })
+  const rowPatches: SubTableBatchChange['rowPatches'] = nextRows.flatMap((_row, index) => {
+    const rowId = rowKey(props.rows[index])
+    const intent = intents.get(rowId)
+    const rowKeyValue = props.rowScopeKey(props.rows[index])
+    if (!intent || !rowId || !rowKeyValue) return []
+    return [{ rowId, rowKey: rowKeyValue, fields: fieldsFor(), assignment: intent.mode === 'person'
+      ? { mode: 'PERSON', assigneeId: intent.assigneeId }
+      : { mode: 'ROLE', roleCode: intent.roleCode, ...(intent.businessUnitCode ? { businessUnitCode: intent.businessUnitCode } : {}) } }]
+  })
+  if (!rowPatches.length) { ElMessage.error(t('subTable.batchEditDraftHint')); return }
+  emit('apply', nextRows, { batchControlId: props.capability.batchControlId, bindingId: props.capability.bindingId, operation: 'ASSIGN', rowPatches })
+  emit('update:visible', false)
+}
 </script>
 
 <style scoped>

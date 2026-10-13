@@ -37,7 +37,7 @@ export interface FormRendererFieldsContext {
   fieldPermissions?: Record<string, string> | null
   /** Server-filtered frozen controls, keyed by a subTable's stable batchControlId. */
   subTableBatchCapabilities?: Record<string, unknown> | null
-  onSubTableBatchChange?: (change: unknown) => void
+  onSubTableBatchChange?: (change: import('@/utils/subTableBatchChanges').SubTableBatchChange) => void
   getSubFormRowFormulas: (bindingId?: number) => unknown
   getSummaryColumns: (bindingId?: number) => unknown
   getSummaryAggregations: (bindingId?: number) => unknown

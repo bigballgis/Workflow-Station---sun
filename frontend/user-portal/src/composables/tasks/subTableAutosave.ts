@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { getTaskFormData, submitTaskForm } from '@/api/processForm'
+import { getTaskFormData, submitTaskForm, type TaskFormSubmitRequest } from '@/api/processForm'
 import { unwrapPortalApiPayload } from '@/utils/httpErrorMessage'
 import { applyServerRowVersionsToLiveRows } from './subTableRowVersionSync'
 
@@ -7,8 +7,8 @@ const AUTOSAVE_DELAY_MS = 400
 
 interface SubTableSubmitPayload {
   formData: Record<string, unknown> & { __subTables__?: Record<string, unknown> }
-  subTableBindingScopes: unknown[]
-  subTableBatchChanges?: unknown[]
+  subTableBindingScopes: NonNullable<TaskFormSubmitRequest['subTableBindingScopes']>
+  subTableBatchChanges?: TaskFormSubmitRequest['subTableBatchChanges']
 }
 
 interface StoredTaskForm {
@@ -33,6 +33,8 @@ export function createSubTableAutosave(deps: {
   loadedSubTableBaseline: Ref<Record<string, unknown>>
   buildSubTableSubmitPayload: () => SubTableSubmitPayload
   onSaved?: () => void
+  beginSave?: (payload: SubTableSubmitPayload) => () => void
+  onError?: () => void
   delayMs?: number
 }) {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -53,10 +55,15 @@ export function createSubTableAutosave(deps: {
     timer = setTimeout(() => {
       timer = null
       if (paused) return
-      const run = runAutosave()
-      inflight = run.finally(() => {
-        if (inflight === run) inflight = null
+      const previous = inflight
+      const run = (async () => {
+        if (previous) await previous
+        if (!paused) await runAutosave()
+      })()
+      const tracked = run.finally(() => {
+        if (inflight === tracked) inflight = null
       })
+      inflight = tracked
     }, delayMs)
   }
 
@@ -67,9 +74,7 @@ export function createSubTableAutosave(deps: {
   async function syncSubTableRowVersionsBeforeSubmit(): Promise<void> {
     if (deps.formReadOnly.value || !deps.effectiveTaskId.value) return
     if (!deps.subTableBindings.value.length) return
-    paused = true
-    clearAutosaveTimer()
-    if (inflight) await inflight
+    await pauseSubTableAutosave()
     const stored = await readStoredSubTables()
     if (!stored) return
     applyServerRowVersionsToLiveRows({
@@ -80,16 +85,28 @@ export function createSubTableAutosave(deps: {
     })
   }
 
+  async function pauseSubTableAutosave(): Promise<void> {
+    paused = true
+    clearAutosaveTimer()
+    if (inflight) await inflight
+  }
+
   async function runAutosave(): Promise<void> {
+    let restore: (() => void) | undefined
+    let persisted = false
     try {
       const payload = deps.buildSubTableSubmitPayload()
+      restore = deps.beginSave?.(payload)
       await submitTaskForm(deps.effectiveTaskId.value, {
         ...payload,
         baselineValues: {},
       })
+      persisted = true
       deps.onSaved?.()
       if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
     } catch (error) {
+      if (!persisted) restore?.()
+      deps.onError?.()
       console.error('[SubTable] autosave failed:', error)
     }
   }
@@ -129,6 +146,7 @@ export function createSubTableAutosave(deps: {
     refreshSavedSubTableVersions,
     syncSubTableRowVersionsBeforeSubmit,
     resumeSubTableAutosave,
+    pauseSubTableAutosave,
   }
 }
 

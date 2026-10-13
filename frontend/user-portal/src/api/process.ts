@@ -347,7 +347,7 @@ export const processApi = {
   /** Allocate PK for sub-table add-row (PRD S5); taskId 同 getFunctionUnitContent（任务参与人放行） */
   allocatePrimaryKeys(
     functionUnitId: string,
-    payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string },
+    payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string; batchControlId?: string },
     taskId?: string,
   ) {
     return request.post<{ values: string[] }>(

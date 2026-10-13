@@ -10,6 +10,12 @@ const capability = {
 }
 
 describe('subTableBatchCapability', () => {
+  it('keeps ordinary columns available when the workspace also contains dedicated Assignment', () => {
+    const parsed = parseSubTableBatchCapability({ ...capability,
+      batchForm: { schemaVersion: 1, rule: [{ type: 'input', field: 'description' }, { type: 'miAssignment', field: 'assignment_control' }] },
+    })
+    expect(extractBatchEditableFields(parsed!)?.map(field => field.field)).toEqual(['description'])
+  })
   it('accepts only the frozen v1 projection and binding it belongs to', () => {
     const parsed = parseSubTableBatchCapability(capability)
     expect(parsed?.batchControlId).toBe('control-1')
