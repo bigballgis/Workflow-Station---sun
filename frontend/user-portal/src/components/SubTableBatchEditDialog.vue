@@ -46,6 +46,7 @@
     <template #footer>
       <el-button @click="close">{{ t('common.cancel') }}</el-button>
       <el-button v-if="showAssign" @click="openAssign">{{ t('subTable.batchAssign') }}</el-button>
+      <el-button v-if="showDelete" type="danger" plain @click="openDelete">{{ t('subTable.delete') }}</el-button>
       <el-button type="primary" @click="apply">{{ t('subTable.batchApply') }}</el-button>
     </template>
   </el-dialog>
@@ -92,12 +93,14 @@ const props = defineProps<{
   capability: SubTableBatchCapability
   rowIdentity: (row: Record<string, unknown>) => string | null
   showAssign?: boolean
+  showDelete?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'update:visible', visible: boolean): void
   (event: 'apply', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet): void
   (event: 'open-assign'): void
+  (event: 'open-delete'): void
 }>()
 
 const { t } = useI18n()
@@ -127,6 +130,11 @@ function close() {
 function openAssign() {
   close()
   emit('open-assign')
+}
+
+function openDelete() {
+  close()
+  emit('open-delete')
 }
 
 function onSelectionChange(selected: Array<Record<string, unknown>>) {

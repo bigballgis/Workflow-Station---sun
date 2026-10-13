@@ -577,8 +577,10 @@
       :capability="batchEditCapability"
       :row-identity="resolveBatchRowIdentity"
       :show-assign="canBatchAssign"
+      :show-delete="canBatchDelete"
       @apply="applyBatchEdit"
       @open-assign="batchAssignDialogVisible = true"
+      @open-delete="batchDeleteDialogVisible = true"
     />
     <SubTableBatchAssignDialog
       v-if="batchAssignCapability"
