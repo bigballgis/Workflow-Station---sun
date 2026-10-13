@@ -53,18 +53,11 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, reactive, ref, resolveComponent, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
+import { extractBatchEditableFields, type SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { applyBatchDraft } from '@/utils/subTableBatchDraft'
 
-type BatchField = {
-  field: string
-  label: string
-  type: string
-  options: Array<{ label: string; value: unknown }>
-}
-
-const supportedTypes = new Set(['input', 'text', 'inputNumber', 'number', 'switch', 'select', 'date', 'datePicker', 'datetime'])
+type BatchField = NonNullable<ReturnType<typeof extractBatchEditableFields>>[number]
 
 const BatchFieldInput = defineComponent({
   name: 'BatchFieldInput',
@@ -110,25 +103,7 @@ const uniformMode = reactive<Record<string, 'none' | 'set' | 'clear'>>({})
 const uniformValues = reactive<Record<string, unknown>>({})
 const selectedRowIds = ref<Set<string>>(new Set())
 
-function normalizeOptions(value: unknown): Array<{ label: string; value: unknown }> {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
-      const option = item as Record<string, unknown>
-      const optionValue = option.value ?? option.label
-      return optionValue === undefined ? [] : [{ label: String(option.label ?? optionValue), value: optionValue }]
-    }
-    return [{ label: String(item), value: item }]
-  })
-}
-
-const fields = computed<BatchField[]>(() => props.capability.batchForm.rule.flatMap((rule) => {
-  const field = typeof rule.field === 'string' ? rule.field.trim() : ''
-  const type = typeof rule.type === 'string' ? rule.type : 'input'
-  if (!field || !supportedTypes.has(type)) return []
-  const optionSource = (rule.props as Record<string, unknown> | undefined)?.options ?? rule.options
-  return [{ field, type, label: typeof rule.title === 'string' && rule.title.trim() ? rule.title : field, options: normalizeOptions(optionSource) }]
-}))
+const fields = computed<BatchField[]>(() => extractBatchEditableFields(props.capability) ?? [])
 
 function resetDraft() {
   draftRows.value = props.rows.map(row => ({ ...row }))

@@ -623,7 +623,7 @@ import {
 import { useSubTableStatusColumns } from '@/composables/subTableField/useSubTableStatusColumns'
 import { useSubTableRowKeys } from '@/composables/subTableField/useSubTableRowKeys'
 import { canonicalRowKeyFromPayload } from '@/composables/subTableField/useSubTableRowKeys'
-import { allowsFrozenBatchEdit, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
+import { allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
 import { useSubTableLinkFormDialog } from '@/composables/subTableField/useSubTableLinkFormDialog'
@@ -780,7 +780,9 @@ const canDelete = computed(() => !isActionBinding.value && props.editable === tr
 const batchDialogVisible = ref(false)
 const batchEditCapability = computed(() => {
   const capability = parseSubTableBatchCapability(props.batchCapability)
-  return allowsFrozenBatchEdit(capability, props.bindingId) ? capability : null
+  return allowsFrozenBatchEdit(capability, props.bindingId) && capability && extractBatchEditableFields(capability)
+    ? capability
+    : null
 })
 
 /** Batch edit never falls back to legacy id/name guesses: it requires a server rowKey or one configured PK. */
