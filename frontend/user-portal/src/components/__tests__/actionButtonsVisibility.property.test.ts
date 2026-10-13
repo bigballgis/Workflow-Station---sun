@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
+import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
 
 /**
  * Feature: function-unit-design-review, Property 15: 动作按钮可见性过滤
@@ -38,8 +39,11 @@ function evaluateVisibilityCondition(
 }
 
 function checkRoleAccess(allowedRoles: string[] | undefined, userRoles: string[]): boolean {
-  if (!allowedRoles || allowedRoles.length === 0) return true
-  return userRoles.some(r => allowedRoles.includes(r))
+  const configJson =
+    allowedRoles && allowedRoles.length > 0
+      ? JSON.stringify({ allowedRoles })
+      : '{}'
+  return isActionVisibleForSession(configJson, userRoles, false)
 }
 
 function isActionVisible(
@@ -106,8 +110,8 @@ describe('Property 15: Action Button Visibility Filtering', () => {
       fc.property(
         fc.array(roleArb, { minLength: 1, maxLength: 5 }),
         (allowedRoles) => {
-          // User has at least one of the allowed roles
-          const userRoles = [allowedRoles[0]]
+          const userRoles = [allowedRoles[0].trim()]
+          fc.pre(userRoles[0].length > 0)
           expect(isActionVisible({ allowedRoles }, {}, userRoles)).toBe(true)
         }
       ),

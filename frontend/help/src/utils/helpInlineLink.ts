@@ -31,6 +31,7 @@ const PATH_TITLE: Record<string, string> = {
   '/email-monitor': 'guides.emailMonitor.title',
   '/environment-variables': 'guides.environmentVariables.title',
   '/action-email': 'guides.actionEmail.title',
+  '/action-allowed-roles': 'guides.actionAllowedRoles.title',
 }
 
 for (const ctl of BASIC_FORM_CONTROLS) {

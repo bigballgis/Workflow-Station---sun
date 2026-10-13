@@ -5,6 +5,7 @@ import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.entity.User;
 import com.platform.security.service.UserRoleService;
+import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import io.jsonwebtoken.Jwts;
@@ -49,6 +50,7 @@ public class PortalSessionIssuerService {
     private final I18nService i18nService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     private final PortalEntitlementService portalEntitlementService;
+    private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final JwtProperties jwtProperties;
 
     @Value("${jwt.secret}")
@@ -284,6 +286,7 @@ public class PortalSessionIssuerService {
                 .workspaceSwitcherVisible(workspaceSwitcherVisible)
                 .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
                 .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
+                .systemAdministrator(functionUnitAccessComponent.isSystemAdministrator(user.getId()))
                 .build();
     }
 

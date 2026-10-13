@@ -226,6 +226,15 @@
 
       <!-- 第四部分：动作按钮 -->
       <div class="section action-section">
+        <el-alert
+          v-if="startActionsBlockedByAllowedRoles"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="action-roles-blocked-alert"
+        >
+          {{ t('processStart.actionsBlockedByAllowedRoles') }}
+        </el-alert>
         <div class="action-buttons">
           <div class="left-actions">
             <el-button
@@ -250,9 +259,9 @@
             >
               {{ action.label }}
             </el-button>
-            <el-button 
-              v-if="availableActions.length === 0"
-              type="primary" 
+            <el-button
+              v-if="availableActions.length === 0 && !startActionsBlockedByAllowedRoles"
+              type="primary"
               :disabled="workspaceStartBlocked"
               :loading="submitting"
               @click="handleSubmit"
@@ -284,6 +293,8 @@ import { collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from
 import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
+import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
+import { isStartSubmitBlockedByAllowedRoles } from '@/utils/processStartAllowedRoles'
 import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
 import { actionButtonStyle, resolveActionButtonType } from '@/utils/actionButtonColor'
 import {
@@ -342,6 +353,9 @@ function clearRecordNoteDraftId() {
   sessionStorage.removeItem(`rnDraft:${functionUnitId.value}`)
 }
 const isDraftMode = computed(() => route.query.draft === 'true')
+
+/** BPMN had custom actions but Allowed Roles hid all of them — no default Submit (aligns with TaskActionBar). */
+const startActionsBlockedByAllowedRoles = ref(false)
 
 // Main-table Request ID config — enables live recompute of the readonly __request_id field.
 const requestIdConfig = ref<{ fieldNames: string[]; separator?: string } | null>(null)
@@ -446,7 +460,8 @@ const loadFunctionUnitContent = async () => {
   isDisabled.value = false
   isAccessDenied.value = false
   noProcessForm.value = false
-  
+  startActionsBlockedByAllowedRoles.value = false
+
   try {
     const response = await processApi.getFunctionUnitContent(functionUnitId.value)
     const content = response.data || response
@@ -719,12 +734,36 @@ const initHistoryRecords = () => {
 
 // 初始化动作按钮 - 从 BPMN actionIds 获取自定义动作
 const initActionButtons = async (actionIds: string[] | null) => {
-  if (actionIds && actionIds.length > 0) {
+  startActionsBlockedByAllowedRoles.value = false
+  const hadBpmnActionIds = !!(actionIds && actionIds.length > 0)
+
+  if (hadBpmnActionIds) {
     try {
-      const response = await processApi.getActionsByIds(actionIds)
+      const response = await processApi.getActionsByIds(actionIds!)
       const actions = response.data || response
       if (Array.isArray(actions) && actions.length > 0) {
-        availableActions.value = actions.map((action: any) => {
+        const user = getUser()
+        const visible = actions.filter((action: { configJson?: unknown }) =>
+          isActionVisibleForSession(
+            action.configJson,
+            user?.roles ?? [],
+            user?.systemAdministrator === true,
+          ),
+        )
+        if (
+          isStartSubmitBlockedByAllowedRoles(hadBpmnActionIds, actions.length, visible.length)
+        ) {
+          availableActions.value = []
+          startActionsBlockedByAllowedRoles.value = true
+          return
+        }
+        availableActions.value = visible.map((action: {
+          id: string
+          actionName: string
+          actionType?: string
+          buttonColor?: string
+          configJson?: string
+        }) => {
           const btnType = resolveActionButtonType(action.actionType, action.buttonColor)
           return {
             id: action.id,
@@ -733,17 +772,16 @@ const initActionButtons = async (actionIds: string[] | null) => {
             buttonColor: action.buttonColor || undefined,
             action: action.actionType,
             actionType: action.actionType,
-            configJson: action.configJson
+            configJson: action.configJson,
           }
         })
-        console.log('Loaded custom action buttons:', availableActions.value)
         return
       }
     } catch (error) {
       console.error('Failed to load action definitions, falling back to default:', error)
     }
   }
-  
+
   // 回退：默认提交按钮
   availableActions.value = [
     {
@@ -1049,7 +1087,11 @@ onMounted(() => {
     position: sticky;
     bottom: 0;
     z-index: 10;
-    
+
+    .action-roles-blocked-alert {
+      margin: 0 20px 12px;
+    }
+
     .action-buttons {
       display: flex;
       justify-content: space-between;

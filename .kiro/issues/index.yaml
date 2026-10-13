@@ -4757,3 +4757,17 @@
     快照闭包，后续 id 变化仍打旧值。
     修复：先独立拉 tables；forms/RT 失败仍保留 MAIN 字段；id 改为 MaybeRefOrGetter。
     验证：useEmailTemplateVariables.test.ts 覆盖 forms 失败仍有 ${sender_email}。
+
+- id: "1666"
+  status: open
+  severity: major
+  category: quality
+  summary: "TaskActionService 在引擎/lookup 异常时 catch 后返回 emptyList，与「查不到」无法区分"
+  file: "backend/user-portal/src/main/java/com/portal/service/TaskActionService.java"
+  detail: |
+    getTaskActions 与 fetchActionDefinitions 均在 catch 后 log.error 并 return Collections.emptyList()。
+    后果：ActionDefinitionLookupComponent 或 workflow-engine 临时失败时，待办 UI 表现为「无自定义 Action」
+    （可能回退 Approve/Reject），运维难以与「BPMN 未配置 actionIds」区分；违反 error-handling 默认向上传播原则。
+    Allowed Roles 功能（2026-10）刻意不在 execute 路径做服务端 allowedRoles 校验（UX-only，见 help failApi）；
+    本条目仅跟踪 lookup/引擎链路的静默降级，后续应抛业务异常或返回带错误标记的结果，并补单测。
+    2026-10-14 审查 follow-up 3-A：本轮不修，PR 引用本 issue。

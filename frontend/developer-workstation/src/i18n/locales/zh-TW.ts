@@ -1229,7 +1229,9 @@ export default {
     visibilityCondition: '可見性條件',
     visibilityConditionPlaceholder: '例如 formData.amount > 10000',
     allowedRoles: '允許角色',
-    allowedRolesPlaceholder: '選擇或輸入角色',
+    allowedRolesPlaceholder: '選擇角色（留空表示不限制，所有入口用戶可見）',
+    allowedRolesGuideLinkAria: '開啟允許角色指南',
+    allowedRolesCatalogLoadFailed: '無法載入角色清單，已儲存的角色代碼仍會顯示。',
     sortOrder: '排序',
     // Test dialog enhancements
     rawJson: '原始 JSON',

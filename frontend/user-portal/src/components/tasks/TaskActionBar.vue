@@ -58,7 +58,9 @@ import { computed } from 'vue'
 import { Check, Close } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 import type { TaskActionInfo } from '@/api/task'
+import { getStoredUser } from '@/api/auth'
 import { actionButtonStyle, resolveActionButtonType } from '@/utils/actionButtonColor'
+import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
 
 /**
  * Delegate / Transfer / Urge are no longer hardcoded here: they are Action
@@ -95,12 +97,16 @@ function actionTypeOf(action: TaskActionInfo): string {
   return (action.actionType || '').trim().toUpperCase()
 }
 
-/** A DELEGATE action stays hidden while the task has no assignee to delegate from. */
-const visibleActions = computed<TaskActionInfo[]>(() =>
-  (props.actions || []).filter(
-    action => actionTypeOf(action) !== 'DELEGATE' || props.canDelegate
-  )
-)
+/** Delegate needs an assignee. Allowed Roles hide the button for the current session. */
+const visibleActions = computed<TaskActionInfo[]>(() => {
+  const user = getStoredUser()
+  const roles = user?.roles ?? []
+  const systemAdministrator = user?.systemAdministrator === true
+  return (props.actions || []).filter((action) => {
+    if (actionTypeOf(action) === 'DELEGATE' && !props.canDelegate) return false
+    return isActionVisibleForSession(action.configJson, roles, systemAdministrator)
+  })
+})
 
 function resolveIconName(action: TaskActionInfo): string | undefined {
   return action.icon || BUILT_IN_ICONS[actionTypeOf(action)]

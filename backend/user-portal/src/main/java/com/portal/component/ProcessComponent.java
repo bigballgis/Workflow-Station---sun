@@ -10,7 +10,6 @@ import com.portal.entity.ProcessInstance;
 import com.portal.entity.ActionDefinition;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessInstanceRepository;
-import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
@@ -47,7 +46,7 @@ public class ProcessComponent {
 
     private final FavoriteProcessRepository favoriteProcessRepository;
     private final ProcessInstanceRepository processInstanceRepository;
-    private final ActionDefinitionRepository actionDefinitionRepository;
+    private final ActionDefinitionLookupComponent actionDefinitionLookupComponent;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
@@ -1009,13 +1008,9 @@ public class ProcessComponent {
 
     /**
      * Get action definitions by IDs.
-     * Delegates to ActionDefinitionRepository.
+     * Delegates to {@link ActionDefinitionLookupComponent}.
      */
     public List<ActionDefinition> getActionsByIds(List<String> ids) {
-        List<ActionDefinition> actions = actionDefinitionRepository.findAllById(ids);
-        if (actions.isEmpty()) {
-            log.warn("No actions found for ids: {}", ids);
-        }
-        return actions;
+        return actionDefinitionLookupComponent.resolveByIdsInOrder(ids);
     }
 }

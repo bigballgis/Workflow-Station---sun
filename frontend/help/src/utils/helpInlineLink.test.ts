@@ -16,6 +16,7 @@ test('resolves How to write events and Basic control paths', () => {
   assert.equal(helpInlineTitleKey('/email-send'), 'guides.emailSend.title')
   assert.equal(helpInlineTitleKey('/email-send#connection'), 'nav.connections')
   assert.equal(helpInlineTitleKey('/action-email'), 'guides.actionEmail.title')
+  assert.equal(helpInlineTitleKey('/action-allowed-roles'), 'guides.actionAllowedRoles.title')
   assert.equal(helpInlineTitleKey('/environment-variables'), 'guides.environmentVariables.title')
 })
 

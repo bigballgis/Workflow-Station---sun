@@ -1182,7 +1182,9 @@ export default {
     visibilityCondition: 'Visibility Condition',
     visibilityConditionPlaceholder: 'e.g. formData.amount > 10000',
     allowedRoles: 'Allowed Roles',
-    allowedRolesPlaceholder: 'Select or enter roles',
+    allowedRolesPlaceholder: 'Select roles (leave empty for no restriction — all portal users)',
+    allowedRolesGuideLinkAria: 'Open the Allowed Roles guideline',
+    allowedRolesCatalogLoadFailed: 'Could not load roles. Saved role codes are still shown.',
     sortOrder: 'Sort Order',
     // Test dialog enhancements
     rawJson: 'Raw JSON',

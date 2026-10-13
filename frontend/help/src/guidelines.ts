@@ -87,6 +87,13 @@ export const GUIDELINES: Guideline[] = [
     load: () => import('@/views/ActionEmailGuide.vue'),
   },
   {
+    id: 'action-allowed-roles',
+    path: '/action-allowed-roles',
+    titleKey: 'guides.actionAllowedRoles.title',
+    summaryKey: 'guides.actionAllowedRoles.summary',
+    load: () => import('@/views/ActionAllowedRolesGuide.vue'),
+  },
+  {
     id: 'email-monitor',
     path: '/email-monitor',
     titleKey: 'guides.emailMonitor.title',
@@ -327,6 +334,12 @@ export const NAV_TREE: NavNode[] = [
                 id: 'dw-action-email',
                 titleKey: 'guides.actionEmail.title',
                 to: '/action-email',
+              },
+              {
+                kind: 'leaf',
+                id: 'dw-action-allowed-roles',
+                titleKey: 'guides.actionAllowedRoles.title',
+                to: '/action-allowed-roles',
               },
             ],
           },

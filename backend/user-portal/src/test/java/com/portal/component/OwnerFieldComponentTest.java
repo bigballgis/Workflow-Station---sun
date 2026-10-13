@@ -668,7 +668,7 @@ class OwnerFieldComponentTest {
             ProcessComponent processComponent = new ProcessComponent(
                     mock(com.portal.repository.FavoriteProcessRepository.class),
                     repo,
-                    mock(com.portal.repository.ActionDefinitionRepository.class),
+                    mock(ActionDefinitionLookupComponent.class),
                     mock(FunctionUnitAccessComponent.class),
                     engine,
                     mock(ProcessDraftComponent.class),
