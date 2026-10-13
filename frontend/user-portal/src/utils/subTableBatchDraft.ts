@@ -17,10 +17,46 @@ export type BatchUniformPatch = {
   fields: Record<string, BatchFieldIntent>
 }
 
+/** Dedicated initial-assignment intent; it is never a free-form field patch. */
+export type BatchAssignmentIntent =
+  | { mode: 'person'; assigneeId: string }
+  | { mode: 'role'; roleCode: string; businessUnitCode?: string }
+
+export type BatchAssignmentConfig = {
+  assigneeField?: string
+  roleField?: string
+  buField?: string
+}
+
 export interface BatchDraftChangeSet {
   rowPatches?: BatchRowPatch[]
   uniformPatches?: BatchUniformPatch[]
   deletedRowIds?: string[]
+}
+
+/**
+ * Applies a frozen AssignmentConfig to one complete row.  The inactive mode is
+ * cleared in the same immutable patch, so role precedence in the engine cannot
+ * accidentally survive a person assignment (or vice versa).
+ */
+export function applyBatchAssignment(
+  row: Record<string, unknown>,
+  config: BatchAssignmentConfig,
+  intent: BatchAssignmentIntent,
+): Record<string, unknown> {
+  const next = { ...row }
+  if (intent.mode === 'person') {
+    if (!config.assigneeField) throw new Error('Batch assignment has no configured assignee field')
+    next[config.assigneeField] = intent.assigneeId
+    if (config.roleField) next[config.roleField] = null
+    if (config.buField) next[config.buField] = null
+    return next
+  }
+  if (!config.roleField) throw new Error('Batch assignment has no configured role field')
+  next[config.roleField] = intent.roleCode
+  if (config.buField) next[config.buField] = intent.businessUnitCode ?? null
+  if (config.assigneeField) next[config.assigneeField] = null
+  return next
 }
 
 function applyFields(row: Record<string, unknown>, fields: Record<string, BatchFieldIntent>): Record<string, unknown> {

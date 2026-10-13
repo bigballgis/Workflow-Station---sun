@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyBatchDraft } from '../subTableBatchDraft'
+import { applyBatchAssignment, applyBatchDraft } from '../subTableBatchDraft'
 
 describe('applyBatchDraft', () => {
   const rows = [
@@ -40,5 +40,24 @@ describe('applyBatchDraft', () => {
     })
 
     expect(result).toEqual([{ id: 'B', name: 'second', quantity: 2, hidden: 'keep-too' }])
+  })
+
+  it('uses the configured assignment fields and clears the inactive mode atomically', () => {
+    const config = { assigneeField: 'assigned_to', roleField: 'role_code', buField: 'bu_code' }
+    const role = applyBatchAssignment(
+      { id: 'A', assigned_to: 'old-user', role_code: null, bu_code: null, untouched: 'keep' }, config,
+      { mode: 'role', roleCode: 'REVIEWER', businessUnitCode: 'EU' },
+    )
+    expect(role).toEqual({ id: 'A', assigned_to: null, role_code: 'REVIEWER', bu_code: 'EU', untouched: 'keep' })
+
+    const person = applyBatchAssignment(role, config, { mode: 'person', assigneeId: 'user-2' })
+    expect(person).toEqual({ id: 'A', assigned_to: 'user-2', role_code: null, bu_code: null, untouched: 'keep' })
+  })
+
+  it('fails closed when the frozen assignment mapping does not support the chosen mode', () => {
+    expect(() => applyBatchAssignment({}, { roleField: 'role_code' }, { mode: 'person', assigneeId: 'user-1' }))
+      .toThrow('no configured assignee field')
+    expect(() => applyBatchAssignment({}, { assigneeField: 'assigned_to' }, { mode: 'role', roleCode: 'REVIEWER' }))
+      .toThrow('no configured role field')
   })
 })
