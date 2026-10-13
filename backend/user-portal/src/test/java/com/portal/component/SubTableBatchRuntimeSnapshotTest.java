@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.SubTableBatchChange;
+import com.portal.dto.SubTableBindingScope;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -148,9 +149,19 @@ class SubTableBatchRuntimeSnapshotTest {
                 .hasMessageContaining("read-only field");
     }
 
+    @Test
+    void requiresTheDeclaredConfiguredRowToExistInTheCanonicalSubmit() {
+        SubTableBatchChange change = editChange("ctl-1", "101", "name");
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validateSubmittedRows(
+                List.of(change), List.of(new SubTableBindingScope("101", "dw:lines", List.of(Map.of("line_id", "L1")), false)),
+                Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("line_id", "other", "name", "new"))))))
+                .hasMessageContaining("does not match a submitted canonical row");
+    }
+
     private static SubTableBatchChange editChange(String controlId, String bindingId, String field) {
         SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
         patch.setRowId("row-1");
+        patch.setRowKey(Map.of("line_id", "L1"));
         patch.setFields(List.of(field));
         SubTableBatchChange change = new SubTableBatchChange();
         change.setBatchControlId(controlId);

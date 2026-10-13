@@ -770,6 +770,11 @@ public class TaskFormComponent {
                     processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId(),
                     taskInfo.taskDefinitionKey));
 
+            // Compare batch declarations with the canonical rows after the normal
+            // binding/MI scope guard has produced the scoped write set.  This keeps
+            // the batch transport metadata from becoming an unrelated client hint.
+            SubTableBatchChangeGuard.validateSubmittedRows(subTableBatchChanges, bindingScopes, inbound);
+
             updatedVariables.putAll(inbound);
 
             // Record which fields THIS submit deliberately cleared, so the read path can tell a

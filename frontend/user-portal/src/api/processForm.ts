@@ -94,7 +94,7 @@ export interface TaskFormSubmitRequest {
     batchControlId: string
     bindingId: string
     operation: 'EDIT'
-    rowPatches: Array<{ rowId: string; fields: string[] }>
+    rowPatches: Array<{ rowId: string; rowKey: Record<string, unknown>; fields: string[] }>
   }>
   /** Present only when the user clicked a SAVE Action (autosave omits this). */
   actionId?: string

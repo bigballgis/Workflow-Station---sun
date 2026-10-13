@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -51,6 +52,37 @@ final class SubTableBatchChangeGuard {
         }
     }
 
+    /**
+     * Verifies that each batch declaration still addresses a concrete canonical
+     * row after the normal scope guard has merged the submitted slice.  The
+     * client-side display identity is not used as authority: {@code rowKey} is
+     * the configured PK/platform identity that the existing scope protocol
+     * already understands.
+     */
+    static void validateSubmittedRows(List<SubTableBatchChange> changes,
+                                      List<com.portal.dto.SubTableBindingScope> scopes,
+                                      Map<String, Object> submitted) {
+        if (changes == null || changes.isEmpty()) return;
+        if (submitted == null) throw forbidden("Batch submit has no canonical sub-table data");
+        Map<String, Object> tables = map(submitted.get("__subTables__"));
+        for (SubTableBatchChange change : changes) {
+            String storeKey = storeKeyFor(change, scopes);
+            List<Map<String, Object>> rows = rows(tables.get(storeKey));
+            for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+                if (patch.getRowKey() == null || patch.getRowKey().isEmpty()) {
+                    throw forbidden("Batch row patch is missing its configured identity");
+                }
+                Map<String, Object> row = findByKey(rows, patch.getRowKey());
+                if (row == null) throw forbidden("Batch row patch does not match a submitted canonical row");
+                for (String field : patch.getFields()) {
+                    if (!row.containsKey(field)) {
+                        throw forbidden("Batch row patch field is absent from the submitted canonical row");
+                    }
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static void validateChange(SubTableBatchChange change, Map<String, Object> controls,
                                        Map<String, String> fieldPermissions) {
@@ -82,7 +114,8 @@ final class SubTableBatchChangeGuard {
             throw forbidden("Batch edit declaration has no row patches");
         }
         for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
-            if (patch == null || blank(patch.getRowId()) || patch.getFields() == null || patch.getFields().isEmpty()) {
+            if (patch == null || blank(patch.getRowId()) || patch.getRowKey() == null || patch.getRowKey().isEmpty()
+                    || patch.getFields() == null || patch.getFields().isEmpty()) {
                 throw forbidden("Invalid batch row patch");
             }
             for (String field : patch.getFields()) {
@@ -94,6 +127,38 @@ final class SubTableBatchChangeGuard {
                 }
             }
         }
+    }
+
+    private static String storeKeyFor(SubTableBatchChange change,
+                                      List<com.portal.dto.SubTableBindingScope> scopes) {
+        if (scopes == null) throw forbidden("Batch submit is missing binding scope metadata");
+        List<String> keys = scopes.stream()
+                .filter(Objects::nonNull)
+                .filter(scope -> change.getBindingId().trim().equals(scope.getBindingId()))
+                .map(com.portal.dto.SubTableBindingScope::getStoreKey)
+                .filter(Objects::nonNull)
+                .distinct().toList();
+        if (keys.size() != 1) throw forbidden("Batch submit has no unambiguous canonical binding scope");
+        return keys.get(0);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> rows(Object value) {
+        if (!(value instanceof List<?> list)) return List.of();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) out.add((Map<String, Object>) map);
+        }
+        return out;
+    }
+
+    private static Map<String, Object> findByKey(List<Map<String, Object>> rows, Map<String, Object> key) {
+        for (Map<String, Object> row : rows) {
+            boolean match = key.entrySet().stream().allMatch(entry ->
+                    Objects.equals(String.valueOf(row.get(entry.getKey())), String.valueOf(entry.getValue())));
+            if (match) return row;
+        }
+        return null;
     }
 
     private static Set<String> batchFormFields(Map<String, Object> batchForm) {

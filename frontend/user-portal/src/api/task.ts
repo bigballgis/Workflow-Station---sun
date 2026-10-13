@@ -163,7 +163,7 @@ export interface TaskCompleteRequest {
     batchControlId: string
     bindingId: string
     operation: 'EDIT'
-    rowPatches: Array<{ rowId: string; fields: string[] }>
+    rowPatches: Array<{ rowId: string; rowKey: Record<string, unknown>; fields: string[] }>
   }>
 }
 

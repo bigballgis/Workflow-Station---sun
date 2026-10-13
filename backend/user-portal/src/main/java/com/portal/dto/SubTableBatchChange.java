@@ -3,6 +3,7 @@ package com.portal.dto;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Transport-only declaration for a SubTable batch workspace change.
@@ -23,6 +24,8 @@ public class SubTableBatchChange {
     @Data
     public static class RowPatch {
         private String rowId;
+        /** Config-derived row identity, used to verify the changed canonical row. */
+        private Map<String, Object> rowKey;
         private List<String> fields;
     }
 }

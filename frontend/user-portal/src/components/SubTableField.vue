@@ -623,6 +623,7 @@ import {
 import { useSubTableStatusColumns } from '@/composables/subTableField/useSubTableStatusColumns'
 import { useSubTableRowKeys } from '@/composables/subTableField/useSubTableRowKeys'
 import { canonicalRowKeyFromPayload } from '@/composables/subTableField/useSubTableRowKeys'
+import { rowKeyForScope } from '@/composables/tasks/subTableCanonicalStamp'
 import { allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
@@ -805,15 +806,22 @@ const canBatchEdit = computed(() => !!batchEditCapability.value
 function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet) {
   const capability = batchEditCapability.value
   if (!capability || !canBatchEdit.value) return
-  const fieldsByRow = new Map<string, Set<string>>()
+  const fieldsByRow = new Map<string, { fields: Set<string>; rowKey: Record<string, unknown> }>()
   const addFields = (rowId: string, fields: Record<string, unknown>) => {
-    const existing = fieldsByRow.get(rowId) ?? new Set<string>()
-    Object.keys(fields).forEach(field => existing.add(field))
+    const row = props.modelValue.find(candidate => resolveBatchRowIdentity(candidate) === rowId)
+    const rowKey = row && rowKeyForScope(row, props.primaryKeyFields)
+    if (!rowKey) return
+    const existing = fieldsByRow.get(rowId) ?? { fields: new Set<string>(), rowKey }
+    Object.keys(fields).forEach(field => existing.fields.add(field))
     fieldsByRow.set(rowId, existing)
   }
   changes.rowPatches?.forEach(patch => addFields(patch.rowId, patch.fields))
   changes.uniformPatches?.forEach(patch => patch.rowIds.forEach(rowId => addFields(rowId, patch.fields)))
-  const rowPatches = [...fieldsByRow.entries()].map(([rowId, fields]) => ({ rowId, fields: [...fields] }))
+  const rowPatches = [...fieldsByRow.entries()].map(([rowId, patch]) => ({
+    rowId,
+    rowKey: patch.rowKey,
+    fields: [...patch.fields],
+  }))
   if (!rowPatches.length) return
   rows.value = nextRows
   emit('update:modelValue', [...rows.value])
