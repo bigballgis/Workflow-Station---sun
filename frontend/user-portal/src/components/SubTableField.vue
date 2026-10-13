@@ -589,6 +589,17 @@
       :row-scope-key="row => rowKeyForScope(row, primaryKeyFields)"
       @apply="applyBatchAssign"
     />
+    <SubTableBatchDeleteDialog
+      v-if="batchDeleteCapability"
+      v-model:visible="batchDeleteDialogVisible"
+      :rows="rows"
+      :columns="columns"
+      :batch-control-id="batchDeleteCapability.batchControlId"
+      :binding-id="batchDeleteCapability.bindingId"
+      :row-identity="resolveBatchRowIdentity"
+      :row-scope-key="row => rowKeyForScope(row, primaryKeyFields)"
+      @apply="applyBatchDelete"
+    />
   </div>
 </template>
 
@@ -600,6 +611,7 @@ import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableBatchEditDialog from './SubTableBatchEditDialog.vue'
 import SubTableBatchAssignDialog from './SubTableBatchAssignDialog.vue'
+import SubTableBatchDeleteDialog from './SubTableBatchDeleteDialog.vue'
 import {
   resolveDisplayValue,
   isUserSnapshotLikeObject,
@@ -636,7 +648,7 @@ import { useSubTableStatusColumns } from '@/composables/subTableField/useSubTabl
 import { useSubTableRowKeys } from '@/composables/subTableField/useSubTableRowKeys'
 import { canonicalRowKeyFromPayload } from '@/composables/subTableField/useSubTableRowKeys'
 import { rowKeyForScope } from '@/composables/tasks/subTableCanonicalStamp'
-import { allowsFrozenBatchAssign, allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
+import { allowsFrozenBatchAssign, allowsFrozenBatchDelete, allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
 import { useSubTableLinkFormDialog } from '@/composables/subTableField/useSubTableLinkFormDialog'
@@ -792,6 +804,7 @@ const canEdit = computed(() => !isActionBinding.value && props.editable === true
 const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
 const batchDialogVisible = ref(false)
 const batchAssignDialogVisible = ref(false)
+const batchDeleteDialogVisible = ref(false)
 const batchEditCapability = computed(() => {
   const capability = parseSubTableBatchCapability(props.batchCapability)
   return allowsFrozenBatchEdit(capability, props.bindingId) && capability && extractBatchEditableFields(capability)
@@ -801,6 +814,10 @@ const batchEditCapability = computed(() => {
 const batchAssignCapability = computed(() => {
   const capability = parseSubTableBatchCapability(props.batchCapability)
   return allowsFrozenBatchAssign(capability, props.bindingId) && capability ? capability : null
+})
+const batchDeleteCapability = computed(() => {
+  const capability = parseSubTableBatchCapability(props.batchCapability)
+  return allowsFrozenBatchDelete(capability, props.bindingId) && capability ? capability : null
 })
 
 /** Batch edit never falls back to legacy id/name guesses: it requires a server rowKey or one configured PK. */
@@ -823,7 +840,11 @@ const canBatchAssign = computed(() => !!batchAssignCapability.value
   && !isActionBinding.value
   && props.editable === true
   && rows.value.every(row => resolveBatchRowIdentity(row) !== null && rowKeyForScope(row, props.primaryKeyFields) !== null))
-const canBatchWorkspace = computed(() => canBatchEdit.value || canBatchAssign.value)
+const canBatchDelete = computed(() => !!batchDeleteCapability.value
+  && !isActionBinding.value
+  && props.editable === true
+  && rows.value.every(row => resolveBatchRowIdentity(row) !== null && rowKeyForScope(row, props.primaryKeyFields) !== null))
+const canBatchWorkspace = computed(() => canBatchEdit.value || canBatchAssign.value || canBatchDelete.value)
 
 function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet) {
   const capability = batchEditCapability.value
@@ -858,10 +879,18 @@ function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: Batch
 function openBatchWorkspace() {
   if (canBatchEdit.value) batchDialogVisible.value = true
   else if (canBatchAssign.value) batchAssignDialogVisible.value = true
+  else if (canBatchDelete.value) batchDeleteDialogVisible.value = true
 }
 
 function applyBatchAssign(nextRows: Array<Record<string, unknown>>, change: unknown) {
   if (!canBatchAssign.value) return
+  rows.value = nextRows
+  emit('update:modelValue', [...rows.value])
+  props.onBatchChange?.(change)
+}
+
+function applyBatchDelete(nextRows: Array<Record<string, unknown>>, change: unknown) {
+  if (!canBatchDelete.value) return
   rows.value = nextRows
   emit('update:modelValue', [...rows.value])
   props.onBatchChange?.(change)

@@ -95,6 +95,12 @@ export function allowsFrozenBatchEdit(capability: SubTableBatchCapability | null
     && capability.originalCrud.allowEdit !== false
 }
 
+export function allowsFrozenBatchDelete(capability: SubTableBatchCapability | null, bindingId: number | null | undefined): boolean {
+  return capability?.capabilities.allowBatchDelete === true
+    && capability.bindingId === String(bindingId ?? '')
+    && capability.originalCrud.allowDelete !== false
+}
+
 function optionList(value: unknown): Array<{ label: string; value: unknown }> {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {

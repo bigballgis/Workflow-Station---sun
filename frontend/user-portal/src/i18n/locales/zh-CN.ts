@@ -1157,6 +1157,8 @@ export default {
     add: '新增',
     batchEdit: '批量编辑',
     batchAssign: '批量分派',
+    batchDeleteHint: '选择要删除的行。原有保存或自动保存成功后才会持久化。',
+    batchDeleteConfirm: '确定删除选中的 {count} 行吗？',
     batchEditDraftHint: '变更仅应用到当前页面，需由原保存或自动保存成功后才会持久化。',
     batchSetSelected: '为选中行统一赋值',
     batchNoChange: '不修改',
