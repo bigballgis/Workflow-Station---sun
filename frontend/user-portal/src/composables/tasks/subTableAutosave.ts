@@ -6,8 +6,9 @@ import { applyServerRowVersionsToLiveRows } from './subTableRowVersionSync'
 const AUTOSAVE_DELAY_MS = 400
 
 interface SubTableSubmitPayload {
-  formData: { __subTables__?: Record<string, unknown> }
+  formData: Record<string, unknown> & { __subTables__?: Record<string, unknown> }
   subTableBindingScopes: unknown[]
+  subTableBatchChanges?: unknown[]
 }
 
 interface StoredTaskForm {
@@ -31,6 +32,7 @@ export function createSubTableAutosave(deps: {
   taskFormDTO: Ref<StoredTaskForm | null>
   loadedSubTableBaseline: Ref<Record<string, unknown>>
   buildSubTableSubmitPayload: () => SubTableSubmitPayload
+  onSaved?: () => void
   delayMs?: number
 }) {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -85,6 +87,7 @@ export function createSubTableAutosave(deps: {
         ...payload,
         baselineValues: {},
       })
+      deps.onSaved?.()
       if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
     } catch (error) {
       console.error('[SubTable] autosave failed:', error)

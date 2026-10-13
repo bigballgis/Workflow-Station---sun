@@ -294,6 +294,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :allow-edit="field.allowEdit"
           :allow-delete="field.allowDelete"
           :batch-capability="field.batchControlId ? ctx.subTableBatchCapabilities?.[field.batchControlId] : undefined"
+          :on-batch-change="ctx.onSubTableBatchChange"
           :row-formulas="ctx.getSubFormRowFormulas(field._bindingId)"
           :summary-columns="ctx.getSummaryColumns(field._bindingId)"
           :summary-aggregations="ctx.getSummaryAggregations(field._bindingId)"

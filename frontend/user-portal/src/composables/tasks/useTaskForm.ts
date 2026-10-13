@@ -1,4 +1,5 @@
 import { ref, watch, type Ref } from 'vue'
+import type { TaskFormSubmitRequest } from '@/api/processForm'
 import { subTableStoreKey } from './subTableStore'
 import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { ElMessage } from 'element-plus'
@@ -97,6 +98,15 @@ export function useTaskForm(options: {
   const savingTaskForm = ref(false)
   const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
   const loadedSubTableBaseline = ref<Record<string, unknown>>({})
+  const pendingSubTableBatchChanges = ref<NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>>([])
+
+  function recordSubTableBatchChange(change: NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>[number]) {
+    const key = `${change.batchControlId}:${change.bindingId}`
+    pendingSubTableBatchChanges.value = [
+      ...pendingSubTableBatchChanges.value.filter(item => `${item.batchControlId}:${item.bindingId}` !== key),
+      change,
+    ]
+  }
   function captureLoadedSubTableBaseline(source: unknown = formData.value.__subTables__): void {
     loadedSubTableBaseline.value = JSON.parse(JSON.stringify(
       source && typeof source === 'object' && !Array.isArray(source) ? source : {},
@@ -422,6 +432,7 @@ export function useTaskForm(options: {
       // 流程变量。Complete 请求在顶层携带这两项，由 `SubTableWriteIsolation` 消费。
       emptiedSubTableKeys: subTablePayload.emptiedSubTableKeys,
       subTableBindingScopes: subTablePayload.subTableBindingScopes,
+      ...(pendingSubTableBatchChanges.value.length ? { subTableBatchChanges: pendingSubTableBatchChanges.value } : {}),
     }
   }
 
@@ -431,6 +442,7 @@ export function useTaskForm(options: {
     try {
       const payload = buildCurrentTaskFormSubmitPayload()
       await submitTaskForm(options.effectiveTaskId.value, { ...payload, actionId })
+      pendingSubTableBatchChanges.value = []
       // #1446: align local slices with what was just persisted; otherwise post-save
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
@@ -460,7 +472,8 @@ export function useTaskForm(options: {
     formData,
     taskFormDTO,
     loadedSubTableBaseline,
-    buildSubTableSubmitPayload,
+    buildSubTableSubmitPayload: buildCurrentTaskFormSubmitPayload,
+    onSaved: () => { pendingSubTableBatchChanges.value = [] },
   })
 
   function getCurrentFormFieldKeys(): string[] {
@@ -484,6 +497,7 @@ export function useTaskForm(options: {
     taskFormDTO,
     saveCurrentTaskForm,
     buildCurrentTaskFormSubmitPayload,
+    recordSubTableBatchChange,
     buildSubTableSubmitPayload,
     loadedSubTableBaseline,
     captureLoadedSubTableBaseline,

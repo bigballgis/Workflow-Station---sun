@@ -106,6 +106,9 @@ public class TaskApprovalCompletionComponent {
         String taskId = task.getTaskId();
         String action = request.getAction();
 
+        taskFormComponent.validateSubTableBatchChanges(task.getTaskDefinitionKey(),
+                task.getProcessInstanceId(), request.getSubTableBatchChanges());
+
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }

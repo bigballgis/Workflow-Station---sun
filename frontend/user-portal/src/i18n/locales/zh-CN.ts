@@ -1155,6 +1155,13 @@ export default {
   },
   subTable: {
     add: '新增',
+    batchEdit: '批量编辑',
+    batchEditDraftHint: '变更仅应用到当前页面，需由原保存或自动保存成功后才会持久化。',
+    batchSetSelected: '为选中行统一赋值',
+    batchNoChange: '不修改',
+    batchSetValue: '设置值',
+    batchClearValue: '清空值',
+    batchApply: '应用到页面',
     edit: '编辑',
     delete: '删除',
     actions: '操作',

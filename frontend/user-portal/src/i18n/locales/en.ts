@@ -1160,6 +1160,13 @@ export default {
   },
   subTable: {
     add: 'Add',
+    batchEdit: 'Batch Edit',
+    batchEditDraftHint: 'Changes stay in this page until the normal Save or auto-save succeeds.',
+    batchSetSelected: 'Set value for selected rows',
+    batchNoChange: 'Do not change',
+    batchSetValue: 'Set value',
+    batchClearValue: 'Clear value',
+    batchApply: 'Apply to page',
     edit: 'Edit',
     delete: 'Delete',
     actions: 'Actions',

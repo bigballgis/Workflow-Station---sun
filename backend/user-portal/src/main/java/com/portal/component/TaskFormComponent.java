@@ -880,6 +880,15 @@ public class TaskFormComponent {
         }
     }
 
+    /** Re-checks a batch declaration on the Complete path before Flowable receives form variables. */
+    public void validateSubTableBatchChanges(String taskDefinitionKey, String processInstanceId,
+                                             List<com.portal.dto.SubTableBatchChange> changes) {
+        if (changes == null || changes.isEmpty()) return;
+        ProcessInstance processInstance = requireProcessInstance(processInstanceId);
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey, processInstanceId);
+        SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition, changes, objectMapper);
+    }
+
     /**
      * Enforces sub-table field-level permissions (composite {@code bindingId:field} keys, see
      * {@code FormDefinition.fieldPermissions}) on {@code editableData.get("__subTables__")},

@@ -28,6 +28,7 @@ function unwrapCompleteFormPayload(built: Record<string, any>): {
   formData: Record<string, any>
   emptiedSubTableKeys?: string[]
   subTableBindingScopes?: TaskCompleteRequest['subTableBindingScopes']
+  subTableBatchChanges?: TaskCompleteRequest['subTableBatchChanges']
 } {
   if (
     built != null
@@ -42,6 +43,7 @@ function unwrapCompleteFormPayload(built: Record<string, any>): {
       formData: built.formData as Record<string, any>,
       emptiedSubTableKeys: built.emptiedSubTableKeys,
       subTableBindingScopes: built.subTableBindingScopes,
+      subTableBatchChanges: built.subTableBatchChanges,
     }
   }
   return { formData: built }
@@ -323,7 +325,7 @@ export function useTaskActions(options: {
       const rawBuilt = options.buildFormPayloadForComplete
         ? options.buildFormPayloadForComplete()
         : buildLegacyCompleteFormData()
-      const { formData: built, emptiedSubTableKeys, subTableBindingScopes } =
+      const { formData: built, emptiedSubTableKeys, subTableBindingScopes, subTableBatchChanges } =
         unwrapCompleteFormPayload(rawBuilt)
       const engineFormData: Record<string, any> = { ...built }
       engineFormData.__subTables__ = canonicalizeSubTablesForSubmit(
@@ -346,6 +348,7 @@ export function useTaskActions(options: {
         formData: submittedFormData,
         emptiedSubTableKeys,
         subTableBindingScopes,
+        subTableBatchChanges,
       })
       ElMessage.success(t('task.operationSuccess'))
       options.approveDialogVisible.value = false

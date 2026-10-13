@@ -197,6 +197,7 @@ interface Props {
   fieldPermissions?: Record<string, string> | null
   /** Current form's server-filtered frozen batch controls. */
   subTableBatchCapabilities?: Record<string, unknown> | null
+  onSubTableBatchChange?: (change: unknown) => void
   /**
    * When true, FormRenderer may auto-open the first previewable upload after data
    * settles, if the account preference is on. Default off. Enable only on the
@@ -764,6 +765,7 @@ const {
   showLinkFormDialogFooter: propShowLinkFormDialogFooter,
   fieldPermissions: propFieldPermissions,
   subTableBatchCapabilities: propSubTableBatchCapabilities,
+  onSubTableBatchChange: propOnSubTableBatchChange,
 } = toRefs(props)
 
 function collectPreviewFiles() {
@@ -823,6 +825,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   isSubTableEditable,
   fieldPermissions: propFieldPermissions,
   subTableBatchCapabilities: propSubTableBatchCapabilities,
+  onSubTableBatchChange: propOnSubTableBatchChange,
   getSubFormRowFormulas,
   getSummaryColumns,
   getSummaryAggregations,

@@ -1155,6 +1155,13 @@ export default {
   },
   subTable: {
     add: '新增',
+    batchEdit: '批次編輯',
+    batchEditDraftHint: '變更只會套用到目前頁面，原有儲存或自動儲存成功後才會持久化。',
+    batchSetSelected: '為選取的列統一設定值',
+    batchNoChange: '不修改',
+    batchSetValue: '設定值',
+    batchClearValue: '清除值',
+    batchApply: '套用到頁面',
     edit: '編輯',
     delete: '刪除',
     actions: '操作',

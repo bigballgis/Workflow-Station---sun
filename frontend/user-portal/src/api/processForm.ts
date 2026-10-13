@@ -89,6 +89,13 @@ export interface TaskFormSubmitRequest {
     emptied: boolean
     deletedRows?: Array<Record<string, unknown>>
   }>
+  /** Server-validated declarations for changes originating in Batch Edit. */
+  subTableBatchChanges?: Array<{
+    batchControlId: string
+    bindingId: string
+    operation: 'EDIT'
+    rowPatches: Array<{ rowId: string; fields: string[] }>
+  }>
   /** Present only when the user clicked a SAVE Action (autosave omits this). */
   actionId?: string
 }

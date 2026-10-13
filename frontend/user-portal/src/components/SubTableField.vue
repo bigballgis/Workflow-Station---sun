@@ -4,6 +4,13 @@
       <span class="title">{{ title }}</span>
       <div class="actions">
         <el-button
+          v-if="canBatchEdit"
+          size="small"
+          @click="batchDialogVisible = true"
+        >
+          {{ t('subTable.batchEdit') }}
+        </el-button>
+        <el-button
           v-if="editable"
           size="small"
           @click="handleExport"
@@ -563,6 +570,14 @@
       The standalone user-picker dialog was removed together with the inline Assign/Reassign button:
       assignment now happens only through the row Edit dialog's assignee field.
     -->
+    <SubTableBatchEditDialog
+      v-if="batchEditCapability"
+      v-model:visible="batchDialogVisible"
+      :rows="rows"
+      :capability="batchEditCapability"
+      :row-identity="resolveBatchRowIdentity"
+      @apply="applyBatchEdit"
+    />
   </div>
 </template>
 
@@ -572,6 +587,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Document, Search, Close, Download, Upload } from '@element-plus/icons-vue'
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import SubTableAddDialog from './SubTableAddDialog.vue'
+import SubTableBatchEditDialog from './SubTableBatchEditDialog.vue'
 import {
   resolveDisplayValue,
   isUserSnapshotLikeObject,
@@ -606,6 +622,9 @@ import {
 } from '@/composables/subTableField/useSubTableLookupCells'
 import { useSubTableStatusColumns } from '@/composables/subTableField/useSubTableStatusColumns'
 import { useSubTableRowKeys } from '@/composables/subTableField/useSubTableRowKeys'
+import { canonicalRowKeyFromPayload } from '@/composables/subTableField/useSubTableRowKeys'
+import { allowsFrozenBatchEdit, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
+import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
 import { useSubTableLinkFormDialog } from '@/composables/subTableField/useSubTableLinkFormDialog'
 import { useSubTableLinkFormOpen } from '@/composables/subTableField/useSubTableLinkFormOpen'
@@ -639,6 +658,10 @@ const props = withDefaults(defineProps<{
   allowAdd?: boolean
   allowEdit?: boolean
   allowDelete?: boolean
+  /** Current task form's server-filtered frozen capability for this control. */
+  batchCapability?: unknown
+  /** Registers a transport-only batch declaration with the owning task form. */
+  onBatchChange?: (change: unknown) => void
   loading?: boolean
   rowFormulas?: RowFormulaRule[]
   summaryColumns?: string[]
@@ -754,6 +777,51 @@ const isActionBinding = computed(() => props.bindingType === 'ACTION')
 const canAdd = computed(() => !isActionBinding.value && props.editable === true && props.allowAdd !== false)
 const canEdit = computed(() => !isActionBinding.value && props.editable === true && props.allowEdit !== false)
 const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
+const batchDialogVisible = ref(false)
+const batchEditCapability = computed(() => {
+  const capability = parseSubTableBatchCapability(props.batchCapability)
+  return allowsFrozenBatchEdit(capability, props.bindingId) ? capability : null
+})
+
+/** Batch edit never falls back to legacy id/name guesses: it requires a server rowKey or one configured PK. */
+function resolveBatchRowIdentity(row: Record<string, unknown>): string | null {
+  const canonical = canonicalRowKeyFromPayload(row)
+  if (canonical) return canonical
+  const primaryKeys = props.primaryKeyFields
+  if (Array.isArray(primaryKeys) && primaryKeys.length === 1) {
+    const value = row[primaryKeys[0]!]
+    if (value !== null && value !== undefined && String(value).trim() !== '') return `${primaryKeys[0]}=${String(value)}`
+  }
+  return null
+}
+
+const canBatchEdit = computed(() => !!batchEditCapability.value
+  && !isActionBinding.value
+  && props.editable === true
+  && rows.value.every(row => resolveBatchRowIdentity(row) !== null))
+
+function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet) {
+  const capability = batchEditCapability.value
+  if (!capability || !canBatchEdit.value) return
+  const fieldsByRow = new Map<string, Set<string>>()
+  const addFields = (rowId: string, fields: Record<string, unknown>) => {
+    const existing = fieldsByRow.get(rowId) ?? new Set<string>()
+    Object.keys(fields).forEach(field => existing.add(field))
+    fieldsByRow.set(rowId, existing)
+  }
+  changes.rowPatches?.forEach(patch => addFields(patch.rowId, patch.fields))
+  changes.uniformPatches?.forEach(patch => patch.rowIds.forEach(rowId => addFields(rowId, patch.fields)))
+  const rowPatches = [...fieldsByRow.entries()].map(([rowId, fields]) => ({ rowId, fields: [...fields] }))
+  if (!rowPatches.length) return
+  rows.value = nextRows
+  emit('update:modelValue', [...rows.value])
+  props.onBatchChange?.({
+    batchControlId: capability.batchControlId,
+    bindingId: capability.bindingId,
+    operation: 'EDIT',
+    rowPatches,
+  })
+}
 
 function ownerChipsForRow(col: Column, row: Record<string, unknown>) {
   const display = row[`${col.field}__display`]

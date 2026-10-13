@@ -159,6 +159,12 @@ export interface TaskCompleteRequest {
     emptied: boolean
     deletedRows?: Array<Record<string, unknown>>
   }>
+  subTableBatchChanges?: Array<{
+    batchControlId: string
+    bindingId: string
+    operation: 'EDIT'
+    rowPatches: Array<{ rowId: string; fields: string[] }>
+  }>
 }
 
 /** Historic user-task node that the current task may be returned to (engine uses taskId = activityId). */
