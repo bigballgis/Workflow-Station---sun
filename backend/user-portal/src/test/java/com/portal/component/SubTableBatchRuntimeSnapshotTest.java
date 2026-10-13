@@ -77,6 +77,22 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     @Test
+    void rejectsBatchAssignWhenThePinnedBpmnHasNoMatchingAssignmentContract() throws Exception {
+        Map<String, Object> assignConfig = config(true, "ctl-1");
+        Map<String, Object> rule = (Map<String, Object>) ((List<?>) assignConfig.get("rule")).get(0);
+        rule.put("props", Map.of("_bindingId", 101, "allowBatchAssign", true));
+        assignConfig.put("batchForms", Map.of("101", Map.of("schemaVersion", 1,
+                "rule", List.of(Map.of("type", "miAssignment")))));
+        Map<String, Object> catalog = Map.of("forms", List.of(Map.of(
+                "sourceId", "form-1", "data", objectMapper.writeValueAsString(assignConfig), "formType", "TASK",
+                "tableBindings", List.of(Map.of("bindingId", 101, "tableName", "line_items")))));
+
+        assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(catalog, pin, objectMapper))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no matching BPMN assignment contract");
+    }
+
+    @Test
     void rejectsDuplicateEnabledControlIdentityAcrossForms() {
         assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(
                 Map.of("forms", List.of(form("form-1", config(true, "duplicate")), form("form-2", config(true, "duplicate")))),

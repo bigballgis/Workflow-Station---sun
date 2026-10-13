@@ -46,6 +46,7 @@ final class SubTableBatchRuntimeSnapshot {
         }
 
         Map<String, Object> snapshotForms = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> assignmentContracts = assignmentContracts(catalogContent);
         Set<String> controlIds = new LinkedHashSet<>();
         int formIndex = 0;
         for (Object rawForm : forms) {
@@ -57,7 +58,8 @@ final class SubTableBatchRuntimeSnapshot {
             Map<String, Object> config = parseConfig(form.get("data"), diagnosticId, objectMapper);
             Map<String, Object> batchForms = mapValue(config.get("batchForms"));
             List<Map<String, Object>> controls = new ArrayList<>();
-            collectControls(config.get("rule"), batchForms, controls, controlIds, diagnosticId, objectMapper);
+            collectControls(config.get("rule"), batchForms, controls, controlIds, diagnosticId,
+                    form, assignmentContracts, objectMapper);
             if (!controls.isEmpty()) {
                 String sourceId = requiredText(form.get("sourceId"), "catalog form sourceId for enabled batch control");
                 Map<String, Object> formSnapshot = new LinkedHashMap<>();
@@ -113,10 +115,12 @@ final class SubTableBatchRuntimeSnapshot {
     @SuppressWarnings("unchecked")
     private static void collectControls(Object value, Map<String, Object> batchForms,
                                         List<Map<String, Object>> controls, Set<String> controlIds,
-                                        String sourceId, ObjectMapper objectMapper) {
+                                        String sourceId, Map<String, Object> form,
+                                        Map<String, Map<String, Object>> assignmentContracts,
+                                        ObjectMapper objectMapper) {
         if (value instanceof List<?> list) {
             for (Object child : list) {
-                collectControls(child, batchForms, controls, controlIds, sourceId, objectMapper);
+                collectControls(child, batchForms, controls, controlIds, sourceId, form, assignmentContracts, objectMapper);
             }
             return;
         }
@@ -143,14 +147,63 @@ final class SubTableBatchRuntimeSnapshot {
                 control.put("capabilities", enabledCapabilities(props));
                 control.put("originalCrud", originalCrud(props));
                 control.put("batchForm", deepCopy(batchForm, objectMapper));
+                if (Boolean.TRUE.equals(props.get("allowBatchAssign"))) {
+                    Map<String, Object> assignment = assignmentForBinding(form, bindingId, assignmentContracts);
+                    if (assignment.isEmpty()) {
+                        throw new IllegalArgumentException("Batch Assign control " + controlId
+                                + " has no matching BPMN assignment contract");
+                    }
+                    control.put("assignmentConfig", deepCopy(assignment, objectMapper));
+                }
                 controls.add(control);
             }
         }
         for (Object child : rule.values()) {
             if (child instanceof Map<?, ?> || child instanceof List<?>) {
-                collectControls(child, batchForms, controls, controlIds, sourceId, objectMapper);
+                collectControls(child, batchForms, controls, controlIds, sourceId, form, assignmentContracts, objectMapper);
             }
         }
+    }
+
+    private static Map<String, Map<String, Object>> assignmentContracts(Map<String, Object> catalogContent) {
+        Map<String, Map<String, Object>> contracts = new LinkedHashMap<>();
+        Object rawProcesses = catalogContent.get("processes");
+        if (!(rawProcesses instanceof List<?> processes)) return contracts;
+        for (Object raw : processes) {
+            if (!(raw instanceof Map<?, ?> process)) continue;
+            Object data = process.get("data");
+            if (!(data instanceof String bpmnXml) || bpmnXml.isBlank()) continue;
+            BpmnMiXmlSupport.buildMiAssignmentsBySubTableName(bpmnXml).forEach((tableName, contract) -> {
+                Map<String, Object> previous = contracts.putIfAbsent(tableName, contract);
+                if (previous != null && !previous.equals(contract)) {
+                    throw new IllegalArgumentException("Conflicting BPMN assignment contract for sub-table " + tableName);
+                }
+            });
+        }
+        return contracts;
+    }
+
+    private static Map<String, Object> assignmentForBinding(Map<String, Object> form, String bindingId,
+                                                              Map<String, Map<String, Object>> contracts) {
+        Object rawBindings = form.get("tableBindings");
+        if (!(rawBindings instanceof List<?> bindings)) return Map.of();
+        String tableName = null;
+        for (Object rawBinding : bindings) {
+            if (!(rawBinding instanceof Map<?, ?> binding)) continue;
+            if (!bindingId.equals(String.valueOf(binding.get("bindingId")))) continue;
+            Object value = binding.get("tableName");
+            if (value instanceof String name && !name.isBlank()) {
+                tableName = name.trim();
+                break;
+            }
+        }
+        if (tableName == null) return Map.of();
+        final String resolvedTableName = tableName;
+        Map<String, Object> direct = contracts.get(resolvedTableName);
+        if (direct != null) return direct;
+        return contracts.entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(resolvedTableName))
+                .map(Map.Entry::getValue).findFirst().orElse(Map.of());
     }
 
     private static void validateBatchForm(Map<String, Object> batchForm, String sourceId,
