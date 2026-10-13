@@ -36,6 +36,15 @@ type BatchFormLike = {
   rule?: unknown
 }
 
+function containsMiAssignment(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsMiAssignment)
+  if (!value || typeof value !== 'object') return false
+  const rule = value as Record<string, unknown>
+  if (rule.type === 'miAssignment') return true
+  return Object.values(rule).some(child => Array.isArray(child) || (child !== null && typeof child === 'object')
+    ? containsMiAssignment(child) : false)
+}
+
 /** Batch permissions are opt-in: legacy strings such as "true" never enable one. */
 export function hasEnabledBatchOperation(rule: RuleLike): boolean {
   return BATCH_OPERATION_FIELDS.some((field) => rule.props?.[field] === true)
@@ -73,6 +82,9 @@ export function validateEnabledBatchForms(
     if (rawBindingId === null || rawBindingId === undefined || String(rawBindingId).trim() === '') return false
     const batchForm = batchForms?.[String(rawBindingId)]
     if (batchForm?.schemaVersion !== 1 || !Array.isArray(batchForm.rule) || batchForm.rule.length === 0) {
+      return false
+    }
+    if (rule.props?.allowBatchAssign === true && !containsMiAssignment(batchForm.rule)) {
       return false
     }
   }

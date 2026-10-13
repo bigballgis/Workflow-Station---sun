@@ -47,4 +47,14 @@ describe('createBatchControlId', () => {
       '101': { schemaVersion: 1, rule: [] },
     })).toBe(false)
   })
+
+  it('requires the dedicated assignment component when Batch Assign is enabled', () => {
+    const assign = [{ _bindingId: 101, props: { allowBatchAssign: true } }]
+    expect(validateEnabledBatchForms(assign, {
+      '101': { schemaVersion: 1, rule: [{ type: 'input', field: 'name' }] },
+    })).toBe(false)
+    expect(validateEnabledBatchForms(assign, {
+      '101': { schemaVersion: 1, rule: [{ type: 'fcRow', children: [{ type: 'miAssignment' }] }] },
+    })).toBe(true)
+  })
 })
