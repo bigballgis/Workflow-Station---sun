@@ -93,6 +93,31 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void freezesTheMatchingPinnedBpmnAssignmentContract() throws Exception {
+        Map<String, Object> assignConfig = config(true, "ctl-1");
+        Map<String, Object> rule = (Map<String, Object>) ((List<?>) assignConfig.get("rule")).get(0);
+        rule.put("props", Map.of("_bindingId", 101, "allowBatchAssign", true));
+        assignConfig.put("batchForms", Map.of("101", Map.of("schemaVersion", 1,
+                "rule", List.of(Map.of("type", "miAssignment")))));
+        Map<String, Object> catalog = Map.of(
+                "forms", List.of(Map.of(
+                        "sourceId", "form-1", "data", objectMapper.writeValueAsString(assignConfig), "formType", "TASK",
+                        "tableBindings", List.of(Map.of("bindingId", 101, "tableName", "line_items")))),
+                "processes", List.of(Map.of("data", bpmnFor("line_items"))));
+
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(catalog, pin, objectMapper).orElseThrow();
+        Map<String, Object> form = (Map<String, Object>) ((Map<String, Object>) snapshot.get("forms")).get("form-1");
+        Map<String, Object> control = (Map<String, Object>) ((List<?>) form.get("controls")).get(0);
+        assertThat((Map<String, Object>) control.get("assignmentConfig"))
+                .containsEntry("allowUser", true)
+                .containsEntry("allowRole", true)
+                .containsEntry("assigneeField", "assigned_to")
+                .containsEntry("roleField", "role_code")
+                .containsEntry("buField", "bu_code");
+    }
+
+    @Test
     void rejectsDuplicateEnabledControlIdentityAcrossForms() {
         assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(
                 Map.of("forms", List.of(form("form-1", config(true, "duplicate")), form("form-2", config(true, "duplicate")))),
@@ -207,5 +232,24 @@ class SubTableBatchRuntimeSnapshotTest {
         return new java.util.LinkedHashMap<>(Map.of(
                 "rule", List.of(rule),
                 "batchForms", Map.of("101", Map.of("schemaVersion", 1, "rule", List.of(Map.of("type", "input", "field", "name"))))));
+    }
+
+    private static String bpmnFor(String tableName) {
+        return """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:flowable="http://flowable.org/bpmn"
+                                  xmlns:custom="http://workflow.platform/schema/bpmn">
+                  <bpmn:process id="process"><bpmn:subProcess id="mi">
+                    <bpmn:multiInstanceLoopCharacteristics flowable:collection="rows"/>
+                    <bpmn:userTask id="task"><bpmn:extensionElements><custom:properties>
+                      <custom:property name="subTableName" value="%s"/>
+                      <custom:property name="assigneeMode" value="both"/>
+                      <custom:property name="assigneeField" value="assigned_to"/>
+                      <custom:property name="roleField" value="role_code"/>
+                      <custom:property name="buField" value="bu_code"/>
+                    </custom:properties></bpmn:extensionElements></bpmn:userTask>
+                  </bpmn:subProcess></bpmn:process>
+                </bpmn:definitions>
+                """.formatted(tableName);
     }
 }
