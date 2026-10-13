@@ -48,6 +48,9 @@ public class ProcessController {
     private final com.portal.component.AuditApplicationListQueryComponent auditApplicationListQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
     private final ActionPostEmailComponent actionPostEmailComponent;
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.portal.component.PortalBatchPrimaryKeyAllocationComponent portalBatchPrimaryKeyAllocationComponent;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -105,6 +108,9 @@ public class ProcessController {
             @RequestParam(required = false) String taskId,
             @Valid @RequestBody com.portal.dto.AllocatePrimaryKeyRequest request) {
         requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
+        if (request.getBatchControlId() != null) {
+            return ApiResponse.success(portalBatchPrimaryKeyAllocationComponent.allocate(taskId, userId, request));
+        }
         return ApiResponse.success(portalPrimaryKeyAllocationComponent.allocate(functionUnitId, request));
     }
     

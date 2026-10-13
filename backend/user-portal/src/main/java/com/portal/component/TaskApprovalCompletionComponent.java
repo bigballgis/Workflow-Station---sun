@@ -164,6 +164,8 @@ public class TaskApprovalCompletionComponent {
         // Without merge here, injectMiCollectionFromBpmn sees no sub-table rows → empty MI collection → zero child tasks.
         miCollectionVariableBuilder.mergeSubTablesFromTaskInfoForMi(task, variables);
         isolateOutboundSubTables(task, request, variables);
+        taskFormComponent.validateSubTableBatchPayload(task.getTaskDefinitionKey(), task.getProcessInstanceId(),
+                request.getSubTableBatchChanges(), request.getSubTableBindingScopes(), variables);
         Object subTablesAfterMerge = variables.get("__subTables__");
         if (!(subTablesAfterMerge instanceof Map<?, ?> subMap) || subMap.isEmpty()) {
             log.warn("[MI] After TaskInfo merge, variables have no __subTables__ (taskId={}, processInstanceId={}). "
@@ -504,7 +506,7 @@ public class TaskApprovalCompletionComponent {
                 formData, variables, baselineVars,
                 request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),
                 functionUnitCode, process.map(ProcessInstance::getFunctionUnitCatalogId).orElse(null),
-                task.getTaskDefinitionKey()));
+                task.getTaskDefinitionKey(), request.getSubTableBatchChanges()));
     }
 
     /**

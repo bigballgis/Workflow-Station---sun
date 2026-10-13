@@ -65,7 +65,12 @@ class SubTableWriteIsolation {
             Map<String, Object> baselineVariables,
             List<String> emptiedSubTableKeys,
             List<SubTableBindingScope> scopes,
-            String functionUnitCode, String catalogId, String stageId) {
+            String functionUnitCode, String catalogId, String stageId, List<com.portal.dto.SubTableBatchChange> batchChanges) {
+        Request(Map<String, Object> formData, Map<String, Object> inbound, Map<String, Object> baselineVariables,
+                List<String> emptiedSubTableKeys, List<SubTableBindingScope> scopes, String functionUnitCode,
+                String catalogId, String stageId) {
+            this(formData, inbound, baselineVariables, emptiedSubTableKeys, scopes, functionUnitCode, catalogId, stageId, null);
+        }
         Request(Map<String, Object> formData, Map<String, Object> inbound,
                 Map<String, Object> baselineVariables, List<String> emptiedSubTableKeys,
                 List<SubTableBindingScope> scopes, String functionUnitCode) {
@@ -94,6 +99,7 @@ class SubTableWriteIsolation {
                 request.scopes() == null ? List.of() : List.copyOf(request.scopes());
         Map<String, SubTableWriteDesign.Binding> frozen = writeDesign == null ? null
                 : writeDesign.resolve(request.catalogId(), request.stageId());
+        frozen = SubTableBatchScopeDesign.overlay(frozen, baselineVars, request.batchChanges());
         requireScopesForFrozenMultiBindings(frozen, submitted, bindingScopes);
         if (merger.isMiSubTaskSubmission(request.formData())) {
             Map<String, Object> rowKey = merger.resolveCurrentItemRowKey(request.formData());

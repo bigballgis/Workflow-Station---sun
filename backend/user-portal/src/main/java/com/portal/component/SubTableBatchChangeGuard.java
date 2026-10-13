@@ -31,8 +31,13 @@ final class SubTableBatchChangeGuard {
         if (controls.isEmpty()) {
             throw forbidden("Batch operations are not enabled for this task form");
         }
+        Set<Map.Entry<String, Map<String, Object>>> affected = new HashSet<>();
         for (SubTableBatchChange change : changes) {
             validateChange(change, controls, Map.of());
+            for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+                affected.add(Map.entry(change.getBindingId(), patch.getRowKey()));
+            }
+            if (affected.size() > 200) throw forbidden("Batch submit exceeds 200 affected rows");
         }
     }
 
@@ -66,7 +71,6 @@ final class SubTableBatchChangeGuard {
         if (submitted == null) throw forbidden("Batch submit has no canonical sub-table data");
         Map<String, Object> tables = map(submitted.get("__subTables__"));
         for (SubTableBatchChange change : changes) {
-            if (change != null && "ADD".equals(change.getOperation())) continue;
             String storeKey = storeKeyFor(change, scopes);
             List<Map<String, Object>> rows = rows(tables.get(storeKey));
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
@@ -74,13 +78,30 @@ final class SubTableBatchChangeGuard {
                     throw forbidden("Batch row patch is missing its configured identity");
                 }
                 Map<String, Object> row = findByKey(rows, patch.getRowKey());
+                if ("DELETE".equals(change.getOperation())) {
+                    if (row != null) throw forbidden("Batch deleted row still exists in the submitted canonical store");
+                    requireVersionedDeletion(change, patch, scopes);
+                    continue;
+                }
                 if (row == null) throw forbidden("Batch row patch does not match a submitted canonical row");
-                for (String field : patch.getFields()) {
+                for (String field : patch.getFields() == null ? List.<String>of() : patch.getFields()) {
                     if (!row.containsKey(field)) {
                         throw forbidden("Batch row patch field is absent from the submitted canonical row");
                     }
                 }
             }
+        }
+    }
+
+    private static void requireVersionedDeletion(SubTableBatchChange change, SubTableBatchChange.RowPatch patch,
+                                                  List<com.portal.dto.SubTableBindingScope> scopes) {
+        List<Map<String, Object>> deletions = scopes.stream().filter(Objects::nonNull)
+                .filter(scope -> change.getBindingId().equals(scope.getBindingId()))
+                .filter(scope -> scope.getDeletedRows() != null)
+                .flatMap(scope -> scope.getDeletedRows().stream()).toList();
+        Map<String, Object> deletion = findByKey(deletions, patch.getRowKey());
+        if (deletion == null || !(deletion.get("_wsRowVersion") instanceof Number)) {
+            throw forbidden("Batch delete requires an explicit versioned deletion claim");
         }
     }
 
@@ -148,6 +169,12 @@ final class SubTableBatchChangeGuard {
         }
         Map<String, Object> capabilities = map(control.get("capabilities"));
         Map<String, Object> originalCrud = map(control.get("originalCrud"));
+        if (change.getRowPatches() == null || change.getRowPatches().isEmpty() || change.getRowPatches().size() > 200) {
+            throw forbidden("Batch operation requires between 1 and 200 row patches");
+        }
+        if ("ADD".equals(change.getOperation()) || "DELETE".equals(change.getOperation())) {
+            validateMembershipIdentity(change, map(control.get("rowDesign")));
+        }
         if (!"DELETE".equals(change.getOperation()) && !"ADD".equals(change.getOperation())
                 && Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
             throw forbidden("Batch operation is not enabled for this control");
@@ -167,6 +194,11 @@ final class SubTableBatchChangeGuard {
             validateAdd(change, capabilities, originalCrud, map(control.get("batchForm")));
             return;
         }
+        validateEdit(change, control, fieldPermissions);
+    }
+
+    private static void validateEdit(SubTableBatchChange change, Map<String, Object> control,
+                                     Map<String, String> fieldPermissions) {
         Set<String> allowedFields = batchFormFields(map(control.get("batchForm")));
         if (allowedFields.isEmpty()) {
             throw forbidden("Batch form has no supported editable fields");
@@ -186,6 +218,25 @@ final class SubTableBatchChangeGuard {
                 if ("READONLY".equals(fieldPermissions.get(change.getBindingId().trim() + ":" + field))) {
                     throw forbidden("Batch patch contains a read-only field");
                 }
+            }
+        }
+    }
+
+    private static void validateMembershipIdentity(SubTableBatchChange change, Map<String, Object> design) {
+        Map<String, Object> binding = map(design.get("binding"));
+        if (!"SUB".equals(binding.get("bindingType")) || !"EDITABLE".equals(binding.get("bindingMode"))
+                || !"structuralFk".equals(binding.get("bindingLinkMode"))) {
+            throw forbidden("Batch membership operations require an editable structural business binding");
+        }
+        if (!(binding.get("primaryKeyFields") instanceof List<?> keys) || keys.isEmpty()) {
+            throw forbidden("Batch membership operations require frozen row identity fields");
+        }
+        Set<Map<String, Object>> seen = new HashSet<>();
+        for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+            if (patch == null || patch.getRowKey() == null || !patch.getRowKey().keySet().equals(new HashSet<>(keys))
+                    || patch.getRowKey().values().stream().anyMatch(value -> value == null || String.valueOf(value).isBlank())
+                    || !seen.add(patch.getRowKey())) {
+                throw forbidden("Batch membership row identity is missing, duplicated or not configured");
             }
         }
     }
@@ -218,7 +269,7 @@ final class SubTableBatchChangeGuard {
             throw forbidden("Batch add declaration has no supported row fields");
         }
         for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
-            if (patch == null || blank(patch.getRowId()) || patch.getRowKey() != null || patch.getAssignment() != null
+            if (patch == null || blank(patch.getRowId()) || patch.getRowKey() == null || patch.getRowKey().isEmpty() || patch.getAssignment() != null
                     || patch.getFields() == null || patch.getFields().isEmpty()) {
                 throw forbidden("Invalid batch add row patch");
             }

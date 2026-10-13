@@ -771,14 +771,13 @@ public class TaskFormComponent {
             subTableWriteIsolation().apply(new SubTableWriteIsolation.Request(
                     formData, inbound, currentVariables, emptiedKeys, bindingScopes,
                     processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId(),
-                    taskInfo.taskDefinitionKey));
+                    taskInfo.taskDefinitionKey, subTableBatchChanges));
 
             // Compare batch declarations with the canonical rows after the normal
             // binding/MI scope guard has produced the scoped write set.  This keeps
             // the batch transport metadata from becoming an unrelated client hint.
-            SubTableBatchChangeGuard.validateSubmittedRows(subTableBatchChanges, bindingScopes, inbound);
-            SubTableBatchChangeGuard.validateSubmittedAssignments(currentVariables, formDefinition,
-                    subTableBatchChanges, bindingScopes, inbound, objectMapper);
+            SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(currentVariables,
+                    formDefinition, subTableBatchChanges, bindingScopes, inbound, objectMapper));
 
             updatedVariables.putAll(inbound);
 
@@ -902,6 +901,17 @@ public class TaskFormComponent {
                 formDefinition != null ? fieldMapper().extractFieldPermissions(formDefinition) : Collections.emptyMap());
         SubTableBatchAssignmentStageGuard.validate(taskDefinitionKey, processInstanceId,
                 processInstance.getVariables(), formDefinition, changes, objectMapper, workflowEngineClient);
+    }
+
+    /** Complete must validate the canonical payload before passing it to the workflow engine. */
+    public void validateSubTableBatchPayload(String stageId, String processId,
+                                            List<com.portal.dto.SubTableBatchChange> changes,
+                                            List<SubTableBindingScope> scopes, Map<String, Object> submitted) {
+        if (changes == null || changes.isEmpty()) return;
+        ProcessInstance instance = requireProcessInstance(processId);
+        Map<String, Object> definition = fetchTaskFormByStageId(stageId, processId);
+        SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(instance.getVariables(),
+                definition, changes, scopes, submitted, objectMapper));
     }
 
     /**

@@ -138,6 +138,20 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void initializesMembershipVersionsOnlyInTheNewLocalInstanceCopy() {
+        Map<String, Object> config = config(false, "ctl-1");
+        Map<String, Object> rule = (Map<String, Object>) ((List<?>) config.get("rule")).get(0);
+        rule.put("props", Map.of("_bindingId", 101, "allowBatchDelete", true));
+        Map<String, Object> engine = Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("line_id", "L1", "name", "original"))));
+        Map<String, Object> local = ProcessStartComponent.withBatchRuntimeSnapshot(engine, content(config), pin);
+        Map<String, Object> table = (Map<String, Object>) local.get("__subTables__");
+        Map<String, Object> row = (Map<String, Object>) ((List<?>) table.get("dw:lines")).get(0);
+        assertThat(row).containsEntry("_wsRowVersion", 1);
+        assertThat(engine.toString()).doesNotContain("_wsRowVersion");
+    }
+
+    @Test
     void projectsOnlyTheCurrentFormsFrozenControls() {
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
                 .orElseThrow();
@@ -267,21 +281,20 @@ class SubTableBatchRuntimeSnapshotTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void acceptsOnlyTemporaryIdentityFreeRowsForFrozenBatchAdd() {
+    void requiresPreparedPersistentIdentityForFrozenBatchAdd() {
         Map<String, Object> config = config(false, "ctl-1");
         Map<String, Object> rule = (Map<String, Object>) ((List<?>) config.get("rule")).get(0);
         rule.put("props", Map.of("_bindingId", 101, "allowAdd", true, "allowBatchAdd", true));
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config), pin, objectMapper).orElseThrow();
         SubTableBatchChange change = editChange("ctl-1", "101", "name");
         change.setOperation("ADD");
-        change.getRowPatches().get(0).setRowKey(null);
         SubTableBatchChangeGuard.validate(Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
                 Map.of("sourceId", "form-1"), List.of(change), objectMapper);
 
-        change.getRowPatches().get(0).setRowKey(Map.of("line_id", "L1"));
+        change.getRowPatches().get(0).setRowKey(null);
         assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(
                 Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), Map.of("sourceId", "form-1"),
-                List.of(change), objectMapper)).hasMessageContaining("Invalid batch add");
+                List.of(change), objectMapper)).hasMessageContaining("row identity");
     }
 
     private static SubTableBatchChange editChange(String controlId, String bindingId, String field) {
@@ -298,12 +311,24 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     private Map<String, Object> content(Map<String, Object> config) {
-        return Map.of("forms", List.of(form("form-1", config)));
+        try {
+            return Map.of("forms", List.of(form("form-1", config)), "dataTables", List.of(Map.of("data",
+                    objectMapper.writeValueAsString(Map.of("tableName", "lines", "fields", List.of(
+                            Map.of("fieldName", "line_id", "dataType", "TEXT", "isPrimaryKey", true),
+                            Map.of("fieldName", "case_ref", "isForeignKey", true, "refTableName", "cases", "refPrimaryKeyFields", List.of("case_key")),
+                            Map.of("fieldName", "name", "dataType", "TEXT", "nullable", false))))), Map.of("data",
+                    objectMapper.writeValueAsString(Map.of("tableName", "cases", "tableType", "MAIN", "fields", List.of(
+                            Map.of("fieldName", "case_key", "dataType", "TEXT", "isPrimaryKey", true)))))));
+        } catch (Exception error) { throw new IllegalStateException(error); }
     }
 
     private Map<String, Object> form(String sourceId, Map<String, Object> config) {
         try {
-            return Map.of("sourceId", sourceId, "data", objectMapper.writeValueAsString(config), "formType", "TASK");
+            return Map.of("sourceId", sourceId, "data", objectMapper.writeValueAsString(config), "formType", "TASK",
+                    "tableBindings", List.of(Map.of("bindingId", 101, "tableName", "lines", "bindingType", "SUB",
+                            "bindingMode", "EDITABLE", "bindingLinkMode", "structuralFk", "tableId", 20,
+                            "foreignKeyField", "case_ref", "fieldDefinitions", List.of(Map.of("fieldName", "unpublished_live_field"))),
+                            Map.of("bindingId", 102, "tableName", "cases", "tableId", 10, "bindingType", "PRIMARY")));
         } catch (Exception ex) {
             throw new IllegalStateException(ex);
         }

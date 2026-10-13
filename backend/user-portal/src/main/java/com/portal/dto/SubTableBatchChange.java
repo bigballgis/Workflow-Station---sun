@@ -17,7 +17,7 @@ import java.util.Map;
 public class SubTableBatchChange {
     private String batchControlId;
     private String bindingId;
-    /** EDIT, ASSIGN and DELETE are supported; ADD requires its own guarded transport contract. */
+    /** EDIT, ASSIGN, ADD or DELETE; validated against the frozen capability. */
     private String operation;
     private List<RowPatch> rowPatches;
 

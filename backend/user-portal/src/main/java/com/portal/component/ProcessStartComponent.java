@@ -385,8 +385,11 @@ public class ProcessStartComponent {
     static Map<String, Object> withBatchRuntimeSnapshot(
             Map<String, Object> engineVariables, Map<String, Object> catalogContent, ActiveCatalogPin pin) {
         Map<String, Object> persistedVariables = new HashMap<>(engineVariables);
-        SubTableBatchRuntimeSnapshot.capture(catalogContent, pin, new ObjectMapper())
-                .ifPresent(snapshot -> persistedVariables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot));
+        ObjectMapper mapper = new ObjectMapper();
+        SubTableBatchRuntimeSnapshot.capture(catalogContent, pin, mapper).ifPresent(snapshot -> {
+            persistedVariables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot);
+            SubTableBatchInitialRows.initialize(persistedVariables, snapshot, mapper);
+        });
         return persistedVariables;
     }
 
