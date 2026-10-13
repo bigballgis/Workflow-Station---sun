@@ -93,7 +93,7 @@ export interface TaskFormSubmitRequest {
   subTableBatchChanges?: Array<{
     batchControlId: string
     bindingId: string
-    operation: 'EDIT' | 'ASSIGN'
+    operation: 'EDIT' | 'ASSIGN' | 'DELETE'
     rowPatches: Array<{
       rowId: string
       rowKey: Record<string, unknown>

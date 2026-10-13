@@ -141,12 +141,12 @@ final class SubTableBatchChangeGuard {
         if (!change.getBindingId().trim().equals(String.valueOf(control.get("bindingId")))) {
             throw forbidden("Batch control does not belong to the submitted binding");
         }
-        if (!"EDIT".equals(change.getOperation()) && !"ASSIGN".equals(change.getOperation())) {
+        if (!"EDIT".equals(change.getOperation()) && !"ASSIGN".equals(change.getOperation()) && !"DELETE".equals(change.getOperation())) {
             throw forbidden("Unsupported batch operation");
         }
         Map<String, Object> capabilities = map(control.get("capabilities"));
         Map<String, Object> originalCrud = map(control.get("originalCrud"));
-        if (Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
+        if (!"DELETE".equals(change.getOperation()) && Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
             throw forbidden("Batch operation is not enabled for this control");
         }
         if ("EDIT".equals(change.getOperation()) && !Boolean.TRUE.equals(capabilities.get("allowBatchEdit"))) {
@@ -154,6 +154,10 @@ final class SubTableBatchChangeGuard {
         }
         if ("ASSIGN".equals(change.getOperation())) {
             validateAssignment(change, control, capabilities);
+            return;
+        }
+        if ("DELETE".equals(change.getOperation())) {
+            validateDelete(change, capabilities, originalCrud);
             return;
         }
         Set<String> allowedFields = batchFormFields(map(control.get("batchForm")));
@@ -175,6 +179,23 @@ final class SubTableBatchChangeGuard {
                 if ("READONLY".equals(fieldPermissions.get(change.getBindingId().trim() + ":" + field))) {
                     throw forbidden("Batch patch contains a read-only field");
                 }
+            }
+        }
+    }
+
+    private static void validateDelete(SubTableBatchChange change, Map<String, Object> capabilities,
+                                       Map<String, Object> originalCrud) {
+        if (!Boolean.TRUE.equals(capabilities.get("allowBatchDelete"))
+                || Boolean.FALSE.equals(originalCrud.get("allowDelete"))) {
+            throw forbidden("Batch delete is not enabled for this control");
+        }
+        if (change.getRowPatches() == null || change.getRowPatches().isEmpty()) {
+            throw forbidden("Batch delete declaration has no row patches");
+        }
+        for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+            if (patch == null || blank(patch.getRowId()) || patch.getRowKey() == null || patch.getRowKey().isEmpty()
+                    || (patch.getFields() != null && !patch.getFields().isEmpty()) || patch.getAssignment() != null) {
+                throw forbidden("Invalid batch delete row patch");
             }
         }
     }
