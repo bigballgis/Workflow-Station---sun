@@ -83,6 +83,50 @@ final class SubTableBatchChangeGuard {
         }
     }
 
+    /**
+     * Assignment intent is not authoritative by itself.  The canonical row
+     * submitted through the normal save path must contain exactly the frozen
+     * assignment fields represented by that intent; otherwise a forged intent
+     * could make an unrelated field mutation look like a valid batch assign.
+     */
+    static void validateSubmittedAssignments(Map<String, Object> instanceVariables,
+                                             Map<String, Object> formDefinition,
+                                             List<SubTableBatchChange> changes,
+                                             List<com.portal.dto.SubTableBindingScope> scopes,
+                                             Map<String, Object> submitted,
+                                             com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+        if (changes == null || changes.stream().noneMatch(change -> change != null && "ASSIGN".equals(change.getOperation()))) return;
+        Object sourceId = formDefinition == null ? null : formDefinition.get("sourceId");
+        Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(instanceVariables, sourceId, objectMapper);
+        Map<String, Object> tables = map(submitted == null ? null : submitted.get("__subTables__"));
+        for (SubTableBatchChange change : changes) {
+            if (change == null || !"ASSIGN".equals(change.getOperation())) continue;
+            Map<String, Object> control = map(controls.get(change.getBatchControlId()));
+            Map<String, Object> config = map(control.get("assignmentConfig"));
+            String assigneeField = text(config.get("assigneeField"));
+            String roleField = text(config.get("roleField"));
+            String buField = text(config.get("buField"));
+            if (assigneeField.isEmpty() && roleField.isEmpty()) throw forbidden("Batch assignment has no frozen field mapping");
+            List<Map<String, Object>> rows = rows(tables.get(storeKeyFor(change, scopes)));
+            for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+                Map<String, Object> row = findByKey(rows, patch.getRowKey());
+                if (row == null) throw forbidden("Batch assignment row does not match a submitted canonical row");
+                SubTableBatchChange.AssignmentIntent intent = patch.getAssignment();
+                if (intent == null) throw forbidden("Batch assignment row has no intent");
+                if ("PERSON".equals(intent.getMode())) {
+                    if (!same(row.get(assigneeField), intent.getAssigneeId()) || !empty(row.get(roleField)) || !empty(row.get(buField))) {
+                        throw forbidden("Batch assignment canonical fields do not match the person intent");
+                    }
+                } else if ("ROLE".equals(intent.getMode())) {
+                    if (!same(row.get(roleField), intent.getRoleCode()) || !empty(row.get(assigneeField))
+                            || (!buField.isEmpty() && !same(row.get(buField), intent.getBusinessUnitCode()))) {
+                        throw forbidden("Batch assignment canonical fields do not match the role intent");
+                    }
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static void validateChange(SubTableBatchChange change, Map<String, Object> controls,
                                        Map<String, String> fieldPermissions) {
@@ -232,6 +276,14 @@ final class SubTableBatchChangeGuard {
 
     private static String text(Object value) {
         return value instanceof String text ? text.trim() : "";
+    }
+
+    private static boolean same(Object actual, String expected) {
+        return expected != null && expected.equals(text(actual));
+    }
+
+    private static boolean empty(Object value) {
+        return text(value).isEmpty();
     }
 
     private static PortalException forbidden(String message) {

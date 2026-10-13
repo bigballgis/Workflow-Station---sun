@@ -777,6 +777,8 @@ public class TaskFormComponent {
             // binding/MI scope guard has produced the scoped write set.  This keeps
             // the batch transport metadata from becoming an unrelated client hint.
             SubTableBatchChangeGuard.validateSubmittedRows(subTableBatchChanges, bindingScopes, inbound);
+            SubTableBatchChangeGuard.validateSubmittedAssignments(currentVariables, formDefinition,
+                    subTableBatchChanges, bindingScopes, inbound, objectMapper);
 
             updatedVariables.putAll(inbound);
 

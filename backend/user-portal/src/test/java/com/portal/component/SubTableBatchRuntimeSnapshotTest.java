@@ -215,6 +215,21 @@ class SubTableBatchRuntimeSnapshotTest {
         SubTableBatchChangeGuard.validate(Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
                 Map.of("sourceId", "form-1"), List.of(change), objectMapper);
 
+        Map<String, Object> submitted = Map.of("__subTables__", Map.of("dw:line_items", List.of(Map.of(
+                "line_id", "L1", "assigned_to", "user-1", "role_code", "", "bu_code", ""))));
+        SubTableBatchChangeGuard.validateSubmittedAssignments(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), Map.of("sourceId", "form-1"),
+                List.of(change), List.of(new SubTableBindingScope("101", "dw:line_items",
+                        List.of(Map.of("line_id", "L1")), false)), submitted, objectMapper);
+
+        Map<String, Object> forged = Map.of("__subTables__", Map.of("dw:line_items", List.of(Map.of(
+                "line_id", "L1", "assigned_to", "other-user", "role_code", "", "bu_code", ""))));
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validateSubmittedAssignments(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), Map.of("sourceId", "form-1"),
+                List.of(change), List.of(new SubTableBindingScope("101", "dw:line_items",
+                        List.of(Map.of("line_id", "L1")), false)), forged, objectMapper))
+                .hasMessageContaining("canonical fields");
+
         intent.setMode("ROLE");
         intent.setRoleCode("");
         assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(
