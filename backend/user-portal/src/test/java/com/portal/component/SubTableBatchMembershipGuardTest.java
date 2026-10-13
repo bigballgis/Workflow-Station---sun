@@ -32,6 +32,14 @@ class SubTableBatchMembershipGuardTest {
                 baseline(Map.of("code", "L1")))).hasMessageContaining("no saved row version");
     }
 
+    @Test
+    void rejectsAnExistingNumericIdentityEvenWhenTheClientUsesAString() {
+        SubTableBatchChange change = change("ADD");
+        change.getRowPatches().get(0).setRowKey(Map.of("code", "7"));
+        assertThatThrownBy(() -> SubTableBatchMembershipGuard.validate(List.of(change), scopes,
+                baseline(Map.of("code", 7, "_wsRowVersion", 2)))).hasMessageContaining("already exists");
+    }
+
     private static SubTableBatchChange change(String operation) {
         SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
         patch.setRowKey(Map.of("code", "L1"));

@@ -11,6 +11,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchRowDesignTest {
     @Test
+    void refusesFieldsThatAreNotBoundOrAreUnsupportedAttachments() {
+        Map<String, Object> form = Map.of("rule", List.of(Map.of("type", "input", "field", "receipt")));
+        assertThatThrownBy(() -> SubTableBatchRowDesign.validateAddForm(Map.of("fields", List.of(
+                Map.of("fieldName", "description", "nullable", true))), form))
+                .hasMessageContaining("unbound field");
+        assertThatThrownBy(() -> SubTableBatchRowDesign.validateAddForm(Map.of("fields", List.of(
+                Map.of("fieldName", "receipt", "dataType", "FILE", "nullable", true))), form))
+                .hasMessageContaining("attachment input is unsupported");
+    }
+    @Test
     void refusesEnablingAddWhenTheFormCannotSupplyRequiredFields() {
         Map<String, Object> design = Map.of("fields", List.of(Map.of("fieldName", "description", "nullable", false)));
         assertThatThrownBy(() -> SubTableBatchRowDesign.validateAddForm(design,

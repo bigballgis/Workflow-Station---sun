@@ -28,7 +28,7 @@ final class SubTableBatchMembershipGuard {
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
                 Map<?, ?> saved = rows.stream().filter(raw -> raw instanceof Map<?, ?> row
                         && patch.getRowKey().entrySet().stream().allMatch(entry ->
-                        Objects.equals(row.get(entry.getKey()), entry.getValue())))
+                        Objects.equals(String.valueOf(row.get(entry.getKey())), String.valueOf(entry.getValue()))))
                         .map(raw -> (Map<?, ?>) raw).findFirst().orElse(null);
                 boolean existed = saved != null;
                 if ("ADD".equals(change.getOperation()) && existed) {

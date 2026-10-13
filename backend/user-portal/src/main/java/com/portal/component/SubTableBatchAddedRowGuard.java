@@ -41,7 +41,8 @@ final class SubTableBatchAddedRowGuard {
             if (fields.isEmpty()) fail("Batch add frozen fields are missing");
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
                 Map<?, ?> row = rows.stream().map(SubTableBatchAddedRowGuard::map)
-                        .filter(value -> patch.getRowKey().entrySet().stream().allMatch(entry -> Objects.equals(value.get(entry.getKey()), entry.getValue())))
+                        .filter(value -> patch.getRowKey().entrySet().stream().allMatch(entry ->
+                                Objects.equals(String.valueOf(value.get(entry.getKey())), String.valueOf(entry.getValue()))))
                         .findFirst().orElseThrow(() -> invalid("Batch added row is missing"));
                 validateColumns(control, fields, row, patch.getRowKey());
                 for (Object raw : fields) validateField(map(raw), row);
@@ -83,6 +84,10 @@ final class SubTableBatchAddedRowGuard {
         if ("DATE".equals(type)) {
             try { java.time.LocalDate.parse(String.valueOf(value)); }
             catch (java.time.format.DateTimeParseException error) { throw invalid("Batch added field has invalid date: " + name); }
+        }
+        if ("TIMESTAMP".equals(type)) {
+            try { java.time.LocalDateTime.parse(String.valueOf(value).replace(' ', 'T')); }
+            catch (java.time.format.DateTimeParseException error) { throw invalid("Batch added field has invalid timestamp: " + name); }
         }
         if (List.of("BIGINT", "INTEGER", "INT", "DECIMAL", "NUMERIC", "DOUBLE", "FLOAT").contains(type)) {
             validateNumeric(field, value, type, name);

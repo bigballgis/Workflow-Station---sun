@@ -15,8 +15,13 @@ final class SubTableBatchRowDesign {
     static void validateAddForm(Map<String, Object> design, Map<String, Object> batchForm) {
         java.util.Set<String> represented = SubTableBatchFormRules.fields(batchForm).keySet();
         if (!(design.get("fields") instanceof List<?> fields)) throw invalid("field metadata is missing");
+        java.util.Set<String> defined = new java.util.HashSet<>();
         for (Object raw : fields) {
             if (!(raw instanceof Map<?, ?> field)) throw invalid("field metadata is invalid");
+            defined.add(String.valueOf(field.get("fieldName")));
+            if (represented.contains(field.get("fieldName")) && "FILE".equals(field.get("dataType"))) {
+                throw invalid("batch attachment input is unsupported");
+            }
             boolean primary = Boolean.TRUE.equals(field.get("isPrimaryKey"));
             Object config = field.get("pkGenerationJson");
             boolean manual = config instanceof Map<?, ?> generation && "manual".equals(generation.get("strategy"));
@@ -25,6 +30,7 @@ final class SubTableBatchRowDesign {
                 throw invalid("batch form omits a required user-entered field");
             }
         }
+        if (!defined.containsAll(represented)) throw invalid("batch form contains an unbound field");
     }
 
     static Map<String, Object> capture(Map<String, Object> form, String bindingId,
