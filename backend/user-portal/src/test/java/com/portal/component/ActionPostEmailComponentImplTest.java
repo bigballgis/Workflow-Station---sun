@@ -11,6 +11,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.TaskActionService;
+import com.portal.util.ActionEmailRuleConditionEvaluator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,6 +45,8 @@ class ActionPostEmailComponentImplTest {
     private ProcessInstanceRepository processInstanceRepository;
     @Mock
     private EventPublisher eventPublisher;
+    @Mock
+    private ActionEmailRuleConditionEvaluator ruleConditionEvaluator;
 
     private ActionPostEmailComponentImpl component;
 
@@ -50,7 +54,15 @@ class ActionPostEmailComponentImplTest {
     void setUp() {
         component = new ActionPostEmailComponentImpl(
                 taskActionService, taskQueryComponent, actionDefinitionRepository,
-                processInstanceRepository, eventPublisher, new ObjectMapper());
+                processInstanceRepository, eventPublisher, new ObjectMapper(), ruleConditionEvaluator);
+        org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any()))
+                .thenAnswer(inv -> {
+                    List<?> conditions = inv.getArgument(1);
+                    int n = conditions == null ? 0 : conditions.size();
+                    boolean[] bits = new boolean[n];
+                    java.util.Arrays.fill(bits, true);
+                    return bits;
+                });
     }
 
     @Test
@@ -222,7 +234,28 @@ class ActionPostEmailComponentImplTest {
         return TaskActionInfo.builder().actionId(id).actionName("Save").actionType(type).configJson(configJson).build();
     }
 
+    @Test
+    void postEmailRules_publishesOnlyMatchingRules() {
+        when(taskActionService.getTaskActions("t1")).thenReturn(List.of(action("7", "SAVE", rulesJson())));
+        when(taskQueryComponent.getTaskById("t1")).thenReturn(java.util.Optional.of(
+                com.portal.dto.TaskInfo.builder().processInstanceId("pi-1").build()));
+        when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(ruleConditionEvaluator.evaluate(org.mockito.ArgumentMatchers.eq("pi-1"), any()))
+                .thenReturn(new boolean[] { true, false });
+
+        component.runWithPostEmail(ctx("7", ActionPostEmailContext.OP_SAVE), () -> "ok");
+        verify(eventPublisher, times(1)).publish(any());
+    }
+
     private static String enabledJson() {
         return "{\"postEmail\":{\"enabled\":true,\"connectionId\":\"c1\",\"emailTo\":\"${initiator}\",\"emailTemplateId\":\"2\"}}";
+    }
+
+    private static String rulesJson() {
+        return """
+                {"postEmailRules":[
+                  {"id":"r1","enabled":true,"connectionId":"c1","emailTo":"a@x.com","emailTemplateId":"2","condition":{}},
+                  {"id":"r2","enabled":true,"connectionId":"c1","emailTo":"b@x.com","emailTemplateId":"2","condition":{"logic":"and","conditions":[{"fieldName":"amount","operator":"gt","value":"1"}]}}
+                ]}""";
     }
 }

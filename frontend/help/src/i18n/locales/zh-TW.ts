@@ -428,6 +428,14 @@ export default {
     fBcc: '可選密件副本。與收件人同一選擇器。留空則不密送。',
     fAttachments:
       '可選。與傳送任務相同的 FILE 欄位選擇器：主表、子表或 Lookup 目標表的上傳（FILE）欄位。見 [[/email-send#extra]]。留空則不帶附件。',
+    conditionsTitle: '多條規則與發送條件',
+    conditionsBody:
+      '同一 Action 最多可設定 20 條發信規則，每條有獨立的收件人、連線與範本。**編輯發送條件** 使用與主表檢視設計相同的 AND/OR 篩選（主表欄位與系統欄位）；留空表示 Action 成功後一律發送。多條規則同時符合時，各發一封郵件。若執行時無法評估某條條件，該規則略過發信（Action 仍會正常完成）。',
+    conditionsCatalogLead: '條件發信相關控件說明。',
+    cAddRule: '新增規則，直至 20 條上限。',
+    cAlwaysSend: '該規則未設定條件時顯示。',
+    cEditCondition: '開啟篩選對話框（欄位、運算子、值、嵌套群組）。',
+    cOperators: '與檢視設計篩選相同的運算子（等於、包含、為空等）。',
     typesTitle: '哪些動作類型能發',
     typesBody:
       'Portal 必須真正執行該動作。API呼叫、自訂腳本、組合動作會顯示提示條，並保持開關關閉。對這些類型打開郵件後儲存會被擋住。',

@@ -29,6 +29,7 @@ const flowKeys = [
 
 const jumpLinks: GuideJump[] = [
   { anchor: 'fields', titleKey: 'actionEmailGuide.fieldsTitle' },
+  { anchor: 'conditions', titleKey: 'actionEmailGuide.conditionsTitle' },
   { anchor: 'types', titleKey: 'actionEmailGuide.typesTitle' },
   { anchor: 'fail', titleKey: 'actionEmailGuide.failTitle' },
 ]
@@ -72,6 +73,19 @@ const sections: GuideSection[] = [
       { code: 'Cc', hintKey: 'actionEmailGuide.fCc' },
       { code: 'Bcc', hintKey: 'actionEmailGuide.fBcc' },
       { code: 'Attachments', hintKey: 'actionEmailGuide.fAttachments' },
+    ],
+  },
+  {
+    anchor: 'conditions',
+    titleKey: 'actionEmailGuide.conditionsTitle',
+    bodyKey: 'actionEmailGuide.conditionsBody',
+    bodyKeys: ['actionEmailGuide.conditionsCatalogLead'],
+    ...catalog,
+    samples: [
+      { code: 'Add email rule', hintKey: 'actionEmailGuide.cAddRule' },
+      { code: 'Always send', hintKey: 'actionEmailGuide.cAlwaysSend' },
+      { code: 'Edit send condition', hintKey: 'actionEmailGuide.cEditCondition' },
+      { code: 'Equals, Contains, …', hintKey: 'actionEmailGuide.cOperators' },
     ],
   },
   {

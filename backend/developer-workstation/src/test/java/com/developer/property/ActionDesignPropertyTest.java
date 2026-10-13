@@ -6,6 +6,7 @@ import com.developer.enums.ActionType;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.TableDefinitionRepository;
 import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
 
@@ -30,7 +31,9 @@ public class ActionDesignPropertyTest {
         FormDefinitionRepository formDefinitionRepository = mock(FormDefinitionRepository.class);
         I18nService i18nService = mock(I18nService.class);
         when(i18nService.getMessage(any(String.class))).thenReturn("test message");
-        ActionDesignComponent component = new ActionDesignComponentImpl(repository, functionUnitRepository, formDefinitionRepository, i18nService);
+        TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
+        ActionDesignComponent component = new ActionDesignComponentImpl(
+                repository, functionUnitRepository, formDefinitionRepository, tableDefinitionRepository, i18nService);
         
         assertThat(component).isNotNull();
         assertThat(actionType).isNotNull();

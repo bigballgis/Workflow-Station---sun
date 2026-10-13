@@ -411,12 +411,13 @@
           </el-form-item>
         </template>
 
-        <ActionPostEmailConfig
+        <ActionPostEmailRules
           v-if="selectedAction"
-          :model-value="actionConfig.postEmail || {}"
+          v-model="actionConfig.postEmailRules"
           :action-type="selectedAction.actionType"
           :function-unit-id="functionUnitId"
-          @update:model-value="actionConfig.postEmail = $event"
+          :field-options="postEmailFilterFieldOptions"
+          :refresh-field-options="loadPostEmailFilterFields"
         />
 
         <!-- 节点绑定配置 -->
@@ -513,7 +514,8 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import ActionColorField from './action-designer/ActionColorField.vue'
 import ActionAllowedRolesField from './action-designer/ActionAllowedRolesField.vue'
-import ActionPostEmailConfig from './action-designer/ActionPostEmailConfig.vue'
+import ActionPostEmailRules from './action-designer/ActionPostEmailRules.vue'
+import { useActionPostEmailFilterFields } from '@/composables/actionDesigner/useActionPostEmailFilterFields'
 import ActionCreateDialog from './action-designer/ActionCreateDialog.vue'
 import ActionTestDialog from './action-designer/ActionTestDialog.vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -532,6 +534,10 @@ const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()
+const {
+  fieldOptions: postEmailFilterFieldOptions,
+  loadFieldOptions: loadPostEmailFilterFields,
+} = useActionPostEmailFilterFields(() => props.functionUnitId)
 
 // 核心共享状态
 const selectedAction = ref<ActionDefinition | null>(null)
@@ -631,7 +637,13 @@ const {
   executeTest,
 } = useActionTest({ functionUnitId: props.functionUnitId, selectedAction, t })
 
-onMounted(loadActions)
+onMounted(async () => {
+  await Promise.all([
+    loadActions(),
+    store.fetchTables(props.functionUnitId),
+    loadPostEmailFilterFields(),
+  ])
+})
 </script>
 
 <style lang="scss" scoped>

@@ -4771,3 +4771,26 @@
     Allowed Roles 功能（2026-10）刻意不在 execute 路径做服务端 allowedRoles 校验（UX-only，见 help failApi）；
     本条目仅跟踪 lookup/引擎链路的静默降级，后续应抛业务异常或返回带错误标记的结果，并补单测。
     2026-10-14 审查 follow-up 3-A：本轮不修，PR 引用本 issue。
+
+- id: "1667"
+  status: fixed
+  fixed_at: "2026-10-14"
+  severity: minor
+  category: architecture
+  summary: "Action 执行后邮件支持 postEmailRules 多条规则 + View Design 同款发送条件（portal SQL 评估）"
+  detail: |
+    根因：单块 configJson.postEmail 无法按业务字段条件分支发信。
+    方案：postEmailRules[]（上限 20）；条件复用 FilterConfig + MainTableViewDesignerFilterSql；
+    ActionPostEmailComponentImpl 命中规则各发 Kafka 事件；93-action-post-email-rules.sql 迁移 legacy postEmail。
+
+- id: "1668"
+  status: fixed
+  fixed_at: "2026-10-14"
+  severity: major
+  category: bug
+  summary: "Post-email 发送条件字段下拉误用 tableType PRIMARY，主表 MAIN 字段永不出现"
+  detail: |
+    根因：useActionPostEmailFilterFields 用 tableType === 'PRIMARY'（BindingType）找表；FU 表定义为 MAIN。
+    修复：tables.find(isMainTableDefinition)（formDesigner.ts）；单测 useActionPostEmailFilterFields.test.ts。
+    跟进：仍仅系统字段时根因还有依赖 Pinia store.tables（FU 进页未 refreshAll，tables 常为空）；
+    改为 functionUnitApi.getTables 独立拉取，打开「编辑发送条件」前 refresh。

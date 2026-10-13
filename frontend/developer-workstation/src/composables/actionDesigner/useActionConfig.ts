@@ -2,6 +2,11 @@ import { reactive, computed, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { ActionDefinition } from '@/api/functionUnit'
 import type { ConditionExpression } from '@/components/designer/formBusinessLogicTypes'
+import {
+  normalizePostEmailRules,
+  stripLegacyPostEmail,
+  type ActionPostEmailRule,
+} from '@/utils/actionPostEmailRules'
 
 interface UseActionConfigOptions {
   selectedAction: Ref<ActionDefinition | null>
@@ -13,18 +18,12 @@ interface UseActionConfigOptions {
       configJson?: { rule?: Array<{ field?: string; type?: string }> }
     }>
   }
-  // 注入回调（wrapper 闭包破环，避免与 binding composable 的循环依赖）
   loadActionBinding: (actionId: string | number) => void
 }
 
-/**
- * 动作配置状态：actionConfig reactive、随 selectedAction 同步的 watch，
- * 以及表单/角色相关的 computed。
- */
 export function useActionConfig(options: UseActionConfigOptions) {
   const { selectedAction, store, loadActionBinding } = options
 
-  // FORM_POPUP action: only show ACTION type forms
   const actionFormOptions = computed(() => store.forms.filter(f => f.formType === 'ACTION'))
   const availableFormFields = computed(() => {
     const fields = new Set<string>()
@@ -41,7 +40,7 @@ export function useActionConfig(options: UseActionConfigOptions) {
     return Array.from(fields)
   })
 
-  const actionConfig = reactive<Record<string, any>>({
+  const actionConfig = reactive<Record<string, unknown>>({
     url: '',
     method: 'POST',
     headers: '',
@@ -55,30 +54,19 @@ export function useActionConfig(options: UseActionConfigOptions) {
     targetStatus: '',
     requireAssignee: false,
     targetStep: '',
-    // Visibility, roles & sort order
     visibilityCondition: null as ConditionExpression[] | null,
     allowedRoles: [] as string[],
     sortOrder: 0,
-    postEmail: {
-      enabled: false,
-      connectionId: '',
-      emailTo: '',
-      emailCc: '',
-      emailBcc: '',
-      emailFrom: '',
-      emailTemplateId: '',
-      emailAttachments: '',
-    },
+    postEmailRules: [] as ActionPostEmailRule[],
   })
 
   watch(selectedAction, (action) => {
     if (action?.configJson) {
       Object.assign(actionConfig, action.configJson)
-      if (!actionConfig.postEmail || typeof actionConfig.postEmail !== 'object') {
-        actionConfig.postEmail = { enabled: false }
-      }
+      const normalized = normalizePostEmailRules(action.configJson as Record<string, unknown>)
+      actionConfig.postEmailRules = normalized
+      stripLegacyPostEmail(actionConfig)
     } else {
-      // Reset to defaults
       Object.assign(actionConfig, {
         url: '',
         method: 'POST',
@@ -93,24 +81,13 @@ export function useActionConfig(options: UseActionConfigOptions) {
         targetStatus: '',
         requireAssignee: false,
         targetStep: '',
-        // Visibility, roles & sort order
         visibilityCondition: null as ConditionExpression[] | null,
         allowedRoles: [] as string[],
         sortOrder: 0,
-        postEmail: {
-          enabled: false,
-          connectionId: '',
-          emailTo: '',
-          emailCc: '',
-          emailBcc: '',
-          emailFrom: '',
-          emailTemplateId: '',
-          emailAttachments: '',
-        },
+        postEmailRules: [] as ActionPostEmailRule[],
       })
     }
 
-    // 加载当前动作的绑定信息
     if (action) {
       loadActionBinding(action.id)
     }

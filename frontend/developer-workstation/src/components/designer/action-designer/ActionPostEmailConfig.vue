@@ -3,32 +3,34 @@
     class="action-post-email"
     data-testid="action-post-email-config"
   >
-  <el-divider>
-    <span class="post-email-title-row">
-      {{ t('action.postEmail.title') }}
-      <DesignerHelpLink
-        path="/action-email"
-        :ariaLabel="t('action.postEmail.guideLinkAria')"
-        test-id="action-post-email-guide-link"
-      />
-    </span>
-  </el-divider>
-  <el-alert
-    v-if="unsupported"
-    type="info"
-    :closable="false"
-    :title="t('action.postEmail.unsupportedHint')"
-    style="margin-bottom: 12px"
-  />
-  <el-form-item :label="t('action.postEmail.enabled')">
-    <el-switch
-      :model-value="model.enabled === true"
-      :disabled="unsupported"
-      data-testid="action-post-email-enabled"
-      @update:model-value="patch({ enabled: $event })"
+  <template v-if="!embedded">
+    <el-divider>
+      <span class="post-email-title-row">
+        {{ t('action.postEmail.title') }}
+        <DesignerHelpLink
+          path="/action-email"
+          :aria-label="t('action.postEmail.guideLinkAria')"
+          test-id="action-post-email-guide-link"
+        />
+      </span>
+    </el-divider>
+    <el-alert
+      v-if="unsupported"
+      type="info"
+      :closable="false"
+      :title="t('action.postEmail.unsupportedHint')"
+      style="margin-bottom: 12px"
     />
-  </el-form-item>
-  <template v-if="model.enabled && !unsupported">
+    <el-form-item :label="t('action.postEmail.enabled')">
+      <el-switch
+        :model-value="model.enabled === true"
+        :disabled="unsupported"
+        data-testid="action-post-email-enabled"
+        @update:model-value="patch({ enabled: $event })"
+      />
+    </el-form-item>
+  </template>
+  <template v-if="(embedded || model.enabled) && !unsupported">
     <el-form-item :label="t('action.postEmail.emailTo')">
       <RecipientExpressionField
         :model-value="model.emailTo || ''"
@@ -149,6 +151,8 @@ const props = defineProps<{
   modelValue: ActionPostEmailModel
   actionType: string
   functionUnitId: number
+  /** When true, omits section header and per-block enable switch (used inside rule list). */
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{

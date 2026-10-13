@@ -456,6 +456,14 @@ export default {
     fBcc: 'Optional Bcc. Same picker as To. Blank: no Bcc.',
     fAttachments:
       'Optional. Same FILE-field picker as Send Task: choose an Upload (FILE) field on the main table, a sub-table, or a Lookup target table. See [[/email-send#extra]]. Blank: no files.',
+    conditionsTitle: 'Multiple rules and send conditions',
+    conditionsBody:
+      'You can add up to 20 email rules on one Action. Each rule has its own recipients, connection, and template. Use **Edit send condition** (same AND/OR filter as Main Table View design) to send only when main-table or system fields match; leave the condition empty to always send after the Action succeeds. When several rules match, Portal sends one email per matching rule. If Portal cannot evaluate a condition at runtime, that rule is skipped (the Action still completes).',
+    conditionsCatalogLead: 'Controls for conditional post-action email.',
+    cAddRule: 'Adds another rule until the 20-rule limit.',
+    cAlwaysSend: 'Shown when no condition is set for that rule.',
+    cEditCondition: 'Opens the filter dialog (field, operator, value, nested groups).',
+    cOperators: 'Same operators as View Design filters (Equals, Contains, is null, …).',
     typesTitle: 'Which Action types can send',
     typesBody:
       'Portal must actually run the Action. API Call, Custom Script, and Composite Action show an info banner and keep the switch off. Saving with mail on for those types is blocked.',

@@ -427,7 +427,15 @@ export default {
     fCc: '可选抄送。与收件人同一选择器。留空则不抄送。',
     fBcc: '可选密送。与收件人同一选择器。留空则不密送。',
     fAttachments:
-      '可选。与发送任务相同的 FILE 字段选择器：主表、子表或 Lookup 目标表的上传（FILE）字段。见 [[/email-send#extra]]。留空则不带附件。',
+      '可选。与发送任务相同的 FILE 字段选择器：主表、子表或 Lookup 表的上传（FILE）字段。见 [[/email-send#extra]]。留空则不带附件。',
+    conditionsTitle: '多条规则与发送条件',
+    conditionsBody:
+      '同一 Action 最多可配置 20 条发信规则，每条有独立的收件人、连接与模板。**编辑发送条件** 使用与主表视图设计相同的 AND/OR 筛选（主表字段与系统字段）；留空表示 Action 成功后始终发送。多条规则同时满足时，各发一封邮件。若运行时无法评估某条条件，该规则跳过发信（Action 仍会正常完成）。',
+    conditionsCatalogLead: '条件发信相关控件说明。',
+    cAddRule: '新增规则，直至 20 条上限。',
+    cAlwaysSend: '该规则未设置条件时显示。',
+    cEditCondition: '打开筛选对话框（字段、运算符、值、嵌套组）。',
+    cOperators: '与视图设计筛选相同的运算符（等于、包含、为空等）。',
     typesTitle: '哪些动作类型能发',
     typesBody:
       'Portal 必须真正执行该动作。API调用、自定义脚本、组合动作会显示提示条，并保持开关关闭。对这些类型打开邮件后保存会被拦住。',
