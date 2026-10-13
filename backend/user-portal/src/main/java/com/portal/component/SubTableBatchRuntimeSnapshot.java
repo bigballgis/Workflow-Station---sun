@@ -134,7 +134,8 @@ final class SubTableBatchRuntimeSnapshot {
                 }
                 String bindingId = requiredBindingId(props.get("_bindingId"), sourceId, controlId);
                 Map<String, Object> batchForm = mapValue(batchForms.get(bindingId));
-                validateBatchForm(batchForm, sourceId, controlId, bindingId);
+                validateBatchForm(batchForm, sourceId, controlId, bindingId,
+                        Boolean.TRUE.equals(props.get("allowBatchAssign")));
 
                 Map<String, Object> control = new LinkedHashMap<>();
                 control.put("batchControlId", controlId);
@@ -153,7 +154,7 @@ final class SubTableBatchRuntimeSnapshot {
     }
 
     private static void validateBatchForm(Map<String, Object> batchForm, String sourceId,
-                                          String controlId, String bindingId) {
+                                          String controlId, String bindingId, boolean batchAssignEnabled) {
         if (batchForm.isEmpty()) {
             throw new IllegalArgumentException("Enabled batch control " + controlId
                     + " in form " + sourceId + " has no batchForms[" + bindingId + "] definition");
@@ -165,6 +166,21 @@ final class SubTableBatchRuntimeSnapshot {
         if (!(batchForm.get("rule") instanceof List<?> rules) || rules.isEmpty()) {
             throw new IllegalArgumentException("Batch form rule is required for control " + controlId);
         }
+        if (batchAssignEnabled && !containsRuleType(rules, "miAssignment")) {
+            throw new IllegalArgumentException("Batch Assign control " + controlId
+                    + " requires an miAssignment component in batchForms[" + bindingId + "]");
+        }
+    }
+
+    private static boolean containsRuleType(Object value, String expectedType) {
+        if (value instanceof List<?> list) {
+            return list.stream().anyMatch(item -> containsRuleType(item, expectedType));
+        }
+        if (!(value instanceof Map<?, ?> raw)) return false;
+        Map<String, Object> rule = stringKeyMap(raw);
+        if (expectedType.equals(rule.get("type"))) return true;
+        return rule.values().stream().anyMatch(child -> child instanceof Map<?, ?> || child instanceof List<?>
+                ? containsRuleType(child, expectedType) : false);
     }
 
     private static boolean hasEnabledOperation(Map<String, Object> props) {

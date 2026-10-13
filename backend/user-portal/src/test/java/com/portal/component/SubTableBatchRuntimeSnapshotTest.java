@@ -64,6 +64,18 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void rejectsBatchAssignWithoutItsDedicatedAssignmentComponent() {
+        Map<String, Object> assignConfig = config(true, "ctl-1");
+        Map<String, Object> rule = (Map<String, Object>) ((List<?>) assignConfig.get("rule")).get(0);
+        rule.put("props", Map.of("_bindingId", 101, "allowBatchAssign", true));
+
+        assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(content(assignConfig), pin, objectMapper))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("requires an miAssignment component");
+    }
+
+    @Test
     void rejectsDuplicateEnabledControlIdentityAcrossForms() {
         assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(
                 Map.of("forms", List.of(form("form-1", config(true, "duplicate")), form("form-2", config(true, "duplicate")))),
