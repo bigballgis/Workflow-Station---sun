@@ -659,6 +659,14 @@ public class TaskFormComponent {
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
             Map<String, Object> baselineValues, List<String> emptiedSubTableKeys,
             List<SubTableBindingScope> subTableBindingScopes) {
+        submitTaskForm(taskId, userId, formData, baselineValues, emptiedSubTableKeys,
+                subTableBindingScopes, null);
+    }
+
+    public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
+            Map<String, Object> baselineValues, List<String> emptiedSubTableKeys,
+            List<SubTableBindingScope> subTableBindingScopes,
+            List<com.portal.dto.SubTableBatchChange> subTableBatchChanges) {
         log.info("Submitting task form for task: {}, user: {}", taskId, userId);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
@@ -668,6 +676,12 @@ public class TaskFormComponent {
         Map<String, String> fieldPermissions = formDefinition != null
                 ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
+
+        if (subTableBatchChanges != null && !subTableBatchChanges.isEmpty()) {
+            ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
+            SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition,
+                    subTableBatchChanges, objectMapper);
+        }
 
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
 

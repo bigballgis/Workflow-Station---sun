@@ -87,7 +87,8 @@ public class TaskFormController {
                 .operatorId(userId)
                 .build(), () -> taskFormComponent.submitTaskForm(taskId, userId, formData,
                 request.getBaselineValues(),
-                request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes()));
+                request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),
+                request.getSubTableBatchChanges()));
         return ApiResponse.success(null);
     }
 

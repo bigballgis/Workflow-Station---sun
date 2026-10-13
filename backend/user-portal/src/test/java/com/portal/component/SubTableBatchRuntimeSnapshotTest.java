@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portal.dto.SubTableBatchChange;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -93,6 +94,51 @@ class SubTableBatchRuntimeSnapshotTest {
         assertThat(projected.get("ctl-1")).isInstanceOf(Map.class);
         assertThat(SubTableBatchRuntimeSnapshot.projectForForm(
                 Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "other-form", objectMapper)).isEmpty();
+    }
+
+    @Test
+    void acceptsOnlyFrozenBatchEditFieldsForTheMatchingControl() {
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
+                .orElseThrow();
+        SubTableBatchChange change = editChange("ctl-1", "101", "name");
+
+        SubTableBatchChangeGuard.validate(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
+                Map.of("sourceId", "form-1"), List.of(change), objectMapper);
+
+        change.getRowPatches().get(0).setFields(List.of("notInBatchForm"));
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
+                Map.of("sourceId", "form-1"), List.of(change), objectMapper))
+                .hasMessageContaining("outside the frozen batch form");
+    }
+
+    @Test
+    void rejectsBatchContextForAnotherFormOrBinding() {
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
+                .orElseThrow();
+        SubTableBatchChange change = editChange("ctl-1", "102", "name");
+
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
+                Map.of("sourceId", "form-1"), List.of(change), objectMapper))
+                .hasMessageContaining("submitted binding");
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
+                Map.of("sourceId", "other-form"), List.of(editChange("ctl-1", "101", "name")), objectMapper))
+                .hasMessageContaining("not enabled");
+    }
+
+    private static SubTableBatchChange editChange(String controlId, String bindingId, String field) {
+        SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
+        patch.setRowId("row-1");
+        patch.setFields(List.of(field));
+        SubTableBatchChange change = new SubTableBatchChange();
+        change.setBatchControlId(controlId);
+        change.setBindingId(bindingId);
+        change.setOperation("EDIT");
+        change.setRowPatches(List.of(patch));
+        return change;
     }
 
     private Map<String, Object> content(Map<String, Object> config) {

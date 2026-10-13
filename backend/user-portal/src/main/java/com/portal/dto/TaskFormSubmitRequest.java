@@ -42,6 +42,9 @@ public class TaskFormSubmitRequest {
      */
     private List<SubTableBindingScope> subTableBindingScopes;
 
+    /** Batch workspace transport declarations; canonical row data remains in formData. */
+    private List<SubTableBatchChange> subTableBatchChanges;
+
     /**
      * Developer Workstation Action id when the user clicked a SAVE Action.
      * Autosave omits this so no post-action email is sent.
