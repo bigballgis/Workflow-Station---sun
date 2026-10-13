@@ -27,5 +27,19 @@ public class SubTableBatchChange {
         /** Config-derived row identity, used to verify the changed canonical row. */
         private Map<String, Object> rowKey;
         private List<String> fields;
+        /**
+         * Dedicated initial-assignment intent.  Field names are never supplied
+         * here: the server derives them only from the frozen BPMN contract.
+         */
+        private AssignmentIntent assignment;
+    }
+
+    @Data
+    public static class AssignmentIntent {
+        /** PERSON or ROLE; blank and unrecognised modes are rejected by the guard. */
+        private String mode;
+        private String assigneeId;
+        private String roleCode;
+        private String businessUnitCode;
     }
 }

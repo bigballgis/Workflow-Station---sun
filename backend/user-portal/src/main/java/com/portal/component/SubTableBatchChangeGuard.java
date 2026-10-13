@@ -97,14 +97,20 @@ final class SubTableBatchChangeGuard {
         if (!change.getBindingId().trim().equals(String.valueOf(control.get("bindingId")))) {
             throw forbidden("Batch control does not belong to the submitted binding");
         }
-        if (!"EDIT".equals(change.getOperation())) {
+        if (!"EDIT".equals(change.getOperation()) && !"ASSIGN".equals(change.getOperation())) {
             throw forbidden("Unsupported batch operation");
         }
         Map<String, Object> capabilities = map(control.get("capabilities"));
         Map<String, Object> originalCrud = map(control.get("originalCrud"));
-        if (!Boolean.TRUE.equals(capabilities.get("allowBatchEdit"))
-                || Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
+        if (Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
+            throw forbidden("Batch operation is not enabled for this control");
+        }
+        if ("EDIT".equals(change.getOperation()) && !Boolean.TRUE.equals(capabilities.get("allowBatchEdit"))) {
             throw forbidden("Batch edit is not enabled for this control");
+        }
+        if ("ASSIGN".equals(change.getOperation())) {
+            validateAssignment(change, control, capabilities);
+            return;
         }
         Set<String> allowedFields = batchFormFields(map(control.get("batchForm")));
         if (allowedFields.isEmpty()) {
@@ -125,6 +131,38 @@ final class SubTableBatchChangeGuard {
                 if ("READONLY".equals(fieldPermissions.get(change.getBindingId().trim() + ":" + field))) {
                     throw forbidden("Batch patch contains a read-only field");
                 }
+            }
+        }
+    }
+
+    private static void validateAssignment(SubTableBatchChange change, Map<String, Object> control,
+                                           Map<String, Object> capabilities) {
+        if (!Boolean.TRUE.equals(capabilities.get("allowBatchAssign"))) {
+            throw forbidden("Batch assignment is not enabled for this control");
+        }
+        Map<String, Object> assignmentConfig = map(control.get("assignmentConfig"));
+        if (blank(text(assignmentConfig.get("taskDefinitionKey")))) {
+            throw forbidden("Batch assignment has no frozen BPMN task target");
+        }
+        if (change.getRowPatches() == null || change.getRowPatches().isEmpty()) {
+            throw forbidden("Batch assignment declaration has no row patches");
+        }
+        for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+            if (patch == null || blank(patch.getRowId()) || patch.getRowKey() == null || patch.getRowKey().isEmpty()
+                    || patch.getAssignment() == null) {
+                throw forbidden("Invalid batch assignment row patch");
+            }
+            SubTableBatchChange.AssignmentIntent intent = patch.getAssignment();
+            if ("PERSON".equals(intent.getMode())) {
+                if (!Boolean.TRUE.equals(assignmentConfig.get("allowUser")) || blank(intent.getAssigneeId())) {
+                    throw forbidden("Batch assignment person target is invalid");
+                }
+            } else if ("ROLE".equals(intent.getMode())) {
+                if (!Boolean.TRUE.equals(assignmentConfig.get("allowRole")) || blank(intent.getRoleCode())) {
+                    throw forbidden("Batch assignment role target is invalid");
+                }
+            } else {
+                throw forbidden("Batch assignment mode is invalid");
             }
         }
     }
@@ -190,6 +228,10 @@ final class SubTableBatchChangeGuard {
 
     private static boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String text(Object value) {
+        return value instanceof String text ? text.trim() : "";
     }
 
     private static PortalException forbidden(String message) {
