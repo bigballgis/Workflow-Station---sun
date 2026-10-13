@@ -3,6 +3,8 @@
  * transport data nevertheless: a malformed projection must disable the workspace,
  * never fall back to the live form rule.
  */
+import { isAssignmentConfigured, normalizeAssignmentConfig, type AssignmentConfig } from './miAssignmentConfig'
+
 export interface SubTableBatchCapability {
   batchControlId: string
   bindingId: string
@@ -22,6 +24,8 @@ export interface SubTableBatchCapability {
     rule: Array<Record<string, unknown>>
     options?: Record<string, unknown>
   }
+  /** Present only for a frozen, BPMN-backed Batch Assign control. */
+  assignmentConfig?: AssignmentConfig
 }
 
 export type BatchEditableField = {
@@ -60,6 +64,8 @@ export function parseSubTableBatchCapability(value: unknown): SubTableBatchCapab
   }
   if (!Object.values(flags).some(Boolean)) return null
   if (!batchForm.rule.every(item => record(item) !== null)) return null
+  const assignmentConfig = normalizeAssignmentConfig(raw.assignmentConfig)
+  if (flags.allowBatchAssign && !isAssignmentConfigured(assignmentConfig)) return null
 
   return {
     batchControlId: raw.batchControlId.trim(),
@@ -71,7 +77,16 @@ export function parseSubTableBatchCapability(value: unknown): SubTableBatchCapab
       rule: batchForm.rule as Array<Record<string, unknown>>,
       ...(record(batchForm.options) ? { options: batchForm.options as Record<string, unknown> } : {}),
     },
+    ...(assignmentConfig ? { assignmentConfig } : {}),
   }
+}
+
+/** Batch Assign is a separate frozen capability; it never inherits Batch Edit. */
+export function allowsFrozenBatchAssign(capability: SubTableBatchCapability | null, bindingId: number | null | undefined): boolean {
+  return capability?.capabilities.allowBatchAssign === true
+    && capability.bindingId === String(bindingId ?? '')
+    && capability.originalCrud.allowEdit !== false
+    && isAssignmentConfigured(capability.assignmentConfig)
 }
 
 export function allowsFrozenBatchEdit(capability: SubTableBatchCapability | null, bindingId: number | null | undefined): boolean {

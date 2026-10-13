@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '../subTableBatchCapability'
+import { allowsFrozenBatchAssign, allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '../subTableBatchCapability'
 
 const capability = {
   batchControlId: 'control-1',
@@ -28,5 +28,20 @@ describe('subTableBatchCapability', () => {
       batchForm: { schemaVersion: 1, rule: [{ type: 'input', field: 'description' }, { type: 'upload', field: 'receipt' }] },
     })
     expect(extractBatchEditableFields(parsed!)).toBeNull()
+  })
+
+  it('fails closed when Batch Assign lacks the frozen BPMN contract', () => {
+    const assignOnly = {
+      ...capability,
+      capabilities: { allowBatchAdd: false, allowBatchEdit: false, allowBatchDelete: false, allowBatchAssign: true },
+    }
+    expect(parseSubTableBatchCapability(assignOnly)).toBeNull()
+
+    const parsed = parseSubTableBatchCapability({
+      ...assignOnly,
+      assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'assigned_to' },
+    })
+    expect(allowsFrozenBatchAssign(parsed, 42)).toBe(true)
+    expect(allowsFrozenBatchEdit(parsed, 42)).toBe(false)
   })
 })
