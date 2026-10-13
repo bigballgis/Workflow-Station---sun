@@ -682,6 +682,9 @@ public class TaskFormComponent {
             SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition,
                     subTableBatchChanges, objectMapper);
             SubTableBatchChangeGuard.validateFieldPermissions(subTableBatchChanges, fieldPermissions);
+            SubTableBatchAssignmentStageGuard.validate(taskInfo.taskDefinitionKey, taskInfo.processInstanceId,
+                    processInstance.getVariables(), formDefinition, subTableBatchChanges, objectMapper,
+                    workflowEngineClient);
         }
 
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
@@ -895,6 +898,8 @@ public class TaskFormComponent {
         SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition, changes, objectMapper);
         SubTableBatchChangeGuard.validateFieldPermissions(changes,
                 formDefinition != null ? fieldMapper().extractFieldPermissions(formDefinition) : Collections.emptyMap());
+        SubTableBatchAssignmentStageGuard.validate(taskDefinitionKey, processInstanceId,
+                processInstance.getVariables(), formDefinition, changes, objectMapper, workflowEngineClient);
     }
 
     /**
