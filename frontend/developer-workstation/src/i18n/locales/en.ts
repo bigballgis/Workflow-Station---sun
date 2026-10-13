@@ -830,6 +830,7 @@ export default {
     subTableBindingRequired: 'All Sub-Table placeholders must have a binding selected before saving',
     batchControlIdInvalid: 'Each Sub-Table with batch operations enabled must have a unique control identifier. Recreate the control if the problem persists.',
     batchFormInvalid: 'Each Sub-Table with batch operations enabled must have a version 1 Batch Form with at least one field.',
+    batchMembershipInvalid: 'Batch Add/Delete require an editable business binding. Batch Add must include every required and manual primary-key field.',
     subTableSelectPlaceholder: 'Select Sub Table',
     subTableSelectEmpty: 'No Sub Tables available',
     subTableGoToDesigner: 'Go To Designer',

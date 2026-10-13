@@ -877,6 +877,7 @@ export default {
     subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定',
     batchControlIdInvalid: '啟用批次操作的每個子表都必須具有唯一的控制項識別碼。若問題持續，請重新建立該控制項。',
     batchFormInvalid: '啟用批次操作的每個子表都必須具有版本 1 且至少包含一個欄位的批次表單。',
+    batchMembershipInvalid: '批次新增/刪除只適用於可編輯的業務綁定。批次新增表單必須包含所有必填欄位和手動主鍵欄位。',
     subTableSelectPlaceholder: '請選擇 Sub Table',
     subTableSelectEmpty: '暫無可用 Sub Table',
     subTableGoToDesigner: 'Go To Designer',

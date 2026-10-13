@@ -1773,6 +1773,7 @@ const formSave = useFormSave({
   subTableListViewRefs,
   getActiveDesignerRef,
   getPrimaryBindingFieldDefinitions,
+  getBatchTableFields: tableId => store.tables.find(table => table.id === tableId)?.fieldDefinitions ?? [],
   syncSubTableListViewFromFormRules,
   loadForms: () => formLifecycle.loadForms(),
   autoSaving: ref(false),

@@ -877,6 +877,7 @@ export default {
     subTableBindingRequired: '保存前，所有子表占位符必须选择绑定',
     batchControlIdInvalid: '启用批量操作的每个子表都必须具有唯一的控件标识。若问题持续，请重新创建该控件。',
     batchFormInvalid: '启用批量操作的每个子表都必须具有版本 1 且至少包含一个字段的批量表单。',
+    batchMembershipInvalid: '批量新增/删除只适用于可编辑的业务绑定。批量新增表单必须包含所有必填字段和手工主键字段。',
     subTableSelectPlaceholder: '请选择 Sub Table',
     subTableSelectEmpty: '暂无可用 Sub Table',
     subTableGoToDesigner: 'Go To Designer',

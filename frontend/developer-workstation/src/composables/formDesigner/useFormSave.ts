@@ -8,6 +8,7 @@ import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 import { validateEnabledBatchControlIds, validateEnabledBatchForms } from '@/utils/batchSubTableConfig'
+import { validateBatchMembershipDesign } from '@/utils/batchSubTableMembership'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -52,6 +53,7 @@ interface UseFormSaveOptions {
   subTableListViewRefs: Ref<Record<number, any>>
   getActiveDesignerRef: () => DesignerLike
   getPrimaryBindingFieldDefinitions: () => FieldDefinition[]
+  getBatchTableFields?: (tableId: number) => FieldDefinition[]
   syncSubTableListViewFromFormRules: (bindingId: number, rule: any[]) => void
   loadForms: () => Promise<void>
   autoSaving: Ref<boolean>
@@ -436,6 +438,11 @@ export function useFormSave(options: UseFormSaveOptions) {
 
       if (!validateEnabledBatchForms(subTableRules, batchForms)) {
         if (isManual) ElMessage.error(t('form.batchFormInvalid'))
+        return false
+      }
+      if (!validateBatchMembershipDesign(subTableRules, batchForms, selectedForm.value.tableBindings ?? [],
+        tableId => options.getBatchTableFields?.(tableId) ?? [])) {
+        if (isManual) ElMessage.error(t('form.batchMembershipInvalid'))
         return false
       }
 
