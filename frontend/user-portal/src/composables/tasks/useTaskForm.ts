@@ -101,9 +101,13 @@ export function useTaskForm(options: {
   const pendingSubTableBatchChanges = ref<NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>>([])
 
   function recordSubTableBatchChange(change: NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>[number]) {
-    const key = `${change.batchControlId}:${change.bindingId}`
+    // Edit and Assign are independently authorised server-side.  They must
+    // therefore remain independent transport declarations when a user applies
+    // both in the same page draft; merging them would make the last operation
+    // accidentally claim fields from the other operation.
+    const key = `${change.batchControlId}:${change.bindingId}:${change.operation}`
     const previous = pendingSubTableBatchChanges.value.find(item =>
-      `${item.batchControlId}:${item.bindingId}` === key,
+      `${item.batchControlId}:${item.bindingId}:${item.operation}` === key,
     )
     if (!previous) {
       pendingSubTableBatchChanges.value = [...pendingSubTableBatchChanges.value, change]
@@ -134,7 +138,7 @@ export function useTaskForm(options: {
       })),
     }
     pendingSubTableBatchChanges.value = pendingSubTableBatchChanges.value.map(item =>
-      `${item.batchControlId}:${item.bindingId}` === key ? merged : item,
+      `${item.batchControlId}:${item.bindingId}:${item.operation}` === key ? merged : item,
     )
   }
   function captureLoadedSubTableBaseline(source: unknown = formData.value.__subTables__): void {
