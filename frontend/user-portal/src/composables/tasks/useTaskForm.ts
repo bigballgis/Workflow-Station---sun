@@ -102,10 +102,30 @@ export function useTaskForm(options: {
 
   function recordSubTableBatchChange(change: NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>[number]) {
     const key = `${change.batchControlId}:${change.bindingId}`
-    pendingSubTableBatchChanges.value = [
-      ...pendingSubTableBatchChanges.value.filter(item => `${item.batchControlId}:${item.bindingId}` !== key),
-      change,
-    ]
+    const previous = pendingSubTableBatchChanges.value.find(item =>
+      `${item.batchControlId}:${item.bindingId}` === key,
+    )
+    if (!previous) {
+      pendingSubTableBatchChanges.value = [...pendingSubTableBatchChanges.value, change]
+      return
+    }
+
+    // One page draft can receive several Apply actions before the existing
+    // autosave runs. Keep every declared field; replacing the earlier change
+    // would make the transport declaration narrower than the page mutation.
+    const fieldsByRowId = new Map<string, Set<string>>()
+    for (const patch of [...previous.rowPatches, ...change.rowPatches]) {
+      const fields = fieldsByRowId.get(patch.rowId) ?? new Set<string>()
+      for (const field of patch.fields) fields.add(field)
+      fieldsByRowId.set(patch.rowId, fields)
+    }
+    const merged = {
+      ...change,
+      rowPatches: Array.from(fieldsByRowId, ([rowId, fields]) => ({ rowId, fields: Array.from(fields) })),
+    }
+    pendingSubTableBatchChanges.value = pendingSubTableBatchChanges.value.map(item =>
+      `${item.batchControlId}:${item.bindingId}` === key ? merged : item,
+    )
   }
   function captureLoadedSubTableBaseline(source: unknown = formData.value.__subTables__): void {
     loadedSubTableBaseline.value = JSON.parse(JSON.stringify(
@@ -472,7 +492,15 @@ export function useTaskForm(options: {
     formData,
     taskFormDTO,
     loadedSubTableBaseline,
-    buildSubTableSubmitPayload: buildCurrentTaskFormSubmitPayload,
+    buildSubTableSubmitPayload: () => {
+      const payload = buildSubTableSubmitPayload()
+      return {
+        ...payload,
+        ...(pendingSubTableBatchChanges.value.length
+          ? { subTableBatchChanges: pendingSubTableBatchChanges.value }
+          : {}),
+      }
+    },
     onSaved: () => { pendingSubTableBatchChanges.value = [] },
   })
 
