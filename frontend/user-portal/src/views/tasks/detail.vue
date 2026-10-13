@@ -229,6 +229,7 @@
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
               :field-permissions="selectedNodeForm.isCurrentTask ? taskFieldPermissions : undefined"
+              :sub-table-batch-capabilities="selectedNodeForm.isCurrentTask ? taskFormDTO?.subTableBatchCapabilities : undefined"
               @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />

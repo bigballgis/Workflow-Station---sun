@@ -195,6 +195,8 @@ interface Props {
    * entries default to editable — this only narrows fields explicitly marked READONLY.
    */
   fieldPermissions?: Record<string, string> | null
+  /** Current form's server-filtered frozen batch controls. */
+  subTableBatchCapabilities?: Record<string, unknown> | null
   /**
    * When true, FormRenderer may auto-open the first previewable upload after data
    * settles, if the account preference is on. Default off. Enable only on the
@@ -761,6 +763,7 @@ const {
   suppressLinkFormInitialData: propSuppressLinkFormInitialData,
   showLinkFormDialogFooter: propShowLinkFormDialogFooter,
   fieldPermissions: propFieldPermissions,
+  subTableBatchCapabilities: propSubTableBatchCapabilities,
 } = toRefs(props)
 
 function collectPreviewFiles() {
@@ -819,6 +822,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   resolveBinding,
   isSubTableEditable,
   fieldPermissions: propFieldPermissions,
+  subTableBatchCapabilities: propSubTableBatchCapabilities,
   getSubFormRowFormulas,
   getSummaryColumns,
   getSummaryAggregations,

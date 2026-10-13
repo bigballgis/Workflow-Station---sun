@@ -35,6 +35,8 @@ export interface FormRendererFieldsContext {
   isSubTableEditable: (bindingId?: number) => boolean
   /** Task-node field permissions (`TaskFormData.fieldPermissions`) — passed through to SubTableField for Add/Edit dialog gating. */
   fieldPermissions?: Record<string, string> | null
+  /** Server-filtered frozen controls, keyed by a subTable's stable batchControlId. */
+  subTableBatchCapabilities?: Record<string, unknown> | null
   getSubFormRowFormulas: (bindingId?: number) => unknown
   getSummaryColumns: (bindingId?: number) => unknown
   getSummaryAggregations: (bindingId?: number) => unknown
