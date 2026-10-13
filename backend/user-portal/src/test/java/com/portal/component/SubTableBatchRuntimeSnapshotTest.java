@@ -265,6 +265,25 @@ class SubTableBatchRuntimeSnapshotTest {
                 List.of(change), objectMapper)).hasMessageContaining("Invalid batch delete");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void acceptsOnlyTemporaryIdentityFreeRowsForFrozenBatchAdd() {
+        Map<String, Object> config = config(false, "ctl-1");
+        Map<String, Object> rule = (Map<String, Object>) ((List<?>) config.get("rule")).get(0);
+        rule.put("props", Map.of("_bindingId", 101, "allowAdd", true, "allowBatchAdd", true));
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config), pin, objectMapper).orElseThrow();
+        SubTableBatchChange change = editChange("ctl-1", "101", "name");
+        change.setOperation("ADD");
+        change.getRowPatches().get(0).setRowKey(null);
+        SubTableBatchChangeGuard.validate(Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot),
+                Map.of("sourceId", "form-1"), List.of(change), objectMapper);
+
+        change.getRowPatches().get(0).setRowKey(Map.of("line_id", "L1"));
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), Map.of("sourceId", "form-1"),
+                List.of(change), objectMapper)).hasMessageContaining("Invalid batch add");
+    }
+
     private static SubTableBatchChange editChange(String controlId, String bindingId, String field) {
         SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
         patch.setRowId("row-1");

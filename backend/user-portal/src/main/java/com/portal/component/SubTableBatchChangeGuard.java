@@ -66,6 +66,7 @@ final class SubTableBatchChangeGuard {
         if (submitted == null) throw forbidden("Batch submit has no canonical sub-table data");
         Map<String, Object> tables = map(submitted.get("__subTables__"));
         for (SubTableBatchChange change : changes) {
+            if (change != null && "ADD".equals(change.getOperation())) continue;
             String storeKey = storeKeyFor(change, scopes);
             List<Map<String, Object>> rows = rows(tables.get(storeKey));
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
@@ -141,12 +142,14 @@ final class SubTableBatchChangeGuard {
         if (!change.getBindingId().trim().equals(String.valueOf(control.get("bindingId")))) {
             throw forbidden("Batch control does not belong to the submitted binding");
         }
-        if (!"EDIT".equals(change.getOperation()) && !"ASSIGN".equals(change.getOperation()) && !"DELETE".equals(change.getOperation())) {
+        if (!"EDIT".equals(change.getOperation()) && !"ASSIGN".equals(change.getOperation())
+                && !"DELETE".equals(change.getOperation()) && !"ADD".equals(change.getOperation())) {
             throw forbidden("Unsupported batch operation");
         }
         Map<String, Object> capabilities = map(control.get("capabilities"));
         Map<String, Object> originalCrud = map(control.get("originalCrud"));
-        if (!"DELETE".equals(change.getOperation()) && Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
+        if (!"DELETE".equals(change.getOperation()) && !"ADD".equals(change.getOperation())
+                && Boolean.FALSE.equals(originalCrud.get("allowEdit"))) {
             throw forbidden("Batch operation is not enabled for this control");
         }
         if ("EDIT".equals(change.getOperation()) && !Boolean.TRUE.equals(capabilities.get("allowBatchEdit"))) {
@@ -158,6 +161,10 @@ final class SubTableBatchChangeGuard {
         }
         if ("DELETE".equals(change.getOperation())) {
             validateDelete(change, capabilities, originalCrud);
+            return;
+        }
+        if ("ADD".equals(change.getOperation())) {
+            validateAdd(change, capabilities, originalCrud, map(control.get("batchForm")));
             return;
         }
         Set<String> allowedFields = batchFormFields(map(control.get("batchForm")));
@@ -196,6 +203,29 @@ final class SubTableBatchChangeGuard {
             if (patch == null || blank(patch.getRowId()) || patch.getRowKey() == null || patch.getRowKey().isEmpty()
                     || (patch.getFields() != null && !patch.getFields().isEmpty()) || patch.getAssignment() != null) {
                 throw forbidden("Invalid batch delete row patch");
+            }
+        }
+    }
+
+    private static void validateAdd(SubTableBatchChange change, Map<String, Object> capabilities,
+                                    Map<String, Object> originalCrud, Map<String, Object> batchForm) {
+        if (!Boolean.TRUE.equals(capabilities.get("allowBatchAdd"))
+                || Boolean.FALSE.equals(originalCrud.get("allowAdd"))) {
+            throw forbidden("Batch add is not enabled for this control");
+        }
+        Set<String> allowedFields = batchFormFields(batchForm);
+        if (allowedFields.isEmpty() || change.getRowPatches() == null || change.getRowPatches().isEmpty()) {
+            throw forbidden("Batch add declaration has no supported row fields");
+        }
+        for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+            if (patch == null || blank(patch.getRowId()) || patch.getRowKey() != null || patch.getAssignment() != null
+                    || patch.getFields() == null || patch.getFields().isEmpty()) {
+                throw forbidden("Invalid batch add row patch");
+            }
+            for (String field : patch.getFields()) {
+                if (blank(field) || !allowedFields.contains(field)) {
+                    throw forbidden("Batch add contains a field outside the frozen batch form");
+                }
             }
         }
     }
