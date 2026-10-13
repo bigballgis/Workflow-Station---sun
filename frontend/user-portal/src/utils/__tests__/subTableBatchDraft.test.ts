@@ -42,6 +42,19 @@ describe('applyBatchDraft', () => {
     expect(result).toEqual([{ id: 'B', name: 'second', quantity: 2, hidden: 'keep-too' }])
   })
 
+  it('keeps new rows separate from existing-row identity patches', () => {
+    const result = applyBatchDraft(rows, (row) => String(row.id), {
+      rowPatches: [{ rowId: 'A', fields: { quantity: { kind: 'set', value: 3 } } }],
+      addedRows: [{ name: 'new', quantity: 1 }],
+    })
+
+    expect(result).toEqual([
+      { id: 'A', name: 'first', quantity: 3, hidden: 'keep' },
+      { id: 'B', name: 'second', quantity: 2, hidden: 'keep-too' },
+      { name: 'new', quantity: 1 },
+    ])
+  })
+
   it('uses the configured assignment fields and clears the inactive mode atomically', () => {
     const config = { assigneeField: 'assigned_to', roleField: 'role_code', buField: 'bu_code' }
     const role = applyBatchAssignment(

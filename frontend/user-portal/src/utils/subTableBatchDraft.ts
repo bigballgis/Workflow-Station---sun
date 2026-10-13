@@ -32,6 +32,8 @@ export interface BatchDraftChangeSet {
   rowPatches?: BatchRowPatch[]
   uniformPatches?: BatchUniformPatch[]
   deletedRowIds?: string[]
+  /** New rows are local drafts until the owning workspace finishes PK/FK preparation. */
+  addedRows?: Array<Record<string, unknown>>
 }
 
 /**
@@ -82,7 +84,7 @@ export function applyBatchDraft<T extends Record<string, unknown>>(
   const patches = new Map((changes.rowPatches || []).map((patch) => [patch.rowId, patch.fields]))
   const uniform = changes.uniformPatches || []
 
-  return rows
+  const existing = rows
     .filter((row) => !deleted.has(rowIdentity(row)))
     .map((row) => {
       const rowId = rowIdentity(row)
@@ -94,4 +96,5 @@ export function applyBatchDraft<T extends Record<string, unknown>>(
       }
       return next as T
     })
+  return [...existing, ...((changes.addedRows ?? []) as T[])]
 }
