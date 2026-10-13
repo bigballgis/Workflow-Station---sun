@@ -22,6 +22,7 @@ class BpmnMiXmlSupportAssignmentTest {
 
         assertThat(result.get("people")).containsEntry("allowUser", true)
                 .containsEntry("allowRole", false)
+                .containsEntry("taskDefinitionKey", "task-user")
                 .containsEntry("assigneeField", "owner_user_id")
                 .doesNotContainKeys("roleField", "buField");
         assertThat(result.get("roles")).containsEntry("allowUser", false)
@@ -30,6 +31,7 @@ class BpmnMiXmlSupportAssignmentTest {
                 .doesNotContainKeys("assigneeField", "buField");
         assertThat(result.get("mixed")).containsEntry("allowUser", true)
                 .containsEntry("allowRole", true)
+                .containsEntry("taskDefinitionKey", "task-both")
                 .containsEntry("assigneeField", "assignee_id")
                 .containsEntry("roleField", "role_code")
                 .containsEntry("buField", "department_code");

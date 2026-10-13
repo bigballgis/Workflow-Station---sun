@@ -393,6 +393,7 @@ final class BpmnMiXmlSupport {
             }
             MiAssignmentContract candidate = new MiAssignmentContract(
                     mode,
+                    normalizedAttribute(task, "id"),
                     normalizedProperty(task, "assigneeField"),
                     normalizedProperty(task, "roleField"),
                     normalizedProperty(task, "buField"));
@@ -410,6 +411,11 @@ final class BpmnMiXmlSupport {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private static String normalizedAttribute(Element element, String name) {
+        String value = element.getAttribute(name);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     private static boolean isSupportedMode(String mode) {
         return "user".equalsIgnoreCase(mode)
                 || "role".equalsIgnoreCase(mode)
@@ -417,7 +423,7 @@ final class BpmnMiXmlSupport {
     }
 
     private record MiAssignmentContract(
-            String assigneeMode, String assigneeField, String roleField, String buField) {
+            String assigneeMode, String taskDefinitionKey, String assigneeField, String roleField, String buField) {
 
         private MiAssignmentContract {
             assigneeMode = assigneeMode.toLowerCase(java.util.Locale.ROOT);
@@ -427,6 +433,7 @@ final class BpmnMiXmlSupport {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("allowUser", !"role".equals(assigneeMode));
             payload.put("allowRole", !"user".equals(assigneeMode));
+            putIfPresent(payload, "taskDefinitionKey", taskDefinitionKey);
             putIfPresent(payload, "assigneeField", assigneeField);
             putIfPresent(payload, "roleField", roleField);
             putIfPresent(payload, "buField", buField);
