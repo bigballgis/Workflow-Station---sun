@@ -113,15 +113,25 @@ export function useTaskForm(options: {
     // One page draft can receive several Apply actions before the existing
     // autosave runs. Keep every declared field; replacing the earlier change
     // would make the transport declaration narrower than the page mutation.
-    const fieldsByRowId = new Map<string, Set<string>>()
+    const fieldsByRowId = new Map<string, {
+      rowKey: Record<string, unknown>
+      fields: Set<string>
+      assignment?: NonNullable<typeof change.rowPatches>[number]['assignment']
+    }>()
     for (const patch of [...previous.rowPatches, ...change.rowPatches]) {
-      const fields = fieldsByRowId.get(patch.rowId) ?? new Set<string>()
-      for (const field of patch.fields) fields.add(field)
-      fieldsByRowId.set(patch.rowId, fields)
+      const mergedPatch = fieldsByRowId.get(patch.rowId) ?? { rowKey: patch.rowKey, fields: new Set<string>() }
+      for (const field of patch.fields ?? []) mergedPatch.fields.add(field)
+      if (patch.assignment) mergedPatch.assignment = patch.assignment
+      fieldsByRowId.set(patch.rowId, mergedPatch)
     }
     const merged = {
       ...change,
-      rowPatches: Array.from(fieldsByRowId, ([rowId, fields]) => ({ rowId, fields: Array.from(fields) })),
+      rowPatches: Array.from(fieldsByRowId, ([rowId, patch]) => ({
+        rowId,
+        rowKey: patch.rowKey,
+        ...(patch.fields.size ? { fields: Array.from(patch.fields) } : {}),
+        ...(patch.assignment ? { assignment: patch.assignment } : {}),
+      })),
     }
     pendingSubTableBatchChanges.value = pendingSubTableBatchChanges.value.map(item =>
       `${item.batchControlId}:${item.bindingId}` === key ? merged : item,

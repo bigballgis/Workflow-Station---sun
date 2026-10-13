@@ -93,8 +93,18 @@ export interface TaskFormSubmitRequest {
   subTableBatchChanges?: Array<{
     batchControlId: string
     bindingId: string
-    operation: 'EDIT'
-    rowPatches: Array<{ rowId: string; rowKey: Record<string, unknown>; fields: string[] }>
+    operation: 'EDIT' | 'ASSIGN'
+    rowPatches: Array<{
+      rowId: string
+      rowKey: Record<string, unknown>
+      fields?: string[]
+      assignment?: {
+        mode: 'PERSON' | 'ROLE'
+        assigneeId?: string
+        roleCode?: string
+        businessUnitCode?: string
+      }
+    }>
   }>
   /** Present only when the user clicked a SAVE Action (autosave omits this). */
   actionId?: string
