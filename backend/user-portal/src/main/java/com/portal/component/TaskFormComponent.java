@@ -681,6 +681,7 @@ public class TaskFormComponent {
             ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
             SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition,
                     subTableBatchChanges, objectMapper);
+            SubTableBatchChangeGuard.validateFieldPermissions(subTableBatchChanges, fieldPermissions);
         }
 
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
@@ -887,6 +888,8 @@ public class TaskFormComponent {
         ProcessInstance processInstance = requireProcessInstance(processInstanceId);
         Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey, processInstanceId);
         SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition, changes, objectMapper);
+        SubTableBatchChangeGuard.validateFieldPermissions(changes,
+                formDefinition != null ? fieldMapper().extractFieldPermissions(formDefinition) : Collections.emptyMap());
     }
 
     /**

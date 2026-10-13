@@ -141,6 +141,13 @@ class SubTableBatchRuntimeSnapshotTest {
                 .hasMessageContaining("not enabled");
     }
 
+    @Test
+    void rejectsAReadOnlyBatchFieldInsteadOfSilentlyDroppingIt() {
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validateFieldPermissions(
+                List.of(editChange("ctl-1", "101", "name")), Map.of("101:name", "READONLY")))
+                .hasMessageContaining("read-only field");
+    }
+
     private static SubTableBatchChange editChange(String controlId, String bindingId, String field) {
         SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
         patch.setRowId("row-1");

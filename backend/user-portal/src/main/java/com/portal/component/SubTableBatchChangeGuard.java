@@ -31,12 +31,29 @@ final class SubTableBatchChangeGuard {
             throw forbidden("Batch operations are not enabled for this task form");
         }
         for (SubTableBatchChange change : changes) {
-            validateChange(change, controls);
+            validateChange(change, controls, Map.of());
+        }
+    }
+
+    static void validateFieldPermissions(List<SubTableBatchChange> changes,
+                                         Map<String, String> fieldPermissions) {
+        if (changes == null || changes.isEmpty() || fieldPermissions == null || fieldPermissions.isEmpty()) return;
+        for (SubTableBatchChange change : changes) {
+            if (change == null || blank(change.getBindingId()) || change.getRowPatches() == null) continue;
+            for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
+                if (patch == null || patch.getFields() == null) continue;
+                for (String field : patch.getFields()) {
+                    if ("READONLY".equals(fieldPermissions.get(change.getBindingId().trim() + ":" + field))) {
+                        throw forbidden("Batch patch contains a read-only field");
+                    }
+                }
+            }
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static void validateChange(SubTableBatchChange change, Map<String, Object> controls) {
+    private static void validateChange(SubTableBatchChange change, Map<String, Object> controls,
+                                       Map<String, String> fieldPermissions) {
         if (change == null || blank(change.getBatchControlId()) || blank(change.getBindingId())) {
             throw forbidden("Batch operation is missing its frozen control identity");
         }
@@ -71,6 +88,9 @@ final class SubTableBatchChangeGuard {
             for (String field : patch.getFields()) {
                 if (blank(field) || !allowedFields.contains(field)) {
                     throw forbidden("Batch patch contains a field outside the frozen batch form");
+                }
+                if ("READONLY".equals(fieldPermissions.get(change.getBindingId().trim() + ":" + field))) {
+                    throw forbidden("Batch patch contains a read-only field");
                 }
             }
         }
