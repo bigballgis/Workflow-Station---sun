@@ -4,11 +4,16 @@
 
 CONDITIONAL。本次 P3 代码批次已补齐工作区混合操作、冻结行设计、批量 PK 准备、明确删除及 Save/Complete 的共同校验边界；不等于 P3 运行验收或 P4 发布验收通过。
 
+主体提交：`c8e1be27e`（后端）、`8cbbfe00b`（DW）、`43fa57e7d`（Portal）。后续边界与帮助提交：`1c4a33654`、`0f2a2d451`。最终帮助 prop 修正与本记录一起提交。
+
 审查范围从 `50b453b65` 后的本次改动开始，包含后端、DW 和 Portal；未扩大到已生成任务改派、业务物理表、旧实例迁移或 Docker 数据修复。
 
 ## 首轮 Findings 与处置
 
 ### Blocker
+
+- 帮助入口增量的最终类型检查发现 `aria-label` 被识别成原生属性，未满足既有组件的必填 `ariaLabel` prop。
+  - 处置：两处调用改为与仓库现有调用相同的 `:ariaLabel`，重跑类型检查；不降低类型标准。
 
 - `SubTableBatchChangeGuard.validateSubmittedRows`：DELETE 原实现要求目标行仍在提交数组中，实际删除不能通过；ADD 又跳过 canonical 验证。
   - 影响：合法删除被拒绝，新增声明无法证明指向真实提交行。
@@ -77,7 +82,7 @@ CONDITIONAL。本次 P3 代码批次已补齐工作区混合操作、冻结行�
 ## 测试与运行证据
 
 - 后端实际执行：SubTableBatchRuntimeSnapshotTest、SubTableBatchRowDesignTest、SubTableBatchScopeDesignTest、SubTableBatchAddedRowGuardTest、SubTableBatchMembershipGuardTest、SubTableBatchSubmittedRowsTest、SubTableBatchDeleteReferenceGuardTest、SubTableBatchFormRulesTest、PortalBatchPrimaryKeyAllocationComponentTest、SubTableBindingScopeGuardTest、TaskApprovalCompletionSubTableGuardTest：通过。
-- Portal 批量 helpers、工作区、保存串行、真实 submit payload 及 projection：最终组合命令 10 个文件、61 个测试通过。
+- Portal 批量 helpers、工作区、保存串行、真实 submit payload 及 projection：最终组合命令 10 个文件、62 个测试通过。
 - DW batchSubTableMembership / batchSubTableConfig：2 个文件、8 个测试通过。
 - Help：22 个测试及 typecheck 通过。
 - 完整 `pnpm -C frontend run regression:mi` 已执行，但 Playwright 打开 `http://localhost:3000/portal/` 30 秒超时，整体失败；不得用单元阶段通过代替完整门禁。

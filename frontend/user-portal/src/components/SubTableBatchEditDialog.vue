@@ -10,7 +10,7 @@
     <template #header>
       <div class="batch-edit-dialog__title">
         <span class="el-dialog__title">{{ t('subTable.batchEdit') }}</span>
-        <DesignerHelpLink path="/form-ctl-sub-table#batch" :aria-label="t('subTable.batchGuideLinkAria')" test-id="batch-workspace-guide-link" />
+        <DesignerHelpLink path="/form-ctl-sub-table#batch" :ariaLabel="t('subTable.batchGuideLinkAria')" test-id="batch-workspace-guide-link" />
       </div>
     </template>
     <p class="batch-edit-dialog__hint">{{ t('subTable.batchEditDraftHint') }}</p>

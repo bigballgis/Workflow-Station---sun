@@ -3,7 +3,7 @@
     <template #header>
       <div class="batch-delete-dialog__title">
         <span class="el-dialog__title">{{ t('subTable.batchEdit') }}</span>
-        <DesignerHelpLink path="/form-ctl-sub-table#batch" :aria-label="t('subTable.batchGuideLinkAria')" test-id="batch-delete-guide-link" />
+        <DesignerHelpLink path="/form-ctl-sub-table#batch" :ariaLabel="t('subTable.batchGuideLinkAria')" test-id="batch-delete-guide-link" />
       </div>
     </template>
     <p class="batch-delete-dialog__hint">{{ t('subTable.batchDeleteHint') }}</p>
