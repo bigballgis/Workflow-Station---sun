@@ -1161,6 +1161,7 @@ export default {
   subTable: {
     add: 'Add',
     batchEdit: 'Batch Edit',
+    batchAssign: 'Batch Assign',
     batchEditDraftHint: 'Changes stay in this page until the normal Save or auto-save succeeds.',
     batchSetSelected: 'Set value for selected rows',
     batchNoChange: 'Do not change',

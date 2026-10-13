@@ -576,7 +576,9 @@
       :rows="rows"
       :capability="batchEditCapability"
       :row-identity="resolveBatchRowIdentity"
+      :show-assign="canBatchAssign"
       @apply="applyBatchEdit"
+      @open-assign="batchAssignDialogVisible = true"
     />
     <SubTableBatchAssignDialog
       v-if="batchAssignCapability"

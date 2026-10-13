@@ -1156,6 +1156,7 @@ export default {
   subTable: {
     add: '新增',
     batchEdit: '批次編輯',
+    batchAssign: '批次分派',
     batchEditDraftHint: '變更只會套用到目前頁面，原有儲存或自動儲存成功後才會持久化。',
     batchSetSelected: '為選取的列統一設定值',
     batchNoChange: '不修改',
