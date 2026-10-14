@@ -20,6 +20,6 @@ public class TaskFormSnapshot {
     private String taskDefinitionKey;
     private String assignee;
     private Instant completedAt;
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> fieldValues;
 }

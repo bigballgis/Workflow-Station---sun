@@ -20,7 +20,7 @@ public class ProcessFormData {
     private String formName;
     private String formType;
     private Map<String, Object> configJson;
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> fieldValues;
     private List<SubTableBindingData> subTableBindings;
     private boolean editable;

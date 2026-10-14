@@ -370,7 +370,8 @@ public class ProcessApplicationQueryComponent {
                 ? new HashMap<>(info.getVariables()) : new HashMap<>();
         Map<String, Object> current = vars.get("__subTables__") instanceof Map<?, ?> m
                 ? (Map<String, Object>) m : null;
-        engineSubTableHydrator.mergeFromEngine(processId, current).ifPresent(result -> {
+        engineSubTableHydrator.mergeFromEngine(processId, current,
+                SubTableBatchDeletedRows.read(instance.getVariables())).ifPresent(result -> {
             vars.put("__subTables__", result.mergedSubTables());
             if (result.rowCount() != null && vars.get("rowCount") == null) {
                 vars.put("rowCount", result.rowCount());

@@ -780,6 +780,7 @@ public class TaskFormComponent {
                     formDefinition, subTableBatchChanges, bindingScopes, inbound, objectMapper));
 
             updatedVariables.putAll(inbound);
+            SubTableBatchDeletedRows.record(updatedVariables, currentVariables, subTableBatchChanges);
 
             // Record which fields THIS submit deliberately cleared, so the read path can tell a
             // user-cleared field from a not-yet-filled one. Both look identical in the store (key
@@ -1156,11 +1157,9 @@ public class TaskFormComponent {
             String processInstanceId, Map<String, Object> completedVariables) {
         ProcessInstance processInstance = requireProcessInstance(processInstanceId);
 
-        Map<String, Object> merged = new HashMap<>();
-        if (processInstance.getVariables() != null) {
-            merged.putAll(processInstance.getVariables());
-        }
-        merged.putAll(completedVariables != null ? completedVariables : Collections.emptyMap());
+        Map<String, Object> merged = SubTableBatchInitialRows.mergeSnapshot(
+                processInstance.getVariables() != null ? processInstance.getVariables() : Collections.emptyMap(),
+                completedVariables != null ? completedVariables : Collections.emptyMap(), objectMapper);
 
         Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey,
                 processInstanceId, merged);

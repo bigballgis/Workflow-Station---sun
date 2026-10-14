@@ -21,7 +21,7 @@ public class TaskFormData {
     private String formName;
     private Map<String, Object> configJson;
     private Map<String, String> fieldPermissions;
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> fieldValues;
     private List<SubTableBindingData> subTableBindings;
     private ProcessFormData processFormRef;

@@ -181,10 +181,13 @@ public class TaskApprovalCompletionComponent {
         // never loaded or edited the grid) can carry an empty __subTables__ slice which, sent to Flowable,
         // overwrites populated engine rows with []. Fill empty outbound slices from the live engine first.
         preserveEngineSubTablesOnComplete(
-            task.getProcessInstanceId(), variables, explicitlySubmittedSubTables);
+            task.getProcessInstanceId(), variables, explicitlySubmittedSubTables,
+            SubTableBatchDeletedRows.read(processInstanceRepository.findById(task.getProcessInstanceId())
+                    .orElseThrow(() -> new IllegalStateException("Process instance is missing at completion")).getVariables()));
 
         Map<String, Object> variablesForEngine =
                 mergeApprovalVariables(task.getProcessInstanceId(), variables);
+        SubTableWriteIsolation.stripTransportMetadata(variablesForEngine);
 
         log.info("Variables before calling workflowEngineClient: {}", variablesForEngine);
 
@@ -230,7 +233,9 @@ public class TaskApprovalCompletionComponent {
                 
                 preSyncVariablesRef.set(existingVars != null ? new HashMap<>(existingVars) : Map.of());
 
-                Map<String, Object> mergedVars = new HashMap<>(variablesForEngine);
+                Map<String, Object> mergedVars = SubTableBatchInitialRows.mergeCompletion(
+                        existingVars != null ? existingVars : Map.of(), variablesForEngine, request.getSubTableBatchChanges(),
+                        com.platform.common.util.JsonUtils.getObjectMapper());
 
                 if (ownerFieldComponent != null) {
                     if (OwnerFieldComponent.taskScopedCurrentItem(mergedVars) == null) {
@@ -519,10 +524,15 @@ public class TaskApprovalCompletionComponent {
     void preserveEngineSubTablesOnComplete(String processInstanceId, Map<String, Object> variables) {
         preserveEngineSubTablesOnComplete(processInstanceId, variables, Map.of());
     }
-    @SuppressWarnings("unchecked")
     void preserveEngineSubTablesOnComplete(String processInstanceId,
                                            Map<String, Object> variables,
                                            Map<String, Object> explicitlySubmittedSubTables) {
+        preserveEngineSubTablesOnComplete(processInstanceId, variables, explicitlySubmittedSubTables, Map.of());
+    }
+    @SuppressWarnings("unchecked")
+    void preserveEngineSubTablesOnComplete(String processInstanceId, Map<String, Object> variables,
+                                           Map<String, Object> explicitlySubmittedSubTables,
+                                           Map<String, SubTableBatchDeletedRows.Store> deletedRows) {
         if (processInstanceId == null || variables == null) {
             return;
         }
@@ -538,7 +548,7 @@ public class TaskApprovalCompletionComponent {
         if (!hasEmptySlice) {
             return; // every outbound slice already carries rows — nothing to protect, skip the round-trip
         }
-        engineSubTableHydrator.mergeFromEngine(processInstanceId, (Map<String, Object>) outMap)
+        engineSubTableHydrator.mergeFromEngine(processInstanceId, (Map<String, Object>) outMap, deletedRows)
                 .ifPresent(result -> {
                     Map<String, Object> merged = new LinkedHashMap<>(result.mergedSubTables());
                     if (explicitlySubmittedSubTables != null) {

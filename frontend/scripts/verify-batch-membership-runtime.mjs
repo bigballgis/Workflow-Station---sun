@@ -1,0 +1,118 @@
+/** Real UI/persistence acceptance. Refuses anything except a pinned synthetic fixture. */
+import assert from 'node:assert/strict'
+import { mkdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright'
+import { loginViaPortalPassword } from './playwright-login.mjs'
+
+const taskId = process.env.FIXTURE_TASK_ID
+if (!taskId) throw new Error('FIXTURE_TASK_ID is required; no automatic task selection')
+const origin = 'http://localhost:3101'
+const out = new URL('../user-portal/verification-screenshots/', import.meta.url)
+mkdirSync(out, { recursive: true })
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
+  const runtimeErrors = []
+  page.on('pageerror', () => runtimeErrors.push('pageerror'))
+  page.on('console', message => {
+    if (message.type() === 'error') runtimeErrors.push({ type: 'console.error', location: message.location() })
+  })
+  await loginViaPortalPassword(page, { loginOrigin: origin })
+  const read = async () => {
+    const response = await page.request.get(`${origin}/api/portal/tasks/${taskId}/form-data`)
+    const body = await response.json()
+    assert.equal(response.ok() && body.success, true, 'Task form read must succeed')
+    assert.equal(body.data.formName, 'Synthetic TASK', 'Refusing non-synthetic form')
+    const entries = Object.entries(body.data.subTableBatchCapabilities || {})
+    assert.equal(entries.length, 1, 'Synthetic fixture must have one frozen control')
+    assert.match(entries[0][0], /^batch-[a-z0-9]+-TASK$/)
+    return body.data
+  }
+  const baseline = await read()
+  const capability = Object.values(baseline.subTableBatchCapabilities)[0]
+  const pkField = capability.rowDesign.binding.primaryKeyFields[0]
+  const fkField = capability.rowDesign.binding.foreignKeyField
+  const textField = capability.batchForm.rule.find(rule => rule.type === 'input' && rule.field !== pkField)?.field
+  const numberField = capability.batchForm.rule.find(rule => rule.type === 'inputNumber')?.field
+  const manualPk = capability.batchForm.rule.some(rule => rule.field === pkField)
+  const variant = manualPk ? 'manual' : 'uuid'
+  assert.ok(pkField && fkField && textField && numberField)
+  const storeKey = `dw:${capability.rowDesign.binding.tableName}`
+  const rowsOf = data => data.fieldValues.__subTables__[storeKey]
+  assert.equal(rowsOf(baseline).length, 2)
+  assert.equal(rowsOf(baseline).every(row => row._wsRowVersion === 1), true, 'Initial row versions survive first-node completion')
+  await page.goto(`${origin}/portal/tasks/${taskId}`)
+  const batchButton = page.getByRole('button', { name: 'Batch Edit', exact: true })
+  await batchButton.waitFor()
+  await batchButton.click()
+  const dialog = page.locator('.el-dialog:visible')
+  await dialog.locator('.el-table__body-wrapper tr').nth(1).waitFor()
+  await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-workspace-initial.png`, out)) })
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  const added = dialog.locator('.el-table__body-wrapper tr').nth(2)
+  const addedInputs = added.locator('input:not([type="checkbox"])')
+  if (manualPk) await addedInputs.nth(0).fill('SYNTHETIC-THREE')
+  await addedInputs.nth(manualPk ? 1 : 0).fill('Third synthetic line')
+  await addedInputs.nth(manualPk ? 2 : 1).fill('3')
+  await addedInputs.nth(manualPk ? 2 : 1).press('Tab')
+  const beforeApply = await read()
+  assert.deepEqual(rowsOf(beforeApply), rowsOf(baseline), 'Editing a draft must not persist')
+  const saveResponse = page.waitForResponse(r => r.url().endsWith(`/tasks/${taskId}/submit`) && r.request().method() === 'POST')
+  await dialog.getByRole('button', { name: /Apply/ }).click()
+  await dialog.waitFor({ state: 'hidden' })
+  assert.equal(await page.locator('.el-overlay-message-box:visible').count(), 0, 'Apply must not trigger discard confirmation')
+  const savedResponse = await saveResponse
+  const savedBody = await savedResponse.json()
+  assert.equal(savedResponse.ok() && savedBody.success, true, `Save rejected: ${savedBody.error?.message || ''}`)
+  const saved = await read()
+  assert.equal(rowsOf(saved).length, 3)
+  const newRow = rowsOf(saved).find(row => row[textField] === 'Third synthetic line')
+  assert.equal(newRow[textField], 'Third synthetic line')
+  assert.equal(newRow[numberField], 3)
+  assert.equal(newRow[fkField], 'SYNTHETIC-CASE')
+  if (manualPk) assert.equal(newRow[pkField], 'SYNTHETIC-THREE')
+  else assert.match(newRow[pkField], /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i)
+  assert.equal(typeof newRow._wsRowVersion, 'number')
+  const duplicateRequest = structuredClone(savedResponse.request().postDataJSON())
+  duplicateRequest.formData.__subTables__[storeKey][0][textField] = 'MUST-NOT-PERSIST'
+  const duplicateResponse = await page.request.post(`${origin}/api/portal/tasks/${taskId}/submit`, { data: duplicateRequest })
+  const duplicateBody = await duplicateResponse.json()
+  assert.equal(duplicateBody.success, false, 'Replayed Add identity must be rejected')
+  assert.equal(String(duplicateBody.error?.code), '409', 'Duplicate identity must produce a conflict, not an unrelated server failure')
+  assert.deepEqual(rowsOf(await read()), rowsOf(saved), 'Rejected batch must not persist the accompanying first-row edit')
+  const forgedRequest = structuredClone(duplicateRequest)
+  forgedRequest.subTableBatchChanges[0].batchControlId = 'unavailable-synthetic-control'
+  const forgedResponse = await page.request.post(`${origin}/api/portal/tasks/${taskId}/submit`, { data: forgedRequest })
+  const forgedBody = await forgedResponse.json()
+  assert.equal(forgedBody.success, false, 'Forged control identity must be rejected')
+  assert.equal(String(forgedBody.error?.code), '403')
+  assert.deepEqual(rowsOf(await read()), rowsOf(saved), 'Unauthorized batch must not change any saved row')
+  await page.reload()
+  await batchButton.waitFor()
+  await batchButton.click()
+  assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 3)
+  await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-add-persisted.png`, out)) })
+  await dialog.locator('.el-table__header-wrapper .el-checkbox').click()
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.locator('.el-message-box').getByRole('button', { name: /Confirm|OK/, exact: true }).click()
+  assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 0)
+  assert.equal(rowsOf(await read()).length, 3, 'Delete stays in local draft before Apply')
+  const deleteSaveResponse = page.waitForResponse(r => r.url().endsWith(`/tasks/${taskId}/submit`) && r.request().method() === 'POST')
+  await dialog.getByRole('button', { name: /Apply/ }).click()
+  const deleteResponse = await deleteSaveResponse
+  const deleteBody = await deleteResponse.json()
+  assert.equal(deleteResponse.ok() && deleteBody.success, true, `Delete rejected: ${deleteBody.error?.message || ''}`)
+  assert.deepEqual(rowsOf(await read()), [], 'Versioned explicit deletion must persist an empty collection')
+  await page.reload()
+  await batchButton.waitFor()
+  await batchButton.click()
+  assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 0)
+  await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-delete-empty-persisted.png`, out)) })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-narrow.png`, out)) })
+  assert.deepEqual(runtimeErrors, [], 'Browser runtime and console errors must be absent')
+  console.log('PASS: isolated batch Add/Delete draft, Apply, autosave, reload, PK/FK and row-version checks')
+} finally {
+  await browser.close()
+}

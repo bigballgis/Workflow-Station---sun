@@ -38,7 +38,7 @@ public class ProcessInstanceInfo {
     private String currentStepName;
     private String currentAssignee;
     private String candidateUsers;
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> variables;
 
     /**

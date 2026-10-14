@@ -8,7 +8,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class SubTableBatchResponsePrivacyTest {
     @Test
     void ordinaryResponsesNeverSerializeTheInstanceWideBatchSnapshot() throws Exception {
-        Map<String, Object> values = Map.of("business", "visible", "__subTableBatchRuntime__", Map.of("otherStage", "private"));
+        Map<String, Object> values = Map.of("business", "visible", "__subTableBatchRuntime__", Map.of("otherStage", "private"),
+                "__subTableBatchDeletedRows__", Map.of("privateStore", "deletedIdentity"));
         ObjectMapper mapper = new ObjectMapper();
         for (Object dto : new Object[] {
                 TaskInfo.builder().variables(values).build(), ProcessInfo.builder().variables(values).formData(values).build(),
@@ -17,6 +18,7 @@ class SubTableBatchResponsePrivacyTest {
                 CalledFunctionUnitInstance.builder().formData(values).build() }) {
             String serialized = mapper.writeValueAsString(dto);
             assertFalse(serialized.contains("__subTableBatchRuntime__"), dto.getClass().getSimpleName());
+            assertFalse(serialized.contains("__subTableBatchDeletedRows__"), dto.getClass().getSimpleName());
             assertTrue(serialized.contains("visible"), dto.getClass().getSimpleName());
         }
         assertTrue(values.containsKey("__subTableBatchRuntime__"), "Serialization must not mutate stored variables");

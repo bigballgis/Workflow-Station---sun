@@ -61,10 +61,10 @@ public class ProcessInfo {
     private LocalDateTime endTime;
 
     /** 流程变量 */
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> variables;
 
     /** 表单数据 */
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> formData;
 }

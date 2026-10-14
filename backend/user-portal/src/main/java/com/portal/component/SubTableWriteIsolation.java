@@ -44,6 +44,7 @@ class SubTableWriteIsolation {
         variables.remove(EMPTIED_KEYS_FIELD);
         variables.remove(SCOPES_FIELD);
         variables.remove(BATCH_RUNTIME_FIELD);
+        variables.remove(com.portal.util.SubTableBatchMetadata.DELETED_ROWS_FIELD);
     }
 
     static Set<String> normalizeEmptiedKeys(List<String> declared) {

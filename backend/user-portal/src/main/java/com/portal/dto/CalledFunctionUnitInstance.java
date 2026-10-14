@@ -63,7 +63,7 @@ public class CalledFunctionUnitInstance {
      * under {@code __subTables__} — so the portal renders it with the ordinary form renderer
      * instead of a second, divergent display path.
      */
-    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> formData;
 
     /**
