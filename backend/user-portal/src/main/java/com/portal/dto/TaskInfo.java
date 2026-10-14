@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -126,6 +129,7 @@ public class TaskInfo {
     private String taskDefinitionKey;
 
     /** 流程变量 */
+    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
     private Map<String, Object> variables;
 
     /**

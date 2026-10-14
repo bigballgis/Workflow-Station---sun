@@ -35,7 +35,7 @@ class SubTableWriteIsolation {
     static final String EMPTIED_KEYS_FIELD = "emptiedSubTableKeys";
     static final String SCOPES_FIELD = "subTableBindingScopes";
     /** Server-owned instance metadata; never accept it from a form or completion request. */
-    static final String BATCH_RUNTIME_FIELD = "__subTableBatchRuntime__";
+    static final String BATCH_RUNTIME_FIELD = com.portal.util.SubTableBatchMetadata.RUNTIME_FIELD;
 
     static void stripTransportMetadata(Map<String, Object> variables) {
         if (variables == null) {

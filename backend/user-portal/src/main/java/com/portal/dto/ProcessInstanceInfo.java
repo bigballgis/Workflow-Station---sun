@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,6 +38,7 @@ public class ProcessInstanceInfo {
     private String currentStepName;
     private String currentAssignee;
     private String candidateUsers;
+    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
     private Map<String, Object> variables;
 
     /**

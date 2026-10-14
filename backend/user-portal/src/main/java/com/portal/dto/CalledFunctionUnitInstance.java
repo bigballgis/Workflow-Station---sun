@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -60,6 +63,7 @@ public class CalledFunctionUnitInstance {
      * under {@code __subTables__} — so the portal renders it with the ordinary form renderer
      * instead of a second, divergent display path.
      */
+    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
     private Map<String, Object> formData;
 
     /**

@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.Data;
 import lombok.Builder;
 
@@ -17,5 +20,6 @@ public class TaskFormSnapshot {
     private String taskDefinitionKey;
     private String assignee;
     private Instant completedAt;
+    @JsonIgnoreProperties(SubTableBatchMetadata.RUNTIME_FIELD)
     private Map<String, Object> fieldValues;
 }
