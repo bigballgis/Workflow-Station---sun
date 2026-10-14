@@ -8,6 +8,7 @@ import type { BindingFieldDefinition } from './subTableRowRuntime'
 import type { FkFillSourceConfig } from './tableFkRuntime'
 
 export interface BatchRowDesign {
+  fieldWriteModes?: Record<string, 'EDITABLE' | 'READONLY'>
   binding: {
     tableId: number
     tableName?: string
@@ -78,6 +79,9 @@ function parseRowDesign(value: unknown): BatchRowDesign | null {
     || !Array.isArray(binding.fieldDefinitions) || !binding.fieldDefinitions.every(field => typeof record(field)?.fieldName === 'string')
     || !Array.isArray(raw.fields) || !raw.fields.every(field => typeof record(field)?.fieldName === 'string')
     || !record(raw.parentTablesById)) return null
+  const writeModes = record(raw.fieldWriteModes)
+  if (raw.fieldWriteModes !== undefined && (!writeModes
+    || !Object.values(writeModes).every(mode => mode === 'EDITABLE' || mode === 'READONLY'))) return null
   return raw as unknown as BatchRowDesign
 }
 

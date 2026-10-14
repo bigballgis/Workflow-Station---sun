@@ -47,7 +47,7 @@
     <el-form class="batch-edit-dialog__uniform" label-position="left" label-width="auto">
       <div class="batch-edit-dialog__uniform-title">{{ t('subTable.batchSetSelected') }}</div>
       <el-form-item v-for="field in fields" :key="field.field" :label="field.label">
-        <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode">
+        <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode" :disabled="uniformReadonly(field.field)">
           <el-option :label="t('subTable.batchNoChange')" value="none" />
           <el-option :label="t('subTable.batchSetValue')" value="set" />
           <el-option :label="t('subTable.batchClearValue')" value="clear" />
@@ -79,6 +79,7 @@ import { pkNeedsAllocation } from '@/utils/subTableRowRuntime/pkPredicates'
 import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { firstBatchFieldError } from '@/utils/subTableBatchValidation'
+import { coerceDefaultValueForRuleType } from '@/utils/formCreateRuleDefaults'
 import { extractBatchEditableFields, type SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { applyBatchDraft } from '@/utils/subTableBatchDraft'
@@ -152,6 +153,8 @@ const deletedRowIds = ref<string[]>([])
 const freshCount = computed(() => draftRows.value.filter(row => temporaryKeys.has(toRaw(row))).length)
 
 const fields = computed<BatchField[]>(() => extractBatchEditableFields(props.capability) ?? [])
+const frozenFields = computed(() => new Map((props.capability.rowDesign?.binding.fieldDefinitions ?? props.fieldDefinitions ?? [])
+  .map(field => [field.fieldName, field])))
 
 function resetDraft() {
   baselineRows.value = JSON.parse(JSON.stringify(props.rows))
@@ -191,8 +194,15 @@ function draftIdentity(row: Record<string, unknown>): string | null {
 function editableRow(row: Record<string, unknown>, fieldName: string): boolean {
   const fresh = temporaryKeys.has(toRaw(row))
   if (!fresh && props.allowEdit === false) return false
-  const definition = props.fieldDefinitions?.find(field => field.fieldName === fieldName)
+  if (props.capability.rowDesign?.fieldWriteModes?.[fieldName] === 'READONLY') return false
+  const definition = frozenFields.value.get(fieldName)
   return !definition?.isComputed && !definition?.isForeignKey && !(definition?.isPrimaryKey && (!fresh || pkNeedsAllocation(definition)))
+}
+
+function uniformReadonly(fieldName: string): boolean {
+  const definition = frozenFields.value.get(fieldName)
+  return props.capability.rowDesign?.fieldWriteModes?.[fieldName] === 'READONLY'
+    || !!(definition?.isPrimaryKey || definition?.isForeignKey || definition?.isComputed)
 }
 
 async function deleteSelected(): Promise<void> {
@@ -213,7 +223,9 @@ function addDraftRows() {
   for (let index = 0; index < addCount.value; index++) {
     const row = Object.fromEntries(fields.value.map(field => {
       const metadata = props.capability.rowDesign?.fields.find(item => item.fieldName === field.field)
-      return [field.field, field.defaultValue ?? metadata?.defaultValue ?? null]
+      const raw = field.defaultValue ?? metadata?.defaultValue ?? null
+      return [field.field, coerceDefaultValueForRuleType(field.type === 'number' ? 'inputNumber' : field.type,
+        raw, { options: field.options })]
     }))
     temporaryKeys.set(row, `draft:${crypto.randomUUID()}`)
     draftRows.value.push(row)
@@ -241,7 +253,7 @@ function collectChanges(): BatchDraftChangeSet {
   })
   const rowIds = [...selectedRowIds.value].filter(id => baselineById.has(id))
   const uniformFields = Object.fromEntries(fields.value.flatMap((field) => {
-    if (props.allowEdit === false || props.fieldDefinitions?.some(definition => definition.fieldName === field.field && (definition.isPrimaryKey || definition.isForeignKey || definition.isComputed))) return []
+    if (props.allowEdit === false || uniformReadonly(field.field)) return []
     const mode = uniformMode[field.field] ?? 'none'
     if (mode === 'none') return []
     return [[field.field, mode === 'clear' ? { kind: 'clear' as const } : { kind: 'set' as const, value: uniformValues[field.field] }]]
@@ -263,8 +275,11 @@ async function apply() {
   const affectedIds = new Set([...changedIds, ...(changes.deletedRowIds ?? [])])
   if (affectedIds.size + fresh.length > 200) { ElMessage.error(t('subTable.batchLimit')); return }
   const affectedExisting = existing.filter(row => changedIds.has(props.rowIdentity(row) ?? ''))
-  const editableFields = fields.value.filter(field => !props.fieldDefinitions?.some(definition => definition.fieldName === field.field && (definition.isPrimaryKey || definition.isForeignKey || definition.isComputed)))
-  const addedFields = fields.value.filter(field => !props.fieldDefinitions?.some(definition => definition.fieldName === field.field && (definition.isForeignKey || definition.isComputed || (definition.isPrimaryKey && pkNeedsAllocation(definition)))))
+  const editableFields = fields.value.filter(field => !uniformReadonly(field.field))
+  const addedFields = fields.value.filter(field => {
+    const definition = frozenFields.value.get(field.field)
+    return !definition?.isForeignKey && !definition?.isComputed && !(definition?.isPrimaryKey && pkNeedsAllocation(definition))
+  })
   const requiredAddedFields = addedFields.map(field => ({ ...field, required: field.required
     || props.capability.rowDesign?.fields.some(item => item.fieldName === field.field && item.nullable === false) === true }))
   const error = firstBatchFieldError(affectedExisting, editableFields) ?? firstBatchFieldError(fresh, requiredAddedFields)
@@ -296,7 +311,7 @@ function freshRows(): Array<Record<string, unknown>> {
     const result = { ...row }
     if (!selectedRowIds.value.has(draftIdentity(row) ?? '')) return result
     for (const field of fields.value) {
-      if (!editableRow(row, field.field) || props.fieldDefinitions?.some(definition => definition.fieldName === field.field && definition.isPrimaryKey)) continue
+      if (!editableRow(row, field.field) || uniformReadonly(field.field)) continue
       const mode = uniformMode[field.field]
       if (mode === 'set') result[field.field] = uniformValues[field.field]
       else if (mode === 'clear') result[field.field] = null

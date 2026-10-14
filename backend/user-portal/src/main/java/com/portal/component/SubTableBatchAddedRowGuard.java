@@ -45,6 +45,7 @@ final class SubTableBatchAddedRowGuard {
                                 Objects.equals(String.valueOf(value.get(entry.getKey())), String.valueOf(entry.getValue()))))
                         .findFirst().orElseThrow(() -> invalid("Batch added row is missing"));
                 validateColumns(control, fields, row, patch.getRowKey());
+                SubTableBatchPublishedPermissions.validateAddedValues(design, row);
                 for (Object raw : fields) validateField(map(raw), row);
                 SubTableBatchFormRules.validateRow(map(control.get("batchForm")), row);
             }

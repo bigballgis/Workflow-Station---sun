@@ -32,6 +32,10 @@ final class BatchTaskFormTransactionHarness {
     final Map<String, Object> baseline;
 
     BatchTaskFormTransactionHarness(String pk, boolean failAfterWrite) throws Exception {
+        this(pk, failAfterWrite, false);
+    }
+
+    BatchTaskFormTransactionHarness(String pk, boolean failAfterWrite, boolean readonlyCaption) throws Exception {
         this.pk = pk;
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:batch_tx_" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
@@ -49,7 +53,9 @@ final class BatchTaskFormTransactionHarness {
                 repository, engine, mock(RestTemplate.class), mapper, metadata, new DataSourceTransactionManager(source));
         TaskFormDefinitionLoader loader = mock(TaskFormDefinitionLoader.class);
         when(loader.fetchTaskFormByStageId(eq("review"), eq("synthetic-process"), any())).thenReturn(
-                Map.of("sourceId", "form-one", "fieldPermissions", Map.of("101:caption", "EDITABLE"), "configJson", Map.of()));
+                Map.of("sourceId", "form-one", "fieldPermissions", Map.of("101:caption", "EDITABLE"), "configJson", Map.of(),
+                        "publishedFieldPermissions", Map.of("101:caption", readonlyCaption ? "READONLY" : "EDITABLE"),
+                        "tableBindings", List.of(Map.of("bindingId", "101", "tableName", "lines", "bindingMode", "EDITABLE"))));
         ReflectionTestUtils.setField(component, "formDefinitionLoader", loader);
         ReflectionTestUtils.setField(component, "requestIdEnricher", mock(RequestIdEnricher.class));
         SubTableWriteDesign design = mock(SubTableWriteDesign.class);
@@ -90,6 +96,15 @@ final class BatchTaskFormTransactionHarness {
                 List.of(scope), List.of(change));
     }
 
+    void editUnmarkedCaption() throws Exception {
+        Map<String, Object> payload = read();
+        Map<String, Object> tables = mapper.convertValue(payload.get("__subTables__"), new TypeReference<Map<String, Object>>() { });
+        List<Map<String, Object>> rows = mapper.convertValue(tables.get("dw:lines"), new TypeReference<List<Map<String, Object>>>() { });
+        rows.get(0).put("caption", "MUST-NOT-WRITE");
+        tables.put("dw:lines", rows);
+        component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables));
+    }
+
     private SubTableBatchChange.RowPatch patch(String value) {
         SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
         patch.setRowId(value); patch.setRowKey(Map.of(pk, value)); patch.setFields(List.of());
@@ -101,7 +116,9 @@ final class BatchTaskFormTransactionHarness {
                 "bindingLinkMode", "structuralFk", "foreignKeyField", "parentRef", "primaryKeyFields", List.of(pk),
                 "fieldDefinitions", List.of(Map.of("fieldName", "parentRef", "isForeignKey", true,
                         "refTableId", 10, "refPrimaryKeyFields", List.of("caseKey"))));
-        Map<String, Object> design = Map.of("binding", binding, "dependencies", List.of(), "parentTablesById",
+        Map<String, Object> design = Map.of("binding", binding, "dependencies", List.of(), "fields", List.of(
+                Map.of("fieldName", pk, "isPrimaryKey", true), Map.of("fieldName", "parentRef", "isForeignKey", true),
+                Map.of("fieldName", "caption", "dataType", "TEXT")), "parentTablesById",
                 Map.of("10", Map.of("tableName", "cases", "tableType", "MAIN")));
         Map<String, Object> control = Map.of("batchControlId", "grid", "bindingId", "101", "rowDesign", design,
                 "capabilities", Map.of("allowBatchDelete", true), "originalCrud", Map.of("allowDelete", true));

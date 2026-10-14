@@ -14,6 +14,17 @@ class SubTableBatchMembershipGuardTest {
     private final List<SubTableBindingScope> scopes = List.of(new SubTableBindingScope("101", "dw:lines", List.of(), false));
 
     @Test
+    void readonlyInitialDefaultsAreValidatedAsValuesNotEditPermissions() {
+        SubTableBatchChange add = change("ADD");
+        add.getRowPatches().get(0).setFields(List.of("amount"));
+        assertThatCode(() -> SubTableBatchChangeGuard.validateFieldPermissions(List.of(add), Map.of("101:amount", "READONLY")))
+                .doesNotThrowAnyException();
+        add.setOperation("EDIT");
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validateFieldPermissions(List.of(add), Map.of("101:amount", "READONLY")))
+                .hasMessageContaining("read-only field");
+    }
+
+    @Test
     void addRejectsAnIdentityAlreadyInTheSavedStore() {
         assertThatThrownBy(() -> SubTableBatchMembershipGuard.validate(List.of(change("ADD")), scopes,
                 baseline(Map.of("code", "L1", "_wsRowVersion", 2))))

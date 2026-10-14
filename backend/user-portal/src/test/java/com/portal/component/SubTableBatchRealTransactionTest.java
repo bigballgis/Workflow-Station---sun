@@ -10,6 +10,39 @@ import static org.junit.jupiter.api.Assertions.*;
 class SubTableBatchRealTransactionTest {
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
+    void unmarkedRowsRequireCompleteUniqueConfiguredIdentities(String pk) throws Exception {
+        var harness = new BatchTaskFormTransactionHarness(pk, false);
+        for (List<Map<String, Object>> rows : List.of(
+                List.of(Map.<String, Object>of("caption", "missing-key")),
+                List.of(Map.<String, Object>of(pk, "one"), Map.<String, Object>of(pk, "one")))) {
+            Map<String, Object> changed = new java.util.HashMap<>(harness.baseline);
+            changed.put("__subTables__", Map.of("dw:lines", rows));
+            assertThrows(com.portal.exception.PortalException.class, () -> harness.component.validateSubTableBatchPayload(
+                    "review", "synthetic-process", null, null, changed));
+            assertEquals(harness.baseline, harness.read());
+        }
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
+    void omittingTheBatchMarkerCannotBypassPublishedReadonlyFields(String pk) throws Exception {
+        var harness = new BatchTaskFormTransactionHarness(pk, false, true);
+        assertThrows(com.portal.exception.PortalException.class, harness::editUnmarkedCaption);
+        assertEquals(0, harness.writes.get());
+        assertEquals(harness.baseline, harness.read());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
+    void completePreflightRejectsReadonlyChangesEvenWithoutBatchDeclarations(String pk) throws Exception {
+        var harness = new BatchTaskFormTransactionHarness(pk, false, true);
+        Map<String, Object> changed = new java.util.HashMap<>(harness.baseline);
+        changed.put("__subTables__", Map.of("dw:lines", List.of(Map.of(pk, "one", "caption", "forged"))));
+        assertThrows(com.portal.exception.PortalException.class, () -> harness.component.validateSubTableBatchPayload(
+                "review", "synthetic-process", null, null, changed));
+        assertEquals(harness.baseline, harness.read());
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
     void lateDatabaseFailureRollsBackAlreadyExecutedCanonicalWrite(String pk) throws Exception {
         var harness = new BatchTaskFormTransactionHarness(pk, true);
         assertThrows(DataIntegrityViolationException.class, () -> harness.deleteBoth(2));

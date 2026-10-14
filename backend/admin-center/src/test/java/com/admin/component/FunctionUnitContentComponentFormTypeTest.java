@@ -285,6 +285,7 @@ class FunctionUnitContentComponentFormTypeTest {
                 .build();
         String snapshot = """
                 {"formName":"task-form","formType":"TASK","configJson":{"snapshot":true},
+                 "fieldPermissions":{"50729:caption":"READONLY"},
                  "tableBindings":[
                    {"bindingId":50729,"bindingType":"SUB","tableName":"p3_mi_file",
                     "filterFkFieldName":"case_id","filterFkRefTableName":"p3_mi_case"},
@@ -325,6 +326,7 @@ class FunctionUnitContentComponentFormTypeTest {
         FormContentDTO form = component.assembleFunctionUnitContent("fu-freeze").getForms().get(0);
         assertThat(form.getData()).isEqualTo("{\"snapshot\":true}");
         assertThat(form.getTableBindings()).hasSize(2);
+        assertThat(form.getPublishedFieldPermissions()).isEqualTo(java.util.Map.of("50729:caption", "READONLY"));
         assertThat(form.getTableBindings().get(0).getFilterFkFieldName()).isEqualTo("case_id");
         assertThat(form.getTableBindings().get(1).getFilterFkFieldName()).isEqualTo("party_id");
     }

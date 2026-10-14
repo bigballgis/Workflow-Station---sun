@@ -302,6 +302,7 @@ public class FunctionUnitContentComponent {
                 .name(content.getContentName())
                 .sourceId(content.getSourceId())
                 .data(snapshot.configJson())
+                .publishedFieldPermissions(payload.publishedFieldPermissions())
                 .formType(snapshot.formType())
                 // Lets the portal tell a node's To Do design from its My Requests one.
                 .scene(snapshot.scene())

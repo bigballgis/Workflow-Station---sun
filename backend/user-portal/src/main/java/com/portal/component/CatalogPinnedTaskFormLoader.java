@@ -105,6 +105,9 @@ final class CatalogPinnedTaskFormLoader {
             return;
         }
         form.put("configJson", nestedConfigJson(objectMapper, parsed.get("configJson")));
+        if (parsed.containsKey("fieldPermissions")) {
+            form.put("publishedFieldPermissions", parsed.get("fieldPermissions"));
+        }
         if (parsed.containsKey("tableBindings")) {
             form.put("tableBindings", parsed.get("tableBindings"));
         }

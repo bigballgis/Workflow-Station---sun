@@ -33,7 +33,8 @@ class SubTableBatchRowDesignTest {
         Map<String, Object> form = Map.of("tableBindings", List.of(Map.of(
                 "bindingId", 101, "tableId", 900, "tableName", "lines", "bindingType", "SUB", "bindingMode", "EDITABLE",
                 "bindingLinkMode", "structuralFk", "primaryKeyFields", List.of("live_key"),
-                "fieldDefinitions", List.of(Map.of("fieldName", "live_key", "pkGeneration", Map.of("strategy", "uuid"))))));
+                "fieldDefinitions", List.of(Map.of("fieldName", "live_key", "pkGeneration", Map.of("strategy", "uuid"))))),
+                "data", mapper.writeValueAsString(Map.of("configJson", Map.of(), "fieldPermissions", Map.of())));
         Map<String, Object> field = Map.of("fieldName", "published_key", "isPrimaryKey", true,
                 "pkGenerationJson", Map.of("strategy", "prefixedSequence", "prefix", "PUB-"));
         Map<String, Object> content = Map.of("forms", List.of(form), "dataTables", List.of(Map.of("data",
@@ -45,5 +46,6 @@ class SubTableBatchRowDesignTest {
         Map<?, ?> frozenField = (Map<?, ?>) ((List<?>) binding.get("fieldDefinitions")).get(0);
         assertThat(frozenField.get("pkGeneration")).isEqualTo(field.get("pkGenerationJson"));
         assertThat(frozenField.get("fieldName")).isEqualTo("published_key");
+        assertThat(design.get("fieldWriteModes")).isEqualTo(Map.of("published_key", "READONLY"));
     }
 }

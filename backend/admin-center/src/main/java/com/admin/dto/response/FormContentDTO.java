@@ -27,4 +27,7 @@ public class FormContentDTO {
     /** TASK = To Do design, REQUEST = My Requests design. Null on legacy rows, read as TASK. */
     private String scene;
     private List<TableBindingDTO> tableBindings;
+    /** Published wrapper authority; never reconstructed from current Designer rows. */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private java.util.Map<String, String> publishedFieldPermissions;
 }

@@ -46,6 +46,9 @@ final class SubTableBatchChangeGuard {
         if (changes == null || changes.isEmpty() || fieldPermissions == null || fieldPermissions.isEmpty()) return;
         for (SubTableBatchChange change : changes) {
             if (change == null || blank(change.getBindingId()) || change.getRowPatches() == null) continue;
+            // ADD carries initial values, including frozen readonly defaults. The full canonical
+            // row is checked by AddedRowGuard and TaskPermissions; it is not an edit permission grant.
+            if ("ADD".equals(change.getOperation())) continue;
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
                 if (patch == null || patch.getFields() == null) continue;
                 for (String field : patch.getFields()) {
@@ -218,6 +221,9 @@ final class SubTableBatchChangeGuard {
                 if ("READONLY".equals(fieldPermissions.get(change.getBindingId().trim() + ":" + field))) {
                     throw forbidden("Batch patch contains a read-only field");
                 }
+            }
+            if (control.get("rowDesign") instanceof Map<?, ?> design) {
+                SubTableBatchPublishedPermissions.validateEditedFields(design, patch.getFields());
             }
         }
     }

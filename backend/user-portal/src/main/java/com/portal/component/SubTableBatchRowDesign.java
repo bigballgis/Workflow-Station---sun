@@ -65,6 +65,7 @@ final class SubTableBatchRowDesign {
             frozenBinding.put("filterFkRefTableId", tableIds.get(parentName));
         }
         return Map.of("binding", frozenBinding, "fields", fields, "parentTablesById", parents,
+                "fieldWriteModes", SubTableBatchPublishedPermissions.capture(form, bindingId, fields, mapper),
                 "dependencies", dependencies(binding.get("tableName"), content, mapper));
     }
 

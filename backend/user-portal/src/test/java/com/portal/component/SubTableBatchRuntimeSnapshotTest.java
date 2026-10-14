@@ -346,7 +346,8 @@ class SubTableBatchRuntimeSnapshotTest {
 
     private Map<String, Object> form(String sourceId, Map<String, Object> config) {
         try {
-            return Map.of("sourceId", sourceId, "data", objectMapper.writeValueAsString(config), "formType", "TASK",
+            return Map.of("sourceId", sourceId, "data", objectMapper.writeValueAsString(
+                    Map.of("configJson", config, "fieldPermissions", Map.of())), "formType", "TASK",
                     "tableBindings", List.of(Map.of("bindingId", 101, "tableName", "lines", "bindingType", "SUB",
                             "bindingMode", "EDITABLE", "bindingLinkMode", "structuralFk", "tableId", 20,
                             "foreignKeyField", "case_ref", "fieldDefinitions", List.of(Map.of("fieldName", "unpublished_live_field"))),

@@ -507,6 +507,7 @@ public class TaskApprovalCompletionComponent {
                 .orElseGet(() -> task.getVariables() != null ? task.getVariables() : Map.of());
         String functionUnitCode = process.map(ProcessInstance::getFunctionUnitCode).orElse(null);
         Map<String, Object> formData = request.getFormData() != null ? request.getFormData() : variables;
+        SubTableBatchTaskPermissions.preserveOmittedStores(baselineVars, variables);
         isolation.apply(new SubTableWriteIsolation.Request(
                 formData, variables, baselineVars,
                 request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),

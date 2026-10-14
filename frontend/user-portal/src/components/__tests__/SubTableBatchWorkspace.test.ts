@@ -18,6 +18,7 @@ interface WorkspaceState {
   deleteSelected(): Promise<void>
   apply(): Promise<void>
   close(): Promise<boolean>
+  editableRow(row: Record<string, unknown>, field: string): boolean
 }
 
 const capability: SubTableBatchCapability = {
@@ -44,6 +45,22 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
 }
 
 describe('batch workspace Add/Delete transaction', () => {
+  it('uses the frozen read-only field policy and typed literal defaults for new rows', async () => {
+    const { wrapper, state } = workspace()
+    await wrapper.setProps({ capability: { ...capability,
+      batchForm: { schemaVersion: 1, rule: [{ type: 'inputNumber', field: 'quantity' }] },
+      rowDesign: { binding: { tableId: 20, bindingType: 'SUB', bindingMode: 'EDITABLE', bindingLinkMode: 'structuralFk',
+        primaryKeyFields: ['line_key'], fieldDefinitions: [{ fieldName: 'quantity' }] },
+        fields: [{ fieldName: 'quantity', dataType: 'INTEGER', defaultValue: '0' }], parentTablesById: {},
+        fieldWriteModes: { quantity: 'READONLY' },
+      },
+    } })
+    state.addDraftRows()
+    const added = state.draftRows[2]!
+    expect(added.quantity).toBe(0)
+    expect(state.editableRow(added, 'quantity')).toBe(false)
+    wrapper.unmount()
+  })
   it('does not replace table data when selection changes', async () => {
     const { wrapper, state } = workspace()
     const data = wrapper.getComponent({ name: 'ElTable' }).props('data')

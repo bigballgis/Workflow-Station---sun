@@ -36,7 +36,8 @@ try {
   const textField = capability.batchForm.rule.find(rule => rule.type === 'input' && rule.field !== pkField)?.field
   const numberField = capability.batchForm.rule.find(rule => rule.type === 'inputNumber')?.field
   const manualPk = capability.batchForm.rule.some(rule => rule.field === pkField)
-  const variant = manualPk ? 'manual' : 'uuid'
+  const readonlyNumber = capability.rowDesign.fieldWriteModes?.[numberField] === 'READONLY'
+  const variant = `${manualPk ? 'manual' : 'uuid'}${readonlyNumber ? '-readonly' : ''}`
   assert.ok(pkField && fkField && textField && numberField)
   const storeKey = `dw:${capability.rowDesign.binding.tableName}`
   const rowsOf = data => data.fieldValues.__subTables__[storeKey]
@@ -54,8 +55,15 @@ try {
   const addedInputs = added.locator('input:not([type="checkbox"])')
   if (manualPk) await addedInputs.nth(0).fill('SYNTHETIC-THREE')
   await addedInputs.nth(manualPk ? 1 : 0).fill('Third synthetic line')
-  await addedInputs.nth(manualPk ? 2 : 1).fill('3')
-  await addedInputs.nth(manualPk ? 2 : 1).press('Tab')
+  const numberInput = addedInputs.nth(manualPk ? 2 : 1)
+  if (readonlyNumber) {
+    const numberCell = added.locator('td').nth(capability.batchForm.rule.findIndex(rule => rule.field === numberField) + 2)
+    assert.equal(await numberCell.locator('input').count(), 0, 'Frozen readonly field must render without an editable input')
+    assert.equal((await numberCell.innerText()).trim(), '0', 'Numeric metadata default must be typed correctly')
+  } else {
+    await numberInput.fill('3')
+    await numberInput.press('Tab')
+  }
   const beforeApply = await read()
   assert.deepEqual(rowsOf(beforeApply), rowsOf(baseline), 'Editing a draft must not persist')
   const saveResponse = page.waitForResponse(r => r.url().endsWith(`/tasks/${taskId}/submit`) && r.request().method() === 'POST')
@@ -69,11 +77,24 @@ try {
   assert.equal(rowsOf(saved).length, 3)
   const newRow = rowsOf(saved).find(row => row[textField] === 'Third synthetic line')
   assert.equal(newRow[textField], 'Third synthetic line')
-  assert.equal(newRow[numberField], 3)
+  assert.equal(newRow[numberField], readonlyNumber ? 0 : 3)
   assert.equal(newRow[fkField], 'SYNTHETIC-CASE')
   if (manualPk) assert.equal(newRow[pkField], 'SYNTHETIC-THREE')
   else assert.match(newRow[pkField], /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i)
   assert.equal(typeof newRow._wsRowVersion, 'number')
+  if (readonlyNumber) {
+    const unmarked = structuredClone(savedResponse.request().postDataJSON())
+    delete unmarked.subTableBatchChanges
+    delete unmarked.subTableBindingScopes
+    delete unmarked.subTableData // Controller would otherwise override formData with the unchanged transport copy.
+    unmarked.formData = structuredClone(saved.fieldValues)
+    unmarked.formData.__subTables__[storeKey][0][numberField] = 99
+    const denied = await page.request.post(`${origin}/api/portal/tasks/${taskId}/submit`, { data: unmarked })
+    const deniedBody = await denied.json()
+    assert.equal(deniedBody.success, false, 'Omitting batch marker must not bypass current task readonly permission')
+    assert.equal(String(deniedBody.error?.code), '403')
+    assert.deepEqual(rowsOf(await read()), rowsOf(saved), 'Denied unmarked write must leave persisted rows unchanged')
+  }
   const duplicateRequest = structuredClone(savedResponse.request().postDataJSON())
   duplicateRequest.formData.__subTables__[storeKey][0][textField] = 'MUST-NOT-PERSIST'
   const duplicateResponse = await page.request.post(`${origin}/api/portal/tasks/${taskId}/submit`, { data: duplicateRequest })

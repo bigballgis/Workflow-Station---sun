@@ -30,11 +30,11 @@ class CatalogPinnedTaskFormLoaderTest {
                 .thenReturn(List.of(bpmn("42")));
         when(jdbcTemplate.query(argThat(sql -> sql != null && sql.contains("content_type = 'FORM'")),
                 any(RowMapper.class), eq(CATALOG), eq("42")))
-                .thenReturn(List.of(Map.of(
+                .thenReturn(List.of(new java.util.HashMap<>(Map.of(
                         "formName", "Pinned Leave",
                         "configJson", Map.of("snapshot", true),
                         "fieldPermissions", Map.of(),
-                        "readOnly", false)));
+                        "readOnly", false))));
 
         Map<String, Object> form = CatalogPinnedTaskFormLoader.fetch(
                 jdbcTemplate, objectMapper, CATALOG, STAGE);
@@ -69,6 +69,15 @@ class CatalogPinnedTaskFormLoaderTest {
         CatalogPinnedTaskFormLoader.applyContentData(form, objectMapper, "{\"rule\":[]}");
         assertThat(form.get("configJson")).isEqualTo(Map.of("rule", java.util.List.of()));
         assertThat(form).doesNotContainKey("tableBindings");
+    }
+
+    @Test
+    void preservesPublishedPermissionAuthorityWithoutChangingLegacyPermissionSelection() {
+        Map<String, Object> form = new java.util.HashMap<>(Map.of("fieldPermissions", Map.of()));
+        CatalogPinnedTaskFormLoader.applyContentData(form, objectMapper,
+                "{\"formType\":\"TASK\",\"configJson\":{},\"fieldPermissions\":{\"101:restricted\":\"READONLY\"}}");
+        assertThat(form.get("publishedFieldPermissions")).isEqualTo(Map.of("101:restricted", "READONLY"));
+        assertThat(form.get("fieldPermissions")).isEqualTo(Map.of());
     }
 
     @Test

@@ -13,6 +13,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchAddedRowGuardTest {
     @Test
+    void frozenReadonlyFieldsCannotBeAddedThroughAnOtherwiseValidBatchForm() {
+        assertThatThrownBy(() -> validate(Map.of("item_key", "L1", "quantity", 2, "enabled", false),
+                Map.of("quantity", "READONLY", "enabled", "EDITABLE", "recorded_at", "EDITABLE")))
+                .hasMessageContaining("read-only field");
+    }
+    @Test
     void validatesCompleteNewRowsAgainstFrozenTypesAndRequiredFields() {
         assertThatCode(() -> validate(Map.of("item_key", "L1", "quantity", 0, "enabled", false)))
                 .doesNotThrowAnyException();
@@ -47,7 +53,12 @@ class SubTableBatchAddedRowGuardTest {
     }
 
     private void validate(Map<String, Object> row) {
+        validate(row, Map.of("quantity", "EDITABLE", "enabled", "EDITABLE", "recorded_at", "EDITABLE"));
+    }
+
+    private void validate(Map<String, Object> row, Map<String, String> modes) {
         Map<String, Object> design = Map.of("binding", Map.of("bindingType", "SUB", "bindingMode", "EDITABLE", "bindingLinkMode", "structuralFk"),
+                "fieldWriteModes", modes,
                 "fields", List.of(Map.of("fieldName", "quantity", "dataType", "INTEGER", "nullable", false),
                         Map.of("fieldName", "enabled", "dataType", "BOOLEAN", "nullable", false),
                         Map.of("fieldName", "recorded_at", "dataType", "TIMESTAMP", "nullable", true)));

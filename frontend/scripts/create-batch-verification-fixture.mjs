@@ -20,6 +20,7 @@ try {
   if (!/^[a-z0-9]+$/.test(suffix)) throw new Error('Synthetic suffix must be an alphanumeric fixture identifier')
   if (process.env.FIXTURE_UNIT_ID && !/^\d+$/.test(process.env.FIXTURE_UNIT_ID)) throw new Error('Invalid synthetic FU ID')
   const automaticPk = process.env.FIXTURE_PK_STRATEGY === 'uuid'
+  const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
   const pkField = automaticPk ? 'entry_token' : 'line_key'
   const fkField = automaticPk ? 'owner_ref' : 'case_ref'
   const textField = automaticPk ? 'item_label' : 'caption'
@@ -49,7 +50,8 @@ try {
       { fieldName: fkField, dataType: 'VARCHAR', length: 64, nullable: false,
         isForeignKey: true, refTableId: main.id, refPrimaryKeyFields: ['case_key'], displayName: 'Case reference' },
       { fieldName: textField, dataType: 'VARCHAR', length: 100, nullable: false, displayName: 'Caption' },
-      { fieldName: numberField, dataType: 'INTEGER', nullable: false, displayName: 'Amount' },
+      { fieldName: numberField, dataType: 'INTEGER', nullable: false, displayName: 'Amount',
+        ...(readonlyNumber ? { defaultValue: '0' } : {}) },
     ],
   })
   const forms = []
@@ -86,7 +88,7 @@ try {
     await api('PUT', `${base}/forms/${form.id}`, {
       formName: form.formName, formType, scene: 'TASK', configJson,
       fieldPermissions: Object.fromEntries(['case_key', ...[pkField, textField, numberField].map(f => `${binding.id}:${f}`)]
-        .map(f => [f, 'EDITABLE'])),
+        .map(f => [f, readonlyNumber && formType === 'TASK' && f === `${binding.id}:${numberField}` ? 'READONLY' : 'EDITABLE'])),
     })
     forms.push({ id: form.id, type: formType, bindingId: binding.id })
   }

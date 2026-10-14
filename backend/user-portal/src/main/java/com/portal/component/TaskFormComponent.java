@@ -688,6 +688,10 @@ public class TaskFormComponent {
         }
 
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
+        // Enhanced instances reject unauthorized original values before legacy filtering or PK
+        // preparation can hide the attempted change. Legacy instances retain their existing path.
+        processInstanceRepository.findById(taskInfo.processInstanceId).ifPresent(instance ->
+                SubTableBatchTaskPermissions.validate(instance.getVariables(), formDefinition, submittedSnapshot, objectMapper));
 
         // Filter: reject fields the form marks READONLY (an absent key means editable)
         Map<String, Object> editableData = filterEditableFields(formData, fieldPermissions);
@@ -740,6 +744,7 @@ public class TaskFormComponent {
             Map<String, Object> currentVariables = processInstance.getVariables() != null
                     ? new HashMap<>(processInstance.getVariables())
                     : new HashMap<>();
+            SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, submittedSnapshot, objectMapper);
 
             Set<String> concurrentFields = detectConcurrentModifications(
                     baselineValues, currentVariables, editableData.keySet());
@@ -765,6 +770,7 @@ public class TaskFormComponent {
             // engine's execution scope only; never store it process-wide.
             inbound.remove("_currentItem");
             inbound.remove("currentItem");
+            SubTableBatchTaskPermissions.preserveOmittedStores(currentVariables, inbound);
 
             // Row-level isolation + binding Guard — same helper as Task Complete so a thin
             // MI payload cannot overwrite sibling rows on either writer.
@@ -778,6 +784,7 @@ public class TaskFormComponent {
             // the batch transport metadata from becoming an unrelated client hint.
             SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(currentVariables,
                     formDefinition, subTableBatchChanges, bindingScopes, inbound, objectMapper));
+            SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, inbound, objectMapper);
 
             updatedVariables.putAll(inbound);
             SubTableBatchDeletedRows.record(updatedVariables, currentVariables, subTableBatchChanges);
@@ -908,11 +915,14 @@ public class TaskFormComponent {
     public void validateSubTableBatchPayload(String stageId, String processId,
                                             List<com.portal.dto.SubTableBatchChange> changes,
                                             List<SubTableBindingScope> scopes, Map<String, Object> submitted) {
-        if (changes == null || changes.isEmpty()) return;
-        ProcessInstance instance = requireProcessInstance(processId);
+        ProcessInstance instance = processInstanceRepository.findById(processId).orElse(null);
+        if ((changes == null || changes.isEmpty()) && (instance == null || instance.getVariables() == null
+                || !instance.getVariables().containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD))) return;
+        if (instance == null) instance = requireProcessInstance(processId);
         Map<String, Object> definition = fetchTaskFormByStageId(stageId, processId);
         SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(instance.getVariables(),
                 definition, changes, scopes, submitted, objectMapper));
+        SubTableBatchTaskPermissions.validate(instance.getVariables(), definition, submitted, objectMapper);
     }
 
     /**
@@ -1261,7 +1271,11 @@ public class TaskFormComponent {
      * in several units, so an unscoped lookup can return a different unit's form.</p>
      */
     private Map<String, Object> fetchTaskFormByStageId(String stageId, String processInstanceId) {
-        return formDefinitionLoader().fetchTaskFormByStageId(stageId, processInstanceId, developerWorkstationUrl);
+        Map<String, Object> form = formDefinitionLoader().fetchTaskFormByStageId(stageId, processInstanceId, developerWorkstationUrl);
+        if (form == null) return null;
+        Map<String, Object> variables = processInstanceRepository.findById(processInstanceId)
+                .map(ProcessInstance::getVariables).orElse(null);
+        return SubTableBatchTaskPermissions.activate(variables, form);
     }
 
     private MiOuterStepResolver.OuterLookup ownerMiLookup(ProcessInstance instance) {
