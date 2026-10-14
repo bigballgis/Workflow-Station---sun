@@ -83,6 +83,14 @@ describe.each([
     return (items: unknown[]) => extractFieldsRecursive(items as never)
   }],
 ])('%s extractFieldsRecursive — inlineSubForm', (_name, makeExtract) => {
+  it('keeps distinct stable batch control identities on the same binding without enabling legacy widgets', () => {
+    const fields = makeExtract()([
+      { type: 'subTable', props: { _bindingId: 65 }, batchControlId: 'control-one' },
+      { type: 'subTable', props: { _bindingId: 65 }, batchControlId: 'control-two' },
+      { type: 'subTable', props: { _bindingId: 65 } },
+    ])
+    expect(fields.map(field => field.batchControlId)).toEqual(['control-one', 'control-two', undefined])
+  })
   it('preserves designer titles for binding-backed widgets', () => {
     const fields = makeExtract()([
       { type: 'subTable', _bindingId: 65, title: 'Case files' },

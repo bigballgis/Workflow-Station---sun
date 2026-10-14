@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { ElMessageBox } from 'element-plus'
 import BatchWorkspace from '../SubTableBatchEditDialog.vue'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
@@ -35,7 +36,7 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
   }, global: { stubs: {
     ElDialog: { template: '<div><slot name="header"/><slot/><slot name="footer"/></div>' },
     DesignerHelpLink: { props: ['path', 'ariaLabel', 'testId'], template: '<a :href="path" :data-testid="testId"/>' },
-    ElTable: true, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' },
+    ElTable: { name: 'ElTable', props: ['data'], template: '<div />' }, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' },
     ElFormItem: { template: '<div><slot/></div>' }, ElInputNumber: true, ElButton: { template: '<button><slot/></button>' },
     ElPagination: true, ElDivider: true, ElSelect: true, ElOption: true, ElInput: true,
   } } })
@@ -43,6 +44,24 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
 }
 
 describe('batch workspace Add/Delete transaction', () => {
+  it('does not replace table data when selection changes', async () => {
+    const { wrapper, state } = workspace()
+    const data = wrapper.getComponent({ name: 'ElTable' }).props('data')
+    state.onSelectionChange([state.draftRows[0]!])
+    await wrapper.vm.$nextTick()
+    expect(wrapper.getComponent({ name: 'ElTable' }).props('data')).toBe(data)
+    wrapper.unmount()
+  })
+  it('does not prompt to discard an already applied workspace when the dialog reports its close', async () => {
+    const { wrapper, state } = workspace()
+    state.draftRows[0]!.description = 'applied value'
+    await state.apply()
+    await wrapper.setProps({ visible: false })
+    vi.mocked(ElMessageBox.confirm).mockClear()
+    await state.close()
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
   it('links its header to the existing Sub-Table batch guideline', () => {
     const { wrapper } = workspace()
     expect(wrapper.get('[data-testid="batch-workspace-guide-link"]').attributes('href')).toBe('/form-ctl-sub-table#batch')

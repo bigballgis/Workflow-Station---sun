@@ -137,4 +137,15 @@ describe('seedMiParticipantScopedBindingForeignKeys — 嵌套新增行不得被
 
     expect(people.data).toHaveLength(1)
   })
+
+  it('writes the configured designer key, not the display label supplied by the caller', () => {
+    const people = { ...peopleBinding([]), tableName: 'People', designerTableName: 'people_copy' }
+    const participants = participantsBinding([])
+    const row = { id: 'owned-child', sub_task_id: PARTICIPANT, age: 666 }
+    createTaskDetailMiLinkChild(ctxOf([participants, people]))
+      .syncMiLinkChildRowsIntoParentNested({ bindingId: people.bindingId, tableName: people.tableName }, [row])
+    const nested = participants.data[0]!.__subTables__ as Record<string, unknown>
+    expect(nested['dw:people_copy']).toEqual([row])
+    expect(nested['dw:people']).toEqual([])
+  })
 })

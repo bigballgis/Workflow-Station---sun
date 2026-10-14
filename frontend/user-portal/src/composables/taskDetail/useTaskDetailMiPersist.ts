@@ -28,6 +28,7 @@ import {
   bindingIdsPreferStrictSubTableLookup,
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
+import { miParticipantScalarPatch } from './miParticipantScalarPatch'
 
 export interface TaskDetailMiPersistFns {
   getPrimaryTableFieldNames: () => Set<string>
@@ -89,14 +90,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     if (myRowId == null) return
     const primaryKeys = getPrimaryTableFieldNames()
     const formKeys = getCurrentFormFieldKeys()
-    const miValues: Record<string, unknown> = {}
-    for (const key of formKeys) {
-      if (primaryKeys.has(key)) continue
-      if (formData.value[key] !== undefined) {
-        miValues[key] = formData.value[key]
-      }
-    }
-    const mergeIntoRows = (rows: unknown[]) => {
+    const mergeIntoRows = (rows: unknown[], miValues: Record<string, unknown>) => {
       if (!Array.isArray(rows)) return
       for (const row of rows) {
         if (row && typeof row === 'object' && ctx.rowBelongsToCurrentMiScope(row, myRowId, {
@@ -109,7 +103,7 @@ export function createTaskDetailMiPersist(ctx: TaskDetailCtx): TaskDetailMiPersi
     }
     for (const b of subTableBindings.value) {
       if (isMiParticipantScopedSubTableBinding(b) || bindingMatchesMiSubTableName(b, miSubProcessScope.value?.subTableName ?? '')) {
-        mergeIntoRows(b.data)
+        mergeIntoRows(b.data, miParticipantScalarPatch(formKeys, formData.value, primaryKeys, b))
       }
     }
     if (myRowId != null) {

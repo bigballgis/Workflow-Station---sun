@@ -42,10 +42,14 @@ export async function countSubTableRows(page, titleMatch) {
  * Match the People form by name; return null when it is absent so the caller can skip.
  */
 export async function readPeopleInlineFields(page) {
-  return page.evaluate(() => {
+  return page.evaluate((fixtureOnly) => {
     const isPeople = (el) => /\bpeople\b/i.test(el.textContent || '')
+    const fixtureForm = fixtureOnly ? [...document.querySelectorAll('.sub-table-inline-form')].find(el => {
+      const labels = [...el.querySelectorAll('.el-form-item__label')].map(label => label.textContent?.trim().toLowerCase())
+      return labels.includes('age') && labels.includes('sub task id')
+    }) : null
     const root =
-      [...document.querySelectorAll('.sub-table-inline-form')].find(isPeople)
+      fixtureForm || [...document.querySelectorAll('.sub-table-inline-form')].find(isPeople)
       || [...document.querySelectorAll('.el-card, .form-layout-card, .sub-table-field')].find(isPeople)
     if (!root) return null
     return [...root.querySelectorAll('.el-form-item')].map(i => ({
@@ -53,7 +57,7 @@ export async function readPeopleInlineFields(page) {
       val: i.querySelector('input')?.value ?? '',
       checked: i.querySelector('.el-switch.is-checked') != null,
     }))
-  })
+  }, process.env.MI_FIXTURE_ONLY === '1')
 }
 
 export function fieldByLabel(fields, labelRe) {

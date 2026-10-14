@@ -93,6 +93,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
             label: getLayoutLabel(item),
             type: 'subTable',
             _bindingId: Number(bindingId),
+            ...(typeof item.batchControlId === 'string' ? { batchControlId: item.batchControlId } : {}),
             // 子表逐操作权限：仅显式 false 才下发（undefined 由 SubTableField 回退 editable）
             ...(item.props?.allowAdd === false ? { allowAdd: false } : {}),
             ...(item.props?.allowEdit === false ? { allowEdit: false } : {}),

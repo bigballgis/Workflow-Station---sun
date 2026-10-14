@@ -221,6 +221,9 @@ export function repairMisassignedLinkChildStructuralFk(
   participantId: string | number,
   config?: MiChildFkConfig | null,
 ): Record<string, unknown> {
+  // A collection row's structural FK points to the main record, never to itself.
+  // Peer/load-side callers also visit collection bindings; they must not run child repair.
+  if (config?.bindingLinkMode === 'miParticipantRow') return row
   const pid = normalizeMiLinkMatchId(participantId)
   if (!pid) return row
 

@@ -37,6 +37,7 @@ export interface SubTableBinding {
   dialogColumns?: Column[]
   /** Designer PK field names (from admin tableBindings); preferred over hardcoded id/rowId. */
   primaryKeyFields?: string[]
+  fieldDefinitions?: BindingFieldDefinition[]
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>

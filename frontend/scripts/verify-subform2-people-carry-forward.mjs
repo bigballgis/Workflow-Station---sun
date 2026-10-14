@@ -28,7 +28,7 @@ console.log('[task]', taskId)
 
 const fields = await readPeopleInlineFields(page)
 const shot = screenshotPath(`task-${taskId.slice(0, 8)}-subform2-people`)
-await page.locator('.sub-table-inline-form').first().screenshot({ path: shot }).catch(async () => {
+await page.locator('.sub-table-inline-form').filter({ has: page.locator('.el-form-item__label', { hasText: /^age$/i }) }).first().screenshot({ path: shot }).catch(async () => {
   await page.locator('.sub-table-field').first().screenshot({ path: shot }).catch(async () => {
     await page.screenshot({ path: shot, fullPage: true })
   })
@@ -42,6 +42,7 @@ if (fields?.length) {
   }
   console.log(`PASS: People age="${age}" on ${taskId}`)
 } else {
+  if (process.env.MI_FIXTURE_ONLY === '1') fail('Synthetic fixture must expose the carried-forward People form')
   console.log('PASS: no People inline on live To Do; carry-forward covered by subForm2CarryForward.test.ts')
 }
 console.log('[saved]', shot)

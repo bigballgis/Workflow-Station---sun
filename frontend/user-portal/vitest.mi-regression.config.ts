@@ -11,6 +11,9 @@ import { resolve } from 'path'
 const MI_REGRESSION_FILES = [
   'src/composables/tasks/__tests__/linkFormMiIsolation.test.ts',
   'src/composables/subTableField/__tests__/subTableLinkFormSelfBound.test.ts',
+  'src/composables/subTableField/__tests__/linkFormCanonicalRows.test.ts',
+  'src/composables/subTableField/__tests__/linkFormBindingResolution.test.ts',
+  'src/composables/subTableField/__tests__/linkFormChildScope.test.ts',
   'src/composables/tasks/__tests__/miSubProcessScope.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.predicates.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.merge.test.ts',
@@ -25,6 +28,7 @@ const MI_REGRESSION_FILES = [
   'src/utils/__tests__/subTableRowRuntime.test.ts',
   'src/composables/taskDetail/__tests__/miLinkChildNoPhantomRow.test.ts',
   'src/composables/taskDetail/__tests__/miNestedChildRowsSurviveSave.test.ts',
+  'src/composables/taskDetail/__tests__/miParticipantScalarIdentity.test.ts',
   // 参与者归属语义（跨子任务串行的第一道闸）——曾因不在门禁清单里而漏掉一次跨参与者行泄漏
   'src/composables/tasks/__tests__/miExpansionIdDesignerPk.test.ts',
   'src/composables/formRenderer/__tests__/saveWithRelationTableBindings.test.ts',

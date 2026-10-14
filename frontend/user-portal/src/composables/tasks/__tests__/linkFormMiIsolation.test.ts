@@ -28,6 +28,17 @@ const CFG = miChildFkConfigOfBinding({
 } as never)
 
 describe('linkFormMiIsolation helpers', () => {
+  it('never repairs a collection row parent FK as though it were a participant child', () => {
+    const row = { id_idw: 'participant-two', main_id: 'main-uuid' }
+    const config = miChildFkConfigOfBinding({
+      bindingLinkMode: 'miParticipantRow', foreignKeyField: 'id_idw', primaryKeyFields: ['id_idw'],
+      fieldDefinitions: [
+        { fieldName: 'id_idw', isPrimaryKey: true },
+        { fieldName: 'main_id', isForeignKey: true, refTableId: 10 },
+      ],
+    })
+    expect(repairMisassignedLinkChildStructuralFk(row, 'participant-two', config)).toEqual(row)
+  })
   it('rowMatchesMiExpansionId matches the designer PK', () => {
     // 设计器主键必须显式传入 —— 不传会抛 MiConfigMissingError（不猜列名）
     expect(rowMatchesMiExpansionId({ id_idw: 88, name: '8' }, 88, ['id_idw'])).toBe(true)

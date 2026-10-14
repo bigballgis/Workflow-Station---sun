@@ -229,10 +229,10 @@
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
               :field-permissions="selectedNodeForm.isCurrentTask ? taskFieldPermissions : undefined"
-              :sub-table-batch-capabilities="selectedNodeForm.isCurrentTask ? taskFormDTO?.subTableBatchCapabilities : undefined"
-              :on-sub-table-batch-change="selectedNodeForm.isCurrentTask ? recordSubTableBatchChange : undefined"
-              @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
-              @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
+              :sub-table-batch-capabilities="selectedNodeForm?.isCurrentTask ? taskFormDTO?.subTableBatchCapabilities : undefined"
+              :on-sub-table-batch-change="selectedNodeForm?.isCurrentTask ? recordSubTableBatchChange : undefined"
+              @update:model-value="val => { if (selectedNodeForm?.isCurrentTask) formData = { ...formData, ...val } }"
+              @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm?.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
           </div>
           <el-empty
@@ -360,6 +360,8 @@
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
               :field-permissions="taskFieldPermissions"
+              :sub-table-batch-capabilities="taskFormDTO?.subTableBatchCapabilities"
+              :on-sub-table-batch-change="recordSubTableBatchChange"
               @update:model-value="val => formData = { ...formData, ...val }"
               @update:sub-table-data="syncMainSubTableRows"
               @save="saveCurrentTaskFormWithMiPersist"

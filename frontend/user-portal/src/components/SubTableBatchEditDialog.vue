@@ -26,7 +26,7 @@
       </el-form-item>
     </el-form>
     <div class="batch-edit-dialog__table">
-      <el-table :data="draftRows.slice((page - 1) * 20, page * 20)" border size="small" max-height="420" @selection-change="onSelectionChange">
+      <el-table :data="displayedRows" border size="small" max-height="420" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" width="58" />
         <el-table-column
@@ -144,6 +144,7 @@ const selectedRowIds = ref<Set<string>>(new Set())
 const selectedParentValue = ref('')
 const addCount = ref(1)
 const page = ref(1)
+const displayedRows = computed(() => draftRows.value.slice((page.value - 1) * 20, page.value * 20))
 const applying = ref(false)
 const baselineRows = ref<Array<Record<string, unknown>>>([])
 let temporaryKeys = new WeakMap<Record<string, unknown>, string>()
@@ -170,6 +171,7 @@ watch(() => props.visible, visible => {
 }, { immediate: true })
 
 async function close() {
+  if (!props.visible) return true
   if (applying.value) return false
   if (JSON.stringify(draftRows.value) !== JSON.stringify(baselineRows.value)
     || Object.values(uniformMode).some(mode => mode !== 'none')) {

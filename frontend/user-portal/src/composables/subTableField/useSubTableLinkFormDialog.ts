@@ -55,7 +55,8 @@ export function useSubTableLinkFormDialog(
     const boundKey = linkFormTableMatchKey(boundNameRaw)
 
     const matches = list.filter(item => {
-      if (boundId != null && Number(item.bindingId) === Number(boundId)) return true
+      // An explicit binding reference is authoritative; labels cannot substitute another table.
+      if (boundId != null) return Number(item.bindingId) === Number(boundId)
       if (boundNameRaw && item.tableName === boundNameRaw) return true
       if (boundKey && linkFormTableMatchKey(item.tableName) === boundKey) return true
       if (boundNameStripped || boundId != null) {
