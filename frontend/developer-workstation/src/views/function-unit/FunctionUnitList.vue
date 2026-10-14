@@ -485,7 +485,7 @@ import LaunchpadFolderCard from '@/components/function-unit/LaunchpadFolderCard.
 import LaunchpadFolderOverlay from '@/components/function-unit/LaunchpadFolderOverlay.vue'
 import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
 import { isAuthenticated } from '@/api/auth'
-import { permissions, isCurrentScopeReadOnly } from '@/utils/permission'
+import { permissions, canCreateInActiveScope, isCurrentScopeReadOnly } from '@/utils/permission'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { useFunctionUnitFilters } from '@/composables/functionUnitList/useFunctionUnitFilters'
@@ -582,7 +582,7 @@ const isCardView = computed({
 const PAGE_SIZE_BY_VIEW = { card: 20, icon: 50 } as const
 const pageSize = computed(() => PAGE_SIZE_BY_VIEW[viewMode.value])
 
-const canCreateInCurrentScope = computed(() => permissions.canCreate() && !isCurrentScopeReadOnly())
+const canCreateInCurrentScope = computed(() => canCreateInActiveScope())
 const canModifyLayout = computed(() => permissions.canEdit() && !isCurrentScopeReadOnly())
 
 // ==================== Launchpad (iOS-style icon layout + drag & drop + folders) ====================

@@ -84,7 +84,7 @@
       class="action-editor"
     >
       <div class="editor-header">
-        <el-button @click="handleBackToList">
+        <el-button data-read-only-allowed @click="handleBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('action.backToList') }}
         </el-button>
         <span class="action-name">{{ selectedAction.actionName }}</span>

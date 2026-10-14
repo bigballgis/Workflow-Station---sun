@@ -50,8 +50,7 @@ public class SubTableViewServiceImpl implements SubTableViewService {
     @Transactional
     public SubTableViewConfig saveViewConfig(Long bindingId, List<ViewFieldDTO> fields) {
         SubTableViewConfig config = viewConfigRepository.findByBindingId(bindingId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "View config not found for binding: " + bindingId));
+                .orElseGet(() -> createDefaultViewConfig(bindingId));
 
         // Clear existing fields and replace
         config.getViewFields().clear();
@@ -144,7 +143,14 @@ public class SubTableViewServiceImpl implements SubTableViewService {
     @Override
     @Transactional(readOnly = true)
     public ViewConfigDTO getViewConfigDTO(Long bindingId) {
-        SubTableViewConfig config = getViewConfig(bindingId);
+        var stored = viewConfigRepository.findByBindingId(bindingId);
+        if (stored.isEmpty()) {
+            // An unset view has no selected columns. Inspecting it must not create persisted defaults.
+            var binding = bindingRepository.findByIdWithTable(bindingId)
+                    .orElseThrow(() -> new IllegalArgumentException("Binding not found: " + bindingId));
+            return new ViewConfigDTO(null, bindingId, binding.getTableId(), List.of());
+        }
+        SubTableViewConfig config = stored.get();
         FormTableBinding binding = config.getBinding();
         Long tableId = binding != null ? binding.getTableId() : null;
 

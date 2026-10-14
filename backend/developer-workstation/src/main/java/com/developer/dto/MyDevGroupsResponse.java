@@ -21,4 +21,9 @@ public class MyDevGroupsResponse {
     private boolean canSeeAllGroups;
     /** 内置 Public 组 id（用于在团队切换器中单独查看公共功能单元）。 */
     private String publicGroupId;
+
+    /**
+     * 用户实际加入的团队（不含 Public）。SYS_ADMIN 查看其它工作区时，写权限还要求具备对应能力角色。
+     */
+    private List<String> memberGroupIds;
 }

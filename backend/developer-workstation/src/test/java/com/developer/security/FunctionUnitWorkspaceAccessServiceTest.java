@@ -51,6 +51,8 @@ class FunctionUnitWorkspaceAccessServiceTest {
         service = new FunctionUnitWorkspaceAccessService(
                 roleRepository, functionUnitRepository, devGroupAssignmentRepository, virtualGroupMembershipDao);
         when(functionUnitRepository.existsById(FU_ID)).thenReturn(true);
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(any()))
+                .thenReturn(Collections.emptyList());
         authenticateAs(USER_ID);
     }
 
@@ -83,12 +85,206 @@ class FunctionUnitWorkspaceAccessServiceTest {
     }
 
     @Test
-    void admin_hasGlobalAccess() {
+    void admin_canViewEveryFunctionUnitButWritesOnlyPublicByDefault() {
         when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
-        for (WorkspaceAccessAction a : WorkspaceAccessAction.values()) {
-            assertTrue(service.canAccess(FU_ID, a), "admin should pass " + a);
-        }
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(Collections.emptyList());
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+        assertEquals(Set.of(), service.modifiableFunctionUnitIds());
         assertNull(service.visibleFunctionUnitIds(), "admin sees all (null)");
+    }
+
+    @Test
+    void admin_canWritePublicFunctionUnit() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(
+                List.of(DevGroupConstants.PUBLIC_GROUP_ID))).thenReturn(List.of(FU_ID));
+        for (WorkspaceAccessAction action : WorkspaceAccessAction.values()) {
+            assertTrue(service.canAccess(FU_ID, action), "admin should write public for " + action);
+        }
+        assertEquals(Set.of(FU_ID), service.modifiableFunctionUnitIds());
+    }
+
+    @Test
+    void adminWithDeveloperMembership_canModifyThatWorkspaceOnly() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "DEVELOPER")).thenReturn(true);
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.CLONE));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.RESTORE));
+        assertEquals(Set.of(FU_ID), service.modifiableFunctionUnitIds());
+    }
+
+    @Test
+    void adminWithTeamLeadMembership_canOperateThatWorkspace() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "TEAM_LEAD")).thenReturn(true);
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.CLONE));
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.RESTORE));
+    }
+
+    @Test
+    void adminMembershipWithoutCapability_isReadOnly() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+        assertEquals(Set.of(), service.modifiableFunctionUnitIds());
+    }
+
+    @Test
+    void adminDeveloperWithoutMembership_isReadOnly() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "DEVELOPER")).thenReturn(true);
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertEquals(Set.of(), service.modifiableFunctionUnitIds());
+    }
+
+    @Test
+    void admin_createsInPublicUnlessWorkspaceCreateRole() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        selectGroup("vg-team-a");
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(null));
+        assertEquals(List.of(DevGroupConstants.PUBLIC_GROUP_ID),
+                service.resolveCreationTeamGroupIds(List.of(DevGroupConstants.PUBLIC_GROUP_ID)));
+        selectGroup(DevGroupConstants.PUBLIC_GROUP_ID);
+        assertEquals(List.of(DevGroupConstants.PUBLIC_GROUP_ID), service.resolveCreationTeamGroupIds(null));
+    }
+
+    @Test
+    void adminTeamLead_canCreateInMemberWorkspaceAndPublic() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "TEAM_LEAD")).thenReturn(true);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        selectGroup("vg-team-a");
+        assertEquals(List.of("vg-team-a"), service.resolveCreationTeamGroupIds(List.of("vg-team-a")));
+        assertEquals(List.of(DevGroupConstants.PUBLIC_GROUP_ID),
+                service.resolveCreationTeamGroupIds(List.of(DevGroupConstants.PUBLIC_GROUP_ID)));
+        selectGroup("vg-team-b");
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(List.of("vg-team-b")));
+    }
+
+    @Test
+    void forbiddenRequestedWorkspaceMustNotBecomePublic() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "TECH_LEAD")).thenReturn(true);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        selectGroup(DevGroupConstants.PUBLIC_GROUP_ID);
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(List.of("vg-team-b")));
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(List.of("vg-team-a", "vg-team-b")));
+    }
+
+    @Test
+    void nonAdminPublicMembership_doesNotGrantPublicWrites() {
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID))
+                .thenReturn(List.of(DevGroupConstants.PUBLIC_GROUP_ID));
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(
+                List.of(DevGroupConstants.PUBLIC_GROUP_ID))).thenReturn(List.of(FU_ID));
+        for (String role : List.of("DEVELOPER", "TEAM_LEAD", "TECH_LEAD")) {
+            when(roleRepository.hasRoleByUserId(USER_ID, role)).thenReturn(true);
+            assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+            assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+            assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+            assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+            assertEquals(Set.of(), service.modifiableFunctionUnitIds());
+            when(roleRepository.hasRoleByUserId(USER_ID, role)).thenReturn(false);
+        }
+    }
+
+    @Test
+    void nonAdminPublicAndTeamAssignment_isReadOnly() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "TEAM_LEAD")).thenReturn(true);
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(
+                List.of(DevGroupConstants.PUBLIC_GROUP_ID))).thenReturn(List.of(FU_ID));
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+        assertEquals(Set.of(), service.modifiableFunctionUnitIds());
+    }
+
+    @Test
+    void techLead_cannotCreateInPublic() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "TECH_LEAD")).thenReturn(true);
+        selectGroup(DevGroupConstants.PUBLIC_GROUP_ID);
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(List.of(DevGroupConstants.PUBLIC_GROUP_ID)));
+    }
+
+    @Test
+    void teamLeadPublicMembership_cannotCreateInPublic() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "TEAM_LEAD")).thenReturn(true);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID))
+                .thenReturn(List.of(DevGroupConstants.PUBLIC_GROUP_ID));
+        selectGroup(DevGroupConstants.PUBLIC_GROUP_ID);
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(null));
+    }
+
+    @Test
+    void developerMembership_cannotCreateWithoutLeadRole() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "DEVELOPER")).thenReturn(true);
+        selectGroup("vg-team-a");
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(null));
+    }
+
+    @Test
+    void auditorTechLead_cannotCreateOutsideOwnMemberships() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "AUDITOR")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "TECH_LEAD")).thenReturn(true);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        when(virtualGroupMembershipDao.findAllSelectableTeams(DevGroupConstants.PUBLIC_GROUP_ID))
+                .thenReturn(List.of(new DevGroupOptionDTO("vg-team-b", "Team B")));
+        selectGroup("vg-team-b");
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.resolveCreationTeamGroupIds(List.of("vg-team-b")));
+    }
+
+    @Test
+    void techLead_createsInOwnActiveWorkspace() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "TECH_LEAD")).thenReturn(true);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        when(virtualGroupMembershipDao.findSelectableTeamsByUserId(USER_ID, DevGroupConstants.PUBLIC_GROUP_ID))
+                .thenReturn(List.of(new DevGroupOptionDTO("vg-team-a", "Team A")));
+        selectGroup("vg-team-a");
+        assertEquals(List.of("vg-team-a"), service.resolveCreationTeamGroupIds(List.of("vg-team-a")));
+        assertEquals(List.of("vg-team-a"), service.resolveCreationTeamGroupIds(null));
+    }
+
+    @Test
+    void teamLead_createsInSelectedMemberWorkspace() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "TEAM_LEAD")).thenReturn(true);
+        selectGroup("vg-team-a");
+        assertEquals(List.of("vg-team-a"), service.resolveCreationTeamGroupIds(null));
+        assertEquals(List.of("vg-team-a"), service.resolveCreationTeamGroupIds(List.of("vg-team-b")));
+    }
+
+    @Test
+    void memberGroupIds_excludesPublicAndAnonymous() {
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID))
+                .thenReturn(List.of("vg-team-a", DevGroupConstants.PUBLIC_GROUP_ID));
+        assertEquals(List.of("vg-team-a"), service.memberGroupIds(USER_ID));
+        assertEquals(List.of(), service.memberGroupIds(null));
     }
 
     @Test

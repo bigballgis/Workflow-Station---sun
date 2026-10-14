@@ -5,6 +5,7 @@
       <div class="decision-editor-frame">
         <div class="decision-editor-nav">
           <el-button
+            data-read-only-allowed
             text
             @click="closeDesigner"
           >

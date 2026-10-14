@@ -15,6 +15,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,6 +69,7 @@ class FunctionUnitImporterWorkspaceAssignmentTest {
     @Mock private AdminCenterAutomationFlowClient automationFlowClient;
     @Mock private FunctionUnitWorkspaceAccessService workspaceAccessService;
     @Mock private FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
+    @Mock private DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
 
     private ExportImportComponentImpl impl;
 
@@ -87,7 +90,7 @@ class FunctionUnitImporterWorkspaceAssignmentTest {
                 devGroupAssignmentRepository,
                 mock(jakarta.persistence.EntityManager.class),
                 new ObjectMapper(),
-                mock(DeveloperWorkstationSequenceSynchronizer.class),
+                sequenceSynchronizer,
                 automationFlowClient);
 
         when(functionUnitRepository.existsByCode(any())).thenReturn(false);
@@ -148,5 +151,22 @@ class FunctionUnitImporterWorkspaceAssignmentTest {
 
         verify(workspaceAccessService, never()).resolveCreationTeamGroupIds(any());
         verify(devGroupAssignmentRepository, never()).save(any());
+        verify(workspaceAccessService).assertCanAccess(100L, WorkspaceAccessAction.MODIFY);
+    }
+
+    @Test
+    void forbiddenExistingUnitAbortsBeforeAnyWrite() throws Exception {
+        FunctionUnit existing = FunctionUnit.builder().name("ImportedFU").code("imported-fu").build();
+        existing.setId(100L);
+        when(functionUnitRepository.findByName(anyString())).thenReturn(Optional.of(existing));
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("Read-only workspace"))
+                .when(workspaceAccessService).assertCanAccess(100L, WorkspaceAccessAction.MODIFY);
+
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> impl.importFunctionUnit(manifestOnlyPackage(), null));
+        verify(functionUnitRepository, never()).save(any());
+        verify(processDefinitionRepository, never()).save(any());
+        verify(devGroupAssignmentRepository, never()).save(any());
+        verify(sequenceSynchronizer, never()).synchronizeAll();
     }
 }

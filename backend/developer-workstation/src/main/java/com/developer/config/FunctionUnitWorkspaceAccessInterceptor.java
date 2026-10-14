@@ -3,6 +3,7 @@ package com.developer.config;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.FormBindingWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.platform.common.i18n.I18nService;
 import com.platform.security.util.SecurityContextUtils;
@@ -31,9 +32,12 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
     private static final Pattern AI_LOCK = Pattern.compile("/ai-generation/lock/(\\d+)");
     private static final Pattern AI_EVENTS = Pattern.compile("/ai-generation/events/(\\d+)");
     private static final Pattern AI_APPLY_UNDO = Pattern.compile("/ai-generation/(\\d+)/(apply|undo)");
+    private static final Pattern FORM_BINDING_VIEW = Pattern.compile(
+            "/api/forms/(\\d+)/(?:sub-table-views|relation-views)/(\\d+)(?:/(or-create|default|fields))?/?");
 
     private final FunctionUnitWorkspaceAccessService workspaceAccessService;
     private final I18nService i18nService;
+    private final FormBindingWorkspaceAccessService formBindingAccessService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
@@ -46,12 +50,21 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
         }
 
         String path = request.getServletPath();
-        Long functionUnitId = extractFunctionUnitId(path, request);
-        if (functionUnitId == null) {
-            return true;
-        }
-
         try {
+            Matcher bindingMatch = FORM_BINDING_VIEW.matcher(path);
+            if (bindingMatch.matches()) {
+                boolean read = ("GET".equalsIgnoreCase(request.getMethod())
+                        || "HEAD".equalsIgnoreCase(request.getMethod()))
+                        && !"or-create".equals(bindingMatch.group(3));
+                formBindingAccessService.assertCanAccess(Long.valueOf(bindingMatch.group(1)),
+                        Long.valueOf(bindingMatch.group(2)),
+                        read ? WorkspaceAccessAction.VIEW : WorkspaceAccessAction.MODIFY);
+                return true;
+            }
+            Long functionUnitId = extractFunctionUnitId(path, request);
+            if (functionUnitId == null) {
+                return true;
+            }
             if (path.matches("/function-units/\\d+/dev-groups")) {
                 if ("PUT".equalsIgnoreCase(request.getMethod())) {
                     workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.ASSIGN_DEV_GROUPS);
