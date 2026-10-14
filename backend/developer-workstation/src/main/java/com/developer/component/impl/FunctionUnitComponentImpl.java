@@ -163,7 +163,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit create(FunctionUnitRequest request) {
         if (functionUnitRepository.existsByName(request.getName())) {
             throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS",
@@ -232,7 +232,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit update(Long id, FunctionUnitRequest request) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         FunctionUnit functionUnit = getById(id);
@@ -268,7 +268,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
     public void delete(Long id) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.DELETE);
         FunctionUnit functionUnit = getById(id);
@@ -305,9 +305,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit restore(Long id) {
-        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.RESTORE);
         FunctionUnit functionUnit = getById(id);
         if (functionUnit.getStatus() != FunctionUnitStatus.ARCHIVED) {
             throw new DeveloperBusinessException("BIZ_NOT_ARCHIVED",
@@ -351,6 +351,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .groups(functionUnitWorkspaceAccessService.getSelectableTeams(userId))
                 .canSeeAllGroups(functionUnitWorkspaceAccessService.canSeeAllGroups(userId))
                 .publicGroupId(com.developer.security.DevGroupConstants.PUBLIC_GROUP_ID)
+                .memberGroupIds(functionUnitWorkspaceAccessService.memberGroupIds(userId))
                 .build();
     }
 
@@ -445,7 +446,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit publish(Long id, String changeLog) {
         return doPublish(id, changeLog);
     }
@@ -505,7 +506,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit clone(Long id, String newName) {
         return cloner.clone(id, newName);
     }

@@ -1,5 +1,11 @@
 import { getStoredUser } from '@/api/auth'
-import { isPublicGroupSelected } from '@/utils/devGroupContext'
+import {
+  ALL_GROUPS,
+  getActiveGroupRaw,
+  getMemberGroupIds,
+  isPublicGroupSelected,
+  PUBLIC_GROUP_ID,
+} from '@/utils/devGroupContext'
 
 /**
  * Permission utility functions for role-based access control.
@@ -10,9 +16,11 @@ import { isPublicGroupSelected } from '@/utils/devGroupContext'
  * - DEVELOPER: EDIT, DEPLOY, PUBLISH（仅团队 scope 内；不能 CREATE / DELETE / CLONE）
  * - 无能力角色的团队成员：只读基线（后端 workspace-access / 团队 scope 校验）
  *
- * SYS_ADMIN is the only global write bypass. AUDITOR is a read overlay; a pure
- * Auditor is blocked at the DW router, but these helpers stay in place so an
- * overlay (AUDITOR + developer capability) or a later product change can reuse them.
+ * SYS_ADMIN can view every function unit and, by default, write only Public.
+ * Writing another workspace still needs membership in that team plus a capability
+ * role. AUDITOR is a read overlay; a pure Auditor is blocked at the DW router,
+ * but these helpers stay in place so an overlay (AUDITOR + developer capability)
+ * or a later product change can reuse them.
  *
  * 说明：这里的按钮可见性仅为 UX；具体某个 FU 能否被编辑由后端工作区隔离
  * （FunctionUnitWorkspaceAccessService）按团队 scope 逐 FU 校验，并以资源级
@@ -55,8 +63,8 @@ export function hasAllRoles(roleCodes: string[]): boolean {
 }
 
 /**
- * Check if the current user is SYS_ADMIN. Mirrors backend
- * FunctionUnitWorkspaceAccessService: only SYS_ADMIN is global full write.
+ * Check if the current user is SYS_ADMIN. View is global; write on non-public
+ * workspaces still requires that workspace's capability role.
  */
 function isAdmin(): boolean {
   return hasRole('SYS_ADMIN')
@@ -71,12 +79,33 @@ export function isAuditorBlockedFromWorkstation(): boolean {
 }
 
 /**
- * Whether the current team scope is writeable. Public function units are
- * read-only for everyone except SYS_ADMIN.
+ * Whether the current team scope is writeable.
+ * Public is read-only except for SYS_ADMIN. An admin browsing another workspace
+ * can write it only when they belong to that team and hold a capability role.
  */
 export function isCurrentScopeReadOnly(): boolean {
-  if (isAdmin()) return false
-  return isPublicGroupSelected()
+  if (isPublicGroupSelected()) return !isAdmin()
+  if (!isAdmin()) return false
+  return !adminCanWriteSelectedWorkspace()
+}
+
+/** Admin may create outside Public only in a team they belong to, with Team/Tech Lead. */
+export function canCreateInActiveScope(): boolean {
+  return canCreateInWorkspace(getActiveGroupRaw())
+}
+
+/** A destination must be owned by the user; Public creation is admin-only. */
+export function canCreateInWorkspace(groupId: string | null): boolean {
+  if (groupId === PUBLIC_GROUP_ID) return isAdmin()
+  if (!groupId || groupId === ALL_GROUPS) return false
+  return getMemberGroupIds().includes(groupId) && hasAnyRole(['TECH_LEAD', 'TEAM_LEAD'])
+}
+
+function adminCanWriteSelectedWorkspace(): boolean {
+  const selected = getActiveGroupRaw()
+  if (!selected || selected === ALL_GROUPS) return false
+  if (!hasAnyRole(['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])) return false
+  return getMemberGroupIds().includes(selected)
 }
 
 /**
@@ -95,8 +124,8 @@ export function isFunctionUnitReadOnly(item: { canModify?: boolean } | null | un
 
 /**
  * Permission checks for function unit operations.
- * SYS_ADMIN bypasses all checks — mirrors backend workspace-access and
- * developer-permission rules (SYS_ADMIN → full access).
+ * Button visibility is only a hint. A specific function unit is editable when
+ * the backend sets canModify (Public for SYS_ADMIN, otherwise workspace role).
  */
 export const permissions = {
   /**

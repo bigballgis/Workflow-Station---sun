@@ -485,6 +485,8 @@ cd deploy/environments/dev
 .\build-and-deploy.ps1 -SkipImagePull
 ```
 
+开发部署默认复用本地已有的基础设施和基础镜像，仅拉取缺失镜像。需要更新某个镜像标签时，先手动执行 `docker pull <image:tag>`，再运行部署脚本。
+
 **`-JavaBaseImage`**：传给后端镜像的 `JAVA_BASE_IMAGE` 构建参数，并用于步骤 0 中 Temurin 的 mirror 预拉取（再 `docker tag` 为 `eclipse-temurin:17-jre` 供其它依赖短名的层使用）。省略时使用脚本内置默认（DaoCloud）。**`-SkipImagePull`**：跳过整段预拉取（不仅 Java，见脚本内镜像列表）。
 
 `-Service` 可选值：

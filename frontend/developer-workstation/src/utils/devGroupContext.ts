@@ -1,3 +1,5 @@
+import { ref } from 'vue'
+
 /**
  * Developer-workstation active "dev group (team)" context.
  *
@@ -13,6 +15,9 @@
  */
 
 const ACTIVE_GROUP_KEY = 'ws_dw_active_group'
+
+/** Teams the signed-in user belongs to (excluding Public). Filled from my-dev-groups. */
+const memberGroupIds = ref<string[]>([])
 
 /** Sentinel meaning "all teams" (no single-team filter). Used by global-view users. */
 export const ALL_GROUPS = '__ALL__'
@@ -46,4 +51,12 @@ export function setActiveGroup(groupId: string): void {
 /** Clear the stored selection (e.g. on logout). */
 export function clearActiveGroup(): void {
   localStorage.removeItem(ACTIVE_GROUP_KEY)
+  memberGroupIds.value = []
 }
+
+/** Remember the user's real team memberships (not the admin "all teams" catalog). */
+export function setMemberGroupIds(ids: readonly string[] | null | undefined): void {
+  memberGroupIds.value = (ids ?? []).filter((id) => id && id !== PUBLIC_GROUP_ID)
+}
+
+export function getMemberGroupIds(): readonly string[] { return memberGroupIds.value }

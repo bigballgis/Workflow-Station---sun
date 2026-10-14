@@ -81,7 +81,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
-import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup } from '@/utils/devGroupContext'
+import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup, setMemberGroupIds } from '@/utils/devGroupContext'
 import { confirmUnsavedDesignerBeforeReload } from '@/composables/useUnsavedDesignerNavigation'
 
 const { t } = useI18n()
@@ -167,10 +167,12 @@ async function resolveContext() {
     groups.value = res?.data?.groups ?? []
     canSeeAll.value = res?.data?.canSeeAllGroups === true
     publicGroupId.value = res?.data?.publicGroupId || null
+    setMemberGroupIds(res?.data?.memberGroupIds)
   } catch {
     groups.value = []
     canSeeAll.value = false
     publicGroupId.value = null
+    setMemberGroupIds([])
     emit('ready')
     return
   }

@@ -4794,3 +4794,35 @@
     修复：tables.find(isMainTableDefinition)（formDesigner.ts）；单测 useActionPostEmailFilterFields.test.ts。
     跟进：仍仅系统字段时根因还有依赖 Pinia store.tables（FU 进页未 refreshAll，tables 常为空）；
     改为 functionUnitApi.getTables 独立拉取，打开「编辑发送条件」前 refresh。
+
+- id: "1669"
+  status: fixed
+  fixed_at: "2026-10-14"
+  severity: major
+  category: bug
+  summary: "DW Public 只读设计器拦截返回列表和子表导航，加载状态误触发保存确认"
+  detail: |
+    根因：Form/Action/Decision 返回按钮与 Form 主表/子表/关联表导航未标记 data-read-only-allowed；
+    切换子表触发设计器快照变化，isDirty 导致只读用户离开时仍弹 Save/Discard。
+    修复：仅放行查看导航；Form 只读态不显示脏状态，不要求保存确认或向外报告未保存更改。
+    验证：4 条新增回归测试修复前失败，修复后只读/权限共 16 测试通过；DW build、Docker 重建成功。
+    Playwright 在 Public FU 50009 与 24 验证返回列表、子表下拉与 Form/List View 切换、Action 返回；
+    Save 禁用、无设计写请求、无 pageerror，截图保留于 verification-screenshots/2026-10-14_readonly-*。
+    浏览器使用真实 FU 数据与模拟 DEVELOPER/canModify=false，未修改服务端角色；1234567 本人登录未验证。
+    全量 vue-tsc 改动前后均为 282 条相同类型错误（行号归一化比较），本修复无新增错误。
+
+- id: "1670"
+  status: fixed
+  fixed_at: "2026-10-14"
+  severity: major
+  category: security
+  summary: "DW 工作区写权限未覆盖同名导入与绑定视图，创建目标可能静默转为 Public"
+  detail: |
+    Review 处置：同名导入先检查 MODIFY，再执行序列同步、快照和内容替换；无权创建目标直接拒绝。
+    子表/关联表视图通过真实 binding→form→FU 统一鉴权并校验 URL 表单归属；or-create GET 按写操作处理。
+    Form 浏览改用纯读取，未设置的 View 返回空配置；明确保存时才创建。创建选项仅列出有权目标。
+    SYS_ADMIN 纳入 FU 方法能力门禁，同时保留 Public/成员工作区的资源级约束；Clone/Restore 独立校验主管能力。
+    回归：新增反例先红后绿；后端 143 测试和 package 通过，前端 48 测试和 build 通过，前后端 Docker 已重建。
+    实际服务端只读 FU 50006：读配置 200、or-create 403 WORKSPACE_FORBIDDEN、伪造父表单 404 RES_NOT_FOUND。
+    Public FU 50009/24 导航回归通过；12 条子表视图配置浏览前后行数与摘要一致，无隐式写入。
+    全量类型检查仍为 282 条相同基线错误；1234567 本人登录仍未验证，Public UI 使用模拟只读状态。

@@ -17,6 +17,7 @@ import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.MainTableViewService;
 import com.developer.service.impl.FunctionUnitDocumentService;
 import com.developer.util.ActionConfigIdRewriter;
@@ -86,7 +87,6 @@ public class FunctionUnitImporter {
      */
     @Transactional
     public Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog) {
-        sequenceSynchronizer.synchronizeAll();
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> packageData = packageParser.parseImportPackage(file);
 
@@ -121,6 +121,9 @@ public class FunctionUnitImporter {
         // increments. Otherwise create a new function unit.
         FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
         final boolean versioned = existing != null;
+        if (versioned) {
+            workspaceAccessService.assertCanAccess(existing.getId(), WorkspaceAccessAction.MODIFY);
+        }
         // A new unit must land in a workspace, resolved exactly as on create (the selected team,
         // or the admin's choice). Without it the unit has no dev-group assignment and no workspace
         // lists it. Resolved before any content is written so an import with no team selected
@@ -129,6 +132,8 @@ public class FunctionUnitImporter {
         List<String> creationGroupIds = versioned
                 ? List.of()
                 : workspaceAccessService.resolveCreationTeamGroupIds(null);
+        // Sequence synchronization changes database state too; authorize before it or any content write.
+        sequenceSynchronizer.synchronizeAll();
         FunctionUnit functionUnit;
         if (versioned) {
             functionUnit = existing;
