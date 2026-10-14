@@ -102,27 +102,31 @@ final class SubTableBatchRuntimeSnapshot {
      */
     static Map<String, Object> projectForForm(Map<String, Object> variables, Object formSourceId,
                                               ObjectMapper objectMapper) {
-        if (variables == null || formSourceId == null || objectMapper == null) {
+        if (variables == null || !variables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
             return Map.of();
         }
+        if (formSourceId == null || objectMapper == null) throw invalidRuntimeSnapshot();
         Map<String, Object> snapshot = mapValue(variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
-        if (!(snapshot.get("schemaVersion") instanceof Number version) || version.intValue() != SCHEMA_VERSION) {
-            return Map.of();
-        }
+        if (!(snapshot.get("schemaVersion") instanceof Number version) || version.doubleValue() != SCHEMA_VERSION
+                || !(snapshot.get("forms") instanceof Map<?, ?>)) throw invalidRuntimeSnapshot();
         Map<String, Object> forms = mapValue(snapshot.get("forms"));
+        if (forms.isEmpty()) throw invalidRuntimeSnapshot();
+        if (!forms.containsKey(String.valueOf(formSourceId))) return Map.of();
         Map<String, Object> form = mapValue(forms.get(String.valueOf(formSourceId)));
-        if (form.isEmpty() || !(form.get("controls") instanceof List<?> controls)) {
-            return Map.of();
-        }
+        if (!(form.get("controls") instanceof List<?> controls) || controls.isEmpty()) throw invalidRuntimeSnapshot();
         Map<String, Object> result = new LinkedHashMap<>();
         for (Object control : controls) {
-            if (!(control instanceof Map<?, ?> map)) continue;
+            if (!(control instanceof Map<?, ?> map)) throw invalidRuntimeSnapshot();
             Map<String, Object> safe = stringKeyMap(map);
             Object controlId = safe.get("batchControlId");
-            if (controlId == null || controlId.toString().isBlank()) continue;
+            if (!(controlId instanceof String id) || id.isBlank() || result.containsKey(id)) throw invalidRuntimeSnapshot();
             result.put(controlId.toString(), deepCopy(safe, objectMapper));
         }
         return result;
+    }
+
+    private static com.portal.exception.PortalException invalidRuntimeSnapshot() {
+        return new com.portal.exception.PortalException("409", "Instance batch capability snapshot is invalid");
     }
 
     @SuppressWarnings("unchecked")

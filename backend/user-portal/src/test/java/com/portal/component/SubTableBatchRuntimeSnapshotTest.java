@@ -165,6 +165,28 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     @Test
+    void rejectsDamagedSnapshotRatherThanTreatingItAsALegacyInstance() {
+        for (Object damaged : List.of("invalid", Map.of("schemaVersion", 99),
+                Map.of("schemaVersion", 1, "forms", List.of()))) {
+            assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.projectForForm(
+                    Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, damaged), "form-1", objectMapper))
+                    .isInstanceOf(com.portal.exception.PortalException.class);
+        }
+        assertThat(SubTableBatchRuntimeSnapshot.projectForForm(Map.of(), "form-1", objectMapper)).isEmpty();
+    }
+
+    @Test
+    void rejectsMalformedCurrentFormControls() {
+        for (Object controls : List.of("invalid", List.of("not-a-control"), List.of(Map.of("bindingId", "101")))) {
+            Map<String, Object> snapshot = Map.of("schemaVersion", 1,
+                    "forms", Map.of("form-1", Map.of("controls", controls)));
+            assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.projectForForm(
+                    Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper))
+                    .isInstanceOf(com.portal.exception.PortalException.class);
+        }
+    }
+
+    @Test
     void acceptsOnlyFrozenBatchEditFieldsForTheMatchingControl() {
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
                 .orElseThrow();
