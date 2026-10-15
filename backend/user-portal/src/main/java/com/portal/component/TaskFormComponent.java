@@ -683,9 +683,6 @@ public class TaskFormComponent {
             SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition,
                     subTableBatchChanges, objectMapper);
             SubTableBatchChangeGuard.validateFieldPermissions(subTableBatchChanges, fieldPermissions);
-            SubTableBatchAssignmentStageGuard.validate(taskInfo.taskDefinitionKey, taskInfo.processInstanceId,
-                    processInstance.getVariables(), formDefinition, subTableBatchChanges, objectMapper,
-                    workflowEngineClient);
         }
 
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
@@ -789,6 +786,9 @@ public class TaskFormComponent {
             SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(currentVariables,
                     formDefinition, subTableBatchChanges, bindingScopes, inbound, objectMapper));
             SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, inbound, objectMapper);
+            SubTableBatchAssignmentStageGuard.validate(new SubTableBatchAssignmentStageGuard.Submission(
+                    taskInfo.taskDefinitionKey, taskInfo.processInstanceId, currentVariables, formDefinition,
+                    subTableBatchChanges, inbound), objectMapper, workflowEngineClient);
 
             updatedVariables.putAll(inbound);
             SubTableBatchDeletedRows.record(updatedVariables, currentVariables, subTableBatchChanges);
@@ -909,8 +909,6 @@ public class TaskFormComponent {
         SubTableBatchChangeGuard.validate(processInstance.getVariables(), formDefinition, changes, objectMapper);
         SubTableBatchChangeGuard.validateFieldPermissions(changes,
                 formDefinition != null ? fieldMapper().extractFieldPermissions(formDefinition) : Collections.emptyMap());
-        SubTableBatchAssignmentStageGuard.validate(taskDefinitionKey, processInstanceId,
-                processInstance.getVariables(), formDefinition, changes, objectMapper, workflowEngineClient);
     }
 
     /** Complete must validate the canonical payload before passing it to the workflow engine. */
@@ -925,6 +923,8 @@ public class TaskFormComponent {
         SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(instance.getVariables(),
                 definition, changes, scopes, submitted, objectMapper));
         SubTableBatchTaskPermissions.validate(instance.getVariables(), definition, submitted, objectMapper);
+        SubTableBatchAssignmentStageGuard.validate(new SubTableBatchAssignmentStageGuard.Submission(
+                stageId, processId, instance.getVariables(), definition, changes, submitted), objectMapper, workflowEngineClient);
     }
 
     /**

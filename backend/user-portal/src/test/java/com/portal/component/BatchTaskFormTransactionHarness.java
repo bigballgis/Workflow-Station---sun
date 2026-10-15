@@ -30,6 +30,7 @@ final class BatchTaskFormTransactionHarness {
     final TaskFormComponent component;
     final String pk;
     final Map<String, Object> baseline;
+    final WorkflowEngineClient engine;
     private final JpaPersistence jpa;
 
     record JpaPersistence(ProcessInstanceRepository repository,
@@ -61,7 +62,7 @@ final class BatchTaskFormTransactionHarness {
                     .startUserId("synthetic-user").status("RUNNING").functionUnitCode("synthetic-unit")
                     .variables(mapper.convertValue(baseline, new TypeReference<Map<String, Object>>() { })).build());
         }
-        WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
+        engine = mock(WorkflowEngineClient.class);
         when(engine.isAvailable()).thenReturn(true);
         when(engine.getTaskById("synthetic-task")).thenReturn(Optional.of(Map.of(
                 "taskDefinitionKey", "review", "processInstanceId", "synthetic-process")));
@@ -125,6 +126,34 @@ final class BatchTaskFormTransactionHarness {
         rows.get(0).put("caption", "MUST-NOT-WRITE");
         tables.put("dw:lines", rows);
         component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables));
+    }
+
+    /** Test setup only: caption is explicitly configured as this fixture's assignee field. */
+    @SuppressWarnings("unchecked")
+    void enableAssignmentContract(boolean targetAlreadyStarted) throws Exception {
+        Map<String, Object> variables = mapper.convertValue(read(), new TypeReference<Map<String, Object>>() { });
+        Map<String, Object> snapshot = (Map<String, Object>) variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+        Map<String, Object> form = (Map<String, Object>) ((Map<?, ?>) snapshot.get("forms")).get("form-one");
+        Map<String, Object> control = (Map<String, Object>) ((List<?>) form.get("controls")).get(0);
+        control.put("capabilities", Map.of("allowBatchDelete", true, "allowBatchAssign", true));
+        control.put("originalCrud", Map.of("allowDelete", true, "allowEdit", true));
+        control.put("assignmentConfig", Map.of("allowUser", true, "allowRole", false,
+                "assigneeField", "caption", "taskDefinitionKey", "assigned-work"));
+        if (jpa == null) persistence.update("UPDATE batch_tx_instance SET variables=? WHERE id=?",
+                mapper.writeValueAsString(variables), "synthetic-process");
+        else {
+            ProcessInstance instance = jpa.repository().findById("synthetic-process").orElseThrow();
+            instance.setVariables(variables);
+            jpa.repository().saveAndFlush(instance);
+        }
+        when(engine.getProcessInstanceTasks("synthetic-process")).thenReturn(Optional.of(Map.of("tasks", List.of(
+                Map.of("taskDefinitionKey", "review", "processInstanceId", "synthetic-process")))));
+        Map<String, Object> host = new HashMap<>();
+        host.put("activityId", "review"); host.put("processInstanceId", "synthetic-process");
+        host.put("endTime", null); host.put("deleteReason", null);
+        List<Map<String, Object>> history = new java.util.ArrayList<>(List.of(host));
+        if (targetAlreadyStarted) history.add(Map.of("activityId", "assigned-work", "processInstanceId", "synthetic-process", "endTime", "completed"));
+        when(engine.getTaskHistory("synthetic-process")).thenReturn(Optional.of(history));
     }
 
     private SubTableBatchChange.RowPatch patch(String value) {

@@ -87,6 +87,18 @@ class SubTableBatchPostgresTransactionIT {
         assertEquals(reloaded, harness.read().get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
     }
 
+    @Test
+    void unmarkedAssignmentStageFailureLeavesRealJsonbAndEntityVersionUntouched() throws Exception {
+        var harness = harness("renamedBusinessKey", repository);
+        harness.enableAssignmentContract(true);
+        Map<String, Object> before = harness.read();
+        Long version = repository.findById("synthetic-process").orElseThrow().getLockVersion();
+        var failure = assertThrows(com.portal.exception.PortalException.class, harness::editUnmarkedCaption);
+        assertTrue(failure.getMessage().contains("already started"));
+        assertEquals(before, harness.read());
+        assertEquals(version, repository.findById("synthetic-process").orElseThrow().getLockVersion());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
     void flushedJpaWriteRollsBackJsonbRowsVersionsAndSnapshotAfterLateFailure(String pk) throws Exception {

@@ -21,24 +21,41 @@ final class SubTableBatchAssignmentStageGuard {
     private SubTableBatchAssignmentStageGuard() {
     }
 
+    record Submission(String stageId, String processId, Map<String, Object> variables,
+                      Map<String, Object> form, List<SubTableBatchChange> changes, Map<String, Object> canonical) { }
+
     static void validate(String activeTaskDefinitionKey, String processInstanceId,
                          Map<String, Object> instanceVariables, Map<String, Object> formDefinition,
                          List<SubTableBatchChange> changes, ObjectMapper objectMapper,
                          WorkflowEngineClient workflowEngineClient) {
-        if (changes == null || changes.stream().noneMatch(SubTableBatchAssignmentStageGuard::isAssign)) return;
-        if (workflowEngineClient == null) {
-            throw forbidden("Batch assignment stage cannot be verified");
-        }
+        validate(new Submission(activeTaskDefinitionKey, processInstanceId, instanceVariables, formDefinition, changes, null),
+                objectMapper, workflowEngineClient);
+    }
 
-        Object sourceId = formDefinition == null ? null : formDefinition.get("sourceId");
+    static void validate(Submission submission, ObjectMapper objectMapper, WorkflowEngineClient workflowEngineClient) {
+        var changes = submission.changes();
+        boolean declared = changes != null && changes.stream().anyMatch(SubTableBatchAssignmentStageGuard::isAssign);
+        boolean enhanced = submission.variables() != null && submission.variables().containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+        if (!declared && (!enhanced || submission.canonical() == null || !submission.canonical().containsKey("__subTables__"))) return;
+
+        Object sourceId = submission.form() == null ? null : submission.form().get("sourceId");
         Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(
-                instanceVariables, sourceId, objectMapper);
+                submission.variables(), sourceId, objectMapper);
+        java.util.Set<String> targets = new java.util.LinkedHashSet<>();
+        if (changes != null) for (SubTableBatchChange change : changes) {
+            if (isAssign(change)) targets.add(targetTaskDefinitionKey(change.getBatchControlId(), change.getBindingId(), controls));
+        }
+        for (var control : SubTableBatchAssignmentDifferences.changedControls(submission.variables(), controls, submission.canonical())) {
+            targets.add(targetTaskDefinitionKey(control.id(), control.bindingId(), controls));
+        }
+        if (targets.isEmpty()) return;
+        if (workflowEngineClient == null) throw forbidden("Batch assignment stage cannot be verified");
+        String activeTaskDefinitionKey = submission.stageId();
+        String processInstanceId = submission.processId();
         List<Map<String, Object>> tasks = null;
         List<Map<String, Object>> history = null;
         boolean taskStateLoaded = false;
-        for (SubTableBatchChange change : changes) {
-            if (!isAssign(change)) continue;
-            String targetTaskDefinitionKey = targetTaskDefinitionKey(change, controls);
+        for (String targetTaskDefinitionKey : targets) {
             if (targetTaskDefinitionKey.equals(activeTaskDefinitionKey)) {
                 throw forbidden("Batch assignment target task has already started");
             }
@@ -79,16 +96,16 @@ final class SubTableBatchAssignmentStageGuard {
     }
 
     @SuppressWarnings("unchecked")
-    private static String targetTaskDefinitionKey(SubTableBatchChange change, Map<String, Object> controls) {
-        if (change == null || blank(change.getBatchControlId()) || blank(change.getBindingId())) {
+    private static String targetTaskDefinitionKey(String controlId, String bindingId, Map<String, Object> controls) {
+        if (blank(controlId) || blank(bindingId)) {
             throw forbidden("Batch assignment is missing its frozen control identity");
         }
-        Object rawControl = controls.get(change.getBatchControlId());
+        Object rawControl = controls.get(controlId);
         if (!(rawControl instanceof Map<?, ?> raw)) {
             throw forbidden("Batch assignment control is not available for this task form");
         }
         Map<String, Object> control = (Map<String, Object>) raw;
-        if (!change.getBindingId().trim().equals(text(control.get("bindingId")))) {
+        if (!bindingId.trim().equals(text(control.get("bindingId")))) {
             throw forbidden("Batch assignment control does not belong to the submitted binding");
         }
         Map<String, Object> capabilities = map(control.get("capabilities"));
