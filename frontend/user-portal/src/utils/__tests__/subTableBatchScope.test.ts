@@ -11,6 +11,13 @@ const capability = { batchControlId: 'grid', bindingId: '101', capabilities: { a
 }
 
 describe('batch membership scope transport', () => {
+  it.each(['EDIT', 'ASSIGN'] as const)('freezes binding mode for pending %s despite live design drift', operation => {
+    const live = { ...binding, bindingMode: 'READONLY' }
+    const [result] = batchMembershipBindings([live], [{ ...change, operation }], { grid: capability })
+    expect(result?.bindingMode).toBe('EDITABLE')
+    expect(result?.primaryKeyFields).toEqual(['published_key'])
+    expect(live.bindingMode).toBe('READONLY')
+  })
   it('matches numeric and string identities consistently with the server scope contract', () => {
     expect(batchScopeIdentity({ code: 7 }, ['code'])).toBe(batchScopeIdentity({ code: '7' }, ['code']))
     expect(batchScopeIdentity({ code: '8' }, ['code'])).not.toBe(batchScopeIdentity({ code: 7 }, ['code']))

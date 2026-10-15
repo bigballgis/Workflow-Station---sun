@@ -28,6 +28,8 @@ public class TaskFormData {
     private Boolean formReadOnly;
     /** Server-filtered batch controls from this instance's frozen runtime snapshot. */
     private Map<String, Object> subTableBatchCapabilities;
+    /** Whether this instance uses the enhanced server-owned write contract. */
+    private Boolean subTableBatchRuntimeEnabled;
     /** Main-table Request ID config ({fieldNames, separator}) so the portal can recompute it live. */
     private Map<String, Object> requestIdConfig;
 }

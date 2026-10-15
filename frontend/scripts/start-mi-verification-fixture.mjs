@@ -1,6 +1,7 @@
 /** Starts only an isolated MI clone and creates test-initiator-owned tasks. */
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { loginViaAdminPassword, loginViaDwPassword, loginViaPortalPassword } from './playwright-login.mjs'
 
@@ -9,6 +10,8 @@ if (!/^\d+$/.test(unitId || '')) throw new Error('MI_FIXTURE_UNIT_ID required')
 const browser = await chromium.launch({ headless: true })
 try {
   const page = await browser.newPage()
+  let pageErrors = 0
+  page.on('pageerror', () => pageErrors++)
   const api = async (prefix, method, path, data) => {
     const response = await page.request.fetch(`http://localhost:3000${prefix}${path}`, { method, data })
     const body = await response.json()
@@ -133,14 +136,42 @@ try {
   }
   assert.equal(response.ok() && saveBody.success, true,
     `Synthetic MI inline Save must succeed: HTTP ${response.status()} ${saveBody.message || saveBody.error?.message || ''}`)
-  assert.deepEqual(parentLinks(response.request().postDataJSON().formData), originalParentLinks,
-    'Submitted MI child edits must preserve participant parent FKs')
+  if (Object.hasOwn(response.request().postDataJSON().formData.__subTables__, participantStore)) {
+    assert.deepEqual(parentLinks(response.request().postDataJSON().formData), originalParentLinks,
+      'Submitted MI child edits must preserve participant parent FKs')
+  } else {
+    assert.equal(form.subTableBatchRuntimeEnabled, true, 'Only enhanced partial submissions may omit the parent store')
+  }
   const saved = await api('/api/portal', 'GET', `/tasks/${firstId}/form-data`)
   formData = saved.fieldValues
   assert.deepEqual(parentLinks(formData), originalParentLinks, 'Editing an MI child must not change any participant parent FK')
   assert.ok(formData.__subTables__?.[`dw:${people.tableName}`]?.some(row => row[childFk.fieldName] === ownerKey && row.age === '666'), 'Inline Save must persist only the owning participant child')
   }
-  await api('/api/portal', 'POST', `/tasks/${firstId}/complete`, { taskId: firstId, action: 'APPROVE', formData, comment: 'Synthetic first MI step' })
+  if (form.subTableBatchRuntimeEnabled === true && process.env.MI_FIXTURE_API_SEED !== '1') {
+    for (const [suffix, width, height] of [['desktop', 1366, 768], ['narrow', 480, 800]]) {
+      await page.setViewportSize({ width, height })
+      await page.evaluate(async () => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        await Promise.all(document.getAnimations().filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+          .map(animation => animation.finished))
+      })
+      const path = fileURLToPath(new URL(`../user-portal/verification-screenshots/${new Date().toISOString().slice(0, 10)}_batch-mi-save-${suffix}.png`, import.meta.url))
+      await page.screenshot({ path, mask: [page.locator('.user-info')] })
+      console.log(path)
+    }
+    await page.setViewportSize({ width: 1366, height: 768 })
+    await page.getByRole('button', { name: 'Approve', exact: true }).click()
+    const dialog = page.getByRole('dialog').filter({ has: page.locator('[data-testid="approve-comment-field"]') })
+    await dialog.locator('textarea').fill('Synthetic UI MI completion')
+    const completion = page.waitForResponse(r => r.url().endsWith(`/tasks/${firstId}/complete`) && r.request().method() === 'POST')
+    await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+    const response = await completion
+    const body = await response.json()
+    assert.equal(response.ok() && body.success, true, `Synthetic UI Complete: ${body.error?.message || response.status()}`)
+    assert.equal(pageErrors, 0, 'UI save and completion must have zero page errors')
+  } else {
+    await api('/api/portal', 'POST', `/tasks/${firstId}/complete`, { taskId: firstId, action: 'APPROVE', formData, comment: 'Synthetic first MI step' })
+  }
   const next = await waitTasks(2, firstId)
   const stageTwo = []
   for (const task of next) {

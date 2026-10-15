@@ -8,13 +8,12 @@ export function batchScopeIdentity(row: Record<string, unknown>, primaryKeyField
     .sort(([left], [right]) => left!.localeCompare(right!))) : null
 }
 
-/** Freeze transport identity/FK semantics only for bindings carrying membership changes. */
+/** Freeze transport identity/FK/mode semantics for every declared batch operation. */
 export function batchMembershipBindings<T extends { bindingId?: number | string }>(
   bindings: T[], changes: SubTableBatchChange[], capabilities?: Record<string, unknown>,
 ): T[] {
   return bindings.map(binding => {
-    const claims = changes.filter(change => change.bindingId === String(binding.bindingId)
-      && (change.operation === 'ADD' || change.operation === 'DELETE'))
+    const claims = changes.filter(change => change.bindingId === String(binding.bindingId))
     if (!claims.length) return binding
     const designs = claims.map(change => parseSubTableBatchCapability(capabilities?.[change.batchControlId])?.rowDesign?.binding)
     if (designs.some(design => !design) || new Set(designs.map(design => JSON.stringify(design))).size !== 1) {

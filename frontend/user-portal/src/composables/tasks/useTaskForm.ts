@@ -34,6 +34,13 @@ import { stampAuthoritativeRowVersions } from './subTableRowVersionSync'
 import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
 import { mergeBatchChanges, beginBatchSave } from '@/utils/subTableBatchChanges'
 import { batchMembershipBindings } from '@/utils/subTableBatchScope'
+import { projectWritableSubTables } from './writableSubTableProjection'
+
+type TaskFormSnapshot = {
+  fieldValues?: Record<string, unknown>
+  subTableBatchCapabilities?: Record<string, unknown>
+  subTableBatchRuntimeEnabled?: boolean
+}
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -63,7 +70,7 @@ export function useTaskForm(options: {
   isMiSubTaskMode: Ref<boolean>
   isCompletedTask: Ref<boolean>
   effectiveTaskId: Ref<string>
-  taskFormDTO?: Ref<{ fieldValues?: Record<string, any>; subTableBatchCapabilities?: Record<string, unknown> } | null>
+  taskFormDTO?: Ref<TaskFormSnapshot | null>
   /** Binding-id → relation-table-id map; used to protect MI collection slices from id_idw scrub on save. */
   bindingRelationTableMap?: Ref<Map<number, number | null>>
   miSubProcessScopeName?: Ref<string | null | undefined>
@@ -98,7 +105,7 @@ export function useTaskForm(options: {
   const formLabelWidth = ref('160px')
   const formFormOptions = ref<Record<string, unknown>>({})
   const savingTaskForm = ref(false)
-  const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any>; subTableBatchCapabilities?: Record<string, unknown> } | null>(null)
+  const taskFormDTO = options.taskFormDTO ?? ref<TaskFormSnapshot | null>(null)
   const loadedSubTableBaseline = ref<Record<string, unknown>>({})
   const pendingSubTableBatchChanges = ref<NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>>([])
 
@@ -392,6 +399,17 @@ export function useTaskForm(options: {
       }
     }
 
+    if (taskFormDTO.value?.subTableBatchRuntimeEnabled === true) {
+      const writableBindings = submitBindings.filter(binding => binding.bindingMode !== 'READONLY')
+      const bindingIds = new Set(writableBindings.map(binding => String(binding.bindingId)))
+      const projected = projectWritableSubTables(subTables, writableBindings)
+      return {
+        formData: { __subTables__: projected },
+        subTableData: projectWritableSubTables(subTableData, writableBindings),
+        emptiedSubTableKeys: emptiedSubTableKeys.filter(key => Object.prototype.hasOwnProperty.call(projected, key)),
+        subTableBindingScopes: subTableBindingScopes.filter(scope => bindingIds.has(scope.bindingId)),
+      }
+    }
     return {
       formData: { __subTables__: subTables },
       subTableData,
@@ -462,7 +480,10 @@ export function useTaskForm(options: {
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
       if (JSON.stringify(formData.value.__subTables__) === pageSnapshot) {
-        formData.value = { ...formData.value, __subTables__: payload.formData.__subTables__ }
+        const tables = taskFormDTO.value?.subTableBatchRuntimeEnabled === true
+          ? { ...formData.value.__subTables__, ...payload.formData.__subTables__ }
+          : payload.formData.__subTables__
+        formData.value = { ...formData.value, __subTables__: tables }
       }
       if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
       ElMessage.success(t('task.operationSuccess'))

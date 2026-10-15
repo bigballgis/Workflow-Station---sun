@@ -7,6 +7,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SubTableBatchResponsePrivacyTest {
     @Test
+    void enhancedWriteContractIsAnExplicitBooleanWithoutExposingTheSnapshot() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        var json = mapper.readTree(mapper.writeValueAsString(TaskFormData.builder()
+                .subTableBatchRuntimeEnabled(true)
+                .fieldValues(Map.of("__subTableBatchRuntime__", Map.of("hiddenStage", "private")))
+                .build()));
+        assertTrue(json.get("subTableBatchRuntimeEnabled").isBoolean());
+        assertTrue(json.get("subTableBatchRuntimeEnabled").booleanValue());
+        assertFalse(json.get("fieldValues").has("__subTableBatchRuntime__"));
+    }
+    @Test
     void ordinaryResponsesNeverSerializeTheInstanceWideBatchSnapshot() throws Exception {
         Map<String, Object> values = Map.of("business", "visible", "__subTableBatchRuntime__", Map.of("otherStage", "private"),
                 "__subTableBatchDeletedRows__", Map.of("privateStore", "deletedIdentity"));

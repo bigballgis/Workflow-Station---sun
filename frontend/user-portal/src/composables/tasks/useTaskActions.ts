@@ -1,5 +1,6 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
 import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
+import { projectWritableSubTables } from './writableSubTableProjection'
 import {
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
@@ -275,15 +276,7 @@ export function useTaskActions(options: {
     delete submitted.__subTables__
     if (unref(options.formReadOnly ?? false)) return submitted
     const engineSubTables = (engineFormData.__subTables__ as Record<string, any>) || {}
-    const submittedSubTables: Record<string, any> = {}
-    for (const binding of options.subTableBindings.value) {
-      if (binding?.bindingMode === 'READONLY') continue
-      const key = subTableStoreKey(binding)
-      if (key && Object.prototype.hasOwnProperty.call(engineSubTables, key)) {
-        // Keep []: an empty current editable grid is an explicit delete-all submission.
-        submittedSubTables[key] = engineSubTables[key]
-      }
-    }
+    const submittedSubTables = projectWritableSubTables(engineSubTables, options.subTableBindings.value)
     if (Object.keys(submittedSubTables).length > 0) {
       submitted.__subTables__ = submittedSubTables
     }

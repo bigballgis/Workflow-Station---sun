@@ -48,6 +48,7 @@ export interface TaskFormData {
   formReadOnly?: boolean
   /** Current form's server-filtered frozen batch controls, keyed by batchControlId. */
   subTableBatchCapabilities?: Record<string, unknown>
+  subTableBatchRuntimeEnabled?: boolean
   requestIdConfig?: RequestIdConfig | null
 }
 

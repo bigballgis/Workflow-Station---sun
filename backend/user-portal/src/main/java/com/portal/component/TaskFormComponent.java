@@ -596,6 +596,7 @@ public class TaskFormComponent {
                 .processFormRef(processFormRef)
                 .formReadOnly(formReadOnly)
                 .subTableBatchCapabilities(subTableBatchCapabilities)
+                .subTableBatchRuntimeEnabled(allVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD))
                 .requestIdConfig(processFormRef != null ? processFormRef.getRequestIdConfig() : null)
                 .build();
     }
