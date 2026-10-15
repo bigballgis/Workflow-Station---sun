@@ -19,7 +19,9 @@ try {
   const suffix = process.env.FIXTURE_SUFFIX || Date.now().toString(36)
   if (!/^[a-z0-9]+$/.test(suffix)) throw new Error('Synthetic suffix must be an alphanumeric fixture identifier')
   if (process.env.FIXTURE_UNIT_ID && !/^\d+$/.test(process.env.FIXTURE_UNIT_ID)) throw new Error('Invalid synthetic FU ID')
-  const automaticPk = process.env.FIXTURE_PK_STRATEGY === 'uuid'
+  const pkStrategy = process.env.FIXTURE_PK_STRATEGY ?? 'manual'
+  if (!['manual', 'uuid', 'prefixedSequence'].includes(pkStrategy)) throw new Error('Unsupported synthetic PK strategy')
+  const automaticPk = pkStrategy !== 'manual'
   const batchMode = process.env.FIXTURE_BATCH_MODE ?? (process.env.FIXTURE_EDIT_ONLY === '1' ? 'edit' : 'all')
   if (!['all', 'add', 'edit', 'delete'].includes(batchMode)) throw new Error('Unsupported synthetic batch mode')
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
@@ -49,7 +51,8 @@ try {
     tableName: `batch_lines_${suffix}`, tableType: 'SUB', tableDisplayName: 'Synthetic lines',
     fields: [
       { fieldName: pkField, dataType: 'VARCHAR', length: 64, nullable: false,
-        isPrimaryKey: true, pkGeneration: { strategy: automaticPk ? 'uuid' : 'manual' }, displayName: 'Line key' },
+        isPrimaryKey: true, pkGeneration: { strategy: pkStrategy,
+          ...(pkStrategy === 'prefixedSequence' ? { prefix: 'SYNTHETIC-', padWidth: 6, scope: 'perTable', startValue: 1 } : {}) }, displayName: 'Line key' },
       { fieldName: fkField, dataType: 'VARCHAR', length: 64, nullable: false,
         isForeignKey: true, refTableId: main.id, refPrimaryKeyFields: ['case_key'], displayName: 'Case reference' },
       { fieldName: textField, dataType: 'VARCHAR', length: 100, nullable: false, displayName: 'Caption' },

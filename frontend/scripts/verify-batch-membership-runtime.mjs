@@ -42,8 +42,12 @@ try {
   const textField = capability.batchForm.rule.find(rule => rule.type === 'input' && rule.field !== pkField)?.field
   const numberField = capability.batchForm.rule.find(rule => rule.type === 'inputNumber')?.field
   const manualPk = capability.batchForm.rule.some(rule => rule.field === pkField)
+  const pkDefinition = capability.rowDesign.fields.find(field => field.fieldName === pkField)
+  assert.ok(pkDefinition, 'Frozen primary key metadata must be present')
+  const pkConfig = pkDefinition.pkGenerationJson ?? pkDefinition.pkGeneration
+  const sequencePk = pkConfig?.strategy === 'prefixedSequence'
   const readonlyNumber = capability.rowDesign.fieldWriteModes?.[numberField] === 'READONLY'
-  const variant = `${manualPk ? 'manual' : 'uuid'}${readonlyNumber ? '-readonly' : ''}`
+  const variant = `${manualPk ? 'manual' : sequencePk ? 'sequence' : 'uuid'}${readonlyNumber ? '-readonly' : ''}`
   assert.ok(pkField && fkField && textField && numberField)
   const storeKey = `dw:${capability.rowDesign.binding.tableName}`
   const rowsOf = data => data.fieldValues.__subTables__[storeKey]
@@ -58,8 +62,9 @@ try {
   await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-workspace-initial.png`, out)) })
   const draftWrites = []
   const trackDraftWrites = request => {
-    if (request.method() === 'POST' && (request.url().endsWith(`/tasks/${taskId}/submit`)
-      || request.url().endsWith('/primary-keys/allocate'))) draftWrites.push(request.url())
+    const path = new URL(request.url()).pathname
+    if (request.method() === 'POST' && (path.endsWith(`/tasks/${taskId}/submit`)
+      || path.endsWith('/primary-keys/allocate'))) draftWrites.push(path)
   }
   page.on('request', trackDraftWrites)
   await dialog.getByRole('button', { name: 'Add', exact: true }).click()
@@ -71,6 +76,10 @@ try {
   assert.deepEqual(rowsOf(await read()), rowsOf(baseline), 'Cancel must leave all saved rows unchanged')
   await batchButton.click()
   assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 2)
+  const allocations = []
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/primary-keys/allocate')) allocations.push(request.postDataJSON())
+  })
   await dialog.getByRole('button', { name: 'Add', exact: true }).click()
   const added = dialog.locator('.el-table__body-wrapper tr').nth(2)
   const addedInputs = added.locator('input:not([type="checkbox"])')
@@ -85,6 +94,20 @@ try {
     await numberInput.fill('3')
     await numberInput.press('Tab')
   }
+  if (sequencePk) {
+    await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+    page.on('request', trackDraftWrites)
+    await dialog.getByRole('button', { name: /Apply/ }).click()
+    await page.locator('.el-message--error').waitFor()
+    assert.equal(await dialog.isVisible(), true, 'Invalid second new row must retain the entire draft')
+    assert.deepEqual(draftWrites, [], 'Second-row validation failure must not allocate or persist the first row')
+    page.off('request', trackDraftWrites)
+    assert.deepEqual(rowsOf(await read()), rowsOf(baseline))
+    const fourthInputs = dialog.locator('.el-table__body-wrapper tr').nth(3).locator('input:not([type="checkbox"])')
+    await fourthInputs.nth(0).fill('Fourth synthetic line')
+    await fourthInputs.nth(1).fill('4')
+    await fourthInputs.nth(1).blur()
+  }
   const beforeApply = await read()
   assert.deepEqual(rowsOf(beforeApply), rowsOf(baseline), 'Editing a draft must not persist')
   const saveResponse = page.waitForResponse(r => r.url().endsWith(`/tasks/${taskId}/submit`) && r.request().method() === 'POST')
@@ -95,12 +118,25 @@ try {
   const savedBody = await savedResponse.json()
   assert.equal(savedResponse.ok() && savedBody.success, true, `Save rejected: ${savedBody.error?.message || ''}`)
   const saved = await read()
-  assert.equal(rowsOf(saved).length, 3)
+  const expectedCount = sequencePk ? 4 : 3
+  assert.equal(rowsOf(saved).length, expectedCount)
   const newRow = rowsOf(saved).find(row => row[textField] === 'Third synthetic line')
   assert.equal(newRow[textField], 'Third synthetic line')
   assert.equal(newRow[numberField], readonlyNumber ? 0 : 3)
   assert.equal(newRow[fkField], 'SYNTHETIC-CASE')
   if (manualPk) assert.equal(newRow[pkField], 'SYNTHETIC-THREE')
+  else if (sequencePk) {
+    assert.equal(typeof pkConfig.prefix, 'string')
+    assert.ok(newRow[pkField].startsWith(pkConfig.prefix), 'Allocated key must use the frozen configured prefix')
+    assert.match(newRow[pkField].slice(pkConfig.prefix.length), /^\d+$/)
+    const fourth = rowsOf(saved).find(row => row[textField] === 'Fourth synthetic line')
+    assert.equal(fourth[numberField], 4)
+    assert.equal(fourth[fkField], 'SYNTHETIC-CASE')
+    assert.notEqual(fourth[pkField], newRow[pkField])
+    assert.ok(fourth[pkField].startsWith(pkConfig.prefix))
+    assert.equal(allocations.length, 1, 'Two sequence keys must be reserved in a single request')
+    assert.equal(allocations[0].count, 2)
+  }
   else assert.match(newRow[pkField], /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i)
   assert.equal(typeof newRow._wsRowVersion, 'number')
   if (readonlyNumber) {
@@ -133,13 +169,13 @@ try {
   await page.reload()
   await batchButton.waitFor()
   await batchButton.click()
-  assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 3)
+  assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), expectedCount)
   await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-add-persisted.png`, out)) })
   await dialog.locator('.el-table__header-wrapper .el-checkbox').click()
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
   await page.locator('.el-message-box').getByRole('button', { name: /Confirm|OK/, exact: true }).click()
   assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 0)
-  assert.equal(rowsOf(await read()).length, 3, 'Delete stays in local draft before Apply')
+  assert.equal(rowsOf(await read()).length, expectedCount, 'Delete stays in local draft before Apply')
   const deleteSaveResponse = page.waitForResponse(r => r.url().endsWith(`/tasks/${taskId}/submit`) && r.request().method() === 'POST')
   await dialog.getByRole('button', { name: /Apply/ }).click()
   const deleteResponse = await deleteSaveResponse

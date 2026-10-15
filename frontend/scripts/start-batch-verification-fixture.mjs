@@ -27,7 +27,9 @@ try {
   }
   await loginViaPortalPassword(page)
   const tableName = `batch_lines_${processKey.slice('batch_verify_'.length)}`
-  const automaticPk = process.env.FIXTURE_PK_STRATEGY === 'uuid'
+  const pkStrategy = process.env.FIXTURE_PK_STRATEGY ?? 'manual'
+  if (!['manual', 'uuid', 'prefixedSequence'].includes(pkStrategy)) throw new Error('Unsupported synthetic PK strategy')
+  const automaticPk = pkStrategy !== 'manual'
   const pkField = automaticPk ? 'entry_token' : 'line_key'
   const fkField = automaticPk ? 'owner_ref' : 'case_ref'
   const textField = automaticPk ? 'item_label' : 'caption'
