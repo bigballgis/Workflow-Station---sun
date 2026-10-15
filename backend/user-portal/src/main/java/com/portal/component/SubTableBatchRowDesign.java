@@ -26,6 +26,11 @@ final class SubTableBatchRowDesign {
             Object config = field.get("pkGenerationJson");
             boolean manual = config instanceof Map<?, ?> generation && "manual".equals(generation.get("strategy"));
             if (Boolean.TRUE.equals(field.get("isForeignKey")) || Boolean.TRUE.equals(field.get("isComputed")) || (primary && !manual)) continue;
+            if ((Boolean.FALSE.equals(field.get("nullable")) || primary)
+                    && design.get("fieldWriteModes") instanceof Map<?, ?> modes
+                    && "READONLY".equals(modes.get(field.get("fieldName")))) {
+                SubTableBatchPublishedPermissions.validateRequiredDefault(field);
+            }
             if ((Boolean.FALSE.equals(field.get("nullable")) || primary) && !represented.contains(field.get("fieldName"))) {
                 throw invalid("batch form omits a required user-entered field");
             }

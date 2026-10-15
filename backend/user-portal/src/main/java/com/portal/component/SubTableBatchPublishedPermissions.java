@@ -80,6 +80,27 @@ final class SubTableBatchPublishedPermissions {
         return field.get("pkGenerationJson") instanceof Map<?, ?> generation && "manual".equals(generation.get("strategy"));
     }
 
+    static void validateRequiredDefault(Map<?, ?> field) {
+        String name = String.valueOf(field.get("fieldName"));
+        Object value = field.get("defaultValue");
+        if (value == null || "".equals(value) || manualKey(field)) throw invalid("Required read-only batch field needs a verified default");
+        String type = String.valueOf(field.get("dataType"));
+        try {
+            if (List.of("INTEGER", "INT", "BIGINT", "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE").contains(type)) {
+                value = new BigDecimal(String.valueOf(value));
+            } else if ("BOOLEAN".equals(type)) {
+                String literal = String.valueOf(value);
+                if (!List.of("true", "false", "1", "0").contains(literal)) throw invalid("Invalid boolean default");
+                value = "true".equals(literal) || "1".equals(literal);
+            } else if (!List.of("VARCHAR", "TEXT", "CHAR", "DATE", "TIMESTAMP").contains(type)) {
+                throw invalid("Unsupported default type");
+            }
+            SubTableBatchAddedRowGuard.validateField(field, Map.of(name, value));
+        } catch (NumberFormatException | PortalException invalidDefault) {
+            throw invalid("Required read-only batch field needs a verified literal default");
+        }
+    }
+
     /** Only literal metadata defaults qualify; expressions/SQL functions are never evaluated. */
     static boolean declaredDefault(Map<?, ?> field, Object value) {
         Object configured = field.get("defaultValue");

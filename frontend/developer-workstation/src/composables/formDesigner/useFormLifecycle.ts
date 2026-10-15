@@ -16,8 +16,10 @@ import { resolveRelationViewEntry, resolveBindingKeyedEntry } from '@/utils/form
 import type { TableFieldDefLike } from '@/utils/formCreateRuleDefaults'
 import { parseProcessNodesFromBpmnXml, type BpmnProcessNode } from '@/utils/bpmnFormBindingUpdate'
 import type { SubTableListColumnDTO } from './useSubTableViews'
+import type { DesignerHydration } from './useDesignerHydration'
 
 interface UseFormLifecycleOptions {
+  hydration: DesignerHydration
   functionUnitId: number
   store: {
     forms: FormDefinition[]
@@ -124,6 +126,8 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
   }
 
   async function handleSelectForm(row: FormDefinition) {
+    const hydration = options.hydration
+    const generation = hydration.begin()
     // Clean up any existing polling before selecting new form
     cleanupAutoSavePolling()
 
@@ -138,14 +142,18 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     subTableActiveTab.value = 'form'
 
     await store.fetchTables(functionUnitId)
+    if (!hydration.current(generation)) return
 
     let bindings: any[] = []
     try {
       const res = await functionUnitApi.getFormBindings(functionUnitId, row.id)
       bindings = res.data || []
     } catch {
-      bindings = []
+      hydration.fail(generation)
+      ElMessage.error(t('form.configNotReady'))
+      return
     }
+    if (!hydration.current(generation)) return
 
     // ACTION forms (FORM_POPUP) are reached via their Action Button, not a PRIMARY table row,
     // so they don't require a PRIMARY binding — the Main Table tab is hidden entirely when one
@@ -214,9 +222,17 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       }
     }
 
+    const mainLoaded = hydration.track(generation)
     nextTick(() => {
-      setTimeout(() => {
-        if (!designerRef.value) return
+      setTimeout(function initializeMain() {
+        if (!hydration.current(generation)) return
+        if (!designerRef.value) {
+          if (row.formType === 'ACTION' && !hasPrimary) mainLoaded()
+          else {
+            hydration.whenMounted(generation, () => designerRef.value, initializeMain)
+          }
+          return
+        }
         try {
           const rules = stripFormCreateRulesDisabledDeep(
             cloneFormRules(
@@ -243,6 +259,8 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
             )
           )
         } catch (e) {
+          hydration.fail(generation)
+          ElMessage.error(t('form.configNotReady'))
           console.error('Failed to load main form config:', e)
           try {
             designerRef.value.setRule([])
@@ -253,18 +271,26 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
         setupMarkerObserver()
         scheduleSyncHiddenMarkers()
         installDesignerPreviewCaptureHooks()
+        mainLoaded()
       }, 100)
     })
 
-    nextTick(() => setTimeout(() => loadSubDesigners(row), 200))
+    const subLoadScheduled = hydration.track(generation)
+    nextTick(() => setTimeout(() => {
+      if (hydration.current(generation)) loadSubDesigners(row, generation)
+      subLoadScheduled()
+    }, 200))
+    hydration.finish(generation)
   }
 
-  function loadSubDesigners(row: FormDefinition) {
+  function loadSubDesigners(row: FormDefinition, generation: number) {
     const config = (selectedForm.value?.configJson || row.configJson || {}) as Record<string, any>
     const subForms = config.subForms || {}
     designerSubBindings.value.forEach((binding, index) => {
+      const subLoaded = options.hydration.track(generation)
       nextTick(() => {
         setTimeout(() => {
+          if (!options.hydration.current(generation)) return
           const subRef = subDesignerRefs.value[index]
           if (subRef) {
           const subConfig = buildEffectiveSubFormConfig(
@@ -297,13 +323,17 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
                 )
               )
               installDesignerPreviewCaptureHooks()
-            } catch {}
+            } catch {
+              options.hydration.fail(generation)
+              ElMessage.error(t('form.configNotReady'))
+            }
           }
           // Hydration is async (nextTick + setTimeout) and touches no reactive state
           // the MI assignment warning computed tracks — without this it can stay
           // stuck on whatever it saw before the sub-designer's rule was populated
           // (e.g. "missing component") until the user manually visits that tab.
           onDesignerStructureChange()
+          subLoaded()
         }, 150)
       })
     })
@@ -349,9 +379,16 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     }
 
     const subForms = config.subForms || {}
+    const generation = options.hydration.token()
+    const tabLoaded = options.hydration.track(generation)
     nextTick(() => {
-      setTimeout(() => {
+      setTimeout(function initializeSub() {
+        if (!options.hydration.current(generation)) return
         const subRef = subDesignerRefs.value[index]
+        if (!subRef) {
+          options.hydration.whenMounted(generation, () => subDesignerRefs.value[index], initializeSub)
+          return
+        }
         if (subRef) {
           // Use cache if available (user already visited this tab), else fall back to saved config
           const cached = subFormCache.value[bindingId]
@@ -384,10 +421,14 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
                 t('form.clickToUpload')
               )
             )
-          } catch {}
+          } catch {
+            options.hydration.fail(generation)
+            ElMessage.error(t('form.configNotReady'))
+          }
         }
         setupMarkerObserver()
         onDesignerStructureChange()
+        tabLoaded()
       }, 100)
     })
   }
@@ -400,6 +441,7 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
   }
 
   function handleBackToList() {
+    options.hydration.begin() // Invalidate delayed canvas callbacks before clearing the selection.
     teardownMarkerObserver()
     selectedForm.value = null
     cleanupAutoSavePolling()

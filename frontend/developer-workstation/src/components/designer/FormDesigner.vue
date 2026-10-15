@@ -118,7 +118,7 @@
           <el-button
             type="primary"
             :loading="savingForm"
-            :disabled="savingForm"
+            :disabled="savingForm || designerHydration.blocked.value"
             @click="saveChanges"
           >
             {{ t('common.save') }}
@@ -1002,6 +1002,7 @@ import { useFormPreviewBuild } from '@/composables/formDesigner/useFormPreviewBu
 import { useFormSave } from '@/composables/formDesigner/useFormSave'
 import { useFormNodeBinding } from '@/composables/formDesigner/useFormNodeBinding'
 import { useFormLifecycle } from '@/composables/formDesigner/useFormLifecycle'
+import { useDesignerHydration } from '@/composables/formDesigner/useDesignerHydration'
 import { useBlockingProgress } from '@/composables/useBlockingProgress'
 import BlockingProgressOverlay from '@/components/common/BlockingProgressOverlay.vue'
 import {
@@ -1019,6 +1020,7 @@ const store = useFunctionUnitStore()
 
 // ── Core shared state ───────────────────────────────────────────────────────
 const selectedForm = ref<FormDefinition | null>(null)
+const designerHydration = useDesignerHydration()
 const designerRef = ref<any>(null)
 const subDesignerRefs = ref<any[]>([])
 const batchDesignerRefs = ref<any[]>([])
@@ -1260,7 +1262,7 @@ function switchToBinding(id: string) {
 
 function setBatchDesignerRef(el: any, index: number) {
   const binding = designerSubBindings.value[index]
-  if (!el && binding) {
+  if (!el && binding && batchFormVisited.value.has(binding.bindingId)) {
     const previous = batchDesignerRefs.value[index]
     try {
       const rule = previous?.getRule?.()
@@ -1279,9 +1281,9 @@ function setBatchDesignerRef(el: any, index: number) {
   batchDesignerRefs.value[index] = el
 }
 
-function loadBatchDesigner(binding: { bindingId: number }, index: number) {
+function loadBatchDesigner(binding: { bindingId: number }, index: number): boolean {
   const designer = batchDesignerRefs.value[index]
-  if (!designer) return
+  if (!designer) return false
   const saved = selectedForm.value?.configJson?.batchForms?.[binding.bindingId]
     || selectedForm.value?.configJson?.batchForms?.[String(binding.bindingId)]
   const source = batchFormCache.value[binding.bindingId] || saved
@@ -1292,15 +1294,25 @@ function loadBatchDesigner(binding: { bindingId: number }, index: number) {
     designer.setRule(rule)
     if (designer.activeModule) designer.activeModule = 'base'
     designer.setOption(mergeLoadedFormOptions(source?.options, defaultFormOption.value, t('form.clickToUpload')))
+    return true
   } catch {
-    // The designer can still be mounting; the next tab activation retries the load.
+    return false
   }
 }
 
 function handleBatchFormTabChange(binding: { bindingId: number }, index: number) {
   if (batchFormVisited.value.has(binding.bindingId)) return
-  batchFormVisited.value.add(binding.bindingId)
-  nextTick(() => setTimeout(() => loadBatchDesigner(binding, index), 0))
+  const generation = designerHydration.token()
+  const loaded = designerHydration.track(generation)
+  nextTick(() => designerHydration.whenMounted(generation, () => batchDesignerRefs.value[index], () => {
+    if (!designerHydration.current(generation)) return
+    if (loadBatchDesigner(binding, index)) batchFormVisited.value.add(binding.bindingId)
+    else {
+      designerHydration.fail(generation)
+      ElMessage.error(t('form.configNotReady'))
+    }
+    loaded()
+  }))
 }
 
 // Default form options — label left-aligned + empty Form event handlers (onChange, onSubmit, …)
@@ -1758,6 +1770,7 @@ const {
 
 // ── Form persistence + field permissions ────────────────────────────────────
 const formSave = useFormSave({
+  configHydrationBlocked: designerHydration.blocked,
   functionUnitId: props.functionUnitId,
   store: store as any,
   selectedForm,
@@ -1839,6 +1852,7 @@ const {
 
 // ── Form list/selection lifecycle ───────────────────────────────────────────
 const formLifecycle = useFormLifecycle({
+  hydration: designerHydration,
   functionUnitId: props.functionUnitId,
   store: store as any,
   selectedForm,

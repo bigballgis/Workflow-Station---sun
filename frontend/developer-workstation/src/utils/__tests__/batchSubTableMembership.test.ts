@@ -10,6 +10,17 @@ const fields: FieldDefinition[] = [
 ]
 
 describe('batch Add/Delete designer validation', () => {
+  it('rejects a required readonly field without a valid literal default', () => {
+    const complete = { '101': { rule: [{ field: 'description' }, { field: 'item_key' }, { field: 'amount' }] } }
+    const amount: FieldDefinition = { fieldName: 'amount', dataType: 'INTEGER', nullable: false, isPrimaryKey: false }
+    const permissions = { '101:amount': 'READONLY' }
+    expect(validateBatchMembershipDesign(rules, complete, [binding], () => [...fields, amount], permissions)).toBe(false)
+    expect(validateBatchMembershipDesign(rules, complete, [binding], () => [...fields, { ...amount, defaultValue: '0' }], permissions)).toBe(true)
+    expect(validateBatchMembershipDesign(rules, complete, [binding], () => [...fields, { ...amount, defaultValue: '1.5' }], permissions)).toBe(false)
+    expect(validateBatchMembershipDesign(rules, complete, [binding], () => [...fields, { ...amount, defaultValue: 'CURRENT_TIMESTAMP' }], permissions)).toBe(false)
+    expect(validateBatchMembershipDesign(rules, complete, [binding], () => [...fields, { ...amount, dataType: 'DATE', defaultValue: '2026-02-31' }], permissions)).toBe(false)
+    expect(validateBatchMembershipDesign(rules, complete, [binding], () => fields, { '101:item_key': 'READONLY' })).toBe(false)
+  })
   it('requires all mandatory business fields and manual primary keys', () => {
     const incomplete = { '101': { rule: [{ field: 'description' }] } }
     expect(validateBatchMembershipDesign(rules, incomplete, [binding], () => fields)).toBe(false)

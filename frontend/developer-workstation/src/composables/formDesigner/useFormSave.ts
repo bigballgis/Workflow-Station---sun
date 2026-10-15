@@ -32,6 +32,7 @@ import {
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
 interface UseFormSaveOptions {
+  configHydrationBlocked?: Readonly<Ref<boolean>>
   functionUnitId: number
   store: { updateForm: (functionUnitId: number, formId: number, payload: Record<string, any>) => Promise<any> }
   selectedForm: Ref<FormDefinition | null>
@@ -85,7 +86,7 @@ export function useFormSave(options: UseFormSaveOptions) {
   const {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, batchDesignerRefs, designerSubBindings,
     subFormCache, batchFormCache, batchFormVisited, relationViewState, subTableViewState, subTableListViewRefs,
-    getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
+    getActiveDesignerRef, getPrimaryBindingFieldDefinitions, getBatchTableFields,
     syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime,
     provisionAndRepairForSave, willProvisionOnSave, blockingProgress, getBpmnXml, t,
     hasMainTableTab,
@@ -208,6 +209,10 @@ export function useFormSave(options: UseFormSaveOptions) {
 
   async function handleSaveForm(isManual = false): Promise<boolean> {
     if (!selectedForm.value) return false
+    if (options.configHydrationBlocked?.value) {
+      if (isManual) ElMessage.warning(t('form.configNotReady'))
+      return false
+    }
     // Forms without a Main Table tab (ACTION forms with no PRIMARY binding) never mount the
     // main fc-designer, so designerRef.value is legitimately null here — not "not ready".
     const mainTablePresent = hasMainTableTab ? hasMainTableTab.value : true
@@ -441,7 +446,7 @@ export function useFormSave(options: UseFormSaveOptions) {
         return false
       }
       if (!validateBatchMembershipDesign(subTableRules, batchForms, selectedForm.value.tableBindings ?? [],
-        tableId => options.getBatchTableFields?.(tableId) ?? [])) {
+        tableId => getBatchTableFields?.(tableId) ?? [], selectedForm.value.fieldPermissions ?? {})) {
         if (isManual) ElMessage.error(t('form.batchMembershipInvalid'))
         return false
       }

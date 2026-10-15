@@ -71,7 +71,7 @@ final class SubTableBatchAddedRowGuard {
         if (!allowed.containsAll(row.keySet())) fail("Batch add contains a field outside the frozen batch form");
     }
 
-    private static void validateField(Map<?, ?> field, Map<?, ?> row) {
+    static void validateField(Map<?, ?> field, Map<?, ?> row) {
         String name = String.valueOf(field.get("fieldName"));
         Object value = row.get(name);
         boolean empty = value == null || "".equals(value);

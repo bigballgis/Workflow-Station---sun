@@ -21,6 +21,7 @@ try {
   if (process.env.FIXTURE_UNIT_ID && !/^\d+$/.test(process.env.FIXTURE_UNIT_ID)) throw new Error('Invalid synthetic FU ID')
   const automaticPk = process.env.FIXTURE_PK_STRATEGY === 'uuid'
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
+  const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
   const pkField = automaticPk ? 'entry_token' : 'line_key'
   const fkField = automaticPk ? 'owner_ref' : 'case_ref'
   const textField = automaticPk ? 'item_label' : 'caption'
@@ -51,7 +52,7 @@ try {
         isForeignKey: true, refTableId: main.id, refPrimaryKeyFields: ['case_key'], displayName: 'Case reference' },
       { fieldName: textField, dataType: 'VARCHAR', length: 100, nullable: false, displayName: 'Caption' },
       { fieldName: numberField, dataType: 'INTEGER', nullable: false, displayName: 'Amount',
-        ...(readonlyNumber ? { defaultValue: '0' } : {}) },
+        ...(readonlyNumber && readonlyDefault !== 'missing' ? { defaultValue: readonlyDefault } : {}) },
     ],
   })
   const forms = []

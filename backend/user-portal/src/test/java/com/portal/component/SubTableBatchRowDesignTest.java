@@ -11,6 +11,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchRowDesignTest {
     @Test
+    void readonlyRequiredBusinessFieldsNeedVerifiedLiteralDefaultsBeforeEnablingAdd() {
+        Map<String, Object> batch = Map.of("rule", List.of(Map.of("type", "inputNumber", "field", "amount")));
+        Map<String, Object> required = Map.of("fieldName", "amount", "dataType", "INTEGER", "nullable", false);
+        assertThatThrownBy(() -> SubTableBatchRowDesign.validateAddForm(Map.of("fields", List.of(required),
+                "fieldWriteModes", Map.of("amount", "READONLY")), batch)).hasMessageContaining("default");
+        Map<String, Object> literal = new java.util.HashMap<>(required);
+        literal.put("defaultValue", "0");
+        org.assertj.core.api.Assertions.assertThatCode(() -> SubTableBatchRowDesign.validateAddForm(Map.of("fields", List.of(literal),
+                "fieldWriteModes", Map.of("amount", "READONLY")), batch)).doesNotThrowAnyException();
+        literal.put("defaultValue", "1.5");
+        assertThatThrownBy(() -> SubTableBatchRowDesign.validateAddForm(Map.of("fields", List.of(literal),
+                "fieldWriteModes", Map.of("amount", "READONLY")), batch)).hasMessageContaining("default");
+    }
+    @Test
     void refusesFieldsThatAreNotBoundOrAreUnsupportedAttachments() {
         Map<String, Object> form = Map.of("rule", List.of(Map.of("type", "input", "field", "receipt")));
         assertThatThrownBy(() -> SubTableBatchRowDesign.validateAddForm(Map.of("fields", List.of(
