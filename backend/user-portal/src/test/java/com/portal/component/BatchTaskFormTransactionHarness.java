@@ -30,27 +30,45 @@ final class BatchTaskFormTransactionHarness {
     final TaskFormComponent component;
     final String pk;
     final Map<String, Object> baseline;
+    private final JpaPersistence jpa;
+
+    record JpaPersistence(ProcessInstanceRepository repository,
+                          org.springframework.transaction.PlatformTransactionManager transactionManager) { }
 
     BatchTaskFormTransactionHarness(String pk, boolean failAfterWrite) throws Exception {
         this(pk, failAfterWrite, false);
     }
 
     BatchTaskFormTransactionHarness(String pk, boolean failAfterWrite, boolean readonlyCaption) throws Exception {
+        this(pk, failAfterWrite, readonlyCaption, null);
+    }
+
+    BatchTaskFormTransactionHarness(String pk, boolean failAfterWrite, boolean readonlyCaption, JpaPersistence jpa) throws Exception {
         this.pk = pk;
+        this.jpa = jpa;
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:batch_tx_" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
         persistence = new JdbcTemplate(source);
-        persistence.execute("CREATE TABLE batch_tx_instance (id VARCHAR(64) PRIMARY KEY, variables CLOB)");
         baseline = variables();
-        persistence.update("INSERT INTO batch_tx_instance VALUES (?, ?)", "synthetic-process", mapper.writeValueAsString(baseline));
-        ProcessInstanceRepository repository = repository(failAfterWrite);
+        ProcessInstanceRepository repository;
+        if (jpa == null) {
+            persistence.execute("CREATE TABLE batch_tx_instance (id VARCHAR(64) PRIMARY KEY, variables CLOB)");
+            persistence.update("INSERT INTO batch_tx_instance VALUES (?, ?)", "synthetic-process", mapper.writeValueAsString(baseline));
+            repository = repository(failAfterWrite);
+        } else {
+            repository = jpa.repository();
+            repository.saveAndFlush(ProcessInstance.builder().id("synthetic-process").processDefinitionKey("synthetic-key")
+                    .startUserId("synthetic-user").status("RUNNING").functionUnitCode("synthetic-unit")
+                    .variables(mapper.convertValue(baseline, new TypeReference<Map<String, Object>>() { })).build());
+        }
         WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
         when(engine.isAvailable()).thenReturn(true);
         when(engine.getTaskById("synthetic-task")).thenReturn(Optional.of(Map.of(
                 "taskDefinitionKey", "review", "processInstanceId", "synthetic-process")));
         JdbcTemplate metadata = mock(JdbcTemplate.class);
         component = new TaskFormComponent(mock(ProcessFormComponent.class), mock(ChangeHistoryComponent.class),
-                repository, engine, mock(RestTemplate.class), mapper, metadata, new DataSourceTransactionManager(source));
+                repository, engine, mock(RestTemplate.class), mapper, metadata,
+                jpa == null ? new DataSourceTransactionManager(source) : jpa.transactionManager());
         TaskFormDefinitionLoader loader = mock(TaskFormDefinitionLoader.class);
         when(loader.fetchTaskFormByStageId(eq("review"), eq("synthetic-process"), any())).thenReturn(
                 Map.of("sourceId", "form-one", "fieldPermissions", Map.of("101:caption", "EDITABLE"), "configJson", Map.of(),
@@ -80,6 +98,7 @@ final class BatchTaskFormTransactionHarness {
     }
 
     Map<String, Object> read() throws Exception {
+        if (jpa != null) return jpa.repository().findById("synthetic-process").orElseThrow().getVariables();
         return mapper.readValue(persistence.queryForObject("SELECT variables FROM batch_tx_instance WHERE id=?",
                 String.class, "synthetic-process"), new TypeReference<Map<String, Object>>() { });
     }
