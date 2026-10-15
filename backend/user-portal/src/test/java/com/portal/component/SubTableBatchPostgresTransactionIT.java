@@ -65,6 +65,28 @@ class SubTableBatchPostgresTransactionIT {
         new TransactionTemplate(transactions).executeWithoutResult(status -> repository.deleteAllInBatch());
     }
 
+    @Test
+    void v2DefinitionDigestSurvivesRealJsonbNormalizationAndTaskSave() throws Exception {
+        var harness = harness("entryKey", repository);
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var instance = repository.findById("synthetic-process").orElseThrow();
+        Map<String, Object> variables = new java.util.LinkedHashMap<>(instance.getVariables());
+        Map<String, Object> snapshot = mapper.convertValue(variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        snapshot.put("schemaVersion", 2);
+        snapshot.put("normalizationProbe", List.of(new java.math.BigDecimal("1000.00"), new java.math.BigDecimal("0.00")));
+        snapshot.put("definitionDigest", SubTableBatchSnapshotDigest.compute(snapshot, mapper));
+        variables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot);
+        instance.setVariables(variables);
+        new TransactionTemplate(transactions).executeWithoutResult(status -> repository.saveAndFlush(instance));
+        Map<String, Object> reloaded = mapper.convertValue(harness.read().get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        assertEquals(snapshot.get("definitionDigest"), SubTableBatchSnapshotDigest.compute(reloaded, mapper));
+        assertFalse(SubTableBatchRuntimeSnapshot.projectForForm(harness.read(), "form-one", mapper).isEmpty());
+        harness.deleteBoth(2);
+        assertEquals(reloaded, harness.read().get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
     void flushedJpaWriteRollsBackJsonbRowsVersionsAndSnapshotAfterLateFailure(String pk) throws Exception {

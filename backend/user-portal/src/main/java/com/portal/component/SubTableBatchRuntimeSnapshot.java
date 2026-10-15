@@ -21,7 +21,7 @@ import java.util.Set;
  */
 final class SubTableBatchRuntimeSnapshot {
 
-    static final int SCHEMA_VERSION = 1;
+    static final int SCHEMA_VERSION = 2;
 
     private static final Set<String> BATCH_FLAGS = Set.of(
             "allowBatchAdd", "allowBatchEdit", "allowBatchDelete", "allowBatchAssign");
@@ -95,6 +95,7 @@ final class SubTableBatchRuntimeSnapshot {
         snapshot.put("functionUnitCode", pin.code());
         snapshot.put("versionLabel", pin.versionLabel());
         snapshot.put("forms", snapshotForms);
+        snapshot.put("definitionDigest", SubTableBatchSnapshotDigest.compute(snapshot, objectMapper));
         return Optional.of(snapshot);
     }
 
@@ -109,8 +110,22 @@ final class SubTableBatchRuntimeSnapshot {
         }
         if (formSourceId == null || objectMapper == null) throw invalidRuntimeSnapshot();
         Map<String, Object> snapshot = mapValue(variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
-        if (!(snapshot.get("schemaVersion") instanceof Number version) || version.doubleValue() != SCHEMA_VERSION
-                || !(snapshot.get("forms") instanceof Map<?, ?>)) throw invalidRuntimeSnapshot();
+        if (!(snapshot.get("schemaVersion") instanceof Number version)) throw invalidRuntimeSnapshot();
+        java.math.BigDecimal exactVersion;
+        try {
+            exactVersion = new java.math.BigDecimal(version.toString());
+        } catch (NumberFormatException ex) {
+            throw invalidRuntimeSnapshot();
+        }
+        boolean legacy = exactVersion.compareTo(java.math.BigDecimal.ONE) == 0;
+        if ((!legacy && exactVersion.compareTo(java.math.BigDecimal.valueOf(SCHEMA_VERSION)) != 0)
+                || !(snapshot.get("forms") instanceof Map<?, ?>)
+                || (legacy && snapshot.containsKey("definitionDigest"))) throw invalidRuntimeSnapshot();
+        // v1 belongs to already captured instances. Do not backfill or rewrite them.
+        // Only newly captured v2 instances require the normalized integrity digest.
+        if (!legacy && (!(snapshot.get("definitionDigest") instanceof String digest)
+                || !digest.matches("[a-f0-9]{64}")
+                || !digest.equals(SubTableBatchSnapshotDigest.compute(snapshot, objectMapper)))) throw invalidRuntimeSnapshot();
         Map<String, Object> forms = mapValue(snapshot.get("forms"));
         if (forms.isEmpty()) throw invalidRuntimeSnapshot();
         if (!forms.containsKey(String.valueOf(formSourceId))) return Map.of();

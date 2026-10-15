@@ -18,6 +18,64 @@ class SubTableBatchRuntimeSnapshotTest {
             new ProcessStartComponent.ActiveCatalogPin("catalog-1", "expense", "2026.10");
 
     @Test
+    void newSnapshotsCarryADefinitionDigestWithoutReturningItToTheBrowser() {
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper).orElseThrow();
+        assertThat(snapshot.get("definitionDigest")).asString().matches("[a-f0-9]{64}");
+        Map<String, Object> projection = SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper);
+        assertThat(projection).containsKey("ctl-1").doesNotContainKey("definitionDigest");
+    }
+
+    @Test
+    void rejectsChangedFrozenDefinitionsBeforeReturningAnyFormProjection() {
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper).orElseThrow();
+        snapshot.put("catalogId", "changed-catalog");
+        assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper))
+                .hasMessageContaining("snapshot is invalid");
+    }
+
+    @Test
+    void rejectsMissingOrMalformedV2DigestsAndUnknownVersions() {
+        for (Object digest : List.of("missing", "invalid", "0".repeat(64))) {
+            Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper).orElseThrow();
+            if ("missing".equals(digest)) snapshot.remove("definitionDigest");
+            else snapshot.put("definitionDigest", digest);
+            assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.projectForForm(
+                    Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper))
+                    .hasMessageContaining("snapshot is invalid");
+        }
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper).orElseThrow();
+        snapshot.put("schemaVersion", 3);
+        assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper))
+                .hasMessageContaining("snapshot is invalid");
+    }
+
+    @Test
+    void preservesPreviouslyCapturedV1SnapshotsWithoutBackfillingADigest() throws Exception {
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper).orElseThrow();
+        snapshot.put("schemaVersion", 1);
+        snapshot.remove("definitionDigest");
+        String original = objectMapper.writeValueAsString(snapshot);
+        assertThat(SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper)).containsKey("ctl-1");
+        assertThat(objectMapper.writeValueAsString(snapshot)).isEqualTo(original);
+    }
+
+    @Test
+    void rejectsFractionalVersionRoundingAndDigestBearingLegacyDowngrades() {
+        for (Number version : List.of(new java.math.BigDecimal("1.0000000000000000001"),
+                new java.math.BigDecimal("2.0000000000000000001"), 1)) {
+            Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper).orElseThrow();
+            snapshot.put("schemaVersion", version);
+            assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.projectForForm(
+                    Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper))
+                    .hasMessageContaining("snapshot is invalid");
+        }
+    }
+
+    @Test
     void returnsEmptyWhenPublishedCatalogHasNoEnabledBatchControl() {
         assertThat(SubTableBatchRuntimeSnapshot.capture(content(config(false, "ctl-1")), pin, objectMapper))
                 .isEmpty();
@@ -43,7 +101,7 @@ class SubTableBatchRuntimeSnapshotTest {
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
                 .orElseThrow();
 
-        assertThat(snapshot).containsEntry("schemaVersion", 1)
+        assertThat(snapshot).containsEntry("schemaVersion", 2)
                 .containsEntry("catalogId", "catalog-1")
                 .containsEntry("functionUnitCode", "expense");
         Map<String, Object> form = (Map<String, Object>) ((Map<String, Object>) snapshot.get("forms")).get("form-1");
@@ -218,7 +276,7 @@ class SubTableBatchRuntimeSnapshotTest {
         Map<String, Object> frozenForm = (Map<String, Object>) ((Map<?, ?>) snapshot.get("forms")).get("form-1");
         ((Map<?, ?>) ((List<?>) frozenForm.get("controls")).get(0)).remove("rowDesign");
         assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(variables, Map.of("sourceId", "form-1"),
-                List.of(editChange("ctl-1", "101", "name")), objectMapper)).hasMessageContaining("permissions are missing");
+                List.of(editChange("ctl-1", "101", "name")), objectMapper)).hasMessageContaining("snapshot is invalid");
     }
 
     @Test
