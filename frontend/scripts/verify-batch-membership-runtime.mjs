@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import { loginViaPortalPassword } from './playwright-login.mjs'
 
 const taskId = process.env.FIXTURE_TASK_ID
-if (!taskId) throw new Error('FIXTURE_TASK_ID is required; no automatic task selection')
+if (!/^[a-f0-9-]{36}$/.test(taskId || '')) throw new Error('Pinned FIXTURE_TASK_ID is required; no automatic task selection')
 const origin = 'http://localhost:3101'
 const out = new URL('../user-portal/verification-screenshots/', import.meta.url)
 mkdirSync(out, { recursive: true })
@@ -19,6 +19,12 @@ try {
     if (message.type() === 'error') runtimeErrors.push({ type: 'console.error', location: message.location() })
   })
   await loginViaPortalPassword(page, { loginOrigin: origin })
+  const taskResponse = await page.request.get(`${origin}/api/portal/tasks/${taskId}`)
+  const taskBody = await taskResponse.json()
+  assert.equal(taskResponse.ok() && taskBody.success, true)
+  const task = taskBody.data
+  assert.match(task.functionUnitName, /^Batch verification /, 'Refusing a non-synthetic workflow')
+  console.log(JSON.stringify({ step: 'membership-review-task', taskId, processId: task.processInstanceId }))
   const read = async () => {
     const response = await page.request.get(`${origin}/api/portal/tasks/${taskId}/form-data`)
     const body = await response.json()
@@ -50,6 +56,21 @@ try {
   const dialog = page.locator('.el-dialog:visible')
   await dialog.locator('.el-table__body-wrapper tr').nth(1).waitFor()
   await dialog.screenshot({ path: fileURLToPath(new URL(`${new Date().toISOString().slice(0, 10)}_batch-${variant}-workspace-initial.png`, out)) })
+  const draftWrites = []
+  const trackDraftWrites = request => {
+    if (request.method() === 'POST' && (request.url().endsWith(`/tasks/${taskId}/submit`)
+      || request.url().endsWith('/primary-keys/allocate'))) draftWrites.push(request.url())
+  }
+  page.on('request', trackDraftWrites)
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.locator('.el-message-box').getByRole('button', { name: /Confirm|OK/, exact: true }).click()
+  await dialog.waitFor({ state: 'hidden' })
+  assert.deepEqual(draftWrites, [], 'Add then Cancel must not allocate PKs or persist')
+  page.off('request', trackDraftWrites)
+  assert.deepEqual(rowsOf(await read()), rowsOf(baseline), 'Cancel must leave all saved rows unchanged')
+  await batchButton.click()
+  assert.equal(await dialog.locator('.el-table__body-wrapper tr').count(), 2)
   await dialog.getByRole('button', { name: 'Add', exact: true }).click()
   const added = dialog.locator('.el-table__body-wrapper tr').nth(2)
   const addedInputs = added.locator('input:not([type="checkbox"])')
