@@ -34,6 +34,7 @@ final class SubTableBatchAssignmentStageGuard {
         Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(
                 instanceVariables, sourceId, objectMapper);
         List<Map<String, Object>> tasks = null;
+        List<Map<String, Object>> history = null;
         boolean taskStateLoaded = false;
         for (SubTableBatchChange change : changes) {
             if (!isAssign(change)) continue;
@@ -47,12 +48,32 @@ final class SubTableBatchAssignmentStageGuard {
                 if (tasks == null) {
                     throw forbidden("Batch assignment stage cannot be verified");
                 }
+                validateTaskIdentities(tasks, processInstanceId, "taskDefinitionKey");
+                history = workflowEngineClient.getTaskHistory(processInstanceId)
+                        .orElseThrow(() -> forbidden("Batch assignment history cannot be verified"));
+                validateTaskIdentities(history, processInstanceId, "activityId");
+                // An empty/mismatched history is not evidence that no task ever existed.
+                boolean hostRecorded = history.stream().anyMatch(task -> activeTaskDefinitionKey.equals(task.get("activityId"))
+                        && task.containsKey("endTime") && task.get("endTime") == null
+                        && task.containsKey("deleteReason") && task.get("deleteReason") == null);
+                if (!hostRecorded) throw forbidden("Batch assignment host history cannot be verified");
                 taskStateLoaded = true;
             }
-            boolean targetStarted = tasks.stream().filter(java.util.Objects::nonNull)
+            boolean targetStarted = tasks.stream()
                     .anyMatch(task -> targetTaskDefinitionKey.equals(text(task.get("taskDefinitionKey"))));
             if (targetStarted) {
                 throw forbidden("Batch assignment target task has already started");
+            }
+            if (history.stream().anyMatch(task -> targetTaskDefinitionKey.equals(task.get("activityId")))) {
+                throw forbidden("Batch assignment target task has already started");
+            }
+        }
+    }
+
+    private static void validateTaskIdentities(List<?> tasks, String processInstanceId, String nodeField) {
+        for (Object raw : tasks) {
+            if (!(raw instanceof Map<?, ?> task) || blank(text(task.get(nodeField))) || !processInstanceId.equals(task.get("processInstanceId"))) {
+                throw forbidden("Batch assignment task identity cannot be verified");
             }
         }
     }
