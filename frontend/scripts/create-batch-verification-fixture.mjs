@@ -23,7 +23,9 @@ try {
   if (!['manual', 'uuid', 'prefixedSequence'].includes(pkStrategy)) throw new Error('Unsupported synthetic PK strategy')
   const automaticPk = pkStrategy !== 'manual'
   const batchMode = process.env.FIXTURE_BATCH_MODE ?? (process.env.FIXTURE_EDIT_ONLY === '1' ? 'edit' : 'all')
-  if (!['all', 'add', 'edit', 'delete'].includes(batchMode)) throw new Error('Unsupported synthetic batch mode')
+  if (!['all', 'add', 'edit', 'delete', 'assign'].includes(batchMode)) throw new Error('Unsupported synthetic batch mode')
+  const assignment = batchMode === 'assign'
+  const assignmentOnly = process.env.FIXTURE_ASSIGN_ONLY === '1'
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
   const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
   const pkField = automaticPk ? 'entry_token' : 'line_key'
@@ -58,6 +60,7 @@ try {
       { fieldName: textField, dataType: 'VARCHAR', length: 100, nullable: false, displayName: 'Caption' },
       { fieldName: numberField, dataType: 'INTEGER', nullable: false, displayName: 'Amount',
         ...(readonlyNumber && readonlyDefault !== 'missing' ? { defaultValue: readonlyDefault } : {}) },
+      ...(assignment ? ['handler_code', 'pool_code', 'unit_code'].map(fieldName => ({ fieldName, dataType: 'VARCHAR', length: 100, nullable: true, displayName: fieldName })) : []),
     ],
   })
   const forms = []
@@ -72,7 +75,7 @@ try {
     })
     const binding = bindings.find(b => b.bindingType === 'SUB') || await api('POST', `${base}/forms/${form.id}/bindings`, {
       tableId: child.id, bindingType: 'SUB', bindingMode: 'EDITABLE', subMode: 'FULL',
-      bindingLinkMode: 'structuralFk', foreignKeyField: fkField, sortOrder: 1,
+      bindingLinkMode: assignment ? 'miParticipantRow' : 'structuralFk', foreignKeyField: fkField, sortOrder: 1,
     })
     const rowRule = [
       ...(!automaticPk ? [{ type: 'input', field: pkField, title: 'Line key', validate: [{ required: true }] }] : []),
@@ -86,16 +89,16 @@ try {
           batchControlId: `batch-${suffix}-${formType}`, props: {
             _bindingId: binding.id, allowAdd: true, allowEdit: true, allowDelete: true,
             allowBatchAdd: batchMode === 'all' || batchMode === 'add',
-            allowBatchEdit: batchMode === 'all' || batchMode === 'edit',
-            allowBatchDelete: batchMode === 'all' || batchMode === 'delete', allowBatchAssign: false,
+            allowBatchEdit: batchMode === 'all' || batchMode === 'edit' || (assignment && !assignmentOnly),
+            allowBatchDelete: batchMode === 'all' || batchMode === 'delete', allowBatchAssign: assignment,
           } },
       ], options: { form: { labelPosition: 'top' } },
       subForms: { [binding.id]: { rule: rowRule, options: {} } },
-      batchForms: { [binding.id]: { schemaVersion: 1, rule: rowRule, options: {} } },
+      batchForms: { [binding.id]: { schemaVersion: 1, rule: [...rowRule, ...(assignment ? [{ type: 'miAssignment' }] : [])], options: {} } },
     }
     await api('PUT', `${base}/forms/${form.id}`, {
       formName: form.formName, formType, scene: 'TASK', configJson,
-      fieldPermissions: Object.fromEntries(['case_key', ...[pkField, textField, numberField].map(f => `${binding.id}:${f}`)]
+      fieldPermissions: Object.fromEntries(['case_key', ...[pkField, textField, numberField, ...(assignment ? ['handler_code', 'pool_code', 'unit_code'] : [])].map(f => `${binding.id}:${f}`)]
         .map(f => [f, readonlyNumber && formType === 'TASK' && f === `${binding.id}:${numberField}` ? 'READONLY' : 'EDITABLE'])),
     })
     forms.push({ id: form.id, type: formType, bindingId: binding.id })
@@ -109,7 +112,12 @@ try {
 <bpmn:userTask id="Intake" name="Synthetic intake" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[0].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
 <bpmn:sequenceFlow id="IntakeToReview" sourceRef="Intake" targetRef="Review"/>
 <bpmn:userTask id="Review" name="Synthetic batch review" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
-<bpmn:sequenceFlow id="ReviewToEnd" sourceRef="Review" targetRef="End"/><bpmn:endEvent id="End"/>
+${assignment ? `<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targetRef="AssignedRows"/>
+<bpmn:subProcess id="AssignedRows"><bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="syntheticAssignmentRows" flowable:elementVariable="item"/>
+<bpmn:startEvent id="AssignedStart"/><bpmn:sequenceFlow id="AssignedFlow" sourceRef="AssignedStart" targetRef="AssignedWork"/>
+<bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', 'both')}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
+<bpmn:sequenceFlow id="AssignedEndFlow" sourceRef="AssignedWork" targetRef="AssignedEnd"/><bpmn:endEvent id="AssignedEnd"/></bpmn:subProcess>
+<bpmn:sequenceFlow id="AssignedToEnd" sourceRef="AssignedRows" targetRef="End"/>` : '<bpmn:sequenceFlow id="ReviewToEnd" sourceRef="Review" targetRef="End"/>'}<bpmn:endEvent id="End"/>
 </bpmn:process>
 <bpmndi:BPMNDiagram id="FixtureDiagram"><bpmndi:BPMNPlane id="FixturePlane" bpmnElement="batch_verify_${suffix}">
 <bpmndi:BPMNShape id="StartShape" bpmnElement="Start"><dc:Bounds x="100" y="112" width="36" height="36"/></bpmndi:BPMNShape>

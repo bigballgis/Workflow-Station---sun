@@ -1,5 +1,7 @@
 <template>
   <el-dialog
+    class="batch-edit-dialog"
+    top="24px"
     :model-value="visible"
     :title="t('subTable.batchEdit')"
     width="min(1120px, calc(100vw - 32px))"
@@ -25,7 +27,7 @@
         <el-button :disabled="applying || freshCount + addCount > 200" @click="addDraftRows">{{ t('subTable.add') }}</el-button>
       </el-form-item>
     </el-form>
-    <div class="batch-edit-dialog__table">
+    <div v-if="fields.length || showAdd || showDelete" class="batch-edit-dialog__table">
       <el-table :data="displayedRows" border size="small" max-height="420" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
         <el-table-column type="index" width="58" />
@@ -43,8 +45,8 @@
       <el-pagination v-model:current-page="page" :page-size="20" :total="draftRows.length" layout="prev, pager, next" />
     </div>
 
-    <el-divider />
-    <el-form class="batch-edit-dialog__uniform" label-position="left" label-width="auto">
+    <el-divider v-if="fields.length" />
+    <el-form v-if="fields.length" class="batch-edit-dialog__uniform" label-position="left" label-width="auto">
       <div class="batch-edit-dialog__uniform-title">{{ t('subTable.batchSetSelected') }}</div>
       <el-form-item v-for="field in fields" :key="field.field" :label="field.label">
         <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode" :disabled="uniformReadonly(field.field)">
@@ -60,10 +62,17 @@
         />
       </el-form-item>
     </el-form>
+    <SubTableBatchAssignmentEditor
+      v-if="visible && showAssign && assignmentCapability && rowScopeKey"
+      ref="assignmentEditor"
+      :rows="assignmentRows"
+      :capability="assignmentCapability"
+      :row-identity="rowIdentity"
+      :row-scope-key="rowScopeKey"
+    />
 
     <template #footer>
       <el-button @click="close">{{ t('common.cancel') }}</el-button>
-      <el-button v-if="showAssign" @click="openAssign">{{ t('subTable.batchAssign') }}</el-button>
       <el-button v-if="showDelete" type="danger" plain :disabled="!selectedRowIds.size" @click="deleteSelected">{{ t('subTable.delete') }}</el-button>
       <el-button type="primary" :loading="applying" :disabled="!draftRows.length && !deletedRowIds.length" @click="apply">{{ t('subTable.batchApply') }}</el-button>
     </template>
@@ -84,6 +93,8 @@ import { extractBatchEditableFields, type SubTableBatchCapability } from '@/util
 import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { applyBatchDraft } from '@/utils/subTableBatchDraft'
 import DesignerHelpLink from './DesignerHelpLink.vue'
+import SubTableBatchAssignmentEditor from './SubTableBatchAssignmentEditor.vue'
+import type { SubTableBatchChange } from '@/utils/subTableBatchChanges'
 
 type BatchField = NonNullable<ReturnType<typeof extractBatchEditableFields>>[number]
 
@@ -121,6 +132,8 @@ const props = withDefaults(defineProps<{
   capability: SubTableBatchCapability
   rowIdentity: (row: Record<string, unknown>) => string | null
   showAssign?: boolean
+  assignmentCapability?: SubTableBatchCapability | null
+  rowScopeKey?: (row: Record<string, unknown>) => Record<string, unknown> | null
   showDelete?: boolean
   showAdd?: boolean
   allowEdit?: boolean
@@ -132,9 +145,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (event: 'update:visible', visible: boolean): void
   (event: 'apply', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet): void
-  (event: 'open-assign'): void
   (event: 'open-delete'): void
-  (event: 'apply-workspace', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows): void
+  (event: 'apply-workspace', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows, assignment?: SubTableBatchChange): void
 }>()
 
 const { t } = useI18n()
@@ -150,6 +162,8 @@ const applying = ref(false)
 const baselineRows = ref<Array<Record<string, unknown>>>([])
 let temporaryKeys = new WeakMap<Record<string, unknown>, string>()
 const deletedRowIds = ref<string[]>([])
+const assignmentEditor = ref<InstanceType<typeof SubTableBatchAssignmentEditor>>()
+const assignmentRows = computed(() => draftRows.value.filter(row => !temporaryKeys.has(toRaw(row))))
 const freshCount = computed(() => draftRows.value.filter(row => temporaryKeys.has(toRaw(row))).length)
 
 const fields = computed<BatchField[]>(() => extractBatchEditableFields(props.capability) ?? [])
@@ -177,16 +191,13 @@ async function close() {
   if (!props.visible) return true
   if (applying.value) return false
   if (JSON.stringify(draftRows.value) !== JSON.stringify(baselineRows.value)
-    || Object.values(uniformMode).some(mode => mode !== 'none')) {
+    || Object.values(uniformMode).some(mode => mode !== 'none') || assignmentEditor.value?.hasChanges()) {
     try { await ElMessageBox.confirm(t('subTable.batchDiscardConfirm'), t('common.cancel'), { type: 'warning' }) } catch { return false }
   }
   emit('update:visible', false)
   return true
 }
 
-async function openAssign(): Promise<void> {
-  if (await close()) emit('open-assign')
-}
 function draftIdentity(row: Record<string, unknown>): string | null {
   return temporaryKeys.get(toRaw(row)) ?? props.rowIdentity(row)
 }
@@ -201,7 +212,7 @@ function editableRow(row: Record<string, unknown>, fieldName: string): boolean {
 
 function uniformReadonly(fieldName: string): boolean {
   const definition = frozenFields.value.get(fieldName)
-  return props.capability.rowDesign?.fieldWriteModes?.[fieldName] === 'READONLY'
+  return (!props.allowEdit && !props.showAdd) || props.capability.rowDesign?.fieldWriteModes?.[fieldName] === 'READONLY'
     || !!(definition?.isPrimaryKey || definition?.isForeignKey || definition?.isComputed)
 }
 
@@ -270,10 +281,23 @@ async function apply() {
   if (JSON.stringify(props.rows) !== JSON.stringify(baselineRows.value)) { ElMessage.error(t('subTable.batchStaleDraft')); return }
   const fresh = freshRows()
   const changes = collectChanges()
-  const existing = applyBatchDraft(props.rows, row => props.rowIdentity(row) ?? '', changes)
+  let existing = applyBatchDraft(props.rows, row => props.rowIdentity(row) ?? '', changes)
+  let assignment: SubTableBatchChange | undefined
+  try {
+    if (props.showAssign) {
+      if (!assignmentEditor.value) throw new Error(t('common.operationFailed'))
+      const collected = assignmentEditor.value.collect(existing)
+      existing = collected.rows
+      assignment = collected.change
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error && error.message.startsWith('subTable.') ? t(error.message) : resolveUserFacingHttpMessage(error, t))
+    return
+  }
   const changedIds = new Set([...(changes.rowPatches ?? []).map(patch => patch.rowId), ...(changes.uniformPatches ?? []).flatMap(patch => patch.rowIds)])
-  const affectedIds = new Set([...changedIds, ...(changes.deletedRowIds ?? [])])
+  const affectedIds = new Set([...changedIds, ...(changes.deletedRowIds ?? []), ...(assignment?.rowPatches ?? []).map(patch => patch.rowId)])
   if (affectedIds.size + fresh.length > 200) { ElMessage.error(t('subTable.batchLimit')); return }
+  if (!affectedIds.size && !fresh.length) { emit('update:visible', false); return }
   const affectedExisting = existing.filter(row => changedIds.has(props.rowIdentity(row) ?? ''))
   const editableFields = fields.value.filter(field => !uniformReadonly(field.field))
   const addedFields = fields.value.filter(field => {
@@ -290,7 +314,7 @@ async function apply() {
     if (fresh.length && !prepared) throw new Error(t('common.operationFailed'))
     if (JSON.stringify(props.rows) !== JSON.stringify(baselineRows.value)) throw new Error(t('subTable.batchStaleDraft'))
     if (prepared) validatePreparedIdentities(prepared)
-    if (prepared || deletedRowIds.value.length) emit('apply-workspace', [...existing, ...(prepared?.rows ?? [])], changes, prepared)
+    if (prepared || deletedRowIds.value.length || assignment) emit('apply-workspace', [...existing, ...(prepared?.rows ?? [])], changes, prepared, assignment)
     else emit('apply', existing, changes)
     emit('update:visible', false)
   } catch (error) { ElMessage.error(resolveUserFacingHttpMessage(error, t)) }
@@ -322,6 +346,10 @@ function freshRows(): Array<Record<string, unknown>> {
 </script>
 
 <style scoped>
+/* ElDialog teleports its content without the caller's scope attribute. Keep these rules scoped by its dedicated class. */
+:global(.el-dialog.batch-edit-dialog) { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); margin-bottom: 24px; }
+:global(.el-dialog.batch-edit-dialog .el-dialog__body) { overflow-y: auto; min-height: 0; }
+:global(.el-dialog.batch-edit-dialog .el-dialog__header), :global(.el-dialog.batch-edit-dialog .el-dialog__footer) { flex-shrink: 0; }
 .batch-edit-dialog__title { display: flex; align-items: center; gap: 8px; }
 .batch-edit-dialog__title :deep(.designer-help-link) { color: var(--el-color-danger); }
 .batch-edit-dialog__hint { margin-top: 0; color: var(--el-text-color-secondary); }

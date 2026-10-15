@@ -1169,6 +1169,7 @@ export default {
     batchDuplicateIdentity: 'A new row has a missing or duplicate primary key. The batch has not been applied.',
     batchDiscardConfirm: 'Discard changes in this workspace?',
     batchStaleDraft: 'The table changed while this workspace was open. Reopen it before applying.',
+    batchAssignmentRequired: 'Select a valid person or complete BU and Role for each changed assignment. Select rows before setting a uniform target.',
     batchDeleteHint: 'Select the rows to delete. The normal Save or auto-save persists the change.',
     batchDeleteConfirm: 'Delete {count} selected row(s)?',
     batchEditDraftHint: 'Changes stay in this page until the normal Save or auto-save succeeds.',

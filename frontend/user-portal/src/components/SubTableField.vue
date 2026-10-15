@@ -581,21 +581,13 @@
       :parent-selection="batchParentSelection"
       :prepare-rows="(draftRows, value) => prepareBatchRows(draftRows, value, batchWorkspaceCapability?.rowDesign)"
       :show-assign="canBatchAssign"
+      :assignment-capability="batchAssignCapability"
+      :row-scope-key="resolveBatchRowScopeKey"
       :show-delete="canBatchDelete"
       :show-add="canBatchAdd"
       @apply="applyBatchEdit"
       @apply-workspace="applyBatchWorkspace"
-      @open-assign="batchAssignDialogVisible = true"
       @open-delete="batchDeleteDialogVisible = true"
-    />
-    <SubTableBatchAssignDialog
-      v-if="batchAssignCapability"
-      v-model:visible="batchAssignDialogVisible"
-      :rows="rows"
-      :capability="batchAssignCapability"
-      :row-identity="resolveBatchRowIdentity"
-      :row-scope-key="resolveBatchRowScopeKey"
-      @apply="applyBatchAssign"
     />
     <SubTableBatchDeleteDialog
       v-if="batchDeleteCapability"
@@ -618,7 +610,6 @@ import { Plus, Document, Search, Close, Download, Upload } from '@element-plus/i
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableBatchEditDialog from './SubTableBatchEditDialog.vue'
-import SubTableBatchAssignDialog from './SubTableBatchAssignDialog.vue'
 import SubTableBatchDeleteDialog from './SubTableBatchDeleteDialog.vue'
 import {
   resolveDisplayValue,
@@ -814,7 +805,6 @@ const canAdd = computed(() => !isActionBinding.value && props.editable === true 
 const canEdit = computed(() => !isActionBinding.value && props.editable === true && props.allowEdit !== false)
 const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
 const batchDialogVisible = ref(false)
-const batchAssignDialogVisible = ref(false)
 const batchDeleteDialogVisible = ref(false)
 const batchAddCapability = computed(() => {
   const capability = parseSubTableBatchCapability(props.batchCapability)
@@ -835,6 +825,7 @@ const batchDeleteCapability = computed(() => {
   return allowsFrozenBatchDelete(capability, props.bindingId) && capability ? capability : null
 })
 const batchWorkspaceCapability = computed(() => batchEditCapability.value ?? batchAddCapability.value
+  ?? batchAssignCapability.value
   ?? (batchDeleteCapability.value && extractBatchEditableFields(batchDeleteCapability.value) ? batchDeleteCapability.value : null))
 
 /** Batch edit never falls back to legacy id/name guesses: it requires a server rowKey or one configured PK. */
@@ -894,8 +885,7 @@ function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: Batch
 }
 
 function openBatchWorkspace() {
-  if (batchWorkspaceCapability.value && (canBatchEdit.value || canBatchAdd.value || canBatchDelete.value)) batchDialogVisible.value = true
-  else if (canBatchAssign.value) batchAssignDialogVisible.value = true
+  if (batchWorkspaceCapability.value && canBatchWorkspace.value) batchDialogVisible.value = true
   else if (canBatchDelete.value) batchDeleteDialogVisible.value = true
 }
 
@@ -913,8 +903,13 @@ function applyBatchAdd(prepared: PreparedBatchRows, fields: string[]) {
   props.onBatchChange?.({ batchControlId: capability.batchControlId, bindingId: capability.bindingId, operation: 'ADD', rowPatches })
 }
 
-function applyBatchWorkspace(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows) {
+function applyBatchWorkspace(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows, assignment?: SubTableBatchChange) {
   if (!canBatchWorkspace.value) return
+  if (assignment && (!canBatchAssign.value || assignment.operation !== 'ASSIGN'
+    || assignment.batchControlId !== batchAssignCapability.value?.batchControlId
+    || assignment.bindingId !== batchAssignCapability.value?.bindingId)) throw new Error(t('common.operationFailed'))
+  if (prepared && !canBatchAdd.value) throw new Error(t('common.operationFailed'))
+  if ((changes.rowPatches?.length || changes.uniformPatches?.length) && !canBatchEdit.value) throw new Error(t('common.operationFailed'))
   const removed = new Set(changes.deletedRowIds ?? [])
   const capability = batchDeleteCapability.value
   const rowPatches = rows.value.filter(row => removed.has(resolveBatchRowIdentity(row) ?? ''))
@@ -934,15 +929,9 @@ function applyBatchWorkspace(nextRows: Array<Record<string, unknown>>, changes: 
     applyBatchAdd(prepared, fields)
   }
   if (rowPatches.length && capability) props.onBatchChange?.({ batchControlId: capability.batchControlId, bindingId: capability.bindingId, operation: 'DELETE', rowPatches })
+  if (assignment) props.onBatchChange?.(assignment)
   rows.value = nextRows
   emit('update:modelValue', [...rows.value])
-}
-
-function applyBatchAssign(nextRows: Array<Record<string, unknown>>, change: SubTableBatchChange) {
-  if (!canBatchAssign.value) return
-  rows.value = nextRows
-  emit('update:modelValue', [...rows.value])
-  props.onBatchChange?.(change)
 }
 
 function applyBatchDelete(nextRows: Array<Record<string, unknown>>, change: SubTableBatchChange) {

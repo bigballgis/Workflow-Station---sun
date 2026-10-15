@@ -130,6 +130,7 @@ function batchWorkspaceSection(prefix: string): GuideSection {
       { code: 'Rows to add · Add', hintKey: `${prefix}.batchAddHint` },
       { code: 'Selection · Delete', hintKey: `${prefix}.batchDeleteHint` },
       { code: 'Set selected · No change / Set value / Clear value', hintKey: `${prefix}.batchSetHint` },
+      { code: 'Batch Assign · Assignment Mode', hintKey: `${prefix}.batchAssignHint` },
       { code: 'Apply', hintKey: `${prefix}.batchApplyHint` },
       { code: 'Cancel', hintKey: `${prefix}.batchCancelHint` },
     ] }

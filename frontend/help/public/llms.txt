@@ -44,7 +44,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/form-ctl-tree-select — TreeSelect
 - /help/form-ctl-transfer — Transfer (Hermes Left Title / Right Title)
 - /help/form-ctl-editor — Editor (Hermes Rows, Placeholder, Max Length)
-- /help/form-ctl-sub-table — Sub-Table (bound SUB grid; help_pr_line; batch Add/Edit/Delete/Assign default off and independent from individual-row permissions; Assign configures only a not-yet-created subtask; List View). Attach the table first in /help/table-bindings. #batch explains private drafts, mixed Add/Delete, required/manual keys, 200 affected rows, Apply versus Save, and Cancel.
+- /help/form-ctl-sub-table — Sub-Table (bound SUB grid; help_pr_line; batch Add/Edit/Delete/Assign default off and independent from individual-row permissions; Assign configures only a not-yet-created subtask; List View). Attach the table first in /help/table-bindings. #batch explains one workspace for ordinary edits and initial assignment, per-row or selected-row targets, directory errors, mixed Add/Delete, required/manual keys, 200 affected rows, Apply versus Save, and Cancel.
 - /help/form-ctl-lookup — Lookup (Relation Table, Search / Display fields, Fixed Filters, cascade, Backfill; setLookupFilter)
 - /help/form-events-extend — Extend and MI event index (Inline Form, Link Form, Owner, Record Note, Assignment Mode). Sub-Table and Lookup have their own articles.
 - /help/form-events-layout — Layout and Auxiliary control events (click, Tabs extras)

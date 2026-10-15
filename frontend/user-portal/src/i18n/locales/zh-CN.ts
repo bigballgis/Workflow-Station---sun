@@ -1164,6 +1164,7 @@ export default {
     batchDuplicateIdentity: '新增行的主键缺失或重复，本批次尚未应用。',
     batchDiscardConfirm: '确定放弃工作区中尚未应用的修改吗？',
     batchStaleDraft: '工作区打开后表格已发生变化，请重新打开后再应用。',
+    batchAssignmentRequired: '请为每个已修改的分派选择有效人员，或完整填写 BU 和角色。统一设置前请先选中行。',
     batchDeleteHint: '选择要删除的行。原有保存或自动保存成功后才会持久化。',
     batchDeleteConfirm: '确定删除选中的 {count} 行吗？',
     batchEditDraftHint: '变更仅应用到当前页面，需由原保存或自动保存成功后才会持久化。',

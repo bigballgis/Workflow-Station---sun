@@ -1164,6 +1164,7 @@ export default {
     batchDuplicateIdentity: '新增列的主鍵缺失或重複，此批次尚未套用。',
     batchDiscardConfirm: '確定放棄工作區中尚未套用的修改嗎？',
     batchStaleDraft: '工作區開啟後表格已變更，請重新開啟後再套用。',
+    batchAssignmentRequired: '請為每個已修改的分派選取有效人員，或完整填寫 BU 與角色。統一設定前請先選取列。',
     batchDeleteHint: '選取要刪除的列。原有儲存或自動儲存成功後才會持久化。',
     batchDeleteConfirm: '確定刪除選取的 {count} 列嗎？',
     batchEditDraftHint: '變更只會套用到目前頁面，原有儲存或自動儲存成功後才會持久化。',

@@ -1,11 +1,14 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { ElMessageBox } from 'element-plus'
+import { defineComponent } from 'vue'
 import BatchWorkspace from '../SubTableBatchEditDialog.vue'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('@/api/request', () => ({ request: { get: vi.fn() } }))
+vi.mock('@/api/permission', () => ({ permissionApi: {} }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn() }, ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') },
 }))
@@ -27,6 +30,8 @@ const capability: SubTableBatchCapability = {
   batchForm: { schemaVersion: 1, rule: [{ type: 'input', field: 'description', required: true }] },
 }
 const initialRows = [{ line_key: 'L1', description: 'first', hidden: 'keep-1' }, { line_key: 'L2', description: 'second', hidden: 'keep-2' }]
+const collectAssignment = vi.fn()
+const assignmentDirty = vi.fn(() => false)
 
 function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown>>): Promise<PreparedBatchRows> => ({
   rows: rows.map((row, index) => ({ ...row, line_key: `N${index + 1}` })),
@@ -40,11 +45,77 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
     ElTable: { name: 'ElTable', props: ['data'], template: '<div />' }, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' },
     ElFormItem: { template: '<div><slot/></div>' }, ElInputNumber: true, ElButton: { template: '<button><slot/></button>' },
     ElPagination: true, ElDivider: true, ElSelect: true, ElOption: true, ElInput: true,
+    SubTableBatchAssignmentEditor: defineComponent({
+      name: 'SubTableBatchAssignmentEditor',
+      setup(_, { expose }) { expose({ collect: collectAssignment, hasChanges: assignmentDirty }); return () => null },
+    }),
   } } })
   return { wrapper, state: wrapper.vm as unknown as WorkspaceState, prepareRows }
 }
 
 describe('batch workspace Add/Delete transaction', () => {
+  it('does not emit data updates for an unchanged workspace', async () => {
+    const { wrapper, state } = workspace()
+    await state.apply()
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
+    expect(wrapper.emitted('update:visible')).toEqual([[false]])
+    wrapper.unmount()
+  })
+
+  it('confirms discarding an Assignment-only draft and keeps it when dismissal is cancelled', async () => {
+    const { wrapper, state } = workspace()
+    await wrapper.setProps({ showAssign: true, allowEdit: false, showAdd: false, showDelete: false,
+      assignmentCapability: { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } },
+      rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
+    assignmentDirty.mockReturnValueOnce(true)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    expect(await state.close()).toBe(false)
+    expect(wrapper.emitted('update:visible')).toBeUndefined()
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not apply valid Assignment when an ordinary field fails validation', async () => {
+    const { wrapper, state } = workspace()
+    await wrapper.setProps({ showAssign: true, assignmentCapability: { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } }, rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
+    state.draftRows[0]!.description = ''
+    collectAssignment.mockImplementation((rows: Array<Record<string, unknown>>) => ({ rows, change: { rowPatches: [{ rowId: 'L1' }] } }))
+    await state.apply()
+    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
+    expect(wrapper.emitted('update:visible')).toBeUndefined()
+    expect(state.draftRows[0]!.description).toBe('')
+    wrapper.unmount()
+  })
+  it('keeps Assignment inside the workspace and applies both drafts in one event', async () => {
+    const { wrapper, state } = workspace()
+    const assignCapability = { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } }
+    await wrapper.setProps({ showAssign: true, assignmentCapability: assignCapability, rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
+    state.draftRows[0]!.description = 'ordinary draft'
+    const change = { batchControlId: 'lines-grid', bindingId: '101', operation: 'ASSIGN', rowPatches: [{ rowId: 'L1', rowKey: { line_key: 'L1' }, fields: ['handler_code'], assignment: { mode: 'PERSON', assigneeId: 'user-new' } }] }
+    collectAssignment.mockImplementation((rows: Array<Record<string, unknown>>) => ({ rows: rows.map((row, index) => index === 0 ? { ...row, handler_code: 'user-new' } : row), change }))
+    expect(wrapper.findComponent({ name: 'SubTableBatchAssignmentEditor' }).exists()).toBe(true)
+    await state.apply()
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    const event = wrapper.emitted('apply-workspace')?.[0]
+    expect(event?.[0]).toEqual([{ ...initialRows[0], description: 'ordinary draft', handler_code: 'user-new' }, initialRows[1]])
+    expect(event?.[3]).toEqual(change)
+    wrapper.unmount()
+  })
+
+  it('retains both drafts and emits nothing when Assignment validation fails', async () => {
+    const { wrapper, state, prepareRows } = workspace()
+    await wrapper.setProps({ showAssign: true, assignmentCapability: { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } }, rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
+    state.draftRows[0]!.description = 'ordinary draft'
+    collectAssignment.mockImplementation(() => { throw new Error('subTable.batchAssignmentRequired') })
+    await state.apply()
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
+    expect(wrapper.emitted('update:visible')).toBeUndefined()
+    expect(prepareRows).not.toHaveBeenCalled()
+    expect(state.draftRows[0]!.description).toBe('ordinary draft')
+    wrapper.unmount()
+  })
   it('uses the frozen read-only field policy and typed literal defaults for new rows', async () => {
     const { wrapper, state } = workspace()
     await wrapper.setProps({ capability: { ...capability,
