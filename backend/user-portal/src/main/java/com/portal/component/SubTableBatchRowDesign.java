@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 
-/** Freezes the metadata needed to validate membership changes in a new instance. */
+/** Freezes published field/identity metadata; membership additionally requires a structural business binding. */
 final class SubTableBatchRowDesign {
     private SubTableBatchRowDesign() { }
 
@@ -40,13 +40,26 @@ final class SubTableBatchRowDesign {
 
     static Map<String, Object> capture(Map<String, Object> form, String bindingId,
                                        Map<String, Object> content, ObjectMapper mapper) {
+        return capture(form, bindingId, content, mapper, true);
+    }
+
+    static Map<String, Object> captureFields(Map<String, Object> form, String bindingId,
+                                             Map<String, Object> content, ObjectMapper mapper) {
+        return capture(form, bindingId, content, mapper, false);
+    }
+
+    private static Map<String, Object> capture(Map<String, Object> form, String bindingId,
+                                              Map<String, Object> content, ObjectMapper mapper, boolean membership) {
         if (!(form.get("tableBindings") instanceof List<?> bindings)) throw invalid("binding metadata is missing");
         Map<?, ?> binding = bindings.stream().filter(raw -> raw instanceof Map<?, ?> value
                         && bindingId.equals(String.valueOf(value.get("bindingId"))))
                 .map(raw -> (Map<?, ?>) raw).findFirst().orElseThrow(() -> invalid("binding metadata is missing"));
-        if (!"SUB".equals(binding.get("bindingType")) || !"EDITABLE".equals(binding.get("bindingMode"))
-                || !"structuralFk".equals(binding.get("bindingLinkMode"))) {
-            throw invalid("Add/Delete require an editable structural business binding");
+        if (!"SUB".equals(binding.get("bindingType")) || !"EDITABLE".equals(binding.get("bindingMode"))) {
+            throw invalid("Batch operations require an editable sub-table binding");
+        }
+        if (!("structuralFk".equals(binding.get("bindingLinkMode"))
+                || (!membership && "miParticipantRow".equals(binding.get("bindingLinkMode"))))) {
+            throw invalid("Add/Delete require a structural business binding; Edit/Assign require a declared link mode");
         }
         Map<String, Object> table = findTable(binding.get("tableName"), content, mapper);
         if (!(table.get("fields") instanceof List<?> fields) || fields.isEmpty()) throw invalid("field metadata is missing");

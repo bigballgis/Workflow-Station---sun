@@ -222,9 +222,7 @@ final class SubTableBatchChangeGuard {
                     throw forbidden("Batch patch contains a read-only field");
                 }
             }
-            if (control.get("rowDesign") instanceof Map<?, ?> design) {
-                SubTableBatchPublishedPermissions.validateEditedFields(design, patch.getFields());
-            }
+            SubTableBatchPublishedPermissions.validateEditedFields(map(control.get("rowDesign")), patch.getFields());
         }
     }
 

@@ -63,16 +63,17 @@ final class SubTableBatchRuntimeSnapshot {
                     form, assignmentContracts, objectMapper);
             for (Map<String, Object> control : controls) {
                 Map<String, Object> flags = mapValue(control.get("capabilities"));
-                if (Boolean.TRUE.equals(flags.get("allowBatchAdd")) || Boolean.TRUE.equals(flags.get("allowBatchDelete"))) {
-                    SubTableBatchFormRules.fields(mapValue(control.get("batchForm")));
-                    String bindingId = String.valueOf(control.get("bindingId"));
-                    Map<String, Object> design = SubTableBatchRowDesign.capture(form, bindingId, catalogContent, objectMapper);
-                    SubTableBatchScopeDesign.validateFrozen(design, bindingId);
-                    if (Boolean.TRUE.equals(flags.get("allowBatchAdd"))) {
-                        SubTableBatchRowDesign.validateAddForm(design, mapValue(control.get("batchForm")));
-                    }
-                    control.put("rowDesign", deepCopy(design, objectMapper));
+                SubTableBatchFormRules.fields(mapValue(control.get("batchForm")));
+                String bindingId = String.valueOf(control.get("bindingId"));
+                boolean membership = Boolean.TRUE.equals(flags.get("allowBatchAdd")) || Boolean.TRUE.equals(flags.get("allowBatchDelete"));
+                Map<String, Object> design = membership
+                        ? SubTableBatchRowDesign.capture(form, bindingId, catalogContent, objectMapper)
+                        : SubTableBatchRowDesign.captureFields(form, bindingId, catalogContent, objectMapper);
+                if (membership) SubTableBatchScopeDesign.validateFrozen(design, bindingId);
+                if (Boolean.TRUE.equals(flags.get("allowBatchAdd"))) {
+                    SubTableBatchRowDesign.validateAddForm(design, mapValue(control.get("batchForm")));
                 }
+                control.put("rowDesign", deepCopy(design, objectMapper));
             }
             if (!controls.isEmpty()) {
                 String sourceId = requiredText(form.get("sourceId"), "catalog form sourceId for enabled batch control");

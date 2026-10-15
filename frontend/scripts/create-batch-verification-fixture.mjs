@@ -20,6 +20,7 @@ try {
   if (!/^[a-z0-9]+$/.test(suffix)) throw new Error('Synthetic suffix must be an alphanumeric fixture identifier')
   if (process.env.FIXTURE_UNIT_ID && !/^\d+$/.test(process.env.FIXTURE_UNIT_ID)) throw new Error('Invalid synthetic FU ID')
   const automaticPk = process.env.FIXTURE_PK_STRATEGY === 'uuid'
+  const editOnly = process.env.FIXTURE_EDIT_ONLY === '1'
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
   const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
   const pkField = automaticPk ? 'entry_token' : 'line_key'
@@ -80,7 +81,7 @@ try {
         { type: 'subTable', field: `lines_${binding.id}`, title: 'Synthetic lines',
           batchControlId: `batch-${suffix}-${formType}`, props: {
             _bindingId: binding.id, allowAdd: true, allowEdit: true, allowDelete: true,
-            allowBatchAdd: true, allowBatchEdit: true, allowBatchDelete: true, allowBatchAssign: false,
+            allowBatchAdd: !editOnly, allowBatchEdit: true, allowBatchDelete: !editOnly, allowBatchAssign: false,
           } },
       ], options: { form: { labelPosition: 'top' } },
       subForms: { [binding.id]: { rule: rowRule, options: {} } },

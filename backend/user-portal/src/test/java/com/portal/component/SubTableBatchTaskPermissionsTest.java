@@ -38,4 +38,23 @@ class SubTableBatchTaskPermissionsTest {
         assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchTaskPermissions.preserveOmittedStores(
                 variables, new HashMap<>(Map.of("__subTables__", Map.of("dw:one", List.of("invalid-row"))))));
     }
+
+    @Test
+    void editOnlyCannotBypassCurrentReadonlyPermissionByOmittingBatchIntent() {
+        Map<String, Object> control = new HashMap<>(Map.of("batchControlId", "grid", "bindingId", "101", "rowDesign", Map.of(
+                "binding", Map.of("tableName", "lines", "primaryKeyFields", List.of("entry_key")),
+                "fields", List.of(Map.of("fieldName", "amount")))));
+        Map<String, Object> variables = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1,
+                "forms", Map.of("form", Map.of("controls", List.of(control)))),
+                "__subTables__", Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 1))));
+        Map<String, Object> form = Map.of("sourceId", "form", "fieldPermissions", Map.of("101:amount", "READONLY"),
+                "tableBindings", List.of(Map.of("tableName", "lines", "bindingMode", "EDITABLE")));
+        SubTableBatchTaskPermissions.validate(variables, form,
+                Map.of("__subTables__", variables.get("__subTables__")), new ObjectMapper());
+        assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchTaskPermissions.validate(variables,
+                form, Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 2)))), new ObjectMapper()));
+        control.remove("rowDesign");
+        assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchTaskPermissions.validate(variables,
+                form, Map.of("__subTables__", variables.get("__subTables__")), new ObjectMapper()));
+    }
 }

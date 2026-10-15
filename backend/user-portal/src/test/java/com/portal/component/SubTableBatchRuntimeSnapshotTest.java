@@ -51,6 +51,7 @@ class SubTableBatchRuntimeSnapshotTest {
         assertThat(control).containsEntry("batchControlId", "ctl-1").containsEntry("bindingId", "101");
         assertThat((Map<String, Object>) control.get("capabilities"))
                 .containsEntry("allowBatchEdit", true).containsEntry("allowBatchAdd", false);
+        assertThat((Map<String, Object>) control.get("rowDesign")).containsKey("fieldWriteModes");
     }
 
     @Test
@@ -100,11 +101,8 @@ class SubTableBatchRuntimeSnapshotTest {
         rule.put("props", Map.of("_bindingId", 101, "allowBatchAssign", true));
         assignConfig.put("batchForms", Map.of("101", Map.of("schemaVersion", 1,
                 "rule", List.of(Map.of("type", "miAssignment")))));
-        Map<String, Object> catalog = Map.of(
-                "forms", List.of(Map.of(
-                        "sourceId", "form-1", "data", objectMapper.writeValueAsString(assignConfig), "formType", "TASK",
-                        "tableBindings", List.of(Map.of("bindingId", 101, "tableName", "line_items")))),
-                "processes", List.of(Map.of("data", bpmnFor("line_items"))));
+        Map<String, Object> catalog = new java.util.LinkedHashMap<>(content(assignConfig));
+        catalog.put("processes", List.of(Map.of("data", bpmnFor("lines"))));
 
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(catalog, pin, objectMapper).orElseThrow();
         Map<String, Object> form = (Map<String, Object>) ((Map<String, Object>) snapshot.get("forms")).get("form-1");
@@ -119,8 +117,10 @@ class SubTableBatchRuntimeSnapshotTest {
 
     @Test
     void rejectsDuplicateEnabledControlIdentityAcrossForms() {
+        Map<String, Object> catalog = new java.util.LinkedHashMap<>(content(config(true, "duplicate")));
+        catalog.put("forms", List.of(form("form-1", config(true, "duplicate")), form("form-2", config(true, "duplicate"))));
         assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(
-                Map.of("forms", List.of(form("form-1", config(true, "duplicate")), form("form-2", config(true, "duplicate")))),
+                catalog,
                 pin, objectMapper))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Duplicate batchControlId");
     }
@@ -204,6 +204,24 @@ class SubTableBatchRuntimeSnapshotTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void editOnlyFreezesReadonlyAuthorityAndRejectsIncompleteOldBatchSnapshots() {
+        Map<String, Object> catalog = new java.util.LinkedHashMap<>(content(config(true, "ctl-1")));
+        Map<String, Object> form = new java.util.LinkedHashMap<>((Map<String, Object>) ((List<?>) catalog.get("forms")).get(0));
+        form.put("publishedFieldPermissions", Map.of("101:name", "READONLY"));
+        catalog.put("forms", List.of(form));
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(catalog, pin, objectMapper).orElseThrow();
+        Map<String, Object> variables = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot);
+        form.put("publishedFieldPermissions", Map.of("101:name", "EDITABLE"));
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(variables, Map.of("sourceId", "form-1"),
+                List.of(editChange("ctl-1", "101", "name")), objectMapper)).hasMessageContaining("read-only or protected");
+        Map<String, Object> frozenForm = (Map<String, Object>) ((Map<?, ?>) snapshot.get("forms")).get("form-1");
+        ((Map<?, ?>) ((List<?>) frozenForm.get("controls")).get(0)).remove("rowDesign");
+        assertThatThrownBy(() -> SubTableBatchChangeGuard.validate(variables, Map.of("sourceId", "form-1"),
+                List.of(editChange("ctl-1", "101", "name")), objectMapper)).hasMessageContaining("permissions are missing");
+    }
+
+    @Test
     void rejectsBatchContextForAnotherFormOrBinding() {
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config(true, "ctl-1")), pin, objectMapper)
                 .orElseThrow();
@@ -234,11 +252,8 @@ class SubTableBatchRuntimeSnapshotTest {
         rule.put("props", Map.of("_bindingId", 101, "allowBatchAssign", true));
         assignConfig.put("batchForms", Map.of("101", Map.of("schemaVersion", 1,
                 "rule", List.of(Map.of("type", "miAssignment")))));
-        Map<String, Object> catalog = Map.of(
-                "forms", List.of(Map.of(
-                        "sourceId", "form-1", "data", objectMapper.writeValueAsString(assignConfig), "formType", "TASK",
-                        "tableBindings", List.of(Map.of("bindingId", 101, "tableName", "line_items")))),
-                "processes", List.of(Map.of("data", bpmnFor("line_items"))));
+        Map<String, Object> catalog = new java.util.LinkedHashMap<>(content(assignConfig));
+        catalog.put("processes", List.of(Map.of("data", bpmnFor("lines"))));
         Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(catalog, pin, objectMapper).orElseThrow();
         SubTableBatchChange change = editChange("ctl-1", "101", "ignored");
         change.setOperation("ASSIGN");

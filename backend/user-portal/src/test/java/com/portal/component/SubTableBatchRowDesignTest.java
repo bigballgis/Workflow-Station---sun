@@ -11,6 +11,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchRowDesignTest {
     @Test
+    void participantFieldsCanBeFrozenWithoutEnablingMembershipOperations() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> binding = new java.util.HashMap<>(Map.of("bindingId", 77, "tableId", 9,
+                "tableName", "participants", "bindingType", "SUB", "bindingMode", "EDITABLE", "bindingLinkMode", "miParticipantRow"));
+        Map<String, Object> form = Map.of("tableBindings", List.of(binding), "publishedFieldPermissions", Map.of("77:comment", "READONLY"));
+        Map<String, Object> content = Map.of("forms", List.of(form), "dataTables", List.of(Map.of("data", mapper.writeValueAsString(
+                Map.of("tableName", "participants", "fields", List.of(Map.of("fieldName", "comment", "dataType", "TEXT")))))));
+        assertThat(SubTableBatchRowDesign.captureFields(form, "77", content, mapper).get("fieldWriteModes"))
+                .isEqualTo(Map.of("comment", "READONLY"));
+        assertThatThrownBy(() -> SubTableBatchRowDesign.capture(form, "77", content, mapper)).hasMessageContaining("structural business binding");
+        binding.remove("bindingLinkMode");
+        assertThatThrownBy(() -> SubTableBatchRowDesign.captureFields(form, "77", content, mapper)).hasMessageContaining("declared link mode");
+    }
+    @Test
     void readonlyRequiredBusinessFieldsNeedVerifiedLiteralDefaultsBeforeEnablingAdd() {
         Map<String, Object> batch = Map.of("rule", List.of(Map.of("type", "inputNumber", "field", "amount")));
         Map<String, Object> required = Map.of("fieldName", "amount", "dataType", "INTEGER", "nullable", false);

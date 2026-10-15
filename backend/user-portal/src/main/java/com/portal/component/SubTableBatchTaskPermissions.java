@@ -68,7 +68,7 @@ final class SubTableBatchTaskPermissions {
     }
 
     private static void validateControl(Map<?, ?> control, Map<?, ?> permissions, Map<?, ?> tables, Map<?, ?> baseline) {
-        if (!(control.get("rowDesign") instanceof Map<?, ?> design)) return; // Edit/Assign-only legacy contracts lack membership metadata.
+        if (!(control.get("rowDesign") instanceof Map<?, ?> design)) throw invalid();
         Map<?, ?> binding = map(design.get("binding"));
         if (!(binding.get("tableName") instanceof String name) || !(binding.get("primaryKeyFields") instanceof List<?> keys)
                 || keys.isEmpty() || !(design.get("fields") instanceof List<?> fields)) throw invalid();

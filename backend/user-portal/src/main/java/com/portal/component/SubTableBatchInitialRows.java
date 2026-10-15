@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
-/** Initializes row versions only when a new instance captures membership capabilities. */
+/** Initializes row versions only when a new instance captures batch capabilities. */
 final class SubTableBatchInitialRows {
     private SubTableBatchInitialRows() { }
 
@@ -94,7 +94,7 @@ final class SubTableBatchInitialRows {
     private static void initializeControl(Map<String, Object> tables, Map<?, ?> control, ObjectMapper mapper) {
         Map<?, ?> binding = map(map(control.get("rowDesign")).get("binding"));
         Object name = binding.get("tableName");
-        if (!(name instanceof String tableName)) return; // Edit/Assign-only snapshots do not carry membership metadata.
+        if (!(name instanceof String tableName)) return; // No frozen table means no store to initialize.
         String key = "dw:" + tableName.toLowerCase(java.util.Locale.ROOT);
         Object value = tables.get(key);
         if (!(value instanceof List<?>)) return; // No rows in this binding at process creation.
