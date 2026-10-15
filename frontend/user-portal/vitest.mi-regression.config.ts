@@ -14,6 +14,7 @@ const MI_REGRESSION_FILES = [
   'src/composables/subTableField/__tests__/linkFormCanonicalRows.test.ts',
   'src/composables/subTableField/__tests__/linkFormBindingResolution.test.ts',
   'src/composables/subTableField/__tests__/linkFormChildScope.test.ts',
+  'src/composables/subTableField/__tests__/linkFormChildSeed.test.ts',
   'src/composables/tasks/__tests__/miSubProcessScope.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.predicates.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.merge.test.ts',
