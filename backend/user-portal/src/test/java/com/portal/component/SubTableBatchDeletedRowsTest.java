@@ -17,7 +17,7 @@ class SubTableBatchDeletedRowsTest {
         Map<String, Object> design = Map.of("binding", binding, "parentTablesById",
                 Map.of("10", Map.of("tableName", "cases", "tableType", "MAIN")));
         return Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("forms", Map.of("form", Map.of("controls",
-                List.of(Map.of("batchControlId", "control-one", "rowDesign", design))))),
+                List.of(Map.of("batchControlId", "control-one", "bindingId", "binding-one", "rowDesign", design))))),
                 "__subTables__", Map.of("dw:renamedlines", rows));
     }
 

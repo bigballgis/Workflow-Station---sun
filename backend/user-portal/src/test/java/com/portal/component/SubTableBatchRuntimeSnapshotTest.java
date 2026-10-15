@@ -334,6 +334,20 @@ class SubTableBatchRuntimeSnapshotTest {
                 List.of(change), objectMapper)).hasMessageContaining("row identity");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void editOnlyMustHaveAResolvableFrozenOwnershipScopeBeforeStart() {
+        Map<String, Object> published = new java.util.LinkedHashMap<>(content(config(true, "ctl-1")));
+        Map<String, Object> form = new java.util.LinkedHashMap<>((Map<String, Object>) ((List<?>) published.get("forms")).get(0));
+        List<?> bindings = (List<?>) form.get("tableBindings");
+        Map<String, Object> sub = new java.util.LinkedHashMap<>((Map<String, Object>) bindings.get(0));
+        sub.remove("foreignKeyField");
+        form.put("tableBindings", List.of(sub, bindings.get(1)));
+        published.put("forms", List.of(form));
+        assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(published, pin, objectMapper))
+                .hasMessageContaining("Frozen batch ownership FK is missing");
+    }
+
     private static SubTableBatchChange editChange(String controlId, String bindingId, String field) {
         SubTableBatchChange.RowPatch patch = new SubTableBatchChange.RowPatch();
         patch.setRowId("row-1");

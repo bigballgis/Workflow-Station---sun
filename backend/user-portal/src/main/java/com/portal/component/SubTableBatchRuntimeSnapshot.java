@@ -69,7 +69,7 @@ final class SubTableBatchRuntimeSnapshot {
                 Map<String, Object> design = membership
                         ? SubTableBatchRowDesign.capture(form, bindingId, catalogContent, objectMapper)
                         : SubTableBatchRowDesign.captureFields(form, bindingId, catalogContent, objectMapper);
-                if (membership) SubTableBatchScopeDesign.validateFrozen(design, bindingId);
+                SubTableBatchScopeDesign.validateFrozen(design, bindingId);
                 if (Boolean.TRUE.equals(flags.get("allowBatchAdd"))) {
                     SubTableBatchRowDesign.validateAddForm(design, mapValue(control.get("batchForm")));
                 }

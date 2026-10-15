@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Overrides only batch membership bindings with their instance-frozen PK/FK scope contract. */
+/** Overrides declared batch bindings with their instance-frozen PK/FK scope contract. */
 final class SubTableBatchScopeDesign {
     private SubTableBatchScopeDesign() { }
 
@@ -16,15 +16,17 @@ final class SubTableBatchScopeDesign {
 
     static Map<String, SubTableWriteDesign.Binding> overlay(Map<String, SubTableWriteDesign.Binding> current,
                                                            Map<String, Object> variables, List<SubTableBatchChange> changes) {
-        if (changes == null || changes.stream().noneMatch(change -> "ADD".equals(change.getOperation()) || "DELETE".equals(change.getOperation()))) return current;
+        if (changes == null || changes.isEmpty()) return current;
         Map<String, SubTableWriteDesign.Binding> result = new LinkedHashMap<>(current == null ? Map.of() : current);
         Map<?, ?> forms = map(map(variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)).get("forms"));
         for (SubTableBatchChange change : changes) {
-            if (!"ADD".equals(change.getOperation()) && !"DELETE".equals(change.getOperation())) continue;
-            Map<?, ?> control = forms.values().stream().flatMap(form -> list(map(form).get("controls")).stream())
+            List<Map<?, ?>> controls = forms.values().stream().flatMap(form -> list(map(form).get("controls")).stream())
                     .map(SubTableBatchScopeDesign::map)
-                    .filter(value -> change.getBatchControlId().equals(value.get("batchControlId")))
-                    .findFirst().orElseThrow(() -> invalid("Frozen batch scope control is missing"));
+                    .filter(value -> change.getBatchControlId().equals(value.get("batchControlId"))
+                            && change.getBindingId().equals(String.valueOf(value.get("bindingId"))))
+                    .toList();
+            if (controls.size() != 1) throw invalid("Frozen batch scope control is missing or ambiguous");
+            Map<?, ?> control = controls.get(0);
             result.put(change.getBindingId(), binding(map(control.get("rowDesign")), change.getBindingId()));
         }
         return result;
