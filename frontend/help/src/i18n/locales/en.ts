@@ -187,6 +187,11 @@ export default {
       summary:
         'Optional mail on an Action Design button: To, outbound connection, and template. Sent only after that Action succeeds in Portal.',
     },
+    actionAllowedRoles: {
+      title: 'Allowed Roles',
+      summary:
+        'Who sees an Action button in Portal. Empty means every portal user. System Administrator always sees it.',
+    },
     emailMonitor: {
       title: 'Email Monitor',
       summary:
@@ -453,6 +458,14 @@ export default {
     fBcc: 'Optional Bcc. Same picker as To. Blank: no Bcc.',
     fAttachments:
       'Optional. Same FILE-field picker as Send Task: choose an Upload (FILE) field on the main table, a sub-table, or a Lookup target table. See [[/email-send#extra]]. Blank: no files.',
+    conditionsTitle: 'Multiple rules and send conditions',
+    conditionsBody:
+      'You can add up to 20 email rules on one Action. Each rule has its own recipients, connection, and template. Use **Edit send condition** (same AND/OR filter as Main Table View design) to send only when main-table or system fields match; leave the condition empty to always send after the Action succeeds. When several rules match, Portal sends one email per matching rule. If Portal cannot evaluate a condition at runtime, that rule is skipped (the Action still completes).',
+    conditionsCatalogLead: 'Controls for conditional post-action email.',
+    cAddRule: 'Adds another rule until the 20-rule limit.',
+    cAlwaysSend: 'Shown when no condition is set for that rule.',
+    cEditCondition: 'Opens the filter dialog (field, operator, value, nested groups).',
+    cOperators: 'Same operators as View Design filters (Equals, Contains, is null, …).',
     typesTitle: 'Which Action types can send',
     typesBody:
       'Portal must actually run the Action. API Call, Custom Script, and Composite Action show an info banner and keep the switch off. Saving with mail on for those types is blocked.',
@@ -474,6 +487,39 @@ export default {
     failTemplate: 'Email template list is empty. Write a template and tick Enabled.',
     failUnbound: 'The Action is not bound to the user task. Bind it under Node Binding, then run it in Portal.',
     failAutosave: 'Portal Save that is not this Action button does not send mail.',
+  },
+  actionAllowedRolesGuide: {
+    pageTitle: 'Allowed Roles',
+    crumb: 'Developer Workstation · Function Units · Action Design',
+    intro:
+      'Allowed Roles decides which Portal users see this Action button. Leave it empty and every portal user sees it. The list stores role codes and shows role names.',
+    flowTitle: 'Order of work',
+    flow1: 'Open the Function Unit → Action Design → Edit',
+    flow2: 'Under Visibility & Permissions, open Allowed Roles and select one or more business roles',
+    flow3: 'Save the Action, then open the task or the start page in Portal with a user who holds one of those roles',
+    openTitle: 'Open the field',
+    openBody:
+      'The field sits under Visibility & Permissions, next to Visibility Condition. The red ? opens this article.',
+    openFigure: 'Action Design: Allowed Roles lists business role names. You can select more than one.',
+    openTab: 'Function Unit tab. This article hangs under Action Design in the help sidebar.',
+    openField: 'Multi-select. Names come from Admin roles. The saved value is the role code.',
+    fieldsTitle: 'What you can select',
+    fieldsBody:
+      'The list contains business roles only: roles bound to a business unit, and roles that are not bound to a business unit. Admin and developer roles are not in the list. A code already saved on the Action stays visible even when that role is no longer in the catalog; it is shown as the code itself.',
+    fRoles: 'Select one or more. Matching any one of them is enough.',
+    fPlaceholder: 'Shown while nothing is selected. An empty selection is not an error.',
+    portalTitle: 'What Portal does',
+    portalBody:
+      'On the task page and on the process start page, Portal hides the button unless the signed-in session holds at least one listed role. The session is the current workspace role plus roles that are not bound to a business unit. System Administrator always sees the button. A button with no Allowed Roles stays visible.',
+    failTitle: 'What this does not do',
+    failBody: 'The field only hides the button in Portal.',
+    failEmpty: 'Empty Allowed Roles means no restriction. Existing Actions stay visible.',
+    failMissing:
+      'A role that was deleted after you saved it still appears as its code. Portal matches that code against the session. If nobody holds it, only System Administrator sees the button.',
+    failAdmin:
+      'System Administrator is not a business role, so it is not in this dropdown. That account still sees every Action button.',
+    failApi:
+      'Hiding the button does not reject the Action on the server. A direct call with a valid session can still run it.',
   },
   emailMonitorGuide: {
     pageTitle: 'Email Monitor',

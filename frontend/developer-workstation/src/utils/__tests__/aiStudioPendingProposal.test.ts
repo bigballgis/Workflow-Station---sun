@@ -21,6 +21,16 @@ describe('aiStudioDraft pending proposal store', () => {
     expect(loadAiStudioPendingProposal(7)).toBeNull()
   })
 
+  it('keeps the one-click request so a waiting page can resubmit it after renewing the AMToken', () => {
+    saveAiStudioPendingProposal(7, {
+      jobId: 'job-1', phase: 'PROCESS_DESIGN', submittedAt: 123, oneClick: { requirements: 'Leave approval' }
+    })
+    expect(loadAiStudioPendingProposal(7)).toEqual({
+      jobId: 'job-1', phase: 'PROCESS_DESIGN', submittedAt: 123,
+      oneClick: { requirements: 'Leave approval', followUp: false }
+    })
+  })
+
   it('discards and removes corrupt or malformed records', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     localStorage.setItem(aiStudioPendingProposalStorageKey(1), '{not json')

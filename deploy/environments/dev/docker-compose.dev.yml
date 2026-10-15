@@ -738,6 +738,12 @@ services:
       - "${DEVELOPER_WORKSTATION_FRONTEND_PORT}:80"
     environment:
       KONG_PROXY_URL: http://kong:8000
+      # Silent AMToken refresh before AI gateway calls (written into /dev/runtime-config.js).
+      # Same keys as the login page; empty in dev = no refresh, the UI asks to sign in again.
+      VITE_DSP_AUTHENTICATE_URL: ${VITE_DSP_AUTHENTICATE_URL:-}
+      VITE_DSP_CLIENT_ID: ${VITE_DSP_CLIENT_ID:-}
+      VITE_DSP_CLIENT_SECRET: ${VITE_DSP_CLIENT_SECRET:-}
+      VITE_DSP_ACCEPT_API_VERSION: ${VITE_DSP_ACCEPT_API_VERSION:-}
     networks:
       - platform-dev-network
     restart: unless-stopped

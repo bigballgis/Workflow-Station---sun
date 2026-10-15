@@ -10,8 +10,8 @@ import {
 import { adminCenterApi, type VirtualGroupInfo } from '@/api/adminCenter'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
 import { normalizeTags } from '@/utils/tagStorage'
-import { permissions } from '@/utils/permission'
-import { ALL_GROUPS, getActiveGroupRaw } from '@/utils/devGroupContext'
+import { permissions, canCreateInWorkspace } from '@/utils/permission'
+import { ALL_GROUPS, getActiveGroupRaw, setMemberGroupIds } from '@/utils/devGroupContext'
 
 type FunctionUnitStore = ReturnType<typeof useFunctionUnitStore>
 
@@ -93,15 +93,22 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
       myGroups.value = my?.data?.groups ?? []
       canSeeAll.value = my?.data?.canSeeAllGroups === true
       publicGroupId.value = my?.data?.publicGroupId ?? ''
+      setMemberGroupIds(my?.data?.memberGroupIds)
     } catch {
       myGroups.value = []
       canSeeAll.value = false
     }
     if (teamEditable.value) {
       try {
-        // ADMIN may target any Developer workspace. TECH_LEAD: own workspaces + Public.
-        // Reload every open so newly created teams appear without a full page refresh.
-        if (canSeeAll.value) {
+        // Creation destinations obey the same scope/capability rule as the create button.
+        if (formDialogMode.value === 'create') {
+          teamOptions.value = myGroups.value
+            .filter(g => g.status !== 'INACTIVE' && canCreateInWorkspace(g.id))
+            .map(g => ({ id: g.id, name: g.name }))
+          if (publicGroupId.value && canCreateInWorkspace(publicGroupId.value)) {
+            teamOptions.value.push({ id: publicGroupId.value, name: 'Public' })
+          }
+        } else if (canSeeAll.value) {
           const developer = await adminCenterApi.getVirtualGroups('DEVELOPER', 'ACTIVE')
           teamOptions.value = developer.sort((a, b) =>
             (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })

@@ -43,6 +43,32 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: KONG_PROXY_URL
+        # Silent AMToken refresh before AI gateway calls: same DSP keys as platform-login-frontend.
+        # optional — an environment without them simply falls back to "sign in again".
+        - name: VITE_DSP_AUTHENTICATE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_AUTHENTICATE_URL
+              optional: true
+        - name: VITE_DSP_CLIENT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_CLIENT_ID
+              optional: true
+        - name: VITE_DSP_ACCEPT_API_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_ACCEPT_API_VERSION
+              optional: true
+        - name: VITE_DSP_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: VITE_DSP_CLIENT_SECRET
+              optional: true
         ports:
         - containerPort: 80
           name: http

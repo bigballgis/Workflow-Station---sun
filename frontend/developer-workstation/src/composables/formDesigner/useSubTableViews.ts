@@ -190,8 +190,8 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
     if (!selectedForm.value) return
 
     try {
-      // Get or create the view config
-      const res = await subTableViewApi.getOrCreateView(selectedForm.value.id, bindingId)
+      // Inspection is pure read; an unset view is persisted only by explicit save.
+      const res = await subTableViewApi.getViewConfig(selectedForm.value.id, bindingId)
       const config: SubTableViewConfig = res.data
 
       // Get available fields from the sub-table

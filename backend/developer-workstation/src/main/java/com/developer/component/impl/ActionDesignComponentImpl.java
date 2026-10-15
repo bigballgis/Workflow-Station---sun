@@ -12,6 +12,11 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.TableDefinitionRepository;
+import com.developer.entity.TableDefinition;
+import com.developer.entity.FieldDefinition;
+import com.developer.enums.TableType;
+import com.developer.util.DesignerFilterOperators;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +43,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final FormDefinitionRepository formDefinitionRepository;
+    private final TableDefinitionRepository tableDefinitionRepository;
     private final I18nService i18nService;
     
     @Override
@@ -354,7 +360,14 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     @SuppressWarnings("unchecked")
     private void validatePostEmail(ActionDefinition action) {
         Map<String, Object> config = action.getConfigJson();
-        if (config == null || !(config.get("postEmail") instanceof Map<?, ?> raw)) {
+        if (config == null) {
+            return;
+        }
+        if (config.get("postEmailRules") instanceof List<?> rules) {
+            validatePostEmailRules(action, rules);
+            return;
+        }
+        if (!(config.get("postEmail") instanceof Map<?, ?> raw)) {
             return;
         }
         Map<String, Object> postEmail = (Map<String, Object>) raw;
@@ -362,17 +375,124 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         if (!Boolean.TRUE.equals(enabled) && !"true".equalsIgnoreCase(String.valueOf(enabled))) {
             return;
         }
+        assertPostEmailTypeSupported(action);
+        assertPostEmailFieldsComplete(postEmail);
+    }
+
+    private void validatePostEmailRules(ActionDefinition action, List<?> rules) {
+        if (rules.size() > DesignerFilterOperators.MAX_POST_EMAIL_RULES) {
+            throw new DeveloperBusinessException("ACTION_EMAIL_RULES_LIMIT",
+                    i18nService.getMessage("action.email_rules_limit"),
+                    i18nService.getMessage("action.email_rules_limit_hint",
+                            DesignerFilterOperators.MAX_POST_EMAIL_RULES));
+        }
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        java.util.Set<String> allowedFields = allowedMainTableFilterFields(action.getFunctionUnit().getId());
+        for (int i = 0; i < rules.size(); i++) {
+            if (!(rules.get(i) instanceof Map<?, ?> ruleMap)) {
+                throw invalidRule(i);
+            }
+            Map<String, Object> rule = (Map<String, Object>) ruleMap;
+            String id = rule.get("id") != null ? rule.get("id").toString().trim() : "";
+            if (!hasText(id) || !ids.add(id)) {
+                throw invalidRule(i);
+            }
+            if (!isRuleEnabled(rule)) {
+                continue;
+            }
+            assertPostEmailTypeSupported(action);
+            assertPostEmailFieldsComplete(rule);
+            if (rule.get("condition") instanceof Map<?, ?> condition) {
+                validateFilterConfig((Map<String, Object>) condition, allowedFields, 0);
+            }
+        }
+    }
+
+    private java.util.Set<String> allowedMainTableFilterFields(Long functionUnitId) {
+        java.util.Set<String> allowed = new java.util.HashSet<>(DesignerFilterOperators.SYSTEM_FILTER_FIELDS);
+        for (TableDefinition table : tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId)) {
+            if (table.getTableType() != TableType.MAIN) {
+                continue;
+            }
+            if (table.getFieldDefinitions() == null) {
+                continue;
+            }
+            for (FieldDefinition field : table.getFieldDefinitions()) {
+                allowed.add(field.getFieldName());
+            }
+            break;
+        }
+        return allowed;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateFilterConfig(Map<String, Object> node, java.util.Set<String> allowedFields, int depth) {
+        if (depth > DesignerFilterOperators.MAX_NEST_DEPTH) {
+            throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_DEPTH",
+                    i18nService.getMessage("action.email_filter_depth"),
+                    i18nService.getMessage("action.email_filter_depth_hint"));
+        }
+        Object logic = node.get("logic");
+        if (logic != null && !"and".equalsIgnoreCase(String.valueOf(logic))
+                && !"or".equalsIgnoreCase(String.valueOf(logic))) {
+            throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_INVALID",
+                    i18nService.getMessage("action.email_filter_invalid"),
+                    i18nService.getMessage("action.email_filter_invalid_hint"));
+        }
+        if (node.get("conditions") instanceof List<?> conditions) {
+            for (Object item : conditions) {
+                if (!(item instanceof Map<?, ?> cond)) {
+                    continue;
+                }
+                String op = cond.get("operator") != null ? cond.get("operator").toString() : "";
+                if (!DesignerFilterOperators.ALL.contains(op)) {
+                    throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_INVALID",
+                            i18nService.getMessage("action.email_filter_invalid"),
+                            i18nService.getMessage("action.email_filter_invalid_hint"));
+                }
+                String fieldName = cond.get("fieldName") != null ? cond.get("fieldName").toString().trim() : "";
+                if (!hasText(fieldName) || !allowedFields.contains(fieldName)) {
+                    throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_FIELD",
+                            i18nService.getMessage("action.email_filter_field"),
+                            i18nService.getMessage("action.email_filter_field_hint", fieldName));
+                }
+            }
+        }
+        if (node.get("groups") instanceof List<?> groups) {
+            for (Object item : groups) {
+                if (item instanceof Map<?, ?> group) {
+                    validateFilterConfig((Map<String, Object>) group, allowedFields, depth + 1);
+                }
+            }
+        }
+    }
+
+    private void assertPostEmailTypeSupported(ActionDefinition action) {
         if (!POST_EMAIL_TYPES.contains(action.getActionType())) {
             throw new DeveloperBusinessException("ACTION_EMAIL_TYPE_UNSUPPORTED",
                     i18nService.getMessage("action.email_type_unsupported"),
                     i18nService.getMessage("action.email_type_unsupported_hint"));
         }
-        if (!hasText(postEmail.get("connectionId")) || !hasText(postEmail.get("emailTo"))
-                || !hasText(postEmail.get("emailTemplateId"))) {
+    }
+
+    private void assertPostEmailFieldsComplete(Map<String, Object> emailBlock) {
+        if (!hasText(emailBlock.get("connectionId")) || !hasText(emailBlock.get("emailTo"))
+                || !hasText(emailBlock.get("emailTemplateId"))) {
             throw new DeveloperBusinessException("ACTION_EMAIL_INCOMPLETE",
                     i18nService.getMessage("action.email_incomplete"),
                     i18nService.getMessage("action.email_incomplete_hint"));
         }
+    }
+
+    private static boolean isRuleEnabled(Map<String, Object> rule) {
+        Object enabled = rule.get("enabled");
+        return Boolean.TRUE.equals(enabled) || "true".equalsIgnoreCase(String.valueOf(enabled));
+    }
+
+    private DeveloperBusinessException invalidRule(int index) {
+        return new DeveloperBusinessException("ACTION_EMAIL_RULE_INVALID",
+                i18nService.getMessage("action.email_rule_invalid"),
+                i18nService.getMessage("action.email_rule_invalid_hint", index + 1));
     }
 
     private static boolean hasText(Object value) {

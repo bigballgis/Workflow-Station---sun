@@ -3,16 +3,20 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-09)
+## 统计 (截至 2026-10-14)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **25** | `index.yaml` |
+| 🔓 Open | **26** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-10-14：#1669 已修复 DW Public 只读设计器返回列表、子表导航及错误保存确认；两个 Public FU 的截图与交互回归已保留，账号本人登录验证仍待实测。
+
+2026-10-14：#1670 已修复同名导入、绑定视图和创建目标的工作区权限缺口及 SYS_ADMIN 方法门禁；143 后端/48 前端回归通过，服务端拒绝路径与浏览无隐式写入已验证。
 
 2026-09-18 复核补丁已并回 #1636 / #1639：同表交集行只递增一次版本、删除必须带读取版本、同父表不同 FK 正确投影，旧实例写校验改读 pinned catalog。
 
@@ -42,6 +46,7 @@
 | 1660 | minor | quality | workflow-engine-core 基线红：TaskManagerComponentMultiInstanceTest 5 个用例因 taskClaimSupport 未注入 NPE（已在 HEAD worktree 证实非新引入） |
 | 1661 | major | bug | FU 克隆/导入/回滚时 FORM_POPUP Action 的 `configJson.formId` 不重映射，弹窗仍指向源 FU 表单 |
 | 1662 | major | bug | platform-messaging `DefaultErrorHandler` recoverer 空实现，Kafka 重试用尽后消息静默丢弃（DLT 从未写入） |
+| 1666 | major | quality | TaskActionService 引擎/lookup 异常 catch→emptyList，与「无 actionIds」无法区分（Allowed Roles 轮次 3-A 暂不修） |
 ### Wontfix
 
 | ID | 分类 | 描述 |

@@ -513,7 +513,10 @@ class ExportImportComponentImplTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rule = (List<Map<String, Object>>) finalForm.getConfigJson().get("rule");
         assertEquals(501L, ((Number) rule.get(0).get("_bindingId")).longValue());
-        verify(formTableBindingRepository).save(any());
+        var bindingsSaved = org.mockito.ArgumentCaptor.forClass(com.developer.entity.FormTableBinding.class);
+        verify(formTableBindingRepository, org.mockito.Mockito.atLeastOnce()).save(bindingsSaved.capture());
+        assertTrue(bindingsSaved.getAllValues().stream().allMatch(binding -> binding.getId().equals(501L)),
+                "Binding creation and FK-fill hydration must persist the same remapped binding");
         verify(tableRelationRepository, never()).save(any());
     }
 

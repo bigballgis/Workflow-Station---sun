@@ -650,6 +650,7 @@ import { ArrowLeft, MagicStick, Check, Close, Promotion, UploadFilled, Loading, 
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ValidationResult } from '@/api/functionUnit'
 import { aiGenerationApi, type AiStudioProposalJob } from '@/api/aiGeneration'
+import { isAmTokenReauthCode, refreshAmToken } from '@/utils/amToken'
 import { aiStudioThreadApi, type AiStudioThreadEventData, type AiStudioThreadEventType } from '@/api/aiStudioThread'
 import { functionUnitDocumentApi } from '@/api/functionUnitDocument'
 import {
@@ -693,7 +694,8 @@ import {
   loadAiStudioPendingProposal,
   saveAiStudioPendingProposal,
   clearAiStudioPendingProposal,
-  type AiStudioPendingProposal
+  type AiStudioPendingProposal,
+  type AiStudioOneClickRequest
 } from '@/utils/aiStudioDraft'
 
 const { t } = useI18n()
@@ -1198,20 +1200,18 @@ async function sendCopilotMessage(propose = false, overrideText?: string, oneCli
   beginCopilotWait(phase)
   try {
     if (propose) {
-      const { data: job } = oneClickFollowUp
-        ? await aiGenerationApi.studioStartOneClick({ functionUnitId: fuId.value, requirements: text, followUp: true })
-        : await aiGenerationApi.studioStartProposal({
+      const submit = oneClickFollowUp
+        ? () => submitOneClickJob(phase, { requirements: text, followUp: true })
+        : () => submitProposalJob(phase, undefined, () => aiGenerationApi.studioStartProposal({
           functionUnitId: fuId.value,
           phase,
           message: text,
           history
-        })
-      // 先落盘再轮询：刷新/离开页面后 onMounted 能凭这条记录接着等同一个作业
-      saveAiStudioPendingProposal(fuId.value, { jobId: job.jobId, phase, submittedAt: Date.now() })
-      copilotProposalJobId.value = job.jobId
+        }))
+      const job = await submit()
       // 提交成功时后端已把提问写进共享线程
       void refreshThreadIncremental(phase, [asked])
-      const done = await pollProposal(job.jobId)
+      const done = await pollProposalRenewingAmToken(job.jobId, submit)
       if (done) await landProposalResult(phase, done)
     } else {
       const res = await aiGenerationApi.studioChat({
@@ -1368,6 +1368,46 @@ async function pollProposal(jobId: string): Promise<AiStudioProposalJob | null> 
 }
 
 /**
+ * 提交作业并立即落盘待办：刷新/离开页面后 onMounted 能凭这条记录接着等同一个作业。
+ * oneClick 一并记下，好让接着等的那一方也能在 AMToken 失效时原样重提。
+ */
+async function submitProposalJob(
+  phase: AiStudioPhase,
+  oneClick: AiStudioOneClickRequest | undefined,
+  start: () => Promise<{ data: AiStudioProposalJob }>
+): Promise<AiStudioProposalJob> {
+  const { data: job } = await start()
+  saveAiStudioPendingProposal(fuId.value, { jobId: job.jobId, phase, submittedAt: Date.now(), oneClick })
+  copilotProposalJobId.value = job.jobId
+  return job
+}
+
+function submitOneClickJob(phase: AiStudioPhase, oneClick: AiStudioOneClickRequest) {
+  return submitProposalJob(phase, oneClick, () => aiGenerationApi.studioStartOneClick({
+    functionUnitId: fuId.value,
+    ...oneClick
+  }))
+}
+
+/**
+ * 轮询到终态；作业因 AMToken 失效失败（gateway 拒绝/缺失）且能静默换到新 token 时，用 resubmit 原样重提一次。
+ * 凭证在模型调用那一步就被拒，什么都没写入，重提是安全的；只重来一次，换不到或再失败就按原样落结果。
+ * 普通提案重提时后端会把提问再记一次进共享线程（与"重新发起"按钮同样的代价）。
+ */
+async function pollProposalRenewingAmToken(
+  jobId: string,
+  resubmit?: () => Promise<AiStudioProposalJob>
+): Promise<AiStudioProposalJob | null> {
+  const done = await pollProposal(jobId)
+  if (!done || done.status !== 'FAILED' || !isAmTokenReauthCode(done.errorCode) || !resubmit) return done
+  if (!(await refreshAmToken())) return done
+  // 续期期间用户点了 Stop / 离开了页面
+  if (proposalPollingCancelled || cancelledJobIds.has(jobId)) return null
+  const retried = await resubmit()
+  return pollProposal(retried.jobId)
+}
+
+/**
  * 作业终态落到线程：共享模式下成功的结果已由后端写进线程，刷新即可（刷新失败才本地追加）；
  * 失败/取消只是发起人自己的临时说明。
  */
@@ -1438,8 +1478,10 @@ async function resumePendingProposal(pending: AiStudioPendingProposal) {
   copilotProposalJobId.value = pending.jobId
   saveAiStudioPendingProposal(fuId.value, pending)
   beginCopilotWait(pending.phase)
+  const { oneClick } = pending
   try {
-    const done = await pollProposal(pending.jobId)
+    const done = await pollProposalRenewingAmToken(pending.jobId,
+      oneClick ? () => submitOneClickJob(pending.phase, oneClick) : undefined)
     if (done) await landProposalResult(pending.phase, done)
   } catch (e: unknown) {
     pushCopilotError(copilotThread(pending.phase), e)

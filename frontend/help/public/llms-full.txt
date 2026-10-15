@@ -95,6 +95,16 @@ Failures: missing To / connection / template; unsupported type; empty connection
 
 Related: /help/email-send#connection , /help/email-send#template , /help/email-send#send-task
 
+## Allowed Roles (/help/action-allowed-roles)
+
+Who sees an Action button in Portal. Open Function Unit → Action Design → Edit. The field is under Visibility & Permissions. Select one or more business roles (business-unit-bound, or not bound to a business unit). The dropdown shows the role name and stores the role code. Admin and developer roles are not listed. A saved code that left the catalog still shows as that code.
+
+Empty means every portal user sees the button. Portal hides the button on the task page and the start page unless the session holds at least one listed code. The session is the current workspace role plus roles that are not bound to a business unit. System Administrator always sees the button and is not in the dropdown.
+
+This hides the button only. A direct call with a valid session can still run the Action.
+
+Related: /help/action-email
+
 ## Email Monitor (/help/email-monitor)
 
 Starts a process when mail arrives.

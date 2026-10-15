@@ -113,7 +113,7 @@
         <el-button
           type="primary"
           :loading="saving"
-          :disabled="!modelerReady"
+          :disabled="!modelerReady || designerReadOnly"
           @click="handleSave(false)"
         >
           {{ t('process.save') }}

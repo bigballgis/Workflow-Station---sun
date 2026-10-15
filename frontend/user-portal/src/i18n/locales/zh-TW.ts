@@ -543,7 +543,8 @@ export default {
     workspaceGuardTitle: '無法提交：缺少完整工作臺身份',
     workspaceGuardHint:
       '您的帳號關聯業務單元角色，發起流程前請在頁面頂部選擇「業務單元 · 角色」工作臺，或登出後重新登入。僅儲存草稿不受影響。',
-    workspaceGuardToast: '請先選擇頂部工作臺或重新登入後再提交'
+    workspaceGuardToast: '請先選擇頂部工作臺或重新登入後再提交',
+    actionsBlockedByAllowedRoles: '目前角色沒有可用的發起操作，如需權限請聯絡管理員。',
   },
   applicationDetail: {
     back: '返回',

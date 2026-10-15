@@ -8,18 +8,23 @@
         {{ t('table.title') }}
       </el-button>
       <el-button
+        data-read-only-allowed
         :loading="loading"
         @click="loadTables"
       >
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
       <el-button
+        data-read-only-allowed
         :disabled="store.tables.length < 2"
         @click="showRelationDialog = true"
       >
         {{ t('table.relations') }}
       </el-button>
-      <el-button @click="handleValidate">
+      <el-button
+        data-read-only-allowed
+        @click="handleValidate"
+      >
         {{ t('table.validateTables') }}
       </el-button>
       <el-button
@@ -77,6 +82,7 @@
         <template #actions="{ row }">
           <div class="table-row-actions">
             <el-button
+              data-read-only-allowed
               link
               type="primary"
               @click.stop="handleSelectTable(row)"
@@ -84,6 +90,7 @@
               {{ t('common.edit') }}
             </el-button>
             <el-button
+              data-read-only-allowed
               link
               type="success"
               @click.stop="handleExportTable(row)"
@@ -126,6 +133,7 @@
         </div>
         <div class="editor-header-actions">
           <el-button
+            data-read-only-allowed
             size="small"
             @click="handleGenerateDDL"
           >
@@ -134,6 +142,7 @@
           <el-button
             type="primary"
             size="small"
+            :disabled="designerReadOnly"
             @click="handleSaveTable"
           >
             {{ t('table.save') }}
@@ -742,6 +751,7 @@
         </el-button>
         <el-button
           type="primary"
+          :disabled="designerReadOnly"
           @click="handleSaveRelations"
         >
           {{ t('table.save') }}
@@ -774,6 +784,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh, InfoFilled, WarningFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { isFunctionUnitReadOnly } from '@/utils/permission'
 import { type TableDefinition, type FieldDefinition, type ForeignKeyDTO, type RequestIdConfig, type SlaConfig } from '@/api/functionUnit'
 import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.vue'
 import RequestIdConfigDialog from '@/components/designer/RequestIdConfigDialog.vue'
@@ -808,6 +819,7 @@ const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()
+const designerReadOnly = computed(() => isFunctionUnitReadOnly(store.current))
 
 // Shared state owned by the orchestrator and threaded into the composables.
 const selectedTable = ref<TableDefinition | null>(null)

@@ -91,7 +91,7 @@ class FunctionUnitCloner {
 
     @Transactional
     FunctionUnit clone(Long id, String newName) {
-        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.CLONE);
         sequenceSynchronizer.synchronizeAll();
         if (functionUnitRepository.existsByName(newName)) {
             throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS",

@@ -488,6 +488,8 @@ export interface MyDevGroups {
   groups: DevGroupOption[]
   canSeeAllGroups: boolean
   publicGroupId: string
+  /** Teams the user belongs to, excluding Public. */
+  memberGroupIds?: string[]
 }
 
 export const functionUnitApi = {

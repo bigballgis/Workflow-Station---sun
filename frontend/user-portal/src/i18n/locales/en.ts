@@ -543,7 +543,9 @@ export default {
     workspaceGuardTitle: 'Cannot submit: workspace identity incomplete',
     workspaceGuardHint:
       'Your account is tied to business-unit roles. Select your workspace (Business unit · Role) in the header, or sign out and sign in again. Saving drafts is still allowed.',
-    workspaceGuardToast: 'Select a workspace in the header or sign in again before submitting'
+    workspaceGuardToast: 'Select a workspace in the header or sign in again before submitting',
+    actionsBlockedByAllowedRoles:
+      'No start actions are available for your current role. Contact an administrator if you need access.',
   },
   applicationDetail: {
     back: 'Back',

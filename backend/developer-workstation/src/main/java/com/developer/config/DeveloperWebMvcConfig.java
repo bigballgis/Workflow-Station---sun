@@ -17,6 +17,8 @@ public class DeveloperWebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns(
                         "/function-units/**",
                         "/export-import/function-units/**",
+                        "/api/forms/*/sub-table-views/**",
+                        "/api/forms/*/relation-views/**",
                         "/ai-generation/**"
                 );
     }

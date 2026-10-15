@@ -207,6 +207,16 @@ export interface AiStudioPendingProposal {
   jobId: string
   phase: AiStudioPhase
   submittedAt: number
+  /**
+   * 一键生成作业的原始请求：作业因 AMToken 失效失败时，续期后凭它原样重新提交一次。
+   * 普通提案不记（请求带整段历史，太大），它们只在发起的那一次等待里能自动重提。
+   */
+  oneClick?: AiStudioOneClickRequest
+}
+
+export interface AiStudioOneClickRequest {
+  requirements: string
+  followUp?: boolean
 }
 
 const PENDING_PROPOSAL_PREFIX = 'dw-ai-studio-proposal:'
@@ -227,7 +237,13 @@ export function loadAiStudioPendingProposal(functionUnitId: number): AiStudioPen
       typeof parsed.phase === 'string' && (AI_STUDIO_PHASES as readonly string[]).includes(parsed.phase) &&
       typeof parsed.submittedAt === 'number'
     ) {
-      return { jobId: parsed.jobId, phase: parsed.phase as AiStudioPhase, submittedAt: parsed.submittedAt }
+      const pending: AiStudioPendingProposal = {
+        jobId: parsed.jobId, phase: parsed.phase as AiStudioPhase, submittedAt: parsed.submittedAt
+      }
+      if (typeof parsed.oneClick?.requirements === 'string') {
+        pending.oneClick = { requirements: parsed.oneClick.requirements, followUp: parsed.oneClick.followUp === true }
+      }
+      return pending
     }
     throw new Error('invalid shape')
   } catch (e) {
