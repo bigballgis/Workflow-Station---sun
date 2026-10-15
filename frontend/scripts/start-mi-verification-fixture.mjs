@@ -100,6 +100,7 @@ try {
     [row[pk(participants)[0]], row[parentFk.fieldName]]))
   const originalParentLinks = parentLinks(form.fieldValues)
   let formData
+  let expectedAge = '666'
   if (process.env.MI_FIXTURE_API_SEED === '1') {
     const controls = Object.values(form.subTableBatchCapabilities || {})
     const control = controls.find(value => value.rowDesign.binding.tableName === people.tableName)
@@ -160,6 +161,19 @@ try {
       console.log(path)
     }
     await page.setViewportSize({ width: 1366, height: 768 })
+    if (process.env.MI_FIXTURE_BATCH_COMPLETE === '1') {
+      await page.getByRole('button', { name: 'Batch Edit', exact: true }).click()
+      const batch = page.locator('.el-dialog:visible')
+      const input = batch.locator('.el-table__body-wrapper tr').first().locator('input:not([type="checkbox"])')
+      await input.fill('777')
+      await input.blur()
+      await batch.getByRole('button', { name: /Apply/ }).click()
+      await batch.waitFor({ state: 'hidden' })
+      const draftCheck = await api('/api/portal', 'GET', `/processes/${processId}`)
+      assert.ok(draftCheck.variables.__subTables__[`dw:${people.tableName}`].some(row =>
+        row[childFk.fieldName] === ownerKey && String(row.age) === '666'), 'MI Apply must remain a page draft before Complete')
+      expectedAge = '777'
+    }
     await page.getByRole('button', { name: 'Approve', exact: true }).click()
     const dialog = page.getByRole('dialog').filter({ has: page.locator('[data-testid="approve-comment-field"]') })
     await dialog.locator('textarea').fill('Synthetic UI MI completion')
@@ -179,7 +193,7 @@ try {
     const item = data.fieldValues._currentItem
     if ((item?.[pk(participants)[0]] ?? item?.rowId) === ownerKey) {
       const persisted = data.fieldValues.__subTables__?.[`dw:${people.tableName}`] || []
-      assert.ok(persisted.some(row => row[childFk.fieldName] === ownerKey && row.age === '666'), 'Age must carry forward from the real saved/completed first MI step')
+      assert.ok(persisted.some(row => row[childFk.fieldName] === ownerKey && String(row.age) === expectedAge), 'Age must carry forward from the real saved/completed first MI step')
       stageTwo.push(task.taskId)
     }
   }

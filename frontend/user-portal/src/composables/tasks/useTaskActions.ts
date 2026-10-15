@@ -1,6 +1,6 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
 import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
-import { projectWritableSubTables } from './writableSubTableProjection'
+import { projectWritableSubTables, type WritableSubTableBinding } from './writableSubTableProjection'
 import {
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
@@ -101,6 +101,7 @@ export function useTaskActions(options: {
   taskId: MaybeRef<string>
   taskInfo: Ref<Record<string, any>>
   subTableBindings: Ref<any[]>
+  resolveSubTableSubmitBindings?: () => WritableSubTableBinding[]
   formData: Ref<Record<string, any>>
   /** Whether the current Task Form is entirely read-only. */
   formReadOnly?: MaybeRef<boolean>
@@ -271,12 +272,12 @@ export function useTaskActions(options: {
     currentFormData.__subTables__ = mergedSub
     return currentFormData
   }
-  function buildUserSubmittedFormData(engineFormData: Record<string, any>): Record<string, any> {
+  function buildUserSubmittedFormData(engineFormData: Record<string, any>, bindings: WritableSubTableBinding[]): Record<string, any> {
     const submitted: Record<string, any> = { ...engineFormData }
     delete submitted.__subTables__
     if (unref(options.formReadOnly ?? false)) return submitted
     const engineSubTables = (engineFormData.__subTables__ as Record<string, any>) || {}
-    const submittedSubTables = projectWritableSubTables(engineSubTables, options.subTableBindings.value)
+    const submittedSubTables = projectWritableSubTables(engineSubTables, bindings)
     if (Object.keys(submittedSubTables).length > 0) {
       submitted.__subTables__ = submittedSubTables
     }
@@ -321,11 +322,13 @@ export function useTaskActions(options: {
       const { formData: built, emptiedSubTableKeys, subTableBindingScopes, subTableBatchChanges } =
         unwrapCompleteFormPayload(rawBuilt)
       const engineFormData: Record<string, any> = { ...built }
+      const submitBindings = options.resolveSubTableSubmitBindings
+        ? options.resolveSubTableSubmitBindings() : options.subTableBindings.value
       engineFormData.__subTables__ = canonicalizeSubTablesForSubmit(
         (built.__subTables__ as Record<string, any>) || {},
-        options.subTableBindings.value,
+        submitBindings,
       )
-      const submittedFormData = buildUserSubmittedFormData(engineFormData)
+      const submittedFormData = buildUserSubmittedFormData(engineFormData, submitBindings)
       Object.assign(variables, engineFormData)
       const pid = resolveProcessTaskId(options.taskId)
       if (!pid) {

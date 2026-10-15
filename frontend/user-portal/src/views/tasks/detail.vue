@@ -844,6 +844,7 @@ const taskActions = useTaskActions({
     await syncSubTableRowVersionsBeforeSubmit()
   },
   onSubmitSettled: resumeSubTableAutosave,
+  resolveSubTableSubmitBindings: taskForm.resolveSubTableSubmitBindings,
   buildFormPayloadForComplete: () => {
     const payload = buildCurrentTaskFormSubmitPayload()
     if (isMiSubTaskMode.value) {

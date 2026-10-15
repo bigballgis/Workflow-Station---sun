@@ -167,9 +167,13 @@ export function useTaskForm(options: {
     }
   }
 
-  function buildSubTableSubmitPayload() {
-    const submitBindings = batchMembershipBindings(options.subTableBindings.value,
+  function resolveSubTableSubmitBindings() {
+    return batchMembershipBindings(options.subTableBindings.value,
       pendingSubTableBatchChanges.value, taskFormDTO.value?.subTableBatchCapabilities)
+  }
+
+  function buildSubTableSubmitPayload() {
+    const submitBindings = resolveSubTableSubmitBindings()
     const snapshot = (formData.value.__subTables__ as Record<string, any>) || {}
     const subTables: Record<string, any> = { ...snapshot }
     /**
@@ -536,6 +540,7 @@ export function useTaskForm(options: {
   }
 
   return {
+    resolveSubTableSubmitBindings,
     formFields,
     formTabs,
     formFieldsAfterTabs,
