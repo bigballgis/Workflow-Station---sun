@@ -96,6 +96,20 @@ try {
   const parentLinks = values => new Map(values.__subTables__[participantStore].map(row =>
     [row[pk(participants)[0]], row[parentFk.fieldName]]))
   const originalParentLinks = parentLinks(form.fieldValues)
+  let formData
+  if (process.env.MI_FIXTURE_API_SEED === '1') {
+    const controls = Object.values(form.subTableBatchCapabilities || {})
+    const control = controls.find(value => value.rowDesign.binding.tableName === people.tableName)
+    assert.ok(control, 'API seeding is only for the explicitly enhanced synthetic clone')
+    const baseline = await api('/api/portal', 'GET', `/processes/${processId}`)
+    const seeded = structuredClone(baseline.variables)
+    seeded.__subTables__[`dw:${people.tableName}`] = [{ [pk(people)[0]]: randomUUID(), [childFk.fieldName]: ownerKey, age: '666' }]
+    const scope = { bindingId: String(control.bindingId), storeKey: `dw:${people.tableName}`,
+      rowKeys: seeded.__subTables__[`dw:${people.tableName}`].map(row => ({ [pk(people)[0]]: row[pk(people)[0]] })), emptied: false }
+    await api('/api/portal', 'POST', `/tasks/${firstId}/submit`, { formData: seeded, subTableBindingScopes: [scope] })
+    formData = (await api('/api/portal', 'GET', `/processes/${processId}`)).variables
+    console.log(JSON.stringify({ step: 'synthetic-api-seed-only', taskId: firstId, uiVerified: false }))
+  } else {
   // Use the real inline editor: it also prepares PK/FK and mirrors the participant's nested child slice.
   await page.goto(`http://localhost:3101/portal/tasks/${firstId}`)
   const age = page.locator('.sub-table-inline-form .el-form-item')
@@ -106,13 +120,26 @@ try {
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   const response = await saveResponse
   const saveBody = await response.json()
-  assert.equal(response.ok() && saveBody.success, true, 'Synthetic MI inline Save must succeed')
+  if (!response.ok() || !saveBody.success) {
+    const stored = await api('/api/portal', 'GET', `/processes/${processId}`)
+    const submitted = response.request().postDataJSON().formData.__subTables__
+    for (const [store, rows] of Object.entries(submitted)) {
+      const before = stored.variables.__subTables__?.[store] || []
+      if (JSON.stringify(before) === JSON.stringify(rows)) continue
+      const fields = [...new Set([...before.flatMap(row => Object.keys(row)), ...rows.flatMap(row => Object.keys(row))])]
+        .filter(field => JSON.stringify(before.map(row => row[field])) !== JSON.stringify(rows.map(row => row[field])))
+      console.log(JSON.stringify({ step: 'synthetic-save-diff', store, beforeRows: before.length, submittedRows: rows.length, fields }))
+    }
+  }
+  assert.equal(response.ok() && saveBody.success, true,
+    `Synthetic MI inline Save must succeed: HTTP ${response.status()} ${saveBody.message || saveBody.error?.message || ''}`)
   assert.deepEqual(parentLinks(response.request().postDataJSON().formData), originalParentLinks,
     'Submitted MI child edits must preserve participant parent FKs')
   const saved = await api('/api/portal', 'GET', `/tasks/${firstId}/form-data`)
-  const formData = saved.fieldValues
+  formData = saved.fieldValues
   assert.deepEqual(parentLinks(formData), originalParentLinks, 'Editing an MI child must not change any participant parent FK')
   assert.ok(formData.__subTables__?.[`dw:${people.tableName}`]?.some(row => row[childFk.fieldName] === ownerKey && row.age === '666'), 'Inline Save must persist only the owning participant child')
+  }
   await api('/api/portal', 'POST', `/tasks/${firstId}/complete`, { taskId: firstId, action: 'APPROVE', formData, comment: 'Synthetic first MI step' })
   const next = await waitTasks(2, firstId)
   const stageTwo = []

@@ -61,6 +61,10 @@ public class TaskListResult {
          * Task ID
          */
         private String taskId;
+
+        /** Present only on the explicit strict write-context task-detail request. */
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        private TaskWriteContext writeContext;
         
         /**
          * Task name

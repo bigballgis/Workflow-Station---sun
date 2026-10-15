@@ -65,6 +65,9 @@ final class BatchTaskFormTransactionHarness {
         when(engine.isAvailable()).thenReturn(true);
         when(engine.getTaskById("synthetic-task")).thenReturn(Optional.of(Map.of(
                 "taskDefinitionKey", "review", "processInstanceId", "synthetic-process")));
+        when(engine.requireTaskWriteContext("synthetic-task")).thenReturn(Map.of("writeContext", Map.of(
+                "taskId", "synthetic-task", "taskDefinitionKey", "review", "processInstanceId", "synthetic-process",
+                "processDefinitionId", "synthetic:1:deployed", "multiInstance", false, "currentItem", Map.of())));
         JdbcTemplate metadata = mock(JdbcTemplate.class);
         component = new TaskFormComponent(mock(ProcessFormComponent.class), mock(ChangeHistoryComponent.class),
                 repository, engine, mock(RestTemplate.class), mapper, metadata,

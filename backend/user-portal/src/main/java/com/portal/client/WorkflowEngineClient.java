@@ -301,6 +301,10 @@ public class WorkflowEngineClient {
         return taskClient.getTaskById(taskId);
     }
 
+    public Map<String, Object> requireTaskWriteContext(String taskId) {
+        return taskClient.requireTaskWriteContext(taskId);
+    }
+
     /**
      * Queries parent task sub-table data (backfill rowId / live sync before assign).
      */

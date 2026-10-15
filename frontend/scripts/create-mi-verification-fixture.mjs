@@ -130,6 +130,18 @@ try {
         props: { allowAdd: false, allowEdit: false, allowDelete: false } })
       changed = true
     }
+    if (process.env.MI_FIXTURE_BATCH_EDIT === '1' && childBinding && form.formType === 'TASK' && form.scene === 'TASK') {
+      assert.equal(people.fieldDefinitions.some(field => field.fieldName === 'age'), true)
+      const controlId = `mi-verification-${form.id}-${childBinding.id}`
+      assert.equal(form.configJson.rule.some(rule => rule.batchControlId === controlId), false,
+        'Use a fresh synthetic clone for the batch-authority fixture')
+      form.configJson.rule.push({ type: 'subTable', field: `synthetic_batch_${childBinding.id}`, title: 'Synthetic batch People', batchControlId: controlId,
+        props: { _bindingId: childBinding.id, allowAdd: false, allowEdit: true, allowDelete: false,
+          allowBatchAdd: false, allowBatchEdit: true, allowBatchDelete: false, allowBatchAssign: false } })
+      form.configJson.batchForms = { ...form.configJson.batchForms,
+        [childBinding.id]: { schemaVersion: 1, rule: [{ type: 'inputNumber', field: 'age', title: 'Synthetic age' }], options: {} } }
+      changed = true
+    }
     if (changed) await api('PUT', `${base}/forms/${form.id}`, { formName: form.formName, formType: form.formType,
       scene: form.scene, configJson: form.configJson, fieldPermissions: form.fieldPermissions })
   }
