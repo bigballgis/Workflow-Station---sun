@@ -81,6 +81,7 @@ public class FunctionUnitImportComponent {
     private ImportResult persistImportedPackage(FunctionUnitImportRequest request, String importerId)
             throws IOException {
         FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
+        ImportBatchDefinitionValidator.validate(parsed, objectMapper);
         FunctionUnitManagerComponent.FunctionPackageContent packageContent = parsed.getPackageContent();
         validateImportedBpmn(packageContent);
         remapViewAccess(packageContent);

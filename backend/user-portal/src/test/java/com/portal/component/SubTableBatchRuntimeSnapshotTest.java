@@ -61,7 +61,7 @@ class SubTableBatchRuntimeSnapshotTest {
         Map<String, Object> badConfig = config(true, "ctl-1");
         badConfig.remove("batchForms");
         assertThatThrownBy(() -> SubTableBatchRuntimeSnapshot.capture(content(badConfig), pin, objectMapper))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("has no batchForms");
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("batchForms definition is missing");
     }
 
     @Test

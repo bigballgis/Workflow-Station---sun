@@ -56,6 +56,7 @@ final class SubTableBatchRuntimeSnapshot {
             Map<String, Object> form = stringKeyMap(rawFormMap);
             String diagnosticId = form.get("sourceId") == null ? "index " + formIndex : form.get("sourceId").toString();
             Map<String, Object> config = parseConfig(form.get("data"), diagnosticId, objectMapper);
+            com.platform.common.form.SubTableBatchDefinition.validate(config);
             Map<String, Object> batchForms = mapValue(config.get("batchForms"));
             List<Map<String, Object>> controls = new ArrayList<>();
             collectControls(config.get("rule"), batchForms, controls, controlIds, diagnosticId,
@@ -155,7 +156,7 @@ final class SubTableBatchRuntimeSnapshot {
                 }
                 String bindingId = requiredBindingId(props.get("_bindingId"), sourceId, controlId);
                 Map<String, Object> batchForm = mapValue(batchForms.get(bindingId));
-                validateBatchForm(batchForm, sourceId, controlId, bindingId,
+                com.platform.common.form.SubTableBatchDefinition.validateForm(batchForm,
                         Boolean.TRUE.equals(props.get("allowBatchAssign")));
 
                 Map<String, Object> control = new LinkedHashMap<>();
@@ -221,36 +222,6 @@ final class SubTableBatchRuntimeSnapshot {
         return contracts.entrySet().stream()
                 .filter(entry -> entry.getKey().equalsIgnoreCase(resolvedTableName))
                 .map(Map.Entry::getValue).findFirst().orElse(Map.of());
-    }
-
-    private static void validateBatchForm(Map<String, Object> batchForm, String sourceId,
-                                          String controlId, String bindingId, boolean batchAssignEnabled) {
-        if (batchForm.isEmpty()) {
-            throw new IllegalArgumentException("Enabled batch control " + controlId
-                    + " in form " + sourceId + " has no batchForms[" + bindingId + "] definition");
-        }
-        Object schemaVersion = batchForm.get("schemaVersion");
-        if (!(schemaVersion instanceof Number number) || number.intValue() != SCHEMA_VERSION) {
-            throw new IllegalArgumentException("Unsupported batch form schema for control " + controlId);
-        }
-        if (!(batchForm.get("rule") instanceof List<?> rules) || rules.isEmpty()) {
-            throw new IllegalArgumentException("Batch form rule is required for control " + controlId);
-        }
-        if (batchAssignEnabled && !containsRuleType(rules, "miAssignment")) {
-            throw new IllegalArgumentException("Batch Assign control " + controlId
-                    + " requires an miAssignment component in batchForms[" + bindingId + "]");
-        }
-    }
-
-    private static boolean containsRuleType(Object value, String expectedType) {
-        if (value instanceof List<?> list) {
-            return list.stream().anyMatch(item -> containsRuleType(item, expectedType));
-        }
-        if (!(value instanceof Map<?, ?> raw)) return false;
-        Map<String, Object> rule = stringKeyMap(raw);
-        if (expectedType.equals(rule.get("type"))) return true;
-        return rule.values().stream().anyMatch(child -> child instanceof Map<?, ?> || child instanceof List<?>
-                ? containsRuleType(child, expectedType) : false);
     }
 
     private static boolean hasEnabledOperation(Map<String, Object> props) {
