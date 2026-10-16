@@ -227,6 +227,51 @@ class SubTableBatchMiCollectionTest {
         assertThat(variables).doesNotContainKey("rowsToCreate");
     }
 
+    @Test
+    void firstTaskRebuildsFrozenTargetsInsteadOfTrustingAnAlreadyPreparedCollection() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
+        var variables = variables(List.of(row("one", "u1")));
+        variables.put("rowsToCreate", List.of(Map.of("handler_code", "untrusted-target")));
+        builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls()));
+        var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
+        assertThat(item.get("handler_code")).isEqualTo("u1");
+        assertThat(item.get("rowKey")).isEqualTo(Map.of("line_key", "one"));
+    }
+
+    @Test
+    void firstTaskRetainsPreparedCollectionsForTargetsThatDoNotEnableBatchAssign() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
+        var disabled = new HashMap<>(control()); disabled.put("capabilities", Map.of("allowBatchAssign", false));
+        var prepared = List.of(Map.of("legacy", "prepared-business-collection"));
+        var variables = variables(List.of()); variables.put("rowsToCreate", prepared);
+        builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(List.of(disabled)));
+        assertThat(variables.get("rowsToCreate")).isSameAs(prepared);
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void frozenFirstTaskStopsAtTheNextHumanHostRatherThanDemandingItsFutureAssignment() {
+        String xml = XML.replace("targetRef=\"mi\"", "targetRef=\"future-host\"").replace("<bpmn:subProcess id=\"mi\">",
+                "<bpmn:userTask id=\"future-host\"/><bpmn:sequenceFlow id=\"later\" sourceRef=\"future-host\" targetRef=\"mi\"/><bpmn:subProcess id=\"mi\">");
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(xml));
+        var variables = variables(List.of(Map.of("line_key", "one", "case_ref", "case-one")));
+        assertThatCode(() -> builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls())))
+                .doesNotThrowAnyException();
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void callActivityLookAheadStillValidatesTheCurrentProcessesReachableAssignmentCollection() {
+        String xml = XML.replace("targetRef=\"mi\"", "targetRef=\"called\"").replace("<bpmn:subProcess id=\"mi\">",
+                "<bpmn:callActivity id=\"called\"/><bpmn:sequenceFlow id=\"later\" sourceRef=\"called\" targetRef=\"mi\"/><bpmn:subProcess id=\"mi\">");
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(xml));
+        var variables = variables(List.of(Map.of("line_key", "one", "case_ref", "case-one")));
+        assertThatThrownBy(() -> builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls())))
+                .hasMessageContaining("source cannot be verified");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+    }
+
     private void inject(Map<String, Object> variables, List<?> controls) {
         when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
         builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls));

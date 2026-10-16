@@ -25,6 +25,8 @@ try {
   const batchMode = process.env.FIXTURE_BATCH_MODE ?? (process.env.FIXTURE_EDIT_ONLY === '1' ? 'edit' : 'all')
   if (!['all', 'add', 'edit', 'delete', 'assign'].includes(batchMode)) throw new Error('Unsupported synthetic batch mode')
   const assignment = batchMode === 'assign'
+  const directMi = process.env.FIXTURE_DIRECT_MI === '1'
+  if (directMi && !assignment) throw new Error('Direct MI fixture requires assignment mode')
   const assignmentMode = process.env.FIXTURE_ASSIGNMENT_MODE ?? 'both'
   if (!['both', 'role', 'user'].includes(assignmentMode)) throw new Error('Unsupported synthetic assignment mode')
   const assignmentOnly = process.env.FIXTURE_ASSIGN_ONLY === '1'
@@ -112,9 +114,9 @@ try {
 <bpmn:startEvent id="Start"><bpmn:extensionElements><custom:properties>${property('formId', forms[0].id)}</custom:properties></bpmn:extensionElements></bpmn:startEvent>
 <bpmn:sequenceFlow id="StartToIntake" sourceRef="Start" targetRef="Intake"/>
 <bpmn:userTask id="Intake" name="Synthetic intake" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[0].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
-<bpmn:sequenceFlow id="IntakeToReview" sourceRef="Intake" targetRef="Review"/>
-<bpmn:userTask id="Review" name="Synthetic batch review" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
-${assignment ? `<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targetRef="AssignedRows"/>
+<bpmn:sequenceFlow id="IntakeToReview" sourceRef="Intake" targetRef="${directMi ? 'AssignedRows' : 'Review'}"/>
+${directMi ? '' : `<bpmn:userTask id="Review" name="Synthetic batch review" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>`}
+${assignment ? `${directMi ? '' : '<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targetRef="AssignedRows"/>'}
 <bpmn:subProcess id="AssignedRows"><bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="syntheticAssignmentRows" flowable:elementVariable="item"/>
 <bpmn:startEvent id="AssignedStart"/><bpmn:sequenceFlow id="AssignedFlow" sourceRef="AssignedStart" targetRef="AssignedWork"/>
 <bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', assignmentMode)}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
@@ -124,11 +126,11 @@ ${assignment ? `<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targ
 <bpmndi:BPMNDiagram id="FixtureDiagram"><bpmndi:BPMNPlane id="FixturePlane" bpmnElement="batch_verify_${suffix}">
 <bpmndi:BPMNShape id="StartShape" bpmnElement="Start"><dc:Bounds x="100" y="112" width="36" height="36"/></bpmndi:BPMNShape>
 <bpmndi:BPMNShape id="IntakeShape" bpmnElement="Intake"><dc:Bounds x="180" y="90" width="100" height="80"/></bpmndi:BPMNShape>
-<bpmndi:BPMNShape id="ReviewShape" bpmnElement="Review"><dc:Bounds x="330" y="90" width="100" height="80"/></bpmndi:BPMNShape>
+${directMi ? '' : '<bpmndi:BPMNShape id="ReviewShape" bpmnElement="Review"><dc:Bounds x="330" y="90" width="100" height="80"/></bpmndi:BPMNShape>'}
 <bpmndi:BPMNShape id="EndShape" bpmnElement="End"><dc:Bounds x="480" y="112" width="36" height="36"/></bpmndi:BPMNShape>
 <bpmndi:BPMNEdge id="StartEdge" bpmnElement="StartToIntake"><di:waypoint x="136" y="130"/><di:waypoint x="180" y="130"/></bpmndi:BPMNEdge>
 <bpmndi:BPMNEdge id="IntakeEdge" bpmnElement="IntakeToReview"><di:waypoint x="280" y="130"/><di:waypoint x="330" y="130"/></bpmndi:BPMNEdge>
-<bpmndi:BPMNEdge id="ReviewEdge" bpmnElement="ReviewToEnd"><di:waypoint x="430" y="130"/><di:waypoint x="480" y="130"/></bpmndi:BPMNEdge>
+${directMi ? '' : '<bpmndi:BPMNEdge id="ReviewEdge" bpmnElement="ReviewToEnd"><di:waypoint x="430" y="130"/><di:waypoint x="480" y="130"/></bpmndi:BPMNEdge>'}
 </bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>`
   await api('POST', `${base}/process`, { bpmnXml })
   const validation = await api('GET', `${base}/validate`)

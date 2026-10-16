@@ -777,21 +777,32 @@ public class ProcessStartComponent {
      * <p>Submitting completes the first task here, not through the To Do path, so an MI
      * sub-process reached from it — directly, or after Function Unit calls, which cannot set this
      * process' variables — used to get no collection, and the request failed with "Variable
-     * '...collection' was not found" when the token reached it. Only collections not already set
-     * are added: flows that prepare their own (the meeting demo above) keep theirs.
+     * '...collection' was not found" when the token reached it. Legacy prepared collections remain;
+     * enhanced instances must instead consume the server-validated frozen assignment collection.
      */
     private void injectMiCollectionsForFirstTask(Map<String, Object> firstTask, String firstTaskDefKey,
                                                  String processInstanceId, ActiveCatalogPin pin,
                                                  Map<String, Object> variables) {
+        Map<String, Object> baseline = processInstanceRepository.findById(processInstanceId)
+                .orElseThrow(() -> new IllegalStateException("Process instance is missing before first-task completion")).getVariables();
+        if (baseline == null) throw new IllegalStateException("Process variables are missing before first-task completion");
+        boolean enhanced = baseline.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
         if (miCollectionVariableBuilder == null || firstTaskDefKey == null || firstTaskDefKey.isBlank()) {
+            if (enhanced) throw new IllegalStateException("Frozen first-task assignment context is missing");
             return;
         }
         Object keyObj = firstTask.get("processDefinitionKey");
         String processKey = keyObj != null && !keyObj.toString().isBlank() ? keyObj.toString() : pin.code();
         Map<String, Object> withCollections = new HashMap<>(variables);
-        miCollectionVariableBuilder.injectMiCollectionFromBpmn(
-                processKey, firstTaskDefKey, processInstanceId, withCollections);
-        withCollections.forEach(variables::putIfAbsent);
+        if (enhanced) {
+            miCollectionVariableBuilder.injectMiCollectionForFirstTask(
+                    processKey, firstTaskDefKey, processInstanceId, withCollections, baseline);
+            variables.putAll(withCollections);
+        } else {
+            miCollectionVariableBuilder.injectMiCollectionFromBpmn(
+                    processKey, firstTaskDefKey, processInstanceId, withCollections);
+            withCollections.forEach(variables::putIfAbsent);
+        }
     }
 
     /**
