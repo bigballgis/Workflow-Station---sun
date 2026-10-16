@@ -104,7 +104,12 @@ try {
   const api = (method, path, data) => request(portal, method, `http://localhost:3000/api/portal${path}`, data)
   const task = await api('GET', `/tasks/${taskId}`)
   assert.match(task.functionUnitName, /^Batch verification /)
-  assert.match(task.processDefinitionKey, /^batch_verify_[a-z0-9]+$/)
+  if (process.env.FIXTURE_EXPECT_PROCESS_KEY) {
+    assert.match(process.env.FIXTURE_EXPECT_PROCESS_KEY, /^[A-Za-z0-9_-]{1,100}$/)
+    assert.match(process.env.FIXTURE_EXPECT_CATALOG_ID || '', /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i)
+    assert.equal(task.processDefinitionKey, process.env.FIXTURE_EXPECT_PROCESS_KEY)
+    assert.equal(task.functionUnitCatalogId, process.env.FIXTURE_EXPECT_CATALOG_ID)
+  } else assert.match(task.processDefinitionKey, /^batch_verify_[a-z0-9]+$/)
   assert.equal(task.taskDefinitionKey, 'Review')
   const form = await api('GET', `/tasks/${taskId}/form-data`)
   const [control] = Object.values(form.subTableBatchCapabilities)

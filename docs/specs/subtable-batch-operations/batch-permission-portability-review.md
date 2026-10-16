@@ -32,4 +32,14 @@ CONDITIONAL。本批修正重建 binding 时遗留的字段权限 ID，并验证
 
 ## 未完成门禁
 
-本例无 lookup/复杂联动、嵌套 scope、邮件/Action 等其他引用；不证明所有 FU 设计产物完整往返。真实跨库 Import、未知格式拒绝、Clone 后再 Deploy→新实例实际执行、完整 DW 编辑器 Preview parity、启动失败隔离与引擎分派异常可见性仍需验收。旧383项前端类型错误仍开放，不报告整体 PASS。
+本例无 lookup/复杂联动、嵌套 scope、邮件/Action 等其他引用；不证明所有 FU 设计产物完整往返。真实跨库 Import、未知格式拒绝、完整 DW 编辑器 Preview parity、启动失败隔离与引擎分派异常可见性仍需验收。旧383项前端类型错误仍开放，不报告整体 PASS。
+
+## 后续：Clone → Deploy → 新实例 → 实际角色任务
+
+- `deploy-start-cloned-batch-fixture.mjs` 正常 DW/Admin/Portal 登录，只接受名称及 tag 均明确为合成的源 FU；从源50037新建 Clone50043，不改源设计。流程键由新 Clone.code 确定，而非修改已有流程键；真实 DW Deploy 状态轮询成功后才启动。
+- 新 catalog `adbb2c28-5812-45d6-b389-70dae553b3e8`，仅给新合成 catalog 的测试工作台角色授予 FU Access；不改用户目录或已有 catalog 权限。新实例 `d4026529-c971-11f1-8f36-4ee612046d7e`，Review `d415c567-c971-11f1-8f36-4ee612046d7e`。
+- 角色工作区脚本接受 Clone 场景的显式期望 process key，并同时匹配实际 task 的 catalog ID；无此参数仍只接受原 `batch_verify_*`。新键不靠放宽正则后盲目写任务，synthetic name、Review、全新两行及能力检查保留。
+- 真正 UI 选两行→统一 BU/Role→Apply，捕获 ASSIGN 两补丁，Save 的引擎任务集合不变。Complete 实际生成 `db921fb8-c971-11f1-8f36-4ee612046d7e` / `db8d16a3-c971-11f1-8f36-4ee612046d7e`，均未领取、候选集合各1人、role/BU 与目录和配置一致、两份冻结身份不同，pageErrors=0。此项证明迁移后的 scoped 权限确实支持 Portal 批量操作，不只是包内字符串相等。
+- 独立脱敏截图 `F:\hermes1.0\Workflow-Station---sun\frontend\user-portal\verification-screenshots\2026-10-16_cloned-role-pool-workspace.png` 及 `2026-10-16_cloned-role-pool-workspace-narrow.png` 保留。没有领取、改派、取消或补偿任务。
+- 审查补强两个 fail-closed 边界：Deploy 前 clone.code 必须与 source.code 不同，授予新 catalog Access/Start 前 catalog.code 必须等于 clone.code；角色脚本 Clone 模式要求期望 catalog ID 是非空 UUID，不能让两个缺失值相等冒充关联验证。
+- 补强后独立新 Clone50044 重跑全链通过：catalog `4a5d50fe-ec4a-4a7d-a2c0-32803e820c8a`，新实例 `2baf9d7d-c972-11f1-8f36-4ee612046d7e`、Review `2bbc20eb-c972-11f1-8f36-4ee612046d7e`，实际角色子任务 `342c9e3c-c972-11f1-8f36-4ee612046d7e` / `342942d7-c972-11f1-8f36-4ee612046d7e`，所有候选身份/BU/Role/两行身份及无提前创建均通过、pageErrors=0。未修改产品或更换镜像。
