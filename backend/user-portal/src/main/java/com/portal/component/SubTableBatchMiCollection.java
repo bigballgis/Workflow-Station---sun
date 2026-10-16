@@ -30,7 +30,7 @@ final class SubTableBatchMiCollection {
     }
 
     static boolean inject(Element subProcess, Map<String, Object> variables, Map<String, Object> controls,
-                          Map<String, Object> baseline, java.util.function.Consumer<Set<String>> validatePeople) {
+                          Map<String, Object> baseline, java.util.function.BiConsumer<Set<String>, Set<SubTableBatchRoleEligibility.Target>> validateTargets) {
         List<Map<?, ?>> enabled = assignmentControls(controls);
         if (enabled.isEmpty()) return false; // Explicit non-assignment path, not recovery from bad configuration.
         Contract selected = null;
@@ -62,11 +62,17 @@ final class SubTableBatchMiCollection {
             if (selected.scope().includes(row)) items.add(item(row, selected, seen));
         }
         Set<String> people = new HashSet<>();
+        Set<SubTableBatchRoleEligibility.Target> roles = new HashSet<>();
         Object personField = selected.assignment().get("assigneeField");
-        if (personField != null) for (Map<String, Object> item : items) {
-            if (item.get(personField) instanceof String person) people.add(person);
+        Object roleField = selected.assignment().get("roleField");
+        Object buField = selected.assignment().get("buField");
+        for (Map<String, Object> item : items) {
+            if (personField != null && item.get(personField) instanceof String person) people.add(person);
+            if (roleField != null && item.get(roleField) instanceof String role) {
+                roles.add(new SubTableBatchRoleEligibility.Target(buField == null ? null : text(item.get(buField)), role));
+            }
         }
-        validatePeople.accept(people);
+        validateTargets.accept(people, roles);
         variables.put(collection, items); // Publish only after every row has passed.
         return true;
     }

@@ -19,6 +19,14 @@ class SubTableBatchMiCollectionTest {
     SubTableBatchMiCollectionTest() {
         jdbc.execute("CREATE TABLE sys_users(id VARCHAR(100) PRIMARY KEY, status VARCHAR(20), deleted BOOLEAN)");
         for (String id : List.of("user-one", "user-two", "u1", "u2")) jdbc.update("INSERT INTO sys_users VALUES(?, ?, ?)", id, "ACTIVE", false);
+        jdbc.execute("CREATE TABLE sys_business_units(id VARCHAR(100), code VARCHAR(100), status VARCHAR(20))");
+        jdbc.execute("CREATE TABLE sys_roles(id VARCHAR(100), code VARCHAR(100), type VARCHAR(30), status VARCHAR(20))");
+        jdbc.execute("CREATE TABLE sys_business_unit_roles(business_unit_id VARCHAR(100), role_id VARCHAR(100))");
+        jdbc.execute("CREATE TABLE sys_user_business_unit_roles(user_id VARCHAR(100), business_unit_id VARCHAR(100), role_id VARCHAR(100))");
+        jdbc.update("INSERT INTO sys_business_units VALUES('bu-id', 'bu-a', 'ACTIVE')");
+        jdbc.update("INSERT INTO sys_roles VALUES('role-id', 'role-a', 'BU_BOUNDED', 'ACTIVE')");
+        jdbc.update("INSERT INTO sys_business_unit_roles VALUES('bu-id', 'role-id')");
+        jdbc.update("INSERT INTO sys_user_business_unit_roles VALUES('u1', 'bu-id', 'role-id')");
         clearInvocations(jdbc);
     }
     @AfterEach void close() { database.shutdown(); }
@@ -86,7 +94,7 @@ class SubTableBatchMiCollectionTest {
         assertThat(item.get("pool_code")).isEqualTo("role-a");
         assertThat(item.get("unit_code")).isEqualTo("bu-a");
         assertThat(item.containsKey("handler_code")).isFalse();
-        verifyNoInteractions(jdbc);
+        assertNoLiveDwReads();
     }
 
     @Test
@@ -134,7 +142,7 @@ class SubTableBatchMiCollectionTest {
         var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
         assertThat(item.get("pool_code")).isEqualTo("role-a");
         assertThat(item.containsKey("unit_code")).isFalse();
-        verifyNoInteractions(jdbc);
+        assertNoLiveDwReads();
     }
 
     @Test
@@ -161,7 +169,7 @@ class SubTableBatchMiCollectionTest {
         var document = BpmnMiXmlSupport.parseBpmnSecurely(XML.replace("value=\"both\"", "value=\"unsupported-mode\""));
         assertThatCode(() -> SubTableBatchMiCollection.validateTargets(document, Map.of("control", control))).doesNotThrowAnyException();
         var subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", "mi");
-        assertThat(SubTableBatchMiCollection.inject(subProcess, new HashMap<>(), Map.of("control", control), Map.of(), ids -> { })).isFalse();
+        assertThat(SubTableBatchMiCollection.inject(subProcess, new HashMap<>(), Map.of("control", control), Map.of(), (people, roles) -> { })).isFalse();
     }
 
     @Test
@@ -207,6 +215,18 @@ class SubTableBatchMiCollectionTest {
         assertThat(variables).doesNotContainKey("rowsToCreate");
     }
 
+    @Test
+    void savedRoleLosingAdmissionOrAllActiveMembersBlocksCompleteBeforePublishing() {
+        jdbc.update("DELETE FROM sys_business_unit_roles");
+        var variables = variables(List.of(Map.of("line_key", "role-row", "pool_code", "role-a", "unit_code", "bu-a", "case_ref", "case-one")));
+        assertThatThrownBy(() -> inject(variables, controls())).hasRootCauseMessage("Initial assignment role target is not currently eligible");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+        jdbc.update("INSERT INTO sys_business_unit_roles VALUES('bu-id', 'role-id')");
+        jdbc.update("UPDATE sys_users SET status='INACTIVE' WHERE id='u1'");
+        assertThatThrownBy(() -> inject(variables, controls())).hasRootCauseMessage("Initial assignment role target is not currently eligible");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+    }
+
     private void inject(Map<String, Object> variables, List<?> controls) {
         when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
         builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls));
@@ -229,7 +249,7 @@ class SubTableBatchMiCollectionTest {
                 "assigneeField", "handler_code", "roleField", "pool_code", "buField", "unit_code");
     }
     private static Map<String, Object> snapshot(List<?> controls) {
-        return Map.of("case_key", "case-one", SubTableWriteIsolation.BATCH_RUNTIME_FIELD,
+        return Map.of("case_key", "case-one", "activeBusinessUnitId", "bu-id", SubTableWriteIsolation.BATCH_RUNTIME_FIELD,
                 Map.of("schemaVersion", 1, "forms", Map.of("form", Map.of("controls", controls))));
     }
     private void assertNoLiveDwReads() {

@@ -792,9 +792,12 @@ public class TaskFormComponent {
                     taskInfo.taskDefinitionKey, taskInfo.processInstanceId, currentVariables, formDefinition,
                     subTableBatchChanges, inbound), objectMapper, workflowEngineClient);
             if (currentVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+                Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(currentVariables,
+                        formDefinition == null ? null : formDefinition.get("sourceId"), objectMapper);
                 SubTableBatchUserEligibility.requireActive(SubTableBatchAssignmentDifferences.changedPersonalTargets(
-                        currentVariables, SubTableBatchRuntimeSnapshot.projectForForm(currentVariables,
-                                formDefinition == null ? null : formDefinition.get("sourceId"), objectMapper), inbound), jdbcTemplate);
+                        currentVariables, controls, inbound), jdbcTemplate);
+                SubTableBatchRoleEligibility.requireEligible(SubTableBatchAssignmentDifferences.changedRoleTargets(
+                        currentVariables, controls, inbound), currentVariables, jdbcTemplate);
             }
 
             updatedVariables.putAll(inbound);

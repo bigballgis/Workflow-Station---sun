@@ -59,15 +59,36 @@ final class SubTableBatchAssignmentDifferences {
     static java.util.Set<String> changedPersonalTargets(Map<String, Object> variables, Map<String, Object> controls,
                                                         Map<String, Object> submitted) {
         java.util.Set<String> targets = new java.util.LinkedHashSet<>();
-        if (submitted == null || !submitted.containsKey("__subTables__")) return targets;
+        for (ChangedRow changed : changedRows(variables, controls, submitted)) {
+            Object field = changed.config().get("assigneeField");
+            if (field != null && !empty(changed.row().get(field))) targets.add(requiredText(changed.row().get(field)));
+        }
+        return targets;
+    }
+
+    static java.util.Set<SubTableBatchRoleEligibility.Target> changedRoleTargets(Map<String, Object> variables,
+                                                        Map<String, Object> controls, Map<String, Object> submitted) {
+        java.util.Set<SubTableBatchRoleEligibility.Target> targets = new java.util.LinkedHashSet<>();
+        for (ChangedRow changed : changedRows(variables, controls, submitted)) {
+            Object field = changed.config().get("roleField");
+            if (field == null || empty(changed.row().get(field))) continue;
+            Object buField = changed.config().get("buField");
+            String bu = buField == null ? null : requiredText(changed.row().get(buField));
+            targets.add(new SubTableBatchRoleEligibility.Target(bu, requiredText(changed.row().get(field))));
+        }
+        return targets;
+    }
+
+    private record ChangedRow(Map<?, ?> config, Map<?, ?> row) { }
+    private static List<ChangedRow> changedRows(Map<String, Object> variables, Map<String, Object> controls,
+                                               Map<String, Object> submitted) {
+        List<ChangedRow> changedRows = new ArrayList<>();
+        if (submitted == null || !submitted.containsKey("__subTables__")) return changedRows;
         Map<?, ?> baseline = variables.containsKey("__subTables__") ? requiredMap(variables.get("__subTables__")) : Map.of();
         Map<?, ?> tables = requiredMap(submitted.get("__subTables__"));
         for (Control changed : changedControls(variables, controls, submitted)) {
             Map<?, ?> control = requiredMap(controls.get(changed.id()));
             Map<?, ?> config = requiredMap(control.get("assignmentConfig"));
-            Object field = config.get("assigneeField");
-            if (field == null) continue;
-            String name = requiredText(field);
             List<String> assignmentFields = List.of("assigneeField", "roleField", "buField").stream()
                     .map(config::get).filter(Objects::nonNull).map(SubTableBatchAssignmentDifferences::requiredText).toList();
             Map<?, ?> binding = requiredMap(requiredMap(control.get("rowDesign")).get("binding"));
@@ -75,14 +96,13 @@ final class SubTableBatchAssignmentDifferences {
             List<String> keys = requiredStrings(binding.get("primaryKeyFields"));
             Map<List<String>, Map<?, ?>> old = baseline.containsKey(store) ? index(baseline.get(store), keys) : Map.of();
             index(tables.get(store), keys).forEach((identity, row) -> {
-                Object person = row.get(name);
                 Map<?, ?> before = old.get(identity);
-                if (!empty(person) && assignmentFields.stream().anyMatch(key -> !same(before == null ? null : before.get(key), row.get(key)))) {
-                    targets.add(requiredText(person));
+                if (assignmentFields.stream().anyMatch(key -> !same(before == null ? null : before.get(key), row.get(key)))) {
+                    changedRows.add(new ChangedRow(config, row));
                 }
             });
         }
-        return targets;
+        return changedRows;
     }
 
     private static boolean same(Object first, Object second) {

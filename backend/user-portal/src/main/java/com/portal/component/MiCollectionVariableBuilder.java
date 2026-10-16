@@ -221,7 +221,10 @@ public class MiCollectionVariableBuilder {
             Element subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", nodeId);
             if (subProcess != null && BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess) != null) {
                 if (SubTableBatchMiCollection.inject(subProcess, variables, controls, baseline,
-                        targets -> SubTableBatchUserEligibility.requireActive(targets, jdbcTemplate))
+                        (people, roles) -> {
+                            SubTableBatchUserEligibility.requireActive(people, jdbcTemplate);
+                            SubTableBatchRoleEligibility.requireEligible(roles, baseline, jdbcTemplate);
+                        })
                         || injectSubProcess(subProcess, variables)) return true;
                 continue;
             }

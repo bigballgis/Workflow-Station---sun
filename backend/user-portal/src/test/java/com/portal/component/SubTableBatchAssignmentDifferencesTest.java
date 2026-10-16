@@ -95,4 +95,25 @@ class SubTableBatchAssignmentDifferencesTest {
         assertEquals(java.util.Set.of("person-original"), SubTableBatchAssignmentDifferences.changedPersonalTargets(
                 payload(List.of(before)), CONTROLS, payload(List.of(after))));
     }
+
+    @Test
+    void roleQualificationFollowsOnlyChangedRowsAndKeepsCodePairs() {
+        Map<String, Object> assigned = new HashMap<>(ROW);
+        assigned.remove("handlerCode"); assigned.put("poolCode", "role-code"); assigned.put("unitCode", "bu-code");
+        assertEquals(java.util.Set.of(new SubTableBatchRoleEligibility.Target("bu-code", "role-code")),
+                SubTableBatchAssignmentDifferences.changedRoleTargets(BASELINE, CONTROLS, payload(List.of(assigned))));
+        Map<String, Object> edited = new HashMap<>(assigned); edited.put("description", "ordinary edit");
+        assertEquals(java.util.Set.of(), SubTableBatchAssignmentDifferences.changedRoleTargets(
+                payload(List.of(assigned)), CONTROLS, payload(List.of(edited))));
+    }
+
+    @Test
+    void contextBasedRoleDoesNotGuessABuColumnAndDeclaredBuCannotBeMissing() {
+        Map<String, Object> role = new HashMap<>(ROW); role.remove("handlerCode"); role.put("poolCode", "role-code");
+        assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchAssignmentDifferences.changedRoleTargets(BASELINE, CONTROLS, payload(List.of(role))));
+        Map<String, Object> config = new HashMap<>((Map<String, Object>) CONTROL.get("assignmentConfig")); config.remove("buField");
+        Map<String, Object> control = new HashMap<>(CONTROL); control.put("assignmentConfig", config);
+        assertEquals(java.util.Set.of(new SubTableBatchRoleEligibility.Target(null, "role-code")),
+                SubTableBatchAssignmentDifferences.changedRoleTargets(BASELINE, Map.of("grid", control), payload(List.of(role))));
+    }
 }
