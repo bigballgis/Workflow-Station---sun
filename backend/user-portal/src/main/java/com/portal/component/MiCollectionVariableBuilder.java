@@ -220,7 +220,8 @@ public class MiCollectionVariableBuilder {
             if (nodeId == null || nodeId.isBlank() || !visited.add(nodeId)) continue;
             Element subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", nodeId);
             if (subProcess != null && BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess) != null) {
-                if (SubTableBatchMiCollection.inject(subProcess, variables, controls, baseline)
+                if (SubTableBatchMiCollection.inject(subProcess, variables, controls, baseline,
+                        targets -> SubTableBatchUserEligibility.requireActive(targets, jdbcTemplate))
                         || injectSubProcess(subProcess, variables)) return true;
                 continue;
             }

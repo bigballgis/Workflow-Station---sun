@@ -76,4 +76,23 @@ class SubTableBatchAssignmentDifferencesTest {
     private static Map<String, Object> payload(List<Map<String, Object>> rows) {
         return Map.of("__subTables__", Map.of("dw:renamedlines", rows));
     }
+
+    @Test
+    void personalQualificationUsesOnlyActualChangedTargetsAndFrozenFieldNames() {
+        Map<String, Object> unchanged = new HashMap<>(ROW); unchanged.put("description", "other-edit");
+        assertEquals(java.util.Set.of(), SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(unchanged))));
+        Map<String, Object> first = new HashMap<>(ROW); first.put("handlerCode", "person-new");
+        Map<String, Object> second = new HashMap<>(first); second.put("businessKey", "B");
+        assertEquals(java.util.Set.of("person-new"), SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(first, second))));
+        first.put("handlerCode", null); first.put("poolCode", "role-new");
+        assertEquals(java.util.Set.of(), SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(first))));
+    }
+
+    @Test
+    void clearingOldRoleToActivateAnUnchangedPersonStillRequiresQualification() {
+        Map<String, Object> before = new HashMap<>(ROW); before.put("poolCode", "old-role"); before.put("unitCode", "old-bu");
+        Map<String, Object> after = new HashMap<>(ROW);
+        assertEquals(java.util.Set.of("person-original"), SubTableBatchAssignmentDifferences.changedPersonalTargets(
+                payload(List.of(before)), CONTROLS, payload(List.of(after))));
+    }
 }

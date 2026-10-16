@@ -30,7 +30,7 @@ final class SubTableBatchMiCollection {
     }
 
     static boolean inject(Element subProcess, Map<String, Object> variables, Map<String, Object> controls,
-                          Map<String, Object> baseline) {
+                          Map<String, Object> baseline, java.util.function.Consumer<Set<String>> validatePeople) {
         List<Map<?, ?>> enabled = assignmentControls(controls);
         if (enabled.isEmpty()) return false; // Explicit non-assignment path, not recovery from bad configuration.
         Contract selected = null;
@@ -61,6 +61,12 @@ final class SubTableBatchMiCollection {
             Map<?, ?> row = map(raw);
             if (selected.scope().includes(row)) items.add(item(row, selected, seen));
         }
+        Set<String> people = new HashSet<>();
+        Object personField = selected.assignment().get("assigneeField");
+        if (personField != null) for (Map<String, Object> item : items) {
+            if (item.get(personField) instanceof String person) people.add(person);
+        }
+        validatePeople.accept(people);
         variables.put(collection, items); // Publish only after every row has passed.
         return true;
     }

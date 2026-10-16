@@ -2,15 +2,26 @@ package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SubTableBatchMiCollectionTest {
     private final WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
-    private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
+    private final EmbeddedDatabase database = new EmbeddedDatabaseBuilder().generateUniqueName(true).setType(EmbeddedDatabaseType.H2).build();
+    private final JdbcTemplate jdbc = spy(new JdbcTemplate(database));
     private final MiCollectionVariableBuilder builder = new MiCollectionVariableBuilder(engine, jdbc);
+    SubTableBatchMiCollectionTest() {
+        jdbc.execute("CREATE TABLE sys_users(id VARCHAR(100) PRIMARY KEY, status VARCHAR(20), deleted BOOLEAN)");
+        for (String id : List.of("user-one", "user-two", "u1", "u2")) jdbc.update("INSERT INTO sys_users VALUES(?, ?, ?)", id, "ACTIVE", false);
+        clearInvocations(jdbc);
+    }
+    @AfterEach void close() { database.shutdown(); }
     private static final String XML = """
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn" xmlns:custom="urn:synthetic">
           <bpmn:process id="process"><bpmn:userTask id="host"><bpmn:extensionElements><custom:properties>
@@ -33,7 +44,7 @@ class SubTableBatchMiCollectionTest {
         var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
         assertThat(item.get("rowKey")).isEqualTo(Map.of("line_key", "one"));
         assertThat(item.get("handler_code")).isEqualTo("user-one");
-        verifyNoInteractions(jdbc);
+        assertNoLiveDwReads();
         verify(engine, never()).getBpmnXml(anyString());
     }
 
@@ -98,7 +109,7 @@ class SubTableBatchMiCollectionTest {
         var variables = variables(List.of(row("one", "u1")));
         builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, baseline);
         assertThat((List<?>) variables.get("rowsToCreate")).hasSize(1);
-        verifyNoInteractions(jdbc);
+        assertNoLiveDwReads();
     }
 
     @Test
@@ -150,7 +161,7 @@ class SubTableBatchMiCollectionTest {
         var document = BpmnMiXmlSupport.parseBpmnSecurely(XML.replace("value=\"both\"", "value=\"unsupported-mode\""));
         assertThatCode(() -> SubTableBatchMiCollection.validateTargets(document, Map.of("control", control))).doesNotThrowAnyException();
         var subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", "mi");
-        assertThat(SubTableBatchMiCollection.inject(subProcess, new HashMap<>(), Map.of("control", control), Map.of())).isFalse();
+        assertThat(SubTableBatchMiCollection.inject(subProcess, new HashMap<>(), Map.of("control", control), Map.of(), ids -> { })).isFalse();
     }
 
     @Test
@@ -161,7 +172,7 @@ class SubTableBatchMiCollectionTest {
         var items = (List<?>) variables.get("rowsToCreate");
         assertThat(items).hasSize(1);
         assertThat(((Map<?, ?>) items.get(0)).get("rowKey")).isEqualTo(Map.of("line_key", "one"));
-        verifyNoInteractions(jdbc);
+        assertNoLiveDwReads();
     }
 
     @Test
@@ -185,6 +196,15 @@ class SubTableBatchMiCollectionTest {
                 .hasRootCauseMessage("Nested assignment target requires a separate collection scope");
         assertThat(variables).doesNotContainKeys("rowsToCreate", "outerRows");
         verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void savedPersonBecomingInactiveBlocksCompleteWithoutPublishingAnyCollection() {
+        jdbc.update("UPDATE sys_users SET status=? WHERE id=?", "INACTIVE", "u1");
+        var variables = variables(List.of(row("one", "u1")));
+        assertThatThrownBy(() -> inject(variables, controls()))
+                .hasRootCauseMessage("Initial assignment person target is not currently active");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
     }
 
     private void inject(Map<String, Object> variables, List<?> controls) {
@@ -211,5 +231,8 @@ class SubTableBatchMiCollectionTest {
     private static Map<String, Object> snapshot(List<?> controls) {
         return Map.of("case_key", "case-one", SubTableWriteIsolation.BATCH_RUNTIME_FIELD,
                 Map.of("schemaVersion", 1, "forms", Map.of("form", Map.of("controls", controls))));
+    }
+    private void assertNoLiveDwReads() {
+        verify(jdbc, never()).query(contains("dw_"), any(org.springframework.jdbc.core.RowMapper.class), anyLong());
     }
 }

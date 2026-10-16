@@ -7,6 +7,8 @@ import { unwrapApiList } from './mi-regression-helpers.mjs'
 
 const taskId = process.env.FIXTURE_TASK_ID
 assert.match(taskId || '', /^[a-f0-9-]{36}$/)
+const screenshotTag = process.env.FIXTURE_SCREENSHOT_TAG
+if (screenshotTag) assert.match(screenshotTag, /^[a-z0-9-]+$/)
 const browser = await chromium.launch({ headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
@@ -76,7 +78,8 @@ try {
     await ordinary.fill('Combined synthetic draft')
   }
   assert.deepEqual(rowsOf(await api('GET', `/tasks/${activeTaskId}/form-data`)), baseline, 'Neither draft may persist before Apply')
-  const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-15_batch-assignment-${control.capabilities.allowBatchEdit ? 'mixed' : 'only'}.png`, import.meta.url))
+  const prefix = screenshotTag ? `2026-10-16_${screenshotTag}-workspace` : '2026-10-15_batch-assignment'
+  const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/${prefix}-${control.capabilities.allowBatchEdit ? 'mixed' : 'only'}.png`, import.meta.url))
   const footer = dialog.getByRole('button', { name: /Apply/ })
   assert.equal(await footer.isVisible(), true)
   assert.ok((await footer.boundingBox()).y + (await footer.boundingBox()).height <= 768,

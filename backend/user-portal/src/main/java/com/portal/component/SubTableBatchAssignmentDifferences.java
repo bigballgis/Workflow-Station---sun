@@ -56,6 +56,35 @@ final class SubTableBatchAssignmentDifferences {
         return result;
     }
 
+    static java.util.Set<String> changedPersonalTargets(Map<String, Object> variables, Map<String, Object> controls,
+                                                        Map<String, Object> submitted) {
+        java.util.Set<String> targets = new java.util.LinkedHashSet<>();
+        if (submitted == null || !submitted.containsKey("__subTables__")) return targets;
+        Map<?, ?> baseline = variables.containsKey("__subTables__") ? requiredMap(variables.get("__subTables__")) : Map.of();
+        Map<?, ?> tables = requiredMap(submitted.get("__subTables__"));
+        for (Control changed : changedControls(variables, controls, submitted)) {
+            Map<?, ?> control = requiredMap(controls.get(changed.id()));
+            Map<?, ?> config = requiredMap(control.get("assignmentConfig"));
+            Object field = config.get("assigneeField");
+            if (field == null) continue;
+            String name = requiredText(field);
+            List<String> assignmentFields = List.of("assigneeField", "roleField", "buField").stream()
+                    .map(config::get).filter(Objects::nonNull).map(SubTableBatchAssignmentDifferences::requiredText).toList();
+            Map<?, ?> binding = requiredMap(requiredMap(control.get("rowDesign")).get("binding"));
+            String store = "dw:" + requiredText(binding.get("tableName")).toLowerCase(java.util.Locale.ROOT);
+            List<String> keys = requiredStrings(binding.get("primaryKeyFields"));
+            Map<List<String>, Map<?, ?>> old = baseline.containsKey(store) ? index(baseline.get(store), keys) : Map.of();
+            index(tables.get(store), keys).forEach((identity, row) -> {
+                Object person = row.get(name);
+                Map<?, ?> before = old.get(identity);
+                if (!empty(person) && assignmentFields.stream().anyMatch(key -> !same(before == null ? null : before.get(key), row.get(key)))) {
+                    targets.add(requiredText(person));
+                }
+            });
+        }
+        return targets;
+    }
+
     private static boolean same(Object first, Object second) {
         return (empty(first) && empty(second)) || Objects.equals(first, second);
     }

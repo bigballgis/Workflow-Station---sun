@@ -791,6 +791,11 @@ public class TaskFormComponent {
             SubTableBatchAssignmentStageGuard.validate(new SubTableBatchAssignmentStageGuard.Submission(
                     taskInfo.taskDefinitionKey, taskInfo.processInstanceId, currentVariables, formDefinition,
                     subTableBatchChanges, inbound), objectMapper, workflowEngineClient);
+            if (currentVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+                SubTableBatchUserEligibility.requireActive(SubTableBatchAssignmentDifferences.changedPersonalTargets(
+                        currentVariables, SubTableBatchRuntimeSnapshot.projectForForm(currentVariables,
+                                formDefinition == null ? null : formDefinition.get("sourceId"), objectMapper), inbound), jdbcTemplate);
+            }
 
             updatedVariables.putAll(inbound);
             SubTableBatchDeletedRows.record(updatedVariables, currentVariables, subTableBatchChanges);

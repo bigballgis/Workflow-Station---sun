@@ -21,12 +21,32 @@ class SubTableBatchAssignmentPersistenceTest {
     void originalSingleRowSaveStillWorksBeforeTheConfiguredTargetStarts() throws Exception {
         var harness = new BatchTaskFormTransactionHarness("renamedEntryKey", false);
         harness.enableAssignmentContract(false);
+        directory(harness, "ACTIVE");
         harness.editUnmarkedCaption();
         assertEquals(1, harness.writes.get());
         var tables = (java.util.Map<?, ?>) harness.read().get("__subTables__");
         var rows = (java.util.List<?>) tables.get("dw:lines");
         assertEquals("MUST-NOT-WRITE", ((java.util.Map<?, ?>) rows.get(0)).get("caption"));
         verify(harness.engine, times(1)).getTaskHistory("synthetic-process");
+    }
+
+    @Test
+    void inactivePersonCannotBeSavedByOmittingBatchMarkers() throws Exception {
+        var harness = new BatchTaskFormTransactionHarness("renamedEntryKey", false);
+        harness.enableAssignmentContract(false);
+        directory(harness, "INACTIVE");
+        var before = harness.read();
+        assertEquals("Initial assignment person target is not currently active",
+                assertThrows(PortalException.class, harness::editUnmarkedCaption).getMessage());
+        assertEquals(0, harness.writes.get());
+        assertEquals(before, harness.read());
+    }
+
+    private static void directory(BatchTaskFormTransactionHarness harness, String status) {
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(harness.persistence.getDataSource());
+        jdbc.execute("CREATE TABLE sys_users(id VARCHAR(100) PRIMARY KEY, status VARCHAR(20), deleted BOOLEAN)");
+        jdbc.update("INSERT INTO sys_users VALUES(?, ?, ?)", "MUST-NOT-WRITE", status, false);
+        org.springframework.test.util.ReflectionTestUtils.setField(harness.component, "jdbcTemplate", jdbc);
     }
 
     @Test

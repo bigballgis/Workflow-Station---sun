@@ -45,7 +45,7 @@ try {
 
 for (const script of ['verify-batch-assignment-workspace.mjs', 'verify-batch-assignment-stage-runtime.mjs']) {
   execFileSync(process.execPath, [fileURLToPath(new URL(`./${script}`, import.meta.url))], {
-    env: { ...process.env, FIXTURE_TASK_ID: taskId, FIXTURE_VERIFY_GENERATED: '0', FIXTURE_SCREENSHOT_TAG: 'frozen-mi' },
+    env: { ...process.env, FIXTURE_TASK_ID: taskId, FIXTURE_VERIFY_GENERATED: '0', FIXTURE_SCREENSHOT_TAG: process.env.FIXTURE_SCREENSHOT_TAG || 'frozen-mi' },
     stdio: 'inherit', timeout: 120000,
   })
 }
