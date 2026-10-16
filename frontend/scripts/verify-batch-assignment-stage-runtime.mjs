@@ -7,7 +7,9 @@ import { unwrapApiList } from './mi-regression-helpers.mjs'
 
 const taskId = process.env.FIXTURE_TASK_ID
 const verifyGenerated = process.env.FIXTURE_VERIFY_GENERATED === '1'
+const screenshotTag = process.env.FIXTURE_SCREENSHOT_TAG || 'assignment-stage'
 assert.match(taskId || '', /^[a-f0-9-]{36}$/)
+assert.match(screenshotTag, /^[a-z0-9-]+$/)
 const browser = await chromium.launch({ headless: true })
 try {
   const page = await browser.newPage()
@@ -25,7 +27,7 @@ try {
   assert.equal(task.taskDefinitionKey, verifyGenerated ? 'AssignedWork' : 'Review')
   const form = await api('GET', `/tasks/${taskId}/form-data`)
   const [control] = Object.values(form.subTableBatchCapabilities)
-  assert.equal(control.capabilities.allowBatchAssign, true)
+  assert.equal(control.capabilities.allowBatchAssign, !verifyGenerated)
   const store = `dw:${control.rowDesign.binding.tableName}`
   const fields = control.assignmentConfig
   const rowKey = row => Object.fromEntries(control.rowDesign.binding.primaryKeyFields.map(field => [field, row[field]]))
@@ -55,6 +57,8 @@ try {
     assert.equal(detail.taskDefinitionKey, 'AssignedWork')
     assert.equal(detail.assignee, target)
     const childForm = await api('GET', `/tasks/${child.taskId}/form-data`)
+    const [childControl] = Object.values(childForm.subTableBatchCapabilities)
+    assert.equal(childControl.capabilities.allowBatchAssign, false, 'Generated target must not advertise initial assignment')
     const canonical = childForm.fieldValues.__subTables__[store]
     // Existing form-data returns canonical data plus the task-scoped identity; rendering and write scope use that identity.
     assert.deepEqual(childForm.fieldValues._currentItem.rowKey, detail.variables._currentItem.rowKey)
@@ -76,10 +80,13 @@ try {
     const table = page.locator('.sub-table-field').first()
     await table.locator('.el-table__body-wrapper tr').first().waitFor()
     assert.equal(await table.locator('.el-table__body-wrapper tr').count(), 1, 'Rendered child must show only its participant')
+    const otherBatchOperation = ['allowBatchAdd', 'allowBatchEdit', 'allowBatchDelete']
+      .some(flag => childControl.capabilities[flag])
+    assert.equal(await table.getByRole('button', { name: 'Batch Edit', exact: true }).count(), otherBatchOperation ? 1 : 0)
     const headers = await table.locator('thead th').allTextContents()
     const assigneeColumn = headers.findIndex(header => header.trim().toLowerCase() === 'assignee')
     assert.ok(assigneeColumn >= 0, 'Assignment display must be masked before capturing evidence')
-    const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-16_batch-assigned-child-${identities.size}.png`, import.meta.url))
+    const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-16_${screenshotTag}-child-${identities.size}.png`, import.meta.url))
     await table.screenshot({ path: screenshot, mask: [table.locator('.el-select'),
       table.locator(`.el-table__body-wrapper td:nth-child(${assigneeColumn + 1})`)] })
   }

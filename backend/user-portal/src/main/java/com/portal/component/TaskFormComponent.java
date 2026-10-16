@@ -523,6 +523,8 @@ public class TaskFormComponent {
                 : false;
         Map<String, Object> subTableBatchCapabilities = SubTableBatchRuntimeSnapshot.projectForForm(
                 allVariables, formDefinition.get("sourceId"), objectMapper);
+        subTableBatchCapabilities = SubTableBatchAssignmentStageGuard.project(subTableBatchCapabilities,
+                taskInfo.taskDefinitionKey, taskInfo.processInstanceId, workflowEngineClient);
 
         // Which field values to send down: the form's DESIGNED fields, not the permission keys.
         //

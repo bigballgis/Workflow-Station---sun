@@ -9,6 +9,9 @@ import com.portal.util.WorkflowEnginePayloadHelper;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Rejects initial batch-assignment configuration after its frozen BPMN target
@@ -41,7 +44,7 @@ final class SubTableBatchAssignmentStageGuard {
         Object sourceId = submission.form() == null ? null : submission.form().get("sourceId");
         Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(
                 submission.variables(), sourceId, objectMapper);
-        java.util.Set<String> targets = new java.util.LinkedHashSet<>();
+        Set<String> targets = new LinkedHashSet<>();
         if (changes != null) for (SubTableBatchChange change : changes) {
             if (isAssign(change)) targets.add(targetTaskDefinitionKey(change.getBatchControlId(), change.getBindingId(), controls));
         }
@@ -49,42 +52,63 @@ final class SubTableBatchAssignmentStageGuard {
             targets.add(targetTaskDefinitionKey(control.id(), control.bindingId(), controls));
         }
         if (targets.isEmpty()) return;
-        if (workflowEngineClient == null) throw forbidden("Batch assignment stage cannot be verified");
-        String activeTaskDefinitionKey = submission.stageId();
-        String processInstanceId = submission.processId();
-        List<Map<String, Object>> tasks = null;
-        List<Map<String, Object>> history = null;
-        boolean taskStateLoaded = false;
-        for (String targetTaskDefinitionKey : targets) {
-            if (targetTaskDefinitionKey.equals(activeTaskDefinitionKey)) {
-                throw forbidden("Batch assignment target task has already started");
-            }
-            if (!taskStateLoaded) {
-                Optional<Map<String, Object>> payload = workflowEngineClient.getProcessInstanceTasks(processInstanceId);
-                tasks = payload.map(WorkflowEnginePayloadHelper::taskListFromPayload).orElse(null);
-                if (tasks == null) {
-                    throw forbidden("Batch assignment stage cannot be verified");
-                }
-                validateTaskIdentities(tasks, processInstanceId, "taskDefinitionKey");
-                history = workflowEngineClient.getTaskHistory(processInstanceId)
-                        .orElseThrow(() -> forbidden("Batch assignment history cannot be verified"));
-                validateTaskIdentities(history, processInstanceId, "activityId");
-                // An empty/mismatched history is not evidence that no task ever existed.
-                boolean hostRecorded = history.stream().anyMatch(task -> activeTaskDefinitionKey.equals(task.get("activityId"))
-                        && task.containsKey("endTime") && task.get("endTime") == null
-                        && task.containsKey("deleteReason") && task.get("deleteReason") == null);
-                if (!hostRecorded) throw forbidden("Batch assignment host history cannot be verified");
-                taskStateLoaded = true;
-            }
-            boolean targetStarted = tasks.stream()
-                    .anyMatch(task -> targetTaskDefinitionKey.equals(text(task.get("taskDefinitionKey"))));
-            if (targetStarted) {
-                throw forbidden("Batch assignment target task has already started");
-            }
-            if (history.stream().anyMatch(task -> targetTaskDefinitionKey.equals(task.get("activityId")))) {
-                throw forbidden("Batch assignment target task has already started");
+        if (targets.contains(submission.stageId()) || !startedTargets(submission.stageId(), submission.processId(), targets,
+                workflowEngineClient, false).isEmpty()) throw forbidden("Batch assignment target task has already started");
+    }
+
+    /** UI eligibility is a projection only; persistence always repeats the authoritative stage check. */
+    static Map<String, Object> project(Map<String, Object> controls, String stageId, String processId,
+                                       WorkflowEngineClient engine) {
+        Map<String, String> controlTargets = new LinkedHashMap<>();
+        for (var entry : controls.entrySet()) {
+            Map<String, Object> control = map(entry.getValue());
+            if (Boolean.TRUE.equals(map(control.get("capabilities")).get("allowBatchAssign"))
+                    && !Boolean.FALSE.equals(map(control.get("originalCrud")).get("allowEdit"))) {
+                controlTargets.put(entry.getKey(), targetTaskDefinitionKey(entry.getKey(), text(control.get("bindingId")), controls));
             }
         }
+        if (controlTargets.isEmpty()) return controls;
+        Set<String> started = startedTargets(stageId, processId, new LinkedHashSet<>(controlTargets.values()), engine, true);
+        Map<String, Object> projected = new LinkedHashMap<>(controls);
+        controlTargets.forEach((id, target) -> {
+            if (!started.contains(target)) return;
+            Map<String, Object> control = new LinkedHashMap<>(map(controls.get(id)));
+            Map<String, Object> flags = new LinkedHashMap<>(map(control.get("capabilities")));
+            flags.put("allowBatchAssign", false);
+            control.put("capabilities", flags);
+            projected.put(id, control);
+        });
+        return projected;
+    }
+
+    private static Set<String> startedTargets(String stageId, String processId, Set<String> targets,
+                                               WorkflowEngineClient engine, boolean readProjection) {
+        Set<String> started = new LinkedHashSet<>();
+        if (targets.contains(stageId)) started.add(stageId);
+        if (started.containsAll(targets)) return started;
+        if (engine == null || blank(stageId) || blank(processId)) throw forbidden("Batch assignment stage cannot be verified");
+        Optional<Map<String, Object>> payload = engine.getProcessInstanceTasks(processId);
+        List<Map<String, Object>> tasks = payload.map(WorkflowEnginePayloadHelper::taskListFromPayload).orElse(null);
+        if (tasks == null) throw forbidden("Batch assignment stage cannot be verified");
+        validateTaskIdentities(tasks, processId, "taskDefinitionKey");
+        List<Map<String, Object>> history = engine.getTaskHistory(processId)
+                .orElseThrow(() -> forbidden("Batch assignment history cannot be verified"));
+        validateTaskIdentities(history, processId, "activityId");
+        boolean hostRecorded = history.stream().anyMatch(task -> stageId.equals(task.get("activityId"))
+                && task.containsKey("endTime") && task.get("endTime") == null
+                && task.containsKey("deleteReason") && task.get("deleteReason") == null);
+        if (!hostRecorded) {
+            boolean endedHost = history.stream().anyMatch(task -> stageId.equals(task.get("activityId"))
+                    && task.containsKey("endTime") && task.containsKey("deleteReason")
+                    && (task.get("endTime") != null || task.get("deleteReason") != null));
+            if (readProjection && endedHost) return targets;
+            throw forbidden("Batch assignment host history cannot be verified");
+        }
+        for (String target : targets) {
+            if (tasks.stream().anyMatch(task -> target.equals(task.get("taskDefinitionKey")))
+                    || history.stream().anyMatch(task -> target.equals(task.get("activityId")))) started.add(target);
+        }
+        return started;
     }
 
     private static void validateTaskIdentities(List<?> tasks, String processInstanceId, String nodeField) {
