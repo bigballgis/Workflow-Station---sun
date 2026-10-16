@@ -63,6 +63,7 @@ public class FunctionUnitPackageParser {
         addRelationTables(rawFiles, relationTables);
         addJsonDir(rawFiles, "connections/", connections);
         addJsonDir(rawFiles, "email-monitors/", emailMonitors);
+        RecordNotePackageValidator.validate(contents, forms, objectMapper);
 
         FunctionUnitManagerComponent.FunctionPackageContent packageContent =
                 FunctionUnitManagerComponent.FunctionPackageContent.builder()

@@ -256,7 +256,8 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :record-id="(ctx.processInstanceId ?? null) as string | null"
           :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
           :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
-          :readonly="false"
+          :task-id="ctx.taskId"
+          :readonly="ctx.taskId != null && field._recordNote?.readonly === true"
         />
       </el-col>
       <RecordNoteField
@@ -266,7 +267,8 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         :record-id="(ctx.processInstanceId ?? null) as string | null"
         :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
         :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
-        :readonly="false"
+        :task-id="ctx.taskId"
+        :readonly="ctx.taskId != null && field._recordNote?.readonly === true"
       />
     </template>
 

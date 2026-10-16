@@ -1,3 +1,4 @@
+import { createRecordNoteFormField } from '@/components/formRendererHelpers/recordNoteFields'
 import type { FormField } from '@/components/FormRenderer.vue'
 import {
   isFormCreateRuleReadonly,
@@ -208,25 +209,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
         fields.push(marker)
         continue
       } else if (item.type === 'recordNote') {
-        const rnProps = item.props || {}
-        const rnScope = rnProps.scope === 'TABLE' ? 'TABLE' : 'RECORD'
-        fields.push({
-          key: `__recordNote_${rnScope.toLowerCase()}`,
-          label: '',
-          type: 'recordNote',
-          span: 24,
-          _recordNote: {
-            scope: rnScope,
-            panelTitle: typeof rnProps.panelTitle === 'string' ? rnProps.panelTitle : undefined,
-            allowAttachment: rnProps.allowAttachment !== false,
-            maxFileSizeMb: Number(rnProps.maxFileSizeMb) || 10,
-            allowEditOwn: rnProps.allowEditOwn !== false,
-            // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
-            allowDelete: rnProps.allowDelete === true,
-            readonly: rnProps.readonly === true,
-            pageSize: Number(rnProps.pageSize) || 5,
-          },
-        } as any)
+        fields.push(createRecordNoteFormField(item.props))
       } else if (item.type === 'lookup' && item.field) {
         let lookupCfg: any = {}
         try {

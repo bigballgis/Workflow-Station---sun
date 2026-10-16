@@ -37,6 +37,8 @@ export type NavNode = NavGroup | NavLeaf
 
 /** Add a guideline: append here, then add the view + i18n keys + a NAV_TREE leaf. */
 export const GUIDELINES: Guideline[] = [
+  { id: 'form-ctl-record-note', path: '/form-ctl-record-note', titleKey: 'recordNoteGuide.title',
+    summaryKey: 'recordNoteGuide.intro', load: () => import('@/views/RecordNoteGuide.vue'), omitFromHome: true },
   {
     id: 'table-data',
     path: '/table-data',
@@ -246,7 +248,7 @@ const FORM_DESIGN_NAV: NavGroup = {
             formControlLeaf('dw-form-ctl-linkForm', 'nav.formCtlLinkForm', '/form-events-extend#linkForm'),
             formControlLeaf('dw-form-ctl-lookup', 'nav.formCtlLookup', '/form-ctl-lookup'),
             formControlLeaf('dw-form-ctl-owner', 'nav.formCtlOwner', '/form-events-extend#owner'),
-            formControlLeaf('dw-form-ctl-recordNote', 'nav.formCtlRecordNote', '/form-events-extend#recordNote'),
+            formControlLeaf('dw-form-ctl-recordNote', 'nav.formCtlRecordNote', '/form-ctl-record-note'),
           ],
         },
         {

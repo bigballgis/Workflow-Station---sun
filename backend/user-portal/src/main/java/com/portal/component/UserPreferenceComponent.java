@@ -110,6 +110,9 @@ public class UserPreferenceComponent {
         List<NotificationPreference> preferences = notificationPreferenceRepository.findByUserId(userId);
         if (preferences.isEmpty()) {
             preferences = createDefaultNotificationPreferences(userId);
+        } else if (preferences.stream().noneMatch(p -> "ATTACHMENT_UPDATE".equals(p.getNotificationType()))) {
+            notificationPreferenceRepository.ensureAttachmentUpdatePreference(userId);
+            preferences = notificationPreferenceRepository.findByUserId(userId);
         }
         return preferences;
     }
@@ -228,6 +231,13 @@ public class UserPreferenceComponent {
                         .notificationType("PROCESS_COMPLETED")
                         .emailEnabled(true)
                         .browserEnabled(false)
+                        .inAppEnabled(true)
+                        .build(),
+                NotificationPreference.builder()
+                        .userId(userId)
+                        .notificationType("ATTACHMENT_UPDATE")
+                        .emailEnabled(false)
+                        .browserEnabled(true)
                         .inAppEnabled(true)
                         .build(),
                 NotificationPreference.builder()

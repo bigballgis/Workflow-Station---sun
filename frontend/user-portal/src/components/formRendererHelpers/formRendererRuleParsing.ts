@@ -1,3 +1,4 @@
+import { createRecordNoteFormField } from './recordNoteFields'
 /**
  * form-create rule → {@link FormField} layout parsing: container/auxiliary
  * predicates, recursive field extraction, tabs/collapse/row-column splitting,
@@ -228,24 +229,7 @@ export function extractFieldsRecursive(
       continue
     }
     if (item.type === 'recordNote') {
-      const scope = props?.scope === 'TABLE' ? 'TABLE' : 'RECORD'
-      const recordNoteField: FormField = {
-        key: `__recordNote_${scope.toLowerCase()}`,
-        label: '',
-        type: 'recordNote',
-        span: 24,
-        _recordNote: {
-          scope,
-          panelTitle: typeof props?.panelTitle === 'string' ? props.panelTitle : undefined,
-          allowAttachment: props?.allowAttachment !== false,
-          maxFileSizeMb: Number(props?.maxFileSizeMb) || 10,
-          allowEditOwn: props?.allowEditOwn !== false,
-          // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
-          allowDelete: props?.allowDelete === true,
-          readonly: props?.readonly === true,
-          pageSize: Number(props?.pageSize) || 5,
-        },
-      }
+      const recordNoteField = createRecordNoteFormField(props)
       applyDesignerHideFlagToFormField(recordNoteField, item)
       fields.push(recordNoteField)
       continue

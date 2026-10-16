@@ -1,4 +1,6 @@
 export default {
+  recordNoteNotification: {"title": "Attachment Notifications", "guide": "Record Note notification guide", "targets": "Target Sub-Task nodes", "assignmentHint": "Case Notes notify related rows; Transaction Notes notify this row only. Recipients follow each target node’s assignment configuration.", "loadFailed": "Cannot load task nodes. Reopen after saving the process design."},
+
   app: {
     name: 'Developer Workstation',
     title: 'Workflow Platform'

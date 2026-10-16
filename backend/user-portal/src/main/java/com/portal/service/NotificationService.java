@@ -15,6 +15,9 @@ public interface NotificationService {
      */
     Notification createFromEvent(NotificationEvent event);
 
+    /** Batch preference lookup for a deduplicated set of target users. */
+    java.util.Map<String, Notification> createFromEvents(java.util.Collection<NotificationEvent> events);
+
     /**
      * 分页查询通知列表
      */

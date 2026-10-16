@@ -27,6 +27,9 @@ public class FlowableConfig {
     @Autowired
     private ProcessCompletionListener processCompletionListener;
 
+    @Autowired
+    private com.workflow.recordnote.RecordNoteLifecycleListener recordNoteLifecycleListener;
+
     @Bean
     public EngineConfigurationConfigurer<SpringProcessEngineConfiguration> customProcessEngineConfigurer() {
         return processEngineConfiguration -> {
@@ -36,12 +39,18 @@ public class FlowableConfig {
             
             // 任务创建事件监听器
             typedListeners.put(FlowableEngineEventType.TASK_CREATED.name(), 
-                    Collections.singletonList(taskAssignmentListener));
+                    List.of(taskAssignmentListener, recordNoteLifecycleListener));
             
             // 流程完成事件监听器
             typedListeners.put(FlowableEngineEventType.PROCESS_COMPLETED.name(), 
                     Collections.singletonList(processCompletionListener));
             
+            for (FlowableEngineEventType type : List.of(FlowableEngineEventType.TASK_ASSIGNED,
+                    FlowableEngineEventType.TASK_COMPLETED, FlowableEngineEventType.VARIABLE_UPDATED,
+                    FlowableEngineEventType.MULTI_INSTANCE_ACTIVITY_CANCELLED, FlowableEngineEventType.MULTI_INSTANCE_ACTIVITY_STARTED,
+                    FlowableEngineEventType.ACTIVITY_CANCELLED, FlowableEngineEventType.PROCESS_CANCELLED)) {
+                typedListeners.put(type.name(), List.of(recordNoteLifecycleListener));
+            }
             processEngineConfiguration.setTypedEventListeners(typedListeners);
         };
     }

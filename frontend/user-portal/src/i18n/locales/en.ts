@@ -1,6 +1,8 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  recordNoteNotification: {"openRequest": "Open request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "This note is unavailable or you no longer have access."},
+
   app: {
     name: 'User Portal',
     title: 'Workflow Platform'
@@ -956,6 +958,8 @@ export default {
     goToApply: 'Go to Apply'
   },
   notification: {
+    attachmentUpdates: 'Attachment Updates',
+    attachmentUpdatesGuide: 'Read the attachment update notification guide',
     title: 'Notifications',
     unread: 'Unread',
     all: 'All',

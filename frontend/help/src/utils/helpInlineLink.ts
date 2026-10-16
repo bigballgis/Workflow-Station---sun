@@ -16,6 +16,7 @@ const PATH_TITLE: Record<string, string> = {
   '/form-events-extend#inlineSubForm': 'nav.formCtlInlineForm',
   '/form-events-extend#linkForm': 'nav.formCtlLinkForm',
   '/form-events-extend#recordNote': 'nav.formCtlRecordNote',
+  '/form-ctl-record-note': 'nav.formCtlRecordNote',
   '/form-events-extend#miAssignment': 'nav.formCtlMiAssignment',
   '/form-events-layout': 'guides.formEventsLayout.title',
   '/form-upload': 'guides.formUpload.title',

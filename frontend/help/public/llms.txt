@@ -107,3 +107,5 @@ Emails in figures are redacted to user@example.com.
 
 See /help/llms-full.txt for a compact English extract of the articles.
 Keep this file in sync with frontend/help/src/guidelines.ts.
+
+- /help/form-ctl-record-note — Record Note (Whole table / Single record, immutable notes, panel properties, opt-in formal attachment notifications in Notifications → Attachment Updates with request name (ID), note location/count and verified upload source, target Sub-Tasks, Person / claimed BU Team / sole auto-assigned member, valid rounds, waiting and permissions).
