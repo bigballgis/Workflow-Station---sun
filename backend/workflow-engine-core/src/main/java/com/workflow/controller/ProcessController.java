@@ -110,6 +110,16 @@ public class ProcessController {
         }
     }
 
+    /** A distinct route makes an older engine reject pinned starts before creating any instance. */
+    @PostMapping("/instances/pinned")
+    public ResponseEntity<ApiResponse<ProcessInstanceResult>> startPinnedProcessInstance(
+            @RequestBody @Valid StartProcessRequest request) {
+        if (request.getExpectedProcessDefinitionId() == null || request.getExpectedProcessDefinitionId().isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("START_FAILED", "Expected deployment ID is required"));
+        }
+        return startProcessInstance(request);
+    }
+
     /**
      * 获取流程实例详情
      */

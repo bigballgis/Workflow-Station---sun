@@ -186,7 +186,7 @@ public class ProcessStartComponent {
 
     /**
      * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved
-     * Flowable process definition key.
+     * Flowable process definition key and exact deployment definition ID.
      *
      * <p>
      * Before: {@code deployProcess} was called on <em>every</em> start. A
@@ -199,13 +199,13 @@ public class ProcessStartComponent {
      * 500 =
      * {@code portal.deploy_process_failed}. Keying by BPMN content hash means
      * exactly one request deploys an
-     * unchanged definition and every other reuses the resolved key; a changed BPMN
+     * unchanged definition and every other reuses the resolved deployment; a changed BPMN
      * (new hash) redeploys once.
      * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine
      * deployment self-heals.
      * </p>
      */
-    private final java.util.concurrent.ConcurrentHashMap<String, String> deployedProcessKeyCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, DeploymentPin> deployedProcessKeyCache = new java.util.concurrent.ConcurrentHashMap<>();
     /**
      * Per-cache-key locks so concurrent starts of the same definition serialize the
      * single deploy (not the map bin).
@@ -248,7 +248,7 @@ public class ProcessStartComponent {
         LoadedStartDefinition def = loadProcessDefinitionForStart(pin, processKey);
 
         // actualProcessKey is the key used to start (Flowable uses BPMN <process id>)
-        final String actualProcessKey = deployAndResolveProcessKey(processKey, def);
+        final DeploymentPin deployment = deployAndResolveProcessKey(processKey, def);
 
         // Start instance: strip forged workspace keys; UBR users need valid JWT
         // workspace context (matches hasContext)
@@ -277,8 +277,7 @@ public class ProcessStartComponent {
                 pin.code(), submittedSnapshot, variables);
         Map<String, Object> data;
         try {
-            data = workflowEngineClient.startProcess(
-                    actualProcessKey, request.getBusinessKey(), userId, variables);
+            data = startPinnedProcess(deployment, request.getBusinessKey(), userId, variables, persistedVariables);
         } catch (RuntimeException ex) {
             // If the start failed (e.g. engine no longer has the deployment we cached),
             // drop the cache entry
@@ -341,6 +340,20 @@ public class ProcessStartComponent {
     }
 
     record ActiveCatalogPin(String catalogId, String code, String versionLabel) {
+    }
+
+    record DeploymentPin(String key, String definitionId) { }
+
+    private Map<String, Object> startPinnedProcess(DeploymentPin deployment, String businessKey, String userId,
+            Map<String, Object> engineVariables, Map<String, Object> persistedVariables) {
+        if (!persistedVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+            return workflowEngineClient.startProcess(deployment.key(), businessKey, userId, engineVariables);
+        }
+        if (deployment.definitionId() == null || deployment.definitionId().isBlank()) {
+            throw new IllegalStateException("Frozen batch start requires a verified deployment ID");
+        }
+        return workflowEngineClient.startProcessWithDeploymentPin(deployment.key(), businessKey, userId,
+                engineVariables, deployment.definitionId());
     }
 
     /**
@@ -458,7 +471,7 @@ public class ProcessStartComponent {
         return new LoadedStartDefinition(processName, bpmnXml, flowableProcessKey, catalogContent);
     }
 
-    private String deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
+    private DeploymentPin deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
         // Check Flowable engine availability
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException(
@@ -480,7 +493,7 @@ public class ProcessStartComponent {
         // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path:
         // already deployed.
         final String cacheKey = deploymentCacheKey(processKey, def.bpmnXml());
-        String cached = deployedProcessKeyCache.get(cacheKey);
+        DeploymentPin cached = deployedProcessKeyCache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
@@ -507,8 +520,10 @@ public class ProcessStartComponent {
                 flowableProcessKey = deployedKey.toString();
                 log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
             }
-            deployedProcessKeyCache.put(cacheKey, flowableProcessKey);
-            return flowableProcessKey;
+            Object definitionId = deployed.get("engineProcessDefinitionId");
+            DeploymentPin deployment = new DeploymentPin(flowableProcessKey, definitionId instanceof String id ? id : null);
+            deployedProcessKeyCache.put(cacheKey, deployment);
+            return deployment;
         }
     }
 

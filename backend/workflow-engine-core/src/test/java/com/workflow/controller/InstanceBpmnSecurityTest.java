@@ -21,9 +21,32 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class InstanceBpmnSecurityTest {
+    @Test
+    void pinnedStartsRequireAuthenticationAndANonblankPinBeforeCallingTheComponent() throws Exception {
+        try (var context = new AnnotationConfigWebApplicationContext()) {
+            context.setServletContext(new MockServletContext()); context.register(TestConfig.class); context.refresh();
+            var processes = context.getBean(Fixtures.class).processes();
+            var tokens = context.getBean(JwtTokenService.class);
+            when(tokens.validateToken("synthetic-test-token")).thenReturn(true);
+            when(tokens.extractUserPrincipal("synthetic-test-token"))
+                    .thenReturn(UserPrincipal.builder().userId("synthetic-user").build());
+            var mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean(FilterChainProxy.class)).build();
+            String path = "/api/v1/processes/instances/pinned";
+            mvc.perform(post(path).contentType("application/json").content("{\"processDefinitionKey\":\"synthetic\"}"))
+                    .andExpect(status().isForbidden());
+            for (String pin : new String[] { "", " ", "null" }) {
+                String value = "null".equals(pin) ? "null" : "\"" + pin + "\"";
+                mvc.perform(post(path).header("Authorization", "Bearer synthetic-test-token").contentType("application/json")
+                                .content("{\"processDefinitionKey\":\"synthetic\",\"expectedProcessDefinitionId\":" + value + "}"))
+                        .andExpect(status().isBadRequest());
+            }
+            verifyNoInteractions(processes);
+        }
+    }
     @Test
     void onlyInstanceBoundReadRequiresAuthenticationThroughTheRealSecurityChain() throws Exception {
         try (var context = new AnnotationConfigWebApplicationContext()) {

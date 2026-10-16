@@ -247,6 +247,11 @@ public class WorkflowEngineClient {
         return processClient.startProcess(processDefinitionKey, businessKey, startUserId, variables);
     }
 
+    public Map<String, Object> startProcessWithDeploymentPin(String processDefinitionKey, String businessKey,
+            String startUserId, Map<String, Object> variables, String expectedProcessDefinitionId) {
+        return processClient.startProcess(processDefinitionKey, businessKey, startUserId, variables, expectedProcessDefinitionId);
+    }
+
     /**
      * Deletes runtime and historic process instances on engine (internal purge; permitAll, no JWT)
      */

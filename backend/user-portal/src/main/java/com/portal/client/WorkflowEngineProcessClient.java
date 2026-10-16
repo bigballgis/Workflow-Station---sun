@@ -87,17 +87,23 @@ public class WorkflowEngineProcessClient {
      */
     public Map<String, Object> startProcess(String processDefinitionKey, String businessKey,
                                                        String startUserId, Map<String, Object> variables) {
+        return startProcess(processDefinitionKey, businessKey, startUserId, variables, null);
+    }
+
+    public Map<String, Object> startProcess(String processDefinitionKey, String businessKey,
+            String startUserId, Map<String, Object> variables, String expectedProcessDefinitionId) {
         if (!engine.isAvailable()) {
             throw new IllegalStateException("Workflow engine unavailable, cannot start process: " + processDefinitionKey);
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances";
+            String url = engine.engineUrl() + "/api/v1/processes/instances" + (expectedProcessDefinitionId == null ? "" : "/pinned");
 
             Map<String, Object> request = new HashMap<>();
             request.put("processDefinitionKey", processDefinitionKey);
             request.put("businessKey", businessKey);
             request.put("startUserId", startUserId);
             request.put("variables", variables);
+            if (expectedProcessDefinitionId != null) request.put("expectedProcessDefinitionId", expectedProcessDefinitionId);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

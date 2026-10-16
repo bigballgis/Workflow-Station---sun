@@ -15,6 +15,9 @@ public class DeploymentResult {
     private String deploymentId;
     
     private String processDefinitionId;
+
+    /** Exact Flowable ID; processDefinitionId retains its historical display format. */
+    private String engineProcessDefinitionId;
     
     private String processDefinitionKey;
     
