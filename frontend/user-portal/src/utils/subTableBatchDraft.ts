@@ -49,12 +49,15 @@ export function applyBatchAssignment(
   const next = { ...row }
   if (intent.mode === 'person') {
     if (!config.assigneeField) throw new Error('Batch assignment has no configured assignee field')
+    // Platform display metadata belongs to the previous person, not the business field mapping.
+    if (row[config.assigneeField] !== intent.assigneeId) delete next.assignee_display_name
     next[config.assigneeField] = intent.assigneeId
     if (config.roleField) next[config.roleField] = null
     if (config.buField) next[config.buField] = null
     return next
   }
   if (!config.roleField) throw new Error('Batch assignment has no configured role field')
+  delete next.assignee_display_name
   next[config.roleField] = intent.roleCode
   if (config.buField) next[config.buField] = intent.businessUnitCode ?? null
   if (config.assigneeField) next[config.assigneeField] = null

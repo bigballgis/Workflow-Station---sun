@@ -73,4 +73,17 @@ describe('applyBatchDraft', () => {
     expect(() => applyBatchAssignment({}, { assigneeField: 'assigned_to' }, { mode: 'role', roleCode: 'REVIEWER' }))
       .toThrow('no configured role field')
   })
+
+  it('invalidates only the platform personal display cache when replacing the configured target', () => {
+    const config = { assigneeField: 'handler_code', roleField: 'pool_code', buField: 'unit_code' }
+    const row = { handler_code: 'user-old', assignee_display_name: 'Synthetic old display', hidden: 'keep' }
+    const role = applyBatchAssignment(row, config, { mode: 'role', roleCode: 'REVIEWER', businessUnitCode: 'EU' })
+    expect(role).not.toHaveProperty('assignee_display_name')
+    expect(role.hidden).toBe('keep')
+    const person = applyBatchAssignment(row, config, { mode: 'person', assigneeId: 'user-new' })
+    expect(person).not.toHaveProperty('assignee_display_name')
+    expect(applyBatchAssignment(row, config, { mode: 'person', assigneeId: 'user-old' }).assignee_display_name)
+      .toBe('Synthetic old display')
+    expect(row.assignee_display_name).toBe('Synthetic old display')
+  })
 })

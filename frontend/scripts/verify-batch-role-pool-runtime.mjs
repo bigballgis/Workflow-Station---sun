@@ -10,6 +10,8 @@ assert.match(taskId || '', /^[a-f0-9-]{36}$/)
 const screenshotTag = process.env.FIXTURE_SCREENSHOT_TAG || 'role-pool'
 assert.match(screenshotTag, /^[a-z0-9-]+$/)
 const mixedTargets = process.env.FIXTURE_MIXED_TARGETS === '1'
+const roundTrip = process.env.FIXTURE_ROLE_PERSON_ROLE === '1'
+assert.ok(!roundTrip || mixedTargets, 'Role/person/role verification requires the mixed-target scenario')
 const browser = await chromium.launch({ headless: true })
 async function request(page, method, url, data) {
   const response = await page.request.fetch(url, { method, data })
@@ -22,7 +24,7 @@ async function request(page, method, url, data) {
   return body
 }
 function flatten(nodes) { return nodes.flatMap(node => [node, ...flatten(node.children || [])]) }
-async function saveUniformRoleThroughWorkspace(page, pool) {
+async function saveUniformRoleThroughWorkspace(page, pool, expectedPatches = 2) {
   await page.setViewportSize({ width: 1366, height: 768 })
   await page.goto(`http://localhost:3101/portal/tasks/${taskId}`)
   await page.getByRole('button', { name: 'Batch Edit', exact: true }).click()
@@ -46,7 +48,7 @@ async function saveUniformRoleThroughWorkspace(page, pool) {
   assert.equal((await response.json()).success, true)
   const changes = response.request().postDataJSON().subTableBatchChanges
   assert.deepEqual(changes.map(change => change.operation), ['ASSIGN'])
-  assert.equal(changes[0].rowPatches.length, 2)
+  assert.equal(changes[0].rowPatches.length, expectedPatches)
 }
 async function replaceFirstRoleWithPersonThroughWorkspace(page) {
   await page.setViewportSize({ width: 1366, height: 768 })
@@ -140,8 +142,8 @@ try {
     assert.ok(!row[config.assigneeField])
   }
   const personId = mixedTargets ? await replaceFirstRoleWithPersonThroughWorkspace(portal) : null
-  const saved = await api('GET', `/tasks/${taskId}/form-data`)
-  const savedRows = saved.fieldValues.__subTables__[store]
+  let saved = await api('GET', `/tasks/${taskId}/form-data`)
+  let savedRows = saved.fieldValues.__subTables__[store]
   if (mixedTargets) {
     assert.equal(savedRows[0][config.assigneeField] === personId, true)
     assert.ok(!savedRows[0][config.roleField] && !savedRows[0][config.buField], 'Role to person replacement must clear inactive targets')
@@ -151,17 +153,42 @@ try {
     assert.equal(isDeepStrictEqual(savedRows[1], { ...unselected, _wsRowVersion: unselected._wsRowVersion + 1 }), true,
       'Unselected second role row must preserve all business/identity fields and receive only the normal claimed-row version bump')
   }
-  for (const row of mixedTargets ? savedRows.slice(1) : savedRows) {
+  if (roundTrip) {
+    await saveUniformRoleThroughWorkspace(portal, pool, 1)
+    saved = await api('GET', `/tasks/${taskId}/form-data`)
+    savedRows = saved.fieldValues.__subTables__[store]
+    const original = initialSaved.fieldValues.__subTables__[store]
+    assert.equal(savedRows.length, original.length)
+    for (let index = 0; index < savedRows.length; index++) {
+      const expected = { ...original[index], _wsRowVersion: original[index]._wsRowVersion + 2 }
+      const differingFields = [...new Set([...Object.keys(expected), ...Object.keys(savedRows[index])])]
+        .filter(key => !isDeepStrictEqual(savedRows[index][key], expected[key]))
+      assert.equal(isDeepStrictEqual(savedRows[index], expected), true,
+        `Role/person/role must restore all original fields; differing synthetic field names: ${differingFields.join(',')}`)
+    }
+    assert.deepEqual((await engineTasks()).tasks.map(row => row.taskId).sort(), beforeTasks,
+      'Neither direction of mode replacement may create tasks before Complete')
+  }
+  for (const row of mixedTargets && !roundTrip ? savedRows.slice(1) : savedRows) {
     assert.equal(row[config.roleField], pool.role.code); assert.equal(row[config.buField], pool.bu.code)
     assert.ok(!row[config.assigneeField])
   }
   await portal.setViewportSize({ width: 1366, height: 768 })
   await portal.goto(`http://localhost:3101/portal/tasks/${taskId}`)
+  if (roundTrip) {
+    await portal.getByRole('button', { name: 'Batch Edit', exact: true }).waitFor()
+    const grid = portal.locator('.sub-table-field').first()
+    await grid.locator('.assignee-role-pool').nth(1).waitFor()
+    assert.equal(await grid.locator('.assignee-role-pool').count(), 2)
+    assert.equal(await grid.locator('.assignee-name').count(), 0, 'Role rows must not display the previous personal cache')
+    await grid.screenshot({ path: fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-16_${screenshotTag}-grid.png`, import.meta.url)),
+      mask: [grid.locator('.assignee-cell')] })
+  }
   await portal.getByRole('button', { name: 'Batch Edit', exact: true }).click()
   const dialog = portal.locator('.el-dialog:visible')
   const editor = dialog.locator('.batch-assignment-editor')
   await editor.locator('.el-table__body-wrapper tr').nth(1).waitFor()
-  assert.equal(await editor.locator('.el-cascader').count(), mixedTargets ? 1 : 2, 'Saved target modes must reopen correctly')
+  assert.equal(await editor.locator('.el-cascader').count(), mixedTargets && !roundTrip ? 1 : 2, 'Saved target modes must reopen correctly')
   const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-16_${screenshotTag}-workspace.png`, import.meta.url))
   const mask = [editor.locator('.el-select__selected-item'), editor.locator('.el-cascader')]
   await dialog.screenshot({ path: screenshot, mask })
@@ -201,6 +228,6 @@ try {
   assert.equal(pageErrors, 0)
   console.log(JSON.stringify({ step: 'synthetic-single-member-role-pool', processInstanceId: task.processInstanceId,
     taskIds: children.map(child => child.taskId), candidateCount: pool.users.length, rolePoolsUnclaimed: true, directoryWrites: 0,
-    assignmentSource: mixedTargets ? 'mixed-row-workspace' : process.env.FIXTURE_ASSIGN_VIA_UI === '1' ? 'uniform-workspace' : 'ordinary-api',
-    personalTasks: mixedTargets ? 1 : 0, pageErrors }))
+    assignmentSource: roundTrip ? 'role-person-role-workspace' : mixedTargets ? 'mixed-row-workspace' : process.env.FIXTURE_ASSIGN_VIA_UI === '1' ? 'uniform-workspace' : 'ordinary-api',
+    personalTasks: mixedTargets && !roundTrip ? 1 : 0, pageErrors }))
 } finally { await browser.close() }
