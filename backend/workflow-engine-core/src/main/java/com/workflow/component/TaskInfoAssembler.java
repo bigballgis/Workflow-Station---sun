@@ -6,6 +6,7 @@ import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.response.TaskListResult;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
+import com.workflow.util.MultiInstanceTaskItem;
 
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
@@ -314,15 +315,11 @@ public class TaskInfoAssembler {
             }
 
             if (task.getExecutionId() != null && variables != null) {
-                try {
-                    Object currentItemObj = runtimeService.getVariable(task.getExecutionId(), "currentItem");
-                    if (currentItemObj instanceof Map) {
-                        variables.put("_currentItem", currentItemObj);
-                        log.debug("Injected _currentItem for MI sub-task {}: {}", task.getId(), currentItemObj);
-                    }
-                } catch (Exception e) {
-                    log.debug("No currentItem for task {}: {}", task.getId(), e.getMessage());
-                }
+                Object currentItemObj = MultiInstanceTaskItem.resolve(repositoryService, runtimeService, task);
+                variables = new HashMap<>(variables);
+                variables.remove("currentItem");
+                variables.remove("_currentItem");
+                if (currentItemObj instanceof Map) variables.put("_currentItem", currentItemObj);
             }
         }
 

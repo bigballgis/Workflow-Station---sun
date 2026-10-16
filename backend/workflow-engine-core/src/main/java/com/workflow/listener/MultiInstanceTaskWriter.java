@@ -10,6 +10,7 @@ import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.TaskAssigneeResolver;
 import com.workflow.util.AssigneeRoleIdsSupport;
+import com.workflow.util.MultiInstanceTaskItem;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
@@ -74,10 +75,7 @@ class MultiInstanceTaskWriter {
         if (executionId == null) {
             return;
         }
-        Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
-        if (currentItemObj == null) {
-            currentItemObj = runtimeService.getVariable(executionId, "_currentItem");
-        }
+        Object currentItemObj = MultiInstanceTaskItem.resolve(repositoryService, runtimeService, task);
         if (!(currentItemObj instanceof Map)) {
             return;
         }
@@ -211,15 +209,11 @@ class MultiInstanceTaskWriter {
         ExtendedTaskInfoRepository extendedTaskInfoRepository = owner.extendedTaskInfoRepository();
         TaskService taskService = owner.taskService();
         ObjectMapper objectMapper = owner.objectMapper();
+        // Let the listener's existing failure recorder expose invalid deployed loop context.
+        Object currentItemObj = MultiInstanceTaskItem.resolve(repositoryService, runtimeService, task);
 
         try {
             log.info("Handling ELEMENT_VARIABLE assignment for task {}", taskId);
-
-            String executionId = task.getExecutionId();
-            Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
-            if (currentItemObj == null) {
-                currentItemObj = runtimeService.getVariable(executionId, "_currentItem");
-            }
 
             if (currentItemObj == null) {
                 log.warn("currentItem variable is null for task {}, task will remain CREATED", taskId);

@@ -2,7 +2,7 @@ package com.workflow.component;
 
 import com.workflow.dto.response.TaskWriteContext;
 import com.workflow.exception.WorkflowBusinessException;
-import org.flowable.bpmn.model.Activity;
+import com.workflow.util.MultiInstanceTaskItem;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.MultiInstanceLoopCharacteristics;
 import org.flowable.engine.RepositoryService;
@@ -34,7 +34,7 @@ public class TaskWriteContextResolver {
         if (model == null) throw invalid();
         FlowElement element = model.getFlowElement(task.getTaskDefinitionKey());
         if (!(element instanceof org.flowable.bpmn.model.UserTask)) throw invalid();
-        MultiInstanceLoopCharacteristics loop = loopFor(element);
+        MultiInstanceLoopCharacteristics loop = MultiInstanceTaskItem.loopFor(element);
         Map<String, Object> item = Map.of();
         if (loop != null) {
             String variable = loop.getElementVariable();
@@ -55,17 +55,6 @@ public class TaskWriteContextResolver {
         }
         return new TaskWriteContext(task.getId(), task.getProcessInstanceId(), task.getProcessDefinitionId(),
                 task.getTaskDefinitionKey(), loop != null, item);
-    }
-
-    private static MultiInstanceLoopCharacteristics loopFor(FlowElement element) {
-        FlowElement current = element;
-        while (current != null) {
-            if (current instanceof Activity activity && activity.getLoopCharacteristics() != null) {
-                return activity.getLoopCharacteristics();
-            }
-            current = current.getSubProcess();
-        }
-        return null; // The actual deployed model positively establishes that this task is not MI.
     }
 
     private static boolean blank(String value) { return value == null || value.isBlank(); }

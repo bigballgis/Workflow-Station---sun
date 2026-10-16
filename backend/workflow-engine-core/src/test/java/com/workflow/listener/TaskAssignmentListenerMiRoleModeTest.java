@@ -273,6 +273,85 @@ class TaskAssignmentListenerMiRoleModeTest {
 
     // ==================== Helpers ====================
 
+    @Test
+    void configuredLoopVariableAssignsItsOwnRowInsteadOfLegacyCurrentItem() {
+        TaskEntity task = createMockTask();
+        when(task.getExecutionId()).thenReturn(EXECUTION_ID);
+        when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(configuredLoopBpmn());
+        var variable = mock(org.flowable.variable.api.persistence.entity.VariableInstance.class);
+        lenient().when(variable.getExecutionId()).thenReturn(EXECUTION_ID);
+        lenient().when(variable.getProcessInstanceId()).thenReturn(PROCESS_INSTANCE_ID);
+        lenient().when(variable.getValue()).thenReturn(Map.of("rowKey", Map.of("id", 206L), ASSIGNEE_FIELD, "u-configured"));
+        lenient().when(runtimeService.getVariableInstance(EXECUTION_ID, "item")).thenReturn(variable);
+        lenient().when(runtimeService.getVariable(EXECUTION_ID, "currentItem"))
+                .thenReturn(Map.of("rowKey", Map.of("id", 999L), ASSIGNEE_FIELD, "u-wrong-legacy"));
+
+        listener.onEvent(createTaskCreatedEvent(task));
+
+        verify(taskService).setAssignee(TASK_ID, "u-configured");
+        verify(runtimeService, never()).getVariable(EXECUTION_ID, "currentItem");
+        verify(runtimeService, never()).getVariable(EXECUTION_ID, "_currentItem");
+        var saved = ArgumentCaptor.forClass(ExtendedTaskInfo.class);
+        verify(extendedTaskInfoRepository).save(saved.capture());
+        assertThat(saved.getValue().getExtendedProperties()).contains("\"id\":206");
+    }
+
+    @Test
+    void preassignedTaskMetadataUsesConfiguredParticipantWithoutReassigning() {
+        TaskEntity task = createMockTask();
+        when(task.getAssignee()).thenReturn("u-preassigned");
+        when(task.getExecutionId()).thenReturn(EXECUTION_ID);
+        when(bpmnActionParser.getMultiInstanceSubProcessSubTableName(PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY))
+                .thenReturn(SUB_TABLE_NAME);
+        when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(configuredLoopBpmn());
+        var variable = mock(org.flowable.variable.api.persistence.entity.VariableInstance.class);
+        when(variable.getExecutionId()).thenReturn(EXECUTION_ID);
+        when(variable.getProcessInstanceId()).thenReturn(PROCESS_INSTANCE_ID);
+        when(variable.getValue()).thenReturn(Map.of("rowKey", Map.of("id", 207L)));
+        when(runtimeService.getVariableInstance(EXECUTION_ID, "item")).thenReturn(variable);
+
+        listener.onEvent(createTaskCreatedEvent(task));
+
+        var saved = ArgumentCaptor.forClass(ExtendedTaskInfo.class);
+        verify(extendedTaskInfoRepository).save(saved.capture());
+        assertThat(saved.getValue().getExtendedProperties()).contains("\"id\":207");
+        assertThat(saved.getValue().getAssignmentTarget()).isEqualTo("u-preassigned");
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verify(runtimeService, never()).getVariable(EXECUTION_ID, "currentItem");
+        verify(runtimeService, never()).getVariable(EXECUTION_ID, "_currentItem");
+    }
+
+    @Test
+    void missingConfiguredLoopVariableCannotAssignLegacyRow() {
+        TaskEntity task = createMockTask();
+        when(task.getExecutionId()).thenReturn(EXECUTION_ID);
+        when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(configuredLoopBpmn());
+        lenient().when(runtimeService.getVariable(EXECUTION_ID, "currentItem"))
+                .thenReturn(Map.of("rowKey", Map.of("id", 999L), ASSIGNEE_FIELD, "u-wrong-legacy"));
+
+        listener.onEvent(createTaskCreatedEvent(task));
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verify(extendedTaskInfoRepository, never()).save(any());
+        verify(runtimeService, never()).getVariable(EXECUTION_ID, "currentItem");
+        verify(taskService).setVariableLocal(eq(TASK_ID), eq("assignmentFailure"), contains("Configured MI participant"));
+    }
+
+    private BpmnModel configuredLoopBpmn() {
+        var model = bothModeBpmn();
+        var process = model.getMainProcess();
+        var userTask = process.getFlowElement(TASK_DEFINITION_KEY);
+        process.removeFlowElement(TASK_DEFINITION_KEY);
+        var parent = new org.flowable.bpmn.model.SubProcess();
+        parent.setId("configured-parallel-step");
+        var loop = new org.flowable.bpmn.model.MultiInstanceLoopCharacteristics();
+        loop.setElementVariable("item");
+        parent.setLoopCharacteristics(loop);
+        parent.addFlowElement(userTask);
+        process.addFlowElement(parent);
+        return model;
+    }
+
     private TaskEntity createMockTask() {
         TaskEntity task = mock(TaskEntity.class);
         when(task.getId()).thenReturn(TASK_ID);
