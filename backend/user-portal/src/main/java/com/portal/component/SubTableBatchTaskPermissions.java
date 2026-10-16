@@ -42,6 +42,7 @@ final class SubTableBatchTaskPermissions {
 
     static void validate(Map<String, Object> variables, Map<String, Object> form,
                          Map<String, Object> submitted, ObjectMapper mapper) {
+        SubTableBatchWorkspaceContext.validate(variables, submitted);
         if (!enhanced(variables) || !submitted.containsKey("__subTables__")) return;
         if (!(submitted.get("__subTables__") instanceof Map<?, ?> tables)) throw invalid();
         Map<?, ?> baseline = map(variables.get("__subTables__"));

@@ -85,6 +85,9 @@ class SubTableWriteIsolation {
      */
     @SuppressWarnings("unchecked")
     void apply(Request request) {
+        if (request != null && request.inbound() != null) {
+            SubTableBatchWorkspaceContext.validate(request.baselineVariables(), request.inbound());
+        }
         if (request == null || request.inbound() == null
                 || !(request.inbound().get("__subTables__") instanceof Map<?, ?>)) {
             return;
