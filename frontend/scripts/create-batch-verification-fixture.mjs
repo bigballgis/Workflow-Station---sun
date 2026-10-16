@@ -25,6 +25,8 @@ try {
   const batchMode = process.env.FIXTURE_BATCH_MODE ?? (process.env.FIXTURE_EDIT_ONLY === '1' ? 'edit' : 'all')
   if (!['all', 'add', 'edit', 'delete', 'assign'].includes(batchMode)) throw new Error('Unsupported synthetic batch mode')
   const assignment = batchMode === 'assign'
+  const assignmentMode = process.env.FIXTURE_ASSIGNMENT_MODE ?? 'both'
+  if (!['both', 'role', 'user'].includes(assignmentMode)) throw new Error('Unsupported synthetic assignment mode')
   const assignmentOnly = process.env.FIXTURE_ASSIGN_ONLY === '1'
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
   const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
@@ -115,7 +117,7 @@ try {
 ${assignment ? `<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targetRef="AssignedRows"/>
 <bpmn:subProcess id="AssignedRows"><bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="syntheticAssignmentRows" flowable:elementVariable="item"/>
 <bpmn:startEvent id="AssignedStart"/><bpmn:sequenceFlow id="AssignedFlow" sourceRef="AssignedStart" targetRef="AssignedWork"/>
-<bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', 'both')}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
+<bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', assignmentMode)}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
 <bpmn:sequenceFlow id="AssignedEndFlow" sourceRef="AssignedWork" targetRef="AssignedEnd"/><bpmn:endEvent id="AssignedEnd"/></bpmn:subProcess>
 <bpmn:sequenceFlow id="AssignedToEnd" sourceRef="AssignedRows" targetRef="End"/>` : '<bpmn:sequenceFlow id="ReviewToEnd" sourceRef="Review" targetRef="End"/>'}<bpmn:endEvent id="End"/>
 </bpmn:process>

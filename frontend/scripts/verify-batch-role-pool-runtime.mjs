@@ -6,6 +6,8 @@ import { loginViaPortalPassword, loginViaAdminPassword } from './playwright-logi
 
 const taskId = process.env.FIXTURE_TASK_ID
 assert.match(taskId || '', /^[a-f0-9-]{36}$/)
+const screenshotTag = process.env.FIXTURE_SCREENSHOT_TAG || 'role-pool'
+assert.match(screenshotTag, /^[a-z0-9-]+$/)
 const browser = await chromium.launch({ headless: true })
 async function request(page, method, url, data) {
   const response = await page.request.fetch(url, { method, data })
@@ -28,6 +30,9 @@ async function saveUniformRoleThroughWorkspace(page, pool) {
   await editor.locator('thead .el-checkbox').click()
   const uniform = editor.locator('.batch-assignment-editor__uniform')
   await uniform.locator('.el-select').first().click()
+  if (process.env.FIXTURE_EXPECT_ROLE_ONLY === '1') {
+    assert.equal(await page.locator('.el-select-dropdown:visible').getByText('Assign by person', { exact: true }).count(), 0)
+  }
   await page.locator('.el-select-dropdown:visible').getByText('Assign by role', { exact: true }).click()
   await uniform.locator('.el-cascader input').fill(pool.bu.name)
   await page.locator('.el-cascader__suggestion-item:visible').filter({ hasText: pool.bu.name }).first().click()
@@ -77,6 +82,7 @@ try {
   const form = await api('GET', `/tasks/${taskId}/form-data`)
   const [control] = Object.values(form.subTableBatchCapabilities)
   assert.equal(control.capabilities.allowBatchAssign && control.assignmentConfig.allowRole, true)
+  if (process.env.FIXTURE_EXPECT_ROLE_ONLY === '1') assert.equal(control.assignmentConfig.allowUser, false)
   const config = control.assignmentConfig
   assert.ok(config.buField)
   const pool = await selectSingleMemberPool(portal, admin)
@@ -107,7 +113,7 @@ try {
   const editor = dialog.locator('.batch-assignment-editor')
   await editor.locator('.el-table__body-wrapper tr').nth(1).waitFor()
   assert.equal(await editor.locator('.el-cascader').count(), 2, 'Saved rows must reopen in role mode')
-  const screenshot = fileURLToPath(new URL('../user-portal/verification-screenshots/2026-10-16_role-pool-workspace.png', import.meta.url))
+  const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-16_${screenshotTag}-workspace.png`, import.meta.url))
   const mask = [editor.locator('.el-select__selected-item'), editor.locator('.el-cascader')]
   await dialog.screenshot({ path: screenshot, mask })
   await portal.setViewportSize({ width: 600, height: 800 })
