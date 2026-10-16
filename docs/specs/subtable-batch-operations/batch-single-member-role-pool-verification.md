@@ -25,6 +25,14 @@
 - 另建独立 role-only FU50037 `batch_verify_roleonly1016`，PROCESS/TASK 50724/50725、binding51016/51018，设计 validate 无 errors/warnings，Deploy 成功。fixture 新增严格枚举 `FIXTURE_ASSIGNMENT_MODE=both|role|user`，缺省仍 both，不改既有 FU。新实例 `39999d93-c93e-11f1-8f36-4ee612046d7e`、Review `39a2c5a1-c93e-11f1-8f36-4ee612046d7e`：服务端投影 allowUser=false，UI 下拉不存在个人模式，统一选 BU/Role Apply 两行后，实际子任务 `95c002e2-c93e-11f1-8f36-4ee612046d7e` / `95bca77d-c93e-11f1-8f36-4ee612046d7e` 均通过候选池/身份核对，pageErrors=0。
 - role-only 桌面及窄屏独立截图 `F:\hermes1.0\Workflow-Station---sun\frontend\user-portal\verification-screenshots\2026-10-16_role-only-pool-workspace.png`、`2026-10-16_role-only-pool-workspace-narrow.png` 保留并已目视窄屏。截图 tag 只接受字母/数字/连字符，不覆盖前一模式证据。
 
+## 混合逐行目标与模式替换
+
+- 新增 `FIXTURE_MIXED_TARGETS=1`：先普通 Save 两行合法角色配置，再从工作区只将第一行切为个人、真实目录选人并 Apply；捕获一项 ASSIGN、rowPatches=1。第一行旧 role/BU 清空；第二行业务值和身份不变。
+- 首轮实例 `54a04cb5-c93f-11f1-8f36-4ee612046d7e` 在第二行全对象相等断言处失败，未进入 Complete。差异只有 `_wsRowVersion` 2→3。核对已有 `SubTableBindingScopeGuard.apply/bumpVersions`：普通整页 Save 按 rowKeys 声明范围为每条 claimed 行递增一次，并不是按 UI 选中行判断。脚本改为严格要求“全部字段不变，唯该平台版本恰好+1”，未删字段忽略差异、未改产品保存规则；失败实例保留且不自动推进。
+- 修正后新实例 `9fe73b65-c93f-11f1-8f36-4ee612046d7e`，Review `9ff2ad63-c93f-11f1-8f36-4ee612046d7e` 通过。UI 重开恢复一行个人和一行角色、全数据与任务 ID 不因重开变化、pageErrors=0。
+- Complete 实际生成 `b21662d3-c93f-11f1-8f36-4ee612046d7e` / `b2159f7f-c93f-11f1-8f36-4ee612046d7e`。按冻结身份逐行匹配：个人行真实 assignee 等于选人结果且没有旧候选人；角色行仍无 assignee、候选身份集合精确等于单人角色池。两身份不同，不用任务顺序猜对应行。
+- 截图 `F:\hermes1.0\Workflow-Station---sun\frontend\user-portal\verification-screenshots\2026-10-16_mixed-person-role-workspace.png` 及同前缀 `-narrow.png` 保留。没有任务领取、改派、取消或目录修改。
+
 ## 未验证项
 
-API 路径、UI 两行统一角色赋值和 role-only 模式已有独立真实实例证据；逐行不同角色、多成员池及个人/角色切换尚不能由本记录推出。仅验证单人角色池的当前状态，不证明多成员混入停用用户时的最终过滤、预校验与创建之间的竞态、无 buField 的引擎默认来源或创建失败可见性。完整功能阶段仍为 CONDITIONAL。
+API 路径、UI 两行统一角色赋值、role-only 和角色→个人的逐行混合目标已有独立真实实例证据；逐行不同角色、多成员池及个人→角色切换尚不能由本记录推出。仅验证单人角色池的当前状态，不证明多成员混入停用用户时的最终过滤、预校验与创建之间的竞态、无 buField 的引擎默认来源或创建失败可见性。完整功能阶段仍为 CONDITIONAL。

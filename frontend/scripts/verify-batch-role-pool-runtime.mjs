@@ -2,12 +2,14 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { fileURLToPath } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 import { loginViaPortalPassword, loginViaAdminPassword } from './playwright-login.mjs'
 
 const taskId = process.env.FIXTURE_TASK_ID
 assert.match(taskId || '', /^[a-f0-9-]{36}$/)
 const screenshotTag = process.env.FIXTURE_SCREENSHOT_TAG || 'role-pool'
 assert.match(screenshotTag, /^[a-z0-9-]+$/)
+const mixedTargets = process.env.FIXTURE_MIXED_TARGETS === '1'
 const browser = await chromium.launch({ headless: true })
 async function request(page, method, url, data) {
   const response = await page.request.fetch(url, { method, data })
@@ -45,6 +47,31 @@ async function saveUniformRoleThroughWorkspace(page, pool) {
   const changes = response.request().postDataJSON().subTableBatchChanges
   assert.deepEqual(changes.map(change => change.operation), ['ASSIGN'])
   assert.equal(changes[0].rowPatches.length, 2)
+}
+async function replaceFirstRoleWithPersonThroughWorkspace(page) {
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await page.goto(`http://localhost:3101/portal/tasks/${taskId}`)
+  await page.getByRole('button', { name: 'Batch Edit', exact: true }).click()
+  const dialog = page.locator('.el-dialog:visible')
+  const editor = dialog.locator('.batch-assignment-editor')
+  await editor.locator('.el-table__body-wrapper tr').nth(1).waitFor()
+  const first = editor.locator('.el-table__body-wrapper tr').first()
+  await first.locator('.el-select').first().click()
+  await page.locator('.el-select-dropdown:visible').getByText('Assign by person', { exact: true }).click()
+  const search = page.waitForResponse(response => response.url().includes('/tasks/users/search'))
+  await first.locator('.el-select').nth(1).locator('input').fill('developer')
+  const users = (await (await search).json()).data
+  const index = users.findIndex(user => user.username === 'developer')
+  assert.ok(index >= 0)
+  await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').nth(index).click()
+  const save = page.waitForResponse(response => response.url().endsWith(`/tasks/${taskId}/submit`) && response.request().method() === 'POST')
+  await dialog.getByRole('button', { name: /Apply/ }).click()
+  const response = await save
+  assert.equal((await response.json()).success, true)
+  const changes = response.request().postDataJSON().subTableBatchChanges
+  assert.deepEqual(changes.map(change => change.operation), ['ASSIGN'])
+  assert.equal(changes[0].rowPatches.length, 1)
+  return users[index].id
 }
 async function selectSingleMemberPool(portal, admin) {
   const units = flatten(await request(portal, 'GET', 'http://localhost:3000/api/portal/permissions/business-units/tree'))
@@ -84,6 +111,7 @@ try {
   assert.equal(control.capabilities.allowBatchAssign && control.assignmentConfig.allowRole, true)
   if (process.env.FIXTURE_EXPECT_ROLE_ONLY === '1') assert.equal(control.assignmentConfig.allowUser, false)
   const config = control.assignmentConfig
+  if (mixedTargets) assert.equal(config.allowUser, true)
   assert.ok(config.buField)
   const pool = await selectSingleMemberPool(portal, admin)
   const payload = structuredClone(form.fieldValues)
@@ -101,8 +129,24 @@ try {
   if (process.env.FIXTURE_ASSIGN_VIA_UI === '1') await saveUniformRoleThroughWorkspace(portal, pool)
   else await api('POST', `/tasks/${taskId}/submit`, { formData: payload, subTableBindingScopes: scopes })
   assert.deepEqual((await engineTasks()).tasks.map(row => row.taskId).sort(), beforeTasks, 'Save must not create tasks')
+  const initialSaved = await api('GET', `/tasks/${taskId}/form-data`)
+  for (const row of initialSaved.fieldValues.__subTables__[store]) {
+    assert.equal(row[config.roleField], pool.role.code); assert.equal(row[config.buField], pool.bu.code)
+    assert.ok(!row[config.assigneeField])
+  }
+  const personId = mixedTargets ? await replaceFirstRoleWithPersonThroughWorkspace(portal) : null
   const saved = await api('GET', `/tasks/${taskId}/form-data`)
-  for (const row of saved.fieldValues.__subTables__[store]) {
+  const savedRows = saved.fieldValues.__subTables__[store]
+  if (mixedTargets) {
+    assert.equal(savedRows[0][config.assigneeField] === personId, true)
+    assert.ok(!savedRows[0][config.roleField] && !savedRows[0][config.buField], 'Role to person replacement must clear inactive targets')
+    const unselected = initialSaved.fieldValues.__subTables__[store][1]
+    assert.equal(typeof unselected._wsRowVersion, 'number')
+    // The existing scope guard bumps every claimed row in the ordinary whole-form Save, including this unchanged row.
+    assert.equal(isDeepStrictEqual(savedRows[1], { ...unselected, _wsRowVersion: unselected._wsRowVersion + 1 }), true,
+      'Unselected second role row must preserve all business/identity fields and receive only the normal claimed-row version bump')
+  }
+  for (const row of mixedTargets ? savedRows.slice(1) : savedRows) {
     assert.equal(row[config.roleField], pool.role.code); assert.equal(row[config.buField], pool.bu.code)
     assert.ok(!row[config.assigneeField])
   }
@@ -112,7 +156,7 @@ try {
   const dialog = portal.locator('.el-dialog:visible')
   const editor = dialog.locator('.batch-assignment-editor')
   await editor.locator('.el-table__body-wrapper tr').nth(1).waitFor()
-  assert.equal(await editor.locator('.el-cascader').count(), 2, 'Saved rows must reopen in role mode')
+  assert.equal(await editor.locator('.el-cascader').count(), mixedTargets ? 1 : 2, 'Saved target modes must reopen correctly')
   const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-16_${screenshotTag}-workspace.png`, import.meta.url))
   const mask = [editor.locator('.el-select__selected-item'), editor.locator('.el-cascader')]
   await dialog.screenshot({ path: screenshot, mask })
@@ -120,7 +164,8 @@ try {
   await dialog.screenshot({ path: screenshot.replace('.png', '-narrow.png'), mask })
   // No Apply, Save or task action is performed by opening/closing this read-only inspection.
   await portal.goto('http://localhost:3101/portal/tasks')
-  assert.deepEqual((await api('GET', `/tasks/${taskId}/form-data`)).fieldValues, saved.fieldValues)
+  assert.equal(isDeepStrictEqual((await api('GET', `/tasks/${taskId}/form-data`)).fieldValues, saved.fieldValues), true,
+    'Opening and closing the workspace must preserve all saved data')
   assert.deepEqual((await engineTasks()).tasks.map(row => row.taskId).sort(), beforeTasks)
   await api('POST', `/tasks/${taskId}/complete`, { taskId, action: 'APPROVE', formData: saved.fieldValues,
     subTableBindingScopes: scopes, comment: 'Synthetic single-member role pool verification' })
@@ -130,19 +175,27 @@ try {
   for (const child of children) {
     assert.equal(child.taskDefinitionKey, 'AssignedWork')
     const detail = await request(portal, 'GET', `http://localhost:8081/api/v1/tasks/${encodeURIComponent(child.taskId)}`)
-    assert.ok(!detail.currentAssignee, 'Single-member role pool must remain unclaimed')
-    assert.equal(detail.assignmentType, 'CANDIDATE_USERS')
-    assert.equal(JSON.stringify([...detail.candidateUserIds].sort()) === JSON.stringify(pool.users.toSorted()), true,
-      'Actual Flowable candidate links must match the role members')
-    assert.equal(detail.miAssigneeMode, 'role')
-    assert.equal(detail.miRoleCode, pool.role.code); assert.equal(detail.miBusinessUnitCode, pool.bu.code)
     const identity = detail.variables._currentItem.rowKey
-    assert.equal(rows.filter(row => control.rowDesign.binding.primaryKeyFields.every(key => row[key] === identity[key])).length, 1)
+    const matching = savedRows.filter(row => control.rowDesign.binding.primaryKeyFields.every(key => row[key] === identity[key]))
+    assert.equal(matching.length, 1)
+    if (matching[0][config.assigneeField]) {
+      assert.equal(detail.currentAssignee === personId, true, 'Actual task must use the selected person')
+      assert.equal(detail.assignmentType, 'USER')
+      assert.ok(!detail.candidateUserIds?.length, 'A personal task must not retain the old role candidates')
+    } else {
+      assert.ok(!detail.currentAssignee, 'Single-member role pool must remain unclaimed')
+      assert.equal(detail.assignmentType, 'CANDIDATE_USERS')
+      assert.equal(JSON.stringify([...detail.candidateUserIds].sort()) === JSON.stringify(pool.users.toSorted()), true,
+        'Actual Flowable candidate links must match the role members')
+      assert.equal(detail.miAssigneeMode, 'role')
+      assert.equal(detail.miRoleCode, pool.role.code); assert.equal(detail.miBusinessUnitCode, pool.bu.code)
+    }
     identities.add(JSON.stringify(identity))
   }
   assert.equal(identities.size, 2)
   assert.equal(pageErrors, 0)
   console.log(JSON.stringify({ step: 'synthetic-single-member-role-pool', processInstanceId: task.processInstanceId,
-    taskIds: children.map(child => child.taskId), candidateCount: pool.users.length, unclaimed: true, directoryWrites: 0,
-    assignmentSource: process.env.FIXTURE_ASSIGN_VIA_UI === '1' ? 'uniform-workspace' : 'ordinary-api', pageErrors }))
+    taskIds: children.map(child => child.taskId), candidateCount: pool.users.length, rolePoolsUnclaimed: true, directoryWrites: 0,
+    assignmentSource: mixedTargets ? 'mixed-row-workspace' : process.env.FIXTURE_ASSIGN_VIA_UI === '1' ? 'uniform-workspace' : 'ordinary-api',
+    personalTasks: mixedTargets ? 1 : 0, pageErrors }))
 } finally { await browser.close() }
