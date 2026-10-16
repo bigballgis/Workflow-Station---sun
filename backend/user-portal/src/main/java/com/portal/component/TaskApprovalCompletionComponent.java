@@ -174,8 +174,13 @@ public class TaskApprovalCompletionComponent {
         }
 
         // If MI sub-process prerequisite, read collection variable and assignee field from BPMN and build collection
-        miCollectionVariableBuilder.injectMiCollectionFromBpmn(
-                task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
+        if (taskWriteContext != null) {
+            miCollectionVariableBuilder.injectMiCollectionFromBpmn(
+                    task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables, true);
+        } else {
+            miCollectionVariableBuilder.injectMiCollectionFromBpmn(
+                    task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
+        }
 
         // Guard against wiping a service task's output: a bare/empty approval (e.g. an action button that
         // never loaded or edited the grid) can carry an empty __subTables__ slice which, sent to Flowable,

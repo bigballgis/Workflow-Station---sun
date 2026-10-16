@@ -144,17 +144,26 @@ public class MiCollectionVariableBuilder {
      */
     void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
                                     String processInstanceId, Map<String, Object> variables) {
+        injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, false);
+    }
+
+    void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
+                                    String processInstanceId, Map<String, Object> variables, boolean instanceBound) {
         try {
             if (processDefinitionKey == null || processDefinitionKey.isBlank()
                     || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
+                if (instanceBound) throw new IllegalStateException("Active MI task source is missing");
                 log.warn("[MI] Missing processDefinitionKey or taskDefinitionKey, skip collection injection (procDef={}, taskDef={})",
                         processDefinitionKey, taskDefinitionKey);
                 return;
             }
             log.info("[MI] injectMiCollectionFromBpmn begin processDefinitionKey={} taskDefinitionKey={} processInstanceId={}",
                     processDefinitionKey, taskDefinitionKey, processInstanceId);
-            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey);
+            Optional<String> bpmnOpt = instanceBound
+                    ? workflowEngineClient.getBpmnXml(processDefinitionKey, processInstanceId)
+                    : workflowEngineClient.getBpmnXml(processDefinitionKey);
             if (bpmnOpt.isEmpty()) {
+                if (instanceBound) throw new IllegalStateException("Instance deployed BPMN is unavailable");
                 log.warn("[MI] Could not fetch BPMN XML for processDefinitionKey={}", processDefinitionKey);
                 return;
             }
@@ -163,109 +172,69 @@ public class MiCollectionVariableBuilder {
             // 1. Locate current task node (bpmn:userTask / userTask)
             Element taskElement = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "userTask", taskDefinitionKey);
             if (taskElement == null) {
+                if (instanceBound) throw new IllegalStateException("Active task node is missing from its deployed BPMN");
                 log.warn("[MI] UserTask id={} not found in BPMN (check taskDefinitionKey vs XML). Skip MI injection.",
                         taskDefinitionKey);
                 return;
             }
 
-            // 2. Outgoing: many exported BPMN files only have sequenceFlow@sourceRef, no <outgoing> under userTask
-            List<String> outgoingFlowIds = BpmnMiXmlSupport.getDirectChildTextValues(taskElement, "outgoing");
-            if (outgoingFlowIds.isEmpty()) {
-                outgoingFlowIds = BpmnMiXmlSupport.listSequenceFlowIdsWithSourceRef(document, taskDefinitionKey);
-                if (!outgoingFlowIds.isEmpty()) {
-                    log.info("[MI] Task {} has no <outgoing> children; using {} sequenceFlow(s) via sourceRef",
-                            taskDefinitionKey, outgoingFlowIds.size());
-                }
+            if (!injectReachableCollection(document, taskElement, taskDefinitionKey, variables)) {
+                log.warn("[MI] No usable reachable multi-instance subProcess found from task {}", taskDefinitionKey);
             }
-            if (outgoingFlowIds.isEmpty()) {
-                log.warn("[MI] No outgoing from userTask {} (no child <outgoing> and no sequenceFlow with matching sourceRef). Skip MI injection.",
-                        taskDefinitionKey);
-                return;
-            }
-
-            Deque<String> frontier = new ArrayDeque<>();
-            Set<String> visited = new HashSet<>();
-            for (String flowId : outgoingFlowIds) {
-                enqueueSequenceFlowTargets(document, flowId, frontier);
-            }
-
-            while (!frontier.isEmpty()) {
-                String nodeId = frontier.poll();
-                if (nodeId == null || nodeId.isBlank()) {
-                    continue;
-                }
-                if (!visited.add(nodeId)) {
-                    continue;
-                }
-
-                Element subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", nodeId);
-                if (subProcess != null) {
-                    Element loopCharacteristics = BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess);
-                    if (loopCharacteristics != null) {
-                        String collectionVariableName = BpmnMiXmlSupport.extractFlowableCollection(loopCharacteristics);
-                        if (collectionVariableName == null || collectionVariableName.isBlank()) {
-                            log.warn("[MI] SubProcess {} has no flowable:collection configuration", nodeId);
-                            continue;
-                        }
-                        // 逐行分派：assigneeField / roleField / buField 都读出来，运行时按每行填了什么决定。
-                        // assigneeMode 只标节点允许了哪些方式（user|role|both），不再决定整表模式。
-                        String assigneeMode = BpmnMiXmlSupport.extractAssigneeModeFromSubProcess(subProcess);
-                        boolean roleAllowed = assigneeMode == null
-                                || "role".equalsIgnoreCase(assigneeMode.trim())
-                                || "both".equalsIgnoreCase(assigneeMode.trim());
-                        boolean userAllowed = assigneeMode == null
-                                || "user".equalsIgnoreCase(assigneeMode.trim())
-                                || "both".equalsIgnoreCase(assigneeMode.trim());
-                        String roleField = roleAllowed ? BpmnMiXmlSupport.extractRoleFieldFromSubProcess(subProcess) : null;
-                        String buField = roleAllowed ? BpmnMiXmlSupport.extractBuFieldFromSubProcess(subProcess) : null;
-                        String assigneeField = userAllowed
-                                ? BpmnMiXmlSupport.extractAssigneeFieldFromSubProcess(subProcess) : null;
-                        boolean hasAssignee = assigneeField != null && !assigneeField.isBlank();
-                        boolean hasRole = roleField != null && !roleField.isBlank();
-                        if (!hasAssignee && !hasRole) {
-                            log.warn("[MI] subProcess {} inner UserTask has neither assigneeField nor roleField", nodeId);
-                            continue;
-                        }
-                        String bpmnSubTableName = BpmnMiXmlSupport.findFirstPropertyValue(subProcess, "subTableName");
-                        String bpmnSubTableId = BpmnMiXmlSupport.extractSubTableIdFromSubProcess(subProcess);
-                        buildMiCollectionVariable(variables, collectionVariableName, assigneeField, bpmnSubTableName,
-                                bpmnSubTableId, roleField, buField);
-                        return;
-                    }
-                    List<String> spOut = BpmnMiXmlSupport.getDirectChildTextValues(subProcess, "outgoing");
-                    for (String outFlow : spOut) {
-                        enqueueSequenceFlowTargets(document, outFlow, frontier);
-                    }
-                    if (spOut.isEmpty()) {
-                        for (String sfId : BpmnMiXmlSupport.listSequenceFlowIdsWithSourceRef(document, nodeId)) {
-                            enqueueSequenceFlowTargets(document, sfId, frontier);
-                        }
-                    }
-                    continue;
-                }
-
-                Element flowNode = BpmnMiXmlSupport.findElementByBpmnId(document, nodeId);
-                if (flowNode != null) {
-                    // Any node is walked through, a Function Unit callActivity included: a call
-                    // runs in its own process instance and cannot set this one's variables, so an
-                    // MI sub-process after it only gets its collection if it is injected here,
-                    // with the variables of the last task this process completes before the call.
-                    List<String> outs = BpmnMiXmlSupport.getDirectChildTextValues(flowNode, "outgoing");
-                    if (outs.isEmpty()) {
-                        outs = BpmnMiXmlSupport.listSequenceFlowIdsWithSourceRef(document, nodeId);
-                    }
-                    for (String outFlow : outs) {
-                        enqueueSequenceFlowTargets(document, outFlow, frontier);
-                    }
-                }
-            }
-
-            log.warn("[MI] No reachable multi-instance subProcess found from task {} (BFS exhausted). Skip MI injection.",
-                    taskDefinitionKey);
         } catch (Exception e) {
+            if (instanceBound) {
+                throw new com.portal.exception.PortalException("409", "Instance MI collection source cannot be verified", e);
+            }
             log.warn("[MI] injectMiCollectionFromBpmn failed for processDefinitionKey={}, taskDefinitionKey={}: {}",
                     processDefinitionKey, taskDefinitionKey, e.getMessage());
         }
+    }
+
+    private boolean injectReachableCollection(Document document, Element task, String taskKey, Map<String, Object> variables) {
+        Deque<String> frontier = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        enqueueOutgoing(document, task, taskKey, frontier);
+        while (!frontier.isEmpty()) {
+            String nodeId = frontier.poll();
+            if (nodeId == null || nodeId.isBlank() || !visited.add(nodeId)) continue;
+            Element subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", nodeId);
+            if (subProcess != null && BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess) != null) {
+                if (injectSubProcess(subProcess, variables)) return true;
+                continue;
+            }
+            // Preserve existing look-ahead through call activities: the called instance cannot supply this one's collection.
+            Element flowNode = subProcess != null ? subProcess : BpmnMiXmlSupport.findElementByBpmnId(document, nodeId);
+            if (flowNode != null) enqueueOutgoing(document, flowNode, nodeId, frontier);
+        }
+        return false;
+    }
+
+    private void enqueueOutgoing(Document document, Element node, String nodeId, Deque<String> frontier) {
+        List<String> outgoing = BpmnMiXmlSupport.getDirectChildTextValues(node, "outgoing");
+        if (outgoing.isEmpty()) outgoing = BpmnMiXmlSupport.listSequenceFlowIdsWithSourceRef(document, nodeId);
+        for (String flow : outgoing) enqueueSequenceFlowTargets(document, flow, frontier);
+    }
+
+    private boolean injectSubProcess(Element subProcess, Map<String, Object> variables) {
+        String collection = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));
+        if (collection == null || collection.isBlank()) {
+            log.warn("[MI] SubProcess {} has no collection configuration", subProcess.getAttribute("id"));
+            return false;
+        }
+        String mode = BpmnMiXmlSupport.extractAssigneeModeFromSubProcess(subProcess);
+        boolean roleAllowed = mode == null || "role".equalsIgnoreCase(mode.trim()) || "both".equalsIgnoreCase(mode.trim());
+        boolean userAllowed = mode == null || "user".equalsIgnoreCase(mode.trim()) || "both".equalsIgnoreCase(mode.trim());
+        String roleField = roleAllowed ? BpmnMiXmlSupport.extractRoleFieldFromSubProcess(subProcess) : null;
+        String buField = roleAllowed ? BpmnMiXmlSupport.extractBuFieldFromSubProcess(subProcess) : null;
+        String assigneeField = userAllowed ? BpmnMiXmlSupport.extractAssigneeFieldFromSubProcess(subProcess) : null;
+        if ((assigneeField == null || assigneeField.isBlank()) && (roleField == null || roleField.isBlank())) {
+            log.warn("[MI] SubProcess {} has neither assigneeField nor roleField", subProcess.getAttribute("id"));
+            return false;
+        }
+        buildMiCollectionVariable(variables, collection, assigneeField,
+                BpmnMiXmlSupport.findFirstPropertyValue(subProcess, "subTableName"),
+                BpmnMiXmlSupport.extractSubTableIdFromSubProcess(subProcess), roleField, buField);
+        return true;
     }
 
     /**

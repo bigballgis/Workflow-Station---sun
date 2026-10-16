@@ -569,6 +569,10 @@ public class WorkflowEngineClient {
         return processClient.getBpmnXml(processDefinitionKey);
     }
 
+    public Optional<String> getBpmnXml(String processDefinitionKey, String processInstanceId) {
+        return processClient.getBpmnXml(processDefinitionKey, processInstanceId);
+    }
+
     /**
      * Child process instances started by this instance's call activities.
      *

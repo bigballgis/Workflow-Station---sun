@@ -473,6 +473,8 @@ class TaskProcessProperties {
         String userId = "user_1";
         String processDefinitionKey = "Process_1";
         String taskDefinitionKey = "Activity_assignment";
+        var instance = new com.portal.entity.ProcessInstance();
+        when(processInstanceRepository.findById("PI_" + taskId)).thenReturn(Optional.of(instance));
 
         Map<String, Object> taskMap = createTaskMap(taskId, "USER", userId);
         taskMap.put("processDefinitionKey", processDefinitionKey);
@@ -529,6 +531,9 @@ class TaskProcessProperties {
                 .build();
 
         taskProcessComponent.completeTask(request, userId);
+
+        verify(workflowEngineClient).getBpmnXml(processDefinitionKey);
+        verify(workflowEngineClient, Mockito.never()).getBpmnXml(anyString(), anyString());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> variablesCaptor = ArgumentCaptor.forClass(Map.class);

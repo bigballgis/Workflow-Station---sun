@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
 
 /**
  * Security configuration for workflow engine.
@@ -57,6 +58,10 @@ public class SecurityConfig {
                 // Process definition deploy/delete - internal service-to-service calls from admin-center
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deploy")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deployments/**")).permitAll()
+                // Instance/deployment association is not part of the public latest-definition read.
+                .requestMatchers(new AndRequestMatcher(
+                        new AntPathRequestMatcher("/api/v1/processes/definitions/*/bpmn"),
+                        request -> request.getParameter("processInstanceId") != null)).authenticated()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/instances/*/purge")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/instances")).permitAll()
