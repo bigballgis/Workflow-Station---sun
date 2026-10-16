@@ -43,6 +43,7 @@ import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
+import com.developer.util.FormFieldPermissionBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
 import com.developer.util.FkFillSourcesSupport;
 import com.developer.validation.DmnXmlParser;
@@ -322,6 +323,7 @@ public class FunctionUnitImportWriter {
         FormConfigJsonOrphanBindingRepair.repairOrphanedBindingKeys(
                 configJson, formTableBindingRepository.findByFormIdOrderBySortOrder(form.getId()));
         form.setConfigJson(configJson);
+        form.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(form.getFieldPermissions(), bindingIdMapping));
 
         importFormStageBindings(form, formData);
         formDefinitionRepository.save(form);

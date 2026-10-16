@@ -30,6 +30,7 @@ import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.SubTableViewService;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
+import com.developer.util.FormFieldPermissionBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
 import com.developer.util.FormConfigJsonPasteBindingMapper;
 import com.developer.util.FkFillSourcesSupport;
@@ -897,6 +898,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(copiedConfig);
         savedCopy.setConfigJson(copiedConfig);
+        savedCopy.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(copiedFieldPermissions, bindingIdMapping));
         savedCopy = formDefinitionRepository.save(savedCopy);
         
         return savedCopy;
@@ -1017,6 +1019,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(copiedConfig);
         savedCopy.setConfigJson(copiedConfig);
+        savedCopy.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(copiedFieldPermissions, bindingIdMapping));
         savedCopy = formDefinitionRepository.save(savedCopy);
         
         return savedCopy;

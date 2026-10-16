@@ -114,7 +114,8 @@ class FunctionUnitCloneBindingTest {
 
         FormDefinition sourceForm = FormDefinition.builder()
                 .id(11L).functionUnit(source).formName("MainForm").formType(FormType.PROCESS)
-                .configJson(configJson).showLiveValues(true).build();
+                .configJson(configJson).showLiveValues(true)
+                .fieldPermissions(Map.of("101:caption", "EDITABLE", "102:caption", "READONLY", "mainField", "HIDDEN")).build();
         sourceForm.setTableBindings(List.of(primaryBinding, relatedBinding));
 
         String sourceBpmn = """
@@ -197,6 +198,8 @@ class FunctionUnitCloneBindingTest {
         ArgumentCaptor<FormDefinition> formCaptor = ArgumentCaptor.forClass(FormDefinition.class);
         verify(formDefinitionRepository, atLeast(2)).save(formCaptor.capture());
         FormDefinition finalForm = formCaptor.getAllValues().get(formCaptor.getAllValues().size() - 1);
+        assertEquals(Map.of("501:caption", "EDITABLE", "502:caption", "READONLY", "mainField", "HIDDEN"), finalForm.getFieldPermissions());
+        assertTrue(sourceForm.getFieldPermissions().containsKey("101:caption"));
         @SuppressWarnings("unchecked")
         Map<String, Object> subForms = (Map<String, Object>) finalForm.getConfigJson().get("subForms");
         assertTrue(subForms.containsKey("501"));
