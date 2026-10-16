@@ -12,19 +12,26 @@ export const useNotificationStore = defineStore('notification', () => {
   const unreadCount = ref(0)
   const wsConnected = ref(false)
 
+  let activeQuery: NotificationParams = {}
+  let querySequence = 0
+
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
   const fetchNotifications = async (params?: NotificationParams) => {
+    activeQuery = { ...params }
+    const sequence = ++querySequence
     loading.value = true
     try {
       const res = await notificationApi.getNotifications(params)
+      if (sequence !== querySequence) return
       notifications.value = res?.data?.content ?? []
       total.value = res?.data?.totalElements ?? 0
     } catch {
+      if (sequence !== querySequence) return
       notifications.value = []
       total.value = 0
     } finally {
-      loading.value = false
+      if (sequence === querySequence) loading.value = false
     }
   }
 
@@ -67,8 +74,14 @@ export const useNotificationStore = defineStore('notification', () => {
 
   // WebSocket integration
   const { connected, connect, disconnect } = useNotificationWebSocket((notification: NotificationData) => {
-    notifications.value.unshift(notification)
-    unreadCount.value++
+    if (!notification.isRead) unreadCount.value++
+    if (activeQuery.type && activeQuery.type !== notification.type) return
+    if (activeQuery.isRead !== undefined && activeQuery.isRead !== notification.isRead) return
+    total.value++
+    if ((activeQuery.page ?? 0) === 0) {
+      notifications.value.unshift(notification)
+      if (activeQuery.size && notifications.value.length > activeQuery.size) notifications.value.pop()
+    }
   })
 
   const startPolling = () => {

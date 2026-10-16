@@ -45,6 +45,27 @@ public class NotificationServiceImpl implements NotificationService {
         Optional<NotificationPreference> preferenceOpt = notificationPreferenceRepository
                 .findByUserIdAndNotificationType(event.getTargetUserId(), event.getNotificationType());
 
+        return createWithPreference(event, preferenceOpt);
+    }
+
+    @Override
+    @Transactional
+    public java.util.Map<String, Notification> createFromEvents(java.util.Collection<NotificationEvent> events) {
+        if (events.isEmpty()) return java.util.Map.of();
+        var users = events.stream().map(NotificationEvent::getTargetUserId).distinct().toList();
+        var types = events.stream().map(NotificationEvent::getNotificationType).distinct().toList();
+        var preferences = notificationPreferenceRepository.findByUserIdInAndNotificationTypeIn(users, types).stream()
+                .collect(java.util.stream.Collectors.toMap(p -> p.getUserId() + ":" + p.getNotificationType(), p -> p));
+        java.util.Map<String, Notification> created = new java.util.LinkedHashMap<>();
+        for (NotificationEvent event : events) {
+            Notification notification = createWithPreference(event, Optional.ofNullable(
+                    preferences.get(event.getTargetUserId() + ":" + event.getNotificationType())));
+            if (notification != null) created.put(event.getTargetUserId(), notification);
+        }
+        return created;
+    }
+
+    private Notification createWithPreference(NotificationEvent event, Optional<NotificationPreference> preferenceOpt) {
         if (preferenceOpt.isPresent() && Boolean.FALSE.equals(preferenceOpt.get().getInAppEnabled())) {
             log.debug("用户 {} 已禁用 {} 类型的站内通知，跳过创建", event.getTargetUserId(), event.getNotificationType());
             return null;
@@ -73,7 +94,8 @@ public class NotificationServiceImpl implements NotificationService {
         // 4. 非免打扰时段且WebSocket服务可用时推送
         if (webSocketNotificationService != null && !inQuietHours) {
             try {
-                webSocketNotificationService.pushNotification(notification);
+                Notification saved = notification;
+                com.portal.recordnote.NotificationAfterCommit.run(() -> webSocketNotificationService.pushNotification(saved));
             } catch (Exception e) {
                 log.warn("WebSocket推送通知失败: notificationId={}, error={}", notification.getId(), e.getMessage());
             }

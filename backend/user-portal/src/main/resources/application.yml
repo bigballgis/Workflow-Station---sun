@@ -174,3 +174,7 @@ management:
       enabled: true
     db:
       enabled: true
+
+# Pause dispatch without removing durable pending intents.
+record-note:
+  delivery-paused: ${PORTAL_RECORD_NOTE_DELIVERY_PAUSED:false}

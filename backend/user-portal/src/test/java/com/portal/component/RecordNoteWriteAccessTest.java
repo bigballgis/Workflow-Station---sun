@@ -67,6 +67,14 @@ class RecordNoteWriteAccessTest {
     @Mock
     private TaskPermissionEvaluator taskPermissionEvaluator;
 
+    @Mock private com.portal.recordnote.RecordNoteSubmissionComponent recordNoteSubmissions;
+    @Mock private com.portal.recordnote.RecordNoteCatalogRepository recordNoteCatalog;
+
+    @Mock
+    private com.portal.recordnote.RecordNoteParticipantRepository recordNoteParticipants;
+
+    @Mock private com.portal.component.RecordNoteUploadSourceResolver recordNoteUploadSources;
+
     @InjectMocks
     private RecordNoteComponent component;
 
@@ -118,6 +126,16 @@ class RecordNoteWriteAccessTest {
      * case — a Department Manager on the Submit task of a unit that grants audit to another role
      * only, who could previously edit notes through the participant bypass.
      */
+    @org.junit.jupiter.api.BeforeEach
+    void delegateNoteSubmission() {
+        org.mockito.Mockito.when(recordNoteSubmissions.submit(any()))
+                .thenAnswer(call -> {
+                    com.portal.recordnote.RecordNoteSubmissionComponent.Submission input=call.getArgument(0);
+                    return recordNoteService.createComment(input.target(),input.subject(),input.body(),
+                            input.files(),input.inlineIds(),input.user(),input.name());
+                });
+    }
+
     @Test
     void participantWithoutAnAuditGrantMayNotAddANote() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(true);

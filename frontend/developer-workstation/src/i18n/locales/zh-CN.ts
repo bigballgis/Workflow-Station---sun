@@ -1,4 +1,6 @@
 export default {
+  recordNoteNotification: {"title": "附件站内通知", "guide": "Record Note 附件通知指南", "targets": "目标 Sub-Task 节点", "assignmentHint": "Case Notes 汇总关联行；Transaction Notes 仅限当前行。接收人使用目标节点的分派配置。", "loadFailed": "无法加载任务节点，请保存流程设计后重新打开。"},
+
   app: {
     name: '开发工作站',
     title: '工作流平台'

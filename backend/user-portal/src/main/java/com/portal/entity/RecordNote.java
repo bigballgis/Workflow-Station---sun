@@ -59,6 +59,12 @@ public class RecordNote {
     @Column(name = "function_unit_id", length = 64)
     private String functionUnitId;
 
+    @Column(name = "process_instance_id", length = 64)
+    private String processInstanceId;
+
+    @Column(name = "submission_id", length = 64)
+    private String submissionId;
+
     @Column(name = "note_type", nullable = false, length = 20)
     private String noteType;
 

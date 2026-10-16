@@ -52,6 +52,10 @@ import java.util.Optional;
 public class TaskCompletionService {
 
     @Autowired
+    @Lazy
+    private com.workflow.recordnote.RecordNoteRollbackSupport recordNoteRollbackSupport;
+
+    @Autowired
     private TaskService taskService;
 
     @Autowired
@@ -299,6 +303,7 @@ public class TaskCompletionService {
             }
 
             recordReturnTaskComment(taskId, processInstanceId, currentTask, targetActivityId, request);
+            recordNoteRollbackSupport.returning(currentTask, targetActivityId);
 
             runtimeService.setVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_FALLBACK_ACTIVE, Boolean.TRUE);
             runtimeService.setVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_TARGET_ACTIVITY_ID, targetActivityId);

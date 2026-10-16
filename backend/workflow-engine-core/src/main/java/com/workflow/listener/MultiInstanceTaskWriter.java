@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 import static com.workflow.listener.AssigneeUserIdNormalizer.normalizeFlowableUserIdValue;
+import static com.workflow.util.AssigneeRoleIdsSupport.resolveRoleCodesFromItem;
 import static com.workflow.listener.UserTaskExtensionPropertyReader.getExtensionProperty;
 
 /**
@@ -295,9 +296,7 @@ class MultiInstanceTaskWriter {
 
             // 分派方式由「行内实际填了什么」逐行决定（支持场景 C：同一 MI 节点两种方式混用，逐行二选一）。
             // assigneeMode 仅作节点级「允许了哪些方式」的参考（user|role|both），不再用于硬分流。
-            boolean roleAllowed = assigneeModeFromBpmn == null
-                    || "role".equalsIgnoreCase(assigneeModeFromBpmn.trim())
-                    || "both".equalsIgnoreCase(assigneeModeFromBpmn.trim());
+            boolean roleAllowed = com.platform.common.recordnote.SubTaskAssignmentMode.allowsRole(assigneeModeFromBpmn);
 
             if (subTableName == null || subTableName.isBlank()) {
                 log.warn("subTableName missing for MI ELEMENT_VARIABLE task {}, task will remain CREATED", taskId);
@@ -578,31 +577,6 @@ class MultiInstanceTaskWriter {
         }
     }
 
-    /**
-     * 把 {@code currentItem[roleField]} 规范成 role code 列表：支持 {@code List}、JSON 数组文本、逗号串、单值。
-     */
-    private static List<String> resolveRoleCodesFromItem(Map<String, Object> currentItem, String roleField) {
-        Object raw = currentItem.get(roleField);
-        if (raw == null) {
-            return List.of();
-        }
-        if (raw instanceof List<?> list) {
-            List<String> out = new ArrayList<>();
-            for (Object o : list) {
-                if (o != null && !String.valueOf(o).trim().isEmpty()) {
-                    out.add(String.valueOf(o).trim());
-                }
-            }
-            return out;
-        }
-        String text = String.valueOf(raw).trim();
-        if (text.isEmpty()) {
-            return List.of();
-        }
-        // AssigneeRoleIdsSupport.parseRoleIds 按逗号切分并去重去空；JSON 数组文本先剥括号引号。
-        String normalized = text.replaceAll("^[\\[\\]\"']+|[\\[\\]\"']+$", "").replace("\"", "").replace("'", "");
-        return AssigneeRoleIdsSupport.parseRoleIds(normalized, null);
-    }
 
     /**
      * MI role 分支的 initiator：进程变量 {@code initiator} 优先，回退到运行/历史流程实例的 startUserId。

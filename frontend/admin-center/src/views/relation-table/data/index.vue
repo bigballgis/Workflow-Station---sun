@@ -1,48 +1,54 @@
 <template>
   <div class="page-container">
-    <PageHeader title="Table Data Management" />
+    <PageHeader :title="t('menu.tableData')">
+      <template #actions>
+        <DesignerHelpLink
+          path="/table-data"
+          v-bind="{ ariaLabel: t('tableDataNavigation.guide') }"
+          test-id="table-data-guide-link"
+        />
+      </template>
+    </PageHeader>
 
     <div class="data-layout">
-      <!-- Left: Table list -->
-      <div class="table-list-panel">
-        <div class="panel-title">
-          Deployed Tables
-        </div>
-        <div style="padding: 6px 8px;">
-          <el-input
-            v-model="tableSearchKeyword"
-            placeholder="Search tables..."
-            clearable
-            size="small"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </div>
-        <el-menu
-          v-loading="tableListLoading"
-          :default-active="selectedTableId ? String(selectedTableId) : ''"
-          @select="handleSelectTable"
-        >
-          <el-menu-item
-            v-for="t in filteredTables"
-            :key="t.id"
-            :index="String(t.id)"
-          >
-            <span>{{ t.displayName || t.tableName }}</span>
-          </el-menu-item>
-        </el-menu>
-        <el-empty
-          v-if="!tableListLoading && filteredTables.length === 0"
-          description="No tables available"
-          :image-size="60"
-        />
-      </div>
+      <RelationTableNavigator
+        :tables="tables"
+        :selected-table-id="selectedTableId"
+        :active-group-key="activeGroupKey"
+        :loading="tableListLoading"
+        :error="tableListError"
+        @select="handleSelectTable"
+        @retry="refresh"
+      />
 
       <!-- Right: Data grid -->
       <div class="data-grid-panel">
         <template v-if="selectedTable">
+          <div
+            class="selected-table-header"
+            data-testid="selected-table-header"
+          >
+            <div class="selected-table-info">
+              <div class="table-breadcrumb">
+                {{ selectedGroupLabel }} / {{ selectedTable.displayName || selectedTable.tableName }}
+              </div>
+              <div class="selected-table-title">
+                <h2>{{ selectedTable.displayName || selectedTable.tableName }}</h2>
+                <el-tag
+                  size="small"
+                  :type="canWrite ? 'info' : 'warning'"
+                >
+                  {{ t(canWrite ? 'tableDataNavigation.writable' : 'tableDataNavigation.readonly') }}
+                </el-tag>
+              </div>
+              <p
+                v-if="selectedTable.description"
+                class="table-description"
+              >
+                {{ selectedTable.description }}
+              </p>
+            </div>
+          </div>
           <div class="grid-toolbar">
             <el-input
               v-model="searchKeyword"
@@ -76,7 +82,9 @@
             >
               <el-button :loading="exportingTemplate">
                 <el-icon><Download /></el-icon> Export Template
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                <el-icon class="el-icon--right">
+                  <ArrowDown />
+                </el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -123,7 +131,7 @@
         </template>
         <el-empty
           v-else
-          description="Select a table from the left panel"
+          :description="selectionError || t('tableDataNavigation.selectTable')"
         />
       </div>
     </div>
@@ -245,7 +253,9 @@
         accept=".csv,.xlsx"
         :on-change="onImportFileChange"
       >
-        <el-icon class="el-icon--upload"><Upload /></el-icon>
+        <el-icon class="el-icon--upload">
+          <Upload />
+        </el-icon>
         <div class="el-upload__text">
           Drop file here or <em>click to upload</em>
         </div>
@@ -254,7 +264,9 @@
         v-if="importing"
         style="margin-top: 12px;"
       >
-        <el-icon class="is-loading"><Loading /></el-icon> Validating...
+        <el-icon class="is-loading">
+          <Loading />
+        </el-icon> Validating...
       </div>
       <div
         v-if="importResult"
@@ -315,7 +327,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onActivated } from 'vue'
+import { onActivated } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Search, Download, Plus, Upload, ArrowDown, Loading } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import LookupField from '@/components/lookup/LookupField.vue'
@@ -326,18 +339,22 @@ import {
   RT_DATA_ACTIONS_COL_WIDTH,
 } from '@/composables/modules/useRelationTableData'
 import RelationTableDataGrid from './components/RelationTableDataGrid.vue'
+import RelationTableNavigator from './components/RelationTableNavigator.vue'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
+
+const { t } = useI18n()
 
 const {
   tableListLoading, dataLoading, exporting, saving,
   exportingTemplate, importDialogVisible, importing, importResult,
-  selectedTableId, searchKeyword, tableSearchKeyword,
+  tables, tableListError, selectedTableId, searchKeyword, activeGroupKey, selectedGroupLabel, selectionError,
   fetchDataError, dialogVisible, dialogMode, formData,
-  selectedTable, canWrite, visibleFieldColumns, filteredTables,
+  selectedTable, canWrite, visibleFieldColumns,
   isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
   lookupSelectedData, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
   fetchData, handleSelectTable,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
-  formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
+  formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, refresh,
   grid,
 } = useRelationTableData()
 
@@ -345,23 +362,18 @@ const onImportFileChange = (file: { raw?: File }) => {
   if (file.raw) handleImportFile(file.raw)
 }
 
-onMounted(init)
 onActivated(refresh)
 </script>
 
 <style scoped>
 .page-container { padding: 20px; }
 .data-layout { display: flex; gap: 16px; height: calc(100vh - 140px); }
-.table-list-panel {
-  width: 220px; flex-shrink: 0;
-  border: 1px solid var(--el-border-color-light); border-radius: 4px; overflow-y: auto;
-}
-.table-list-panel :deep(.el-menu-item.is-active) {
-  background-color: var(--el-color-primary-light-9, #ecf5ff);
-  color: var(--el-color-primary, #409eff);
-}
-.table-list-panel :deep(.el-menu-item.is-active)::before { display: none; }
-.panel-title { padding: 12px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--el-border-color-light); }
 .data-grid-panel { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.grid-toolbar { display: flex; align-items: center; margin-bottom: 12px; gap: 8px; }
+.grid-toolbar { display: flex; flex-wrap: wrap; align-items: center; margin-bottom: 12px; gap: 8px; }
+.selected-table-header { padding: 2px 0 16px; margin-bottom: 16px; border-bottom: 1px solid var(--el-border-color-light); }
+.table-breadcrumb { font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px; }
+.selected-table-title { display: flex; align-items: center; gap: 12px; }
+.selected-table-title h2 { font-size: 20px; font-weight: 600; line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
+.table-description { margin: 8px 0 0; color: var(--el-text-color-regular); font-size: 13px; line-height: 1.5; }
+@media (max-width: 1100px) { .page-container { padding: 12px; } .data-layout { gap: 12px; } }
 </style>

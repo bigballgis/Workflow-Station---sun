@@ -57,12 +57,16 @@ import java.util.List;
 public class RecordNoteComponent {
 
     private final RecordNoteService recordNoteService;
+    private final com.portal.recordnote.RecordNoteSubmissionComponent recordNoteSubmissions;
+    private final com.portal.recordnote.RecordNoteCatalogRepository recordNoteCatalog;
+    private final com.portal.recordnote.RecordNoteParticipantRepository recordNoteParticipants;
     private final ProcessComponent processComponent;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final ChangeHistoryComponent changeHistoryComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskPermissionEvaluator taskPermissionEvaluator;
+    private final com.portal.component.RecordNoteUploadSourceResolver recordNoteUploadSources;
 
     public PageResponse<NoteItem> list(String userId, NoteTarget target, int page, int size,
                                        String processInstanceId) {
@@ -73,6 +77,7 @@ public class RecordNoteComponent {
 
     public NoteDetail detail(String userId, String noteId, String processInstanceId) {
         RecordNote note = requireLive(noteId);
+        requireNoteOwnership(userId, note, processInstanceId);
         checkAccess(userId, targetOf(note), processInstanceId);
         return recordNoteService.detail(noteId, userId);
     }
@@ -83,6 +88,7 @@ public class RecordNoteComponent {
         if (!RecordNote.TYPE_ATTACHMENT.equals(note.getNoteType())) {
             throw new RecordNoteException("NOT_ATTACHMENT", "Note has no downloadable content");
         }
+        requireNoteOwnership(userId, note, processInstanceId);
         checkAccess(userId, targetOf(note), processInstanceId);
         return note;
     }
@@ -93,10 +99,16 @@ public class RecordNoteComponent {
         checkTargetShape(target);
         checkAccess(userId, target, processInstanceId);
         checkWriteAccess(userId, target, processInstanceId, taskId);
-        NoteItem created = recordNoteService.createComment(target, subject, bodyHtml, files, adoptInlineIds,
-                userId, resolveName(userId));
-        audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
-                null, RecordNoteAuditSummary.created(created, uploadedFileNames(files)));
+        target.setProcessInstanceId(RecordNote.TARGET_TABLE.equals(target.getTargetType())
+                ? target.getTargetId() : processInstanceId);
+        target.setTaskId(taskId);
+        target.setVerifiedUploadSource(recordNoteUploadSources.resolve(userId, target));
+        NoteItem created = recordNoteSubmissions.submit(new com.portal.recordnote.RecordNoteSubmissionComponent.Submission(userId, resolveName(userId), target,
+                subject, bodyHtml, files, adoptInlineIds));
+        if (!Boolean.TRUE.equals(created.getReplayed())) {
+            audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
+                    null, RecordNoteAuditSummary.created(created, uploadedFileNames(files)));
+        }
         return created;
     }
 
@@ -105,6 +117,8 @@ public class RecordNoteComponent {
         checkTargetShape(target);
         checkAccess(userId, target, processInstanceId);
         checkWriteAccess(userId, target, processInstanceId, taskId);
+        target.setProcessInstanceId(RecordNote.TARGET_TABLE.equals(target.getTargetType())
+                ? target.getTargetId() : processInstanceId);
         return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
     }
 
@@ -115,6 +129,7 @@ public class RecordNoteComponent {
      */
     public boolean canAddNote(String userId, NoteTarget target, String processInstanceId, String taskId) {
         try {
+            checkTargetShape(target);
             checkAccess(userId, target, processInstanceId);
             checkWriteAccess(userId, target, processInstanceId, taskId);
             return true;
@@ -164,7 +179,7 @@ public class RecordNoteComponent {
                 && !processComponent.canAccessProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
-        return recordNoteService.adoptDraftNotes(draftTargetId, processInstanceId, userId);
+        return recordNoteSubmissions.adopt(draftTargetId, processInstanceId, userId);
     }
 
     /** Participant-or-admin gate for the per-instance archive download. */
@@ -260,6 +275,15 @@ public class RecordNoteComponent {
     private void checkAccess(String userId, NoteTarget target, String hostProcessInstanceId) {
         if (userId == null || userId.isBlank()) {
             throw new RecordNoteException("FORBIDDEN", "Missing user identity");
+        }
+        if (!isDraftTarget(target.getTargetId())) {
+            String instanceId = RecordNote.TARGET_TABLE.equals(target.getTargetType())
+                    ? target.getTargetId() : hostProcessInstanceId;
+            if (target.getProcessInstanceId() != null && !target.getProcessInstanceId().equals(instanceId)) {
+                throw new RecordNoteException("FORBIDDEN", "Note belongs to another request");
+            }
+            target.setProcessInstanceId(instanceId);
+            recordNoteCatalog.requireTarget(recordNoteCatalog.request(instanceId, false), target);
         }
         if (functionUnitAccessComponent.isSystemAdministrator(userId)) {
             return;
@@ -391,7 +415,8 @@ public class RecordNoteComponent {
      * that re-anchors someone else's drafts).
      */
     private void requireParticipant(String userId, ProcessInstanceInfo detail) {
-        if (!processComponent.canAuditProcessDetail(userId, detail)) {
+        if (!recordNoteParticipants.isAssignedReader(userId,detail.getId())
+                && !processComponent.canAuditProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
     }
@@ -411,8 +436,19 @@ public class RecordNoteComponent {
             throw new RecordNoteException("BAD_TARGET", "targetType must be TABLE or RECORD");
         }
         String kind = target.getTableKind();
+        if (kind == null) target.setTableKind("DW");
         if (kind != null && !"DW".equals(kind) && !"RT".equals(kind)) {
             throw new RecordNoteException("BAD_TARGET", "tableKind must be DW or RT");
+        }
+    }
+
+    private void requireNoteOwnership(String userId, RecordNote note, String host) {
+        if (userId == null || (isDraftTarget(note.getTargetId()) && !userId.equals(note.getCreatedBy()))) {
+            throw new RecordNoteException("FORBIDDEN", "Draft note belongs to another user");
+        }
+        if (!isDraftTarget(note.getTargetId()) && RecordNote.TARGET_RECORD.equals(note.getTargetType())
+                && note.getProcessInstanceId() == null) {
+            throw new RecordNoteException("FORBIDDEN", "Legacy note request ownership is unresolved");
         }
     }
 
@@ -423,6 +459,7 @@ public class RecordNoteComponent {
                 .tableKind(note.getTableKind())
                 .tableId(note.getTableId())
                 .functionUnitId(note.getFunctionUnitId())
+                .processInstanceId(note.getProcessInstanceId())
                 .build();
     }
 

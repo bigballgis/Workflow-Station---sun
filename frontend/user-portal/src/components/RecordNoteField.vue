@@ -191,6 +191,7 @@ import { ElMessage } from 'element-plus'
 import { formContextKey } from 'element-plus'
 import type { UploadFile, UploadUserFile } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import { i18nChangeLanguage } from '@wangeditor/editor'
 import '@wangeditor/editor/dist/css/style.css'
@@ -210,8 +211,11 @@ import {
 import { notifyRecordNoteChanged } from './formRendererHelpers/recordNoteFields'
 import { openFilePreviewFromList } from '@/composables/filePreview/useFilePreview'
 import { isPreviewableFileName } from '@/utils/collectFormPreviewFiles'
+import { useRecordNoteSubmission } from '@/composables/useRecordNoteSubmission'
 
 export interface RecordNoteConfig {
+  formKey?: string
+  controlId?: string
   scope?: string
   panelTitle?: string
   allowAttachment?: boolean
@@ -229,6 +233,7 @@ const props = defineProps<{
   processInstanceId?: string | null
   functionUnitId?: number | string | null
   readonly?: boolean
+  focusSubmissionId?: string
   /**
    * Set when this panel sits on a To Do task form. Sent with the write calls so the server can
    * authorize by task rather than by audit role; verified server-side, so it grants nothing here.
@@ -237,6 +242,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const route = useRoute()
 
 // Notes stay writable inside readonly forms (My Requests / completed views):
 // reset the injected el-form context so the outer form's `disabled` does not
@@ -251,7 +257,7 @@ const allowAttachment = computed(() => props.config?.allowAttachment !== false)
 const pageSize = computed(() => Math.max(1, Number(props.config?.pageSize) || 5))
 const maxFileBytes = computed(() => Math.min(Number(props.config?.maxFileSizeMb) || 10, 10) * 1024 * 1024)
 
-const expanded = ref(false)
+const expanded = ref(Boolean(props.focusSubmissionId))
 const bodyVisible = computed(() => !compact.value || expanded.value)
 
 // Notes never cross process instances. TABLE scope = the hosting table's
@@ -272,6 +278,8 @@ const target = computed<RecordNoteTargetParams | null>(() => {
     // RECORD scope authorizes against the hosting request — a row id alone identifies no instance.
     processInstanceId: props.processInstanceId ?? null,
     taskId: props.taskId ?? null,
+    sourceView: props.taskId ? undefined : route.query.from === 'audit' ? 'AUDIT' : 'REQUEST',
+    focusSubmissionId: props.focusSubmissionId,
   }
 })
 
@@ -388,6 +396,7 @@ onBeforeUnmount(() => {
 const showEditor = ref(false)
 const editorHtml = ref('')
 const submitting = ref(false)
+const submission = useRecordNoteSubmission()
 const inlineImageIds = ref<string[]>([])
 const pickedFiles = ref<File[]>([])
 const uploadList = ref<UploadUserFile[]>([])
@@ -433,6 +442,7 @@ function openEditor() {
   inlineImageIds.value = []
   pickedFiles.value = []
   uploadList.value = []
+  submission.reset()
   showEditor.value = true
 }
 
@@ -469,16 +479,18 @@ function onFileRemoved(_file: UploadFile, fileList: UploadUserFile[]) {
 }
 
 async function submit() {
-  if (!target.value) return
+  if (!target.value || submitting.value) return
   const editor = editorInstance.value
   const html = editor && !editor.isEmpty() ? editor.getHtml() : ''
   if (!html && !pickedFiles.value.length) {
     ElMessage.warning(t('recordNote.emptySubmit'))
     return
   }
+  const signature = JSON.stringify([target.value, html, inlineImageIds.value, pickedFiles.value.map(file => [file.name, file.size, file.lastModified])])
   submitting.value = true
   try {
-    await createRecordNote(target.value, {
+    await createRecordNote({ ...target.value, formKey: props.config?.formKey,
+      controlId: props.config?.controlId, clientSubmissionId: submission.keyFor(signature) }, {
       bodyHtml: html || undefined,
       inlineImageIds: inlineImageIds.value,
       files: allowAttachment.value ? pickedFiles.value : [],

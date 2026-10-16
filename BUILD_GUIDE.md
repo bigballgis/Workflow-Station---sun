@@ -865,6 +865,7 @@ Kafka(K8S) ───────────────────────
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
 | `VAULT_ADDR` | admin-center | HashiCorp Vault 基址（含 `:8200`）。Admin 用 Kubernetes JWT（或本地可选 `VAULT_TOKEN`）登录后读 KV v2 `data.data.password`。空值则 VAULT 解析失败。已有库需手动执行 `00-schema/86-ac-environment-variables.sql`。`credential_encrypted` 列本发保留（应用不再读写）；测通后再另开脚本 DROP。平台须把 ServiceAccount `admin-center` 绑到 `VAULT_ROLE`。 |
 | `USER_PORTAL_BASE_URL` | admin-center | user-portal 基址（含 `/api/portal`）；PortalRuntimePurge / UserPortalAudit 内部调用 |
+| `PORTAL_RECORD_NOTE_DELIVERY_PAUSED` | user-portal | 默认 false；true 暂停附件通知投递，保留已受理意图和历史记录 |
 | `PORTAL_INTERNAL_API_TOKEN` | admin-center, user-portal, workflow-engine | 调用门户 `/internal/*` 的共享密钥（须两端一致） |
 
 各 Hermes 部署应对接的 **Vault 集群**（Admin 直连 `VAULT_ADDR`，无独立 Wrapper 服务）：

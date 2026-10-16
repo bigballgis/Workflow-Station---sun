@@ -26,7 +26,7 @@ vi.mock('@/composables/useNotificationWebSocket', () => ({
   })
 }))
 
-import { notificationApi } from '@/api/notification'
+import { notificationApi, type NotificationData } from '@/api/notification'
 
 const mockNotification = (id: number, isRead = false) => ({
   id,
@@ -62,6 +62,23 @@ describe('notification store', () => {
       expect(notificationApi.getNotifications).toHaveBeenCalledWith({ page: 0, size: 20 })
       expect(store.notifications).toHaveLength(2)
       expect(store.total).toBe(2)
+      expect(store.loading).toBe(false)
+    })
+
+    it('切换到附件分类后，较慢的旧分类请求不得覆盖当前列表', async () => {
+      type Response = Awaited<ReturnType<typeof notificationApi.getNotifications>>
+      let resolveOld!: (response: Response) => void
+      const oldResponse = new Promise<Response>(resolve => { resolveOld = resolve })
+      const page = { page: 0, size: 20, totalElements: 1, totalPages: 1, hasNext: false, hasPrevious: false }
+      vi.mocked(notificationApi.getNotifications)
+        .mockImplementationOnce(() => oldResponse)
+        .mockResolvedValueOnce({ data: { ...page, content: [{ ...mockNotification(92), type: 'ATTACHMENT_UPDATE' }] } })
+      const store = useNotificationStore()
+      const oldRequest = store.fetchNotifications({ isRead: false })
+      await store.fetchNotifications({ type: 'ATTACHMENT_UPDATE' })
+      resolveOld({ data: { ...page, content: [mockNotification(91)] } })
+      await oldRequest
+      expect(store.notifications.map(item => item.type)).toEqual(['ATTACHMENT_UPDATE'])
       expect(store.loading).toBe(false)
     })
 
@@ -192,6 +209,26 @@ describe('notification store', () => {
   })
 
   describe('WebSocket 消息处理', () => {
+    it('附件实时通知只进入匹配类别，其他类别仍更新铃铛未读数', async () => {
+      vi.mocked(notificationApi.getNotifications).mockResolvedValue({ data: { content: [], totalElements: 0,
+        page: 0, size: 20, totalPages: 0, hasNext: false, hasPrevious: false } })
+      const store = useNotificationStore()
+      await store.fetchNotifications({ type: 'TASK' })
+      const callback = (globalThis as unknown as { __wsOnMessage: (notification: NotificationData) => void }).__wsOnMessage
+      callback({ ...mockNotification(91), type: 'ATTACHMENT_UPDATE' })
+      expect(store.notifications).toHaveLength(0)
+      expect(store.total).toBe(0)
+      expect(store.unreadCount).toBe(1)
+      await store.fetchNotifications({ type: 'ATTACHMENT_UPDATE' })
+      callback({ ...mockNotification(92), type: 'ATTACHMENT_UPDATE' })
+      expect(store.notifications[0].id).toBe(92)
+      expect(store.total).toBe(1)
+      expect(store.unreadCount).toBe(2)
+      callback(mockNotification(93))
+      expect(store.notifications).toHaveLength(1)
+      expect(store.unreadCount).toBe(3)
+    })
+
     it('收到新通知应添加到列表头部并递增未读数', () => {
       const store = useNotificationStore()
       store.unreadCount = 2

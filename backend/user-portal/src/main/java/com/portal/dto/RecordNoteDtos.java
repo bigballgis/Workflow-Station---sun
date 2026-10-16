@@ -36,6 +36,8 @@ public final class RecordNoteDtos {
     @AllArgsConstructor
     public static class NoteItem {
         private String id;
+        private String submissionId;
+        private Boolean replayed;
         private String noteType;
         private String subject;
         private String bodyText;
@@ -70,6 +72,11 @@ public final class RecordNoteDtos {
         private List<AttachmentInfo> attachments;
     }
 
+    public enum UploadSourceKind { TASK, MY_REQUEST, AUDIT, NEW_REQUEST }
+
+    /** Backend-verified snapshot, independent of the notification recipient tasks. */
+    public record UploadSource(UploadSourceKind kind, String taskId, String taskName) {}
+
     /** Target descriptor shared by create/list calls. */
     @Data
     @Builder
@@ -81,5 +88,16 @@ public final class RecordNoteDtos {
         private String tableKind;
         private String tableId;
         private String functionUnitId;
+        private String processInstanceId;
+        private String formKey;
+        private String controlId;
+        private String taskId;
+        private String clientSubmissionId;
+        /** Optional Audit surface hint; authorized server-side, never a task display name. */
+        private String sourceView;
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        private UploadSource verifiedUploadSource;
+        /** Server generated; never accepted from an HTTP field. */
+        private String submissionId;
     }
 }

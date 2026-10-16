@@ -19,6 +19,12 @@ export interface RecordNoteTargetParams {
    * instance, and must be one the caller may process — so sending it grants nothing on its own.
    */
   taskId?: string | null
+  /** Request navigation hint; the backend verifies ownership and the active role. */
+  sourceView?: 'AUDIT' | 'REQUEST'
+  formKey?: string
+  controlId?: string
+  clientSubmissionId?: string
+  focusSubmissionId?: string
 }
 
 export interface RecordNoteAttachment {
@@ -86,6 +92,10 @@ function targetQuery(target: RecordNoteTargetParams): Record<string, unknown> {
       : {}),
     ...(target.processInstanceId ? { processInstanceId: target.processInstanceId } : {}),
     ...(target.taskId ? { taskId: target.taskId } : {}),
+    ...(target.formKey ? { formKey: target.formKey } : {}),
+    ...(target.controlId ? { controlId: target.controlId } : {}),
+    ...(target.clientSubmissionId ? { clientSubmissionId: target.clientSubmissionId } : {}),
+    ...(target.focusSubmissionId ? { submissionId: target.focusSubmissionId } : {}),
   }
 }
 
@@ -135,6 +145,7 @@ export async function createRecordNote(
   },
 ): Promise<RecordNoteItem | null> {
   const form = new FormData()
+  if (target.sourceView) form.append('sourceView', target.sourceView)
   Object.entries(targetQuery(target)).forEach(([k, v]) => form.append(k, String(v)))
   if (payload.subject) form.append('subject', payload.subject)
   if (payload.bodyHtml) form.append('bodyHtml', payload.bodyHtml)

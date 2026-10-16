@@ -270,6 +270,9 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             response.setProgress(19);
             deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
 
+            com.platform.common.recordnote.RecordNoteBpmnValidator.validate(
+                    updatedUnit.getFormDefinitions().stream().map(com.developer.entity.FormDefinition::getConfigJson).toList(),
+                    pd == null ? null : pd.getBpmnXml());
             emailMonitorRuleComponent.assertRuntimeBindingsForDeploy(functionUnitId);
 
             updateStep(steps, i18nService.getMessage("deploy.step.export"), "RUNNING", null);

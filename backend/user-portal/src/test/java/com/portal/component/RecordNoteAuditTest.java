@@ -57,6 +57,14 @@ class RecordNoteAuditTest {
     @Mock
     private ChangeHistoryComponent changeHistoryComponent;
 
+    @Mock private com.portal.recordnote.RecordNoteSubmissionComponent recordNoteSubmissions;
+    @Mock private com.portal.recordnote.RecordNoteCatalogRepository recordNoteCatalog;
+
+    @Mock
+    private com.portal.recordnote.RecordNoteParticipantRepository recordNoteParticipants;
+
+    @Mock private com.portal.component.RecordNoteUploadSourceResolver recordNoteUploadSources;
+
     @InjectMocks
     private RecordNoteComponent component;
 
@@ -103,6 +111,16 @@ class RecordNoteAuditTest {
                 .bodyText("Original body")
                 .createdBy("u1")
                 .build();
+    }
+
+    @org.junit.jupiter.api.BeforeEach
+    void delegateNoteSubmission() {
+        org.mockito.Mockito.when(recordNoteSubmissions.submit(any()))
+                .thenAnswer(call -> {
+                    com.portal.recordnote.RecordNoteSubmissionComponent.Submission input=call.getArgument(0);
+                    return recordNoteService.createComment(input.target(),input.subject(),input.body(),
+                            input.files(),input.inlineIds(),input.user(),input.name());
+                });
     }
 
     @Test

@@ -1,5 +1,5 @@
 <template>
-  <div class="form-designer">
+  <div class="form-designer" :data-function-unit-id="props.functionUnitId">
     <!-- Form list view -->
     <FormListSidebar
       v-if="!selectedForm"

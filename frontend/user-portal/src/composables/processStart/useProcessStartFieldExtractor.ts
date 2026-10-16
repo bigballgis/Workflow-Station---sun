@@ -1,3 +1,4 @@
+import { createRecordNoteFormField } from '@/components/formRendererHelpers/recordNoteFields'
 import type { Ref } from 'vue'
 import type { FormField } from '@/components/FormRenderer.vue'
 import {
@@ -158,29 +159,7 @@ export function createFieldExtractor(deps: {
         fields.push(marker)
         continue
       } else if (item.type === 'recordNote') {
-        // New Request: notes are writable before the instance exists — the page
-        // anchors them on a draft target id, then re-anchors (adopt) after start.
-        const rnProps = item.props || {}
-        const rnScope = rnProps.scope === 'TABLE' ? 'TABLE' : 'RECORD'
-        fields.push({
-          key: `__recordNote_${rnScope.toLowerCase()}`,
-          label: '',
-          type: 'recordNote',
-          span: 24,
-          _recordNote: {
-            scope: rnScope,
-            panelTitle: typeof rnProps.panelTitle === 'string' ? rnProps.panelTitle : undefined,
-            allowAttachment: rnProps.allowAttachment !== false,
-            maxFileSizeMb: Number(rnProps.maxFileSizeMb) || 10,
-            allowEditOwn: rnProps.allowEditOwn !== false,
-            // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
-            allowDelete: rnProps.allowDelete === true,
-            // Carried through even though New Request is not a To Do surface: the same rule
-            // tree feeds task forms, and dropping the flag here would silently unset it.
-            readonly: rnProps.readonly === true,
-            pageSize: Number(rnProps.pageSize) || 5,
-          },
-        } as any)
+        fields.push(createRecordNoteFormField(item.props))
       } else if (item.type === 'lookup' && item.field) {
         // Lookup field — parse config from form-create rule props.lookupConfig
         let lookupCfg: any = {}

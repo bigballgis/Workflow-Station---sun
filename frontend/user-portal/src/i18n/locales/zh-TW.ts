@@ -1,6 +1,8 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  recordNoteNotification: {"openRequest": "開啟 Request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "記錄無法使用，或你已無權存取。"},
+
   app: {
     name: '使用者入口',
     title: '工作流平臺'
@@ -909,6 +911,8 @@ export default {
     goToApply: '前往申請'
   },
   notification: {
+    attachmentUpdates: '附件更新',
+    attachmentUpdatesGuide: '查看附件更新通知指南',
     title: '訊息中心',
     unread: '未讀訊息',
     all: '全部訊息',
