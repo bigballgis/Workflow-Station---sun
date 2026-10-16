@@ -379,6 +379,14 @@ final class BpmnMiXmlSupport {
         }
     }
 
+    static Map<String, Object> assignmentContract(Element task) {
+        String mode = normalizedProperty(task, "assigneeMode");
+        if (!isSupportedMode(mode)) return Map.of();
+        return new MiAssignmentContract(mode, normalizedAttribute(task, "id"),
+                normalizedProperty(task, "assigneeField"), normalizedProperty(task, "roleField"),
+                normalizedProperty(task, "buField")).toPayload();
+    }
+
     private static void collectMiAssignmentContracts(
             Element subProcess, Map<String, MiAssignmentContract> contracts) {
         NodeList tasks = subProcess.getElementsByTagNameNS("*", "userTask");

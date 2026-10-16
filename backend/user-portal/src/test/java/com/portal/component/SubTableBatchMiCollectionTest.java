@@ -1,0 +1,215 @@
+package com.portal.component;
+
+import com.portal.client.WorkflowEngineClient;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.*;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class SubTableBatchMiCollectionTest {
+    private final WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
+    private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
+    private final MiCollectionVariableBuilder builder = new MiCollectionVariableBuilder(engine, jdbc);
+    private static final String XML = """
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn" xmlns:custom="urn:synthetic">
+          <bpmn:process id="process"><bpmn:userTask id="host"><bpmn:extensionElements><custom:properties>
+          <custom:property name="formId" value="form"/></custom:properties></bpmn:extensionElements></bpmn:userTask>
+          <bpmn:sequenceFlow id="next" sourceRef="host" targetRef="mi"/>
+          <bpmn:subProcess id="mi"><bpmn:multiInstanceLoopCharacteristics flowable:collection="rowsToCreate" flowable:elementVariable="item"/>
+          <bpmn:userTask id="child"><bpmn:extensionElements><custom:properties><custom:property name="formId" value="form"/>
+          <custom:property name="subTableName" value="synthetic_lines"/><custom:property name="subTableId" value="987"/>
+          <custom:property name="assigneeMode" value="both"/><custom:property name="assigneeField" value="handler_code"/>
+          <custom:property name="roleField" value="pool_code"/><custom:property name="buField" value="unit_code"/>
+          </custom:properties></bpmn:extensionElements></bpmn:userTask></bpmn:subProcess></bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    @Test
+    void frozenStoreAndKeysWinWithoutLiveDwOrCandidateColumnGuessing() {
+        var variables = variables(List.of(row("one", "user-one"), row("two", "user-two")));
+        inject(variables, controls());
+        assertThat((List<?>) variables.get("rowsToCreate")).hasSize(2);
+        var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
+        assertThat(item.get("rowKey")).isEqualTo(Map.of("line_key", "one"));
+        assertThat(item.get("handler_code")).isEqualTo("user-one");
+        verifyNoInteractions(jdbc);
+        verify(engine, never()).getBpmnXml(anyString());
+    }
+
+    @Test
+    void missingFrozenTargetCannotUseAnAssigneeAliasAndNeverPartiallyPublishesCollection() {
+        var invalid = new LinkedHashMap<>(row("two", "user-two"));
+        invalid.remove("handler_code"); invalid.put("assignee", "wrong-alias-person");
+        var variables = variables(List.of(row("one", "user-one"), invalid));
+        assertThatThrownBy(() -> inject(variables, controls())).hasMessageContaining("source cannot be verified");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void duplicateOrMissingFrozenIdentityRejectsWholeCollection() {
+        for (var rows : List.of(List.of(row("one", "u1"), row("one", "u2")), List.of(Map.of("handler_code", "u1")))) {
+            var variables = variables(rows);
+            assertThatThrownBy(() -> inject(variables, controls())).hasMessageContaining("source cannot be verified");
+            assertThat(variables).doesNotContainKey("rowsToCreate");
+        }
+    }
+
+    @Test
+    void conflictingModesAndMappingDriftAreExplicitErrors() {
+        var both = new LinkedHashMap<>(row("one", "u1"));
+        both.put("pool_code", "role-a"); both.put("unit_code", "bu-a");
+        assertThatThrownBy(() -> inject(variables(List.of(both)), controls())).hasMessageContaining("source cannot be verified");
+        var config = new LinkedHashMap<>(config()); config.put("assigneeField", "other_handler");
+        var control = new LinkedHashMap<>(control()); control.put("assignmentConfig", config);
+        assertThatThrownBy(() -> inject(variables(List.of(row("one", "u1"))), List.of(control)))
+                .hasMessageContaining("source cannot be verified");
+    }
+
+    @Test
+    void rolePoolRemainsRoleAndNoPersonalTargetIsInvented() {
+        var variables = variables(List.of(Map.of("line_key", "role-row", "pool_code", "role-a", "unit_code", "bu-a", "case_ref", "case-one")));
+        inject(variables, controls());
+        var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
+        assertThat(item.get("pool_code")).isEqualTo("role-a");
+        assertThat(item.get("unit_code")).isEqualTo("bu-a");
+        assertThat(item.containsKey("handler_code")).isFalse();
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void alreadyCreatedChildCanCompleteWithoutRegeneratingFutureCollection() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
+        var variables = variables(List.of(row("one", "u1")));
+        builder.injectMiCollectionFromBpmn("process", "child", "instance", variables, snapshot(controls()));
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void twoFormsMayReuseAControlIdWithoutMixingTheirContracts() {
+        var other = new LinkedHashMap<>(control());
+        other.put("bindingId", "other-binding");
+        other.put("assignmentConfig", Map.of("taskDefinitionKey", "foreign-task"));
+        var baseline = Map.<String, Object>of("case_key", "case-one", SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1,
+                "forms", Map.of("form", Map.of("controls", controls()), "foreign-form", Map.of("controls", List.of(other)))));
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
+        var variables = variables(List.of(row("one", "u1")));
+        builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, baseline);
+        assertThat((List<?>) variables.get("rowsToCreate")).hasSize(1);
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void simultaneousTableAndTargetDriftCannotFallBackToTheLegacyBuilder() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(
+                XML.replace("value=\"synthetic_lines\"", "value=\"other_table\"").replace("id=\"child\"", "id=\"other_child\"")));
+        var variables = variables(List.of(row("one", "u1")));
+        assertThatThrownBy(() -> builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls())))
+                .hasRootCauseMessage("Frozen assignment does not match deployed BPMN");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void roleWithoutABuFieldPreservesTheExistingOptionalBuContract() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML.replace(
+                "<custom:property name=\"buField\" value=\"unit_code\"/>", "")));
+        var config = new LinkedHashMap<>(config()); config.remove("buField");
+        var control = new LinkedHashMap<>(control()); control.put("assignmentConfig", config);
+        var variables = variables(List.of(Map.of("line_key", "one", "pool_code", "role-a", "case_ref", "case-one")));
+        builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(List.of(control)));
+        var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
+        assertThat(item.get("pool_code")).isEqualTo("role-a");
+        assertThat(item.containsKey("unit_code")).isFalse();
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void missingDeployedFormSourceAndInvalidSnapshotRejectInsteadOfUsingLiveDesign() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML.replace("name=\"formId\"", "name=\"unrelated\"")));
+        assertThatThrownBy(() -> builder.injectMiCollectionFromBpmn("process", "host", "instance",
+                variables(List.of(row("one", "u1"))), snapshot(controls())))
+                .hasRootCauseMessage("Instance batch capability snapshot is invalid");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void missingCanonicalStoreCannotUseASimilarUnrelatedSlice() {
+        assertThatThrownBy(() -> inject(new LinkedHashMap<>(Map.of("__subTables__", Map.of(
+                "dw:unrelated", List.of(row("one", "u1"))))), controls()))
+                .hasRootCauseMessage("Frozen assignment canonical store is missing");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void nonAssignmentControlsDoNotValidateUnrelatedAssignmentConfiguration() throws Exception {
+        var control = new LinkedHashMap<>(control());
+        control.put("capabilities", Map.of("allowBatchEdit", true));
+        var document = BpmnMiXmlSupport.parseBpmnSecurely(XML.replace("value=\"both\"", "value=\"unsupported-mode\""));
+        assertThatCode(() -> SubTableBatchMiCollection.validateTargets(document, Map.of("control", control))).doesNotThrowAnyException();
+        var subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", "mi");
+        assertThat(SubTableBatchMiCollection.inject(subProcess, new HashMap<>(), Map.of("control", control), Map.of())).isFalse();
+    }
+
+    @Test
+    void onlyThePersistedMainParentScopeCanGenerateParticipants() {
+        var foreign = new LinkedHashMap<>(row("foreign", "foreign-user")); foreign.put("case_ref", "case-two");
+        var variables = variables(List.of(row("one", "u1"), foreign));
+        inject(variables, controls());
+        var items = (List<?>) variables.get("rowsToCreate");
+        assertThat(items).hasSize(1);
+        assertThat(((Map<?, ?>) items.get(0)).get("rowKey")).isEqualTo(Map.of("line_key", "one"));
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void missingParentAuthorityCannotAuthorizeEveryRow() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
+        var baseline = new LinkedHashMap<>(snapshot(controls())); baseline.remove("case_key");
+        var variables = variables(List.of(row("one", "u1")));
+        assertThatThrownBy(() -> builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, baseline))
+                .hasRootCauseMessage("Frozen assignment parent scope is missing or ambiguous");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+    }
+
+    @Test
+    void nestedTargetCannotWriteInnerRowsIntoTheOuterCollection() {
+        String nested = XML.replace("targetRef=\"mi\"", "targetRef=\"outer\"")
+                .replace("<bpmn:subProcess id=\"mi\">", "<bpmn:subProcess id=\"outer\"><bpmn:multiInstanceLoopCharacteristics flowable:collection=\"outerRows\"/><bpmn:subProcess id=\"mi\">")
+                .replace("</bpmn:subProcess>", "</bpmn:subProcess></bpmn:subProcess>");
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(nested));
+        var variables = variables(List.of(row("one", "u1")));
+        assertThatThrownBy(() -> builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls())))
+                .hasRootCauseMessage("Nested assignment target requires a separate collection scope");
+        assertThat(variables).doesNotContainKeys("rowsToCreate", "outerRows");
+        verifyNoInteractions(jdbc);
+    }
+
+    private void inject(Map<String, Object> variables, List<?> controls) {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
+        builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls));
+    }
+    private static Map<String, Object> variables(List<?> rows) {
+        return new LinkedHashMap<>(Map.of("__subTables__", Map.of("dw:synthetic_lines", rows,
+                "dw:unrelated", List.of(row("wrong", "foreign-person")))));
+    }
+    private static Map<String, Object> row(String key, String target) { return Map.of("line_key", key, "handler_code", target, "case_ref", "case-one"); }
+    private static List<?> controls() { return List.of(control()); }
+    private static Map<String, Object> control() {
+        return Map.of("batchControlId", "control", "bindingId", "17", "capabilities", Map.of("allowBatchAssign", true),
+                "assignmentConfig", config(), "rowDesign", Map.of("binding", Map.of("tableName", "synthetic_lines", "primaryKeyFields", List.of("line_key"),
+                        "filterFkFieldName", "case_ref", "fieldDefinitions", List.of(Map.of("fieldName", "case_ref", "isForeignKey", true,
+                                "refTableId", "parent", "refPrimaryKeyFields", List.of("case_key")))),
+                        "parentTablesById", Map.of("parent", Map.of("tableName", "synthetic_header", "tableType", "MAIN"))));
+    }
+    private static Map<String, Object> config() {
+        return Map.of("taskDefinitionKey", "child", "allowUser", true, "allowRole", true,
+                "assigneeField", "handler_code", "roleField", "pool_code", "buField", "unit_code");
+    }
+    private static Map<String, Object> snapshot(List<?> controls) {
+        return Map.of("case_key", "case-one", SubTableWriteIsolation.BATCH_RUNTIME_FIELD,
+                Map.of("schemaVersion", 1, "forms", Map.of("form", Map.of("controls", controls))));
+    }
+}

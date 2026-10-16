@@ -148,7 +148,21 @@ public class MiCollectionVariableBuilder {
     }
 
     void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
+                                    String processInstanceId, Map<String, Object> variables, Map<String, Object> instanceVariables) {
+        if (instanceVariables == null || !instanceVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+            throw new com.portal.exception.PortalException("409", "Frozen assignment instance context is missing");
+        }
+        injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, true, instanceVariables);
+    }
+
+    void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
                                     String processInstanceId, Map<String, Object> variables, boolean instanceBound) {
+        injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, instanceBound, null);
+    }
+
+    private void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
+                                            String processInstanceId, Map<String, Object> variables, boolean instanceBound,
+                                            Map<String, Object> instanceVariables) {
         try {
             if (processDefinitionKey == null || processDefinitionKey.isBlank()
                     || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
@@ -178,7 +192,13 @@ public class MiCollectionVariableBuilder {
                 return;
             }
 
-            if (!injectReachableCollection(document, taskElement, taskDefinitionKey, variables)) {
+            // The immutable deployed node, not a mutable stage/form lookup, owns this source id.
+            String formId = BpmnMiXmlSupport.findFirstPropertyValue(taskElement, "formId");
+            Map<String, Object> controls = instanceVariables == null ? Map.of()
+                    : SubTableBatchRuntimeSnapshot.projectForForm(instanceVariables, formId,
+                            com.platform.common.util.JsonUtils.getObjectMapper());
+            SubTableBatchMiCollection.validateTargets(document, controls);
+            if (!injectReachableCollection(document, taskElement, taskDefinitionKey, variables, controls, instanceVariables)) {
                 log.warn("[MI] No usable reachable multi-instance subProcess found from task {}", taskDefinitionKey);
             }
         } catch (Exception e) {
@@ -190,7 +210,8 @@ public class MiCollectionVariableBuilder {
         }
     }
 
-    private boolean injectReachableCollection(Document document, Element task, String taskKey, Map<String, Object> variables) {
+    private boolean injectReachableCollection(Document document, Element task, String taskKey, Map<String, Object> variables,
+                                              Map<String, Object> controls, Map<String, Object> baseline) {
         Deque<String> frontier = new ArrayDeque<>();
         Set<String> visited = new HashSet<>();
         enqueueOutgoing(document, task, taskKey, frontier);
@@ -199,7 +220,8 @@ public class MiCollectionVariableBuilder {
             if (nodeId == null || nodeId.isBlank() || !visited.add(nodeId)) continue;
             Element subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", nodeId);
             if (subProcess != null && BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess) != null) {
-                if (injectSubProcess(subProcess, variables)) return true;
+                if (SubTableBatchMiCollection.inject(subProcess, variables, controls, baseline)
+                        || injectSubProcess(subProcess, variables)) return true;
                 continue;
             }
             // Preserve existing look-ahead through call activities: the called instance cannot supply this one's collection.

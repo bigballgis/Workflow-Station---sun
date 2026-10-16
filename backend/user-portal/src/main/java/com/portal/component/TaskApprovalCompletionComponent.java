@@ -176,7 +176,9 @@ public class TaskApprovalCompletionComponent {
         // If MI sub-process prerequisite, read collection variable and assignee field from BPMN and build collection
         if (taskWriteContext != null) {
             miCollectionVariableBuilder.injectMiCollectionFromBpmn(
-                    task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables, true);
+                    task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables,
+                    processInstanceRepository.findById(task.getProcessInstanceId())
+                            .orElseThrow(() -> new IllegalStateException("Process instance is missing at completion")).getVariables());
         } else {
             miCollectionVariableBuilder.injectMiCollectionFromBpmn(
                     task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);

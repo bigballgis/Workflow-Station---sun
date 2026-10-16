@@ -32,7 +32,7 @@ final class SubTableBatchScopeDesign {
         return result;
     }
 
-    private static SubTableWriteDesign.Binding binding(Map<?, ?> design, String id) {
+    static SubTableWriteDesign.Binding binding(Map<?, ?> design, String id) {
         Map<?, ?> binding = map(design.get("binding"));
         List<?> fields = list(binding.get("fieldDefinitions"));
         String filter = text(binding.get("filterFkFieldName"));

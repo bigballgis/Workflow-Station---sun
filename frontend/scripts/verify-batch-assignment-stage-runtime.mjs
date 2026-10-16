@@ -47,8 +47,22 @@ try {
     await api('POST', `/tasks/${taskId}/complete`, { taskId, action: 'APPROVE', formData: saved.fieldValues,
       subTableBindingScopes: scopes, comment: 'Synthetic initial assignment stage verification' })
   }
-  const active = unwrapApiList(await api('POST', '/tasks/todo/query', { page: 0, size: 100, filters: [] }))
-    .filter(row => row.processInstanceId === task.processInstanceId)
+  const engineResponse = await page.request.get(`http://localhost:8081/api/v1/tasks?processInstanceId=${encodeURIComponent(task.processInstanceId)}&page=0&size=100`)
+  const engineBody = await engineResponse.json()
+  assert.equal(engineResponse.ok() && engineBody.success, true)
+  const actualTasks = engineBody.data.tasks
+  assert.equal(actualTasks.length, 2, 'Actual engine must contain both real MI children, not merely return Complete success')
+  assert.ok(actualTasks.every(row => row.processInstanceId === task.processInstanceId && row.taskDefinitionKey === 'AssignedWork'))
+  // Mine list has an existing 15s cache. Verify actual engine first, then require the portal list to converge.
+  const deadline = Date.now() + 20000
+  let active
+  do {
+    active = unwrapApiList(await api('POST', '/tasks/todo/query', { page: 0, size: 100, filters: [] }))
+      .filter(row => row.processInstanceId === task.processInstanceId)
+    if (active.length === 2 && active.every(row => row.taskDefinitionKey === 'AssignedWork')) break
+    assert.ok(Date.now() < deadline, 'Portal todo list did not converge to the actual MI children')
+    await new Promise(resolve => setTimeout(resolve, 250))
+  } while (true)
   console.log(JSON.stringify({ step: verifyGenerated ? 'synthetic-generated-recheck' : 'synthetic-host-completed', processInstanceId: task.processInstanceId, activeTasks: active.map(row => ({ taskId: row.taskId, node: row.taskDefinitionKey })) }))
   assert.equal(active.length, 2, 'Both real MI child tasks must exist')
   const identities = new Set()
