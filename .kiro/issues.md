@@ -3,11 +3,11 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-09)
+## 统计 (截至 2026-10-17)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **25** | `index.yaml` |
+| 🔓 Open | **26** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665 等） |
 
@@ -22,6 +22,7 @@
 
 | ID | 严重度 | 分类 | 描述 |
 |----|--------|------|------|
+| 1666 | critical | architecture | Batch A39：引擎启动后本地落库及补偿均失败缺持久隔离；用户要求暂缓，仍阻塞 P4 发布 |
 | 1402 | major | architecture | VirtualGroupTaskServiceImpl 与工作流引擎未集成 |
 | 1405 | major | bug | ACTION 表单弹窗提交无服务端 API |
 | 1406 | minor | quality | 多实例状态接口用户名为 User-{id} 占位 |

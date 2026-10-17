@@ -4757,3 +4757,21 @@
     快照闭包，后续 id 变化仍打旧值。
     修复：先独立拉 tables；forms/RT 失败仍保留 MAIN 字段；id 改为 MaybeRefOrGetter。
     验证：useEmailTemplateVariables.test.ts 覆盖 forms 失败仍有 ${sender_email}。
+
+- id: "1666"
+  status: open
+  severity: critical
+  category: architecture
+  summary: "SubTable Batch A39：启动落库及引擎补偿均失败后缺少持久隔离"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartComponent.java"
+  detail: |
+    2026-10-17 用户明确要求暂时跳过，保持 OPEN/DEFERRED；不是修复、风险放行或取消验收。
+    P4 发布验收仍被 A39 阻塞；后续批量功能工作继续，不改变现有启动顺序。
+    只读代码复核（含独立 reviewer）确认：Flowable 已创建实例/任务后，Portal TX1 本地落库失败，
+    cancel 与 purge 均失败时只日志/抛错，没有持久 quarantine 或启动待确认协议。
+    恢复后 ProcessInstanceHydrationComponent 可从引擎补建 RUNNING 本地行，并剥离 batch runtime；
+    无快照状态无法区分合法旧实例和新增强实例丢失快照，可能进入普通保存/Complete 路径。
+    没有对真实环境注入故障，没有发现或修补现有业务孤儿实例。
+    恢复处理时先确认跨服务启动方案：引擎待确认握手，或本地预创建快照并固定引擎实例ID。
+    两者均须覆盖幂等、响应丢失/进程崩溃、hydration 和所有操作入口；仅新增强启动启用，保留旧路径。
+    不得用增加 catch/告警、关闭按钮或失败后再次写同一故障数据库冒充隔离。
