@@ -38,6 +38,11 @@ export interface ProcessInstance {
    * 不含具体原因（原文带 AP webhook URL，等同凭据），排查看服务端日志。
    */
   firstStepError?: string | null
+  /** Start already succeeded; this observation never authorizes retrying it. */
+  batchAssignmentVerification?: {
+    status: 'FAILED' | 'UNCONFIRMED'
+    issues: Array<{ taskId: string | null; reasonCode: string }>
+  } | null
   variables?: Record<string, unknown>
 }
 

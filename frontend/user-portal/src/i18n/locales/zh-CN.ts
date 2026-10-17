@@ -536,6 +536,8 @@ export default {
     pleaseCompleteForm: '请完善表单信息',
     pkGenerateFailed: '主键生成失败，请重试',
     processSubmitSuccess: '流程提交成功',
+    batchAssignmentFailed: '申请已创建，但部分初次分派的个人任务没有办理人。请勿重复发起，请联系管理员核查实际任务。',
+    batchAssignmentUnconfirmed: '申请已创建，但批量分派结果尚未全部核实。请勿重复发起，请核查实际任务。',
     firstStepIncomplete:
       '申请已创建，但首个步骤未完成。该步骤已回到您的待办，请打开后重新提交；若持续失败请联系管理员。',
     submitFailed: '提交失败',

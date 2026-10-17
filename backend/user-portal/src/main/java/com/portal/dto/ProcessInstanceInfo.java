@@ -60,6 +60,9 @@ public class ProcessInstanceInfo {
      */
     private String firstStepError;
 
+    /** Only direct initial Batch Assign: the instance exists even when verification is FAILED/UNCONFIRMED. */
+    private BatchAssignmentVerification batchAssignmentVerification;
+
     /** 发起时钉死的功能单元目录 ID（admin sys_function_units.id） */
     private String functionUnitCatalogId;
     private String functionUnitCode;

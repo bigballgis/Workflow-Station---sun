@@ -275,7 +275,8 @@ public class ProcessStartComponent {
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
-        SubTableBatchInitialMiPreflight.prepare(def.bpmnXml(), deployment.key(), variables, persistedVariables, jdbcTemplate);
+        var initialAssignments = SubTableBatchInitialMiPreflight.prepare(
+                def.bpmnXml(), deployment.key(), variables, persistedVariables, jdbcTemplate);
         Map<String, Object> data;
         try {
             data = startPinnedProcess(deployment, request.getBusinessKey(), userId, variables, persistedVariables);
@@ -336,8 +337,12 @@ public class ProcessStartComponent {
             calledProcessSync.recordCalledWork(flowableProcessInstanceId, outcome.calledWorkStatus);
         }
 
-        return buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
+        ProcessInstanceInfo result = buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);
+        result.setBatchAssignmentVerification(SubTableBatchInitialMiOutcome.verify(initialAssignments,
+                flowableProcessInstanceId, deployment.definitionId(),
+                () -> workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId)));
+        return result;
     }
 
     record ActiveCatalogPin(String catalogId, String code, String versionLabel) {

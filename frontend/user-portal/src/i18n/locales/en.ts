@@ -536,6 +536,8 @@ export default {
     pleaseCompleteForm: 'Please complete the form',
     pkGenerateFailed: 'Failed to generate the primary key, please retry',
     processSubmitSuccess: 'Process submitted successfully',
+    batchAssignmentFailed: 'Request created, but some initial personal tasks have no assignee. Do not submit again; ask an administrator to inspect the actual tasks.',
+    batchAssignmentUnconfirmed: 'Request created, but the batch assignment results are not fully verified. Do not submit again; inspect the actual tasks.',
     firstStepIncomplete:
       'Request created, but its first step did not complete. It is waiting in your To Do — open it and submit again. If it keeps failing, contact your administrator.',
     submitFailed: 'Submission failed',

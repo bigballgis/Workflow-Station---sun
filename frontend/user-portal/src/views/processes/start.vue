@@ -913,12 +913,21 @@ const handleSubmit = async (actionId?: string) => {
     // The instance exists either way, but a first step that did not complete is not a successful
     // submission — saying "submitted successfully" here is how a failed automation used to look fine.
     const firstStepError = startResponse?.data?.firstStepError || startResponse?.firstStepError
+    const assignmentResult = startResponse?.data?.batchAssignmentVerification || startResponse?.batchAssignmentVerification
     if (firstStepError) {
       // Marker only — the reason is server-side (it names the AP webhook URL, which is a credential).
       console.warn('[processStart] first step did not complete; see user-portal logs')
       ElMessage({
         type: 'warning',
         message: t('processStart.firstStepIncomplete'),
+        duration: 0,
+        showClose: true
+      })
+    } else if (assignmentResult) {
+      ElMessage({
+        type: 'warning',
+        message: t(assignmentResult.status === 'FAILED'
+          ? 'processStart.batchAssignmentFailed' : 'processStart.batchAssignmentUnconfirmed'),
         duration: 0,
         showClose: true
       })

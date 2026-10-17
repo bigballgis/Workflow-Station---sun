@@ -284,7 +284,8 @@ class SubTableBatchMiCollectionTest {
     @Test void initialMiReplacesClientCollectionUsingFrozenCanonicalRowsBeforeStart() {
         var variables = variables(List.of(row("one", "u1"), row("two", "u2")));
         variables.put("rowsToCreate", List.of(Map.of("handler_code", "untrusted")));
-        SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(controls()), jdbc);
+        var plan = SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(controls()), jdbc);
+        assertThat(plan).containsExactly(new SubTableBatchInitialMiOutcome.Expected("child", true));
         assertThat((List<?>) variables.get("rowsToCreate")).hasSize(2);
         assertThat(variables).doesNotContainKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
         verifyNoInteractions(engine);
@@ -310,7 +311,7 @@ class SubTableBatchMiCollectionTest {
         var disabled = new HashMap<>(control()); disabled.put("capabilities", Map.of("allowBatchAssign", false));
         var prepared = List.of(Map.of("legacy", "prepared"));
         var variables = variables(List.of()); variables.put("rowsToCreate", prepared);
-        SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(List.of(disabled)), jdbc);
+        assertThat(SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(List.of(disabled)), jdbc)).isEmpty();
         assertThat(variables.get("rowsToCreate")).isSameAs(prepared);
         verifyNoInteractions(engine, jdbc);
     }

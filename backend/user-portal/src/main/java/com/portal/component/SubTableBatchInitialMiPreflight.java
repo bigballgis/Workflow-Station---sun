@@ -14,19 +14,20 @@ import java.util.Map;
 final class SubTableBatchInitialMiPreflight {
     private SubTableBatchInitialMiPreflight() { }
 
-    static void prepare(String xml, String processKey, Map<String, Object> variables,
+    static List<SubTableBatchInitialMiOutcome.Expected> prepare(String xml, String processKey, Map<String, Object> variables,
             Map<String, Object> baseline, JdbcTemplate jdbc) {
-        if (!baseline.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) return;
+        if (!baseline.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) return List.of();
         try {
             var document = BpmnMiXmlSupport.parseBpmnSecurely(xml);
             Element process = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "process", processKey);
             if (process == null) throw new PortalException("409", "Frozen start process is missing");
             Initial initial = initialTargets(process, document);
-            if (initial == null) return;
+            if (initial == null) return List.of();
             Map<String, Object> controls = sourceControls(initial.starts(), baseline);
-            if (controls.isEmpty()) return; // Only this source's explicit capability can change the legacy start contract.
+            if (controls.isEmpty()) return List.of(); // Only this source's explicit capability can change the legacy start contract.
             SubTableBatchMiCollection.validateTargets(document, controls);
             Map<String, Object> prepared = new HashMap<>(variables);
+            List<SubTableBatchInitialMiOutcome.Expected> expected = new ArrayList<>();
             Map<String, Integer> uses = new HashMap<>();
             for (Element target : initial.targets()) uses.merge(collection(target), 1, Integer::sum);
             for (Element target : initial.targets()) {
@@ -35,9 +36,11 @@ final class SubTableBatchInitialMiPreflight {
                     SubTableBatchRoleEligibility.requireEligible(roles, baseline, jdbc);
                 })) {
                     if (uses.get(collection(target)) != 1) throw new PortalException("409", "Initial assignment collections overlap");
+                    expected.addAll(SubTableBatchInitialMiOutcome.plan(target, controls, (List<?>) prepared.get(collection(target))));
                 }
             }
             variables.putAll(prepared); // No collection is published if any direct initial target fails.
+            return List.copyOf(expected);
         } catch (PortalException exception) {
             throw exception;
         } catch (Exception exception) {
