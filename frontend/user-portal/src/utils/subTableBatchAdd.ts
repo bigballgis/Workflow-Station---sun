@@ -6,11 +6,8 @@ import { batchScopeIdentity } from './subTableBatchScope'
 
 type FinalizeOptions = Parameters<typeof finalizeSubTableRowOnSave>[0]
 export type BatchAddOptions = Omit<FinalizeOptions, 'row'> & { rows: Array<Record<string, unknown>> }
-export interface PreparedBatchRows {
-  rows: Array<Record<string, unknown>>
-  primaryFormDataPatch?: Record<string, unknown>
-  parentRowPatch?: Record<string, unknown>
-}
+import type { PreparedBatchRows } from '@platform-shared/batch/workspaceTypes'
+export type { PreparedBatchRows } from '@platform-shared/batch/workspaceTypes'
 
 /** Reserves each child PK field in one allocation request; no business rows are written. */
 async function reserveKeys(options: BatchAddOptions): Promise<Map<string, string[]>> {

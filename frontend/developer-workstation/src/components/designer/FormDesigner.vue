@@ -1315,6 +1315,14 @@ function handleBatchFormTabChange(binding: { bindingId: number }, index: number)
   }))
 }
 
+function getBatchFormForPreview(bindingId: number): unknown {
+  const index = designerSubBindings.value.findIndex(binding => binding.bindingId === bindingId)
+  const live = batchFormVisited.value.has(bindingId) ? batchDesignerRefs.value[index] : undefined
+  if (live) return { schemaVersion: 1, rule: cloneFormRules(live.getRule()), options: live.getOption() }
+  return batchFormCache.value[bindingId] ? { schemaVersion: 1, ...batchFormCache.value[bindingId] }
+    : selectedForm.value?.configJson?.batchForms?.[bindingId]
+}
+
 // Default form options — label left-aligned + empty Form event handlers (onChange, onSubmit, …)
 const defaultFormOption = computed(() => buildDefaultFormCreateOptions({
   form: { labelPosition: 'left' },
@@ -1679,6 +1687,7 @@ const {
   makeLookupPreviewItem,
   getTableName,
   getAssignmentConfig: resolveAssignmentConfigForTable,
+  getBatchForm: getBatchFormForPreview,
   t,
 })
 

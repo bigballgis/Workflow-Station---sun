@@ -127,6 +127,7 @@ const sections = computed((): GuideSection[] => {
 function batchWorkspaceSection(prefix: string): GuideSection {
   return { anchor: 'batch', titleKey: `${prefix}.batchTitle`, bodyKey: `${prefix}.batchBody`,
     sampleLayout: 'block', samples: [
+      { code: 'Form Preview · Batch Edit', hintKey: `${prefix}.batchPreviewHint` },
       { code: 'Rows to add · Add', hintKey: `${prefix}.batchAddHint` },
       { code: 'Selection · Delete', hintKey: `${prefix}.batchDeleteHint` },
       { code: 'Set selected · No change / Set value / Clear value', hintKey: `${prefix}.batchSetHint` },

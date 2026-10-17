@@ -35,6 +35,7 @@ export interface SubTableConfig {
    * 强制 editable=false，不依赖 allowAdd/allowEdit/allowDelete props 的值。
    */
   bindingType?: string
+  bindingMode?: string
   pagination?: boolean
   pageSize?: number
   maxHeight?: number

@@ -9,6 +9,7 @@ export default {
     'Labels below match this control’s Component props. Designer locale is English. Blank means the listed default unless the row says required.',
   subTable: {
     batchTitle: 'Batch workspace in User Portal',
+    batchPreviewHint: 'Open Form Preview, then Batch Edit beside Export. Preview uses the current batch design, including unsaved changes. An empty grid supplies two sample rows. Apply changes only the preview; Cancel leaves it unchanged. Sample users, business units, roles and generated keys do not reserve numbers, save business records or create tasks.',
     batchBody: 'Open Batch Edit to the left of Export. Its commands depend on the enabled batch permissions and your current task. Add-only keeps existing rows read-only; Delete-only allows selection without field changes. Existing requests do not gain this workspace when a designer later enables it. Changes in this dialog remain private until Apply.',
     batchAddHint: 'Enter 1–200 rows, click Add, then fill the new rows. Select a parent when the dropdown is shown. Required fields and manually entered keys must be complete. Generated keys are prepared on Apply; Cancel does not allocate them.',
     batchDeleteHint: 'Select rows on the current page and confirm Delete. Removing a newly added draft only discards that draft. Related child data or a changed saved row can block deletion. No child tasks are cancelled.',

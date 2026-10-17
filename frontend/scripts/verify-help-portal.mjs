@@ -702,6 +702,8 @@ try {
   await page.screenshot({ path: subTableShot, fullPage: true })
   console.log(`screenshot ${subTableShot}`)
   const batchSection = subTableArticle.locator('#batch')
+  rec('Batch Preview distinguishes local samples from real task creation',
+    (await batchSection.textContent())?.includes('Sample users, business units, roles and generated keys do not reserve numbers') === true)
   rec('Batch assignment warning says the action already happened and must not be repeated',
     (await batchSection.textContent())?.includes('that action has already happened. Do not repeat it.') === true)
   rec('Batch assignment help distinguishes unverified results from saved target values',

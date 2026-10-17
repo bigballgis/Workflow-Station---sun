@@ -32,6 +32,8 @@ import {
 } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { nestAssignmentFieldsIntoContainer, type AssignmentConfig } from '@/utils/miAssignmentConfig'
+import { buildBatchPreviewDefinition } from '@/utils/batchSubTablePreview'
+import { hasEnabledBatchOperation, validateEnabledBatchControlIds } from '@/utils/batchSubTableConfig'
 import {
   applyActionFormCanvasToPreview,
   resolveActionFormCanvasRule,
@@ -75,6 +77,7 @@ interface UseFormPreviewBuildOptions {
   makeLookupPreviewItem: (ruleItem: any, config: any) => any
   getTableName: (tableId: number, fallback?: string) => string
   getAssignmentConfig: (tableId: number) => AssignmentConfig | undefined
+  getBatchForm?: (bindingId: number) => unknown
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -426,6 +429,9 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
 
     // Both rule types bind a SUB table and get their own preview item kind.
+    const batchControls: Array<{ batchControlId?: unknown; props?: Record<string, unknown> }> = []
+    walkFormCreateRules(rawRule, rule => { if (rule.type === 'subTable' && hasEnabledBatchOperation(rule)) batchControls.push(rule) })
+    const validBatchControlIds = validateEnabledBatchControlIds(batchControls)
     const isSubBindingRuleType = (type: unknown) => type === 'subTable' || type === 'inlineSubForm'
 
     function containsSubTableRule(item: any): boolean {
@@ -470,9 +476,14 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           }
           flushSegment()
           const binding = localBindingMap.get(Number(itemBindingId))
+            ?? (hasEnabledBatchOperation(ruleItem) ? fullBindingMap.get(Number(itemBindingId)) : undefined)
           if (binding) {
             // 逐操作权限来自放置组件 rule.props（仅显式 false 下发，undefined 由 SubTableField 回退 editable）
             const placedProps = (ruleItem.props ?? {}) as Record<string, unknown>
+            const batchPreview = hasEnabledBatchOperation(ruleItem) ? buildBatchPreviewDefinition(ruleItem,
+              options.getBatchForm ? options.getBatchForm(Number(itemBindingId)) : config.batchForms?.[itemBindingId],
+              getAssignmentConfig(binding.tableId), selectedForm.value?.fieldPermissions) : undefined
+            if (batchPreview && !validBatchControlIds) batchPreview.invalid = true
             items.push({
               kind: 'subTable',
               binding: {
@@ -482,6 +493,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
                 allowAdd: placedProps.allowAdd === false ? false : undefined,
                 allowEdit: placedProps.allowEdit === false ? false : undefined,
                 allowDelete: placedProps.allowDelete === false ? false : undefined,
+                batchPreview,
               },
               sourceRule: ruleItem as Record<string, unknown>,
             })

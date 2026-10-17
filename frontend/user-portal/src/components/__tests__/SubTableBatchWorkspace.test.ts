@@ -50,7 +50,7 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
       setup(_, { expose }) { expose({ collect: collectAssignment, hasChanges: assignmentDirty }); return () => null },
     }),
   } } })
-  return { wrapper, state: wrapper.vm as unknown as WorkspaceState, prepareRows }
+  return { wrapper, state: wrapper.findComponent({ name: 'BatchWorkspace' }).vm as unknown as WorkspaceState, prepareRows }
 }
 
 describe('batch workspace Add/Delete transaction', () => {

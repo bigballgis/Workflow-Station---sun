@@ -1,0 +1,103 @@
+/**
+ * Pure, side-effect-free merge for the Batch Edit workspace.  It deliberately
+ * operates on complete rows: fields not present in an edit patch survive unchanged.
+ * Persistence, row scope and permission checks remain server-side concerns.
+ */
+export type BatchFieldIntent =
+  | { kind: 'set'; value: unknown }
+  | { kind: 'clear' }
+
+export type BatchRowPatch = {
+  rowId: string
+  fields: Record<string, BatchFieldIntent>
+}
+
+export type BatchUniformPatch = {
+  rowIds: string[]
+  fields: Record<string, BatchFieldIntent>
+}
+
+/** Dedicated initial-assignment intent; it is never a free-form field patch. */
+export type BatchAssignmentIntent =
+  | { mode: 'person'; assigneeId: string }
+  | { mode: 'role'; roleCode: string; businessUnitCode?: string }
+
+export type BatchAssignmentConfig = {
+  assigneeField?: string
+  roleField?: string
+  buField?: string
+}
+
+export interface BatchDraftChangeSet {
+  rowPatches?: BatchRowPatch[]
+  uniformPatches?: BatchUniformPatch[]
+  deletedRowIds?: string[]
+  /** New rows are local drafts until the owning workspace finishes PK/FK preparation. */
+  addedRows?: Array<Record<string, unknown>>
+}
+
+/**
+ * Applies a frozen AssignmentConfig to one complete row.  The inactive mode is
+ * cleared in the same immutable patch, so role precedence in the engine cannot
+ * accidentally survive a person assignment (or vice versa).
+ */
+export function applyBatchAssignment(
+  row: Record<string, unknown>,
+  config: BatchAssignmentConfig,
+  intent: BatchAssignmentIntent,
+): Record<string, unknown> {
+  const next = { ...row }
+  if (intent.mode === 'person') {
+    if (!config.assigneeField) throw new Error('Batch assignment has no configured assignee field')
+    // Platform display metadata belongs to the previous person, not the business field mapping.
+    if (row[config.assigneeField] !== intent.assigneeId) delete next.assignee_display_name
+    next[config.assigneeField] = intent.assigneeId
+    if (config.roleField) next[config.roleField] = null
+    if (config.buField) next[config.buField] = null
+    return next
+  }
+  if (!config.roleField) throw new Error('Batch assignment has no configured role field')
+  delete next.assignee_display_name
+  next[config.roleField] = intent.roleCode
+  if (config.buField) next[config.buField] = intent.businessUnitCode ?? null
+  if (config.assigneeField) next[config.assigneeField] = null
+  return next
+}
+
+function applyFields(row: Record<string, unknown>, fields: Record<string, BatchFieldIntent>): Record<string, unknown> {
+  const next = { ...row }
+  for (const [field, intent] of Object.entries(fields)) {
+    // A clear is intentional and distinct from omitting the field from the patch.
+    next[field] = intent.kind === 'clear' ? null : intent.value
+  }
+  return next
+}
+
+/**
+ * Applies the current workspace's row edits followed by its explicit uniform edits.
+ * A deleted row is never reintroduced by a field patch; this makes a mixed
+ * edit/delete batch normalize to a single delete operation for that identity.
+ */
+export function applyBatchDraft<T extends Record<string, unknown>>(
+  rows: readonly T[],
+  rowIdentity: (row: T) => string,
+  changes: BatchDraftChangeSet,
+): T[] {
+  const deleted = new Set(changes.deletedRowIds || [])
+  const patches = new Map((changes.rowPatches || []).map((patch) => [patch.rowId, patch.fields]))
+  const uniform = changes.uniformPatches || []
+
+  const existing = rows
+    .filter((row) => !deleted.has(rowIdentity(row)))
+    .map((row) => {
+      const rowId = rowIdentity(row)
+      let next: Record<string, unknown> = row
+      const rowPatch = patches.get(rowId)
+      if (rowPatch) next = applyFields(next, rowPatch)
+      for (const patch of uniform) {
+        if (patch.rowIds.includes(rowId)) next = applyFields(next, patch.fields)
+      }
+      return next as T
+    })
+  return [...existing, ...((changes.addedRows ?? []) as T[])]
+}

@@ -8,6 +8,7 @@ export default {
   catalogExtendBody:
     '下列標籤對應此控制項 Component 屬性。設計器介面是英文。空白表示該列寫明的預設值，除非標明必填。',
   subTable: {
+    batchPreviewHint: '開啟 Form Preview，再點擊 Export 左側的 Batch Edit。預覽使用目前批次設計，包括尚未儲存的修改；空表提供兩條範例記錄。Apply 只更新預覽，Cancel 保持原預覽不變。範例使用者、BU、角色及產生的主鍵不會預留號碼、儲存業務記錄或建立任務。',
     batchTitle: 'User Portal 批次工作區',
     batchBody: '點擊 Export 左側的 Batch Edit。可用命令由批次開關與目前任務權限決定。僅新增模式下既有列唯讀；僅刪除模式下可選列，不能改欄位。設計器後來啟用批次功能不會讓舊申請取得此工作區。點擊 Apply 前，對話框草稿不會寫回頁面。',
     batchAddHint: '輸入 1–200 列並點擊 Add，再填寫新增列。顯示父記錄下拉選單時須選取父記錄。必填欄位與人工主鍵須完整。自動主鍵在 Apply 時準備；Cancel 不分配主鍵。',

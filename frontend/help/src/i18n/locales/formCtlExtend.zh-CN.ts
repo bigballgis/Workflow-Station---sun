@@ -8,6 +8,7 @@ export default {
   catalogExtendBody:
     '下列标签对应该控件 Component 属性。设计器界面是英文。空白表示该行写明的默认值，除非标明必填。',
   subTable: {
+    batchPreviewHint: '打开 Form Preview，再点击 Export 左侧的 Batch Edit。预览使用当前批量设计，包括尚未保存的修改；空表提供两条示例记录。Apply 只更新预览，Cancel 保持原预览不变。示例用户、BU、角色及生成的主键不会预留号码、保存业务记录或创建任务。',
     batchTitle: 'User Portal 批量工作区',
     batchBody: '点击 Export 左侧的 Batch Edit。可用命令由批量开关和当前任务权限决定。仅新增模式下已有行只读；仅删除模式下可选行，不能改字段。设计器后来开启批量功能不会让旧申请获得此工作区。点击 Apply 前，弹窗中的草稿不写回页面。',
     batchAddHint: '输入 1–200 行并点击 Add，再填写新增行。显示父记录下拉框时需选择父记录。必填字段和人工主键必须完整。自动主键在 Apply 时准备；Cancel 不分配主键。',

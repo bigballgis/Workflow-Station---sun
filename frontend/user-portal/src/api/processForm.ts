@@ -91,22 +91,7 @@ export interface TaskFormSubmitRequest {
     deletedRows?: Array<Record<string, unknown>>
   }>
   /** Server-validated declarations for changes originating in Batch Edit. */
-  subTableBatchChanges?: Array<{
-    batchControlId: string
-    bindingId: string
-    operation: 'EDIT' | 'ASSIGN' | 'DELETE' | 'ADD'
-    rowPatches: Array<{
-      rowId: string
-      rowKey: Record<string, unknown>
-      fields?: string[]
-      assignment?: {
-        mode: 'PERSON' | 'ROLE'
-        assigneeId?: string
-        roleCode?: string
-        businessUnitCode?: string
-      }
-    }>
-  }>
+  subTableBatchChanges?: import('@platform-shared/batch/workspaceTypes').SubTableBatchChange[]
   /** Present only when the user clicked a SAVE Action (autosave omits this). */
   actionId?: string
 }

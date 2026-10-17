@@ -24,7 +24,7 @@ function editor(rows: Array<Record<string, unknown>>) {
   const wrapper = mount(AssignmentEditor, { props: { rows, capability, rowIdentity: row => String(row.key), rowScopeKey: row => ({ key: row.key }) },
     global: { stubs: { ElTable: true, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' }, ElFormItem: true, ElDivider: true,
       ElPagination: true, ElSelect: true, ElOption: true, ElAlert: true, ElCascader: true } } })
-  return { wrapper, state: wrapper.vm as unknown as State }
+  return { wrapper, state: wrapper.findComponent({ name: 'BatchAssignmentEditor' }).vm as unknown as State }
 }
 describe('embedded assignment editor', () => {
   it('restores an existing BU+Role without declaring a change, coalescing same-BU queries', async () => {
