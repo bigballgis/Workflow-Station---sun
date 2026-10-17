@@ -1,13 +1,14 @@
-import { computed, ref } from 'vue'
+import { computed, effectScope, ref, type Ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { useFormSave } from '../useFormSave'
 import { ElMessage } from 'element-plus'
+import { useBatchDesignerDrafts } from '../useBatchDesignerDrafts'
 import type { FormDefinition } from '@/api/functionUnit'
 
 vi.mock('@/api/functionUnit', () => ({ functionUnitApi: { getDataTableColumns: vi.fn().mockResolvedValue({ data: [] }) } }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
-function setup(defaultValue?: string, loading = false) {
+function setup(defaultValue?: string, loading = false, batchBlocked: Readonly<Ref<boolean>> = ref(false)) {
   const rowRule = [{ type: 'inputNumber', field: 'amount', title: 'Amount' }]
   const rule = [{ type: 'subTable', field: 'lines', _bindingId: 101, batchControlId: 'synthetic-grid',
     props: { _bindingId: 101, allowBatchAdd: true } }]
@@ -23,7 +24,7 @@ function setup(defaultValue?: string, loading = false) {
   const batchDesignerRefs = ref<Array<{ getRule?: () => unknown; getOption?: () => unknown }>>([])
   const batchFormCache = ref<Record<number, { rule: unknown[]; options: Record<string, unknown> }>>({})
   const batchFormVisited = ref(new Set<number>())
-  const save = useFormSave({ configHydrationBlocked: ref(loading), functionUnitId: 1, store, selectedForm: form, designerRef: ref(designer),
+  const save = useFormSave({ configHydrationBlocked: computed(() => loading || batchBlocked.value), functionUnitId: 1, store, selectedForm: form, designerRef: ref(designer),
     subDesignerRefs: ref([]), batchDesignerRefs, designerSubBindings: computed(() => [
       { bindingId: 101, bindingType: 'SUB', assignmentTableName: 'lines', tableName: 'lines' },
     ]),
@@ -37,6 +38,20 @@ function setup(defaultValue?: string, loading = false) {
 }
 
 describe('actual designer save membership wiring', () => {
+  it('does not save stale config after batch unmount collection failed', async () => {
+    const scope = effectScope()
+    const drafts = scope.run(() => useBatchDesignerDrafts({ formId: () => 1, bindingIds: () => [101],
+      collect: () => { throw new Error('Synthetic unmount collection failure') }, reportFailure: vi.fn() }))!
+    drafts.visited.value.add(101)
+    drafts.register(101, { getRule: () => [] })
+    drafts.register(101, null)
+    const { save, store, getBatchTableFields } = setup('0', false, drafts.failed)
+    expect(await save.handleSaveForm(true)).toBe(false)
+    expect(store.updateForm).not.toHaveBeenCalled()
+    expect(getBatchTableFields).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
   it('rejects saving when the mounted batch canvas read fails rather than writing old cache', async () => {
     const { save, store, batchDesignerRefs, batchFormCache, batchFormVisited } = setup('0')
     batchFormVisited.value.add(101)

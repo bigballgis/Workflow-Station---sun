@@ -118,7 +118,7 @@
           <el-button
             type="primary"
             :loading="savingForm"
-            :disabled="savingForm || designerHydration.blocked.value"
+            :disabled="savingForm || batchSaveBlocked"
             @click="saveChanges"
           >
             {{ t('common.save') }}
@@ -396,7 +396,7 @@
                 >
                   <div class="fc-designer-zoom-stage">
                     <fc-designer
-                      :ref="(el: any) => setBatchDesignerRef(el, index)"
+                      :ref="batchDrafts.refFor(binding.bindingId)"
                       :locale="fcDesignerEnLocale"
                       :config="designerConfig"
                       height="calc(100vh - 320px)"
@@ -1003,6 +1003,7 @@ import { useFormSave } from '@/composables/formDesigner/useFormSave'
 import { useFormNodeBinding } from '@/composables/formDesigner/useFormNodeBinding'
 import { useFormLifecycle } from '@/composables/formDesigner/useFormLifecycle'
 import { useDesignerHydration } from '@/composables/formDesigner/useDesignerHydration'
+import { useBatchDesignerDrafts } from '@/composables/formDesigner/useBatchDesignerDrafts'
 import { useBlockingProgress } from '@/composables/useBlockingProgress'
 import BlockingProgressOverlay from '@/components/common/BlockingProgressOverlay.vue'
 import {
@@ -1023,9 +1024,14 @@ const selectedForm = ref<FormDefinition | null>(null)
 const designerHydration = useDesignerHydration()
 const designerRef = ref<any>(null)
 const subDesignerRefs = ref<any[]>([])
-const batchDesignerRefs = ref<any[]>([])
-const batchFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
-const batchFormVisited = ref<Set<number>>(new Set())
+const batchDrafts = useBatchDesignerDrafts({
+  formId: () => selectedForm.value?.id,
+  bindingIds: () => designerSubBindings.value.map(binding => binding.bindingId),
+  collect: collectBatchDesignerDraft,
+  reportFailure: () => ElMessage.error(t('form.configNotReady')),
+})
+const { refs: batchDesignerRefs, cache: batchFormCache, visited: batchFormVisited } = batchDrafts
+const batchSaveBlocked = computed(() => designerHydration.blocked.value || batchDrafts.failed.value)
 const activeDesignerTab = ref<string>('main')
 const linkFormComponents = ref<Array<{
   id: number
@@ -1260,30 +1266,17 @@ function switchToBinding(id: string) {
   })
 }
 
-function setBatchDesignerRef(el: any, index: number) {
-  const binding = designerSubBindings.value[index]
-  if (!el && binding && batchFormVisited.value.has(binding.bindingId)) {
-    const previous = batchDesignerRefs.value[index]
-    try {
-      const rule = previous?.getRule?.()
-      if (Array.isArray(rule)) {
-        const persistedRule = stripFormCreateRulesDisabledDeep(rule) as any[]
-        prepareFormCreateRulesForPersist(persistedRule)
-        batchFormCache.value[binding.bindingId] = {
-          rule: persistedRule,
-          options: serializeFormCreateOptionsForPersist(previous.getOption?.()),
-        }
-      }
-    } catch {
-      // A cache miss preserves the saved batch form; save owns the fallback chain.
-    }
-  }
-  batchDesignerRefs.value[index] = el
+function collectBatchDesignerDraft(canvas: { getRule?: () => unknown; getOption?: () => Record<string, unknown> }) {
+  const rule = canvas.getRule?.()
+  if (!Array.isArray(rule)) throw new Error(t('form.batchFormInvalid'))
+  const persistedRule = stripFormCreateRulesDisabledDeep(rule) as any[]
+  prepareFormCreateRulesForPersist(persistedRule)
+  return { rule: persistedRule, options: serializeFormCreateOptionsForPersist(canvas.getOption?.()) }
 }
 
 function loadBatchDesigner(binding: { bindingId: number }, index: number): boolean {
   const designer = batchDesignerRefs.value[index]
-  if (!designer) return false
+  if (!designer?.setRule || !designer.setOption) return false
   const saved = selectedForm.value?.configJson?.batchForms?.[binding.bindingId]
     || selectedForm.value?.configJson?.batchForms?.[String(binding.bindingId)]
   const source = batchFormCache.value[binding.bindingId] || saved
@@ -1316,9 +1309,14 @@ function handleBatchFormTabChange(binding: { bindingId: number }, index: number)
 }
 
 function getBatchFormForPreview(bindingId: number): unknown {
+  if (batchDrafts.failed.value) throw new Error(t('form.configNotReady'))
   const index = designerSubBindings.value.findIndex(binding => binding.bindingId === bindingId)
   const live = batchFormVisited.value.has(bindingId) ? batchDesignerRefs.value[index] : undefined
-  if (live) return { schemaVersion: 1, rule: cloneFormRules(live.getRule()), options: live.getOption() }
+  if (live) {
+    const rule = live.getRule?.()
+    if (!Array.isArray(rule)) throw new Error(t('form.batchFormInvalid'))
+    return { schemaVersion: 1, rule: cloneFormRules(rule), options: live.getOption?.() }
+  }
   return batchFormCache.value[bindingId] ? { schemaVersion: 1, ...batchFormCache.value[bindingId] }
     : selectedForm.value?.configJson?.batchForms?.[bindingId]
 }
@@ -1779,7 +1777,7 @@ const {
 
 // ── Form persistence + field permissions ────────────────────────────────────
 const formSave = useFormSave({
-  configHydrationBlocked: designerHydration.blocked,
+  configHydrationBlocked: batchSaveBlocked,
   functionUnitId: props.functionUnitId,
   store: store as any,
   selectedForm,
@@ -2024,9 +2022,7 @@ async function handleBindingUpdate() {
       selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
       // Reset sub designer state so new tabs render cleanly
       subDesignerRefs.value = []
-      batchDesignerRefs.value = []
-      batchFormCache.value = {}
-      batchFormVisited.value = new Set()
+      batchDrafts.reset()
       // Restore any pending auto-fill seeds before Vue renders the new tabs
       subFormCache.value = { ...pendingSubFormCacheSeed.value }
       pendingSubFormCacheSeed.value = {}
