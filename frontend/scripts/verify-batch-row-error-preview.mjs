@@ -1,0 +1,85 @@
+/** Tagged synthetic DW Preview only: page-aware error locations, without persistence. */
+import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright'
+import { loginViaDwPassword } from './playwright-login.mjs'
+
+const unitId = process.env.FIXTURE_UNIT_ID
+assert.match(unitId || '', /^\d+$/)
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
+  let pageErrors = 0
+  page.on('pageerror', () => pageErrors++)
+  const origin = 'http://localhost:3102'
+  await loginViaDwPassword(page, { loginOrigin: origin })
+  const unit = await (await page.request.get(`${origin}/api/v1/function-units/${unitId}`)).json()
+  assert.ok(unit.data?.tags?.includes('batch-verification-synthetic'))
+  const forms = await (await page.request.get(`${origin}/api/v1/function-units/${unitId}/forms`)).json()
+  const original = forms.data.find(form => form.formType === 'TASK' && form.formName === 'Synthetic TASK')
+  assert.ok(original?.configJson?.batchForms)
+  await page.goto(`${origin}/dev/function-units/${unitId}`)
+  await page.getByRole('tab', { name: /Form/ }).click()
+  await page.getByRole('row').filter({ hasText: 'Synthetic TASK' }).getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.locator('.form-editor-view .fc-designer-wrapper').first().waitFor()
+  await page.locator('.form-editor-view .header-actions').getByRole('button', { name: 'Preview', exact: true }).click()
+  const preview = page.locator('.form-preview-dialog').last()
+  await preview.waitFor()
+  const writes = []
+  page.on('request', request => { if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) writes.push(new URL(request.url()).pathname) })
+  const mainKey = preview.locator('.el-form-item').filter({ hasText: 'Case key' }).locator('input').first()
+  if (await mainKey.count()) await mainKey.fill('SYNTHETIC-ERROR-PREVIEW')
+  const dialog = page.locator('.batch-edit-dialog')
+  const capture = async path => {
+    const box = await dialog.boundingBox()
+    assert.ok(box)
+    await page.screenshot({ path, clip: box })
+  }
+  const rows = dialog.locator('.batch-edit-dialog__table .el-table__body-wrapper tbody tr')
+  await preview.getByRole('button', { name: 'Batch Edit', exact: true }).click()
+  const add = dialog.locator('.batch-edit-dialog__add')
+  await add.locator('.el-input-number input').fill('19')
+  await add.getByRole('button', { name: 'Add', exact: true }).click()
+  await rows.first().getByRole('textbox').fill('Synthetic page two')
+  await rows.first().locator('.el-input-number input').fill('21')
+  await dialog.locator('.el-pagination .btn-prev').click()
+  for (let index = 2; index < 20; index++) {
+    await rows.nth(index).getByRole('textbox').fill(`Synthetic line ${index + 1}`)
+    await rows.nth(index).locator('.el-input-number input').fill(String(index + 1))
+  }
+  await dialog.getByRole('button', { name: 'Apply to page', exact: true }).click()
+  await dialog.waitFor({ state: 'hidden' })
+  assert.equal(await preview.locator('.el-table__body-wrapper tbody tr').count(), 21)
+  await preview.getByRole('button', { name: 'Batch Edit', exact: true }).click()
+  await dialog.locator('.el-pagination .btn-next').click()
+  await rows.first().getByRole('textbox').fill('')
+  await dialog.locator('.el-pagination .btn-prev').click()
+  await dialog.getByRole('button', { name: 'Apply to page', exact: true }).click()
+  const shot = fileURLToPath(new URL('../developer-workstation/verification-screenshots/2026-10-17_batch-error-row-existing.png', import.meta.url))
+  const error = page.locator('.el-message--error').last()
+  await error.waitFor()
+  const message = await error.innerText()
+  if (!/Caption in row 21/.test(message)) await capture(shot.replace('existing.png', 'before.png'))
+  assert.match(message, /Caption in row 21/)
+  assert.equal(await dialog.locator('.el-pagination .is-active').innerText(), '2')
+  assert.equal((await rows.first().locator('td').nth(1).innerText()).trim(), '21')
+  await capture(shot)
+  await rows.first().getByRole('textbox').fill('Synthetic restored')
+  await dialog.locator('.el-pagination .btn-prev').click()
+  await rows.first().locator('.el-checkbox').click()
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
+  await page.locator('.el-message-box').getByRole('button', { name: 'OK', exact: true }).click()
+  await add.locator('.el-input-number input').fill('1')
+  await add.getByRole('button', { name: 'Add', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Apply to page', exact: true }).click()
+  await page.locator('.el-message--error').filter({ hasText: /Caption in row 21/ }).last().waitFor()
+  assert.equal((await rows.first().locator('td').nth(1).innerText()).trim(), '21')
+  await page.setViewportSize({ width: 600, height: 800 })
+  await capture(shot.replace('existing.png', 'added-narrow.png'))
+  assert.equal(await preview.locator('.el-table__body-wrapper tbody tr').count(), 21, 'Invalid batch must not replace preview data')
+  assert.equal(pageErrors, 0)
+  assert.deepEqual(writes, [])
+  const reloaded = await (await page.request.get(`${origin}/api/v1/function-units/${unitId}/forms`)).json()
+  assert.deepEqual(reloaded.data.find(form => form.id === original.id).configJson, original.configJson)
+  console.log(JSON.stringify({ step: 'batch-error-row-preview', unitId, existingErrorRow: 21, addedErrorRow: 21, pageErrors, writes: writes.length, screenshot: shot }))
+} finally { await browser.close() }

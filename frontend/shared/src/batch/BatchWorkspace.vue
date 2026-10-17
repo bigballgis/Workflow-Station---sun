@@ -30,7 +30,7 @@
     <div v-if="fields.length || showAdd || showDelete" class="batch-edit-dialog__table">
       <el-table :data="displayedRows" border size="small" max-height="420" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
-        <el-table-column type="index" width="58" />
+        <el-table-column type="index" :index="rowIndex => (page - 1) * 20 + rowIndex + 1" width="58" />
         <el-table-column
           v-for="field in fields"
           :key="field.field"
@@ -306,7 +306,15 @@ function validateRows(affectedExisting: Array<Record<string, unknown>>, fresh: A
   })
   const requiredAddedFields = addedFields.map(field => ({ ...field, required: field.required
     || frozenFields.value.get(field.field)?.nullable === false }))
-  return firstBatchFieldError(affectedExisting, editableFields) ?? firstBatchFieldError(fresh, requiredAddedFields)
+  const existingError = firstBatchFieldError(affectedExisting, editableFields)
+  if (existingError) {
+    const identity = props.rowIdentity(affectedExisting[existingError.row - 1]!)
+    return { ...existingError, row: draftRows.value.findIndex(row => draftIdentity(row) === identity) + 1 }
+  }
+  const addedError = firstBatchFieldError(fresh, requiredAddedFields)
+  if (!addedError) return null
+  const addedPositions = draftRows.value.flatMap((row, index) => temporaryKeys.has(toRaw(row)) ? [index + 1] : [])
+  return { ...addedError, row: addedPositions[addedError.row - 1]! }
 }
 
 function validatePreparedIdentities(prepared: PreparedBatchRows): void {

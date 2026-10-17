@@ -1,12 +1,12 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { defineComponent } from 'vue'
 import BatchWorkspace from '../SubTableBatchEditDialog.vue'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => params ? `${key}:${JSON.stringify(params)}` : key }) }))
 vi.mock('@/api/request', () => ({ request: { get: vi.fn() } }))
 vi.mock('@/api/permission', () => ({ permissionApi: {} }))
 vi.mock('element-plus', () => ({
@@ -16,6 +16,7 @@ vi.mock('element-plus', () => ({
 interface WorkspaceState {
   draftRows: Array<Record<string, unknown>>
   addCount: number
+  page: number
   addDraftRows(): void
   onSelectionChange(rows: Array<Record<string, unknown>>): void
   deleteSelected(): Promise<void>
@@ -54,6 +55,35 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
 }
 
 describe('batch workspace Add/Delete transaction', () => {
+  it('locates the actual page and row when only an existing row on page two is invalid', async () => {
+    const { wrapper, state } = workspace()
+    await wrapper.setProps({ rows: Array.from({ length: 22 }, (_, index) => ({ line_key: `L${index + 1}`, description: 'valid' })) })
+    await wrapper.setProps({ visible: false })
+    await wrapper.setProps({ visible: true })
+    state.draftRows[20]!.description = ''
+    state.page = 1
+    vi.mocked(ElMessage.error).mockClear()
+    await state.apply()
+    expect(ElMessage.error).toHaveBeenLastCalledWith('subTable.batchInvalidField:{"row":21,"label":"description"}')
+    expect(state.page).toBe(2)
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('locates an invalid added row after deleting an existing row', async () => {
+    const { wrapper, state, prepareRows } = workspace()
+    state.onSelectionChange([state.draftRows[0]!])
+    await state.deleteSelected()
+    state.addDraftRows()
+    vi.mocked(ElMessage.error).mockClear()
+    await state.apply()
+    expect(ElMessage.error).toHaveBeenLastCalledWith('subTable.batchInvalidField:{"row":2,"label":"description"}')
+    expect(prepareRows).not.toHaveBeenCalled()
+    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('does not emit data updates for an unchanged workspace', async () => {
     const { wrapper, state } = workspace()
     await state.apply()
