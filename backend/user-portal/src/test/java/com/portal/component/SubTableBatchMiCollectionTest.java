@@ -276,6 +276,118 @@ class SubTableBatchMiCollectionTest {
         when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
         builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls));
     }
+
+    private static String initialXml() {
+        return XML.replace("<bpmn:userTask id=\"host\">", "<bpmn:startEvent id=\"host\">")
+                .replaceFirst("</bpmn:userTask>", "</bpmn:startEvent>");
+    }
+    @Test void initialMiReplacesClientCollectionUsingFrozenCanonicalRowsBeforeStart() {
+        var variables = variables(List.of(row("one", "u1"), row("two", "u2")));
+        variables.put("rowsToCreate", List.of(Map.of("handler_code", "untrusted")));
+        SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(controls()), jdbc);
+        assertThat((List<?>) variables.get("rowsToCreate")).hasSize(2);
+        assertThat(variables).doesNotContainKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+        verifyNoInteractions(engine);
+    }
+    @Test void initialMiRejectsInvalidTargetsAndDoesNotPublishAnyPreparedCollection() {
+        var variables = variables(List.of(row("one", "u1"), row("two", "inactive-synthetic-user")));
+        var spoofed = List.of(Map.of("handler_code", "untrusted")); variables.put("rowsToCreate", spoofed);
+        assertThatThrownBy(() -> SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(controls()), jdbc))
+                .hasMessageContaining("active");
+        assertThat(variables.get("rowsToCreate")).isSameAs(spoofed);
+        verifyNoInteractions(engine);
+    }
+    @Test void initialPreflightDoesNotDemandFutureHumanHostsAssignmentsOrAffectLegacyStarts() {
+        var variables = variables(List.of(Map.of("line_key", "one", "case_ref", "case-one")));
+        String ordinary = XML.replace("<bpmn:process id=\"process\">", "<bpmn:process id=\"process\"><bpmn:startEvent id=\"start\"/>"
+                + "<bpmn:sequenceFlow id=\"initial-flow\" sourceRef=\"start\" targetRef=\"host\"/>");
+        SubTableBatchInitialMiPreflight.prepare(ordinary, "process", variables, snapshot(controls()), jdbc);
+        SubTableBatchInitialMiPreflight.prepare("not xml", "process", variables, Map.of(), jdbc);
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+        verifyNoInteractions(engine, jdbc);
+    }
+    @Test void initialPreflightRetainsPreparedCollectionsForNonAssignmentControls() {
+        var disabled = new HashMap<>(control()); disabled.put("capabilities", Map.of("allowBatchAssign", false));
+        var prepared = List.of(Map.of("legacy", "prepared"));
+        var variables = variables(List.of()); variables.put("rowsToCreate", prepared);
+        SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(List.of(disabled)), jdbc);
+        assertThat(variables.get("rowsToCreate")).isSameAs(prepared);
+        verifyNoInteractions(engine, jdbc);
+    }
+    @Test void laterInitialMiFailureCannotPublishAnEarlierCollectionsPreparedRows() {
+        String xml = twoInitialTargets(false);
+        var other = new HashMap<>(control());
+        var otherConfig = new HashMap<>(config()); otherConfig.put("taskDefinitionKey", "other-child"); other.put("assignmentConfig", otherConfig);
+        var design = new HashMap<>((Map<String, Object>) other.get("rowDesign"));
+        var binding = new HashMap<>((Map<String, Object>) design.get("binding")); binding.put("tableName", "other_lines");
+        design.put("binding", binding); other.put("rowDesign", design); other.put("batchControlId", "other-control");
+        var variables = variables(List.of(row("one", "u1")));
+        var stores = new HashMap<>((Map<String, Object>) variables.get("__subTables__"));
+        stores.put("dw:other_lines", List.of(row("two", "inactive-synthetic-user"))); variables.put("__subTables__", stores);
+        var prepared = List.of(Map.of("legacy", "untrusted")); variables.put("rowsToCreate", prepared);
+        String source = xml;
+        assertThatThrownBy(() -> SubTableBatchInitialMiPreflight.prepare(source, "process", variables, snapshot(List.of(control(), other)), jdbc))
+                .hasMessageContaining("active");
+        assertThat(variables.get("rowsToCreate")).isSameAs(prepared);
+        assertThat(variables).doesNotContainKey("otherRows");
+    }
+    private static String twoInitialTargets(boolean sameCollection) {
+        String xml = initialXml();
+        String second = xml.substring(xml.indexOf("<bpmn:subProcess"), xml.indexOf("</bpmn:subProcess>") + "</bpmn:subProcess>".length())
+                .replace("id=\"mi\"", "id=\"other-mi\"").replace("id=\"child\"", "id=\"other-child\"").replace("synthetic_lines", "other_lines");
+        if (!sameCollection) second = second.replace("rowsToCreate", "otherRows");
+        return xml.replace("</bpmn:process>", "<bpmn:sequenceFlow id=\"second\" sourceRef=\"host\" targetRef=\"other-mi\"/>" + second + "</bpmn:process>");
+    }
+    @Test void directMiWithoutAnyAssignRetainsLegacyCollectionEvenWithoutAStartForm() {
+        var disabled = new HashMap<>(control()); disabled.put("capabilities", Map.of("allowBatchEdit", true));
+        var variables = variables(List.of()); var prepared = List.of(Map.of("legacy", "prepared")); variables.put("rowsToCreate", prepared);
+        String xml = initialXml().replace("<custom:property name=\"formId\" value=\"form\"/>", "");
+        SubTableBatchInitialMiPreflight.prepare(xml, "process", variables, snapshot(List.of(disabled)), jdbc);
+        assertThat(variables.get("rowsToCreate")).isSameAs(prepared); verifyNoInteractions(engine, jdbc);
+    }
+    @Test void assignmentAndLegacyTargetsCannotShareAnInitialCollectionName() {
+        var variables = variables(List.of(row("one", "u1")));
+        assertThatThrownBy(() -> SubTableBatchInitialMiPreflight.prepare(twoInitialTargets(true), "process", variables, snapshot(controls()), jdbc))
+                .hasMessageContaining("overlap");
+        assertThat(variables).doesNotContainKey("rowsToCreate");
+    }
+    @Test void differentLegacyCollectionRemainsUntouchedBesideAnInitialAssignmentTarget() {
+        var variables = variables(List.of(row("one", "u1"))); var prepared = List.of(Map.of("legacy", "prepared"));
+        variables.put("otherRows", prepared);
+        SubTableBatchInitialMiPreflight.prepare(twoInitialTargets(false), "process", variables, snapshot(controls()), jdbc);
+        assertThat(variables.get("otherRows")).isSameAs(prepared);
+        assertThat((List<?>) variables.get("rowsToCreate")).hasSize(1);
+    }
+    @Test void multipleInitialEventsAreRejectedRatherThanGuessingWhichOneTheKeyStartUses() {
+        String xml = initialXml().replace("</bpmn:process>", "<bpmn:startEvent id=\"another-start\"/></bpmn:process>");
+        var variables = variables(List.of(row("one", "u1")));
+        assertThatThrownBy(() -> SubTableBatchInitialMiPreflight.prepare(xml, "process", variables, snapshot(controls()), jdbc))
+                .hasMessageContaining("ambiguous");
+        assertThat(variables).doesNotContainKey("rowsToCreate"); verifyNoInteractions(engine, jdbc);
+    }
+    @Test void aDifferentFormsAssignCapabilityNeitherAuthorizesNorBlocksTheLegacyStartCollection() {
+        var disabled = new HashMap<>(control()); disabled.put("capabilities", Map.of("allowBatchEdit", true));
+        var baseline = new HashMap<>(snapshot(controls()));
+        baseline.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1, "forms",
+                Map.of("form", Map.of("controls", List.of(disabled)), "other-form", Map.of("controls", controls()))));
+        var variables = variables(List.of(row("one", "u1")));
+        var prepared = List.of(Map.of("legacy", "prepared")); variables.put("rowsToCreate", prepared);
+        SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, baseline, jdbc);
+        assertThat(variables.get("rowsToCreate")).isSameAs(prepared); verifyNoInteractions(engine, jdbc);
+    }
+    @Test void anotherTablesSameNamedTaskDoesNotProtectTheCurrentLegacyInitialCollection() {
+        var foreign = new HashMap<>(control());
+        var design = new HashMap<>((Map<String, Object>) foreign.get("rowDesign"));
+        var binding = new HashMap<>((Map<String, Object>) design.get("binding")); binding.put("tableName", "another_process_table");
+        design.put("binding", binding); foreign.put("rowDesign", design);
+        var baseline = new HashMap<>(snapshot(controls()));
+        baseline.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1,
+                "forms", Map.of("foreign-form", Map.of("controls", List.of(foreign)))));
+        var variables = variables(List.of()); var prepared = List.of(Map.of("legacy", "prepared")); variables.put("rowsToCreate", prepared);
+        String xml = initialXml().replace("<custom:property name=\"formId\" value=\"form\"/>", "");
+        SubTableBatchInitialMiPreflight.prepare(xml, "process", variables, baseline, jdbc);
+        assertThat(variables.get("rowsToCreate")).isSameAs(prepared); verifyNoInteractions(engine, jdbc);
+    }
     private static Map<String, Object> variables(List<?> rows) {
         return new LinkedHashMap<>(Map.of("__subTables__", Map.of("dw:synthetic_lines", rows,
                 "dw:unrelated", List.of(row("wrong", "foreign-person")))));

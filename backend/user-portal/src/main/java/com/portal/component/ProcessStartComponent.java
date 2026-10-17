@@ -275,6 +275,7 @@ public class ProcessStartComponent {
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
+        SubTableBatchInitialMiPreflight.prepare(def.bpmnXml(), deployment.key(), variables, persistedVariables, jdbcTemplate);
         Map<String, Object> data;
         try {
             data = startPinnedProcess(deployment, request.getBusinessKey(), userId, variables, persistedVariables);
