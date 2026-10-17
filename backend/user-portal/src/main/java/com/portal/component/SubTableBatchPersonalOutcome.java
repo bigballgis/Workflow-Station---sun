@@ -20,7 +20,6 @@ final class SubTableBatchPersonalOutcome {
         for (var item : expected) {
             if (!item.personalOnly() || item.people().isEmpty() || item.people().size() != item.rowKeys().size()) {
                 complete = false;
-                continue;
             }
             for (var target : item.people()) {
                 var matches = tasks.stream().filter(task -> item.node().equals(task.live().get("taskDefinitionKey"))

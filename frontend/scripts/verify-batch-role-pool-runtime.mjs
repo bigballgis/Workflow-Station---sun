@@ -12,6 +12,8 @@ assert.match(screenshotTag, /^[a-z0-9-]+$/)
 const mixedTargets = process.env.FIXTURE_MIXED_TARGETS === '1'
 const roundTrip = process.env.FIXTURE_ROLE_PERSON_ROLE === '1'
 assert.ok(!roundTrip || mixedTargets, 'Role/person/role verification requires the mixed-target scenario')
+const wrongPerson = process.env.FIXTURE_EXPECT_WRONG_PERSON === '1'
+assert.ok(!wrongPerson || mixedTargets && !roundTrip, 'Wrong-person verification requires a retained mixed target')
 const browser = await chromium.launch({ headless: true })
 async function request(page, method, url, data) {
   const response = await page.request.fetch(url, { method, data })
@@ -24,6 +26,29 @@ async function request(page, method, url, data) {
   return body
 }
 function flatten(nodes) { return nodes.flatMap(node => [node, ...flatten(node.children || [])]) }
+async function completeMixedFailureThroughUi(page) {
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await page.goto(`http://localhost:3101/portal/tasks/${taskId}`)
+  await page.getByRole('button', { name: 'Approve', exact: true }).click()
+  const dialog = page.locator('.el-dialog:visible')
+  await dialog.locator('textarea').fill('Synthetic mixed personal failure verification')
+  const completed = page.waitForResponse(response => response.url().endsWith(`/tasks/${taskId}/complete`) && response.request().method() === 'POST')
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+  const body = await (await completed).json()
+  assert.equal(body.success, true)
+  await page.waitForURL('**/portal/tasks')
+  const message = page.locator('.el-message').last()
+  await message.waitFor()
+  const path = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-17_${screenshotTag}-outcome.png`, import.meta.url))
+  await message.screenshot({ path })
+  await page.setViewportSize({ width: 600, height: 800 })
+  await message.screenshot({ path: path.replace('.png', '-narrow.png') })
+  console.log(JSON.stringify({ step: 'synthetic-mixed-outcome', observation: body.data.batchAssignmentVerification, screenshot: path }))
+  assert.equal(body.data.batchAssignmentVerification.status, 'FAILED')
+  assert.match(await message.innerText(), /missing or mismatched assignee/)
+  assert.equal(await page.locator('.el-message--success').count(), 0)
+  return body.data.batchAssignmentVerification
+}
 async function saveUniformRoleThroughWorkspace(page, pool, expectedPatches = 2) {
   await page.setViewportSize({ width: 1366, height: 768 })
   await page.goto(`http://localhost:3101/portal/tasks/${taskId}`)
@@ -199,8 +224,10 @@ try {
   assert.equal(isDeepStrictEqual((await api('GET', `/tasks/${taskId}/form-data`)).fieldValues, saved.fieldValues), true,
     'Opening and closing the workspace must preserve all saved data')
   assert.deepEqual((await engineTasks()).tasks.map(row => row.taskId).sort(), beforeTasks)
-  await api('POST', `/tasks/${taskId}/complete`, { taskId, action: 'APPROVE', formData: saved.fieldValues,
-    subTableBindingScopes: scopes, comment: 'Synthetic single-member role pool verification' })
+  const observation = wrongPerson ? await completeMixedFailureThroughUi(portal)
+    : (await api('POST', `/tasks/${taskId}/complete`, { taskId, action: 'APPROVE', formData: saved.fieldValues,
+      subTableBindingScopes: scopes, comment: 'Synthetic single-member role pool verification' })).batchAssignmentVerification
+  if (mixedTargets && !wrongPerson) assert.equal(observation.status, 'UNCONFIRMED', 'Correct personal rows cannot verify the unobserved role pool')
   const children = (await engineTasks()).tasks
   assert.equal(children.length, 2)
   const identities = new Set()
@@ -211,7 +238,9 @@ try {
     const matching = savedRows.filter(row => control.rowDesign.binding.primaryKeyFields.every(key => row[key] === identity[key]))
     assert.equal(matching.length, 1)
     if (matching[0][config.assigneeField]) {
-      assert.equal(detail.currentAssignee === personId, true, 'Actual task must use the selected person')
+      assert.equal(detail.currentAssignee === (wrongPerson ? 'synthetic-wrong-person' : personId), true,
+        'Actual task must have the explicitly expected personal target')
+      if (wrongPerson) assert.deepEqual(observation.issues, [{ taskId: child.taskId, reasonCode: 'PERSON_TASK_TARGET_MISMATCH' }])
       assert.equal(detail.assignmentType, 'USER')
       assert.ok(!detail.candidateUserIds?.length, 'A personal task must not retain the old role candidates')
     } else {

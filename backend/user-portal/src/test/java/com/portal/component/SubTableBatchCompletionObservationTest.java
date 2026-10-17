@@ -26,6 +26,43 @@ class SubTableBatchCompletionObservationTest {
         when(engine.getProcessInstanceTasks("synthetic-instance")).thenReturn(Optional.of(Map.of("tasks", live, "totalCount", live.size())));
         when(engine.getMultiInstanceStatus("synthetic-instance")).thenReturn(Optional.of(Map.of("processInstanceId", "synthetic-instance", "tasks", identity)));
     }
+    private SubTableBatchInitialMiOutcome.Plan mixedPlan() {
+        var mixed = new SubTableBatchInitialMiOutcome.Expected("configured-node", false, "configured_table",
+                List.of(Map.of("configured_pk", "own"), Map.of("configured_pk", "role")), plan.expected().get(0).people());
+        return new SubTableBatchInitialMiOutcome.Plan(plan.instanceId(), plan.definitionId(), List.of(mixed));
+    }
+    @Test void mixedCorrectPersonAndUnclaimedRoleRemainUnconfirmed() {
+        var person = live("own-task"); person.put("currentAssignee", "synthetic-person");
+        responses(List.of(person, live("role-task")), List.of(identity("own-task", "own"), identity("role-task", "role")));
+        var result = SubTableBatchCompletionObservation.observe(mixedPlan(), engine);
+        assertThat(result.status()).isEqualTo("UNCONFIRMED");
+        assertThat(result.toString()).doesNotContain("role-task");
+    }
+    @Test void mixedRoleUncertaintyCannotHideKnownWrongOrMissingPerson() {
+        for (String target : List.of("synthetic-wrong-person", "")) {
+            var person = live("own-task"); person.put("currentAssignee", target);
+            responses(List.of(person, live("role-task")), List.of(identity("own-task", "own"), identity("role-task", "role")));
+            var result = SubTableBatchCompletionObservation.observe(mixedPlan(), engine);
+            assertThat(result.status()).isEqualTo("FAILED");
+            assertThat(result.issues()).containsExactly(new com.portal.dto.BatchAssignmentVerification.Issue("own-task",
+                    target.isBlank() ? "PERSON_TASK_UNASSIGNED" : "PERSON_TASK_TARGET_MISMATCH"));
+            assertThat(result.toString()).doesNotContain("role-task", "synthetic-person", "synthetic-wrong-person");
+        }
+    }
+    @Test void mixedForeignPersonalRowCannotLeakFailureOrProveSuccess() {
+        responses(List.of(live("foreign-task"), live("role-task")),
+                List.of(identity("foreign-task", "foreign"), identity("role-task", "role")));
+        var result = SubTableBatchCompletionObservation.observe(mixedPlan(), engine);
+        assertThat(result.status()).isEqualTo("UNCONFIRMED");
+        assertThat(result.toString()).doesNotContain("foreign-task", "role-task");
+    }
+    @Test void mixedDuplicatePersonalIdentityCannotFabricateAKnownFailure() {
+        responses(List.of(live("own-task"), live("role-task")),
+                List.of(identity("own-task", "own"), identity("own-task", "own"), identity("role-task", "role")));
+        var result = SubTableBatchCompletionObservation.observe(mixedPlan(), engine);
+        assertThat(result.status()).isEqualTo("UNCONFIRMED");
+        assertThat(result.toString()).doesNotContain("own-task", "role-task");
+    }
     @Test void sameNodeForeignScopeCannotBeReportedAsAnUnassignedPersonalTask() {
         responses(List.of(live("foreign-task")), List.of(identity("foreign-task", "foreign")));
         var result = SubTableBatchCompletionObservation.observe(plan, engine);
