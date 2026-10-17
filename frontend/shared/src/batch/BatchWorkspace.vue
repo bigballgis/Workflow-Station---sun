@@ -98,7 +98,9 @@ const BatchFieldInput = defineComponent({
     return () => {
       if (props.disabled) return h('span', String(props.modelValue ?? ''))
       if (props.field.type === 'switch') return h(resolveComponent('el-switch'), { modelValue: props.modelValue, 'onUpdate:modelValue': update })
-      if (props.field.type === 'inputNumber' || props.field.type === 'number') return h(resolveComponent('el-input-number'), { modelValue: props.modelValue, 'onUpdate:modelValue': update, style: 'width: 100%' })
+      if (props.field.type === 'inputNumber' || props.field.type === 'number') return h(resolveComponent('el-input-number'), {
+        modelValue: props.modelValue, 'onUpdate:modelValue': update, min: props.field.min, max: props.field.max, style: 'width: 100%',
+      })
       if (props.field.type === 'select') return h(resolveComponent('el-select'), { modelValue: props.modelValue, 'onUpdate:modelValue': update, clearable: true, style: 'width: 100%' }, () =>
         props.field.options.map(option => h(resolveComponent('el-option'), { key: String(option.value), label: option.label, value: option.value })))
       if (props.field.type === 'date' || props.field.type === 'datePicker' || props.field.type === 'datetime') return h(resolveComponent('el-date-picker'), {
@@ -108,7 +110,7 @@ const BatchFieldInput = defineComponent({
         valueFormat: props.field.type === 'datetime' ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD',
         style: 'width: 100%',
       })
-      return h(resolveComponent('el-input'), { modelValue: props.modelValue, 'onUpdate:modelValue': update, clearable: true })
+      return h(resolveComponent('el-input'), { modelValue: props.modelValue, 'onUpdate:modelValue': update, maxlength: props.field.maxlength, clearable: true })
     }
   },
 })

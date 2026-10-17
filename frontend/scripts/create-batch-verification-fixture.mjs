@@ -36,6 +36,7 @@ try {
   const assignmentOnly = process.env.FIXTURE_ASSIGN_ONLY === '1'
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
   const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
+  const inputLimits = process.env.FIXTURE_INPUT_LIMITS === '1'
   const pkField = automaticPk ? 'entry_token' : 'line_key'
   const fkField = automaticPk ? 'owner_ref' : 'case_ref'
   const textField = automaticPk ? 'item_label' : 'caption'
@@ -87,8 +88,8 @@ try {
     })
     const rowRule = [
       ...(!automaticPk ? [{ type: 'input', field: pkField, title: 'Line key', validate: [{ required: true }] }] : []),
-      { type: 'input', field: textField, title: 'Caption', validate: [{ required: true }] },
-      { type: 'inputNumber', field: numberField, title: 'Amount', validate: [{ required: true }] },
+      { type: 'input', field: textField, title: 'Caption', validate: [{ required: true }], ...(inputLimits ? { props: { maxlength: 12 } } : {}) },
+      { type: 'inputNumber', field: numberField, title: 'Amount', validate: [{ required: true }], ...(inputLimits ? { props: { min: 0, max: 10 } } : {}) },
     ]
     const configJson = {
       rule: [
