@@ -339,11 +339,9 @@ public class ProcessStartComponent {
 
         ProcessInstanceInfo result = buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);
-        result.setBatchAssignmentVerification(initialAssignments.isEmpty()
-                ? SubTableBatchCompletionObservation.observe(outcome.assignmentPlan, workflowEngineClient)
-                : SubTableBatchInitialMiOutcome.verify(initialAssignments,
-                flowableProcessInstanceId, deployment.definitionId(),
-                () -> workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId)));
+        var assignmentPlan = initialAssignments.isEmpty() ? outcome.assignmentPlan
+                : new SubTableBatchInitialMiOutcome.Plan(flowableProcessInstanceId, deployment.definitionId(), initialAssignments);
+        result.setBatchAssignmentVerification(SubTableBatchCompletionObservation.observe(assignmentPlan, workflowEngineClient));
         return result;
     }
 

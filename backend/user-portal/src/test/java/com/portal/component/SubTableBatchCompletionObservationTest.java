@@ -129,6 +129,21 @@ class SubTableBatchCompletionObservationTest {
         responses(List.of(task), List.of(identity("own-task", "own")));
         assertThat(SubTableBatchCompletionObservation.observe(plan, engine).status()).isEqualTo("UNCONFIRMED");
     }
+    @Test void blankPersonalAssigneesRemainExplicitFailures() {
+        for (String value : List.of("", " ", "\t")) {
+            var task = live("own-task"); task.put("currentAssignee", value);
+            responses(List.of(task), List.of(identity("own-task", "own")));
+            assertThat(SubTableBatchCompletionObservation.observe(plan, engine).issues())
+                    .containsExactly(new com.portal.dto.BatchAssignmentVerification.Issue("own-task", "PERSON_TASK_UNASSIGNED"));
+        }
+    }
+    @Test void failedLiveQueryCannotUndoTheStartOrQueryIdentity() {
+        when(engine.getProcessInstanceTasks("synthetic-instance")).thenThrow(new IllegalStateException("synthetic-private-error"));
+        var result = SubTableBatchCompletionObservation.observe(plan, engine);
+        assertThat(result.status()).isEqualTo("UNCONFIRMED");
+        assertThat(result.toString()).doesNotContain("synthetic-private-error");
+        verify(engine, never()).getMultiInstanceStatus(anyString());
+    }
     @Test void wrongTableNodeOrKeyShapeCannotAuthorizeObservation() {
         for (String field : List.of("taskDefinitionKey", "subTableName", "subTableRowKey")) {
             var identity = identity("own-task", "own"); identity.remove(field);

@@ -62,6 +62,12 @@ try {
   const tasks = (await request(page, 'GET', `http://localhost:8081/api/v1/tasks?processInstanceId=${instanceId}&page=0&size=100`)).tasks
   assert.equal(tasks.length, 2)
   for (const task of tasks) assert.equal(task.currentAssignee === person.id, expected !== 'FAILED')
+  if (process.env.FIXTURE_EXPECT_WRONG_PERSON === '1') {
+    assert.equal(expected, 'FAILED')
+    for (const task of tasks) assert.equal(task.currentAssignee, 'synthetic-wrong-person')
+    assert.deepEqual(body.data.batchAssignmentVerification.issues.map(issue => issue.taskId).sort(), tasks.map(task => task.taskId).sort())
+    assert.ok(body.data.batchAssignmentVerification.issues.every(issue => issue.reasonCode === 'PERSON_TASK_TARGET_MISMATCH'))
+  }
   assert.equal(pageErrors, 0)
   console.log(JSON.stringify({ step: 'synthetic-initial-outcome-ui', instanceId, taskIds: tasks.map(task => task.taskId), expected, pageErrors, screenshot }))
 } finally { await browser.close() }

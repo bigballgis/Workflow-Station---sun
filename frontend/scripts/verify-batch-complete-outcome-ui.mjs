@@ -60,6 +60,7 @@ try {
   if (process.env.FIXTURE_EXPECT_WRONG_PERSON === '1') {
     assert.equal(expected, 'FAILED')
     for (const created of tasks) assert.equal(created.currentAssignee, 'synthetic-wrong-person')
+    assert.deepEqual(body.data.batchAssignmentVerification.issues.map(issue => issue.taskId).sort(), tasks.map(task => task.taskId).sort())
     assert.ok(body.data.batchAssignmentVerification.issues.every(issue => issue.reasonCode === 'PERSON_TASK_TARGET_MISMATCH'))
   }
   console.log(JSON.stringify({ step: 'synthetic-complete-outcome-created', instanceId: task.processInstanceId,

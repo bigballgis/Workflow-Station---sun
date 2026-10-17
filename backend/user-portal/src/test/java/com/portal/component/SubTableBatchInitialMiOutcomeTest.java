@@ -1,66 +1,71 @@
 package com.portal.component;
 
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.Element;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 
 class SubTableBatchInitialMiOutcomeTest {
-    private final List<SubTableBatchInitialMiOutcome.Expected> expected =
-            List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", true, "synthetic_table", List.of(Map.of("synthetic_key", "one")), List.of()));
-    private Map<String, Object> task() {
-        return new HashMap<>(Map.of("taskId", "synthetic-task", "processInstanceId", "synthetic-instance",
-                "processDefinitionId", "synthetic-definition", "taskDefinitionKey", "configured-node"));
+    private Element target() throws Exception {
+        return BpmnMiXmlSupport.parseBpmnSecurely("<subProcess xmlns='http://www.omg.org/spec/BPMN/20100524/MODEL'>"
+                + "<userTask id='configured-node'/></subProcess>").getDocumentElement();
     }
-    private com.portal.dto.BatchAssignmentVerification verify(Map<String, Object> task) {
-        return SubTableBatchInitialMiOutcome.verify(expected, "synthetic-instance", "synthetic-definition",
-                () -> Optional.of(Map.of("tasks", List.of(task), "totalCount", 1)));
+    private Map<String, Object> control(String node, boolean enabled) {
+        return Map.of("capabilities", Map.of("allowBatchAssign", enabled),
+                "assignmentConfig", Map.of("taskDefinitionKey", node, "assigneeField", "configured_person"),
+                "rowDesign", Map.of("binding", Map.of("tableName", "configured_lines")));
     }
-    @Test void missingActualPersonIsFailureWithoutThrowing() {
-        for (String target : new String[] { null, "", " " }) {
-            var task = task(); task.put("currentAssignee", target);
-            var result = verify(task);
-            assertThat(result.status()).isEqualTo("FAILED");
-            assertThat(result.issues().get(0).reasonCode()).isEqualTo("PERSON_TASK_UNASSIGNED");
-            assertThat(result.issues().get(0).taskId()).isEqualTo("synthetic-task");
-        }
+    private Map<String, Object> row(String key, String person) {
+        return new HashMap<>(Map.of("rowKey", new HashMap<>(Map.of("configured_pk", key)), "configured_person", person));
     }
-    @Test void aPopulatedPersonDoesNotProveCorrectRowTarget() {
-        var task = task(); task.put("currentAssignee", "synthetic-person");
-        assertThat(verify(task).status()).isEqualTo("UNCONFIRMED");
+    private List<SubTableBatchInitialMiOutcome.Expected> plan(List<?> items) throws Exception {
+        return SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable-control", control("configured-node", true)), items);
     }
-    @Test void anotherNodeCannotProveTheExpectedTaskExists() {
-        var task = task(); task.put("taskDefinitionKey", "synthetic-other");
-        assertThat(verify(task).status()).isEqualTo("UNCONFIRMED");
+    @Test void capturesDifferentPeopleWithFullConfiguredKeys() throws Exception {
+        var expected = plan(List.of(row("first", "synthetic-first"), row("second", "synthetic-second"))).get(0);
+        assertThat(expected.personalOnly()).isTrue();
+        assertThat(expected.table()).isEqualTo("configured_lines");
+        assertThat(expected.people()).containsExactly(
+                new SubTableBatchInitialMiOutcome.PersonalTarget(Map.of("configured_pk", "first"), "synthetic-first"),
+                new SubTableBatchInitialMiOutcome.PersonalTarget(Map.of("configured_pk", "second"), "synthetic-second"));
     }
-    @Test void anotherInstanceOrDeploymentCannotBeUsedToReportFailure() {
-        for (String field : List.of("processInstanceId", "processDefinitionId", "taskId")) {
-            var task = task(); task.remove(field);
-            assertThat(verify(task).status()).isEqualTo("UNCONFIRMED");
-        }
+    @Test void doesNotGuessFromAssigneeLikeColumnNames() throws Exception {
+        var item = row("first", "synthetic-person"); item.remove("configured_person"); item.put("assignee", "synthetic-person");
+        var expected = plan(List.of(item)).get(0);
+        assertThat(expected.personalOnly()).isFalse();
+        assertThat(expected.people()).isEmpty();
     }
-    @Test void truncatedQueryNeverClaimsAllRowsSucceeded() {
-        var result = SubTableBatchInitialMiOutcome.verify(expected, "synthetic-instance", "synthetic-definition",
-                () -> Optional.of(Map.of("tasks", List.of(task()), "totalCount", 200)));
-        assertThat(result.status()).isEqualTo("UNCONFIRMED");
-        assertThat(result.issues().get(0).reasonCode()).isEqualTo("INCOMPLETE_TASK_QUERY");
+    @Test void mixedRowsCannotBeDeclaredAllPersonal() throws Exception {
+        var role = row("second", "unused"); role.remove("configured_person"); role.put("configured_role", "synthetic-role");
+        var expected = plan(List.of(row("first", "synthetic-first"), role)).get(0);
+        assertThat(expected.personalOnly()).isFalse();
+        assertThat(expected.rowKeys()).hasSize(2);
+        assertThat(expected.people()).hasSize(1);
     }
-    @Test void queryFailureAfterEngineSuccessMustNotThrowOrSuggestRetry() {
-        var result = SubTableBatchInitialMiOutcome.verify(expected, "synthetic-instance", "synthetic-definition",
-                () -> { throw new IllegalStateException("synthetic-private-error"); });
-        assertThat(result.status()).isEqualTo("UNCONFIRMED");
-        assertThat(result.toString()).doesNotContain("synthetic-private-error");
+    @Test void disabledControlCreatesNoPlan() throws Exception {
+        assertThat(SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable", control("configured-node", false)),
+                List.of(row("first", "synthetic-person")))).isEmpty();
     }
-    @Test void noNewCapabilityDoesNotQueryEngine() {
-        assertThat(SubTableBatchInitialMiOutcome.verify(List.of(), "synthetic-instance", "synthetic-definition",
-                () -> { throw new AssertionError("Legacy path must not query"); })).isNull();
+    @Test void anotherNodeCreatesNoPlan() throws Exception {
+        assertThat(SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable", control("other-node", true)),
+                List.of(row("first", "synthetic-person")))).isEmpty();
     }
-    @Test void unclaimedRoleOrMixedNodeCannotBeCalledAnUnassignedPersonalTask() {
-        var role = List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", false, "synthetic_table", List.of(Map.of("synthetic_key", "one")), List.of()));
-        var result = SubTableBatchInitialMiOutcome.verify(role, "synthetic-instance", "synthetic-definition",
-                () -> Optional.of(Map.of("tasks", List.of(task()), "totalCount", 1)));
-        assertThat(result.status()).isEqualTo("UNCONFIRMED");
+    @Test void emptyRowsCreateNoPlan() throws Exception {
+        assertThat(plan(List.of())).isEmpty();
+    }
+    @Test void planCopiesRowsAndKeysInsteadOfRetainingMutableDrafts() throws Exception {
+        var item = row("first", "synthetic-first");
+        var expected = plan(List.of(item)).get(0);
+        item.put("configured_person", "synthetic-later"); item.put("rowKey", Map.of("configured_pk", "later"));
+        assertThat(expected.people()).containsExactly(new SubTableBatchInitialMiOutcome.PersonalTarget(
+                Map.of("configured_pk", "first"), "synthetic-first"));
+        assertThatThrownBy(() -> expected.rowKeys().get(0).put("configured_pk", "later")).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> expected.people().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+    @Test void equivalentControlsDoNotDuplicateTheExpectedRowSet() throws Exception {
+        var controls = Map.<String, Object>of("first", control("configured-node", true), "second", control("configured-node", true));
+        assertThat(SubTableBatchInitialMiOutcome.plan(target(), controls, List.of(row("first", "synthetic-person")))).hasSize(1);
     }
 }
