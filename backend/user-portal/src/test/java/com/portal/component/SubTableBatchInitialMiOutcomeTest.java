@@ -14,14 +14,16 @@ class SubTableBatchInitialMiOutcomeTest {
     }
     private Map<String, Object> control(String node, boolean enabled) {
         return Map.of("capabilities", Map.of("allowBatchAssign", enabled),
-                "assignmentConfig", Map.of("taskDefinitionKey", node, "assigneeField", "configured_person"),
+                "assignmentConfig", Map.of("taskDefinitionKey", node, "assigneeField", "configured_person", "roleField", "configured_role", "buField", "configured_bu"),
                 "rowDesign", Map.of("binding", Map.of("tableName", "configured_lines")));
     }
     private Map<String, Object> row(String key, String person) {
         return new HashMap<>(Map.of("rowKey", new HashMap<>(Map.of("configured_pk", key)), "configured_person", person));
     }
     private List<SubTableBatchInitialMiOutcome.Expected> plan(List<?> items) throws Exception {
-        return SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable-control", control("configured-node", true)), items);
+        var key = new SubTableBatchRoleEligibility.Target("synthetic-bu", "synthetic-role");
+        return SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable-control", control("configured-node", true)), items,
+                Map.of(key, new SubTableBatchRoleEligibility.Pool(key, java.util.Set.of("synthetic-member"))));
     }
     @Test void capturesDifferentPeopleWithFullConfiguredKeys() throws Exception {
         var expected = plan(List.of(row("first", "synthetic-first"), row("second", "synthetic-second"))).get(0);
@@ -38,19 +40,21 @@ class SubTableBatchInitialMiOutcomeTest {
         assertThat(expected.people()).isEmpty();
     }
     @Test void mixedRowsCannotBeDeclaredAllPersonal() throws Exception {
-        var role = row("second", "unused"); role.remove("configured_person"); role.put("configured_role", "synthetic-role");
+        var role = row("second", "unused"); role.remove("configured_person"); role.put("configured_role", "synthetic-role"); role.put("configured_bu", "synthetic-bu");
         var expected = plan(List.of(row("first", "synthetic-first"), role)).get(0);
         assertThat(expected.personalOnly()).isFalse();
         assertThat(expected.rowKeys()).hasSize(2);
         assertThat(expected.people()).hasSize(1);
+        assertThat(expected.roles()).containsExactly(new SubTableBatchInitialMiOutcome.RoleTarget(Map.of("configured_pk", "second"),
+                "synthetic-bu", "synthetic-role", java.util.Set.of("synthetic-member")));
     }
     @Test void disabledControlCreatesNoPlan() throws Exception {
         assertThat(SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable", control("configured-node", false)),
-                List.of(row("first", "synthetic-person")))).isEmpty();
+                List.of(row("first", "synthetic-person")), Map.of())).isEmpty();
     }
     @Test void anotherNodeCreatesNoPlan() throws Exception {
         assertThat(SubTableBatchInitialMiOutcome.plan(target(), Map.of("stable", control("other-node", true)),
-                List.of(row("first", "synthetic-person")))).isEmpty();
+                List.of(row("first", "synthetic-person")), Map.of())).isEmpty();
     }
     @Test void emptyRowsCreateNoPlan() throws Exception {
         assertThat(plan(List.of())).isEmpty();
@@ -66,6 +70,6 @@ class SubTableBatchInitialMiOutcomeTest {
     }
     @Test void equivalentControlsDoNotDuplicateTheExpectedRowSet() throws Exception {
         var controls = Map.<String, Object>of("first", control("configured-node", true), "second", control("configured-node", true));
-        assertThat(SubTableBatchInitialMiOutcome.plan(target(), controls, List.of(row("first", "synthetic-person")))).hasSize(1);
+        assertThat(SubTableBatchInitialMiOutcome.plan(target(), controls, List.of(row("first", "synthetic-person")), Map.of())).hasSize(1);
     }
 }

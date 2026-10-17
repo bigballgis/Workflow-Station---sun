@@ -35,7 +35,7 @@ class ProcessStartBatchFirstCollectionTest {
     @Test void enhancedFirstTaskUsesPersistedSnapshotAndReplacesAnUntrustedPreexistingCollection() {
         Map<String, Object> frozen = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1));
         baseline(frozen); legacyBuild();
-        var expected = List.of(new SubTableBatchInitialMiOutcome.Expected("child", true, "synthetic_lines", List.of(Map.of("key", "one")), List.of()));
+        var expected = List.of(new SubTableBatchInitialMiOutcome.Expected("child", true, "synthetic_lines", List.of(Map.of("key", "one")), List.of(), List.of()));
         doAnswer(call -> { ((Map<String, Object>) call.getArgument(3)).put("miRows", SERVER_ROWS); return expected; })
                 .when(builder).injectMiCollectionForFirstTask(anyString(), anyString(), anyString(), anyMap(), eq(frozen));
         Map<String, Object> variables = new HashMap<>(Map.of("miRows", List.of("untrusted-client-collection")));

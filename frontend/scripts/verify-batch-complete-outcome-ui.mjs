@@ -72,7 +72,7 @@ try {
   await message.screenshot({ path: screenshot })
   assert.equal(body.data?.batchAssignmentVerification?.status, expected)
   assert.equal(await message.locator('.el-message__content').innerText(), expected === 'VERIFIED' ? 'Operation successful' : expected === 'FAILED'
-    ? 'Task completed, but some initial personal tasks have a missing or mismatched assignee. Do not complete it again; ask an administrator to inspect the actual tasks.'
+    ? 'Task completed, but some initial assignments have missing or mismatched targets. Do not complete it again; ask an administrator to inspect the actual tasks.'
     : 'Task completed, but the batch assignment results are not fully verified. Do not complete it again; inspect the actual tasks.')
   assert.equal(await page.locator('.el-message--success').count(), expected === 'VERIFIED' ? 1 : 0)
   await page.setViewportSize({ width: 600, height: 800 })

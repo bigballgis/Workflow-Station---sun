@@ -18,13 +18,11 @@ final class SubTableBatchPersonalOutcome {
         Set<String> used = new HashSet<>();
         boolean complete = !expected.isEmpty();
         for (var item : expected) {
-            if (!item.personalOnly() || item.people().isEmpty() || item.people().size() != item.rowKeys().size()) {
+            if (item.people().size() + item.roles().size() != item.rowKeys().size() || item.rowKeys().isEmpty()) {
                 complete = false;
             }
             for (var target : item.people()) {
-                var matches = tasks.stream().filter(task -> item.node().equals(task.live().get("taskDefinitionKey"))
-                        && item.table().equals(task.table())
-                        && SubTableBatchCompletionObservation.sameKey(target.rowKey(), task.rowKey())).toList();
+                var matches = matching(item, target.rowKey(), tasks);
                 if (target.assignee().isBlank() || matches.size() != 1
                         || item.rowKeys().stream().filter(key -> SubTableBatchCompletionObservation.sameKey(key, target.rowKey())).count() != 1) {
                     complete = false;
@@ -40,9 +38,15 @@ final class SubTableBatchPersonalOutcome {
                     if (!target.assignee().equals(person)) issues.add(new Issue(id, "PERSON_TASK_TARGET_MISMATCH"));
                 } else complete = false;
             }
+            complete &= SubTableBatchRoleOutcome.verify(item, tasks, used, issues);
         }
         if (!issues.isEmpty()) return new BatchAssignmentVerification("FAILED", List.copyOf(issues));
         return complete && used.size() == tasks.size() ? new BatchAssignmentVerification("VERIFIED", List.of())
                 : new BatchAssignmentVerification("UNCONFIRMED", List.of(new Issue(null, "ROW_RESULTS_NOT_VERIFIED")));
+    }
+
+    static List<RowTask> matching(SubTableBatchInitialMiOutcome.Expected item, Map<String, Object> key, List<RowTask> tasks) {
+        return tasks.stream().filter(task -> item.node().equals(task.live().get("taskDefinitionKey")) && item.table().equals(task.table())
+                && SubTableBatchCompletionObservation.sameKey(key, task.rowKey())).toList();
     }
 }

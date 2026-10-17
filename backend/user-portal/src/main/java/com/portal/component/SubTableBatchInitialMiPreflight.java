@@ -31,12 +31,13 @@ final class SubTableBatchInitialMiPreflight {
             Map<String, Integer> uses = new HashMap<>();
             for (Element target : initial.targets()) uses.merge(collection(target), 1, Integer::sum);
             for (Element target : initial.targets()) {
+                Map<SubTableBatchRoleEligibility.Target, SubTableBatchRoleEligibility.Pool> pools = new HashMap<>();
                 if (SubTableBatchMiCollection.inject(target, prepared, controls, baseline, (people, roles) -> {
                     SubTableBatchUserEligibility.requireActive(people, jdbc);
-                    SubTableBatchRoleEligibility.requireEligible(roles, baseline, jdbc);
+                    pools.putAll(SubTableBatchRoleEligibility.resolvePools(roles, baseline, jdbc));
                 })) {
                     if (uses.get(collection(target)) != 1) throw new PortalException("409", "Initial assignment collections overlap");
-                    expected.addAll(SubTableBatchInitialMiOutcome.plan(target, controls, (List<?>) prepared.get(collection(target))));
+                    expected.addAll(SubTableBatchInitialMiOutcome.plan(target, controls, (List<?>) prepared.get(collection(target)), pools));
                 }
             }
             variables.putAll(prepared); // No collection is published if any direct initial target fails.

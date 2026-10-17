@@ -234,13 +234,14 @@ public class MiCollectionVariableBuilder {
             if (baseline != null && BpmnMiXmlSupport.findElementByLocalNameAndId(document, "userTask", nodeId) != null) continue;
             Element subProcess = BpmnMiXmlSupport.findElementByLocalNameAndId(document, "subProcess", nodeId);
             if (subProcess != null && BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess) != null) {
+                Map<SubTableBatchRoleEligibility.Target, SubTableBatchRoleEligibility.Pool> pools = new HashMap<>();
                 if (SubTableBatchMiCollection.inject(subProcess, variables, controls, baseline,
                         (people, roles) -> {
                             SubTableBatchUserEligibility.requireActive(people, jdbcTemplate);
-                            SubTableBatchRoleEligibility.requireEligible(roles, baseline, jdbcTemplate);
+                            pools.putAll(SubTableBatchRoleEligibility.resolvePools(roles, baseline, jdbcTemplate));
                         })) {
                     String name = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));
-                    expected.addAll(SubTableBatchInitialMiOutcome.plan(subProcess, controls, (List<?>) variables.get(name)));
+                    expected.addAll(SubTableBatchInitialMiOutcome.plan(subProcess, controls, (List<?>) variables.get(name), pools));
                     return true;
                 }
                 String collection = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));

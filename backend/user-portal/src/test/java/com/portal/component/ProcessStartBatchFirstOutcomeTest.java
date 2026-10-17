@@ -21,7 +21,7 @@ class ProcessStartBatchFirstOutcomeTest {
     private final ProcessInstanceRepository instances = mock(ProcessInstanceRepository.class);
     private final TaskFormComponent forms = mock(TaskFormComponent.class);
     private final List<SubTableBatchInitialMiOutcome.Expected> expected = List.of(
-            new SubTableBatchInitialMiOutcome.Expected("child", true, "synthetic_lines", List.of(Map.of("line_key", "one")), List.of()));
+            new SubTableBatchInitialMiOutcome.Expected("child", true, "synthetic_lines", List.of(Map.of("line_key", "one")), List.of(), List.of()));
 
     @BeforeEach void setUp() {
         ReflectionTestUtils.setField(component, "workflowEngineClient", engine);

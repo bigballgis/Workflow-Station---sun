@@ -50,6 +50,7 @@ class SubTableBatchRoleEligibilityTest {
                     new org.springframework.jdbc.datasource.DataSourceTransactionManager(db)).executeWithoutResult(status -> {
                 jdbc.execute(sql);
                 assertThatThrownBy(() -> check(List.of(target), Map.of())).hasMessageContaining("role target");
+                assertThatThrownBy(() -> SubTableBatchRoleEligibility.resolvePools(List.of(target), Map.of(), jdbc)).hasMessageContaining("role target");
                 status.setRollbackOnly();
             });
         }
@@ -66,7 +67,42 @@ class SubTableBatchRoleEligibilityTest {
     }
     @Test void personalOnlySubmissionDoesNotReadTheRoleDirectory() {
         check(List.of(), Map.of());
+        assertThat(SubTableBatchRoleEligibility.resolvePools(List.of(), Map.of(), jdbc)).isEmpty();
         verifyNoInteractions(jdbc);
+    }
+    @Test void poolsCaptureOnlyDistinctActiveMembersAndRemainImmutable() {
+        jdbc.update("INSERT INTO sys_users VALUES('second-person', 'ACTIVE', false), ('inactive-person', 'INACTIVE', false), ('deleted-person', 'ACTIVE', true)");
+        for (String user : List.of("person-id", "second-person", "inactive-person", "deleted-person")) {
+            jdbc.update("INSERT INTO sys_user_business_unit_roles VALUES(?, 'bu-id', 'role-id')", user);
+        }
+        clearInvocations(jdbc);
+        var pools = SubTableBatchRoleEligibility.resolvePools(List.of(target, target), Map.of(), jdbc);
+        assertThat(pools.get(target).members()).containsExactlyInAnyOrder("person-id", "second-person");
+        assertThat(pools.get(target).resolved()).isEqualTo(target);
+        verify(jdbc, times(1)).query(any(org.springframework.jdbc.core.PreparedStatementCreator.class), any(org.springframework.jdbc.core.RowMapper.class));
+        assertThatThrownBy(() -> pools.get(target).members().clear()).isInstanceOf(UnsupportedOperationException.class);
+        jdbc.update("UPDATE sys_users SET status='INACTIVE'");
+        assertThat(pools.get(target).members()).hasSize(2);
+        assertThatThrownBy(() -> SubTableBatchRoleEligibility.resolvePools(List.of(target), Map.of(), jdbc)).hasMessageContaining("role target");
+    }
+    @Test void contextPoolRecordsResolvedCodeButKeepsTheOriginalLookupKey() {
+        var context = new SubTableBatchRoleEligibility.Target(null, "ROLE-CODE");
+        var pool = SubTableBatchRoleEligibility.resolvePools(List.of(context), Map.of("activeBusinessUnitId", "bu-id"), jdbc).get(context);
+        assertThat(pool.resolved()).isEqualTo(target);
+        assertThat(pool.members()).containsExactly("person-id");
+        assertThatThrownBy(() -> SubTableBatchRoleEligibility.resolvePools(List.of(context), Map.of(), jdbc)).hasMessageContaining("role target");
+    }
+    @Test void memberQueryReadsExactRequestedPairsRatherThanTheirCartesianProduct() {
+        jdbc.update("INSERT INTO sys_business_units VALUES('second-bu', 'SECOND-BU', 'ACTIVE')");
+        jdbc.update("INSERT INTO sys_roles VALUES('second-role', 'SECOND-ROLE', 'BU_BOUNDED', 'ACTIVE')");
+        jdbc.update("INSERT INTO sys_business_unit_roles VALUES('second-bu', 'second-role'), ('bu-id', 'second-role')");
+        jdbc.update("INSERT INTO sys_users VALUES('second-person', 'ACTIVE', false), (' ', 'ACTIVE', false)");
+        jdbc.update("INSERT INTO sys_user_business_unit_roles VALUES('second-person', 'second-bu', 'second-role'), (' ', 'bu-id', 'second-role')");
+        var second = new SubTableBatchRoleEligibility.Target("SECOND-BU", "SECOND-ROLE");
+        var pools = SubTableBatchRoleEligibility.resolvePools(List.of(target, second), Map.of(), jdbc);
+        assertThat(pools.keySet()).containsExactlyInAnyOrder(target, second);
+        assertThat(pools.get(target).members()).containsExactly("person-id");
+        assertThat(pools.get(second).members()).containsExactly("second-person");
     }
     private void check(List<SubTableBatchRoleEligibility.Target> targets, Map<String, Object> baseline) {
         SubTableBatchRoleEligibility.requireEligible(targets, baseline, jdbc);

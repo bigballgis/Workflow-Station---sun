@@ -4,6 +4,7 @@ import { chromium } from 'playwright'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { loginViaPortalPassword, loginViaAdminPassword } from './playwright-login.mjs'
+import { selectExistingBatchRolePool } from './batch-verification-pool.mjs'
 
 const taskId = process.env.FIXTURE_TASK_ID
 assert.match(taskId || '', /^[a-f0-9-]{36}$/)
@@ -14,6 +15,8 @@ const roundTrip = process.env.FIXTURE_ROLE_PERSON_ROLE === '1'
 assert.ok(!roundTrip || mixedTargets, 'Role/person/role verification requires the mixed-target scenario')
 const wrongPerson = process.env.FIXTURE_EXPECT_WRONG_PERSON === '1'
 assert.ok(!wrongPerson || mixedTargets && !roundTrip, 'Wrong-person verification requires a retained mixed target')
+const extraGroup = process.env.FIXTURE_EXPECT_EXTRA_GROUP === '1'
+assert.ok(!extraGroup || !wrongPerson && !mixedTargets && !roundTrip, 'Extra-group verification requires an exclusive role-only scenario')
 const browser = await chromium.launch({ headless: true })
 async function request(page, method, url, data) {
   const response = await page.request.fetch(url, { method, data })
@@ -25,13 +28,12 @@ async function request(page, method, url, data) {
   }
   return body
 }
-function flatten(nodes) { return nodes.flatMap(node => [node, ...flatten(node.children || [])]) }
-async function completeMixedFailureThroughUi(page) {
+async function completeOutcomeThroughUi(page, expected) {
   await page.setViewportSize({ width: 1366, height: 768 })
   await page.goto(`http://localhost:3101/portal/tasks/${taskId}`)
   await page.getByRole('button', { name: 'Approve', exact: true }).click()
   const dialog = page.locator('.el-dialog:visible')
-  await dialog.locator('textarea').fill('Synthetic mixed personal failure verification')
+  await dialog.locator('textarea').fill('Synthetic initial assignment outcome verification')
   const completed = page.waitForResponse(response => response.url().endsWith(`/tasks/${taskId}/complete`) && response.request().method() === 'POST')
   await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
   const body = await (await completed).json()
@@ -43,10 +45,11 @@ async function completeMixedFailureThroughUi(page) {
   await message.screenshot({ path })
   await page.setViewportSize({ width: 600, height: 800 })
   await message.screenshot({ path: path.replace('.png', '-narrow.png') })
-  console.log(JSON.stringify({ step: 'synthetic-mixed-outcome', observation: body.data.batchAssignmentVerification, screenshot: path }))
-  assert.equal(body.data.batchAssignmentVerification.status, 'FAILED')
-  assert.match(await message.innerText(), /missing or mismatched assignee/)
-  assert.equal(await page.locator('.el-message--success').count(), 0)
+  console.log(JSON.stringify({ step: 'synthetic-role-outcome', observation: body.data.batchAssignmentVerification, screenshot: path }))
+  assert.equal(body.data.batchAssignmentVerification.status, expected)
+  if (expected === 'FAILED') assert.match(await message.innerText(), /missing or mismatched targets/)
+  else assert.equal(await message.innerText(), 'Operation successful')
+  assert.equal(await page.locator('.el-message--success').count(), expected === 'VERIFIED' ? 1 : 0)
   return body.data.batchAssignmentVerification
 }
 async function saveUniformRoleThroughWorkspace(page, pool, expectedPatches = 2) {
@@ -100,27 +103,6 @@ async function replaceFirstRoleWithPersonThroughWorkspace(page) {
   assert.equal(changes[0].rowPatches.length, 1)
   return users[index].id
 }
-async function selectSingleMemberPool(portal, admin) {
-  const units = flatten(await request(portal, 'GET', 'http://localhost:3000/api/portal/permissions/business-units/tree'))
-  assert.ok(units.length > 0 && units.length <= 50, 'Bounded directory fixture expected')
-  for (const bu of units) {
-    assert.ok(bu.id && bu.code)
-    const roles = await request(portal, 'GET', `http://localhost:3000/api/portal/permissions/business-units/${encodeURIComponent(bu.id)}/roles`)
-    assert.ok(roles.length <= 50)
-    for (const role of roles) {
-      assert.ok(role.code)
-      const path = `http://localhost:3000/api/v1/admin/task-assignment/business-units/${encodeURIComponent(bu.code)}/roles/${encodeURIComponent(role.code)}`
-      const users = await request(admin, 'GET', `${path}/users`)
-      assert.ok(Array.isArray(users))
-      if (new Set(users).size === 1) {
-        const admission = await request(admin, 'GET', `${path}/eligible`)
-        assert.equal(typeof admission.eligible, 'boolean')
-        if (admission.eligible === true) return { bu, role, users: [...new Set(users)] }
-      }
-    }
-  }
-  throw new Error('No existing single-member admitted role pool; no directory data was changed')
-}
 try {
   const portal = await browser.newPage()
   const admin = await browser.newPage()
@@ -145,7 +127,7 @@ try {
   const config = control.assignmentConfig
   if (mixedTargets) assert.equal(config.allowUser, true)
   assert.ok(config.buField)
-  const pool = await selectSingleMemberPool(portal, admin)
+  const pool = await selectExistingBatchRolePool(portal, admin, process.env.FIXTURE_MULTI_MEMBER_POOL === '1')
   const payload = structuredClone(form.fieldValues)
   const store = `dw:${control.rowDesign.binding.tableName}`
   const rows = payload.__subTables__[store]
@@ -224,12 +206,17 @@ try {
   assert.equal(isDeepStrictEqual((await api('GET', `/tasks/${taskId}/form-data`)).fieldValues, saved.fieldValues), true,
     'Opening and closing the workspace must preserve all saved data')
   assert.deepEqual((await engineTasks()).tasks.map(row => row.taskId).sort(), beforeTasks)
-  const observation = wrongPerson ? await completeMixedFailureThroughUi(portal)
+  const observation = wrongPerson || extraGroup || process.env.FIXTURE_COMPLETE_VIA_UI === '1'
+    ? await completeOutcomeThroughUi(portal, wrongPerson || extraGroup ? 'FAILED' : 'VERIFIED')
     : (await api('POST', `/tasks/${taskId}/complete`, { taskId, action: 'APPROVE', formData: saved.fieldValues,
       subTableBindingScopes: scopes, comment: 'Synthetic single-member role pool verification' })).batchAssignmentVerification
-  if (mixedTargets && !wrongPerson) assert.equal(observation.status, 'UNCONFIRMED', 'Correct personal rows cannot verify the unobserved role pool')
+  if (!wrongPerson && !extraGroup) assert.equal(observation.status, 'VERIFIED', 'All configured personal and role targets must be exactly verified')
   const children = (await engineTasks()).tasks
   assert.equal(children.length, 2)
+  if (extraGroup) {
+    assert.deepEqual(observation.issues.map(issue => issue.taskId).sort(), children.map(child => child.taskId).sort())
+    assert.ok(observation.issues.every(issue => issue.reasonCode === 'ROLE_TASK_CANDIDATES_MISMATCH'))
+  }
   const identities = new Set()
   for (const child of children) {
     assert.equal(child.taskDefinitionKey, 'AssignedWork')
@@ -244,10 +231,12 @@ try {
       assert.equal(detail.assignmentType, 'USER')
       assert.ok(!detail.candidateUserIds?.length, 'A personal task must not retain the old role candidates')
     } else {
-      assert.ok(!detail.currentAssignee, 'Single-member role pool must remain unclaimed')
+      assert.ok(!detail.currentAssignee, 'Role pool must remain unclaimed regardless of member count')
       assert.equal(detail.assignmentType, 'CANDIDATE_USERS')
       assert.equal(JSON.stringify([...detail.candidateUserIds].sort()) === JSON.stringify(pool.users.toSorted()), true,
-        'Actual Flowable candidate links must match the role members')
+        'Actual Flowable candidate user links must match the role members')
+      if (extraGroup) assert.deepEqual(detail.candidateGroupIds, ['synthetic-extra-group'])
+      else assert.ok(!detail.candidateGroupIds?.length, 'A normal role pool must not contain extra candidate groups')
       assert.equal(detail.miAssigneeMode, 'role')
       assert.equal(detail.miRoleCode, pool.role.code); assert.equal(detail.miBusinessUnitCode, pool.bu.code)
     }
@@ -258,5 +247,5 @@ try {
   console.log(JSON.stringify({ step: 'synthetic-single-member-role-pool', processInstanceId: task.processInstanceId,
     taskIds: children.map(child => child.taskId), candidateCount: pool.users.length, rolePoolsUnclaimed: true, directoryWrites: 0,
     assignmentSource: roundTrip ? 'role-person-role-workspace' : mixedTargets ? 'mixed-row-workspace' : process.env.FIXTURE_ASSIGN_VIA_UI === '1' ? 'uniform-workspace' : 'ordinary-api',
-    personalTasks: mixedTargets && !roundTrip ? 1 : 0, pageErrors }))
+    personalTasks: mixedTargets && !roundTrip ? 1 : 0, outcome: observation.status, extraCandidateGroupFault: extraGroup, pageErrors }))
 } finally { await browser.close() }
