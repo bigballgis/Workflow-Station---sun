@@ -2,11 +2,40 @@ import { describe, expect, it } from 'vitest'
 import {
   createBatchControlId,
   hasEnabledBatchOperation,
+  initializeBatchControlIdOnEnable,
   validateEnabledBatchControlIds,
   validateEnabledBatchForms,
 } from '../batchSubTableConfig'
 
 describe('createBatchControlId', () => {
+  it('initializes a legacy control only on explicit boolean opt-in and retains it across toggles', () => {
+    const rule = { props: { allowBatchEdit: false } } as { batchControlId?: string; props: Record<string, unknown> }
+    for (const value of [undefined, false, 'true', 1]) initializeBatchControlIdOnEnable({ value, rule })
+    expect(rule.batchControlId).toBeUndefined()
+    initializeBatchControlIdOnEnable({ value: true, rule })
+    const id = rule.batchControlId
+    expect(id).toMatch(/^stbc_[0-9a-f-]+$/i)
+    expect(rule.props.batchControlId).toBe(id)
+    initializeBatchControlIdOnEnable({ value: false, rule })
+    initializeBatchControlIdOnEnable({ value: true, rule })
+    expect(rule.batchControlId).toBe(id)
+  })
+
+  it('does not repair malformed or duplicated existing identities on activation', () => {
+    for (const id of ['', null, 'existing']) {
+      const rule = { batchControlId: id, props: {} }
+      initializeBatchControlIdOnEnable({ value: true, rule })
+      expect(rule.batchControlId).toBe(id)
+      const propsRule = { props: { batchControlId: id } }
+      initializeBatchControlIdOnEnable({ value: true, rule: propsRule })
+      expect(propsRule.props.batchControlId).toBe(id)
+    }
+    const a = { props: {} }; const b = { props: {} }
+    initializeBatchControlIdOnEnable({ value: true, rule: a })
+    initializeBatchControlIdOnEnable({ value: true, rule: b })
+    expect(validateEnabledBatchControlIds([a, b].map(rule => ({ ...rule, props: { ...rule.props, allowBatchEdit: true } })))).toBe(true)
+  })
+
   it('creates a non-empty, stable-format id for each new sub-table control', () => {
     const first = createBatchControlId()
     const second = createBatchControlId()

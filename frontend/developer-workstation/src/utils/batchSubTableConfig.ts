@@ -31,6 +31,14 @@ type RuleLike = {
   props?: Record<string, unknown>
 }
 
+/** Allocate an identity only for the user's first opt-in on a legacy canvas control. */
+export function initializeBatchControlIdOnEnable({ value, rule }: { value: unknown; rule: RuleLike }): void {
+  if (value !== true || rule.batchControlId !== undefined || rule.props?.batchControlId !== undefined) return
+  const id = createBatchControlId()
+  rule.batchControlId = id
+  rule.props = { ...rule.props, batchControlId: id }
+}
+
 type BatchFormLike = {
   schemaVersion?: unknown
   rule?: unknown
