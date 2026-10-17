@@ -43,6 +43,7 @@ try {
   await submit.click()
   const body = await (await startedResponse).json()
   assert.equal(body.success, true, 'Instance creation must not be misreported as a retryable start failure')
+  assert.ok(!body.data.firstStepError, 'A completed first step must not be reported as retryable')
   const instanceId = body.data.processInstanceId || body.data.id
   assert.ok(instanceId)
   console.log(JSON.stringify({ step: 'synthetic-initial-outcome-started', instanceId, observation: body.data.batchAssignmentVerification || null }))

@@ -155,12 +155,12 @@ public class MiCollectionVariableBuilder {
         return injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, true, instanceVariables, false);
     }
 
-    void injectMiCollectionForFirstTask(String processDefinitionKey, String taskDefinitionKey,
+    List<SubTableBatchInitialMiOutcome.Expected> injectMiCollectionForFirstTask(String processDefinitionKey, String taskDefinitionKey,
                                         String processInstanceId, Map<String, Object> variables, Map<String, Object> instanceVariables) {
         if (instanceVariables == null || !instanceVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
             throw new com.portal.exception.PortalException("409", "Frozen assignment instance context is missing");
         }
-        injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, true, instanceVariables, true);
+        return injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, true, instanceVariables, true);
     }
 
     void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,

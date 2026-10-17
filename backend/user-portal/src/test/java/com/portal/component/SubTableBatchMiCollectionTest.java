@@ -232,7 +232,9 @@ class SubTableBatchMiCollectionTest {
         when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
         var variables = variables(List.of(row("one", "u1")));
         variables.put("rowsToCreate", List.of(Map.of("handler_code", "untrusted-target")));
-        builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls()));
+        var expected = builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls()));
+        assertThat(expected).containsExactly(new SubTableBatchInitialMiOutcome.Expected(
+                "child", true, "synthetic_lines", List.of(Map.of("line_key", "one"))));
         var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
         assertThat(item.get("handler_code")).isEqualTo("u1");
         assertThat(item.get("rowKey")).isEqualTo(Map.of("line_key", "one"));
@@ -244,7 +246,7 @@ class SubTableBatchMiCollectionTest {
         var disabled = new HashMap<>(control()); disabled.put("capabilities", Map.of("allowBatchAssign", false));
         var prepared = List.of(Map.of("legacy", "prepared-business-collection"));
         var variables = variables(List.of()); variables.put("rowsToCreate", prepared);
-        builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(List.of(disabled)));
+        assertThat(builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(List.of(disabled)))).isEmpty();
         assertThat(variables.get("rowsToCreate")).isSameAs(prepared);
         verifyNoInteractions(jdbc);
     }
@@ -255,8 +257,7 @@ class SubTableBatchMiCollectionTest {
                 "<bpmn:userTask id=\"future-host\"/><bpmn:sequenceFlow id=\"later\" sourceRef=\"future-host\" targetRef=\"mi\"/><bpmn:subProcess id=\"mi\">");
         when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(xml));
         var variables = variables(List.of(Map.of("line_key", "one", "case_ref", "case-one")));
-        assertThatCode(() -> builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls())))
-                .doesNotThrowAnyException();
+        assertThat(builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls()))).isEmpty();
         assertThat(variables).doesNotContainKey("rowsToCreate");
         verifyNoInteractions(jdbc);
     }

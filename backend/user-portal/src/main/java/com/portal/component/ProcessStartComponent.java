@@ -339,7 +339,9 @@ public class ProcessStartComponent {
 
         ProcessInstanceInfo result = buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);
-        result.setBatchAssignmentVerification(SubTableBatchInitialMiOutcome.verify(initialAssignments,
+        result.setBatchAssignmentVerification(initialAssignments.isEmpty()
+                ? SubTableBatchCompletionObservation.observe(outcome.assignmentPlan, workflowEngineClient)
+                : SubTableBatchInitialMiOutcome.verify(initialAssignments,
                 flowableProcessInstanceId, deployment.definitionId(),
                 () -> workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId)));
         return result;
@@ -383,6 +385,8 @@ public class ProcessStartComponent {
         String firstStepError;
         /** Engine status when the request went straight into a Function Unit call; else null. */
         Map<String, Object> calledWorkStatus;
+        /** Server-only scope retained only after the first task actually completes. */
+        SubTableBatchInitialMiOutcome.Plan assignmentPlan;
     }
 
     /**
@@ -705,9 +709,11 @@ public class ProcessStartComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
-            // Do not throw; the instance already exists and its first task stays open for retry.
-            // Still report it — swallowing this is what made a failed submission look successful.
-            if (outcome.firstStepError == null) {
+            // Do not throw: the instance already exists. Preserve the original first-step
+            // error when completion has not succeeded; do not turn it into a green submit.
+            // A retained batch plan proves engine completion succeeded. Its post-commit
+            // observation will warn FAILED/UNCONFIRMED; never invite a duplicate submit.
+            if (outcome.assignmentPlan == null && outcome.firstStepError == null) {
                 outcome.firstStepError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             }
         }
@@ -766,13 +772,14 @@ public class ProcessStartComponent {
         // inject
         computeSubTableConditionVariables(variables);
 
-        injectMiCollectionsForFirstTask(firstTask, firstTaskDefKey, flowableProcessInstanceId, pin, variables);
+        var assignmentPlan = injectMiCollectionsForFirstTask(firstTask, firstTaskDefKey, flowableProcessInstanceId, pin, variables);
 
         // Complete first task
         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                 taskId, userId, "SUBMIT", variables);
         String failure = firstStepErrorOf(completeResult);
         if (failure == null) {
+            outcome.assignmentPlan = assignmentPlan;
             log.info("First task completed successfully: {}", taskId);
             // §6.3: this node's Case Handler must hold the actual operator *before* the
             // snapshot freezes. The initiator's own first step is a Complete too, and the
@@ -801,28 +808,32 @@ public class ProcessStartComponent {
      * '...collection' was not found" when the token reached it. Legacy prepared collections remain;
      * enhanced instances must instead consume the server-validated frozen assignment collection.
      */
-    private void injectMiCollectionsForFirstTask(Map<String, Object> firstTask, String firstTaskDefKey,
+    private SubTableBatchInitialMiOutcome.Plan injectMiCollectionsForFirstTask(Map<String, Object> firstTask, String firstTaskDefKey,
                                                  String processInstanceId, ActiveCatalogPin pin,
                                                  Map<String, Object> variables) {
-        Map<String, Object> baseline = processInstanceRepository.findById(processInstanceId)
-                .orElseThrow(() -> new IllegalStateException("Process instance is missing before first-task completion")).getVariables();
+        ProcessInstance instance = processInstanceRepository.findById(processInstanceId)
+                .orElseThrow(() -> new IllegalStateException("Process instance is missing before first-task completion"));
+        Map<String, Object> baseline = instance.getVariables();
         if (baseline == null) throw new IllegalStateException("Process variables are missing before first-task completion");
         boolean enhanced = baseline.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
         if (miCollectionVariableBuilder == null || firstTaskDefKey == null || firstTaskDefKey.isBlank()) {
             if (enhanced) throw new IllegalStateException("Frozen first-task assignment context is missing");
-            return;
+            return null;
         }
         Object keyObj = firstTask.get("processDefinitionKey");
         String processKey = keyObj != null && !keyObj.toString().isBlank() ? keyObj.toString() : pin.code();
         Map<String, Object> withCollections = new HashMap<>(variables);
         if (enhanced) {
-            miCollectionVariableBuilder.injectMiCollectionForFirstTask(
+            var expected = miCollectionVariableBuilder.injectMiCollectionForFirstTask(
                     processKey, firstTaskDefKey, processInstanceId, withCollections, baseline);
             variables.putAll(withCollections);
+            return expected.isEmpty() ? null : new SubTableBatchInitialMiOutcome.Plan(
+                    processInstanceId, instance.getProcessDefinitionId(), expected);
         } else {
             miCollectionVariableBuilder.injectMiCollectionFromBpmn(
                     processKey, firstTaskDefKey, processInstanceId, withCollections);
             withCollections.forEach(variables::putIfAbsent);
+            return null;
         }
     }
 
