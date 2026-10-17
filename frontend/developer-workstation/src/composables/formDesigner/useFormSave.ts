@@ -401,7 +401,9 @@ export function useFormSave(options: UseFormSaveOptions) {
       for (const [key, existing] of Object.entries(savedBatchForms)) {
         const bindingId = Number(key)
         if (!Number.isFinite(bindingId) || !existing) continue
-        const rule = stripFormCreateRulesDisabledDeep((existing as { rule?: unknown[] }).rule || []) as any[]
+        if ((existing as { schemaVersion?: unknown }).schemaVersion !== 1
+          || !Array.isArray((existing as { rule?: unknown }).rule)) throw new Error(t('form.batchFormInvalid'))
+        const rule = stripFormCreateRulesDisabledDeep((existing as { rule: unknown[] }).rule) as any[]
         prepareFormCreateRulesForPersist(rule)
         batchForms[bindingId] = {
           schemaVersion: 1,
@@ -417,20 +419,17 @@ export function useFormSave(options: UseFormSaveOptions) {
           const batchRef = batchFormVisited.value.has(binding.bindingId)
             ? batchDesignerRefs.value[index]
             : null
-          try {
-            const liveRule = batchRef?.getRule?.()
-            if (Array.isArray(liveRule)) {
-              const rule = stripFormCreateRulesDisabledDeep(liveRule) as any[]
-              ensureFormCreateRulesValidationDeep(rule)
-              prepareFormCreateRulesForPersist(rule)
-              collected = {
-                schemaVersion: 1,
-                rule,
-                options: serializeFormCreateOptionsForPersist(batchRef.getOption?.()),
-              }
+          const liveRule = batchRef?.getRule?.()
+          if (batchRef && !Array.isArray(liveRule)) throw new Error(t('form.batchFormInvalid'))
+          if (Array.isArray(liveRule)) {
+            const rule = stripFormCreateRulesDisabledDeep(liveRule) as any[]
+            ensureFormCreateRulesValidationDeep(rule)
+            prepareFormCreateRulesForPersist(rule)
+            collected = {
+              schemaVersion: 1,
+              rule,
+              options: serializeFormCreateOptionsForPersist(batchRef.getOption?.()),
             }
-          } catch {
-            // Preserve the cache/saved form on a transient designer read failure.
           }
           if (!collected && batchFormCache.value[binding.bindingId]) {
             const cached = batchFormCache.value[binding.bindingId]
