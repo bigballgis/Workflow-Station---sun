@@ -272,9 +272,20 @@ class SubTableBatchMiCollectionTest {
         assertThat(variables).doesNotContainKey("rowsToCreate");
     }
 
-    private void inject(Map<String, Object> variables, List<?> controls) {
+    private List<SubTableBatchInitialMiOutcome.Expected> inject(Map<String, Object> variables, List<?> controls) {
         when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
-        builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls));
+        return builder.injectMiCollectionFromBpmn("process", "host", "instance", variables, snapshot(controls));
+    }
+
+    @Test void completionReturnsOnlyItsStrictPreparedAssignmentNodePlan() {
+        assertThat(inject(variables(List.of(row("one", "u1"))), controls()))
+                .extracting(SubTableBatchInitialMiOutcome.Expected::node, SubTableBatchInitialMiOutcome.Expected::personalOnly)
+                .containsExactly(tuple("child", true));
+        var mixed = Map.of("line_key", "two", "pool_code", "role-a", "unit_code", "bu-a", "case_ref", "case-one");
+        assertThat(inject(variables(List.of(row("one", "u1"), mixed)), controls()))
+                .extracting(SubTableBatchInitialMiOutcome.Expected::node, SubTableBatchInitialMiOutcome.Expected::personalOnly)
+                .containsExactly(tuple("child", false));
+        assertThat(inject(variables(List.of()), controls())).isEmpty();
     }
 
     private static String initialXml() {
@@ -285,7 +296,8 @@ class SubTableBatchMiCollectionTest {
         var variables = variables(List.of(row("one", "u1"), row("two", "u2")));
         variables.put("rowsToCreate", List.of(Map.of("handler_code", "untrusted")));
         var plan = SubTableBatchInitialMiPreflight.prepare(initialXml(), "process", variables, snapshot(controls()), jdbc);
-        assertThat(plan).containsExactly(new SubTableBatchInitialMiOutcome.Expected("child", true));
+        assertThat(plan).extracting(SubTableBatchInitialMiOutcome.Expected::node, SubTableBatchInitialMiOutcome.Expected::personalOnly)
+                .containsExactly(tuple("child", true));
         assertThat((List<?>) variables.get("rowsToCreate")).hasSize(2);
         assertThat(variables).doesNotContainKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
         verifyNoInteractions(engine);

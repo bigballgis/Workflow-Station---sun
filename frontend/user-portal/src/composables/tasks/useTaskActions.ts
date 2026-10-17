@@ -335,7 +335,7 @@ export function useTaskActions(options: {
         ElMessage.warning(t('task.operationFailed'))
         return
       }
-      await completeTask(pid, {
+      const completion = await completeTask(pid, {
         taskId: pid,
         action: options.currentApproveAction.value,
         actionId: options.currentActionId?.value || undefined,
@@ -346,7 +346,18 @@ export function useTaskActions(options: {
         subTableBindingScopes,
         subTableBatchChanges,
       })
-      ElMessage.success(t('task.operationSuccess'))
+      const assignmentResult = completion.data?.batchAssignmentVerification
+      if (assignmentResult) {
+        ElMessage({
+          type: 'warning',
+          message: t(assignmentResult.status === 'FAILED'
+            ? 'task.batchAssignmentFailed' : 'task.batchAssignmentUnconfirmed'),
+          duration: 0,
+          showClose: true,
+        })
+      } else {
+        ElMessage.success(t('task.operationSuccess'))
+      }
       options.approveDialogVisible.value = false
       router.push('/tasks')
     } catch (e) {

@@ -191,7 +191,7 @@ public class TaskController {
 
     @Operation(summary = "Complete task")
     @PostMapping("/{taskId}/complete")
-    public ApiResponse<Void> completeTask(
+    public ApiResponse<com.portal.dto.TaskCompletionResult> completeTask(
             @PathVariable String taskId,
             @CurrentUserId String userId,
             @Valid @RequestBody TaskCompleteRequest request) {
@@ -199,15 +199,16 @@ public class TaskController {
             throw new PortalException("401", "Authentication required");
         }
         request.setTaskId(taskId);
-        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+        var observationPlan = actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
                 .actionId(request.getActionId())
                 .operation(completeOperation(request.getAction()))
                 .taskId(taskId)
                 .operatorId(userId)
                 .comment(request.getComment())
-                .build(), () -> taskProcessComponent.completeTask(request, userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null)));
-        return ApiResponse.success();
+                .build(), () -> { return taskProcessComponent.completeTaskWithObservationPlan(request, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null)); });
+        var observation = taskProcessComponent.observeCompletion(observationPlan);
+        return ApiResponse.success(observation == null ? null : new com.portal.dto.TaskCompletionResult(observation));
     }
 
     @Operation(summary = "Delegate task")

@@ -433,6 +433,8 @@ export default {
     startNode: 'Start',
     endNode: 'End',
     operationSuccess: 'Operation successful',
+    batchAssignmentFailed: 'Task completed, but some initial personal tasks have no assignee. Do not complete it again; ask an administrator to inspect the actual tasks.',
+    batchAssignmentUnconfirmed: 'Task completed, but the batch assignment results are not fully verified. Do not complete it again; inspect the actual tasks.',
     operationFailed: 'Operation failed',
     delegateSuccess: 'Delegated successfully',
     transferSuccess: 'Transferred successfully',

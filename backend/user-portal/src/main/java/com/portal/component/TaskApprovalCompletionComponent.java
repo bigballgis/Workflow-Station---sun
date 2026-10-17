@@ -102,7 +102,7 @@ public class TaskApprovalCompletionComponent {
      * Handles approval completion
      * Via WorkflowEngineClient calling Flowable engine
      */
-    void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
+    SubTableBatchInitialMiOutcome.Plan handleApproval(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
         String taskId = task.getTaskId();
         String action = request.getAction();
 
@@ -174,11 +174,15 @@ public class TaskApprovalCompletionComponent {
         }
 
         // If MI sub-process prerequisite, read collection variable and assignee field from BPMN and build collection
+        List<SubTableBatchInitialMiOutcome.Expected> assignmentPlan = List.of();
+        String assignmentDefinitionId = null;
         if (taskWriteContext != null) {
-            miCollectionVariableBuilder.injectMiCollectionFromBpmn(
+            ProcessInstance assignmentInstance = processInstanceRepository.findById(task.getProcessInstanceId())
+                    .orElseThrow(() -> new IllegalStateException("Process instance is missing at completion"));
+            assignmentDefinitionId = assignmentInstance.getProcessDefinitionId();
+            assignmentPlan = miCollectionVariableBuilder.injectMiCollectionFromBpmn(
                     task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables,
-                    processInstanceRepository.findById(task.getProcessInstanceId())
-                            .orElseThrow(() -> new IllegalStateException("Process instance is missing at completion")).getVariables());
+                    assignmentInstance.getVariables());
         } else {
             miCollectionVariableBuilder.injectMiCollectionFromBpmn(
                     task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
@@ -459,6 +463,8 @@ public class TaskApprovalCompletionComponent {
                     taskId, e.getMessage());
             ProcessInstanceSyncComponent.rethrowIfRollbackOnlyAfterCatch(e, taskId);
         }
+        return assignmentPlan.isEmpty() ? null : new SubTableBatchInitialMiOutcome.Plan(
+                task.getProcessInstanceId(), assignmentDefinitionId, assignmentPlan);
     }
 
     private MiOuterStepResolver.OuterLookup completingMiLookup(TaskInfo task, ProcessInstance instance) {

@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.*;
 
 class SubTableBatchInitialMiOutcomeTest {
     private final List<SubTableBatchInitialMiOutcome.Expected> expected =
-            List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", true));
+            List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", true, "synthetic_table", List.of(Map.of("synthetic_key", "one"))));
     private Map<String, Object> task() {
         return new HashMap<>(Map.of("taskId", "synthetic-task", "processInstanceId", "synthetic-instance",
                 "processDefinitionId", "synthetic-definition", "taskDefinitionKey", "configured-node"));
@@ -58,7 +58,7 @@ class SubTableBatchInitialMiOutcomeTest {
                 () -> { throw new AssertionError("Legacy path must not query"); })).isNull();
     }
     @Test void unclaimedRoleOrMixedNodeCannotBeCalledAnUnassignedPersonalTask() {
-        var role = List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", false));
+        var role = List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", false, "synthetic_table", List.of(Map.of("synthetic_key", "one"))));
         var result = SubTableBatchInitialMiOutcome.verify(role, "synthetic-instance", "synthetic-definition",
                 () -> Optional.of(Map.of("tasks", List.of(task()), "totalCount", 1)));
         assertThat(result.status()).isEqualTo("UNCONFIRMED");

@@ -14,6 +14,11 @@ export interface ProcessDefinition {
   isFavorite?: boolean
 }
 
+export interface BatchAssignmentVerification {
+  status: 'FAILED' | 'UNCONFIRMED'
+  issues: Array<{ taskId: string | null; reasonCode: string }>
+}
+
 export interface ProcessInstance {
   id: string
   processDefinitionId: string
@@ -39,10 +44,7 @@ export interface ProcessInstance {
    */
   firstStepError?: string | null
   /** Start already succeeded; this observation never authorizes retrying it. */
-  batchAssignmentVerification?: {
-    status: 'FAILED' | 'UNCONFIRMED'
-    issues: Array<{ taskId: string | null; reasonCode: string }>
-  } | null
+  batchAssignmentVerification?: BatchAssignmentVerification | null
   variables?: Record<string, unknown>
 }
 

@@ -9,10 +9,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/** Observes only direct initial collections already built by the strict source-bound preflight. */
-final class SubTableBatchInitialMiOutcome {
+/** Observes only initial-assignment collections already built by a strict source-bound preflight. */
+public final class SubTableBatchInitialMiOutcome {
     private SubTableBatchInitialMiOutcome() { }
-    record Expected(String node, boolean personalOnly) { }
+    record Expected(String node, boolean personalOnly, String table, List<Map<String, Object>> rowKeys) { }
+    /** Server-only plan returned across the completion transaction, never serialized as a response. */
+    public record Plan(String instanceId, String definitionId, List<Expected> expected) { }
 
     static List<Expected> plan(Element target, Map<String, Object> controls, List<?> items) {
         List<Expected> expected = new ArrayList<>();
@@ -25,7 +27,14 @@ final class SubTableBatchInitialMiOutcome {
             Object personField = config.get("assigneeField");
             boolean personalOnly = personField != null && items.stream()
                     .allMatch(value -> ((Map<?, ?>) value).get(personField) instanceof String);
-            Expected candidate = new Expected(node, personalOnly);
+            String table = (String) ((Map<?, ?>) ((Map<?, ?>) control.get("rowDesign")).get("binding")).get("tableName");
+            List<Map<String, Object>> keys = new ArrayList<>();
+            for (Object rawItem : items) {
+                var key = new java.util.LinkedHashMap<String, Object>();
+                ((Map<?, ?>) ((Map<?, ?>) rawItem).get("rowKey")).forEach((name, value) -> key.put((String) name, value));
+                keys.add(Map.copyOf(key));
+            }
+            Expected candidate = new Expected(node, personalOnly, table, List.copyOf(keys));
             if (!expected.contains(candidate)) expected.add(candidate);
         }
         return expected;

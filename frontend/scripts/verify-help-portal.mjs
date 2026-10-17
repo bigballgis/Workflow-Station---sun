@@ -701,6 +701,15 @@ try {
   const subTableShot = resolve(DW_SHOTS, `${DATE}_help-portal-form-ctl-sub-table.png`)
   await page.screenshot({ path: subTableShot, fullPage: true })
   console.log(`screenshot ${subTableShot}`)
+  const batchSection = subTableArticle.locator('#batch')
+  rec('Batch assignment warning says the action already happened and must not be repeated',
+    (await batchSection.textContent())?.includes('that action has already happened. Do not repeat it.') === true)
+  rec('Batch assignment help distinguishes unverified results from saved target values',
+    (await batchSection.textContent())?.includes('An unverified warning means not all task results could be confirmed') === true)
+  await batchSection.screenshot({ path: resolve(DW_SHOTS, `${DATE}_help-sub-table-batch-outcome.png`) })
+  await page.setViewportSize({ width: 600, height: 800 })
+  await batchSection.screenshot({ path: resolve(DW_SHOTS, `${DATE}_help-sub-table-batch-outcome-narrow.png`) })
+  await page.setViewportSize({ width: 1400, height: 900 })
 
   await page.goto('http://localhost:3000/help/form-events-extend#lookup', {
     waitUntil: 'domcontentloaded',

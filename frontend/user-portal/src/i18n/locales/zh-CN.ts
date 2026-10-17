@@ -433,6 +433,8 @@ export default {
     startNode: '开始',
     endNode: '结束',
     operationSuccess: '操作成功',
+    batchAssignmentFailed: '任务已完成，但部分初次分派的个人任务没有办理人。请勿重复完成，请联系管理员核查实际任务。',
+    batchAssignmentUnconfirmed: '任务已完成，但批量分派结果尚未全部核实。请勿重复完成，请核查实际任务。',
     operationFailed: '操作失败',
     delegateSuccess: '委托成功',
     transferSuccess: '转办成功',

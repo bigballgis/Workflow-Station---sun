@@ -147,12 +147,12 @@ public class MiCollectionVariableBuilder {
         injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, false);
     }
 
-    void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
+    List<SubTableBatchInitialMiOutcome.Expected> injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
                                     String processInstanceId, Map<String, Object> variables, Map<String, Object> instanceVariables) {
         if (instanceVariables == null || !instanceVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
             throw new com.portal.exception.PortalException("409", "Frozen assignment instance context is missing");
         }
-        injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, true, instanceVariables, false);
+        return injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, true, instanceVariables, false);
     }
 
     void injectMiCollectionForFirstTask(String processDefinitionKey, String taskDefinitionKey,
@@ -168,16 +168,17 @@ public class MiCollectionVariableBuilder {
         injectMiCollectionFromBpmn(processDefinitionKey, taskDefinitionKey, processInstanceId, variables, instanceBound, null, false);
     }
 
-    private void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
+    private List<SubTableBatchInitialMiOutcome.Expected> injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
                                             String processInstanceId, Map<String, Object> variables, boolean instanceBound,
                                             Map<String, Object> instanceVariables, boolean preserveUnfrozenPreparedCollections) {
+        List<SubTableBatchInitialMiOutcome.Expected> expected = new ArrayList<>();
         try {
             if (processDefinitionKey == null || processDefinitionKey.isBlank()
                     || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
                 if (instanceBound) throw new IllegalStateException("Active MI task source is missing");
                 log.warn("[MI] Missing processDefinitionKey or taskDefinitionKey, skip collection injection (procDef={}, taskDef={})",
                         processDefinitionKey, taskDefinitionKey);
-                return;
+                return List.of();
             }
             log.info("[MI] injectMiCollectionFromBpmn begin processDefinitionKey={} taskDefinitionKey={} processInstanceId={}",
                     processDefinitionKey, taskDefinitionKey, processInstanceId);
@@ -187,7 +188,7 @@ public class MiCollectionVariableBuilder {
             if (bpmnOpt.isEmpty()) {
                 if (instanceBound) throw new IllegalStateException("Instance deployed BPMN is unavailable");
                 log.warn("[MI] Could not fetch BPMN XML for processDefinitionKey={}", processDefinitionKey);
-                return;
+                return List.of();
             }
             Document document = BpmnMiXmlSupport.parseBpmnSecurely(bpmnOpt.get());
 
@@ -197,7 +198,7 @@ public class MiCollectionVariableBuilder {
                 if (instanceBound) throw new IllegalStateException("Active task node is missing from its deployed BPMN");
                 log.warn("[MI] UserTask id={} not found in BPMN (check taskDefinitionKey vs XML). Skip MI injection.",
                         taskDefinitionKey);
-                return;
+                return List.of();
             }
 
             // The immutable deployed node, not a mutable stage/form lookup, owns this source id.
@@ -207,7 +208,7 @@ public class MiCollectionVariableBuilder {
                             com.platform.common.util.JsonUtils.getObjectMapper());
             SubTableBatchMiCollection.validateTargets(document, controls);
             if (!injectReachableCollection(document, taskElement, taskDefinitionKey, variables, controls, instanceVariables,
-                    preserveUnfrozenPreparedCollections)) {
+                    preserveUnfrozenPreparedCollections, expected)) {
                 log.warn("[MI] No usable reachable multi-instance subProcess found from task {}", taskDefinitionKey);
             }
         } catch (Exception e) {
@@ -217,10 +218,12 @@ public class MiCollectionVariableBuilder {
             log.warn("[MI] injectMiCollectionFromBpmn failed for processDefinitionKey={}, taskDefinitionKey={}: {}",
                     processDefinitionKey, taskDefinitionKey, e.getMessage());
         }
+        return List.copyOf(expected);
     }
 
     private boolean injectReachableCollection(Document document, Element task, String taskKey, Map<String, Object> variables,
-                                              Map<String, Object> controls, Map<String, Object> baseline, boolean preserveUnfrozenPreparedCollections) {
+                                              Map<String, Object> controls, Map<String, Object> baseline, boolean preserveUnfrozenPreparedCollections,
+                                              List<SubTableBatchInitialMiOutcome.Expected> expected) {
         Deque<String> frontier = new ArrayDeque<>();
         Set<String> visited = new HashSet<>();
         enqueueOutgoing(document, task, taskKey, frontier);
@@ -235,7 +238,11 @@ public class MiCollectionVariableBuilder {
                         (people, roles) -> {
                             SubTableBatchUserEligibility.requireActive(people, jdbcTemplate);
                             SubTableBatchRoleEligibility.requireEligible(roles, baseline, jdbcTemplate);
-                        })) return true;
+                        })) {
+                    String name = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));
+                    expected.addAll(SubTableBatchInitialMiOutcome.plan(subProcess, controls, (List<?>) variables.get(name)));
+                    return true;
+                }
                 String collection = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));
                 // Only the first-task legacy preparation contract keeps a prebuilt non-Batch-Assign collection.
                 if (preserveUnfrozenPreparedCollections && collection != null && variables.containsKey(collection)) return true;

@@ -173,6 +173,12 @@ public class TaskProcessComponent {
 
     @Transactional
     public void completeTask(TaskCompleteRequest request, String userId, String portalUsername) {
+        completeTaskWithObservationPlan(request, userId, portalUsername);
+    }
+
+    @Transactional
+    public SubTableBatchInitialMiOutcome.Plan completeTaskWithObservationPlan(
+            TaskCompleteRequest request, String userId, String portalUsername) {
         String taskId = request.getTaskId();
         TaskInfo task = getTaskOrThrow(taskId);
         if (TaskPermissionEvaluator.isTaskAlreadyClosedInEngineView(task)) {
@@ -203,9 +209,10 @@ public class TaskProcessComponent {
         }
 
         String action = request.getAction();
+        SubTableBatchInitialMiOutcome.Plan observationPlan = null;
         switch (action) {
             case "APPROVE", "REJECT" ->
-                    taskApprovalCompletionComponent.handleApproval(task, request, userId, portalUsername);
+                    observationPlan = taskApprovalCompletionComponent.handleApproval(task, request, userId, portalUsername);
             case "TRANSFER" -> handleTransfer(task, request, userId);
             case "DELEGATE" -> handleDelegate(task, request, userId);
             case "RETURN" -> handleReturn(task, request, userId, "RETURN");
@@ -217,6 +224,12 @@ public class TaskProcessComponent {
         // cache so the next My Request / process detail load reflects it immediately (otherwise the
         // 5s TTL serves a stale snapshot and the page needs two refreshes to update).
         miOverlayComponent.invalidate(task.getProcessInstanceId());
+        return observationPlan;
+    }
+
+    /** Called only after the completion transaction has returned, never inside the write transaction. */
+    public com.portal.dto.BatchAssignmentVerification observeCompletion(SubTableBatchInitialMiOutcome.Plan plan) {
+        return SubTableBatchCompletionObservation.observe(plan, workflowEngineClient);
     }
 
     /**

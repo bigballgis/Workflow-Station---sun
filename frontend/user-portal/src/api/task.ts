@@ -1,5 +1,6 @@
 import type { AxiosRequestConfig } from 'axios'
 import { request } from './request'
+import type { BatchAssignmentVerification } from './process'
 
 import type { ListColumnFilterRequest, ListColumnMeta } from '@platform-shared/list/columnMeta'
 
@@ -301,8 +302,11 @@ export function reassignTask(taskId: string, targetUserId: string) {
 }
 
 // Complete task
+export interface TaskCompletionResult {
+  batchAssignmentVerification: BatchAssignmentVerification
+}
 export function completeTask(taskId: string, data: TaskCompleteRequest) {
-  return request.post(`/tasks/${taskId}/complete`, data)
+  return request.post<{ data?: TaskCompletionResult | null }>(`/tasks/${taskId}/complete`, data)
 }
 
 export interface TaskDelegateRequest {
