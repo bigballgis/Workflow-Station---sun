@@ -119,6 +119,9 @@ public class ProcessStartComponent {
      */
     private volatile TransactionTemplate txTemplate;
 
+    @Autowired
+    private SubTableBatchAssignmentHistory batchAssignmentHistory;
+
     private TransactionTemplate tx() {
         TransactionTemplate t = txTemplate;
         if (t == null) {
@@ -341,7 +344,9 @@ public class ProcessStartComponent {
                 userId, startUserDisplayName, outcome, pin);
         var assignmentPlan = initialAssignments.isEmpty() ? outcome.assignmentPlan
                 : new SubTableBatchInitialMiOutcome.Plan(flowableProcessInstanceId, deployment.definitionId(), initialAssignments);
-        result.setBatchAssignmentVerification(SubTableBatchCompletionObservation.observe(assignmentPlan, workflowEngineClient));
+        var observation = SubTableBatchCompletionObservation.observe(assignmentPlan, workflowEngineClient);
+        if (assignmentPlan != null) observation = batchAssignmentHistory.record(assignmentPlan, observation, userId, outcome.initiatorTaskIdForHistory);
+        result.setBatchAssignmentVerification(observation);
         return result;
     }
 

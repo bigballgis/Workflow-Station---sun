@@ -1,4 +1,5 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
+import { batchAssignmentFeedback } from '@/utils/batchAssignmentFeedback'
 import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
 import { projectWritableSubTables, type WritableSubTableBinding } from './writableSubTableProjection'
 import {
@@ -347,11 +348,10 @@ export function useTaskActions(options: {
         subTableBatchChanges,
       })
       const assignmentResult = completion.data?.batchAssignmentVerification
-      if (assignmentResult && assignmentResult.status !== 'VERIFIED') {
+      if (assignmentResult && (assignmentResult.status !== 'VERIFIED' || assignmentResult.historyRecorded === false)) {
         ElMessage({
           type: 'warning',
-          message: t(assignmentResult.status === 'FAILED'
-            ? 'task.batchAssignmentFailed' : 'task.batchAssignmentUnconfirmed'),
+          message: batchAssignmentFeedback(assignmentResult, t, 'task'),
           duration: 0,
           showClose: true,
         })

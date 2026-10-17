@@ -1,5 +1,6 @@
 import type { HistoryRecord } from '@/components/ProcessHistory.vue'
 import { processApi } from '@/api/process'
+import { projectBatchAssignmentHistory } from '@/utils/batchAssignmentHistoryProjection'
 import { getHistoryStatus, getHistoryAction } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
 
@@ -17,11 +18,15 @@ export function createApplicationDetailHistory(ctx: ApplicationDetailCtx): Appli
     snapshotTaskId,
     processInfo,
     historyRecords,
+    batchAssignmentHistory,
+    batchHistoryLoadError,
     snapshotActivityId,
   } = ctx
 
   // Load flow history
   const loadProcessHistory = async () => {
+    batchAssignmentHistory.value = []
+    batchHistoryLoadError.value = false
     try {
       const response = await processApi.getProcessHistory(processId)
       const historyData = response.data || response
@@ -56,8 +61,11 @@ export function createApplicationDetailHistory(ctx: ApplicationDetailCtx): Appli
           }
         }
 
-        // Convert to HistoryRecord format (keep gateway records for diagram status determination)
-        historyRecords.value = filteredData.map((item: any, index: number) => ({
+        // Audit observations are not BPMN activities and must never influence diagram status.
+        batchAssignmentHistory.value = projectBatchAssignmentHistory(
+          historyData.filter((item: { operationType?: string }) => item.operationType === 'BATCH_ASSIGNMENT_VERIFICATION'),
+          { time: snapshotTime, taskId: snapshotTaskId, name: snapshotTaskName })
+        historyRecords.value = filteredData.filter((item: { operationType?: string }) => item.operationType !== 'BATCH_ASSIGNMENT_VERIFICATION').map((item: any, index: number) => ({
           id: `history_${index}`,
           nodeId: item.activityId || `node_${index}`,
           nodeName: item.activityName || item.taskName || t('applicationDetail.unknownNode'),
@@ -73,6 +81,7 @@ export function createApplicationDetailHistory(ctx: ApplicationDetailCtx): Appli
         initHistoryRecords()
       }
     } catch (error: any) {
+      batchHistoryLoadError.value = true
       console.error('Failed to load process history:', error)
       initHistoryRecords()
     }

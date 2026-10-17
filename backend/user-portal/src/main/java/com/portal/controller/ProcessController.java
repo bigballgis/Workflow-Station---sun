@@ -48,6 +48,9 @@ public class ProcessController {
     private final com.portal.component.AuditApplicationListQueryComponent auditApplicationListQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
     private final ActionPostEmailComponent actionPostEmailComponent;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
     private com.portal.component.PortalBatchPrimaryKeyAllocationComponent portalBatchPrimaryKeyAllocationComponent;
@@ -631,6 +634,7 @@ public class ProcessController {
         }
         log.debug("ProcessController.getProcessHistory called with processId: {}", processId);
         List<Map<String, Object>> history = processComponent.getProcessHistory(processId);
+        if (detail != null) history = batchAssignmentHistory.merge(processId, history);
         log.debug("ProcessController.getProcessHistory returning {} records", history.size());
         return ApiResponse.success(history);
     }

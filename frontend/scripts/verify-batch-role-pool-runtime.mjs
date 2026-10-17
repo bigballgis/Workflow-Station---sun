@@ -243,6 +243,22 @@ try {
     identities.add(JSON.stringify(identity))
   }
   assert.equal(identities.size, 2)
+  if (process.env.FIXTURE_VERIFY_HISTORY === '1') {
+    const records = await api('GET', `/processes/${task.processInstanceId}/history`)
+    const record = records.find(item => item.operationType === 'BATCH_ASSIGNMENT_VERIFICATION' && item.taskId === taskId)
+    assert.equal(observation.historyRecorded, true)
+    assert.deepEqual(record?.batchAssignmentVerification, observation)
+    await portal.goto(`http://localhost:3101/portal/applications/${task.processInstanceId}`)
+    await portal.getByRole('tab', { name: 'Flow History', exact: true }).click()
+    await portal.locator('.batch-assignment-history').waitFor()
+    await portal.reload()
+    await portal.getByRole('tab', { name: 'Flow History', exact: true }).click()
+    const history = portal.locator('.batch-assignment-history')
+    await history.waitFor()
+    await history.screenshot({ path: screenshot.replace('-workspace.png', '-history-reloaded.png') })
+    await portal.setViewportSize({ width: 1366, height: 768 })
+    await history.screenshot({ path: screenshot.replace('-workspace.png', '-history-desktop.png') })
+  }
   assert.equal(pageErrors, 0)
   console.log(JSON.stringify({ step: 'synthetic-single-member-role-pool', processInstanceId: task.processInstanceId,
     taskIds: children.map(child => child.taskId), candidateCount: pool.users.length, rolePoolsUnclaimed: true, directoryWrites: 0,

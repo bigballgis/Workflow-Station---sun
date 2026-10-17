@@ -268,6 +268,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { batchAssignmentFeedback } from '@/utils/batchAssignmentFeedback'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -923,11 +924,10 @@ const handleSubmit = async (actionId?: string) => {
         duration: 0,
         showClose: true
       })
-    } else if (assignmentResult && assignmentResult.status !== 'VERIFIED') {
+    } else if (assignmentResult && (assignmentResult.status !== 'VERIFIED' || assignmentResult.historyRecorded === false)) {
       ElMessage({
         type: 'warning',
-        message: t(assignmentResult.status === 'FAILED'
-          ? 'processStart.batchAssignmentFailed' : 'processStart.batchAssignmentUnconfirmed'),
+        message: batchAssignmentFeedback(assignmentResult, t, 'processStart'),
         duration: 0,
         showClose: true
       })

@@ -102,6 +102,21 @@ try {
     assert.deepEqual(body.data.batchAssignmentVerification.issues.map(issue => issue.taskId).sort(), tasks.map(task => task.taskId).sort())
     assert.ok(body.data.batchAssignmentVerification.issues.every(issue => issue.reasonCode === 'PERSON_TASK_TARGET_MISMATCH'))
   }
+  if (process.env.FIXTURE_VERIFY_HISTORY === '1') {
+    await page.goto(`http://localhost:3101/portal/applications/${instanceId}`)
+    await page.getByRole('tab', { name: 'Flow History', exact: true }).click()
+    const history = page.locator('.history-section')
+    await history.waitFor()
+    await history.screenshot({ path: screenshot.replace('.png', '-history.png') })
+    const records = await request(page, 'GET', `/api/portal/processes/${instanceId}/history`)
+    const record = records.find(item => item.operationType === 'BATCH_ASSIGNMENT_VERIFICATION')
+    assert.deepEqual(record?.batchAssignmentVerification, body.data.batchAssignmentVerification,
+      'Committed verification must remain available after navigation and reload')
+    await page.reload()
+    await page.getByRole('tab', { name: 'Flow History', exact: true }).click()
+    await page.locator('.batch-assignment-history').waitFor()
+    await page.locator('.batch-assignment-history').screenshot({ path: screenshot.replace('.png', '-history-reloaded.png') })
+  }
   assert.equal(pageErrors, 0)
   console.log(JSON.stringify({ step: 'synthetic-initial-outcome-ui', instanceId, taskIds: tasks.map(task => task.taskId), expected, pageErrors, screenshot }))
 } finally { await browser.close() }

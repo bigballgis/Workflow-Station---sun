@@ -185,7 +185,8 @@ public class TaskHistoryComponent {
             if (resolvedProcessInstanceId != null && !resolvedProcessInstanceId.isBlank()) {
                 // Try to get history from the local database
                 List<ProcessHistory> dbHistory = processHistoryRepository
-                        .findByProcessInstanceIdOrderByOperationTimeAsc(resolvedProcessInstanceId);
+                        .findByProcessInstanceIdOrderByOperationTimeAsc(resolvedProcessInstanceId).stream()
+                        .filter(row -> !SubTableBatchAssignmentHistory.OPERATION.equals(row.getOperationType())).toList();
 
                 for (int i = 0; i < dbHistory.size(); i++) {
                     ProcessHistory ph = dbHistory.get(i);

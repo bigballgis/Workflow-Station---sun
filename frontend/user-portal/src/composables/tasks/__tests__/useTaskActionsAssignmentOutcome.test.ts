@@ -58,4 +58,18 @@ describe('completion assignment observation', () => {
     expect(mocks.message).toHaveBeenCalledWith(expect.objectContaining({ message: 'task.batchAssignmentUnconfirmed', type: 'warning' }))
     expect(mocks.message.success).not.toHaveBeenCalled()
   })
+  it('warns when a committed verification could not be saved without repeating the action', async () => {
+    mocks.complete.mockResolvedValue({ data: { batchAssignmentVerification: { status: 'VERIFIED', issues: [], historyRecorded: false } } })
+    await setup().actions.submitApprove()
+    expect(mocks.message).toHaveBeenCalledWith(expect.objectContaining({ message: 'task.batchHistory.saveFailed', type: 'warning' }))
+    expect(mocks.message.success).not.toHaveBeenCalled()
+    expect(mocks.complete).toHaveBeenCalledTimes(1)
+  })
+  it.each(['FAILED', 'UNCONFIRMED'])('preserves %s when audit saving also fails', async status => {
+    mocks.complete.mockResolvedValue({ data: { batchAssignmentVerification: { status, issues: [], historyRecorded: false } } })
+    await setup().actions.submitApprove()
+    expect(mocks.message).toHaveBeenCalledWith(expect.objectContaining({ message:
+      `${status === 'FAILED' ? 'task.batchAssignmentFailed' : 'task.batchAssignmentUnconfirmed'} task.batchHistory.saveFailed` }))
+    expect(mocks.complete).toHaveBeenCalledTimes(1)
+  })
 })

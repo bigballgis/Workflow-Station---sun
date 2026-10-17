@@ -55,6 +55,9 @@ public class TaskController {
     private final I18nService i18nService;
     private final RestTemplate restTemplate;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
@@ -208,6 +211,7 @@ public class TaskController {
                 .build(), () -> { return taskProcessComponent.completeTaskWithObservationPlan(request, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null)); });
         var observation = taskProcessComponent.observeCompletion(observationPlan);
+        if (observationPlan != null) observation = batchAssignmentHistory.record(observationPlan, observation, userId, taskId);
         return ApiResponse.success(observation == null ? null : new com.portal.dto.TaskCompletionResult(observation));
     }
 

@@ -18,12 +18,15 @@ class TaskCompletionObservationTest {
     private final WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
     private final TaskProcessComponent processor = mock(TaskProcessComponent.class, CALLS_REAL_METHODS);
     private final ActionPostEmailComponent email = mock(ActionPostEmailComponent.class);
+    private final SubTableBatchAssignmentHistory audit = mock(SubTableBatchAssignmentHistory.class);
     private final TaskController controller = new TaskController(null, processor, null, null, null, email, null, null, null);
     private final SubTableBatchInitialMiOutcome.Plan plan = new SubTableBatchInitialMiOutcome.Plan(
             "synthetic-instance", "synthetic-definition", List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", true,
                     "synthetic_table", List.of(Map.of("synthetic_key", "one")), List.of(), List.of())));
 
     TaskCompletionObservationTest() {
+        ReflectionTestUtils.setField(controller, "batchAssignmentHistory", audit);
+        lenient().when(audit.record(any(), any(), anyString(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         ReflectionTestUtils.setField(processor, "workflowEngineClient", engine);
         when(email.runWithPostEmail(any(), org.mockito.ArgumentMatchers.<Supplier<SubTableBatchInitialMiOutcome.Plan>>any()))
                 .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get());
@@ -47,6 +50,7 @@ class TaskCompletionObservationTest {
         order.verify(engine).getProcessInstanceTasks("synthetic-instance");
         verify(processor, never()).completeTask(any(), any(), any());
         verifyNoMoreInteractions(engine);
+        verify(audit).record(plan, result.getData().batchAssignmentVerification(), "synthetic-user", "synthetic-task");
     }
     @Test void legacyActionHasNoNewResponseDataOrEngineObservation() {
         doReturn(null).when(processor).completeTaskWithObservationPlan(any(), eq("synthetic-user"), nullable(String.class));
@@ -94,6 +98,7 @@ class TaskCompletionObservationTest {
                     new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
             var proxied = (TaskProcessComponent) factory.getProxy();
             var controller = new TaskController(null, proxied, null, null, null, email, null, null, null);
+            ReflectionTestUtils.setField(controller, "batchAssignmentHistory", audit);
             var response = controller.completeTask("synthetic-task", "synthetic-user", request());
             assertThat(observed).isTrue();
             assertThat(response.isSuccess()).isTrue();

@@ -706,8 +706,11 @@ try {
     (await batchSection.textContent())?.includes('Sample users, business units, roles and generated keys do not reserve numbers') === true)
   rec('Batch assignment warning says the action already happened and must not be repeated',
     (await batchSection.textContent())?.includes('that action has already happened. Do not repeat it.') === true)
-  rec('Batch assignment help distinguishes unverified results from saved target values',
-    (await batchSection.textContent())?.includes('An unverified warning means not all task results could be confirmed') === true)
+  const batchHelpText = await batchSection.textContent() || ''
+  rec('Batch assignment help locates recorded results and distinguishes them from saved values or current status',
+    ['open Flow History to see recorded verification results', 'not current task status',
+      'Saving assignment values alone does not prove task creation.', 'If the record could not be saved'].every(
+      text => batchHelpText.includes(text)))
   await batchSection.screenshot({ path: resolve(DW_SHOTS, `${DATE}_help-sub-table-batch-outcome.png`) })
   await page.setViewportSize({ width: 600, height: 800 })
   await batchSection.screenshot({ path: resolve(DW_SHOTS, `${DATE}_help-sub-table-batch-outcome-narrow.png`) })
