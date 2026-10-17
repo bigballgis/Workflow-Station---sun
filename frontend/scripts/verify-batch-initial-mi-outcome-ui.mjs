@@ -7,7 +7,7 @@ import { loginViaPortalPassword } from './playwright-login.mjs'
 const key = process.env.FIXTURE_PROCESS_KEY
 const expected = process.env.FIXTURE_EXPECT_ASSIGNMENT_OUTCOME
 assert.match(key || '', /^batch_verify_[a-z0-9]+$/)
-assert.ok(['FAILED', 'UNCONFIRMED'].includes(expected))
+assert.ok(['VERIFIED', 'FAILED', 'UNCONFIRMED'].includes(expected))
 const tag = process.env.FIXTURE_SCREENSHOT_TAG || 'initial-assignment-outcome'
 assert.match(tag, /^[a-z0-9-]+$/)
 const browser = await chromium.launch({ headless: true })
@@ -53,10 +53,10 @@ try {
   const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-17_${tag}.png`, import.meta.url))
   await message.screenshot({ path: screenshot })
   assert.equal(body.data.batchAssignmentVerification?.status, expected)
-  assert.equal(await message.locator('.el-message__content').innerText(), expected === 'FAILED'
-    ? 'Request created, but some initial personal tasks have no assignee. Do not submit again; ask an administrator to inspect the actual tasks.'
+  assert.equal(await message.locator('.el-message__content').innerText(), expected === 'VERIFIED' ? 'Process submitted successfully' : expected === 'FAILED'
+    ? 'Request created, but some initial personal tasks have a missing or mismatched assignee. Do not submit again; ask an administrator to inspect the actual tasks.'
     : 'Request created, but the batch assignment results are not fully verified. Do not submit again; inspect the actual tasks.')
-  assert.equal(await page.locator('.el-message--success').count(), 0)
+  assert.equal(await page.locator('.el-message--success').count(), expected === 'VERIFIED' ? 1 : 0)
   await page.setViewportSize({ width: 600, height: 800 })
   await message.screenshot({ path: screenshot.replace('.png', '-narrow.png') })
   const tasks = (await request(page, 'GET', `http://localhost:8081/api/v1/tasks?processInstanceId=${instanceId}&page=0&size=100`)).tasks

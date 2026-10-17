@@ -12,7 +12,9 @@ import java.util.function.Supplier;
 /** Observes only initial-assignment collections already built by a strict source-bound preflight. */
 public final class SubTableBatchInitialMiOutcome {
     private SubTableBatchInitialMiOutcome() { }
-    record Expected(String node, boolean personalOnly, String table, List<Map<String, Object>> rowKeys) { }
+    record PersonalTarget(Map<String, Object> rowKey, String assignee) { }
+    record Expected(String node, boolean personalOnly, String table, List<Map<String, Object>> rowKeys,
+                    List<PersonalTarget> people) { }
     /** Server-only plan returned across the completion transaction, never serialized as a response. */
     public record Plan(String instanceId, String definitionId, List<Expected> expected) { }
 
@@ -29,12 +31,16 @@ public final class SubTableBatchInitialMiOutcome {
                     .allMatch(value -> ((Map<?, ?>) value).get(personField) instanceof String);
             String table = (String) ((Map<?, ?>) ((Map<?, ?>) control.get("rowDesign")).get("binding")).get("tableName");
             List<Map<String, Object>> keys = new ArrayList<>();
+            List<PersonalTarget> people = new ArrayList<>();
             for (Object rawItem : items) {
                 var key = new java.util.LinkedHashMap<String, Object>();
                 ((Map<?, ?>) ((Map<?, ?>) rawItem).get("rowKey")).forEach((name, value) -> key.put((String) name, value));
                 keys.add(Map.copyOf(key));
+                if (personField != null && ((Map<?, ?>) rawItem).get(personField) instanceof String person) {
+                    people.add(new PersonalTarget(Map.copyOf(key), person));
+                }
             }
-            Expected candidate = new Expected(node, personalOnly, table, List.copyOf(keys));
+            Expected candidate = new Expected(node, personalOnly, table, List.copyOf(keys), List.copyOf(people));
             if (!expected.contains(candidate)) expected.add(candidate);
         }
         return expected;

@@ -21,7 +21,7 @@ class TaskCompletionObservationTest {
     private final TaskController controller = new TaskController(null, processor, null, null, null, email, null, null, null);
     private final SubTableBatchInitialMiOutcome.Plan plan = new SubTableBatchInitialMiOutcome.Plan(
             "synthetic-instance", "synthetic-definition", List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", true,
-                    "synthetic_table", List.of(Map.of("synthetic_key", "one")))));
+                    "synthetic_table", List.of(Map.of("synthetic_key", "one")), List.of())));
 
     TaskCompletionObservationTest() {
         ReflectionTestUtils.setField(processor, "workflowEngineClient", engine);

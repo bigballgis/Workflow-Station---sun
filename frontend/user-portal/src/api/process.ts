@@ -15,7 +15,7 @@ export interface ProcessDefinition {
 }
 
 export interface BatchAssignmentVerification {
-  status: 'FAILED' | 'UNCONFIRMED'
+  status: 'VERIFIED' | 'FAILED' | 'UNCONFIRMED'
   issues: Array<{ taskId: string | null; reasonCode: string }>
 }
 

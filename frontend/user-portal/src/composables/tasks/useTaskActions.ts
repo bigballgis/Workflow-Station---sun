@@ -347,7 +347,7 @@ export function useTaskActions(options: {
         subTableBatchChanges,
       })
       const assignmentResult = completion.data?.batchAssignmentVerification
-      if (assignmentResult) {
+      if (assignmentResult && assignmentResult.status !== 'VERIFIED') {
         ElMessage({
           type: 'warning',
           message: t(assignmentResult.status === 'FAILED'

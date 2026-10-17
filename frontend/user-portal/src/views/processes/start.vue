@@ -923,7 +923,7 @@ const handleSubmit = async (actionId?: string) => {
         duration: 0,
         showClose: true
       })
-    } else if (assignmentResult) {
+    } else if (assignmentResult && assignmentResult.status !== 'VERIFIED') {
       ElMessage({
         type: 'warning',
         message: t(assignmentResult.status === 'FAILED'

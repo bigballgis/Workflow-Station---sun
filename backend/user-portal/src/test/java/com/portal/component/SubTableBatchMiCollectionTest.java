@@ -234,7 +234,8 @@ class SubTableBatchMiCollectionTest {
         variables.put("rowsToCreate", List.of(Map.of("handler_code", "untrusted-target")));
         var expected = builder.injectMiCollectionForFirstTask("process", "host", "instance", variables, snapshot(controls()));
         assertThat(expected).containsExactly(new SubTableBatchInitialMiOutcome.Expected(
-                "child", true, "synthetic_lines", List.of(Map.of("line_key", "one"))));
+                "child", true, "synthetic_lines", List.of(Map.of("line_key", "one")),
+                List.of(new SubTableBatchInitialMiOutcome.PersonalTarget(Map.of("line_key", "one"), "u1"))));
         var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
         assertThat(item.get("handler_code")).isEqualTo("u1");
         assertThat(item.get("rowKey")).isEqualTo(Map.of("line_key", "one"));

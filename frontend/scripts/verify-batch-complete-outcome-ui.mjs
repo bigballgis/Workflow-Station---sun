@@ -7,7 +7,7 @@ import { loginViaPortalPassword } from './playwright-login.mjs'
 const taskId = process.env.FIXTURE_TASK_ID
 const expected = process.env.FIXTURE_EXPECT_ASSIGNMENT_OUTCOME
 assert.match(taskId || '', /^[a-f0-9-]{36}$/i)
-assert.ok(['FAILED', 'UNCONFIRMED'].includes(expected))
+assert.ok(['VERIFIED', 'FAILED', 'UNCONFIRMED'].includes(expected))
 const tag = process.env.FIXTURE_SCREENSHOT_TAG || 'complete-assignment-outcome'
 assert.match(tag, /^[a-z0-9-]+$/)
 const browser = await chromium.launch({ headless: true })
@@ -57,6 +57,11 @@ try {
   const tasks = (await request(page, 'GET', enginePath)).tasks
   assert.equal(tasks.length, 2)
   for (const created of tasks) assert.equal(created.currentAssignee === person.id, expected !== 'FAILED')
+  if (process.env.FIXTURE_EXPECT_WRONG_PERSON === '1') {
+    assert.equal(expected, 'FAILED')
+    for (const created of tasks) assert.equal(created.currentAssignee, 'synthetic-wrong-person')
+    assert.ok(body.data.batchAssignmentVerification.issues.every(issue => issue.reasonCode === 'PERSON_TASK_TARGET_MISMATCH'))
+  }
   console.log(JSON.stringify({ step: 'synthetic-complete-outcome-created', instanceId: task.processInstanceId,
     taskIds: tasks.map(created => created.taskId), observation: body.data?.batchAssignmentVerification || null }))
   await page.waitForURL('**/portal/tasks')
@@ -65,10 +70,10 @@ try {
   const screenshot = fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-17_${tag}.png`, import.meta.url))
   await message.screenshot({ path: screenshot })
   assert.equal(body.data?.batchAssignmentVerification?.status, expected)
-  assert.equal(await message.locator('.el-message__content').innerText(), expected === 'FAILED'
-    ? 'Task completed, but some initial personal tasks have no assignee. Do not complete it again; ask an administrator to inspect the actual tasks.'
+  assert.equal(await message.locator('.el-message__content').innerText(), expected === 'VERIFIED' ? 'Operation successful' : expected === 'FAILED'
+    ? 'Task completed, but some initial personal tasks have a missing or mismatched assignee. Do not complete it again; ask an administrator to inspect the actual tasks.'
     : 'Task completed, but the batch assignment results are not fully verified. Do not complete it again; inspect the actual tasks.')
-  assert.equal(await page.locator('.el-message--success').count(), 0)
+  assert.equal(await page.locator('.el-message--success').count(), expected === 'VERIFIED' ? 1 : 0)
   await page.setViewportSize({ width: 600, height: 800 })
   await message.screenshot({ path: screenshot.replace('.png', '-narrow.png') })
   assert.equal(pageErrors, 0)

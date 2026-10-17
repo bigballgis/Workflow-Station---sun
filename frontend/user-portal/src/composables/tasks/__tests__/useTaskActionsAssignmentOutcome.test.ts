@@ -45,4 +45,17 @@ describe('completion assignment observation', () => {
     expect(mocks.message).not.toHaveBeenCalled()
     expect(mocks.push).toHaveBeenCalledWith('/tasks')
   })
+  it('uses ordinary success only for an explicitly verified assignment outcome', async () => {
+    mocks.complete.mockResolvedValue({ data: { batchAssignmentVerification: { status: 'VERIFIED', issues: [] } } })
+    await setup().actions.submitApprove()
+    expect(mocks.message.success).toHaveBeenCalledWith('task.operationSuccess')
+    expect(mocks.message).not.toHaveBeenCalled()
+    expect(mocks.complete).toHaveBeenCalledTimes(1)
+  })
+  it('keeps unknown outcome statuses unconfirmed', async () => {
+    mocks.complete.mockResolvedValue({ data: { batchAssignmentVerification: { status: 'UNKNOWN', issues: [] } } })
+    await setup().actions.submitApprove()
+    expect(mocks.message).toHaveBeenCalledWith(expect.objectContaining({ message: 'task.batchAssignmentUnconfirmed', type: 'warning' }))
+    expect(mocks.message.success).not.toHaveBeenCalled()
+  })
 })

@@ -433,7 +433,7 @@ export default {
     startNode: '开始',
     endNode: '结束',
     operationSuccess: '操作成功',
-    batchAssignmentFailed: '任务已完成，但部分初次分派的个人任务没有办理人。请勿重复完成，请联系管理员核查实际任务。',
+    batchAssignmentFailed: '任务已完成，但部分初次分派的个人任务缺少办理人或办理人与配置不符。请勿重复完成，请联系管理员核查实际任务。',
     batchAssignmentUnconfirmed: '任务已完成，但批量分派结果尚未全部核实。请勿重复完成，请核查实际任务。',
     operationFailed: '操作失败',
     delegateSuccess: '委托成功',
@@ -538,7 +538,7 @@ export default {
     pleaseCompleteForm: '请完善表单信息',
     pkGenerateFailed: '主键生成失败，请重试',
     processSubmitSuccess: '流程提交成功',
-    batchAssignmentFailed: '申请已创建，但部分初次分派的个人任务没有办理人。请勿重复发起，请联系管理员核查实际任务。',
+    batchAssignmentFailed: '申请已创建，但部分初次分派的个人任务缺少办理人或办理人与配置不符。请勿重复发起，请联系管理员核查实际任务。',
     batchAssignmentUnconfirmed: '申请已创建，但批量分派结果尚未全部核实。请勿重复发起，请核查实际任务。',
     firstStepIncomplete:
       '申请已创建，但首个步骤未完成。该步骤已回到您的待办，请打开后重新提交；若持续失败请联系管理员。',

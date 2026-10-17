@@ -31,6 +31,8 @@ try {
   if (startsInMi && !directMi) throw new Error('Initial MI fixture requires direct MI mode')
   const clearCreatedAssignee = process.env.FIXTURE_CLEAR_CREATED_ASSIGNEE === '1'
   if (clearCreatedAssignee && !assignment) throw new Error('Assignment failure fixture requires assignment mode')
+  const wrongCreatedAssignee = process.env.FIXTURE_WRONG_CREATED_ASSIGNEE === '1'
+  if (wrongCreatedAssignee && (!assignment || clearCreatedAssignee)) throw new Error('Wrong-person fixture requires exclusive assignment failure mode')
   const assignmentMode = process.env.FIXTURE_ASSIGNMENT_MODE ?? 'both'
   if (!['both', 'role', 'user'].includes(assignmentMode)) throw new Error('Unsupported synthetic assignment mode')
   const assignmentOnly = process.env.FIXTURE_ASSIGN_ONLY === '1'
@@ -124,7 +126,7 @@ ${directMi ? '' : `<bpmn:userTask id="Review" name="Synthetic batch review" flow
 ${assignment ? `${directMi ? '' : '<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targetRef="AssignedRows"/>'}
 <bpmn:subProcess id="AssignedRows"><bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="syntheticAssignmentRows" flowable:elementVariable="item"/>
 <bpmn:startEvent id="AssignedStart"/><bpmn:sequenceFlow id="AssignedFlow" sourceRef="AssignedStart" targetRef="AssignedWork"/>
-<bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', assignmentMode)}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties>${clearCreatedAssignee ? '<flowable:taskListener event="assignment" expression="${task.assignee == null ? null : task.setAssignee(null)}"/>' : ''}</bpmn:extensionElements></bpmn:userTask>
+<bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', assignmentMode)}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties>${clearCreatedAssignee ? '<flowable:taskListener event="assignment" expression="${task.assignee == null ? null : task.setAssignee(null)}"/>' : ''}${wrongCreatedAssignee ? '<flowable:taskListener event="assignment" expression="${task.assignee == null || task.assignee == &quot;synthetic-wrong-person&quot; ? null : task.setAssignee(&quot;synthetic-wrong-person&quot;)}"/>' : ''}</bpmn:extensionElements></bpmn:userTask>
 <bpmn:sequenceFlow id="AssignedEndFlow" sourceRef="AssignedWork" targetRef="AssignedEnd"/><bpmn:endEvent id="AssignedEnd"/></bpmn:subProcess>
 <bpmn:sequenceFlow id="AssignedToEnd" sourceRef="AssignedRows" targetRef="End"/>` : '<bpmn:sequenceFlow id="ReviewToEnd" sourceRef="Review" targetRef="End"/>'}<bpmn:endEvent id="End"/>
 </bpmn:process>
