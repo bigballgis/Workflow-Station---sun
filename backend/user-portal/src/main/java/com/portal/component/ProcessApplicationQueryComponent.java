@@ -423,6 +423,8 @@ public class ProcessApplicationQueryComponent {
                     continue;
                 }
                 String key = String.valueOf(e.getKey());
+                // Engine variables are never an authoritative source for local batch capabilities/deletions.
+                if (com.portal.util.SubTableBatchMetadata.isLocalField(key)) continue;
                 if ("__subTables__".equals(key) || vars.get(key) != null || clearedByUser.contains(key)) {
                     continue;
                 }

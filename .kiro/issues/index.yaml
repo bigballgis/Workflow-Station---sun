@@ -4789,3 +4789,16 @@
     合成 clone 50066 同 catalog 覆盖/关闭后旧页面 HTTP409 且无错误新实例，刷新后可启动；
     旧增强实例快照保持，关闭后新实例无批量能力；MI234+6、Help153 与独立关键26测试通过。
     证据 docs/specs/subtable-batch-operations/batch-start-context-review.md；不解决延期 A39/#1666。
+
+- id: "1668"
+  status: fixed
+  fixed_at: "2026-10-18"
+  severity: major
+  category: security
+  summary: "引擎回写可覆盖/补造批量保留元数据，Call逐行输出可外传子实例快照"
+  file: "backend/user-portal/src/main/java/com/portal/component/CalledProcessSyncComponent.java"
+  detail: |
+    Call映射计划在复制/保存前拒绝保留target和逐行保留source；申请详情scalar hydration排除本地协议键。
+    两保留字段的新旧实例正反例及source泄露用例红→绿，隔离package47项通过；
+    部署后自有paired增强/普通实例详情读取，本地元数据不变且响应不泄露；不声称真实引擎故障注入。
+    证据 docs/specs/subtable-batch-operations/batch-engine-metadata-review.md；A39/#1666保持延期。
