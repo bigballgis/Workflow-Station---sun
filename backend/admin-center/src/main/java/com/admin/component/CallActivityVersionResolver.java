@@ -48,6 +48,9 @@ public class CallActivityVersionResolver {
     private static final Pattern CALLED_ELEMENT_ATTR = Pattern.compile("\\bcalledElement=\"([^\"]*)\"");
     private static final Pattern ID_ATTR = Pattern.compile("\\bid=\"([^\"]*)\"");
 
+    private static final String FLOWABLE_NS = "http://flowable.org/bpmn";
+    private static final Pattern DEFINITIONS_START_TAG = Pattern.compile("<(?:\\w+:)?definitions\\b");
+
     /** Designer property naming the published version this call is pinned to. */
     private static final Pattern PINNED_VERSION_PROPERTY = Pattern.compile(
             "<(?:\\w+:)?property\\b[^>]*\\bname=\"calledVersion\"[^>]*\\bvalue=\"([^\"]*)\"");
@@ -109,7 +112,25 @@ public class CallActivityVersionResolver {
             return bpmnXml;
         }
         out.append(bpmnXml.substring(cursor));
-        return out.toString();
+        return ensureFlowableNamespace(out.toString());
+    }
+
+    /**
+     * Declares the {@code flowable} prefix on the root element when the designer did not.
+     * The rewrite above writes {@code flowable:calledElementType}; with the prefix unbound
+     * the XML is not well-formed and Flowable refuses to read it.
+     */
+    private String ensureFlowableNamespace(String xml) {
+        if (xml.contains("xmlns:flowable=")) {
+            return xml;
+        }
+        Matcher root = DEFINITIONS_START_TAG.matcher(xml);
+        if (!root.find()) {
+            return xml;
+        }
+        return xml.substring(0, root.end())
+                + " xmlns:flowable=\"" + FLOWABLE_NS + "\""
+                + xml.substring(root.end());
     }
 
     /**

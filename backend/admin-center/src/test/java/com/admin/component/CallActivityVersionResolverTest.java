@@ -11,6 +11,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.w3c.dom.Element;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
@@ -82,6 +87,47 @@ class CallActivityVersionResolverTest {
         assertThat(out).contains("flowable:calledElementType=\"id\"");
         // The key form must be gone, or Flowable would still resolve "latest".
         assertThat(out).doesNotContain("calledElement=\"fu-callee\"");
+    }
+
+    /**
+     * The designer's BPMN does not always declare the flowable prefix. The rewrite adds a
+     * flowable attribute, so the output must still be namespace-well-formed or Flowable
+     * rejects it ("prefix flowable ... is not bound").
+     */
+    @Test
+    void rewrittenXmlBindsTheFlowablePrefix() throws Exception {
+        givenDeployedVersion("fu-callee", "1.2.0", "fu-callee:3:abc-def");
+
+        String out = resolver.resolvePinnedCalls(pinnedCall("fu-callee", "1.2.0"));
+
+        assertThat(parsedCallActivity(out).getAttributeNS("http://flowable.org/bpmn", "calledElementType"))
+                .isEqualTo("id");
+    }
+
+    /**
+     * When the designer did declare the prefix it must not be declared again: a repeated
+     * attribute on the root is just as unreadable as an unbound prefix.
+     */
+    @Test
+    void keepsAnExistingFlowablePrefixDeclarationSingle() throws Exception {
+        givenDeployedVersion("fu-callee", "1.2.0", "fu-callee:3:abc-def");
+        String declared = pinnedCall("fu-callee", "1.2.0").replace(
+                "xmlns:custom=", "xmlns:flowable=\"http://flowable.org/bpmn\"\n  xmlns:custom=");
+
+        String out = resolver.resolvePinnedCalls(declared);
+
+        assertThat(out.split("xmlns:flowable=", -1)).hasSize(2);
+        assertThat(parsedCallActivity(out).getAttributeNS("http://flowable.org/bpmn", "calledElementType"))
+                .isEqualTo("id");
+    }
+
+    private static Element parsedCallActivity(String xml) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        return (Element) factory.newDocumentBuilder()
+                .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))
+                .getElementsByTagNameNS("http://www.omg.org/spec/BPMN/20100524/MODEL", "callActivity")
+                .item(0);
     }
 
     /** Without a pin the call follows whatever is deployed — the BPMN is untouched. */
