@@ -67,7 +67,14 @@ export interface MyApplicationQueryRequest {
   keyword?: string
 }
 
+export interface BatchStartContext {
+  schemaVersion: number
+  catalogId: string
+  definitionDigest: string
+}
+
 export interface ProcessStartRequest {
+  batchStartContext?: BatchStartContext
   /** 与路径 /processes/{processKey}/start 一致；省略时由后端用路径参数补全 */
   processDefinitionKey?: string
   businessKey?: string
@@ -99,6 +106,7 @@ export interface AuditFunctionUnit {
 }
 
 export interface FunctionUnitContent {
+  batchStartContext?: BatchStartContext
   id: string
   name: string
   code: string
@@ -300,6 +308,10 @@ export const processApi = {
       `/processes/function-units/${functionUnitId}/content`,
       Object.keys(params).length > 0 ? { params } : undefined,
     )
+  },
+
+  getFunctionUnitStartContent(functionUnitId: string) {
+    return request.get<FunctionUnitContent>(`/processes/function-units/${functionUnitId}/content`, { params: { forStart: true } })
   },
   
   // 获取功能单元特定类型的内容

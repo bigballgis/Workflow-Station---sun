@@ -130,6 +130,10 @@ public class FunctionUnitManagerComponent {
         return contentComponent.assembleFunctionUnitContent(id);
     }
 
+    public FunctionUnitContentResponse assemblePublishedStartContent(String id) {
+        return contentComponent.assembleFunctionUnitContent(id, true);
+    }
+
     // ==================== Basic queries ====================
 
     /** Compute checksum */

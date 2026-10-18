@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { loginViaAdminPassword, loginViaPortalPassword } from './playwright-login.mjs'
+import { readBatchStartContext } from './batch-start-context.mjs'
 
 const processKey = process.env.FIXTURE_PROCESS_KEY
 assert.match(processKey || '', /^batch_verify_[a-z0-9]+$/)
@@ -30,7 +31,8 @@ try {
   const person = users.find(user => user.username === 'developer')
   assert.ok(person?.id)
   const store = `dw:batch_lines_${processKey.slice('batch_verify_'.length)}`
-  const start = target => api('POST', `/processes/${encodeURIComponent(catalog.code)}/start`, { formData: {
+  const batchStartContext = await readBatchStartContext(page, catalog.id)
+  const start = target => api('POST', `/processes/${encodeURIComponent(catalog.code)}/start`, { batchStartContext, formData: {
     case_key: 'SYNTHETIC-FIRST-CASE', __subTables__: { [store]: [
       { line_key: 'SYNTHETIC-ONE', case_ref: 'SYNTHETIC-FIRST-CASE', caption: 'First synthetic line', amount: 1, handler_code: target },
       { line_key: 'SYNTHETIC-TWO', case_ref: 'SYNTHETIC-FIRST-CASE', caption: 'Second synthetic line', amount: 2, handler_code: target },

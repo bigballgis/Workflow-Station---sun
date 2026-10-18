@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { chromium } from 'playwright'
 import { loginViaPortalPassword, loginViaAdminPassword } from './playwright-login.mjs'
+import { readBatchStartContext } from './batch-start-context.mjs'
 
 const processKey = process.env.FIXTURE_PROCESS_KEY
 assert.match(processKey || '', /^batch_verify_[a-z0-9]+$/)
@@ -29,7 +30,7 @@ try {
   const api = (method, path, data) => request(page, method, `http://localhost:3000/api/portal${path}`, data)
   const engine = (method, path, data) => request(page, method, `http://localhost:8081/api/v1/processes${path}`, data)
   const store = `dw:batch_lines_${processKey.slice('batch_verify_'.length)}`
-  const payload = { formData: { case_key: 'SYNTHETIC-PIN-CASE', __subTables__: { [store]: [
+  const payload = { batchStartContext: await readBatchStartContext(page, catalog.id), formData: { case_key: 'SYNTHETIC-PIN-CASE', __subTables__: { [store]: [
     { line_key: 'SYNTHETIC-ONE', case_ref: 'SYNTHETIC-PIN-CASE', caption: 'Synthetic pin first', amount: 1 },
     { line_key: 'SYNTHETIC-TWO', case_ref: 'SYNTHETIC-PIN-CASE', caption: 'Synthetic pin second', amount: 2 },
   ] } }, remark: 'Synthetic startup pin verification' }

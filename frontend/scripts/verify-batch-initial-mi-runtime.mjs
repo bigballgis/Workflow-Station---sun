@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { chromium } from 'playwright'
 import { loginViaAdminPassword, loginViaPortalPassword } from './playwright-login.mjs'
+import { readBatchStartContext } from './batch-start-context.mjs'
 
 const processKey = process.env.FIXTURE_PROCESS_KEY
 assert.match(processKey || '', /^batch_verify_[a-z0-9]+$/)
@@ -36,7 +37,8 @@ try {
   const person = users.find(user => user.username === 'developer')
   assert.ok(person?.id)
   const store = `dw:batch_lines_${processKey.slice('batch_verify_'.length)}`
-  const payload = target => ({ formData: { case_key: 'SYNTHETIC-INITIAL-CASE', __subTables__: { [store]: [
+  const batchStartContext = await readBatchStartContext(page, catalog.id)
+  const payload = target => ({ batchStartContext, formData: { case_key: 'SYNTHETIC-INITIAL-CASE', __subTables__: { [store]: [
     { line_key: 'SYNTHETIC-ONE', case_ref: 'SYNTHETIC-INITIAL-CASE', caption: 'Synthetic initial first', amount: 1, handler_code: target },
     { line_key: 'SYNTHETIC-TWO', case_ref: 'SYNTHETIC-INITIAL-CASE', caption: 'Synthetic initial second', amount: 2, handler_code: target },
   ] }, syntheticAssignmentRows: [{ handler_code: 'SYNTHETIC-SPOOFED-NONPERSON' }] }, remark: 'Synthetic initial MI verification' })

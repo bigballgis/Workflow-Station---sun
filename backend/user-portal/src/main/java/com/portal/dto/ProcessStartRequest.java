@@ -29,6 +29,9 @@ public class ProcessStartRequest {
     /** 表单数据 */
     private Map<String, Object> formData;
 
+    /** Page's published design identity; transport-only, never copied into formData. */
+    private BatchStartContext batchStartContext;
+
     /** 附件列表 */
     private List<AttachmentInfo> attachments;
 

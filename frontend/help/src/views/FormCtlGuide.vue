@@ -134,6 +134,7 @@ function batchWorkspaceSection(prefix: string): GuideSection {
       { code: 'Batch Assign · Assignment Mode', hintKey: `${prefix}.batchAssignHint` },
       { code: 'Apply', hintKey: `${prefix}.batchApplyHint` },
       { code: 'Cancel', hintKey: `${prefix}.batchCancelHint` },
+      { code: 'New Request · Submit Application', hintKey: `${prefix}.batchStartHint` },
       { code: 'Submit Application · Approve', hintKey: `${prefix}.batchOutcomeHint` },
     ] }
 }

@@ -4775,3 +4775,17 @@
     恢复处理时先确认跨服务启动方案：引擎待确认握手，或本地预创建快照并固定引擎实例ID。
     两者均须覆盖幂等、响应丢失/进程崩溃、hydration 和所有操作入口；仅新增强启动启用，保留旧路径。
     不得用增加 catch/告警、关闭按钮或失败后再次写同一故障数据库冒充隔离。
+
+- id: "1667"
+  status: fixed
+  fixed_at: "2026-10-18"
+  severity: major
+  category: bug
+  summary: "New Request 批量设计未校验发布上下文且 Portal/Admin 双缓存可消费旧内容"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableBatchStartContext.java"
+  detail: |
+    服务端产生类型化发布摘要，New Request 原样回传，在引擎调用前复核；CSV 保留普通鉴权。
+    forStart 内容读取绕过两层缓存并要求 Admin authoritative 确认，不污染普通缓存。
+    合成 clone 50066 同 catalog 覆盖/关闭后旧页面 HTTP409 且无错误新实例，刷新后可启动；
+    旧增强实例快照保持，关闭后新实例无批量能力；MI234+6、Help153 与独立关键26测试通过。
+    证据 docs/specs/subtable-batch-operations/batch-start-context-review.md；不解决延期 A39/#1666。

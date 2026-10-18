@@ -6,6 +6,7 @@ import { chromium } from 'playwright'
 import { loginViaDwPassword, loginViaAdminPassword, loginViaPortalPassword } from './playwright-login.mjs'
 import { waitForFixtureDeployment } from './fixture-deployment.mjs'
 import { unwrapApiList } from './mi-regression-helpers.mjs'
+import { readBatchStartContext } from './batch-start-context.mjs'
 
 const sourceId = process.env.FIXTURE_UNIT_ID
 assert.match(sourceId || '', /^\d+$/)
@@ -54,6 +55,7 @@ try {
   await loginViaPortalPassword(page)
   const portal = (method, path, data) => json(page, method, `http://localhost:3000/api/portal${path}`, data)
   const started = await portal('POST', `/processes/${encodeURIComponent(catalog.code)}/start`, {
+    batchStartContext: await readBatchStartContext(page, catalog.id),
     formData: { case_key: 'SYNTHETIC-CLONE-CASE', __subTables__: { [`dw:${child.tableName}`]: [
       { line_key: 'SYNTHETIC-ONE', case_ref: 'SYNTHETIC-CLONE-CASE', caption: 'First synthetic line', amount: 1 },
       { line_key: 'SYNTHETIC-TWO', case_ref: 'SYNTHETIC-CLONE-CASE', caption: 'Second synthetic line', amount: 2 },

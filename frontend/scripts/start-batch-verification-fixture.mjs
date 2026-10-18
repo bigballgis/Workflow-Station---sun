@@ -3,6 +3,7 @@ import { chromium } from 'playwright'
 import { randomUUID } from 'node:crypto'
 import { loginViaAdminPassword, loginViaPortalPassword } from './playwright-login.mjs'
 import { unwrapApiList } from './mi-regression-helpers.mjs'
+import { readBatchStartContext } from './batch-start-context.mjs'
 
 const processKey = process.env.FIXTURE_PROCESS_KEY
 if (!/^batch_verify_[a-z0-9]+$/.test(processKey || '')) throw new Error('Explicit synthetic FIXTURE_PROCESS_KEY required')
@@ -35,7 +36,7 @@ try {
   const textField = automaticPk ? 'item_label' : 'caption'
   const numberField = automaticPk ? 'units' : 'amount'
   const response = await page.request.post(`http://localhost:3000/api/portal/processes/${unit.code}/start`, {
-    data: { formData: { case_key: 'SYNTHETIC-CASE', __subTables__: { [`dw:${tableName}`]: [
+    data: { batchStartContext: await readBatchStartContext(page, unit.id), formData: { case_key: 'SYNTHETIC-CASE', __subTables__: { [`dw:${tableName}`]: [
       { [pkField]: automaticPk ? randomUUID() : 'SYNTHETIC-ONE', [fkField]: 'SYNTHETIC-CASE', [textField]: 'First synthetic line', [numberField]: 1 },
       { [pkField]: automaticPk ? randomUUID() : 'SYNTHETIC-TWO', [fkField]: 'SYNTHETIC-CASE', [textField]: 'Second synthetic line', [numberField]: 2 },
     ] } }, remark: 'Isolated synthetic batch acceptance' },

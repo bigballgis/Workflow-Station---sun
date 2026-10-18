@@ -707,6 +707,9 @@ try {
   rec('Batch assignment warning says the action already happened and must not be repeated',
     (await batchSection.textContent())?.includes('that action has already happened. Do not repeat it.') === true)
   const batchHelpText = await batchSection.textContent() || ''
+  rec('New Request batch help requires refresh after a published design change',
+    ['checks the published batch design again', 'blocked before a process is created',
+      'Refresh the request form', 'Existing instances retain their own batch design'].every(text => batchHelpText.includes(text)))
   rec('Batch assignment help locates recorded results and distinguishes them from saved values or current status',
     ['open Flow History to see recorded verification results', 'not current task status',
       'Saving assignment values alone does not prove task creation.', 'If the record could not be saved'].every(

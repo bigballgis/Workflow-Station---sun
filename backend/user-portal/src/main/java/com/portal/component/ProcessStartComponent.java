@@ -225,7 +225,7 @@ public class ProcessStartComponent {
     // confined to the
     // short tx() blocks; all HTTP runs connection-free. See txTemplate javadoc.
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
-        return startProcess(userId, processKey, request, false);
+        return startProcess(userId, processKey, request, false, false);
     }
 
     /**
@@ -234,11 +234,16 @@ public class ProcessStartComponent {
      */
     public ProcessInstanceInfo startProcessFromInternal(
             String userId, String processKey, ProcessStartRequest request) {
-        return startProcess(userId, processKey, request, true);
+        return startProcess(userId, processKey, request, true, true);
+    }
+
+    /** CSV is a server producer, not an internal caller: ordinary FU/workspace authorization still applies. */
+    public ProcessInstanceInfo startProcessFromServer(String userId, String processKey, ProcessStartRequest request) {
+        return startProcess(userId, processKey, request, false, true);
     }
 
     private ProcessInstanceInfo startProcess(
-            String userId, String processKey, ProcessStartRequest request, boolean internal) {
+            String userId, String processKey, ProcessStartRequest request, boolean internal, boolean serverProduced) {
         if (processKey == null || processKey.isEmpty()) {
             throw new IllegalArgumentException("Process key cannot be empty");
         }
@@ -249,6 +254,9 @@ public class ProcessStartComponent {
         ActiveCatalogPin pin = resolveActiveCatalogPin(userId, processKey, internal);
 
         LoadedStartDefinition def = loadProcessDefinitionForStart(pin, processKey);
+        var currentContext = SubTableBatchStartContext.capture(def.catalogContent(), pin, new ObjectMapper());
+        SubTableBatchStartContext.validate(request.getBatchStartContext(), currentContext, serverProduced,
+                i18nService.getMessage("portal.batch.start_context_changed"));
 
         // actualProcessKey is the key used to start (Flowable uses BPMN <process id>)
         final DeploymentPin deployment = deployAndResolveProcessKey(processKey, def);
@@ -453,7 +461,7 @@ public class ProcessStartComponent {
         String flowableProcessKey = null;
 
         try {
-            Map<String, Object> content = processComponent.getFunctionUnitContent(pin.catalogId());
+            Map<String, Object> content = processComponent.getPublishedStartContent(pin.catalogId());
             if (content != null) {
                 catalogContent = content;
                 if (content.get("name") != null) {

@@ -83,9 +83,12 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam(required = false) String taskId,
-            @RequestParam(required = false) String processInstanceId) {
+            @RequestParam(required = false) String processInstanceId,
+            @RequestParam(defaultValue = "false") boolean forStart) {
         requireFunctionUnitContentAccess(userId, functionUnitId, taskId, processInstanceId);
-        Map<String, Object> content = processComponent.getFunctionUnitContent(functionUnitId);
+        if (forStart && (taskId != null || processInstanceId != null)) throw new IllegalArgumentException("Start content cannot use task or instance access");
+        Map<String, Object> content = forStart ? processComponent.getFunctionUnitStartContent(functionUnitId)
+                : processComponent.getFunctionUnitContent(functionUnitId);
         return ApiResponse.success(content);
     }
 

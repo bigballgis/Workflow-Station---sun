@@ -695,9 +695,11 @@ public class FunctionUnitController extends AbstractBaseController {
     @GetMapping("/{id}/content")
     @Operation(summary = "Full bundled content", description = "Forms, BPMN, actions for portal")
     public ResponseEntity<ApiResponse<com.admin.dto.response.FunctionUnitContentResponse>> getFunctionUnitContent(
-            @Parameter(description = "Function unit id") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @RequestParam(defaultValue = "false") boolean forStart) {
         log.info("Getting function unit content for: {}", id);
-        return handleRequest(() -> functionUnitManager.assembleFunctionUnitContent(id));
+        return handleRequest(() -> forStart ? functionUnitManager.assemblePublishedStartContent(id)
+                : functionUnitManager.assembleFunctionUnitContent(id));
     }
     
     // ==================== Merge content endpoint (Req 35) ====================

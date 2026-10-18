@@ -137,7 +137,7 @@ class PortalMainTableViewImportTest {
 
     @Test
     void importViewCsv_blankProcessInstanceId_createsNewProcess() {
-        when(processComponent.startProcess(eq(USER_ID), eq(FU_CODE), any(ProcessStartRequest.class)))
+        when(processComponent.startProcessFromServer(eq(USER_ID), eq(FU_CODE), any(ProcessStartRequest.class)))
                 .thenReturn(ProcessInstanceInfo.builder().id("new-proc-1").build());
 
         String csv = "processInstanceId,Case Number,Legal Hold\n,99,true\n";
@@ -147,7 +147,7 @@ class PortalMainTableViewImportTest {
         assertThat(result.errorCount()).isZero();
 
         ArgumentCaptor<ProcessStartRequest> captor = ArgumentCaptor.forClass(ProcessStartRequest.class);
-        verify(processComponent).startProcess(eq(USER_ID), eq(FU_CODE), captor.capture());
+        verify(processComponent).startProcessFromServer(eq(USER_ID), eq(FU_CODE), captor.capture());
         assertThat(captor.getValue().getFormData()).containsEntry("case_number", "99");
         assertThat(captor.getValue().getFormData()).containsEntry("legal_hold", true);
         assertThat(captor.getValue().getBusinessKey()).isEqualTo("99");
@@ -155,7 +155,7 @@ class PortalMainTableViewImportTest {
 
     @Test
     void importViewCsv_missingProcessInstanceIdColumn_createsNewProcess() {
-        when(processComponent.startProcess(eq(USER_ID), eq(FU_CODE), any(ProcessStartRequest.class)))
+        when(processComponent.startProcessFromServer(eq(USER_ID), eq(FU_CODE), any(ProcessStartRequest.class)))
                 .thenReturn(ProcessInstanceInfo.builder().id("new-proc-2").build());
 
         String csv = "Case Number,Legal Hold\n88,false\n";
@@ -173,7 +173,7 @@ class PortalMainTableViewImportTest {
         assertThat(result.createdCount()).isZero();
         assertThat(result.errorCount()).isEqualTo(1);
         assertThat(result.errors().get(0)).contains("no field values for new record");
-        verify(processComponent, never()).startProcess(any(), any(), any());
+        verify(processComponent, never()).startProcessFromServer(any(), any(), any());
     }
 
     @Test
@@ -191,7 +191,7 @@ class PortalMainTableViewImportTest {
 
         assertThat(result.updatedCount()).isEqualTo(1);
         assertThat(result.createdCount()).isZero();
-        verify(processComponent, never()).startProcess(any(), any(), any());
+        verify(processComponent, never()).startProcessFromServer(any(), any(), any());
         verify(processInstanceRepository).save(pi);
         assertThat(pi.getVariables().get("case_number")).isEqualTo("42");
         assertThat(pi.getVariables().get("legal_hold")).isEqualTo("false");
@@ -199,7 +199,7 @@ class PortalMainTableViewImportTest {
 
     @Test
     void importViewCsv_createFailure_recordsRowError() {
-        when(processComponent.startProcess(eq(USER_ID), eq(FU_CODE), any(ProcessStartRequest.class)))
+        when(processComponent.startProcessFromServer(eq(USER_ID), eq(FU_CODE), any(ProcessStartRequest.class)))
                 .thenThrow(new IllegalStateException("Workflow engine unavailable"));
 
         String csv = "processInstanceId,Case Number\n,77\n";
