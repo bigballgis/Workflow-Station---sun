@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.platform.common.enums.ErrorCode;
+import com.platform.common.exception.BusinessException;
 import com.portal.dto.SubTableBatchChange;
 import com.portal.exception.PortalException;
 
@@ -37,7 +39,8 @@ final class SubTableBatchChangeGuard {
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
                 affected.add(Map.entry(change.getBindingId(), patch.getRowKey()));
             }
-            if (affected.size() > 200) throw forbidden("Batch submit exceeds 200 affected rows");
+            if (affected.size() > 200) throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Batch submit exceeds 200 affected rows");
         }
     }
 
@@ -173,7 +176,8 @@ final class SubTableBatchChangeGuard {
         Map<String, Object> capabilities = map(control.get("capabilities"));
         Map<String, Object> originalCrud = map(control.get("originalCrud"));
         if (change.getRowPatches() == null || change.getRowPatches().isEmpty() || change.getRowPatches().size() > 200) {
-            throw forbidden("Batch operation requires between 1 and 200 row patches");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "Batch operation requires between 1 and 200 row patches");
         }
         if ("ADD".equals(change.getOperation()) || "DELETE".equals(change.getOperation())) {
             validateMembershipIdentity(change, map(control.get("rowDesign")));

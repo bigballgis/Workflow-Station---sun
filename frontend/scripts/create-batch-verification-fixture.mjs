@@ -43,6 +43,12 @@ try {
   const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
   const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
   const inputLimits = process.env.FIXTURE_INPUT_LIMITS === '1'
+  const extraCount = Number(process.env.FIXTURE_EXTRA_FIELDS ?? '0')
+  if (!Number.isInteger(extraCount) || extraCount < 0 || extraCount > 48 || (extraCount && process.env.FIXTURE_UNIT_ID)) {
+    throw new Error('Wide fixtures require a new synthetic FU and between 0 and 48 extra fields')
+  }
+  const extraFields = Array.from({ length: extraCount }, (_, index) => ({ fieldName: `synthetic_extra_${index}`,
+    dataType: 'VARCHAR', length: 100, nullable: true, displayName: `Synthetic field ${index + 1}` }))
   const pkField = automaticPk ? 'entry_token' : 'line_key'
   const fkField = automaticPk ? 'owner_ref' : 'case_ref'
   const textField = automaticPk ? 'item_label' : 'caption'
@@ -76,6 +82,7 @@ try {
       { fieldName: numberField, dataType: 'INTEGER', nullable: false, displayName: 'Amount',
         ...(readonlyNumber && readonlyDefault !== 'missing' ? { defaultValue: readonlyDefault } : {}) },
       ...(assignment ? ['handler_code', 'pool_code', 'unit_code'].map(fieldName => ({ fieldName, dataType: 'VARCHAR', length: 100, nullable: true, displayName: fieldName })) : []),
+      ...extraFields,
     ],
   })
   const forms = []
@@ -96,6 +103,7 @@ try {
       ...(!automaticPk ? [{ type: 'input', field: pkField, title: 'Line key', validate: [{ required: true }] }] : []),
       { type: 'input', field: textField, title: 'Caption', validate: [{ required: true }], ...(inputLimits ? { props: { maxlength: 12 } } : {}) },
       { type: 'inputNumber', field: numberField, title: 'Amount', validate: [{ required: true }], ...(inputLimits ? { props: { min: 0, max: 10 } } : {}) },
+      ...extraFields.map(field => ({ type: 'input', field: field.fieldName, title: field.displayName })),
     ]
     const configJson = {
       rule: [
@@ -113,7 +121,7 @@ try {
     }
     await api('PUT', `${base}/forms/${form.id}`, {
       formName: form.formName, formType, scene: 'TASK', configJson,
-      fieldPermissions: Object.fromEntries(['case_key', ...[pkField, textField, numberField, ...(assignment ? ['handler_code', 'pool_code', 'unit_code'] : [])].map(f => `${binding.id}:${f}`)]
+      fieldPermissions: Object.fromEntries(['case_key', ...[pkField, textField, numberField, ...extraFields.map(field => field.fieldName), ...(assignment ? ['handler_code', 'pool_code', 'unit_code'] : [])].map(f => `${binding.id}:${f}`)]
         .map(f => [f, readonlyNumber && formType === 'TASK' && f === `${binding.id}:${numberField}` ? 'READONLY' : 'EDITABLE'])),
     })
     forms.push({ id: form.id, type: formType, bindingId: binding.id })
