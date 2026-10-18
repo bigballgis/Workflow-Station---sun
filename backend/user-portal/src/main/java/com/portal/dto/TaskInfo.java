@@ -125,6 +125,19 @@ public class TaskInfo {
     /** 任务定义Key（BPMN元素ID，如 Activity_1abc） */
     private String taskDefinitionKey;
 
+    /** 流程定义ID（key:version:id），To Do 批量分组按「流程版本 + 节点」 */
+    private String processDefinitionId;
+
+    /** 节点在 DW 开启了「允许批量处理」（BPMN custom:property allowBatch，引擎透出） */
+    @Builder.Default
+    private boolean allowBatch = false;
+
+    /**
+     * To Do 行所属的批量任务组（{@link com.portal.util.BatchTaskEligibility#groupKeyOf}）；
+     * 本人不能批量处理这条任务时为 null。与 taskDefinitionKey 一起对应 Batch Actions 里的一组。
+     */
+    private String batchGroupKey;
+
     /** 流程变量 */
     private Map<String, Object> variables;
 

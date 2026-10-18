@@ -3,21 +3,26 @@ import { h } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import TaskActionBar from '@/components/tasks/TaskActionBar.vue'
+import type { TaskActionInfo } from '@/api/task'
 
 let wrapper: VueWrapper | null = null
 
-function mountActionBar(overrides: { isCompletedTask?: boolean; claimLocked?: boolean } = {}) {
+const APPROVE_ONLY: TaskActionInfo[] = [{ actionId: 'a1', actionName: 'Approve', actionType: 'APPROVE' } as TaskActionInfo]
+
+function mountActionBar(overrides: {
+  isCompletedTask?: boolean
+  claimLocked?: boolean
+  actions?: TaskActionInfo[] | null
+} = {}) {
   wrapper = mount(TaskActionBar, {
     props: {
       isCompletedTask: false,
-      showImplicitSaveAction: true,
-      savingTaskForm: false,
-      actions: null,
+      actions: APPROVE_ONLY,
       // TaskActionBar 的必填 prop，此前漏传（组件里按它决定是否渲染 Delegate）。
       // 本用例只关心 claim 锁定，故给 false 保持既有行为。
       canDelegate: false,
       getIconComponent: () => h('span'),
-      getActionLabel: () => 'action',
+      getActionLabel: (a: TaskActionInfo) => a.actionName,
       ...overrides,
     },
     global: {
@@ -34,10 +39,42 @@ afterEach(() => {
 })
 
 describe('TaskActionBar claim lock', () => {
-  it('shows approve, reject and save on a task the user may process', () => {
+  it('shows the configured actions on a task the user may process', () => {
     const w = mountActionBar()
     expect(w.find('.action-section').exists()).toBe(true)
-    expect(w.text()).toContain('task.approve')
+    expect(w.text()).toContain('Approve')
+  })
+
+  /** Developer Workstation is the truth: one Action bound to the node means one button. */
+  it('renders one button per configured action and nothing else', () => {
+    const w = mountActionBar()
+    const buttons = w.findAll('.right-actions button').map((b) => b.text())
+    expect(buttons).toEqual(['Approve'])
+    expect(w.text()).not.toContain('common.save')
+  })
+
+  /**
+   * The bar has no switch for buttons of its own. The implicit Save came back once through such a
+   * switch (removed 2026-05-09, re-enabled 2026-08-21 via a `showImplicitSaveAction` prop). A Save
+   * button is a SAVE Action bound to the node in Developer Workstation; widening this list is a
+   * deliberate product decision, not a refactor.
+   */
+  it('offers no prop that adds buttons beyond the configured actions', () => {
+    expect(Object.keys(TaskActionBar.props ?? {}).sort()).toEqual([
+      'actions',
+      'canDelegate',
+      'claimLocked',
+      'getActionLabel',
+      'getIconComponent',
+      'isCompletedTask',
+    ])
+  })
+
+  it('invents no default Approve / Reject when no actions are known', () => {
+    const w = mountActionBar({ actions: null })
+    expect(w.findAll('.right-actions button')).toHaveLength(0)
+    expect(w.text()).not.toContain('task.approve')
+    expect(w.text()).not.toContain('task.reject')
   })
 
   /**

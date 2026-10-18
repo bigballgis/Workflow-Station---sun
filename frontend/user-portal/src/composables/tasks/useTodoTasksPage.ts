@@ -27,7 +27,32 @@ const TODO_VISIBLE_FIELDS = [
   'createTime',
 ] as const
 
-export function useTodoTasksPage() {
+/**
+ * Inside one「可批量操作」group these are the same for every row (one node of one process
+ * version, all handled by me), so the page shows them once in the group header instead.
+ */
+export const BATCH_GROUP_COMMON_FIELDS: readonly string[] = [
+  'functionUnitCode',
+  'taskName',
+  'assignmentType',
+  'assigneeName',
+]
+const BATCH_GROUP_VISIBLE_FIELDS = TODO_VISIBLE_FIELDS.filter(
+  (field) => !BATCH_GROUP_COMMON_FIELDS.includes(field),
+)
+
+export interface TodoBatchGroupRef {
+  groupKey: string
+  taskDefinitionKey: string
+}
+
+/**
+ * @param batchGroup when it returns a group, the same grid lists only that「可批量操作」group's tasks
+ *   (To Do columns minus BATCH_GROUP_COMMON_FIELDS, no claim column); the server applies the
+ *   batch eligibility filter. The group view keeps its own widths/order: a width dragged for the
+ *   six To Do columns would otherwise pin the group's two columns and push the slack elsewhere.
+ */
+export function useTodoTasksPage(batchGroup: () => TodoBatchGroupRef | null = () => null) {
   const pendingTaskStore = usePendingTaskStore()
   const preferenceStore = useUserPreferenceStore()
   const { t } = useI18n()
@@ -42,9 +67,9 @@ export function useTodoTasksPage() {
   })
 
   const grid = usePortalListGrid<TaskInfo>({
-    storageKey: 'portal-list-layout:todo-tasks-v4',
-    extraWidth: 50 + CLAIM_ACTION_WIDTH,
-    visibleFields: TODO_VISIBLE_FIELDS,
+    storageKey: () => (batchGroup() ? 'portal-list-layout:todo-batch-group-v1' : 'portal-list-layout:todo-tasks-v4'),
+    extraWidth: () => 50 + (batchGroup() ? 0 : CLAIM_ACTION_WIDTH),
+    visibleFields: () => (batchGroup() ? BATCH_GROUP_VISIBLE_FIELDS : TODO_VISIBLE_FIELDS),
     defaultWidthOf: (field) => (field === 'assigneeName' ? CURRENT_ASSIGNEE_COL_WIDTH : undefined),
   })
 
@@ -65,7 +90,8 @@ export function useTodoTasksPage() {
       const res = await queryTodoTasks(todoQueryBody())
       if (!grid.isCurrentQuery(seq)) return
       grid.applyPage(res.data, 'todo/query response is missing its column declaration')
-      pendingTaskStore.syncCountFromListTotal(res.data.totalElements)
+      // A batch group total is a subset; only the full To Do total may drive the menu badge.
+      if (!batchGroup()) pendingTaskStore.syncCountFromListTotal(res.data.totalElements)
     } catch (error) {
       if (!grid.isCurrentQuery(seq)) return
       if (!(error as { response?: unknown })?.response) {
@@ -87,8 +113,16 @@ export function useTodoTasksPage() {
     const body: TodoTaskQueryRequest = { ...grid.buildQuery() }
     const keyword = filterForm.keyword.trim()
     if (keyword) body.keyword = keyword
-    if (filterForm.assignmentTypes.length > 0) body.assignmentTypes = filterForm.assignmentTypes
     if (filterForm.priorities.length > 0) body.priorities = filterForm.priorities
+    const group = batchGroup()
+    if (group) {
+      body.batchGroupKey = group.groupKey
+      body.batchTaskDefinitionKey = group.taskDefinitionKey
+    } else if (filterForm.assignmentTypes.length > 0) {
+      // A group has one assignment type, so its toolbar hides this filter; a value kept
+      // from the All To Do tab must not silently empty the group.
+      body.assignmentTypes = filterForm.assignmentTypes
+    }
     return body
   }
 

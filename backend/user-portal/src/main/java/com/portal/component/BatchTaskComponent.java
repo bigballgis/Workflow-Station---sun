@@ -1,0 +1,181 @@
+package com.portal.component;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.portal.client.WorkflowEngineClient;
+import com.portal.dto.BatchCompleteRequest;
+import com.portal.dto.BatchCompleteResponse;
+import com.portal.dto.BatchTaskGroup;
+import com.portal.dto.TaskActionInfo;
+import com.portal.dto.TaskCompleteRequest;
+import com.portal.dto.TaskInfo;
+import com.portal.exception.PortalException;
+import com.portal.service.TaskActionService;
+import com.portal.util.BatchTaskEligibility;
+import com.portal.util.WorkflowEnginePayloadHelper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * To Do「可批量操作」：按「流程版本 + 节点」分组，以及对选中任务逐条执行同一个通过/驳回动作。
+ *
+ * <p>批量提交不信任前端：每条任务重新从引擎取，复核节点 allowBatch、本人办理、动作属于该节点、
+ * 意见必填；随后走与单条 {@code POST /tasks/{id}/complete} 完全相同的路径（含动作后邮件），
+ * 每条独立事务，单条失败不影响其他任务。
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class BatchTaskComponent {
+
+    private final TodoListQueryComponent todoListQueryComponent;
+    private final RequestIdEnricher requestIdEnricher;
+    private final TaskActionService taskActionService;
+    private final WorkflowEngineClient workflowEngineClient;
+    private final TaskProcessComponent taskProcessComponent;
+    private final ActionPostEmailComponent actionPostEmailComponent;
+    private final MineTaskListCache mineTaskListCache;
+
+    public List<BatchTaskGroup> listGroups(String userId) {
+        List<TaskInfo> eligible = todoListQueryComponent.listMergedTodoTasks(userId).stream()
+                .filter(t -> BatchTaskEligibility.isEligible(t, userId))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        if (eligible.isEmpty()) {
+            return List.of();
+        }
+        // Fills functionUnitCatalogId (the release pinned at start) that the group key is built from.
+        requestIdEnricher.enrichTaskRequestIds(eligible);
+        Map<String, String> versions = requestIdEnricher.loadCatalogVersions(eligible.stream()
+                .map(TaskInfo::getFunctionUnitCatalogId)
+                .toList());
+
+        Map<String, List<TaskInfo>> byGroup = new LinkedHashMap<>();
+        for (TaskInfo t : eligible) {
+            byGroup.computeIfAbsent(BatchTaskEligibility.groupKeyOf(t) + "\n" + t.getTaskDefinitionKey(),
+                    k -> new ArrayList<>()).add(t);
+        }
+        List<BatchTaskGroup> groups = new ArrayList<>();
+        for (List<TaskInfo> tasks : byGroup.values()) {
+            TaskInfo first = tasks.get(0);
+            List<BatchTaskGroup.BatchTaskAction> actions = batchActions(tasks);
+            if (actions.isEmpty()) {
+                continue;
+            }
+            groups.add(new BatchTaskGroup(
+                    BatchTaskEligibility.groupKeyOf(first),
+                    first.getProcessDefinitionKey(),
+                    first.getFunctionUnitName() != null ? first.getFunctionUnitName() : first.getProcessDefinitionName(),
+                    first.getFunctionUnitCatalogId() == null ? null : versions.get(first.getFunctionUnitCatalogId()),
+                    first.getTaskDefinitionKey(),
+                    first.getCurrentStepName() != null ? first.getCurrentStepName() : first.getTaskName(),
+                    tasks.size(),
+                    actions));
+        }
+        return groups;
+    }
+
+    public BatchCompleteResponse complete(String userId, String username, BatchCompleteRequest request) {
+        List<String> succeeded = new ArrayList<>();
+        List<BatchCompleteResponse.Failure> failed = new ArrayList<>();
+        for (String taskId : new LinkedHashSet<>(request.taskIds())) {
+            try {
+                completeOne(taskId, userId, username, request);
+                succeeded.add(taskId);
+            } catch (Exception e) {
+                log.warn("Batch complete failed for task {} by user {}: {}", taskId, userId, e.getMessage());
+                failed.add(new BatchCompleteResponse.Failure(taskId,
+                        e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+            }
+        }
+        if (!succeeded.isEmpty()) {
+            // The To Do list / groups / badge read a 15s Mine cache; completed tasks must leave it now.
+            mineTaskListCache.invalidate();
+        }
+        return new BatchCompleteResponse(succeeded, failed);
+    }
+
+    private void completeOne(String taskId, String userId, String username, BatchCompleteRequest request) {
+        Map<String, Object> engineTask = fetchEngineTask(taskId)
+                .orElseThrow(() -> new PortalException("404", "Task not found or already completed"));
+        TaskInfo task = EngineTaskMapper.convertMapToTaskInfo(engineTask);
+        if ("COMPLETED".equalsIgnoreCase(task.getStatus())) {
+            throw new PortalException("409", "Task already completed");
+        }
+        if (!BatchTaskEligibility.isEligible(task, userId)) {
+            throw new PortalException("403", "Task is not available for batch processing");
+        }
+        TaskActionInfo action = taskActionService.getTaskActionsFromPayload(engineTask).stream()
+                .filter(a -> request.actionId().equals(a.getActionId()))
+                .findFirst()
+                .orElseThrow(() -> new PortalException("400", "Action is not configured on this node"));
+        String completeAction = BatchTaskEligibility.completeActionOf(action);
+        if (completeAction == null) {
+            throw new PortalException("400", "Action does not support batch processing");
+        }
+        JsonNode config = BatchTaskEligibility.parseConfig(action);
+        String comment = request.comment() == null || request.comment().isBlank() ? null : request.comment().trim();
+        if (BatchTaskEligibility.requiresComment(config) && comment == null) {
+            throw new PortalException("400", "Comment is required");
+        }
+
+        TaskCompleteRequest complete = TaskCompleteRequest.builder()
+                .taskId(taskId)
+                .action(completeAction)
+                .actionId(action.getActionId())
+                .comment(comment)
+                .build();
+        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId(action.getActionId())
+                .operation("REJECT".equals(completeAction)
+                        ? ActionPostEmailContext.OP_REJECT : ActionPostEmailContext.OP_APPROVE)
+                .taskId(taskId)
+                .operatorId(userId)
+                .comment(comment)
+                .build(), () -> taskProcessComponent.completeTask(complete, userId, username));
+    }
+
+    /**
+     * Actions are per node of one process version, so any open task of the group answers;
+     * a task closed since the list was read (another tab, a colleague) carries no actions.
+     */
+    private List<BatchTaskGroup.BatchTaskAction> batchActions(List<TaskInfo> groupTasks) {
+        Optional<Map<String, Object>> engineTask = groupTasks.stream()
+                .map(t -> fetchEngineTask(t.getTaskId()))
+                .flatMap(Optional::stream)
+                .filter(m -> !"COMPLETED".equalsIgnoreCase(String.valueOf(m.get("status"))))
+                .findFirst();
+        if (engineTask.isEmpty()) {
+            return List.of();
+        }
+        List<BatchTaskGroup.BatchTaskAction> out = new ArrayList<>();
+        for (TaskActionInfo a : taskActionService.getTaskActionsFromPayload(engineTask.get())) {
+            if (BatchTaskEligibility.completeActionOf(a) == null) {
+                continue;
+            }
+            JsonNode config;
+            try {
+                config = BatchTaskEligibility.parseConfig(a);
+            } catch (IllegalArgumentException e) {
+                // 配置损坏的动作不进入批量（详情页同样会对它报错），记日志不静默
+                log.warn("Skip batch action {} with invalid configJson", a.getActionId());
+                continue;
+            }
+            out.add(new BatchTaskGroup.BatchTaskAction(a.getActionId(), a.getActionName(), a.getActionType(),
+                    a.getIcon(), a.getButtonColor(), BatchTaskEligibility.requiresComment(config),
+                    BatchTaskEligibility.confirmMessage(config), a.getConfigJson()));
+        }
+        return out;
+    }
+
+    private Optional<Map<String, Object>> fetchEngineTask(String taskId) {
+        return workflowEngineClient.getTaskById(taskId)
+                .map(WorkflowEnginePayloadHelper::singleTaskFromPayload);
+    }
+}

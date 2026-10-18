@@ -1535,6 +1535,8 @@ export default {
     bindFormRequest: '「我的申請」表單',
     bindFormRequestNone: '未綁定',
     actionsTodoOnlyHint: '動作按鈕在「待辦」頁面上、針對上方的待辦表單顯示。',
+    allowBatch: '允許批次處理',
+    allowBatchHint: '開啟後，該節點的任務會出現在「待辦 > 可批次操作」中，可不填表單直接批次通過/駁回。僅提供通過/駁回類動作；意見必填的動作會彈出一次統一意見。',
     formReadOnly: '表單唯讀',
     availableActions: '可用動作',
     selectActions: '選擇動作',

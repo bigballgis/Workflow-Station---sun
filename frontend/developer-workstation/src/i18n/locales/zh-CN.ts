@@ -1534,6 +1534,8 @@ export default {
     bindFormRequest: '「我的申请」表单',
     bindFormRequestNone: '未绑定',
     actionsTodoOnlyHint: '动作按钮在「待办」页面上、针对上方的待办表单显示。',
+    allowBatch: '允许批量处理',
+    allowBatchHint: '开启后，该节点的任务会出现在「待办 > 可批量操作」中，可不填表单直接批量通过/驳回。仅提供通过/驳回类动作；意见必填的动作会弹出一次统一意见。',
     formReadOnly: '表单只读',
     availableActions: '可用动作',
     selectActions: '选择动作',

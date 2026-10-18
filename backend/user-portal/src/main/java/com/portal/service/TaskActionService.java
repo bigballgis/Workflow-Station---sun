@@ -47,24 +47,28 @@ public class TaskActionService {
                 return Collections.emptyList();
             }
             
-            // 2. Normalize actionIds (engine JSON often uses numeric arrays deserialized as List<Integer>, not List<String>).
-            List<String> actionIds = normalizeActionIdList(data.get("actionIds"));
-            
-            if (actionIds == null || actionIds.isEmpty()) {
-                log.info("No actions defined for task: {}", taskId);
-                return Collections.emptyList();
-            }
-            
-            log.info("Found {} action IDs for task {}: {}", actionIds.size(), taskId, actionIds);
-            
-            // 3. Resolve definitions only for this node's actionIds; do not fall back to all process actions
-            // or todo detail would show buttons for unrelated nodes.
-            return fetchActionDefinitions(actionIds);
-            
+            return getTaskActionsFromPayload(data);
+
         } catch (Exception e) {
             log.error("Error getting task actions for task: " + taskId, e);
             return Collections.emptyList();
         }
+    }
+
+    /**
+     * Resolves the actions of an engine task payload already in hand (avoids a second engine fetch).
+     */
+    public List<TaskActionInfo> getTaskActionsFromPayload(Map<String, Object> engineTask) {
+        // Normalize actionIds (engine JSON often uses numeric arrays deserialized as List<Integer>, not List<String>).
+        List<String> actionIds = normalizeActionIdList(engineTask.get("actionIds"));
+        if (actionIds.isEmpty()) {
+            log.info("No actions defined for task: {}", engineTask.get("taskId"));
+            return Collections.emptyList();
+        }
+        log.info("Found {} action IDs for task {}: {}", actionIds.size(), engineTask.get("taskId"), actionIds);
+        // Resolve definitions only for this node's actionIds; do not fall back to all process actions
+        // or todo detail would show buttons for unrelated nodes.
+        return fetchActionDefinitions(actionIds);
     }
     
     /**

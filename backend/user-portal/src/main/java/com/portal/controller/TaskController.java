@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.ActionPostEmailComponent;
 import com.portal.component.ActionPostEmailContext;
+import com.portal.component.BatchTaskComponent;
 import com.portal.component.ClaimBatchComponent;
 import com.portal.component.UnclaimBatchComponent;
 import com.portal.component.TaskProcessComponent;
@@ -51,6 +52,7 @@ public class TaskController {
     private final UnclaimBatchComponent unclaimBatchComponent;
     private final TaskReassignComponent taskReassignComponent;
     private final ActionPostEmailComponent actionPostEmailComponent;
+    private final BatchTaskComponent batchTaskComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final I18nService i18nService;
     private final RestTemplate restTemplate;
@@ -208,6 +210,27 @@ public class TaskController {
                 .build(), () -> taskProcessComponent.completeTask(request, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null)));
         return ApiResponse.success();
+    }
+
+    @Operation(summary = "To Do batch groups (process version + node with allowBatch)")
+    @GetMapping("/batch/groups")
+    public ApiResponse<List<BatchTaskGroup>> getBatchGroups(@CurrentUserId String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authentication required");
+        }
+        return ApiResponse.success(batchTaskComponent.listGroups(userId));
+    }
+
+    @Operation(summary = "Batch approve/reject selected To Do tasks without form input")
+    @PostMapping("/batch/complete")
+    public ApiResponse<BatchCompleteResponse> batchComplete(
+            @CurrentUserId String userId,
+            @Valid @RequestBody BatchCompleteRequest request) {
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authentication required");
+        }
+        return ApiResponse.success(batchTaskComponent.complete(userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null), request));
     }
 
     @Operation(summary = "Delegate task")

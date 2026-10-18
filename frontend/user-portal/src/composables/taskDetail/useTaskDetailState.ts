@@ -228,9 +228,6 @@ export function createTaskDetailState(options: { taskId: string }) {
 
   // Task 17.2: Task Form data
   const taskFormDTO = ref<TaskFormDataDTO | null>(null)
-  const hasConfiguredSaveAction = computed(() =>
-    (taskInfo.value.actions || []).some(action => (action.actionType || '').trim().toUpperCase() === 'SAVE')
-  )
 
   // Task 17.3: Completed task snapshot
   const completedFormData = ref<CompletedTaskFormData | null>(null)
@@ -342,7 +339,6 @@ export function createTaskDetailState(options: { taskId: string }) {
     processFormFormConfig,
     processFormNativeSubTableBindingIds,
     taskFormDTO,
-    hasConfiguredSaveAction,
     completedFormData,
     isCompletedTask,
     miSubProcessScope,

@@ -190,6 +190,8 @@ final class EngineTaskMapper {
                 .isOverdue(taskMap.get("isOverdue") != null ? (Boolean) taskMap.get("isOverdue") : false)
                 .formKey((String) taskMap.get("formKey"))
                 .taskDefinitionKey((String) taskMap.get("taskDefinitionKey"))
+                .processDefinitionId(engineStringField(taskMap.get("processDefinitionId")))
+                .allowBatch(Boolean.TRUE.equals(booleanField(taskMap.get("allowBatch"))))
                 .variables(variables)
                 .candidateUserIds(candidateUserIds)
                 .candidateGroupIds(candidateGroupIds)

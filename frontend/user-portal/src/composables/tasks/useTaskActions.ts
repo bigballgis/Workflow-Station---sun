@@ -181,21 +181,6 @@ export function useTaskActions(options: {
       searchUsers('')
     }
   }
-  function handleApprove() {
-    if (!validateSubTableAssigneesForComplete()) return
-    approveCommentRequired.value = false
-    options.currentApproveAction.value = 'APPROVE'
-    options.approveDialogTitle.value = t('task.approve')
-    options.approveForm.comment = ''
-    options.approveDialogVisible.value = true
-  }
-  function handleReject() {
-    approveCommentRequired.value = false
-    options.currentApproveAction.value = 'REJECT'
-    options.approveDialogTitle.value = t('task.reject')
-    options.approveForm.comment = ''
-    options.approveDialogVisible.value = true
-  }
   function handleDelegate(action?: TaskActionInfo) {
     if (!applyActionReasonRequired(action)) return
     if (options.currentActionId) {
@@ -431,8 +416,6 @@ export function useTaskActions(options: {
     validateSubTableAssigneesForComplete,
     searchUsers,
     onActionDialogOpened,
-    handleApprove,
-    handleReject,
     handleDelegate,
     handleTransfer,
     handleUrge,

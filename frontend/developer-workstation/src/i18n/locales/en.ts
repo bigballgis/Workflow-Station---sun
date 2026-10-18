@@ -1539,6 +1539,8 @@ export default {
     bindFormRequest: 'My Requests Form',
     bindFormRequestNone: 'Not bound',
     actionsTodoOnlyHint: 'Action buttons render on the To Do page, against the To Do form above.',
+    allowBatch: 'Allow batch processing',
+    allowBatchHint: 'When on, tasks at this node appear under To Do > Batch Actions and can be approved/rejected in bulk without filling the form. Only Approve/Reject-type actions are offered; an action that requires a comment asks for one shared comment.',
     formReadOnly: 'Form Read Only',
     availableActions: 'Available Actions',
     selectActions: 'Select Actions',

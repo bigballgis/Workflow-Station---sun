@@ -366,6 +366,7 @@ public class TaskInfoAssembler {
         String bpmnAssigneeType = null;
         String bpmnBusinessUnitId = null;
         java.util.List<String> bpmnRoleIds = java.util.Collections.emptyList();
+        boolean allowBatch = false;
         if (processDefinitionId != null && task.getTaskDefinitionKey() != null) {
             try {
                 bpmnAssigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
@@ -380,6 +381,9 @@ public class TaskInfoAssembler {
                 String rawRoleId = bpmnActionParser.getUserTaskExtensionPropertyValue(
                         processDefinitionId, task.getTaskDefinitionKey(), "roleId");
                 bpmnRoleIds = com.workflow.util.AssigneeRoleIdsSupport.parseRoleIds(rawRoleIds, rawRoleId);
+                // DW 节点开关「允许批量处理」(custom:property allowBatch)
+                allowBatch = "true".equalsIgnoreCase(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                        processDefinitionId, task.getTaskDefinitionKey(), "allowBatch"));
             } catch (Exception e) {
                 log.debug("Read bpmn assigneeType for task {}: {}", task.getId(), e.getMessage());
             }
@@ -497,6 +501,7 @@ public class TaskInfoAssembler {
             .candidateUserIds(candidateUserIds.isEmpty() ? null : candidateUserIds)
             .candidateGroupIds(candidateGroupIds.isEmpty() ? null : candidateGroupIds)
             .actionIds(extractedActionIds)
+            .allowBatch(allowBatch)
             .build();
     }
 

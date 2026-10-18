@@ -37,7 +37,7 @@ final class VersionSemanticXmlProjector {
             "manualAssignRoleVariable", "roleId", "roleIds", "roleField",
             "businessUnitId", "buField", "subTableId", "subTableName", "rowIdVariable",
             "formId", "formName", "requestFormId", "requestFormName",
-            "actionIds", "actionNames", "globalActionIds", "globalActionNames", "timeoutEnabled", "timeoutDuration",
+            "actionIds", "actionNames", "globalActionIds", "globalActionNames", "allowBatch", "timeoutEnabled", "timeoutDuration",
             "timeoutAction", "multiInstance", "sequential", "collection",
             "completionCondition", "miTaskStatusField", "miTaskCurrentNodeField",
             "serviceType", "decisionTableReferenceKey", "fallbackToDefaultTenant",

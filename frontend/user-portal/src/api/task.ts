@@ -32,6 +32,48 @@ export interface TodoTaskQueryRequest {
   keyword?: string
   assignmentTypes?: string[]
   priorities?: string[]
+  /** Batch group drill-in: only my batch-eligible tasks of this group (BatchTaskGroup.groupKey) + node; set both or neither. */
+  batchGroupKey?: string
+  batchTaskDefinitionKey?: string
+}
+
+/**
+ * An action that can run on a whole batch group (Approve/Reject types only). Name, icon and
+ * colour are the Developer Workstation configuration, rendered exactly as on the task page.
+ */
+export interface BatchTaskAction {
+  actionId: string
+  actionName: string
+  actionType: string
+  icon?: string | null
+  buttonColor?: string | null
+  requireComment: boolean
+  confirmMessage?: string | null
+  /** The Action's DW configJson; its allowedRoles decide visibility for this session, as on the task page. */
+  configJson?: string | null
+}
+
+/**
+ * To Do「可批量操作」group: one node of one Function Unit release — the release each request was
+ * started on, i.e. the version Developer Workstation Version Management lists (1.0.23), not the
+ * engine's process definition number.
+ */
+export interface BatchTaskGroup {
+  /** Opaque group identity; send it back as `batchGroupKey` to list the group's tasks. */
+  groupKey: string
+  processDefinitionKey: string
+  functionUnitName?: string | null
+  /** Release version, e.g. "1.0.23"; null when the requests carry no pinned release. */
+  version?: string | null
+  taskDefinitionKey: string
+  nodeName: string
+  count: number
+  actions: BatchTaskAction[]
+}
+
+export interface BatchCompleteResult {
+  succeeded: string[]
+  failed: { taskId: string; reason: string }[]
 }
 
 export interface TaskQueryRequest {
@@ -69,6 +111,10 @@ export interface TaskInfo {
   processInstanceId: string
   processDefinitionKey: string
   processDefinitionName: string
+  /** BPMN element id of the node. */
+  taskDefinitionKey?: string
+  /** To Do rows only: the batch group (BatchTaskGroup.groupKey) I can process this task in; null when I cannot. */
+  batchGroupKey?: string | null
   assignmentType: string
   /** BPMN extension assigneeType (e.g. INITIATOR, PROCESS_INITIATOR) */
   bpmnAssigneeType?: string
@@ -339,6 +385,15 @@ export function queryCompletedTasks(params: CompletedTaskQueryRequest) {
 
 export function queryTodoTasks(params: TodoTaskQueryRequest) {
   return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/todo/query', params)
+}
+
+export function getBatchTaskGroups() {
+  return request.get<{ data: BatchTaskGroup[] }>('/tasks/batch/groups')
+}
+
+/** Per-task results; one task failing never fails the others. */
+export function batchCompleteTasks(taskIds: string[], actionId: string, comment?: string) {
+  return request.post<{ data: BatchCompleteResult }>('/tasks/batch/complete', { taskIds, actionId, comment })
 }
 
 /** One To Do task reachable from a Views grid row. */
