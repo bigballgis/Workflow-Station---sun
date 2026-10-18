@@ -87,6 +87,33 @@ class SubTableBatchPostgresTransactionIT {
         assertEquals(reloaded, harness.read().get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
+    void invalidSecondEditedRowLeavesRealJsonbAndEntityVersionUntouched(String pk) throws Exception {
+        var harness = harness(pk, repository);
+        harness.enableEditContract();
+        Map<String, Object> before = harness.read();
+        Long version = repository.findById("synthetic-process").orElseThrow().getLockVersion();
+        assertThrows(com.platform.common.exception.BusinessException.class, () -> harness.editBothCaptions(12));
+        assertEquals(before, harness.read());
+        assertEquals(version, repository.findById("synthetic-process").orElseThrow().getLockVersion());
+        harness.editBothCaptions("valid-second-change");
+        assertEquals(version + 1, repository.findById("synthetic-process").orElseThrow().getLockVersion());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
+    void unmarkedInvalidValueCannotBypassMetadataOrIncrementEntityVersion(String pk) throws Exception {
+        var harness = harness(pk, repository);
+        Map<String, Object> before = harness.read();
+        Long version = repository.findById("synthetic-process").orElseThrow().getLockVersion();
+        assertThrows(com.platform.common.exception.BusinessException.class, () -> harness.editUnmarkedCaption(12));
+        assertEquals(before, harness.read());
+        assertEquals(version, repository.findById("synthetic-process").orElseThrow().getLockVersion());
+        harness.editUnmarkedCaption("ordinary-field-outside-batch-form");
+        assertEquals(version + 1, repository.findById("synthetic-process").orElseThrow().getLockVersion());
+    }
+
     @Test
     void unmarkedAssignmentStageFailureLeavesRealJsonbAndEntityVersionUntouched() throws Exception {
         var harness = harness("renamedBusinessKey", repository);

@@ -120,12 +120,50 @@ final class BatchTaskFormTransactionHarness {
     }
 
     void editUnmarkedCaption() throws Exception {
+        editUnmarkedCaption("MUST-NOT-WRITE");
+    }
+
+    void editUnmarkedCaption(Object value) throws Exception {
         Map<String, Object> payload = read();
         Map<String, Object> tables = mapper.convertValue(payload.get("__subTables__"), new TypeReference<Map<String, Object>>() { });
         List<Map<String, Object>> rows = mapper.convertValue(tables.get("dw:lines"), new TypeReference<List<Map<String, Object>>>() { });
-        rows.get(0).put("caption", "MUST-NOT-WRITE");
+        rows.get(0).put("caption", value);
         tables.put("dw:lines", rows);
         component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables));
+    }
+
+    @SuppressWarnings("unchecked")
+    void enableEditContract() throws Exception {
+        Map<String, Object> variables = mapper.convertValue(read(), new TypeReference<Map<String, Object>>() { });
+        Map<String, Object> snapshot = (Map<String, Object>) variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+        Map<String, Object> form = (Map<String, Object>) ((Map<?, ?>) snapshot.get("forms")).get("form-one");
+        Map<String, Object> control = (Map<String, Object>) ((List<?>) form.get("controls")).get(0);
+        control.put("capabilities", Map.of("allowBatchEdit", true));
+        control.put("originalCrud", Map.of("allowEdit", true));
+        control.put("batchForm", Map.of("schemaVersion", 1, "rule", List.of(Map.of("type", "input", "field", "caption"))));
+        ((Map<String, Object>) control.get("rowDesign")).put("fieldWriteModes", Map.of("caption", "EDITABLE"));
+        if (jpa == null) persistence.update("UPDATE batch_tx_instance SET variables=? WHERE id=?",
+                mapper.writeValueAsString(variables), "synthetic-process");
+        else {
+            ProcessInstance instance = jpa.repository().findById("synthetic-process").orElseThrow();
+            instance.setVariables(variables);
+            jpa.repository().saveAndFlush(instance);
+        }
+    }
+
+    void editBothCaptions(Object second) throws Exception {
+        Map<String, Object> payload = read();
+        Map<String, Object> tables = mapper.convertValue(payload.get("__subTables__"), new TypeReference<Map<String, Object>>() { });
+        List<Map<String, Object>> rows = mapper.convertValue(tables.get("dw:lines"), new TypeReference<List<Map<String, Object>>>() { });
+        rows.get(0).put("caption", "valid-first-change"); rows.get(1).put("caption", second);
+        tables.put("dw:lines", rows);
+        var change = new SubTableBatchChange();
+        change.setBindingId("101"); change.setBatchControlId("grid"); change.setOperation("EDIT");
+        var patches = List.of(patch("one"), patch("two"));
+        patches.forEach(patch -> patch.setFields(List.of("caption"))); change.setRowPatches(patches);
+        component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables),
+                null, List.of(), List.of(new SubTableBindingScope("101", "dw:lines",
+                        List.of(Map.of(pk, "one"), Map.of(pk, "two")), false)), List.of(change));
     }
 
     /** Test setup only: caption is explicitly configured as this fixture's assignee field. */

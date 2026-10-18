@@ -81,9 +81,11 @@ final class SubTableBatchTaskPermissions {
             List<String> id = identity(row, keys);
             if (!seen.add(id)) throw invalid();
             Map<?, ?> original = originals.get(id);
+            boolean metadataChanged = original == null;
             for (Object rawField : fields) {
                 Map<?, ?> field = map(rawField);
                 String fieldName = String.valueOf(field.get("fieldName"));
+                metadataChanged |= original != null && !Objects.equals(original.get(fieldName), row.get(fieldName));
                 if (!"READONLY".equals(permissions.get(control.get("bindingId") + ":" + fieldName))) continue;
                 if (Boolean.TRUE.equals(field.get("isComputed")) || Boolean.TRUE.equals(field.get("isForeignKey"))
                         || Boolean.TRUE.equals(field.get("isPrimaryKey"))) continue; // Existing identity/scope/generated-value guards own these.
@@ -91,6 +93,7 @@ final class SubTableBatchTaskPermissions {
                 if (original == null && row.get(fieldName) != null && !"".equals(row.get(fieldName))
                         && !SubTableBatchPublishedPermissions.declaredDefault(field, row.get(fieldName))) throw forbidden();
             }
+            if (metadataChanged) SubTableBatchEditedRowGuard.validateMetadata(fields, row);
         }
     }
 

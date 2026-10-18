@@ -4802,3 +4802,17 @@
     两保留字段的新旧实例正反例及source泄露用例红→绿，隔离package47项通过；
     部署后自有paired增强/普通实例详情读取，本地元数据不变且响应不泄露；不声称真实引擎故障注入。
     证据 docs/specs/subtable-batch-operations/batch-engine-metadata-review.md；A39/#1666保持延期。
+
+- id: "1669"
+  status: fixed
+  fixed_at: "2026-10-18"
+  severity: major
+  category: bug
+  summary: "批量Edit服务端未验证完整行类型/规则，省略标记可绕过基础元数据校验"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableBatchEditedRowGuard.java"
+  detail: |
+    Save/Complete写前复用冻结元数据和批量表单规则；增强实例真实业务字段变化另做基础元数据校验，
+    不依赖客户端EDIT标记，不将批量表单字段范围套给普通单行；系统行版本单独变化不重验历史值。
+    旧部署自有synthetic50067确实写入非法数字字符串；最终50067/50068两种PK/字段样本，
+    声明/无标记的Save和Complete均400且整variables不变，合法0/2保存成功；package277与PG/H2 29通过。
+    证据 docs/specs/subtable-batch-operations/batch-edited-row-validation-review.md；A39/#1666仍延期。

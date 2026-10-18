@@ -8,6 +8,7 @@ final class SubTableBatchPayloadGuard {
         SubTableBatchChangeGuard.validateSubmittedRows(request.changes(), request.scopes(), request.submitted());
         SubTableBatchMembershipGuard.validate(request.changes(), request.scopes(), request.variables());
         SubTableBatchDeleteReferenceGuard.validate(request.variables(), request.form(), request.changes(), request.mapper());
+        SubTableBatchEditedRowGuard.validate(request);
         SubTableBatchAddedRowGuard.validate(request);
         SubTableBatchChangeGuard.validateSubmittedAssignments(request.variables(), request.form(),
                 request.changes(), request.scopes(), request.submitted(), request.mapper());

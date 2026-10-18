@@ -76,44 +76,44 @@ final class SubTableBatchAddedRowGuard {
         Object value = row.get(name);
         boolean empty = value == null || "".equals(value);
         if (empty && Boolean.FALSE.equals(field.get("nullable")) && !Boolean.TRUE.equals(field.get("isComputed"))) {
-            fail("Batch added row requires field " + name);
+            fail("Batch row requires field " + name);
         }
         if (empty) return;
         String type = String.valueOf(field.get("dataType"));
-        if (List.of("VARCHAR", "TEXT", "CHAR").contains(type) && !(value instanceof String)) fail("Batch added field has invalid text type: " + name);
-        if ("BOOLEAN".equals(type) && !(value instanceof Boolean)) fail("Batch added field has invalid boolean type: " + name);
+        if (List.of("VARCHAR", "TEXT", "CHAR").contains(type) && !(value instanceof String)) fail("Batch field has invalid text type: " + name);
+        if ("BOOLEAN".equals(type) && !(value instanceof Boolean)) fail("Batch field has invalid boolean type: " + name);
         if ("DATE".equals(type)) {
             try { java.time.LocalDate.parse(String.valueOf(value)); }
-            catch (java.time.format.DateTimeParseException error) { throw invalid("Batch added field has invalid date: " + name); }
+            catch (java.time.format.DateTimeParseException error) { throw invalid("Batch field has invalid date: " + name); }
         }
         if ("TIMESTAMP".equals(type)) {
             try { java.time.LocalDateTime.parse(String.valueOf(value).replace(' ', 'T')); }
-            catch (java.time.format.DateTimeParseException error) { throw invalid("Batch added field has invalid timestamp: " + name); }
+            catch (java.time.format.DateTimeParseException error) { throw invalid("Batch field has invalid timestamp: " + name); }
         }
         if (List.of("BIGINT", "INTEGER", "INT", "DECIMAL", "NUMERIC", "DOUBLE", "FLOAT").contains(type)) {
             validateNumeric(field, value, type, name);
         }
         if (value instanceof String text && field.get("length") instanceof Number length && text.length() > length.intValue()) {
-            fail("Batch added field exceeds its maximum length: " + name);
+            fail("Batch field exceeds its maximum length: " + name);
         }
     }
 
     private static void validateNumeric(Map<?, ?> field, Object value, String type, String name) {
         // The existing PK allocation API returns strings even for sequence-backed numeric PKs.
         boolean allocatedKey = Boolean.TRUE.equals(field.get("isPrimaryKey")) && value instanceof String;
-        if (!(value instanceof Number) && !allocatedKey) fail("Batch added field has invalid numeric type: " + name);
+        if (!(value instanceof Number) && !allocatedKey) fail("Batch field has invalid numeric type: " + name);
         BigDecimal decimal;
         try { decimal = new BigDecimal(value.toString()); }
-        catch (NumberFormatException error) { throw invalid("Batch added field has invalid numeric value: " + name); }
+        catch (NumberFormatException error) { throw invalid("Batch field has invalid numeric value: " + name); }
         try {
             if ("BIGINT".equals(type)) decimal.longValueExact();
             if ("INTEGER".equals(type) || "INT".equals(type)) decimal.intValueExact();
-        } catch (ArithmeticException error) { throw invalid("Batch added field requires an in-range integer: " + name); }
+        } catch (ArithmeticException error) { throw invalid("Batch field requires an in-range integer: " + name); }
         if (List.of("DECIMAL", "NUMERIC").contains(type) && field.get("precision") instanceof Number precision
                 && field.get("scale") instanceof Number scale) {
             if (Math.max(decimal.scale(), 0) > scale.intValue()
                     || decimal.precision() - decimal.scale() > precision.intValue() - scale.intValue()) {
-                fail("Batch added decimal exceeds its configured precision: " + name);
+                fail("Batch decimal exceeds its configured precision: " + name);
             }
         }
     }
