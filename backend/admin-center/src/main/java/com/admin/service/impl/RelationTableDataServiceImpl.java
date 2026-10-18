@@ -249,7 +249,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                      List<String> searchFields, String displayField,
-                                                     String filterConditions, int limit, int offset) {
+                                                     String filterConditions, int limit, int offset,
+                                                     boolean includeInactive) {
         try {
             int safeLimit = Math.min(Math.max(1, limit), LOOKUP_MAX_LIMIT);
             int safeOffset = Math.max(0, offset);
@@ -267,6 +268,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             List<String> predicates = new ArrayList<>();
             List<Object> params = new ArrayList<>();
             params.add(tableId);
+            if (!includeInactive) {
+                predicates.add("status = 'ACTIVE'");
+            }
 
             for (LookupFilterCondition filter : parseLookupFilterConditions(filterConditions, allowedFields)) {
                 appendLookupFilterPredicate(predicates, params,

@@ -93,9 +93,11 @@ public class PortalRelationTableController {
             @RequestParam(required = false, defaultValue = "") String displayField,
             @RequestParam(required = false, defaultValue = "") String filterConditions,
             @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "false") boolean includeInactive) {
         try {
-            List<Map<String, Object>> result = service.searchForLookup(tableId, keyword, searchFields, displayField, filterConditions, limit, offset);
+            List<Map<String, Object>> result = service.searchForLookup(
+                    tableId, keyword, searchFields, displayField, filterConditions, limit, offset, includeInactive);
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));

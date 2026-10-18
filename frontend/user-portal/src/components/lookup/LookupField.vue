@@ -238,7 +238,7 @@ async function loadAllData() {
     loadedViewFields.value = vfRes.data as LookupViewField[]
     emit('viewFieldsLoaded', loadedViewFields.value)
   }
-  maybeClearMissingSelection(allRows.value)
+  await maybeClearMissingSelection(allRows.value)
 }
 
 const { nextZIndex } = useZIndex()
@@ -378,13 +378,32 @@ function currentSelectionPks(): string[] {
   return [String(val)]
 }
 
-function maybeClearMissingSelection(rows: Record<string, unknown>[]) {
-  if (!props.autoClearIfMissing) return
+async function maybeClearMissingSelection(rows: Record<string, unknown>[]) {
+  if (!props.autoClearIfMissing || !props.tableId) return
   const pks = currentSelectionPks()
   if (!pks.length) return
   const present = new Set(rows.map((row) => String(rowPk(row))))
-  if (pks.every((pk) => present.has(pk))) return
+  const missing = pks.filter((pk) => !present.has(pk))
+  if (!missing.length) return
+  if (await allMatchFilterIncludingInactive(props.tableId, missing)) return
   handleClear()
+}
+
+/**
+ * The dropdown rows omit INACTIVE relation-table rows, so a saved selection that points at one
+ * looks "missing". It is still valid while it matches the current filter — re-check by PK.
+ */
+async function allMatchFilterIncludingInactive(tableId: number, pks: string[]): Promise<boolean> {
+  const pk = pkField()
+  const results = await Promise.all(pks.map((value) => relationTableApi.searchForLookup(tableId, {
+    keyword: '',
+    searchFields: props.searchFields || [],
+    displayField: props.displayField || '',
+    filterConditions: [...(props.filterConditions || []), { fieldName: pk, value, matchType: 'eq' }],
+    includeInactive: true,
+    limit: 1,
+  })))
+  return results.every((res, i) => (res.data || []).some((row) => String(rowPk(row)) === pks[i]))
 }
 
 // Sync empty parent modelValue into local UI only — never emit('clear').

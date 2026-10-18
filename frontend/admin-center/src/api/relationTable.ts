@@ -414,6 +414,8 @@ export const relationTableDataApi = {
     filterConditions?: LookupFilterCondition[]
     limit?: number
     offset?: number
+    /** Only for resolving an already-saved value by primary key; dropdown/search omit INACTIVE rows. */
+    includeInactive?: boolean
   }) => {
     const query = new URLSearchParams()
     if (params.keyword) query.append('keyword', params.keyword)
@@ -421,6 +423,7 @@ export const relationTableDataApi = {
     if (params.filterConditions?.length) query.append('filterConditions', JSON.stringify(params.filterConditions))
     if (params.limit) query.append('limit', String(params.limit))
     if (params.offset) query.append('offset', String(params.offset))
+    if (params.includeInactive) query.append('includeInactive', 'true')
     params.searchFields?.forEach(f => query.append('searchFields', f))
     return get<Record<string, unknown>[]>(`/relation-tables/data/${tableId}/search?${query.toString()}`)
   },

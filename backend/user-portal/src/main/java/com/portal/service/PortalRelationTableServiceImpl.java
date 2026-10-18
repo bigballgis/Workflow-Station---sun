@@ -360,7 +360,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                       List<String> searchFields, String displayField,
                                                       String filterConditions,
-                                                      int limit, int offset) {
+                                                      int limit, int offset, boolean includeInactive) {
         try {
             int safeLimit = normalizeLimit(limit);
             int safeOffset = Math.max(0, offset);
@@ -385,6 +385,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             List<String> predicates = new ArrayList<>();
             List<Object> params = new ArrayList<>();
             params.add(tableId);
+            if (!includeInactive) {
+                predicates.add("status = 'ACTIVE'");
+            }
 
             for (LookupFilterCondition filter : filters) {
                 if (!allowedFields.contains(filter.fieldName())) {

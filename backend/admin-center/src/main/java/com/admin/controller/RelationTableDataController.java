@@ -137,9 +137,10 @@ public class RelationTableDataController {
             @RequestParam(required = false, defaultValue = "") String displayField,
             @RequestParam(required = false) String filterConditions,
             @RequestParam(required = false, defaultValue = "50") int limit,
-            @RequestParam(required = false, defaultValue = "0") int offset) {
+            @RequestParam(required = false, defaultValue = "0") int offset,
+            @RequestParam(required = false, defaultValue = "false") boolean includeInactive) {
         List<Map<String, Object>> rows = dataService.searchForLookup(
-                tableId, keyword, searchFields, displayField, filterConditions, limit, offset);
+                tableId, keyword, searchFields, displayField, filterConditions, limit, offset, includeInactive);
         return ResponseEntity.ok(rows);
     }
 
