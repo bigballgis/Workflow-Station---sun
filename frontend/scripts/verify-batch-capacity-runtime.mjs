@@ -20,7 +20,7 @@ try {
   const api = async (method, path, data) => {
     // Playwright transport exceptions include request cookies; never forward their raw diagnostics.
     let response
-    try { response = await page.request.fetch(`http://localhost:3000/api/portal${path}`, { method, data, timeout: 120000 }) }
+    try { response = await page.request.fetch(`http://localhost:3000/api/portal${path}`, { method, data, timeout: 30000 }) }
     catch (error) { throw new Error(`Synthetic API transport failed (${error.name}); inspect server timing and persisted state before retrying`) }
     const body = await response.json()
     assert.ok(response.ok() && body.success, `Synthetic API failed HTTP ${response.status()}, code ${body.error?.code}`)
@@ -88,6 +88,19 @@ try {
     assert.deepEqual(rowsOf(saved).map(rowKey), rowsOf(form).map(rowKey))
     form = saved
   }
+  const unchangedSaveMs = []
+  for (let sample = 0; sample < 3; sample++) {
+    const request = requestFor(form, 'EDIT', [], [])
+    delete request.subTableBatchChanges
+    const start = performance.now()
+    await api('POST', `/tasks/${id}/submit`, request)
+    unchangedSaveMs.push(Math.round(performance.now() - start))
+    const saved = await read()
+    assert.deepEqual(rowsOf(saved).map(rowKey), rowsOf(form).map(rowKey))
+    assert.deepEqual(rowsOf(saved).map(row => [row[numeric], ...extraText.map(field => row[field])]),
+      rowsOf(form).map(row => [row[numeric], ...extraText.map(field => row[field])]))
+    form = saved
+  }
   const db = () => execFileSync('docker', ['exec', 'platform-postgres-dev', 'psql', '-U', 'platform_dev', '-d',
     'workflow_platform_dev', '-Atc', `SELECT variables::text FROM up_process_instance WHERE id='${task.processInstanceId}'`], { encoding: 'utf8' }).trim()
   const before = db()
@@ -131,7 +144,7 @@ try {
   assert.equal(uiSaves, 0)
   assert.equal(db(), before)
   assert.equal(pageErrors, 0)
-  console.log(JSON.stringify({ taskId: id, rows: 200, columns: control.batchForm.rule.length, renderedRows: 20, renderedControls, samples: 3, editMs, ...timings,
+  console.log(JSON.stringify({ taskId: id, rows: 200, columns: control.batchForm.rule.length, renderedRows: 20, renderedControls, samples: 3, editMs, unchangedSaveMs, ...timings,
     overLimitRejected: true, unchangedAfterCancel: true, pageErrors }))
 } catch (error) {
   // Browser/request errors may embed authentication headers in their call logs.

@@ -31,6 +31,7 @@ class SubTableBatchPostgresTransactionIT {
     private static LocalContainerEntityManagerFactoryBean factory;
     private static JpaTransactionManager transactions;
     private static ProcessInstanceRepository repository;
+    private static com.portal.repository.ChangeHistoryRepository auditRepository;
 
     @BeforeAll
     static void connectToDisposableDatabase() {
@@ -41,7 +42,7 @@ class SubTableBatchPostgresTransactionIT {
         var source = new DriverManagerDataSource(url, required("BATCH_TEST_DB_USER"), required("BATCH_TEST_DB_PASSWORD"));
         factory = new LocalContainerEntityManagerFactoryBean();
         factory.setDataSource(source);
-        factory.setManagedTypes(PersistenceManagedTypes.of(ProcessInstance.class.getName()));
+        factory.setManagedTypes(PersistenceManagedTypes.of(ProcessInstance.class.getName(), com.portal.entity.ChangeHistory.class.getName()));
         factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
         factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.show_sql", "false"));
         factory.afterPropertiesSet();
@@ -53,6 +54,7 @@ class SubTableBatchPostgresTransactionIT {
                 new org.springframework.transaction.interceptor.TransactionInterceptor(transactions,
                         new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource())));
         repository = repositoryFactory.getRepository(ProcessInstanceRepository.class);
+        auditRepository = repositoryFactory.getRepository(com.portal.repository.ChangeHistoryRepository.class);
     }
 
     @AfterAll
@@ -62,7 +64,68 @@ class SubTableBatchPostgresTransactionIT {
 
     @BeforeEach
     void clearSyntheticInstances() {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> auditRepository.deleteAllInBatch());
         new TransactionTemplate(transactions).executeWithoutResult(status -> repository.deleteAllInBatch());
+    }
+
+    @Test void latestAuditLookupIsScopedAndKeepsOnlyLatestPairIncludingNullIdentity() {
+        java.time.Instant time = java.time.Instant.parse("2026-10-18T00:00:00Z");
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            auditRepository.saveAndFlush(audit("process-one", "lines-one", "row-one", "caption", "first", time));
+            auditRepository.saveAndFlush(audit("process-one", "lines-one", "row-one", "caption", "latest-tied", time));
+            var otherType = audit("process-one", "lines-one", "row-one", "caption", "other-type", time);
+            otherType.setChangeType(com.portal.enums.ChangeType.SUB_TABLE_ROW_ADD);
+            auditRepository.saveAndFlush(otherType);
+            auditRepository.saveAndFlush(audit("process-one", "lines-one", "row-one", "quantity", "other-field", time));
+            auditRepository.saveAndFlush(audit("process-one", "lines-one", null, "caption", "null-row", time));
+            auditRepository.saveAndFlush(audit("process-one", "lines-one", "unselected-row", "caption", "excluded", time));
+            auditRepository.saveAndFlush(audit("process-two", "lines-one", "row-one", "caption", "other-process", time.plusSeconds(1)));
+            auditRepository.saveAndFlush(audit("process-one", "lines-two", "row-one", "caption", "other-table", time.plusSeconds(1)));
+        });
+        var selected = auditRepository.findLatestSubTableChanges("process-one", "lines-one", List.of("row-one"), false);
+        assertEquals(java.util.Set.of("latest-tied", "other-type", "other-field"), selected.stream()
+                .map(com.portal.entity.ChangeHistory::getNewValue).collect(java.util.stream.Collectors.toSet()));
+        var withNull = auditRepository.findLatestSubTableChanges("process-one", "lines-one", java.util.Arrays.asList("row-one", null), true);
+        assertEquals(java.util.Set.of("latest-tied", "other-type", "other-field", "null-row"), withNull.stream()
+                .map(com.portal.entity.ChangeHistory::getNewValue).collect(java.util.stream.Collectors.toSet()));
+        var nullOnly = auditRepository.findLatestSubTableChanges("process-one", "lines-one", java.util.Collections.singletonList(null), true);
+        assertEquals(List.of("null-row"), nullOnly.stream().map(com.portal.entity.ChangeHistory::getNewValue).toList());
+    }
+
+    private static com.portal.entity.ChangeHistory audit(String process, String table, String row, String field,
+                                                         String value, java.time.Instant time) {
+        return com.portal.entity.ChangeHistory.builder().processInstanceId(process).userId("synthetic-user")
+                .subTableName(table).rowIdentifier(row).fieldName(field).newValue(value).timestamp(time)
+                .changeType(com.portal.enums.ChangeType.SUB_TABLE_ROW_UPDATE).build();
+    }
+
+    @Test void largeAuditInsertRetainsEveryFieldDeduplicatesAndRollsBackItsOwnFailedBatch() {
+        var jdbc = new org.springframework.jdbc.core.JdbcTemplate(java.util.Objects.requireNonNull(factory.getDataSource()));
+        var component = new ChangeHistoryComponent(auditRepository, repository,
+                mock(com.platform.security.repository.UserRepository.class), mock(com.portal.client.WorkflowEngineClient.class),
+                jdbc, new com.fasterxml.jackson.databind.ObjectMapper(), mock(UserPortalAuditEnricher.class),
+                mock(UserPortalAuditProcessInstanceMatcher.class), transactions);
+        var context = com.portal.dto.ChangeHistoryContext.builder().processInstanceId("audit-synthetic")
+                .taskInstanceId("task-synthetic").stageId("stage-synthetic").userId("user-synthetic").build();
+        var changes = java.util.stream.IntStream.range(0, 401).mapToObj(index -> com.portal.dto.SubTableChange.builder()
+                .changeType("ROW_UPDATE").rowIdentifier("row-" + index).oldValues(Map.<String, Object>of("caption", "before"))
+                .newValues(Map.<String, Object>of("caption", "after")).build()).toList();
+        component.recordSubTableChangesWithName(context, "synthetic-lines", changes);
+        var records = auditRepository.findAll();
+        assertEquals(401, records.size());
+        assertTrue(records.stream().allMatch(row -> "before".equals(row.getOldValue()) && "after".equals(row.getNewValue())
+                && "task-synthetic".equals(row.getTaskInstanceId()) && "stage-synthetic".equals(row.getStageId())
+                && "user-synthetic".equals(row.getUserId()) && "caption".equals(row.getFieldName())
+                && row.getTimestamp() != null && row.getId() != null && !row.getIsConcurrent()
+                && row.getChangeType() == com.portal.enums.ChangeType.SUB_TABLE_ROW_UPDATE));
+        component.recordSubTableChangesWithName(context, "synthetic-lines", changes);
+        assertEquals(401, auditRepository.count(), "An identical repeated save must not append duplicates");
+        var invalid = new java.util.ArrayList<>(changes);
+        invalid.add(com.portal.dto.SubTableChange.builder().changeType("ROW_UPDATE").rowIdentifier("bad-row")
+                .oldValues(Map.of("x".repeat(256), "before")).newValues(Map.of("x".repeat(256), "after")).build());
+        component.recordSubTableChangesWithName(com.portal.dto.ChangeHistoryContext.builder()
+                .processInstanceId("other-audit-synthetic").userId("user-synthetic").build(), "synthetic-lines", invalid);
+        assertEquals(401, auditRepository.count(), "The audit transaction rolls back even earlier JDBC chunks");
     }
 
     @Test

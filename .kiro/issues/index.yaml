@@ -4816,3 +4816,41 @@
     旧部署自有synthetic50067确实写入非法数字字符串；最终50067/50068两种PK/字段样本，
     声明/无标记的Save和Complete均400且整variables不变，合法0/2保存成功；package277与PG/H2 29通过。
     证据 docs/specs/subtable-batch-operations/batch-edited-row-validation-review.md；A39/#1666仍延期。
+
+- id: "1670"
+  status: fixed
+  fixed_at: "2026-10-18"
+  severity: minor
+  category: bug
+  summary: "批量数量超限被错误分类为403权限拒绝"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableBatchChangeGuard.java"
+  detail: |
+    仅两处数量边界改用统一VALIDATION_ERROR；200上限、去重计数和权限拒绝不变。
+    4测试中2红到全绿，最终三套合成FU真实201行均400/code4000且整variables不变。
+    证据 docs/specs/subtable-batch-operations/batch-capacity-review.md，commit b335bcb5a。
+
+- id: "1671"
+  status: fixed
+  fixed_at: "2026-10-18"
+  severity: major
+  category: performance
+  summary: "宽表批量保存审计逐cell查最新记录并以IDENTITY逐条插入导致超时"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistoryComponent.java"
+  detail: |
+    按200行身份分片读取每组最新审计，保留row/field/type隔离与去重；全null身份另走IS NULL。
+    大于200审计记录使用同DataSource/原REQUIRES_NEW事务的JDBC200条批插，未减少审计记录。
+    真PG验证401记录、重复去重、跨chunk失败零部分审计；9600cells查询从逐cell变1次。
+    同一200x51合成样本45/59/88秒降至约1.8~2.2秒，默认30秒请求恢复成功。
+    不宣称API性能底线或P4通过，剩余时延记1672；证据batch-audit-throughput-review.md。
+
+- id: "1672"
+  status: open
+  severity: major
+  category: performance
+  summary: "批量容量验收仍有保存超过1秒及宽表弹窗打开超过交互底线"
+  file: "frontend/shared/src/batch/BatchWorkspace.vue"
+  detail: |
+    合成50069的200x51列每页20行实际挂载1000输入，打开约1.4~1.7秒。
+    审计N+1修复后保存约1.8~2.2秒；同数据普通无业务改值Save约1.2~1.3秒，不能作SLO豁免。
+    后续分别收紧UI挂载与测量保存链固定成本，不通过省略权限/校验/审计或提高超时伪造PASS。
+    A25/P4未通过，A39/#1666仍按用户要求延期。
