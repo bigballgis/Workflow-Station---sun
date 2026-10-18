@@ -294,7 +294,7 @@ import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
 import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
-import { isStartSubmitBlockedByAllowedRoles } from '@/utils/processStartAllowedRoles'
+import { startSubmitMode } from '@/utils/processStartAllowedRoles'
 import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
 import { actionButtonStyle, resolveActionButtonType } from '@/utils/actionButtonColor'
 import {
@@ -354,7 +354,7 @@ function clearRecordNoteDraftId() {
 }
 const isDraftMode = computed(() => route.query.draft === 'true')
 
-/** BPMN had custom actions but Allowed Roles hid all of them — no default Submit (aligns with TaskActionBar). */
+/** BPMN binds submit Actions but Allowed Roles hide all of them — no default Submit either (startSubmitMode 'blocked'). */
 const startActionsBlockedByAllowedRoles = ref(false)
 
 // Main-table Request ID config — enables live recompute of the readonly __request_id field.
@@ -750,14 +750,13 @@ const initActionButtons = async (actionIds: string[] | null) => {
             user?.systemAdministrator === true,
           ),
         )
-        if (
-          isStartSubmitBlockedByAllowedRoles(hadBpmnActionIds, actions.length, visible.length)
-        ) {
+        const submitMode = startSubmitMode(actions, visible)
+        if (submitMode === 'blocked') {
           availableActions.value = []
           startActionsBlockedByAllowedRoles.value = true
           return
         }
-        availableActions.value = visible.map((action: {
+        const bound = visible.map((action: {
           id: string
           actionName: string
           actionType?: string
@@ -775,6 +774,8 @@ const initActionButtons = async (actionIds: string[] | null) => {
             configJson: action.configJson,
           }
         })
+        // Bound actions that cannot start a request (Approve / Reject …) leave the default Submit in place.
+        availableActions.value = submitMode === 'default' ? [...bound, defaultSubmitAction()] : bound
         return
       }
     } catch (error) {
@@ -782,16 +783,19 @@ const initActionButtons = async (actionIds: string[] | null) => {
     }
   }
 
-  // 回退：默认提交按钮
-  availableActions.value = [
-    {
-      id: 'submit',
-      label: t('processStart.submitApplication'),
-      type: 'primary',
-      action: 'submit',
-      actionType: 'PROCESS_SUBMIT'
-    }
-  ]
+  // 未绑定动作（或动作定义读取失败/为空）：第一个节点的默认提交按钮
+  availableActions.value = [defaultSubmitAction()]
+}
+
+/** The first node's own Submit, offered whenever DW binds no submit Action to it (startSubmitMode). */
+function defaultSubmitAction() {
+  return {
+    id: 'submit',
+    label: t('processStart.submitApplication'),
+    type: 'primary' as const,
+    action: 'submit',
+    actionType: 'PROCESS_SUBMIT',
+  }
 }
 
 // 保存草稿

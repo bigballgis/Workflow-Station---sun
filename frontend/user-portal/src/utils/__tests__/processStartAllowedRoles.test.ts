@@ -1,20 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import { isStartSubmitBlockedByAllowedRoles } from '../processStartAllowedRoles'
+import { startSubmitMode } from '../processStartAllowedRoles'
 
-describe('isStartSubmitBlockedByAllowedRoles', () => {
-  it('blocks default submit when BPMN had actions but none visible', () => {
-    expect(isStartSubmitBlockedByAllowedRoles(true, 3, 0)).toBe(true)
+const submit = { actionType: 'PROCESS_SUBMIT' }
+const approve = { actionType: 'APPROVE' }
+const reject = { actionType: 'REJECT' }
+
+describe('startSubmitMode', () => {
+  it('offers the default Submit when no Action is bound', () => {
+    expect(startSubmitMode([], [])).toBe('default')
   })
 
-  it('does not block when no BPMN action ids', () => {
-    expect(isStartSubmitBlockedByAllowedRoles(false, 0, 0)).toBe(false)
+  /** Approve / Reject cannot start a request, so the first node still needs its Submit. */
+  it('offers the default Submit next to bound Actions that cannot submit', () => {
+    expect(startSubmitMode([approve, reject], [approve, reject])).toBe('default')
   })
 
-  it('does not block when some actions remain visible', () => {
-    expect(isStartSubmitBlockedByAllowedRoles(true, 3, 1)).toBe(false)
+  it('uses a bound submit Action instead of adding a second Submit', () => {
+    expect(startSubmitMode([submit, reject], [submit, reject])).toBe('configured')
   })
 
-  it('does not block when lookup returned nothing (legacy default submit path)', () => {
-    expect(isStartSubmitBlockedByAllowedRoles(true, 0, 0)).toBe(false)
+  /** The default button must not bypass Allowed Roles on the submit Action. */
+  it('blocks submitting when Allowed Roles hide every bound submit Action', () => {
+    expect(startSubmitMode([submit, reject], [reject])).toBe('blocked')
+    expect(startSubmitMode([submit], [])).toBe('blocked')
+  })
+
+  it('offers the default Submit when Allowed Roles hide only Actions that cannot submit', () => {
+    expect(startSubmitMode([approve], [])).toBe('default')
   })
 })
