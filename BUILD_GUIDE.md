@@ -530,6 +530,14 @@ cd deploy/environments/dev
 
 Dev 环境首次启动时，PostgreSQL 容器会自动执行 `deploy/init-scripts/` 下的 SQL 脚本（通过 Docker volume mount 到 `/docker-entrypoint-initdb.d`）。
 
+已有数据库升级子表批量保存性能时，还需单独执行新增的审计索引脚本；`build-and-deploy.ps1` 或重启容器不会重跑初始化 SQL：
+
+```powershell
+docker exec platform-postgres-dev psql -U platform_dev -d workflow_platform_dev -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/00-schema/96-up-sub-table-audit-latest-index.sql
+```
+
+该脚本只新增索引，不修改或删除历史记录，可重复执行。非 Docker 环境用实际连接参数运行同一文件，必须保持 psql 自动提交，不可放入 `BEGIN/COMMIT` 或使用 `--single-transaction`，因为它使用 `CREATE INDEX CONCURRENTLY`。若执行曾被中断，先由数据库管理员检查 `idx_change_history_sub_table_latest` 的 `indisvalid/indisready`；`IF NOT EXISTS` 不会修复已存在但无效的索引。
+
 如需手动初始化（非 Docker 场景）：
 ```powershell
 cd deploy/init-scripts

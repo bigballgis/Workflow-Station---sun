@@ -29,7 +29,8 @@ function workspace(count: number, prepareRows = vi.fn(async (rows: Array<Record<
     ElTable: { name: 'ElTable', props: ['data'], template: '<div />' }, ElTableColumn: true,
     ElForm: { template: '<div><slot/></div>' }, ElFormItem: { template: '<div><slot/></div>' },
     ElButton: { template: '<button><slot/></button>' }, ElInputNumber: true, ElInput: true,
-    ElPagination: true, ElDivider: true, ElSelect: true, ElOption: true,
+    ElPagination: true, ElDivider: true,
+    ElSelect: { name: 'ElSelect', props: { persistent: { type: Boolean, default: true } }, template: '<div><slot/></div>' }, ElOption: true,
   } } })
   return { wrapper, state: wrapper.vm as unknown as State, rows, prepareRows }
 }
@@ -54,6 +55,46 @@ describe('batch capacity and single-apply boundary', () => {
     expect(applied).toHaveLength(200)
     expect(applied.every((row, index) => row.hidden === index && row.description === 'changed')).toBe(true)
     expect(rows.every(row => row.description === 'original')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('reduces wide-table page size instead of mounting a thousand field inputs', async () => {
+    const { wrapper, state, rows } = workspace(200)
+    await wrapper.setProps({ fields: [
+      { field: 'description', label: 'Description', type: 'input', options: [], required: true },
+      ...Array.from({ length: 50 }, (_, index) => ({ field: `extra_${index}`, label: `Extra ${index}`, type: 'input', options: [], required: false })),
+    ] })
+    expect(wrapper.findComponent({ name: 'ElTable' }).props('data')).toEqual(rows.slice(0, 3))
+    state.page = 67
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findComponent({ name: 'ElTable' }).props('data')).toEqual(rows.slice(198))
+    wrapper.unmount()
+  })
+
+  it('does not eagerly mount every uniform-value dropdown in a wide form', async () => {
+    const { wrapper } = workspace(200)
+    await wrapper.setProps({ fields: Array.from({ length: 51 }, (_, index) => ({
+      field: `extra_${index}`, label: `Extra ${index}`, type: 'input', options: [], required: false,
+    })) })
+    const modes = wrapper.findAllComponents({ name: 'ElSelect' })
+    expect(modes).toHaveLength(51)
+    expect(modes.every(mode => mode.props('persistent') === false)).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('uses the wide-table page size when focusing invalid and newly added rows', async () => {
+    const { wrapper, state } = workspace(200)
+    await wrapper.setProps({ fields: [
+      { field: 'description', label: 'Description', type: 'input', options: [], required: true },
+      ...Array.from({ length: 50 }, (_, index) => ({ field: `extra_${index}`, label: `Extra ${index}`, type: 'input', options: [], required: false })),
+    ] })
+    state.draftRows[199]!.description = ''
+    await state.apply()
+    expect(state.page).toBe(67)
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    state.page = 1
+    state.addDraftRows()
+    expect(state.page).toBe(67)
     wrapper.unmount()
   })
 

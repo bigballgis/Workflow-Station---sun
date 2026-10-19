@@ -10,7 +10,8 @@ const id = process.env.FIXTURE_TASK_ID
 assert.match(id || '', /^[a-f0-9-]{36}$/)
 const tag = process.env.FIXTURE_SCREENSHOT_TAG || 'batch-capacity'
 assert.match(tag, /^[a-z0-9-]+$/)
-const shot = suffix => fileURLToPath(new URL(`../user-portal/verification-screenshots/2026-10-18_${tag}-${suffix}.png`, import.meta.url))
+const date = new Date().toISOString().slice(0, 10)
+const shot = suffix => fileURLToPath(new URL(`../user-portal/verification-screenshots/${date}_${tag}-${suffix}.png`, import.meta.url))
 const browser = await chromium.launch({ headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
@@ -124,18 +125,35 @@ try {
   await open.click()
   const dialog = page.locator('.el-dialog:visible')
   const table = dialog.locator('.el-table__body-wrapper')
-  assert.equal(await table.locator('tr').count(), 20)
-  assert.equal(await table.locator('.el-input-number input').count(), 20)
+  await table.locator('tr').first().waitFor()
+  const renderedRows = await table.locator('tr').count()
+  assert.ok(renderedRows > 0 && renderedRows <= 20)
+  assert.equal(await table.locator('.el-input-number input').count(), renderedRows)
   const editableColumns = control.batchForm.rule.filter(rule => rule.field !== pk && control.rowDesign.fieldWriteModes[rule.field] === 'EDITABLE').length
   const renderedControls = await table.locator('input:not([type="checkbox"])').count()
-  assert.equal(renderedControls, editableColumns * 20)
+  assert.equal(renderedControls, editableColumns * renderedRows)
   timings.open200Ms = Math.round(performance.now() - openStarted)
+  console.log(JSON.stringify({ step: 'synthetic-render-budget', taskId: id, renderedRows, renderedControls,
+    ...timings, editMs, unchangedSaveMs }))
+  await dialog.screenshot({ path: shot('render-budget') })
+  assert.ok(renderedControls <= 200, 'Wide-table pages must not mount a thousand field inputs')
   await dialog.locator('.el-pagination .btn-next').click()
-  await table.locator('tr').first().locator('td').nth(1).getByText('21', { exact: true }).waitFor()
+  await table.locator('tr').first().locator('td').nth(1).getByText(String(renderedRows + 1), { exact: true }).waitFor()
   const captionColumn = control.batchForm.rule.filter(rule => rule.field && rule.type !== 'miAssignment').findIndex(rule => rule.field === caption) + 2
-  assert.equal(await table.locator('tr').first().locator('td').nth(captionColumn).locator('input').inputValue(), String(rowsOf(form)[20][caption]))
+  assert.equal(await table.locator('tr').first().locator('td').nth(captionColumn).locator('input').inputValue(), String(rowsOf(form)[renderedRows][caption]))
   await table.scrollIntoViewIfNeeded()
   await dialog.screenshot({ path: shot('page-two') })
+  const uniformItem = dialog.locator('.batch-edit-dialog__uniform .el-form-item')
+    .filter({ has: page.locator('.el-select__wrapper:not(.is-disabled)') }).first()
+  const mode = uniformItem.locator('.el-select').first()
+  await mode.click()
+  const choices = page.locator('.el-select-dropdown:visible')
+  await choices.getByText('Set value', { exact: true }).click()
+  await uniformItem.locator('.batch-edit-dialog__uniform-value input').fill('Synthetic uniform check')
+  await mode.click()
+  await choices.getByText('Do not change', { exact: true }).click()
+  assert.equal(await uniformItem.locator('.batch-edit-dialog__uniform-value').count(), 0)
+  await table.scrollIntoViewIfNeeded()
   await page.setViewportSize({ width: 390, height: 844 })
   const box = await dialog.boundingBox()
   assert.ok(box && box.x >= 0 && box.x + box.width <= 390 && box.y + box.height <= 844)
@@ -144,7 +162,7 @@ try {
   assert.equal(uiSaves, 0)
   assert.equal(db(), before)
   assert.equal(pageErrors, 0)
-  console.log(JSON.stringify({ taskId: id, rows: 200, columns: control.batchForm.rule.length, renderedRows: 20, renderedControls, samples: 3, editMs, unchangedSaveMs, ...timings,
+  console.log(JSON.stringify({ taskId: id, rows: 200, columns: control.batchForm.rule.length, renderedRows, renderedControls, samples: 3, editMs, unchangedSaveMs, ...timings,
     overLimitRejected: true, unchangedAfterCancel: true, pageErrors }))
 } catch (error) {
   // Browser/request errors may embed authentication headers in their call logs.

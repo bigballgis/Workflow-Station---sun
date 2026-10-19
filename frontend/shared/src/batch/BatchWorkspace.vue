@@ -30,7 +30,7 @@
     <div v-if="fields.length || showAdd || showDelete" class="batch-edit-dialog__table">
       <el-table :data="displayedRows" border size="small" max-height="420" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
-        <el-table-column type="index" :index="rowIndex => (page - 1) * 20 + rowIndex + 1" width="58" />
+        <el-table-column type="index" :index="rowIndex => (page - 1) * pageSize + rowIndex + 1" width="58" />
         <el-table-column
           v-for="field in fields"
           :key="field.field"
@@ -42,7 +42,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination v-model:current-page="page" :page-size="20" :total="draftRows.length" layout="prev, pager, next" />
+      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="draftRows.length" layout="prev, pager, next" />
     </div>
 
     <el-divider v-if="fields.length" />
@@ -53,7 +53,7 @@
         {{ t('subTable.batchUniformSelectionHint') }}
       </p>
       <el-form-item v-for="field in fields" :key="field.field" :label="field.label">
-        <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode" :disabled="uniformReadonly(field.field)">
+        <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode" :persistent="false" :disabled="uniformReadonly(field.field)">
           <el-option :label="t('subTable.batchNoChange')" value="none" />
           <el-option :label="t('subTable.batchSetValue')" value="set" />
           <el-option :label="t('subTable.batchClearValue')" value="clear" />
@@ -154,7 +154,9 @@ const selectedRowIds = ref<Set<string>>(new Set())
 const selectedParentValue = ref('')
 const addCount = ref(1)
 const page = ref(1)
-const displayedRows = computed(() => draftRows.value.slice((page.value - 1) * 20, page.value * 20))
+// Preserve twenty-row pages for ordinary forms; wide forms target at most 200 mounted cells.
+const pageSize = computed(() => Math.max(1, Math.min(20, Math.floor(200 / Math.max(1, props.fields.length)))))
+const displayedRows = computed(() => draftRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const applying = ref(false)
 const baselineRows = ref<Array<Record<string, unknown>>>([])
 let temporaryKeys = new WeakMap<Record<string, unknown>, string>()
@@ -232,7 +234,7 @@ function addDraftRows() {
     temporaryKeys.set(row, `draft:${crypto.randomUUID()}`)
     draftRows.value.push(row)
   }
-  page.value = Math.ceil(draftRows.value.length / 20)
+  page.value = Math.ceil(draftRows.value.length / pageSize.value)
 }
 
 function onSelectionChange(selected: Array<Record<string, unknown>>) {
@@ -294,7 +296,7 @@ async function apply() {
   if (affectedIds.size + fresh.length > 200) { ElMessage.error(t('subTable.batchLimit')); return }
   if (!affectedIds.size && !fresh.length) { emit('update:visible', false); return }
   const error = validateRows(existing.filter(row => changedIds.has(props.rowIdentity(row) ?? '')), fresh)
-  if (error) { page.value = Math.ceil(error.row / 20); ElMessage.error(t('subTable.batchInvalidField', { row: error.row, label: error.label })); return }
+  if (error) { page.value = Math.ceil(error.row / pageSize.value); ElMessage.error(t('subTable.batchInvalidField', { row: error.row, label: error.label })); return }
   applying.value = true
   try {
     const prepared = fresh.length ? await props.prepareRows?.(fresh, selectedParentValue.value) : undefined

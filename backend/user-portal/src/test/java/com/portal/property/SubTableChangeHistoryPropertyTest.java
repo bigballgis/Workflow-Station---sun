@@ -344,9 +344,13 @@ public class SubTableChangeHistoryPropertyTest {
                                 .changeType(ChangeType.SUB_TABLE_ROW_ADD)
                                 .build();
                 when(changeHistoryRepository
-                                .findLatestSubTableChanges("process-1", "acq_transaction",
-                                                List.of("ACQ-DC-PW-TRANS-000003"), false))
-                                .thenReturn(List.of(persisted));
+                                .findLatestAuditCells("process-1", "acq_transaction",
+                                                List.of(new com.portal.repository.ChangeHistoryRepository.AuditCell(
+                                                        "ACQ-DC-PW-TRANS-000003", "arn", ChangeType.SUB_TABLE_ROW_ADD))))
+                                .thenReturn(List.of(new com.portal.repository.ChangeHistoryRepository.AuditCellSnapshot(
+                                                new com.portal.repository.ChangeHistoryRepository.AuditCell(
+                                                        persisted.getRowIdentifier(), persisted.getFieldName(), persisted.getChangeType()),
+                                                persisted.getOldValue(), persisted.getNewValue())));
                 SubTableChange duplicateChange = SubTableChange.builder()
                                 .changeType("ROW_ADD")
                                 .rowIdentifier("ACQ-DC-PW-TRANS-000003")

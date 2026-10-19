@@ -79,6 +79,7 @@ class SubTableBatchPostgresTransactionIT {
             auditRepository.saveAndFlush(audit("process-one", "lines-one", "row-one", "quantity", "other-field", time));
             auditRepository.saveAndFlush(audit("process-one", "lines-one", null, "caption", "null-row", time));
             auditRepository.saveAndFlush(audit("process-one", "lines-one", "unselected-row", "caption", "excluded", time));
+            auditRepository.saveAndFlush(audit("process-one", "lines-one", "synthetic-'quoted-行", "caption", "bound-key", time));
             auditRepository.saveAndFlush(audit("process-two", "lines-one", "row-one", "caption", "other-process", time.plusSeconds(1)));
             auditRepository.saveAndFlush(audit("process-one", "lines-two", "row-one", "caption", "other-table", time.plusSeconds(1)));
         });
@@ -90,6 +91,19 @@ class SubTableBatchPostgresTransactionIT {
                 .map(com.portal.entity.ChangeHistory::getNewValue).collect(java.util.stream.Collectors.toSet()));
         var nullOnly = auditRepository.findLatestSubTableChanges("process-one", "lines-one", java.util.Collections.singletonList(null), true);
         assertEquals(List.of("null-row"), nullOnly.stream().map(com.portal.entity.ChangeHistory::getNewValue).toList());
+        var cell = new com.portal.repository.ChangeHistoryRepository.AuditCell(
+                "row-one", "caption", com.portal.enums.ChangeType.SUB_TABLE_ROW_UPDATE);
+        var emptyRow = new com.portal.repository.ChangeHistoryRepository.AuditCell(
+                null, "caption", com.portal.enums.ChangeType.SUB_TABLE_ROW_UPDATE);
+        var cells = auditRepository.findLatestAuditCells("process-one", "lines-one", List.of(cell, cell, emptyRow));
+        assertEquals(java.util.Set.of("latest-tied", "null-row"), cells.stream()
+                .map(com.portal.repository.ChangeHistoryRepository.AuditCellSnapshot::newValue).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(2, cells.size(), "Duplicate lookup keys must not duplicate audit records");
+        assertTrue(auditRepository.findLatestAuditCells("process-one", "lines-one", List.of()).isEmpty());
+        var quoted = new com.portal.repository.ChangeHistoryRepository.AuditCell(
+                "synthetic-'quoted-行", "caption", com.portal.enums.ChangeType.SUB_TABLE_ROW_UPDATE);
+        assertEquals(List.of("bound-key"), auditRepository.findLatestAuditCells("process-one", "lines-one", List.of(quoted))
+                .stream().map(com.portal.repository.ChangeHistoryRepository.AuditCellSnapshot::newValue).toList());
     }
 
     private static com.portal.entity.ChangeHistory audit(String process, String table, String row, String field,
