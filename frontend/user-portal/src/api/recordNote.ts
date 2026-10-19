@@ -1,4 +1,5 @@
 import service from './request'
+import i18n from '@/i18n'
 
 export interface RecordNoteTargetParams {
   targetType: 'TABLE' | 'RECORD'
@@ -144,12 +145,15 @@ export async function createRecordNote(
     processInstanceId?: string | null
   },
 ): Promise<RecordNoteItem | null> {
+  if (target.processInstanceId && payload.processInstanceId && target.processInstanceId !== payload.processInstanceId) {
+    throw new Error(i18n.global.t('api.invalidParams'))
+  }
   const form = new FormData()
   if (target.sourceView) form.append('sourceView', target.sourceView)
   Object.entries(targetQuery(target)).forEach(([k, v]) => form.append(k, String(v)))
   if (payload.subject) form.append('subject', payload.subject)
   if (payload.bodyHtml) form.append('bodyHtml', payload.bodyHtml)
-  if (payload.processInstanceId) form.append('processInstanceId', payload.processInstanceId)
+  if (!target.processInstanceId && payload.processInstanceId) form.append('processInstanceId', payload.processInstanceId)
   payload.inlineImageIds?.forEach((id) => form.append('inlineImageIds', id))
   payload.files?.forEach((f) => form.append('files', f))
   const res = (await service.post('/record-notes', form, {
