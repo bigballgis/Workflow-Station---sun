@@ -1,4 +1,11 @@
 export default {
+  relationTableBatch: {
+    inactive: '批量 Inactive（{count}）',
+    active: '批量 Active（{count}）',
+    inactiveConfirm: '确定将选中的 {count} 行设为 Inactive？设为 Inactive 后，这些行不会再出现在 Lookup 字段的可选项中。',
+    inactiveDone: '已将 {count} 行设为 Inactive',
+    activeDone: '已将 {count} 行设为 Active',
+  },
   app: {
     name: '管理中心',
     title: '工作流平台'

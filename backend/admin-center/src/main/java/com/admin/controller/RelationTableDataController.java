@@ -3,6 +3,7 @@ package com.admin.controller;
 import com.admin.component.RelationTableDataListQueryComponent;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AllocatePrimaryKeyRequest;
+import com.admin.dto.request.RelationTableBatchStatusRequest;
 import com.admin.dto.request.RelationTableDataListQueryRequest;
 import com.admin.dto.response.AllocatePrimaryKeyResponse;
 import com.admin.dto.response.RelationTableResponse;
@@ -214,6 +215,22 @@ public class RelationTableDataController {
         log.info("Changing status for table: tableId={}, rowId={}, status={}", tableId, rowId, status);
         RelationTableDataRowDTO row = dataService.changeStatus(tableId, rowId, status);
         return ResponseEntity.ok(row);
+    }
+
+    @PutMapping("/{tableId}/status/batch")
+    @Operation(summary = "Batch change data status",
+            description = "Set ACTIVE/INACTIVE on several rows at once; all rows succeed or none do")
+    public ResponseEntity<Map<String, Integer>> changeStatusBatch(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @RequestBody @Valid RelationTableBatchStatusRequest request) {
+        String status = request.status().toUpperCase();
+        if (!ALLOWED_STATUSES.contains(status)) {
+            log.warn("Invalid batch status change attempt: tableId={}, status={}", tableId, request.status());
+            return ResponseEntity.badRequest().build();
+        }
+        log.info("Batch changing status: tableId={}, rows={}, status={}", tableId, request.rowIds().size(), status);
+        int updated = dataService.changeStatusBatch(tableId, request.rowIds(), status);
+        return ResponseEntity.ok(Map.of("updated", updated));
     }
 
     // ==================== Audit Log ====================

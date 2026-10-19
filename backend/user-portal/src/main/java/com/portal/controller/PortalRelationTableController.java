@@ -180,6 +180,16 @@ public class PortalRelationTableController {
         return ResponseEntity.ok(ApiResponse.success(service.changeStatus(tableId, userId, rowId, status)));
     }
 
+    @PutMapping("/{tableId}/status/batch")
+    @Operation(summary = "批量切换数据状态 ACTIVE/INACTIVE（需要 READ_WRITE，全部成功或全部回滚）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> changeStatusBatch(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId,
+            @RequestBody @jakarta.validation.Valid com.portal.dto.RelationTableBatchStatusRequest request) {
+        int updated = service.changeStatusBatch(tableId, userId, request.rowIds(), request.status());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("updated", updated)));
+    }
+
     @GetMapping("/{tableId}/template")
     @Operation(summary = "下载导入模板 (csv|xlsx)")
     public ResponseEntity<byte[]> downloadTemplate(

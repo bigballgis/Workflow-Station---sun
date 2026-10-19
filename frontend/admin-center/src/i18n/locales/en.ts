@@ -1,4 +1,11 @@
 export default {
+  relationTableBatch: {
+    inactive: 'Inactive ({count})',
+    active: 'Active ({count})',
+    inactiveConfirm: 'Set {count} selected row(s) to inactive? They will no longer be offered in Lookup fields.',
+    inactiveDone: '{count} row(s) set to inactive',
+    activeDone: '{count} row(s) set to active',
+  },
   app: {
     name: 'Admin Center',
     title: 'Workflow Platform'

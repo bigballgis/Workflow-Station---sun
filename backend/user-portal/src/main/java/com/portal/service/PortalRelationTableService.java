@@ -81,6 +81,9 @@ public interface PortalRelationTableService {
      */
     Map<String, Object> changeStatus(Long tableId, String userId, String rowId, String status);
 
+    /** Sets every row to ACTIVE/INACTIVE in one transaction; requires READ_WRITE. Returns the row count. */
+    int changeStatusBatch(Long tableId, String userId, List<String> rowIds, String status);
+
     /**
      * 生成导入模板（CSV / XLSX）。
      */

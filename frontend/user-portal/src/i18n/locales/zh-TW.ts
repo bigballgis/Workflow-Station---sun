@@ -1,6 +1,13 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  relationTableBatch: {
+    inactive: '批次 Inactive（{count}）',
+    active: '批次 Active（{count}）',
+    inactiveConfirm: '確定將選取的 {count} 列設為 Inactive？設為 Inactive 後，這些列不會再出現在 Lookup 欄位的可選項中。',
+    inactiveDone: '已將 {count} 列設為 Inactive',
+    activeDone: '已將 {count} 列設為 Active',
+  },
   recordNoteNotification: {"openRequest": "開啟 Request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "記錄無法使用，或你已無權存取。"},
 
   app: {

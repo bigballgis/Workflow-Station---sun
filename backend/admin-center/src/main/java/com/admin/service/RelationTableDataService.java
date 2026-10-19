@@ -75,6 +75,9 @@ public interface RelationTableDataService {
      */
     RelationTableDataRowDTO changeStatus(Long tableId, String rowId, String status);
 
+    /** Sets every row to the given status in one transaction (audited per row). Returns the row count. */
+    int changeStatusBatch(Long tableId, List<String> rowIds, String status);
+
     /**
      * 导出表数据为 CSV
      */

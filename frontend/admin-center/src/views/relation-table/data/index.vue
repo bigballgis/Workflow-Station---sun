@@ -103,6 +103,24 @@
             >
               <el-icon><Upload /></el-icon> Import
             </el-button>
+            <template v-if="canWrite && selectedRowCount">
+              <el-button
+                type="warning"
+                plain
+                :loading="batchStatusLoading"
+                @click="handleBatchStatus('INACTIVE')"
+              >
+                {{ t('relationTableBatch.inactive', { count: selectedRowCount }) }}
+              </el-button>
+              <el-button
+                type="success"
+                plain
+                :loading="batchStatusLoading"
+                @click="handleBatchStatus('ACTIVE')"
+              >
+                {{ t('relationTableBatch.active', { count: selectedRowCount }) }}
+              </el-button>
+            </template>
           </div>
 
           <el-alert
@@ -354,6 +372,7 @@ const {
   lookupSelectedData, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
   fetchData, handleSelectTable,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
+  selectedRowCount, batchStatusLoading, handleBatchStatus,
   formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, refresh,
   grid,
 } = useRelationTableData()

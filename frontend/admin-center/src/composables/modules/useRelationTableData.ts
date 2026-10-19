@@ -326,6 +326,28 @@ export function useRelationTableData() {
     } catch (e: unknown) { notifyError((e as Error)?.message || 'Failed') }
   }
 
+  const selectedRowCount = computed(() => grid.gridSelectedRows.value.length)
+  const batchStatusLoading = ref(false)
+
+  const handleBatchStatus = async (status: 'ACTIVE' | 'INACTIVE') => {
+    if (!selectedTableId.value) return
+    const ids = grid.gridSelectedRows.value.map(row => row.rowId)
+    if (!ids.length) return
+    if (status === 'INACTIVE') {
+      try { await notifyConfirm(t('relationTableBatch.inactiveConfirm', { count: ids.length }), 'Confirm', { type: 'warning' }) }
+      catch { return }
+    }
+    batchStatusLoading.value = true
+    try {
+      const res = await relationTableDataApi.changeStatusBatch(selectedTableId.value, ids, status)
+      localStatusMap.value = { ...localStatusMap.value, ...Object.fromEntries(ids.map(id => [id, status])) }
+      notifySuccess(t(status === 'INACTIVE' ? 'relationTableBatch.inactiveDone' : 'relationTableBatch.activeDone', { count: res.updated }))
+      await fetchData()
+    } catch (e: unknown) {
+      notifyError((e as Error)?.message || 'Failed')
+    } finally { batchStatusLoading.value = false }
+  }
+
   const handleDelete = async (row: RelationTableDataRow) => {
     if (!selectedTableId.value) return
     try { await notifyConfirm('Are you sure to delete this record?', 'Confirm', { type: 'warning' }) }
@@ -437,6 +459,7 @@ export function useRelationTableData() {
     lookupSelectedData, isLookupField, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
     fetchTables, fetchData, handleSelectTable,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
+    selectedRowCount, batchStatusLoading, handleBatchStatus,
     formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, refresh,
     grid,
     RT_DATA_STATUS_COL_WIDTH,

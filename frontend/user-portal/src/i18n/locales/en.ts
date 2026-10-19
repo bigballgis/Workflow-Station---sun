@@ -1,6 +1,13 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  relationTableBatch: {
+    inactive: 'Inactive ({count})',
+    active: 'Active ({count})',
+    inactiveConfirm: 'Set {count} selected row(s) to inactive? They will no longer be offered in Lookup fields.',
+    inactiveDone: '{count} row(s) set to inactive',
+    activeDone: '{count} row(s) set to active',
+  },
   recordNoteNotification: {"openRequest": "Open request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "This note is unavailable or you no longer have access."},
 
   app: {

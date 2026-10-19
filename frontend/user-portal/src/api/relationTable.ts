@@ -182,6 +182,10 @@ export const relationTableApi = {
   changeStatus: (tableId: number, rowId: string, status: string) =>
     request.put<{ data: Record<string, any> }>(`/relation-tables/${tableId}/${rowId}/status`, { status }),
 
+  /** 批量切换 ACTIVE/INACTIVE（全部成功或全部回滚） */
+  changeStatusBatch: (tableId: number, rowIds: string[], status: 'ACTIVE' | 'INACTIVE') =>
+    request.put<{ data: { updated: number } }>(`/relation-tables/${tableId}/status/batch`, { rowIds, status }),
+
   /** 下载导入模板 (csv|xlsx) */
   downloadTemplate: (tableId: number, format: 'csv' | 'xlsx' = 'csv') =>
     request.get<Blob>(`/relation-tables/${tableId}/template`, {

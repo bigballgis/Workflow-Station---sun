@@ -388,6 +388,10 @@ export const relationTableDataApi = {
   changeStatus: (tableId: number, rowId: string, status: string) =>
     put<RelationTableDataRow>(`/relation-tables/data/${tableId}/${rowId}/status`, { status }),
 
+  /** 批量切换 ACTIVE/INACTIVE（全部成功或全部回滚） */
+  changeStatusBatch: (tableId: number, rowIds: string[], status: 'ACTIVE' | 'INACTIVE') =>
+    put<{ updated: number }>(`/relation-tables/data/${tableId}/status/batch`, { rowIds, status }),
+
   /** 查询审计日志 */
   queryAuditLogs: (
     tableId: number,
