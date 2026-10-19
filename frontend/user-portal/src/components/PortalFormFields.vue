@@ -73,6 +73,12 @@ export interface PortalSubTableBindingLite {
   fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
 }
 
+export interface NestedHostContext {
+  hostPrimaryTableDisplayName?: string
+  hostSubTableBindingsForContext?: Array<{ tableId?: number | null; bindingType?: string; tableName?: string; tableDisplayName?: string }>
+  hostParentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+}
+
 const props = withDefaults(
   defineProps<{
     fields: FormField[]
@@ -101,6 +107,9 @@ const props = withDefaults(
     hostTaskId?: string
     hostPrimaryFormData?: Record<string, unknown>
     hostPrimaryTableId?: number | null
+    hostPrimaryTableDisplayName?: NestedHostContext['hostPrimaryTableDisplayName']
+    hostSubTableBindingsForContext?: NestedHostContext['hostSubTableBindingsForContext']
+    hostParentTablesById?: NestedHostContext['hostParentTablesById']
     hostBindingId?: number | string | null
     /**
      * inlineSubForm bindingIds already resolved along this render path (this component's own
@@ -509,9 +518,23 @@ const miKindContext = computed(() => {
 
 /** Host row's own table joins the ancestor pool so a nested FK to it can be auto-filled. */
 const nestedParentTablesById = computed(() => {
-  if (props.hostTableId == null || !props.hostFieldDefinitions?.length) return undefined
-  return { [Number(props.hostTableId)]: { fieldDefinitions: props.hostFieldDefinitions } }
+  const parents = { ...props.hostParentTablesById }
+  if (props.hostTableId != null && props.hostFieldDefinitions?.length) {
+    parents[Number(props.hostTableId)] = { fieldDefinitions: props.hostFieldDefinitions }
+  }
+  return Object.keys(parents).length ? parents : undefined
 })
+
+// Layout containers must preserve the same host; only a nested inline form changes it.
+const nestedHostContext = computed(() => ({
+  hostTableId: props.hostTableId, hostFieldDefinitions: props.hostFieldDefinitions,
+  hostFunctionUnitId: props.hostFunctionUnitId, hostTaskId: props.hostTaskId,
+  hostPrimaryFormData: props.hostPrimaryFormData, hostPrimaryTableId: props.hostPrimaryTableId,
+  hostBindingId: props.hostBindingId,
+  hostPrimaryTableDisplayName: props.hostPrimaryTableDisplayName,
+  hostSubTableBindingsForContext: props.hostSubTableBindingsForContext,
+  hostParentTablesById: nestedParentTablesById.value,
+}))
 
 /**
  * The designer's `miAssignment` marker owns the assignee / BU / role rules as its CHILDREN.
@@ -592,6 +615,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :parent-tables-by-id="nestedParentTablesById"
         :primary-form-data="hostPrimaryFormData"
         :primary-table-id="hostPrimaryTableId ?? null"
+        :primary-table-display-name="hostPrimaryTableDisplayName"
+        :sub-table-bindings-for-context="hostSubTableBindingsForContext"
         style="margin-bottom: 16px;"
         @update:model-value="(rows: any[]) => onNestedSubTableRowsUpdate(field, rows)"
         @update:parent-row="onNestedParentRowPatch"
@@ -619,6 +644,9 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :host-task-id="hostTaskId"
         :host-primary-form-data="hostPrimaryFormData"
         :host-primary-table-id="hostPrimaryTableId ?? null"
+        :host-primary-table-display-name="hostPrimaryTableDisplayName"
+        :host-sub-table-bindings-for-context="hostSubTableBindingsForContext"
+        :host-parent-tables-by-id="nestedParentTablesById"
         :host-binding-id="field._bindingId"
         :visited-inline-sub-form-binding-ids="nextVisitedInlineSubFormBindingIds(field._bindingId)"
         :field-permissions="fieldPermissions"
@@ -641,6 +669,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :name="tab.name"
         >
           <PortalFormFields
+            v-bind="nestedHostContext"
             :fields="tab.fields || []"
             :model="model"
             :readonly="readonly"
@@ -680,6 +709,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
     >
       <el-row :gutter="field.gutter ?? 20">
         <PortalFormFields
+          v-bind="nestedHostContext"
           :fields="field.children || []"
           :model="model"
           :readonly="readonly"
@@ -706,6 +736,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
       :span="field.span || 12"
     >
       <PortalFormFields
+        v-bind="nestedHostContext"
         :fields="field.children || []"
         :model="model"
         :readonly="readonly"
@@ -738,6 +769,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :name="panel.name"
         >
           <PortalFormFields
+            v-bind="nestedHostContext"
             :fields="panel.fields || []"
             :model="model"
             :readonly="readonly"
@@ -775,6 +807,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         </template>
         <el-row :gutter="20">
           <PortalFormFields
+            v-bind="nestedHostContext"
             :fields="field.children || []"
             :model="model"
             :readonly="readonly"
@@ -814,6 +847,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         <template #default="{ hiddenFields }">
           <el-row :gutter="20">
             <PortalFormFields
+              v-bind="nestedHostContext"
               :fields="assignmentVisibleChildren(field.children, hiddenFields)"
               :model="model"
               :readonly="readonly || field.readonly === true"
@@ -850,6 +884,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
     >
       <el-row :gutter="20">
         <PortalFormFields
+          v-bind="nestedHostContext"
           :fields="field.children || []"
           :model="model"
           :readonly="readonly || field.readonly === true"

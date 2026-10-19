@@ -7,6 +7,7 @@ const SubTableField = defineAsyncComponent({
   delay: 0,
 })
 import SubTableInlineForm from './SubTableInlineForm.vue'
+import type { NestedHostContext } from './PortalFormFields.vue'
 import RecordNoteField from './RecordNoteField.vue'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
@@ -431,6 +432,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :host-task-id="ctx.taskId as string | undefined"
           :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
           :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
+          :host-primary-table-display-name="ctx.primaryTableDisplayName as NestedHostContext['hostPrimaryTableDisplayName']"
+          :host-sub-table-bindings-for-context="ctx.subTableBindingsForContext as NestedHostContext['hostSubTableBindingsForContext']"
+          :host-parent-tables-by-id="ctx.parentTablesById as NestedHostContext['hostParentTablesById']"
           :visited-inline-sub-form-binding-ids="new Set([Number(field._bindingId)])"
           :field-permissions="ctx.fieldPermissions"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
@@ -464,6 +468,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
           :host-task-id="ctx.taskId as string | undefined"
           :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
           :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
+          :host-primary-table-display-name="ctx.primaryTableDisplayName as NestedHostContext['hostPrimaryTableDisplayName']"
+          :host-sub-table-bindings-for-context="ctx.subTableBindingsForContext as NestedHostContext['hostSubTableBindingsForContext']"
+          :host-parent-tables-by-id="ctx.parentTablesById as NestedHostContext['hostParentTablesById']"
           :visited-inline-sub-form-binding-ids="new Set([Number(field._bindingId)])"
           :field-permissions="ctx.fieldPermissions"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"

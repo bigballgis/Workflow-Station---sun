@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import PortalFormFields, { type PortalSubTableBindingLite } from './PortalFormFields.vue'
+import PortalFormFields, { type PortalSubTableBindingLite, type NestedHostContext } from './PortalFormFields.vue'
 import { flattenLeafFormFields, type FormField } from './formRendererHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
@@ -45,6 +45,9 @@ interface Props {
   hostTaskId?: string
   hostPrimaryFormData?: Record<string, unknown>
   hostPrimaryTableId?: number | null
+  hostPrimaryTableDisplayName?: NestedHostContext['hostPrimaryTableDisplayName']
+  hostSubTableBindingsForContext?: NestedHostContext['hostSubTableBindingsForContext']
+  hostParentTablesById?: NestedHostContext['hostParentTablesById']
   hostBindingId?: number | string | null
   /** Inline Form widget: rows persist with the host form, so it owns no Save button. */
   hideSaveButton?: boolean
@@ -346,6 +349,9 @@ const cardTitle = computed(() =>
           :host-task-id="hostTaskId"
           :host-primary-form-data="hostPrimaryFormData"
           :host-primary-table-id="hostPrimaryTableId ?? null"
+          :host-primary-table-display-name="hostPrimaryTableDisplayName"
+          :host-sub-table-bindings-for-context="hostSubTableBindingsForContext"
+          :host-parent-tables-by-id="hostParentTablesById"
           :host-binding-id="hostBindingId ?? null"
           :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
           :field-permissions="fieldPermissions"

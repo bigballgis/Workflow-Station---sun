@@ -16,6 +16,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import PortalFormFields from '../PortalFormFields.vue'
 import type { FormField } from '../formRendererHelpers'
 import {
@@ -145,7 +146,7 @@ describe('subTable nested inside an inlineSubForm — FK/PK context', () => {
 
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.message).toBe('subTable.fkGuardMainNotReady')
+    expect(result.message).toBe('subTable.fkGuardMissingParents')
   })
 })
 
@@ -179,6 +180,10 @@ describe('PortalFormFields — FK/PK context reaches a nested subTable', () => {
     ElRow: { template: '<div><slot /></div>' },
     ElCard: { template: '<div><slot /></div>' },
     ElFormItem: { template: '<div><slot /></div>' },
+    ElTabs: { template: '<div><slot /></div>' },
+    ElTabPane: { template: '<div><slot /></div>' },
+    ElCollapse: { template: '<div><slot /></div>' },
+    ElCollapseItem: { template: '<div><slot /></div>' },
   }
 
   const peopleBinding = {
@@ -204,7 +209,7 @@ describe('PortalFormFields — FK/PK context reaches a nested subTable', () => {
 
   function mountWith(fields: FormField[]) {
     capturedProps.length = 0
-    mount(PortalFormFields, {
+    const wrapper = mount(PortalFormFields, {
       props: {
         fields,
         model: { name: 'rrcc' },
@@ -212,9 +217,11 @@ describe('PortalFormFields — FK/PK context reaches a nested subTable', () => {
         subTableBindings: [peopleBinding],
         ...hostContext,
       },
-      global: { stubs },
+      global: { stubs, plugins: [createPinia()] },
     })
-    return capturedProps[0]
+    const seen = capturedProps[0]
+    wrapper.unmount()
+    return seen
   }
 
   it('forwards the main-table context and the binding link mode to a direct nested subTable', () => {
@@ -236,13 +243,16 @@ describe('PortalFormFields — FK/PK context reaches a nested subTable', () => {
     })
   })
 
-  it('keeps that context across a layout container it recurses through', () => {
+  it.each(['card', 'row', 'tabs', 'collapse'])('keeps that context across a %s layout container', (layout) => {
+    const children = [{ key: 'people', type: 'subTable', _bindingId: 77, span: 24 }]
     const seen = mountWith([
       {
-        key: 'card',
-        type: 'card',
+        key: 'layout',
+        type: layout,
         span: 24,
-        children: [{ key: 'people', type: 'subTable', _bindingId: 77, span: 24 }],
+        children,
+        tabs: [{ name: 'tab', label: 'Tab', fields: children }],
+        collapsePanels: [{ name: 'panel', title: 'Panel', fields: children }],
       } as unknown as FormField,
     ])
 
