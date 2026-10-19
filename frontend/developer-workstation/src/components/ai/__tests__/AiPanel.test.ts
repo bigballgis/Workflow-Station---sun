@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import { ref } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { Close } from '@element-plus/icons-vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
 
 const i18n = createI18n({
@@ -205,12 +206,12 @@ describe('AiPanel', () => {
     mockIsLocked.value = false
     const wrapper = mountComponent(true)
 
-    // Find close button in header-actions (second button, after detach toggle)
+    // Prompt management and detach actions may precede the close control.
     const headerActions = wrapper.find('.ai-panel__header-actions')
-    const buttons = headerActions.findAll('.el-button')
-    expect(buttons.length).toBe(2)
-    // Close button is the last one
-    await buttons[1].trigger('click')
+    const buttons = headerActions.findAllComponents(globalStubs['el-button'])
+    const close = buttons.find(button => button.props('icon') === Close)
+    expect(close).toBeDefined()
+    await close!.trigger('click')
 
     expect(wrapper.emitted('update:visible')).toBeTruthy()
     expect(wrapper.emitted('update:visible')![0]).toEqual([false])

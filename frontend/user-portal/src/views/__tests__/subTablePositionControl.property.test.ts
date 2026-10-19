@@ -3,7 +3,8 @@
 // Property 3: update:subTableData emitted on inline row change
 // Property 5: Submission payload includes all sub-table data regardless of placement
 
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 import * as fc from 'fast-check'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
@@ -24,6 +25,14 @@ const i18n = createI18n({
 const formRendererMountGlobal = {
   plugins: [i18n, ElementPlus],
 }
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    media, matches: false, onchange: null, addListener: vi.fn(), removeListener: vi.fn(),
+    addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+  }))
+})
 
 describe('Property 2: Inline sub-table editable prop reflects mode', () => {
   /**

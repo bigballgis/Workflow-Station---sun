@@ -290,7 +290,7 @@ const toggleCollapse = () => {
 
 <style scoped lang="scss">
 $header-height: 64px;
-$aside-width: 280px; // 与 user-portal / developer-workstation 统一；280 起「Entitlement Management」文字才不压子菜单箭头
+$aside-width: 280px; // Match Portal/DW; keep Entitlement Management clear of the submenu arrow.
 $aside-collapsed-width: 64px;
 $primary-color: #db0011;
 $primary-dark: #8b0000;
@@ -411,9 +411,9 @@ $primary-dark: #8b0000;
     background: transparent;
   }
 
-  // 收起态：菜单容器 8px padding 把条目压到 48px 宽，而 EP 仍按「64px 宽 + 20px 左 padding」
-  // 摆图标（el-menu-item 的内容还包在绝对定位的 .el-menu-tooltip__trigger 里，自带同款 padding），
-  // 图标中心整体右偏 8px —— 收起时一律 flex 居中。
+  // Container padding leaves 48px for collapsed items, but Element Plus still uses
+  // a 64px layout with 20px left padding, including its positioned tooltip trigger.
+  // Center all collapsed icons with flex to remove the resulting 8px offset.
   &.el-menu--collapse {
     :deep(.el-menu-item),
     :deep(.el-sub-menu__title),
