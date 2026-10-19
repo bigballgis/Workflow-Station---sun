@@ -19,9 +19,28 @@ public record TodoTaskQueryRequest(
         String sortDirection,
         String keyword,
         List<String> assignmentTypes,
-        List<String> priorities) {
+        List<String> priorities,
+        String batchGroupKey,
+        String batchTaskDefinitionKey) {
+
+    public TodoTaskQueryRequest(int page, int size, List<ListColumnFilter> filters, String sortField,
+                                String sortDirection, String keyword, List<String> assignmentTypes,
+                                List<String> priorities) {
+        this(page, size, filters, sortField, sortDirection, keyword, assignmentTypes, priorities, null, null);
+    }
+
+    /** 「可批量操作」任务组下钻：只返回该组(功能单元发布版本 + 节点)下本人可批量办理的任务 */
+    public boolean batchGroup() {
+        return batchGroupKey != null;
+    }
 
     public TodoTaskQueryRequest {
+        batchGroupKey = blankToNull(batchGroupKey);
+        batchTaskDefinitionKey = blankToNull(batchTaskDefinitionKey);
+        if ((batchGroupKey == null) != (batchTaskDefinitionKey == null)) {
+            throw new IllegalArgumentException(
+                    "batchGroupKey and batchTaskDefinitionKey must be set together");
+        }
         if (page < 0) {
             throw new IllegalArgumentException("page must be >= 0");
         }
@@ -44,5 +63,9 @@ public record TodoTaskQueryRequest(
         if (sortField != null && sortDirection == null) {
             throw new IllegalArgumentException("sortDirection is required when sortField is set");
         }
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 }

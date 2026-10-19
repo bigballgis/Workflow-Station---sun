@@ -56,7 +56,7 @@ export interface SubTableViewFieldDTO {
 }
 
 export interface SubTableViewConfig {
-  id: number
+  id: number | null
   bindingId: number
   tableId: number
   viewFields: SubTableViewFieldDTO[]

@@ -9,45 +9,21 @@
           {{ $t('task.backToList') }}
         </el-button>
       </div>
+      <!-- Exactly the Actions configured on this node in Developer Workstation: no implicit
+           Save, no default Approve / Reject. A Save button is a SAVE Action bound to the node. -->
       <div class="right-actions">
         <el-button
-          v-if="showImplicitSaveAction"
-          type="primary"
-          :loading="savingTaskForm"
-          @click="$emit('save')"
+          v-for="action in visibleActions"
+          :key="action.actionId"
+          :type="resolveButtonType(action)"
+          :style="resolveButtonStyle(action)"
+          @click="$emit('customAction', action)"
         >
-          {{ $t('common.save') }}
+          <el-icon v-if="resolveIconName(action)">
+            <component :is="getIconComponent(resolveIconName(action))" />
+          </el-icon>
+          {{ getActionLabel(action) }}
         </el-button>
-        <!-- Show custom buttons when custom Actions are configured -->
-        <template v-if="visibleActions.length > 0">
-          <el-button
-            v-for="action in visibleActions"
-            :key="action.actionId"
-            :type="resolveButtonType(action)"
-            :style="resolveButtonStyle(action)"
-            @click="$emit('customAction', action)"
-          >
-            <el-icon v-if="resolveIconName(action)">
-              <component :is="getIconComponent(resolveIconName(action))" />
-            </el-icon>
-            {{ getActionLabel(action) }}
-          </el-button>
-        </template>
-        <!-- Show default approval buttons when no custom Actions are configured -->
-        <template v-else-if="actions === undefined || actions === null">
-          <el-button
-            type="success"
-            @click="$emit('approve')"
-          >
-            <el-icon><Check /></el-icon> {{ $t('task.approve') }}
-          </el-button>
-          <el-button
-            type="danger"
-            @click="$emit('reject')"
-          >
-            <el-icon><Close /></el-icon> {{ $t('task.reject') }}
-          </el-button>
-        </template>
       </div>
     </div>
   </div>
@@ -55,10 +31,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, Close } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 import type { TaskActionInfo } from '@/api/task'
+import { getStoredUser } from '@/api/auth'
 import { actionButtonStyle, resolveActionButtonType } from '@/utils/actionButtonColor'
+import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
 
 /**
  * Delegate / Transfer / Urge are no longer hardcoded here: they are Action
@@ -76,31 +53,30 @@ const props = defineProps<{
   isCompletedTask: boolean
   /** BU Role pool task the signed-in user does not hold: view only until they claim it. */
   claimLocked?: boolean
-  showImplicitSaveAction: boolean
-  savingTaskForm: boolean
   actions: TaskActionInfo[] | undefined | null
   canDelegate: boolean
-  getIconComponent: (iconName?: string) => Component
+  getIconComponent: (iconName?: string) => Component | null
   getActionLabel: (action: TaskActionInfo) => string
 }>()
 
 defineEmits<{
-  (e: 'save'): void
   (e: 'customAction', action: TaskActionInfo): void
-  (e: 'approve'): void
-  (e: 'reject'): void
 }>()
 
 function actionTypeOf(action: TaskActionInfo): string {
   return (action.actionType || '').trim().toUpperCase()
 }
 
-/** A DELEGATE action stays hidden while the task has no assignee to delegate from. */
-const visibleActions = computed<TaskActionInfo[]>(() =>
-  (props.actions || []).filter(
-    action => actionTypeOf(action) !== 'DELEGATE' || props.canDelegate
-  )
-)
+/** Delegate needs an assignee. Allowed Roles hide the button for the current session. */
+const visibleActions = computed<TaskActionInfo[]>(() => {
+  const user = getStoredUser()
+  const roles = user?.roles ?? []
+  const systemAdministrator = user?.systemAdministrator === true
+  return (props.actions || []).filter((action) => {
+    if (actionTypeOf(action) === 'DELEGATE' && !props.canDelegate) return false
+    return isActionVisibleForSession(action.configJson, roles, systemAdministrator)
+  })
+})
 
 function resolveIconName(action: TaskActionInfo): string | undefined {
   return action.icon || BUILT_IN_ICONS[actionTypeOf(action)]

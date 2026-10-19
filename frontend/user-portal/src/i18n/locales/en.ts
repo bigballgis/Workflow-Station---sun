@@ -1,6 +1,15 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  relationTableBatch: {
+    inactive: 'Inactive ({count})',
+    active: 'Active ({count})',
+    inactiveConfirm: 'Set {count} selected row(s) to inactive? They will no longer be offered in Lookup fields.',
+    inactiveDone: '{count} row(s) set to inactive',
+    activeDone: '{count} row(s) set to active',
+  },
+  recordNoteNotification: {"openRequest": "Open request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "This note is unavailable or you no longer have access."},
+
   app: {
     name: 'User Portal',
     title: 'Workflow Platform'
@@ -350,6 +359,25 @@ export default {
     transfer: 'Transfer',
     urge: 'Urge',
     batchUrge: 'Batch Urge',
+    tabAll: 'All To Do',
+    tabBatch: 'Batch Actions',
+    batchGroups: 'Task Groups',
+    batchGroupsSummary: 'Groups: {groups} · Pending: {count}',
+    batchGroupsEmpty: 'No tasks can be processed in batch right now',
+    batchGroupVersion: 'Version',
+    batchMark: 'Batch',
+    batchMarkHint: 'Can be approved or rejected together under Batch Actions — click to open the group',
+    batchGroupCount: 'Pending',
+    batchGroupActions: 'Batch Actions',
+    batchPendingCount: '{count} pending',
+    viewTasks: 'View Tasks',
+    backToGroups: 'Back to groups',
+    batchScopeThisPage: 'Selection scope: this page',
+    batchActionTitle: 'Batch {action} ({count})',
+    batchConfirm: 'Run "{action}" on the selected tasks ({count})? They move straight to the next step.',
+    batchCommentPrompt: 'This action requires a comment; it is written to every selected task.',
+    batchAllSucceeded: 'Processed: {count}',
+    batchPartialResult: '{ok} succeeded, {failed} failed:',
     selected: '{count} selected',
     approve: 'Approve',
     reject: 'Reject',
@@ -557,7 +585,9 @@ export default {
     workspaceGuardTitle: 'Cannot submit: workspace identity incomplete',
     workspaceGuardHint:
       'Your account is tied to business-unit roles. Select your workspace (Business unit · Role) in the header, or sign out and sign in again. Saving drafts is still allowed.',
-    workspaceGuardToast: 'Select a workspace in the header or sign in again before submitting'
+    workspaceGuardToast: 'Select a workspace in the header or sign in again before submitting',
+    actionsBlockedByAllowedRoles:
+      'No start actions are available for your current role. Contact an administrator if you need access.',
   },
   applicationDetail: {
     back: 'Back',
@@ -968,6 +998,8 @@ export default {
     goToApply: 'Go to Apply'
   },
   notification: {
+    attachmentUpdates: 'Attachment Updates',
+    attachmentUpdatesGuide: 'Read the attachment update notification guide',
     title: 'Notifications',
     unread: 'Unread',
     all: 'All',

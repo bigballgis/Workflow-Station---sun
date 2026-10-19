@@ -19,7 +19,7 @@ class TaskCompletionObservationTest {
     private final TaskProcessComponent processor = mock(TaskProcessComponent.class, CALLS_REAL_METHODS);
     private final ActionPostEmailComponent email = mock(ActionPostEmailComponent.class);
     private final SubTableBatchAssignmentHistory audit = mock(SubTableBatchAssignmentHistory.class);
-    private final TaskController controller = new TaskController(null, processor, null, null, null, email, null, null, null);
+    private final TaskController controller = new TaskController(null, processor, null, null, null, email, null, null, null, null);
     private final SubTableBatchInitialMiOutcome.Plan plan = new SubTableBatchInitialMiOutcome.Plan(
             "synthetic-instance", "synthetic-definition", List.of(new SubTableBatchInitialMiOutcome.Expected("configured-node", true,
                     "synthetic_table", List.of(Map.of("synthetic_key", "one")), List.of(), List.of())));
@@ -97,7 +97,7 @@ class TaskCompletionObservationTest {
                     new org.springframework.jdbc.datasource.DataSourceTransactionManager(database),
                     new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
             var proxied = (TaskProcessComponent) factory.getProxy();
-            var controller = new TaskController(null, proxied, null, null, null, email, null, null, null);
+            var controller = new TaskController(null, proxied, null, null, null, email, null, null, null, null);
             ReflectionTestUtils.setField(controller, "batchAssignmentHistory", audit);
             var response = controller.completeTask("synthetic-task", "synthetic-user", request());
             assertThat(observed).isTrue();

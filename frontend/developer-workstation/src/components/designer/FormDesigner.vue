@@ -1,5 +1,5 @@
 <template>
-  <div class="form-designer">
+  <div class="form-designer" :data-function-unit-id="props.functionUnitId">
     <!-- Form list view -->
     <FormListSidebar
       v-if="!selectedForm"
@@ -30,7 +30,7 @@
       class="form-editor-view"
     >
       <div class="editor-header">
-        <el-button @click="requestBackToList">
+        <el-button data-read-only-allowed @click="requestBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('form.backToList') }}
         </el-button>
         <el-input
@@ -72,7 +72,7 @@
         <div class="header-actions">
           <div class="auto-save-status">
             <span
-              v-if="isDirty"
+              v-if="isDirty && !designerReadOnly"
               class="auto-save-blocked"
             >
               <el-icon><WarningFilled /></el-icon>
@@ -112,13 +112,17 @@
           <el-button @click="handleBindNode(selectedForm)">
             {{ t('form.bindProcessNode') }}
           </el-button>
-          <el-button @mousedown.capture="prepareCustomPreviewValidation" @click="handlePreview">
+          <el-button
+            data-read-only-allowed
+            @mousedown.capture="prepareCustomPreviewValidation"
+            @click="handlePreview"
+          >
             {{ t('common.preview') }}
           </el-button>
           <el-button
             type="primary"
             :loading="savingForm"
-            :disabled="savingForm || batchSaveBlocked"
+            :disabled="savingForm || batchSaveBlocked || designerReadOnly"
             @click="saveChanges"
           >
             {{ t('common.save') }}
@@ -136,7 +140,7 @@
       />
       
       <!-- Grouped tab navigation: Main Table | Sub Tables ▾ | Relation Tables ▾ -->
-      <div class="designer-grouped-nav">
+      <div class="designer-grouped-nav" data-read-only-allowed>
         <button
           v-if="showMainTableTab"
           class="designer-nav-btn"
@@ -339,7 +343,7 @@
             class="sub-table-design-wrapper"
           >
             <div class="sub-inner-tabs">
-              <div class="sub-inner-tabs__header">
+              <div class="sub-inner-tabs__header" data-read-only-allowed>
                 <button
                   class="sub-inner-tab-btn"
                   :class="{ 'is-active': subTableActiveTab === 'form' }"
@@ -934,6 +938,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ArrowLeft, ArrowDown, Check, Connection, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { isFunctionUnitReadOnly } from '@/utils/permission'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
 import { fieldSwitchTypes } from '@/utils/designerDragRules'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -1018,6 +1023,7 @@ const { t } = useI18n()
 const selectedControlHelpPath = computed(() => formCtlHelpPath(formControlTypeStore.activeRule))
 const props = defineProps<{ functionUnitId: number }>()
 const store = useFunctionUnitStore()
+const designerReadOnly = computed(() => isFunctionUnitReadOnly(store.current))
 
 // ── Core shared state ───────────────────────────────────────────────────────
 const selectedForm = ref<FormDefinition | null>(null)
@@ -1832,7 +1838,7 @@ async function discardChanges(): Promise<void> {
 }
 
 defineExpose({
-  hasUnsavedChanges,
+  hasUnsavedChanges: () => !designerReadOnly.value && hasUnsavedChanges(),
   saveChanges,
   discardChanges,
 })
@@ -1909,7 +1915,7 @@ const {
 } = formLifecycle
 
 async function confirmFormLeave(): Promise<boolean> {
-  if (!isDirty.value) return true
+  if (designerReadOnly.value || !isDirty.value) return true
   try {
     await ElMessageBox.confirm(t('process.unsavedChanges'), t('functionUnit.documents.unsavedTitle'), {
       type: 'warning', confirmButtonText: t('common.save'), cancelButtonText: t('functionUnit.documents.discard'), distinguishCancelAndClose: true,

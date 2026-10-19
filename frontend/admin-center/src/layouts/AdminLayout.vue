@@ -133,21 +133,9 @@
             <el-menu-item index="/relation-tables/structure">
               {{ t('menu.tableStructure') }}
             </el-menu-item>
-            <el-sub-menu index="relation-tables-data">
-              <template #title>
-                <span>{{ t('menu.tableData') }}</span>
-              </template>
-              <el-menu-item index="/relation-tables/data">
-                {{ t('menu.allFunctionUnits') }}
-              </el-menu-item>
-              <el-menu-item
-                v-for="fu in tableDataFunctionUnits"
-                :key="fu.functionUnitCode"
-                :index="`/relation-tables/data/${fu.functionUnitCode}`"
-              >
-                {{ fu.functionUnitName || fu.functionUnitCode }}
-              </el-menu-item>
-            </el-sub-menu>
+            <el-menu-item index="/relation-tables/data">
+              {{ t('menu.tableData') }}
+            </el-menu-item>
           </el-sub-menu>
 
           <el-menu-item
@@ -250,7 +238,7 @@
             <keep-alive>
               <component
                 :is="Component"
-                :key="route.path"
+                :key="route.name === 'RelationTableData' ? route.name : route.path"
               />
             </keep-alive>
           </transition>
@@ -261,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -270,7 +258,6 @@ import {
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
-import { relationTableDataApi, type FunctionUnitTableGroup } from '@/api/relationTable'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -278,7 +265,7 @@ const { t } = useI18n()
 const brandMarkUrl = `${import.meta.env.BASE_URL}hermes-mark.svg`
 
 const isCollapse = ref(false)
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => route.name === 'RelationTableData' ? '/relation-tables/data' : route.path)
 
 // Header breadcrumb: the current page title comes from the route's meta.titleKey
 const currentTitle = computed(() => {
@@ -299,19 +286,6 @@ const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
 }
 
-// Table Data nav sub-menu: one entry per Function Unit that has deployed relation tables.
-const tableDataFunctionUnits = ref<FunctionUnitTableGroup[]>([])
-const loadTableDataFunctionUnits = async () => {
-  try {
-    tableDataFunctionUnits.value = await relationTableDataApi.getFunctionUnitGroups()
-  } catch {
-    tableDataFunctionUnits.value = []
-  }
-}
-
-onMounted(() => {
-  if (isSystemAdmin.value) void loadTableDataFunctionUnits()
-})
 </script>
 
 <style scoped lang="scss">

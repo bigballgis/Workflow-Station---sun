@@ -4,7 +4,7 @@ import type {
 } from '@/types/aiGeneration'
 import { AI_CHAT_STREAM_URL } from '@/api/aiGeneration'
 import { getUser } from '@/api/auth'
-import { readAmToken } from '@/utils/amToken'
+import { isAmTokenReauthCode, readAmToken, refreshAmToken } from '@/utils/amToken'
 
 /** Draft data structure stored in localStorage */
 export interface AiGenerationDraft {
@@ -23,6 +23,14 @@ export interface AiGenerationDraft {
 }
 
 const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+/** SSE `error` event payload carrying a machine code */
+interface StreamErrorPayload {
+  errorCode: string
+  message?: string
+  lastSuccessTime?: string
+  degradationOptions?: string[]
+}
 
 /**
  * Build the localStorage key for a generation draft.
@@ -84,6 +92,10 @@ export function useAiChat() {
 
   let lastRequest: AiChatRequest | null = null
   let abortController: AbortController | null = null
+  /** 本轮流里 gateway 拒了 AMToken：先压住不报，流结束后静默续期重发一次 */
+  let deferredReauthError: StreamErrorPayload | null = null
+  /** 当前这一轮已经是续期后的重发：再被拒就照常报错，不再续 */
+  let amTokenRetried = false
 
   // Event callbacks
   let onDocumentCallback: ((type: string, content: string, meta?: AiDocumentMeta) => void) | null = null
@@ -109,7 +121,11 @@ export function useAiChat() {
     return headers
   }
 
-  async function sendMessage(request: AiChatRequest): Promise<void> {
+  function sendMessage(request: AiChatRequest): Promise<void> {
+    return send(request, false)
+  }
+
+  async function send(request: AiChatRequest, isAmTokenRetry: boolean): Promise<void> {
     // 防止重复发送（如果已经在 streaming 中，忽略新请求）
     if (isStreaming.value) {
       console.warn('sendMessage ignored: already streaming')
@@ -117,6 +133,8 @@ export function useAiChat() {
     }
 
     lastRequest = request
+    amTokenRetried = isAmTokenRetry
+    deferredReauthError = null
     error.value = null
     canRetry.value = false
     errorCode.value = null
@@ -147,9 +165,10 @@ export function useAiChat() {
     abortController = new AbortController()
 
     try {
+      const headers = getAuthHeaders()
       const response = await fetch(AI_CHAT_STREAM_URL, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers,
         body: JSON.stringify(request),
         signal: abortController.signal
       })
@@ -187,6 +206,9 @@ export function useAiChat() {
       }
 
       finalizeStream()
+      if (deferredReauthError) {
+        await retryWithFreshAmToken(request, deferredReauthError, headers['X-AM-Token'] ?? '')
+      }
     } catch (err: any) {
       if (err.name === 'AbortError') return
       error.value = err.message || 'Connection error'
@@ -288,17 +310,10 @@ export function useAiChat() {
         try {
           const parsed = JSON.parse(eventData)
           if (parsed.errorCode) {
-            error.value = parsed.message || eventData
-            const retryableCodes = ['AI_WEBHOOK_TIMEOUT', 'AI_WEBHOOK_CALL_FAILED']
-            canRetry.value = retryableCodes.includes(parsed.errorCode)
-            // Store errorCode for i18n lookup
-            errorCode.value = parsed.errorCode
-            // Capture degradation info if present
-            if (parsed.degradationOptions) {
-              degradationInfo.value = {
-                lastSuccessTime: parsed.lastSuccessTime,
-                degradationOptions: parsed.degradationOptions
-              }
+            if (!amTokenRetried && isAmTokenReauthCode(parsed.errorCode)) {
+              deferredReauthError = parsed
+            } else {
+              applyStreamError(parsed, eventData)
             }
           } else {
             error.value = eventData
@@ -320,6 +335,45 @@ export function useAiChat() {
         break
       }
     }
+  }
+
+  function applyStreamError(parsed: StreamErrorPayload, raw: string) {
+    error.value = parsed.message || raw
+    const retryableCodes = ['AI_WEBHOOK_TIMEOUT', 'AI_WEBHOOK_CALL_FAILED']
+    canRetry.value = retryableCodes.includes(parsed.errorCode)
+    // Store errorCode for i18n lookup
+    errorCode.value = parsed.errorCode
+    // Capture degradation info if present
+    if (parsed.degradationOptions) {
+      degradationInfo.value = {
+        lastSuccessTime: parsed.lastSuccessTime,
+        degradationOptions: parsed.degradationOptions
+      }
+    }
+  }
+
+  /**
+   * gateway 拒了 AMToken（多为 DSP 侧过期）：静默换一个新 token，把同一条请求重发一次。
+   * 换不到就把压住的错误原样报出来，界面照旧给"重新登录"。
+   */
+  async function retryWithFreshAmToken(request: AiChatRequest, reauthError: StreamErrorPayload, rejectedToken: string) {
+    deferredReauthError = null
+    const signal = abortController?.signal
+    isStreaming.value = true
+    const refreshed = await refreshAmToken(rejectedToken)
+    // 续期期间用户点了取消：这一轮到此为止
+    if (signal?.aborted) return
+    isStreaming.value = false
+    if (!refreshed) {
+      applyStreamError(reauthError, JSON.stringify(reauthError))
+      return
+    }
+    // send 会再推一条用户消息：先撤掉这一轮的，避免重复
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg?.role === 'USER' && lastMsg.content === request.message) {
+      messages.value.pop()
+    }
+    await send(request, true)
   }
 
   function finalizeStream() {

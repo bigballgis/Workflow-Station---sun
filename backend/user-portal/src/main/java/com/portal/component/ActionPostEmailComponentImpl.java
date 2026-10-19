@@ -11,11 +11,15 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.TaskActionService;
+import com.portal.util.ActionEmailRuleConditionEvaluator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -26,6 +30,7 @@ import java.util.function.Supplier;
 public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<Map<String, Object>>> RULE_LIST_TYPE = new TypeReference<>() {};
 
     private final TaskActionService taskActionService;
     private final TaskQueryComponent taskQueryComponent;
@@ -33,13 +38,14 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final EventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final ActionEmailRuleConditionEvaluator ruleConditionEvaluator;
 
     @Override
     public <T> T runWithPostEmail(ActionPostEmailContext context, Supplier<T> action) {
         ResolvedAction resolved = resolveIfNeeded(context);
         T result = action.get();
         if (resolved != null) {
-            publish(context, resolved, result);
+            publishMatchingRules(context, resolved, result);
         }
         return result;
     }
@@ -67,11 +73,11 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                     context.getActionId(), context.getOperation(), bound.getActionType());
             return null;
         }
-        Map<String, Object> postEmail = readPostEmail(context.getActionId(), bound.getConfigJson());
-        if (!isEnabled(postEmail)) {
+        List<Map<String, Object>> rules = readPostEmailRules(context.getActionId(), bound.getConfigJson());
+        if (rules.isEmpty()) {
             return null;
         }
-        return new ResolvedAction(bound, postEmail);
+        return new ResolvedAction(bound, rules);
     }
 
     private TaskActionInfo findBoundAction(ActionPostEmailContext context) {
@@ -88,7 +94,6 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
             if (onTask != null || !StringUtils.hasText(context.getProcessInstanceId())) {
                 return onTask;
             }
-            // Withdraw cancels the process before this lookup, so the runtime task is often gone.
         }
         String functionUnitKey = resolveFunctionUnitKey(context);
         if (!StringUtils.hasText(functionUnitKey)) {
@@ -102,12 +107,6 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 .orElse(null);
     }
 
-    /**
-     * A client-supplied task id is trusted only when this call has no process yet (the task id is
-     * the authorized path id) or the loaded task belongs to that process. A task that still exists
-     * on another process is rejected. A missing task is not a foreign task: withdraw has already
-     * cancelled it.
-     */
     private boolean taskBelongsToAnotherProcess(ActionPostEmailContext context) {
         if (!StringUtils.hasText(context.getProcessInstanceId())) {
             return false;
@@ -117,7 +116,6 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 .orElse(false);
     }
 
-    /** Start passes the path key. Withdraw reads the code stored on the process instance. */
     private String resolveFunctionUnitKey(ActionPostEmailContext context) {
         if (StringUtils.hasText(context.getFunctionUnitCode())) {
             return context.getFunctionUnitCode();
@@ -160,58 +158,123 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
         };
     }
 
-    private Map<String, Object> readPostEmail(String actionId, String configJson) {
+    List<Map<String, Object>> readPostEmailRules(String actionId, String configJson) {
         if (!StringUtils.hasText(configJson)) {
-            return Map.of();
+            return List.of();
         }
         try {
             Map<String, Object> config = objectMapper.readValue(configJson, MAP_TYPE);
-            Object raw = config.get("postEmail");
-            if (raw instanceof Map<?, ?> map) {
-                return objectMapper.convertValue(map, MAP_TYPE);
+            if (config.get("postEmailRules") instanceof List<?> rawRules) {
+                List<Map<String, Object>> parsed = objectMapper.convertValue(rawRules, RULE_LIST_TYPE);
+                return parsed.stream().filter(this::isRuleEnabled).toList();
             }
+            Map<String, Object> legacy = readLegacyPostEmail(config);
+            if (legacy.isEmpty()) {
+                return List.of();
+            }
+            return List.of(legacy);
         } catch (Exception e) {
             // FALLBACK(external): mail is a side path. A broken config must not fail the Action.
             log.error("[ACTION-EMAIL] configJson parse failed actionId={}: {}", actionId, e.getMessage());
+            return List.of();
         }
-        return Map.of();
     }
 
-    private static boolean isEnabled(Map<String, Object> postEmail) {
-        Object enabled = postEmail.get("enabled");
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readLegacyPostEmail(Map<String, Object> config) {
+        Object raw = config.get("postEmail");
+        if (!(raw instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, Object> postEmail = objectMapper.convertValue(map, MAP_TYPE);
+        if (!isRuleEnabled(postEmail)) {
+            return Map.of();
+        }
+        return postEmail;
+    }
+
+    private boolean isRuleEnabled(Map<String, Object> rule) {
+        Object enabled = rule.get("enabled");
         return Boolean.TRUE.equals(enabled) || "true".equalsIgnoreCase(String.valueOf(enabled));
     }
 
-    private void publish(ActionPostEmailContext context, ResolvedAction resolved, Object result) {
+    private void publishMatchingRules(ActionPostEmailContext context, ResolvedAction resolved, Object result) {
         String processInstanceId = resolveProcessInstanceId(context, result);
         if (!StringUtils.hasText(processInstanceId)) {
             log.warn("[ACTION-EMAIL] skip missing processInstanceId actionId={}", context.getActionId());
             return;
         }
+        List<Map<String, Object>> rules = resolved.rules();
+        List<Map<String, Object>> conditions = new ArrayList<>(rules.size());
+        for (Map<String, Object> rule : rules) {
+            Object condition = rule.get("condition");
+            if (condition instanceof Map<?, ?> map) {
+                conditions.add(objectMapper.convertValue(map, MAP_TYPE));
+            } else {
+                conditions.add(Map.of());
+            }
+        }
+        boolean[] matches = ruleConditionEvaluator.evaluate(processInstanceId, conditions);
+        for (int i = 0; i < rules.size(); i++) {
+            if (!matches[i]) {
+                log.info("[ACTION-EMAIL] skip rule not matched actionId={} ruleId={} process={}",
+                        context.getActionId(), rules.get(i).get("id"), processInstanceId);
+                continue;
+            }
+            publishOne(context, resolved.info(), processInstanceId, rules.get(i));
+        }
+    }
+
+    private void publishOne(
+            ActionPostEmailContext context,
+            TaskActionInfo info,
+            String processInstanceId,
+            Map<String, Object> rule) {
+        Map<String, Object> postEmail = buildPostEmailPayload(rule);
         ActionEmailRequestedEvent event = ActionEmailRequestedEvent.builder()
                 .eventType("ACTION_EMAIL_REQUESTED")
                 .sourceService("user-portal")
                 .processInstanceId(processInstanceId)
                 .taskId(context.getTaskId())
-                .actionId(resolved.info().getActionId())
-                .actionName(resolved.info().getActionName())
-                .actionType(resolved.info().getActionType())
+                .actionId(info.getActionId())
+                .actionName(info.getActionName())
+                .actionType(info.getActionType())
                 .operatorId(context.getOperatorId())
                 .comment(context.getComment())
-                .postEmail(resolved.postEmail())
+                .postEmail(postEmail)
                 .build();
         try {
             // FALLBACK(external): notification side-path — Kafka publish must not fail the Action.
             eventPublisher.publish(event).exceptionally(ex -> {
-                log.error("[ACTION-EMAIL] publish failed actionId={} process={}: {}",
-                        context.getActionId(), processInstanceId, ex.getMessage(), ex);
+                log.error("[ACTION-EMAIL] publish failed actionId={} ruleId={} process={}: {}",
+                        context.getActionId(), rule.get("id"), processInstanceId, ex.getMessage(), ex);
                 return null;
             });
         } catch (RuntimeException e) {
             // FALLBACK(external): same as above when KafkaTemplate.send throws synchronously.
-            log.error("[ACTION-EMAIL] publish failed actionId={} process={}: {}",
-                    context.getActionId(), processInstanceId, e.getMessage(), e);
+            log.error("[ACTION-EMAIL] publish failed actionId={} ruleId={} process={}: {}",
+                    context.getActionId(), rule.get("id"), processInstanceId, e.getMessage(), e);
         }
+    }
+
+    static Map<String, Object> buildPostEmailPayload(Map<String, Object> rule) {
+        Map<String, Object> postEmail = new HashMap<>();
+        for (String key : List.of(
+                "connectionId", "emailTo", "emailCc", "emailBcc", "emailFrom",
+                "emailTemplateId", "emailAttachments")) {
+            Object value = rule.get(key);
+            if (value != null) {
+                postEmail.put(key, value);
+            }
+        }
+        postEmail.put("enabled", true);
+        if (rule.get("id") != null) {
+            postEmail.put("ruleId", rule.get("id").toString());
+        }
+        if (rule.get("name") != null && StringUtils.hasText(rule.get("name").toString())) {
+            postEmail.put("ruleName", rule.get("name").toString());
+        }
+        return postEmail;
     }
 
     private String resolveProcessInstanceId(ActionPostEmailContext context, Object result) {
@@ -229,5 +292,5 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
         return null;
     }
 
-    private record ResolvedAction(TaskActionInfo info, Map<String, Object> postEmail) {}
+    private record ResolvedAction(TaskActionInfo info, List<Map<String, Object>> rules) {}
 }

@@ -360,7 +360,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                       List<String> searchFields, String displayField,
                                                       String filterConditions,
-                                                      int limit, int offset) {
+                                                      int limit, int offset, boolean includeInactive) {
         try {
             int safeLimit = normalizeLimit(limit);
             int safeOffset = Math.max(0, offset);
@@ -385,6 +385,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             List<String> predicates = new ArrayList<>();
             List<Object> params = new ArrayList<>();
             params.add(tableId);
+            if (!includeInactive) {
+                predicates.add("status = 'ACTIVE'");
+            }
 
             for (LookupFilterCondition filter : filters) {
                 if (!allowedFields.contains(filter.fieldName())) {
@@ -985,7 +988,25 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Transactional
     public Map<String, Object> changeStatus(Long tableId, String userId, String rowId, String status) {
         requireWriteAccess(tableId, userId);
-        String normalized = "INACTIVE".equalsIgnoreCase(status) ? "INACTIVE" : "ACTIVE";
+        return applyStatus(tableId, userId, rowId, normalizeStatus(status));
+    }
+
+    @Override
+    @Transactional
+    public int changeStatusBatch(Long tableId, String userId, List<String> rowIds, String status) {
+        requireWriteAccess(tableId, userId);
+        String normalized = normalizeStatus(status);
+        List<String> distinctIds = rowIds.stream().distinct().toList();
+        // A missing row throws and rolls the whole batch back.
+        distinctIds.forEach(rowId -> applyStatus(tableId, userId, rowId, normalized));
+        return distinctIds.size();
+    }
+
+    private static String normalizeStatus(String status) {
+        return "INACTIVE".equalsIgnoreCase(status) ? "INACTIVE" : "ACTIVE";
+    }
+
+    private Map<String, Object> applyStatus(Long tableId, String userId, String rowId, String normalized) {
         Map<String, Object> oldData = loadRow(tableId, rowId);
         if (oldData == null) {
             throw new IllegalArgumentException("Row not found: " + rowId);

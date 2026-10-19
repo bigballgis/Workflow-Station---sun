@@ -41,6 +41,8 @@ export async function fetchLookupRowByPrimaryKey(
         searchFields: options.searchFields || [],
         displayField: options.displayField || '',
         filterConditions: filters,
+        // A saved value keeps resolving after its row is set INACTIVE.
+        includeInactive: true,
         // Server caps this at 200. Use the full cap, not 10: when the PK `eq` filter cannot be
         // applied server-side (resolved pk field is not a column of the relation table, so the
         // predicate is dropped), the query degrades to "first N rows ORDER BY id". A window of 10

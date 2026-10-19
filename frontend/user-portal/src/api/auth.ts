@@ -93,6 +93,8 @@ export interface UserInfo {
   /** FULL | PERMISSION_SELF_SERVICE_ONLY */
   portalAccessMode?: string
   hasAvatar: boolean
+  /** SYS_ADMIN. Not included in roles. */
+  systemAdministrator?: boolean
 }
 
 export const AUTH_BASE_URL = '/api/portal/auth'

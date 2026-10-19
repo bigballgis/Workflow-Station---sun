@@ -39,9 +39,9 @@ public class RecordNoteServiceImpl implements RecordNoteService {
     @Transactional(readOnly = true)
     public PageResponse<NoteItem> list(NoteTarget target, int page, int size, String currentUserId) {
         Page<RecordNoteSummary> result = recordNoteRepository
-                .findByTargetTypeAndTargetIdAndTableIdAndParentNoteIdIsNullAndIsDeletedFalseOrderByCreatedAtDesc(
-                        target.getTargetType(), target.getTargetId(), target.getTableId(),
-                        PageRequest.of(page, size));
+                .scopedNotes(target.getTargetType(),target.getTargetId(),target.getTableKind(),target.getTableId(),
+                        target.getProcessInstanceId(),target.getTargetId().startsWith("draft-"),currentUserId,
+                        target.getSubmissionId(),PageRequest.of(page,size));
 
         List<String> commentIds = result.getContent().stream()
                 .filter(s -> RecordNote.TYPE_COMMENT.equals(s.getNoteType()))
@@ -223,7 +223,10 @@ public class RecordNoteServiceImpl implements RecordNoteService {
                     .filter(n -> Boolean.TRUE.equals(n.getIsInlineImage()))
                     .filter(n -> n.getCreatedBy().equals(userId))
                     .filter(n -> n.getTargetType().equals(comment.getTargetType())
-                            && n.getTargetId().equals(comment.getTargetId()))
+                            && n.getTargetId().equals(comment.getTargetId())
+                            && java.util.Objects.equals(n.getTableId(),comment.getTableId())
+                            && java.util.Objects.equals(n.getTableKind(),comment.getTableKind())
+                            && java.util.Objects.equals(n.getProcessInstanceId(),comment.getProcessInstanceId()))
                     .ifPresent(n -> {
                         n.setParentNoteId(comment.getId());
                         recordNoteRepository.save(n);
@@ -265,6 +268,8 @@ public class RecordNoteServiceImpl implements RecordNoteService {
                 .tableKind(target.getTableKind() == null ? "DW" : target.getTableKind())
                 .tableId(target.getTableId())
                 .functionUnitId(target.getFunctionUnitId())
+                .processInstanceId(target.getProcessInstanceId())
+                .submissionId(target.getSubmissionId())
                 .createdBy(userId)
                 .createdByName(trimTo(userName, 100))
                 .build();

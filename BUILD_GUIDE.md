@@ -485,6 +485,8 @@ cd deploy/environments/dev
 .\build-and-deploy.ps1 -SkipImagePull
 ```
 
+开发部署默认复用本地已有的基础设施和基础镜像，仅拉取缺失镜像。需要更新某个镜像标签时，先手动执行 `docker pull <image:tag>`，再运行部署脚本。
+
 **`-JavaBaseImage`**：传给后端镜像的 `JAVA_BASE_IMAGE` 构建参数，并用于步骤 0 中 Temurin 的 mirror 预拉取（再 `docker tag` 为 `eclipse-temurin:17-jre` 供其它依赖短名的层使用）。省略时使用脚本内置默认（DaoCloud）。**`-SkipImagePull`**：跳过整段预拉取（不仅 Java，见脚本内镜像列表）。
 
 `-Service` 可选值：
@@ -863,6 +865,7 @@ Kafka(K8S) ───────────────────────
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
 | `VAULT_ADDR` | admin-center | HashiCorp Vault 基址（含 `:8200`）。Admin 用 Kubernetes JWT（或本地可选 `VAULT_TOKEN`）登录后读 KV v2 `data.data.password`。空值则 VAULT 解析失败。已有库需手动执行 `00-schema/86-ac-environment-variables.sql`。`credential_encrypted` 列本发保留（应用不再读写）；测通后再另开脚本 DROP。平台须把 ServiceAccount `admin-center` 绑到 `VAULT_ROLE`。 |
 | `USER_PORTAL_BASE_URL` | admin-center | user-portal 基址（含 `/api/portal`）；PortalRuntimePurge / UserPortalAudit 内部调用 |
+| `PORTAL_RECORD_NOTE_DELIVERY_PAUSED` | user-portal | 默认 false；true 暂停附件通知投递，保留已受理意图和历史记录 |
 | `PORTAL_INTERNAL_API_TOKEN` | admin-center, user-portal, workflow-engine | 调用门户 `/internal/*` 的共享密钥（须两端一致） |
 
 各 Hermes 部署应对接的 **Vault 集群**（Admin 直连 `VAULT_ADDR`，无独立 Wrapper 服务）：

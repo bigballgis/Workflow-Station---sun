@@ -1,3 +1,4 @@
+import tableDataMessages from './tableData.en'
 import formEventMessages from './formEvents.en'
 import formCtlMessages from './formCtl.en'
 import tableDesignMessages from './tableDesign.en'
@@ -8,6 +9,8 @@ import aiStudioMessages from './aiStudio.en'
 import slaPoliciesMessages from './slaPolicies.en'
 
 export default {
+  recordNoteGuide: {"title": "Record Note", "intro": "Add a Record Note panel to a request or sub-table form. People can submit notes and files from the deployed form. Submitted notes cannot be edited or deleted.", "crumb": "Developer Workstation · Form Design · Extend", "flowTitle": "Set up the panel", "flow1": "Add Record Note to the intended form. Choose Scope and whether attachments are allowed.", "flow2": "To send attachment notifications, turn on Attachment Notifications and select the responsible Sub-Task nodes. Save the form and deploy the Function Unit.", "flow3": "In User Portal, add a note with a formal attachment. Use another handler account to check the notification and its destination.", "scopeTitle": "Choose where notes are shared", "scopeBody": "Whole table shares one stream for that table within the current request. Single record is available on sub-table forms and keeps each row’s notes separate. Sharing a stream does not give access to another request.", "fieldsTitle": "Panel properties", "scopeField": "Whole table: request-scoped table stream. Single record: the current sub-table row only.", "titleField": "Optional heading shown above the panel.", "attachmentField": "On by default. Turn it on before enabling attachment notifications.", "sizeField": "Limit for each file, from 1 to 10 MB.", "pageField": "Number of entries shown per page, from 1 to 20.", "readonlyField": "On a To Do form, prevents adding notes. Request-form writing still requires the current role’s Audit permission.", "notifyTitle": "Attachment Notifications", "notifyBody": "Off by default. A successful submission containing formal attachments can notify the configured handlers. Text alone, inline images and abandoned editor uploads do not trigger a notification. One submission creates at most one notification per person, even when that person handles several related rows. The uploader is excluded.", "enableField": "Turn on to create notifications for new formal attachment submissions. Turn off to stop creating new notification intents. Previously accepted notifications retain their processing records.", "targetsField": "Required when enabled. Select concrete row-task nodes from this process. Person and BU Team recipients follow those nodes’ existing assignment configuration.", "recipientsTitle": "Who receives it", "recipientsBody": "Case Notes collect handlers across the configured Sub-Tasks and related rows. Transaction Notes stay within the current row. Person uses the configured personnel field. BU Team uses the claimed handler; an automatically assigned sole member also qualifies. Completed tasks use the final recipient saved for that execution round. After return or rework, unsent notifications are resolved against the current valid round. Already delivered notifications are not sent again because the handler changes.", "openTitle": "Open the notification", "openBody": "In User Portal, open Notifications → Attachment Updates. The notification shows the request name (ID), the note location and formal attachment count. New submissions also show the upload source: the actual task or Sub-Task, My Request, Audit or New Request. A task upload can add to either Case Notes or Transaction Notes; the source does not change the note scope. Historical submissions without a recorded source omit that line. Open it to view the exact submission in Record Note. Access is checked again; receiving a notification does not grant access to the request or its files. Existing notification preferences apply.", "waitingTitle": "When delivery waits", "waitingBody": "If the stage has not started, delivery waits for activation. If a BU Team task has no handler, it waits for a valid Claim. Historical tasks without a trustworthy round or final recipient remain unresolved. The system does not broadcast to the candidate team or guess an earlier handler."},
+
   app: {
     name: 'Guidelines',
     tagline: 'How formulas, views, and designers behave — same text in every environment.',
@@ -155,6 +158,7 @@ export default {
     upProfileSetup: 'User Profile Setup',
   },
   guides: {
+    tableData: { title: "Table Data", summary: "Find deployed tables by Function Unit and browse their records." },
     fuDocuments: {
       title: 'Requirements and Function Unit Design',
       summary: 'The two Markdown documents of a Function Unit: edit, import, download, versions, and where AI Studio writes to them.',
@@ -184,6 +188,11 @@ export default {
       title: 'Send email after this Action',
       summary:
         'Optional mail on an Action Design button: To, outbound connection, and template. Sent only after that Action succeeds in Portal.',
+    },
+    actionAllowedRoles: {
+      title: 'Allowed Roles',
+      summary:
+        'Who sees an Action button in Portal. Empty means every portal user. System Administrator always sees it.',
     },
     emailMonitor: {
       title: 'Email Monitor',
@@ -451,6 +460,14 @@ export default {
     fBcc: 'Optional Bcc. Same picker as To. Blank: no Bcc.',
     fAttachments:
       'Optional. Same FILE-field picker as Send Task: choose an Upload (FILE) field on the main table, a sub-table, or a Lookup target table. See [[/email-send#extra]]. Blank: no files.',
+    conditionsTitle: 'Multiple rules and send conditions',
+    conditionsBody:
+      'You can add up to 20 email rules on one Action. Each rule has its own recipients, connection, and template. Use **Edit send condition** (same AND/OR filter as Main Table View design) to send only when main-table or system fields match; leave the condition empty to always send after the Action succeeds. When several rules match, Portal sends one email per matching rule. If Portal cannot evaluate a condition at runtime, that rule is skipped (the Action still completes).',
+    conditionsCatalogLead: 'Controls for conditional post-action email.',
+    cAddRule: 'Adds another rule until the 20-rule limit.',
+    cAlwaysSend: 'Shown when no condition is set for that rule.',
+    cEditCondition: 'Opens the filter dialog (field, operator, value, nested groups).',
+    cOperators: 'Same operators as View Design filters (Equals, Contains, is null, …).',
     typesTitle: 'Which Action types can send',
     typesBody:
       'Portal must actually run the Action. API Call, Custom Script, and Composite Action show an info banner and keep the switch off. Saving with mail on for those types is blocked.',
@@ -472,6 +489,39 @@ export default {
     failTemplate: 'Email template list is empty. Write a template and tick Enabled.',
     failUnbound: 'The Action is not bound to the user task. Bind it under Node Binding, then run it in Portal.',
     failAutosave: 'Portal Save that is not this Action button does not send mail.',
+  },
+  actionAllowedRolesGuide: {
+    pageTitle: 'Allowed Roles',
+    crumb: 'Developer Workstation · Function Units · Action Design',
+    intro:
+      'Allowed Roles decides which Portal users see this Action button. Leave it empty and every portal user sees it. The list stores role codes and shows role names.',
+    flowTitle: 'Order of work',
+    flow1: 'Open the Function Unit → Action Design → Edit',
+    flow2: 'Under Visibility & Permissions, open Allowed Roles and select one or more business roles',
+    flow3: 'Save the Action, then open the task or the start page in Portal with a user who holds one of those roles',
+    openTitle: 'Open the field',
+    openBody:
+      'The field sits under Visibility & Permissions, next to Visibility Condition. The red ? opens this article.',
+    openFigure: 'Action Design: Allowed Roles lists business role names. You can select more than one.',
+    openTab: 'Function Unit tab. This article hangs under Action Design in the help sidebar.',
+    openField: 'Multi-select. Names come from Admin roles. The saved value is the role code.',
+    fieldsTitle: 'What you can select',
+    fieldsBody:
+      'The list contains business roles only: roles bound to a business unit, and roles that are not bound to a business unit. Admin and developer roles are not in the list. A code already saved on the Action stays visible even when that role is no longer in the catalog; it is shown as the code itself.',
+    fRoles: 'Select one or more. Matching any one of them is enough.',
+    fPlaceholder: 'Shown while nothing is selected. An empty selection is not an error.',
+    portalTitle: 'What Portal does',
+    portalBody:
+      'On the task page and on the process start page, Portal hides the button unless the signed-in session holds at least one listed role. The session is the current workspace role plus roles that are not bound to a business unit. System Administrator always sees the button. A button with no Allowed Roles stays visible.',
+    failTitle: 'What this does not do',
+    failBody: 'The field only hides the button in Portal.',
+    failEmpty: 'Empty Allowed Roles means no restriction. Existing Actions stay visible.',
+    failMissing:
+      'A role that was deleted after you saved it still appears as its code. Portal matches that code against the session. If nobody holds it, only System Administrator sees the button.',
+    failAdmin:
+      'System Administrator is not a business role, so it is not in this dropdown. That account still sees every Action button.',
+    failApi:
+      'Hiding the button does not reject the Action on the server. A direct call with a valid session can still run it.',
   },
   emailMonitorGuide: {
     pageTitle: 'Email Monitor',
@@ -868,4 +918,5 @@ export default {
   ...fuDocumentsMessages,
   ...aiStudioMessages,
   ...slaPoliciesMessages,
+  ...tableDataMessages,
 }

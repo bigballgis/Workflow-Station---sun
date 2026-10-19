@@ -9,7 +9,7 @@ export interface NotificationParams {
 
 export interface NotificationData {
   id: number
-  type: 'TASK' | 'PROCESS' | 'SYSTEM' | 'REMINDER' | 'PERMISSION' | 'APPROVAL'
+  type: 'TASK' | 'PROCESS' | 'ATTACHMENT_UPDATE' | 'SYSTEM' | 'REMINDER' | 'PERMISSION' | 'APPROVAL'
   title: string
   content: string
   link?: string
@@ -29,11 +29,11 @@ export interface PageResponse<T> {
 
 export const notificationApi = {
   getNotifications(params?: NotificationParams) {
-    return request.get<{ data: PageResponse<NotificationData> }>('/notifications', { params })
+    return request.get<unknown, { data: PageResponse<NotificationData> }>('/notifications', { params })
   },
 
   getUnreadCount() {
-    return request.get<{ data: number }>('/notifications/unread-count')
+    return request.get<unknown, { data: number }>('/notifications/unread-count')
   },
 
   markAsRead(id: number) {

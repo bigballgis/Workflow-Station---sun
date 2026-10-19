@@ -31,11 +31,14 @@ public interface PortalRelationTableService {
 
     /**
      * Lookup 搜索（limit+offset 分页；客户端按批翻页可拉全量）
+     *
+     * @param includeInactive false（下拉 / 关键字搜索 / 派生带出）只返回 ACTIVE 行；
+     *                        true 仅供按主键解析已保存的值，INACTIVE 行照常解析
      */
     List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                List<String> searchFields, String displayField,
                                                String filterConditions,
-                                               int limit, int offset);
+                                               int limit, int offset, boolean includeInactive);
 
     /**
      * 获取表单的 Lookup 配置列表
@@ -77,6 +80,9 @@ public interface PortalRelationTableService {
      * 修改一行数据状态 ACTIVE/INACTIVE（需要 READ_WRITE）。
      */
     Map<String, Object> changeStatus(Long tableId, String userId, String rowId, String status);
+
+    /** Sets every row to ACTIVE/INACTIVE in one transaction; requires READ_WRITE. Returns the row count. */
+    int changeStatusBatch(Long tableId, String userId, List<String> rowIds, String status);
 
     /**
      * 生成导入模板（CSV / XLSX）。

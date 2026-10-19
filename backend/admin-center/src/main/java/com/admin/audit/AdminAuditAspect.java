@@ -1,5 +1,6 @@
 package com.admin.audit;
 
+import com.admin.dto.request.RelationTableBatchStatusRequest;
 import com.admin.bi.repository.BiDashboardAssignmentRepository;
 import com.admin.bi.repository.BiDashboardRegistryRepository;
 import com.admin.bi.repository.BiDataViewAssignmentRepository;
@@ -161,7 +162,8 @@ public class AdminAuditAspect {
             + "&& (execution(* *.addData(..)) "
             + "|| execution(* *.updateData(..)) "
             + "|| execution(* *.deleteData(..)) "
-            + "|| execution(* *.changeStatus(..)))")
+            + "|| execution(* *.changeStatus(..)) "
+            + "|| execution(* *.changeStatusBatch(..)))")
     public Object auditRelationTableData(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "RELATION_TABLE_DATA");
     }
@@ -413,6 +415,11 @@ public class AdminAuditAspect {
             case "updateData"   -> new AuditMeta(AuditAction.UPDATE, "RELATION_TABLE_ROW", resourceId);
             case "deleteData"   -> new AuditMeta(AuditAction.DELETE, "RELATION_TABLE_ROW", resourceId);
             case "changeStatus" -> new AuditMeta(AuditAction.UPDATE, "RELATION_TABLE_ROW", resourceId);
+            // The request path carries neither the rows nor the target status — record both.
+            case "changeStatusBatch" -> args.length > 1 && args[1] instanceof RelationTableBatchStatusRequest req
+                    ? new AuditMeta(AuditAction.UPDATE, "RELATION_TABLE_ROW", tableId,
+                            detailJson("rowIds", req.rowIds(), "status", req.status()))
+                    : new AuditMeta(AuditAction.UPDATE, "RELATION_TABLE_ROW", tableId);
             default             -> AuditMeta.skip();
         };
     }

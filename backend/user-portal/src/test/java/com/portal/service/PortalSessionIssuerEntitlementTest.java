@@ -4,6 +4,7 @@ import com.platform.common.i18n.I18nService;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.entity.User;
 import com.platform.security.service.UserRoleService;
+import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.dto.LoginResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -42,6 +43,8 @@ class PortalSessionIssuerEntitlementTest {
     @Mock
     private PortalEntitlementService portalEntitlementService;
     @Mock
+    private FunctionUnitAccessComponent functionUnitAccessComponent;
+    @Mock
     private JwtProperties jwtProperties;
 
     private PortalSessionIssuerService issuer;
@@ -54,6 +57,7 @@ class PortalSessionIssuerEntitlementTest {
                 i18nService,
                 portalWorkspaceAuthService,
                 portalEntitlementService,
+                functionUnitAccessComponent,
                 jwtProperties);
         ReflectionTestUtils.setField(issuer, "jwtSecret", "unit-test-secret-key-at-least-32-bytes!!");
         ReflectionTestUtils.setField(issuer, "jwtExpiration", 3600_000L);
@@ -95,5 +99,25 @@ class PortalSessionIssuerEntitlementTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getAccessToken()).isNotBlank();
         assertThat(response.getBody().getLoginErrorCode()).isNull();
+    }
+
+    @Test
+    void issuePortalSession_exposesSystemAdministratorOnUserInfo() {
+        User user = User.builder().id("u1").username("alice").displayName("Alice").build();
+        when(portalEntitlementService.hasEligibleVirtualGroupMembership("u1")).thenReturn(true);
+        when(portalWorkspaceAuthService.listWorkspaceContexts("u1")).thenReturn(List.of());
+        when(jwtProperties.getPrimaryCookieName()).thenReturn("up_access_token");
+        when(jwtProperties.getRefreshCookieName()).thenReturn("up_refresh_token");
+        when(userRoleService.getEffectiveRolesForUser("u1")).thenReturn(List.of());
+        when(userRoleService.getPermissionsForUser("u1")).thenReturn(List.of("basic:access"));
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("u1"))).thenReturn(List.of("USER"));
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(true);
+
+        ResponseEntity<LoginResponse> response = issuer.issuePortalSession(
+                user, null, null, mock(HttpServletRequest.class), mock(HttpServletResponse.class), "alice");
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getUser().isSystemAdministrator()).isTrue();
     }
 }

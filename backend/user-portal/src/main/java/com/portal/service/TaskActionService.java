@@ -3,8 +3,8 @@ package com.portal.service;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskActionInfo;
 import com.portal.util.WorkflowEnginePayloadHelper;
+import com.portal.component.ActionDefinitionLookupComponent;
 import com.portal.entity.ActionDefinition;
-import com.portal.repository.ActionDefinitionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 public class TaskActionService {
     
     private final WorkflowEngineClient workflowEngineClient;
-    private final ActionDefinitionRepository actionDefinitionRepository;
+    private final ActionDefinitionLookupComponent actionDefinitionLookupComponent;
     
     /**
      * Returns the list of actions enabled for a task.
@@ -47,24 +47,28 @@ public class TaskActionService {
                 return Collections.emptyList();
             }
             
-            // 2. Normalize actionIds (engine JSON often uses numeric arrays deserialized as List<Integer>, not List<String>).
-            List<String> actionIds = normalizeActionIdList(data.get("actionIds"));
-            
-            if (actionIds == null || actionIds.isEmpty()) {
-                log.info("No actions defined for task: {}", taskId);
-                return Collections.emptyList();
-            }
-            
-            log.info("Found {} action IDs for task {}: {}", actionIds.size(), taskId, actionIds);
-            
-            // 3. Resolve definitions only for this node's actionIds; do not fall back to all process actions
-            // or todo detail would show buttons for unrelated nodes.
-            return fetchActionDefinitions(actionIds);
-            
+            return getTaskActionsFromPayload(data);
+
         } catch (Exception e) {
             log.error("Error getting task actions for task: " + taskId, e);
             return Collections.emptyList();
         }
+    }
+
+    /**
+     * Resolves the actions of an engine task payload already in hand (avoids a second engine fetch).
+     */
+    public List<TaskActionInfo> getTaskActionsFromPayload(Map<String, Object> engineTask) {
+        // Normalize actionIds (engine JSON often uses numeric arrays deserialized as List<Integer>, not List<String>).
+        List<String> actionIds = normalizeActionIdList(engineTask.get("actionIds"));
+        if (actionIds.isEmpty()) {
+            log.info("No actions defined for task: {}", engineTask.get("taskId"));
+            return Collections.emptyList();
+        }
+        log.info("Found {} action IDs for task {}: {}", actionIds.size(), engineTask.get("taskId"), actionIds);
+        // Resolve definitions only for this node's actionIds; do not fall back to all process actions
+        // or todo detail would show buttons for unrelated nodes.
+        return fetchActionDefinitions(actionIds);
     }
     
     /**
@@ -93,63 +97,12 @@ public class TaskActionService {
     private List<TaskActionInfo> fetchActionDefinitions(List<String> actionIds) {
         try {
             log.info("Fetching {} action definitions from database", actionIds.size());
-
-            Map<String, ActionDefinition> actionsById = new LinkedHashMap<>();
-            List<ActionDefinition> directMatches = actionDefinitionRepository.findAllById(actionIds);
-            for (ActionDefinition action : directMatches) {
-                if (action != null && action.getId() != null) {
-                    actionsById.put(action.getId(), action);
-                }
-            }
-
-            List<String> missingIds = actionIds.stream()
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(id -> !id.isEmpty())
-                    .distinct()
-                    .filter(id -> !actionsById.containsKey(id))
-                    .toList();
-
-            if (!missingIds.isEmpty()) {
-                log.info("Direct ID lookup missing {} actions, falling back to dw_action_definitions for IDs: {}",
-                        missingIds.size(), missingIds);
-                List<ActionDefinition> dwMatches = actionDefinitionRepository.findFromDwByIds(missingIds);
-                for (ActionDefinition action : dwMatches) {
-                    if (action != null && action.getId() != null) {
-                        actionsById.putIfAbsent(action.getId(), action);
-                    }
-                }
-            }
-
-            if (actionsById.isEmpty()) {
-                log.warn("No action definitions found for IDs: {}", actionIds);
-                return Collections.emptyList();
-            }
-
-            List<String> unresolvedIds = actionIds.stream()
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(id -> !id.isEmpty())
-                    .distinct()
-                    .filter(id -> !actionsById.containsKey(id))
-                    .toList();
-            if (!unresolvedIds.isEmpty()) {
-                log.warn("Could not resolve action definitions for IDs: {}", unresolvedIds);
-            }
-
-            List<TaskActionInfo> orderedActions = actionIds.stream()
-                    .filter(Objects::nonNull)
-                    .map(String::trim)
-                    .filter(id -> !id.isEmpty())
-                    .distinct()
-                    .map(actionsById::get)
-                    .filter(Objects::nonNull)
+            List<TaskActionInfo> orderedActions = actionDefinitionLookupComponent.resolveByIdsInOrder(actionIds)
+                    .stream()
                     .map(this::toTaskActionInfo)
                     .collect(Collectors.toList());
-
             log.info("Resolved {} action definitions from requested actionIds", orderedActions.size());
             return orderedActions;
-                
         } catch (Exception e) {
             log.error("Error fetching action definitions from database", e);
             return Collections.emptyList();

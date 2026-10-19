@@ -21,8 +21,6 @@ function mountActionBar(actions: TaskActionInfo[]) {
   wrapper = mount(TaskActionBar, {
     props: {
       isCompletedTask: false,
-      showImplicitSaveAction: false,
-      savingTaskForm: false,
       actions,
       canDelegate: true,
       getIconComponent: () => h('span'),

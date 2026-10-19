@@ -1,3 +1,4 @@
+import tableDataMessages from './tableData.zh-TW'
 import formEventMessages from './formEvents.zh-TW'
 import formCtlMessages from './formCtl.zh-TW'
 import tableDesignMessages from './tableDesign.zh-TW'
@@ -8,6 +9,8 @@ import aiStudioMessages from './aiStudio.zh-TW'
 import slaPoliciesMessages from './slaPolicies.zh-TW'
 
 export default {
+  recordNoteGuide: {"title": "Record Note", "intro": "在 Request 或子表表單中放置 Record Note，讓使用者在部署後的表單中提交記錄與檔案。提交後不可編輯或刪除。", "crumb": "Developer Workstation · Form Design · Extend", "flowTitle": "設定順序", "flow1": "將 Record Note 放入目標表單，選擇 Scope，並決定是否允許附件。", "flow2": "需要附件通知時，開啟附件站內通知，選擇負責辦理的 Sub-Task 節點，然後儲存表單並部署 Function Unit。", "flow3": "在 User Portal 中提交帶正式附件的記錄，使用另一位辦理人的帳號檢查通知及開啟位置。", "scopeTitle": "選擇記錄共用範圍", "scopeBody": "Whole table 在目前 Request 內共用該表的一條記錄流。Single record 僅用於子表表單，每行獨立儲存記錄。共用記錄流不授予其他 Request 的存取權。", "fieldsTitle": "面板屬性", "scopeField": "Whole table：目前 Request 內按表共用；Single record：僅目前子表行。", "titleField": "選填的面板標題。", "attachmentField": "預設開啟。啟用附件通知前必須允許附件。", "sizeField": "每個檔案的大小上限，範圍為 1 至 10 MB。", "pageField": "每頁顯示的記錄數，範圍為 1 至 20。", "readonlyField": "在 To Do 表單中禁止新增記錄。Request 表單仍要求目前角色具有 Audit 權限。", "notifyTitle": "附件站內通知", "notifyBody": "預設關閉。只有包含正式附件且提交成功的記錄才觸發通知。純文字、富文字內嵌圖片和放棄編輯時預先上傳的圖片不觸發通知。同一次提交對同一使用者最多提醒一次，即使該使用者負責多個關聯行。上傳者本人不會收到提醒。", "enableField": "開啟後，為新的正式附件提交產生通知。關閉後停止產生新的通知意圖，已受理通知保留處理記錄。", "targetsField": "開啟時必選。選擇本流程中實際負責行資料辦理的任務節點。Person 與 BU Team 接收人沿用節點既有的分派設定。", "recipientsTitle": "接收人規則", "recipientsBody": "Case Notes 彙總設定的 Sub-Task 及關聯行的辦理人；Transaction Notes 僅限目前行。Person 讀取設定人員欄位；BU Team 使用 Claim 人，自動分派給唯一成員時該成員也可接收。任務完成後使用本輪最終接收人快照。退回或重辦後，尚未投遞的通知按目前有效輪次重新解析；已送達通知不會因換人再次傳送。", "openTitle": "開啟通知", "openBody": "在 User Portal 開啟「通知 → 附件更新」。通知顯示 Request 名稱（ID）、記錄位置和正式附件數量。新提交還會顯示上傳來源：實際 Task / Sub-Task、我的申請、審核或新增申請。在任務中上傳的附件既可能屬於 Case Notes，也可能屬於 Transaction Notes，來源不會改變共享範圍。歷史提交未記錄來源時不顯示該行。點擊後查看 Record Note 中的這次提交。系統會重新檢查存取權，收到通知不會額外授予 Request 或檔案存取權。既有通知偏好仍然生效。", "waitingTitle": "通知為何等待", "waitingBody": "階段尚未開始時等待啟用；BU Team 尚無辦理人時等待有效 Claim。歷史任務缺少可信輪次或最終接收人時保留待處理狀態，不廣播候選團隊，也不猜測舊辦理人。"},
+
   app: {
     name: '使用指南',
     tagline: '公式、檢視與設計器的規則說明。所有環境共用同一套頁面，不綁定開發工作站。',
@@ -155,6 +158,7 @@ export default {
     upProfileSetup: '用戶檔案設置',
   },
   guides: {
+    tableData: { title: "表資料管理", summary: "按功能單元尋找已部署的表並瀏覽記錄。" },
     fuDocuments: {
       title: 'Requirements 與 Function Unit Design',
       summary: '功能單元的兩份 Markdown 文件：編輯、匯入、下載、版本，以及 AI Studio 在哪裡寫入它們。',
@@ -182,6 +186,10 @@ export default {
     actionEmail: {
       title: '動作執行後發送郵件',
       summary: '動作設計裡可選的按鈕郵件：收件人、出站連線、範本。僅在 Portal 中該動作成功後發送。',
+    },
+    actionAllowedRoles: {
+      title: '允許角色',
+      summary: '誰能在 Portal 看到這個動作按鈕。留空則所有入口使用者都能看到。系統管理員始終能看到。',
     },
     emailMonitor: {
       title: '郵件監聽',
@@ -424,6 +432,14 @@ export default {
     fBcc: '可選密件副本。與收件人同一選擇器。留空則不密送。',
     fAttachments:
       '可選。與傳送任務相同的 FILE 欄位選擇器：主表、子表或 Lookup 目標表的上傳（FILE）欄位。見 [[/email-send#extra]]。留空則不帶附件。',
+    conditionsTitle: '多條規則與發送條件',
+    conditionsBody:
+      '同一 Action 最多可設定 20 條發信規則，每條有獨立的收件人、連線與範本。**編輯發送條件** 使用與主表檢視設計相同的 AND/OR 篩選（主表欄位與系統欄位）；留空表示 Action 成功後一律發送。多條規則同時符合時，各發一封郵件。若執行時無法評估某條條件，該規則略過發信（Action 仍會正常完成）。',
+    conditionsCatalogLead: '條件發信相關控件說明。',
+    cAddRule: '新增規則，直至 20 條上限。',
+    cAlwaysSend: '該規則未設定條件時顯示。',
+    cEditCondition: '開啟篩選對話框（欄位、運算子、值、嵌套群組）。',
+    cOperators: '與檢視設計篩選相同的運算子（等於、包含、為空等）。',
     typesTitle: '哪些動作類型能發',
     typesBody:
       'Portal 必須真正執行該動作。API呼叫、自訂腳本、組合動作會顯示提示條，並保持開關關閉。對這些類型打開郵件後儲存會被擋住。',
@@ -444,6 +460,36 @@ export default {
     failTemplate: '郵件範本清單為空。寫好範本並勾選啟用。',
     failUnbound: '動作沒有綁到使用者任務。在節點繫結裡綁上，再在 Portal 執行。',
     failAutosave: 'Portal 裡不是這個動作按鈕的儲存不會發信。',
+  },
+  actionAllowedRolesGuide: {
+    pageTitle: '允許角色',
+    crumb: '開發工作站 · 功能單元 · 動作設計',
+    intro:
+      '允許角色決定哪些 Portal 使用者能看到這個動作按鈕。留空則所有入口使用者都能看到。清單儲存角色代碼，顯示角色名稱。',
+    flowTitle: '操作順序',
+    flow1: '打開功能單元 → 動作設計 → 編輯',
+    flow2: '在「可見性與權限」下打開允許角色，選擇一個或多個業務角色',
+    flow3: '儲存動作，再用持有其中一個角色的使用者打開任務頁或發起頁',
+    openTitle: '打開這個欄位',
+    openBody: '欄位在「可見性與權限」裡，緊挨可見性條件。紅色 ? 打開本篇。',
+    openFigure: '動作設計：允許角色列出業務角色名稱，可以多選。',
+    openTab: '功能單元頁籤。本篇掛在說明側欄的動作設計下。',
+    openField: '多選。名稱來自管理中心的角色。儲存的是角色代碼。',
+    fieldsTitle: '可以選哪些角色',
+    fieldsBody:
+      '清單只有業務角色：綁定業務單元的角色，以及不綁定業務單元的角色。管理員角色和開發者角色不在清單裡。動作上已經儲存、但目錄裡已經沒有的代碼仍會顯示，標籤就是代碼本身。',
+    fRoles: '可選一個或多個。命中其中任意一個即可。',
+    fPlaceholder: '未選擇時的提示。空選擇不是錯誤。',
+    portalTitle: 'Portal 怎麼用',
+    portalBody:
+      '任務頁和流程發起頁會隱藏按鈕，除非目前登入工作階段持有至少一個列出的角色。工作階段是目前工作區角色，加上不綁定業務單元的角色。系統管理員始終能看到按鈕。沒有設定允許角色的按鈕保持可見。',
+    failTitle: '這做不到什麼',
+    failBody: '這個欄位只在 Portal 裡隱藏按鈕。',
+    failEmpty: '允許角色為空表示不限制。既有動作保持可見。',
+    failMissing:
+      '儲存之後被刪除的角色仍以代碼顯示。Portal 用這個代碼和工作階段比對。沒有人持有它時，只有系統管理員能看到按鈕。',
+    failAdmin: '系統管理員不是業務角色，所以不在這個下拉裡。該帳號仍然能看到每個動作按鈕。',
+    failApi: '隱藏按鈕不會在伺服器上拒絕這個動作。持有有效工作階段的直接呼叫仍然可以執行。',
   },
   emailMonitorGuide: {
     pageTitle: '郵件監聽',
@@ -811,4 +857,5 @@ export default {
   ...fuDocumentsMessages,
   ...aiStudioMessages,
   ...slaPoliciesMessages,
+  ...tableDataMessages,
 }

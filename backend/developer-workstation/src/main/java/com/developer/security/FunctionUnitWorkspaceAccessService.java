@@ -33,8 +33,9 @@ import java.util.Set;
  * 可见范围（scope）：
  * <ul>
  * <li><b>{@code SYS_ADMIN} 与 {@code AUDITOR}</b>为平台级超级视角，默认全局可见；
- * 可通过 {@code X-Dev-Group-Id} 收窄到某一团队或 Public。{@code SYS_ADMIN} 可写；
- * 纯 {@code AUDITOR} 仅 VIEW。</li>
+ * 可通过 {@code X-Dev-Group-Id} 收窄到某一团队或 Public。{@code SYS_ADMIN} 默认可写
+ * Public；其它工作区只读，除非同时具备该工作区的能力角色（成员 + TECH_LEAD /
+ * TEAM_LEAD / DEVELOPER）。纯 {@code AUDITOR} 仅 VIEW。</li>
  * <li>其余用户（含 {@code TECH_LEAD}）只能看到「当前所选团队」（或未选择时其全部团队）
  * 或主动选择的 Public 组。</li>
  * </ul>
@@ -48,6 +49,7 @@ import java.util.Set;
  * 可编辑；{@code TECH_LEAD}/{@code TEAM_LEAD}
  * 可删除/维护团队分配；仅团队成员身份（无能力角色）为<b>只读</b>。Public 组功能单元
  * 仅 {@code SYS_ADMIN} 可改（承载历史/共享，团队成员与 Auditor 只读）。
+ * {@code SYS_ADMIN} 对其它工作区没有全局写绕过。
  * </p>
  */
 @Slf4j
@@ -89,15 +91,17 @@ public class FunctionUnitWorkspaceAccessService {
         if (!functionUnitRepository.existsById(functionUnitId)) {
             return false;
         }
-        if (hasRole(userId, ROLE_SYS_ADMIN)) {
+        boolean admin = hasRole(userId, ROLE_SYS_ADMIN);
+        if (action == WorkspaceAccessAction.VIEW && (admin || hasRole(userId, ROLE_AUDITOR))) {
             return true;
         }
-        if (action == WorkspaceAccessAction.VIEW && hasRole(userId, ROLE_AUDITOR)) {
-            return true;
+        boolean inPublic = publicFunctionUnitIds().contains(functionUnitId);
+        // Public remains read-only for every non-admin, including its explicit members.
+        if (inPublic) {
+            return action == WorkspaceAccessAction.VIEW || admin;
         }
         boolean inMemberScope = isAssignedViaVirtualGroup(userId, functionUnitId);
-        boolean inPublic = publicFunctionUnitIds().contains(functionUnitId);
-        if (!inMemberScope && !inPublic) {
+        if (!inMemberScope) {
             return false;
         }
         boolean techLead = hasRole(userId, ROLE_TECH_LEAD);
@@ -106,7 +110,7 @@ public class FunctionUnitWorkspaceAccessService {
         return switch (action) {
             case VIEW -> true;
             case MODIFY -> inMemberScope && (techLead || teamLead || developer);
-            case DELETE, ASSIGN_DEV_GROUPS -> inMemberScope && (techLead || teamLead);
+            case DELETE, CLONE, RESTORE, ASSIGN_DEV_GROUPS -> inMemberScope && (techLead || teamLead);
         };
     }
 
@@ -187,9 +191,9 @@ public class FunctionUnitWorkspaceAccessService {
     /**
      * 解析创建功能单元时应绑定的团队（虚拟组）：
      * <ul>
-     * <li><b>ADMIN</b>：可自由选择任意团队（含 Public）——用请求携带的 {@code virtualGroupIds}；
-     * 未提供则回退到当前所选团队。</li>
-     * <li><b>TECH_LEAD</b>：可选择「自己的团队 ∪ Public」——请求值经白名单过滤；
+     * <li><b>ADMIN</b>：默认可建在 Public。其它工作区须同时是该团队成员且具备
+     * {@code TECH_LEAD} 或 {@code TEAM_LEAD}。</li>
+     * <li><b>TECH_LEAD</b>：可选择自己的活跃团队——请求值经白名单过滤；
      * 未提供则回退到当前所选团队。</li>
      * <li><b>其余创建者（TEAM_LEAD）</b>：强制绑定「当前所选团队」（须为其成员），忽略请求携带值。</li>
      * </ul>
@@ -202,43 +206,24 @@ public class FunctionUnitWorkspaceAccessService {
         String userId = SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new IllegalStateException("No authenticated user"));
         Optional<String> selected = DevGroupContextHolder.getSelectedGroupId();
-        List<String> memberships = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
+        List<String> memberships = memberGroupIds(userId);
         boolean admin = hasRole(userId, ROLE_SYS_ADMIN);
         boolean techLead = hasRole(userId, ROLE_TECH_LEAD);
         if (admin || techLead) {
-            Set<String> allowed = null; // admin: 任意
-            if (!admin) {
-                allowed = new HashSet<>();
-                for (DevGroupOptionDTO t : getSelectableTeams(userId)) {
-                    if (t.isSelectable()) {
-                        allowed.add(t.getId());
-                    }
-                }
-                allowed.add(DevGroupConstants.PUBLIC_GROUP_ID);
-            }
-            List<String> chosen = new java.util.ArrayList<>();
-            if (requested != null) {
-                for (String gid : requested) {
-                    if (gid == null || gid.isBlank()) {
-                        continue;
-                    }
-                    String trimmed = gid.trim();
-                    if (allowed == null || allowed.contains(trimmed)) {
-                        chosen.add(trimmed);
-                    }
-                }
-            }
+            Set<String> allowed = creationAllowedGroupIds(userId, memberships, admin, techLead);
+            List<String> chosen = filterRequestedGroups(requested, allowed);
             if (!chosen.isEmpty()) {
                 return chosen;
             }
-            if (selected.isPresent() && (admin || memberships.contains(selected.get()))) {
+            if (selected.isPresent() && allowed.contains(selected.get())) {
                 return List.of(selected.get());
             }
             throw new FunctionUnitWorkspaceAccessDeniedException(
                     "Please select a team for this function unit");
         }
         // 普通创建者（Team Lead）：绑定当前所选团队，必须是其成员
-        if (selected.isPresent() && memberships.contains(selected.get())) {
+        if (hasRole(userId, ROLE_TEAM_LEAD)
+                && selected.isPresent() && memberships.contains(selected.get())) {
             return List.of(selected.get());
         }
         throw new FunctionUnitWorkspaceAccessDeniedException(
@@ -251,7 +236,7 @@ public class FunctionUnitWorkspaceAccessService {
     }
 
     private boolean isAssignedViaVirtualGroup(String userId, Long functionUnitId) {
-        List<String> groups = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
+        List<String> groups = memberGroupIds(userId);
         if (groups.isEmpty()) {
             return false;
         }
@@ -298,8 +283,9 @@ public class FunctionUnitWorkspaceAccessService {
     }
 
     /**
-     * 可修改范围：{@code SYS_ADMIN} 返回 {@code null}（全部）；纯 {@code AUDITOR} 返回空集；
-     * 能力角色只返回其成员团队已分配的 FU（不含 Public）。
+     * 可修改范围：{@code SYS_ADMIN} 含全部 Public FU；能力角色再并上其成员团队已分配的 FU
+     * （不含仅因 Public 成员身份获得的项）。纯 {@code AUDITOR} 与无能力角色者不含团队项。
+     * 不再用 {@code null} 表示「全部可写」。
      */
     public Set<Long> modifiableFunctionUnitIds() {
         Optional<String> userIdOpt = SecurityContextUtils.getCurrentUserId();
@@ -307,22 +293,78 @@ public class FunctionUnitWorkspaceAccessService {
             return Collections.emptySet();
         }
         String userId = userIdOpt.get();
-        if (hasRole(userId, ROLE_SYS_ADMIN)) {
-            return null;
+        Set<Long> ids = new HashSet<>();
+        boolean admin = hasRole(userId, ROLE_SYS_ADMIN);
+        Set<Long> publicIds = publicFunctionUnitIds();
+        if (admin) {
+            ids.addAll(publicIds);
         }
         boolean canModify = hasRole(userId, ROLE_TECH_LEAD)
                 || hasRole(userId, ROLE_TEAM_LEAD)
                 || hasRole(userId, ROLE_DEVELOPER);
         if (!canModify) {
-            return Collections.emptySet();
+            return ids;
+        }
+        List<String> groups = memberGroupIds(userId);
+        if (!groups.isEmpty()) {
+            ids.addAll(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(groups));
+        }
+        if (!admin) {
+            ids.removeAll(publicIds);
+        }
+        return ids;
+    }
+
+    /** Groups the user actually belongs to, excluding Public. */
+    public List<String> memberGroupIds(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return List.of();
         }
         List<String> groups = new java.util.ArrayList<>(
                 virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId));
         groups.remove(DevGroupConstants.PUBLIC_GROUP_ID);
-        if (groups.isEmpty()) {
-            return Collections.emptySet();
+        return groups;
+    }
+
+    private Set<String> creationAllowedGroupIds(
+            String userId, List<String> memberships, boolean admin, boolean techLead) {
+        Set<String> allowed = new HashSet<>();
+        boolean teamLead = hasRole(userId, ROLE_TEAM_LEAD);
+        if (admin && !techLead && !teamLead) {
+            allowed.add(DevGroupConstants.PUBLIC_GROUP_ID);
+            return allowed;
         }
-        return new HashSet<>(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(groups));
+        if (admin) {
+            allowed.addAll(memberships);
+            allowed.add(DevGroupConstants.PUBLIC_GROUP_ID);
+            return allowed;
+        }
+        for (DevGroupOptionDTO team : virtualGroupMembershipDao
+                .findSelectableTeamsByUserId(userId, DevGroupConstants.PUBLIC_GROUP_ID)) {
+            if (team.isSelectable()) {
+                allowed.add(team.getId());
+            }
+        }
+        return allowed;
+    }
+
+    private static List<String> filterRequestedGroups(List<String> requested, Set<String> allowed) {
+        List<String> chosen = new java.util.ArrayList<>();
+        if (requested == null) {
+            return chosen;
+        }
+        for (String gid : requested) {
+            if (gid == null || gid.isBlank()) {
+                continue;
+            }
+            String trimmed = gid.trim();
+            if (!allowed.contains(trimmed)) {
+                throw new FunctionUnitWorkspaceAccessDeniedException(
+                        "Not authorized to create a function unit in the requested workspace");
+            }
+            chosen.add(trimmed);
+        }
+        return chosen;
     }
 
     /**

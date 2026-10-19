@@ -70,6 +70,9 @@ class TaskManagerComponentReturnTaskMultiInstanceTest {
     @Mock
     private MultiInstanceCanceller multiInstanceCanceller;
 
+    @Mock
+    private com.workflow.recordnote.RecordNoteRollbackSupport recordNoteRollbackSupport;
+
     // returnTask 主体现在落在 TaskCompletionService；@InjectMocks 注入其同名字段
     // （taskService/runtimeService/historyService/extendedTaskInfoRepository/multiInstanceCanceller）。
     @InjectMocks

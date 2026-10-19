@@ -68,6 +68,10 @@ $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
 $EnvFile = "$PSScriptRoot/.env"
 
+if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) {
+    throw "Missing dev environment file: $EnvFile. Restore the .env from your existing dev environment, or copy .env.example to .env and configure it before deployment."
+}
+
 # Load .env into PowerShell session so $env:VAR works for docker exec / scripting.
 # docker compose reads .env automatically, but inline docker exec commands do not.
 if (Test-Path $EnvFile) {
@@ -272,12 +276,22 @@ function Invoke-ComposeUpSequential {
     }
 }
 
-# Pull image with retries and simple fallback rules (sequential, reduces concurrent registry load)
+# Reuse local images for incremental dev deployment; pull missing images with retries.
 function Pull-ImageWithRetry {
     param(
         [Parameter(Mandatory=$true)] [string]$Image,
         [int]$MaxAttempts = 5
     )
+
+    docker image inspect $Image *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Using cached image: $Image" -ForegroundColor Green
+        return $true
+    }
+    if ($SkipImagePull) {
+        Write-Host "  Cached image unavailable and image pulls disabled: $Image" -ForegroundColor Red
+        return $false
+    }
 
     $attempt = 0
     while ($attempt -lt $MaxAttempts) {
@@ -319,12 +333,12 @@ function Resolve-BaseImage {
     )
 
     foreach ($img in $Candidates) {
+        docker image inspect $img *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  Using cached base image: $img" -ForegroundColor Green
+            return $img
+        }
         if ($SkipImagePull) {
-            docker image inspect $img *> $null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "  Using cached base image: $img" -ForegroundColor Green
-                return $img
-            }
             Write-Host "  Cached base image unavailable: $img" -ForegroundColor DarkGray
             continue
         }
@@ -1266,7 +1280,7 @@ if (-not $buildOk) {
     throw "Docker compose image build failed (all fallbacks exhausted)"
 }
 if (-not $SkipImagePull) {
-    Write-Host "`n[0.5] Pulling images listed in compose (sequential, retries)" -ForegroundColor Yellow
+    Write-Host "`n[0.5] Ensuring compose images (reuse cached, pull missing sequentially)" -ForegroundColor Yellow
     $images = docker compose -f $ComposeFile --env-file $EnvFile config --images 2>$null | Sort-Object -Unique
     $failedImages = @()
     foreach ($img in $images) {
@@ -1284,7 +1298,7 @@ if (-not $SkipImagePull) {
         $failedImages | ForEach-Object { Write-Host "    $_" }
         Write-Host "  You may need to check Docker proxy/network or pull these images manually." -ForegroundColor Yellow
     } else {
-        Write-Host "  All external images pulled." -ForegroundColor Green
+        Write-Host "  All external images available." -ForegroundColor Green
     }
 }
 

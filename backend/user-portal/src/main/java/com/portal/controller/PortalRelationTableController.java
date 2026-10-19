@@ -93,9 +93,11 @@ public class PortalRelationTableController {
             @RequestParam(required = false, defaultValue = "") String displayField,
             @RequestParam(required = false, defaultValue = "") String filterConditions,
             @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "false") boolean includeInactive) {
         try {
-            List<Map<String, Object>> result = service.searchForLookup(tableId, keyword, searchFields, displayField, filterConditions, limit, offset);
+            List<Map<String, Object>> result = service.searchForLookup(
+                    tableId, keyword, searchFields, displayField, filterConditions, limit, offset, includeInactive);
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
@@ -176,6 +178,16 @@ public class PortalRelationTableController {
             @RequestBody Map<String, String> request) {
         String status = request.get("status");
         return ResponseEntity.ok(ApiResponse.success(service.changeStatus(tableId, userId, rowId, status)));
+    }
+
+    @PutMapping("/{tableId}/status/batch")
+    @Operation(summary = "批量切换数据状态 ACTIVE/INACTIVE（需要 READ_WRITE，全部成功或全部回滚）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> changeStatusBatch(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId,
+            @RequestBody @jakarta.validation.Valid com.portal.dto.RelationTableBatchStatusRequest request) {
+        int updated = service.changeStatusBatch(tableId, userId, request.rowIds(), request.status());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("updated", updated)));
     }
 
     @GetMapping("/{tableId}/template")

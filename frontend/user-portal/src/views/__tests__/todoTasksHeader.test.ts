@@ -12,11 +12,15 @@ vi.mock('@/api/task', () => ({
   unclaimBatch: vi.fn(),
   claimTask: vi.fn(),
   unclaimTask: vi.fn(),
+  getBatchTaskGroups: vi.fn().mockResolvedValue({ data: [] }),
+  batchCompleteTasks: vi.fn(),
 }))
 
 vi.mock('@/stores/pendingTask', () => ({
   usePendingTaskStore: () => ({
+    count: 0,
     syncCountFromListTotal: vi.fn(),
+    fetchPendingCount: vi.fn(),
   }),
 }))
 
@@ -34,7 +38,8 @@ vi.mock('@/stores/userPreference', () => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRoute: () => ({ query: {} }),
 }))
 
 const api = vi.mocked(queryTodoTasks)
@@ -105,6 +110,8 @@ function mountPage() {
         'el-table': { template: '<div><slot /><slot name="empty" /></div>' },
         'el-table-column': { template: '<div><slot name="header" /></div>' },
         'el-dialog': true,
+        'el-tabs': { template: '<div><slot /></div>' },
+        'el-tab-pane': { template: '<div><slot name="label" /></div>' },
         'el-input': {
           props: ['modelValue', 'placeholder'],
           emits: ['update:modelValue', 'clear'],

@@ -24,4 +24,30 @@ public final class AssigneeRoleIdsSupport {
         }
         return List.of();
     }
+    /**
+     * 把 {@code currentItem[roleField]} 规范成 role code 列表：支持 {@code List}、JSON 数组文本、逗号串、单值。
+     */
+    public static List<String> resolveRoleCodesFromItem(java.util.Map<String, Object> currentItem, String roleField) {
+        Object raw = currentItem.get(roleField);
+        if (raw == null) {
+            return List.of();
+        }
+        if (raw instanceof List<?> list) {
+            List<String> out = new java.util.ArrayList<>();
+            for (Object o : list) {
+                if (o != null && !String.valueOf(o).trim().isEmpty()) {
+                    out.add(String.valueOf(o).trim());
+                }
+            }
+            return out;
+        }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) {
+            return List.of();
+        }
+        // AssigneeRoleIdsSupport.parseRoleIds 按逗号切分并去重去空；JSON 数组文本先剥括号引号。
+        String normalized = text.replaceAll("^[\\[\\]\"']+|[\\[\\]\"']+$", "").replace("\"", "").replace("'", "");
+        return AssigneeRoleIdsSupport.parseRoleIds(normalized, null);
+    }
+
 }

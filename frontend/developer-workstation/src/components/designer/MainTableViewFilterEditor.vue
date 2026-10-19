@@ -14,6 +14,7 @@ const props = defineProps<{
   modelValue: boolean
   filterConfig?: FilterConfig | null
   fieldOptions: FilterFieldOption[]
+  title?: string
 }>()
 
 const emit = defineEmits<{
@@ -46,7 +47,7 @@ function confirmDialog() {
 <template>
   <el-dialog
     :model-value="modelValue"
-    :title="t('mainTableView.editFiltersTitle')"
+    :title="title ?? t('mainTableView.editFiltersTitle')"
     width="760px"
     destroy-on-close
     class="mtv-filter-dialog"

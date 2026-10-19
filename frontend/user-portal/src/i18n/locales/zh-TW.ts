@@ -1,6 +1,15 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  relationTableBatch: {
+    inactive: '批次 Inactive（{count}）',
+    active: '批次 Active（{count}）',
+    inactiveConfirm: '確定將選取的 {count} 列設為 Inactive？設為 Inactive 後，這些列不會再出現在 Lookup 欄位的可選項中。',
+    inactiveDone: '已將 {count} 列設為 Inactive',
+    activeDone: '已將 {count} 列設為 Active',
+  },
+  recordNoteNotification: {"openRequest": "開啟 Request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "記錄無法使用，或你已無權存取。"},
+
   app: {
     name: '使用者入口',
     title: '工作流平臺'
@@ -350,6 +359,25 @@ export default {
     transfer: '轉辦',
     urge: '催辦',
     batchUrge: '批次催辦',
+    tabAll: '全部待辦',
+    tabBatch: '可批次操作',
+    batchGroups: '任務組',
+    batchGroupsSummary: '{groups} 個任務組 · {count} 條待辦',
+    batchGroupsEmpty: '目前沒有可批次處理的任務',
+    batchGroupVersion: '流程版本',
+    batchMark: '可批次',
+    batchMarkHint: '可在「可批次操作」中一起通過或駁回，點擊開啟該任務組',
+    batchGroupCount: '待辦數量',
+    batchGroupActions: '支援的批次操作',
+    batchPendingCount: '{count} 條待辦',
+    viewTasks: '查看任務',
+    backToGroups: '返回任務組',
+    batchScopeThisPage: '選擇範圍：本頁任務',
+    batchActionTitle: '批次 {action}（{count} 條）',
+    batchConfirm: '確認對選中的 {count} 條任務執行「{action}」？任務將直接流轉到下一節點。',
+    batchCommentPrompt: '該操作要求填寫處理意見，意見將寫入每條選中的任務。',
+    batchAllSucceeded: '已處理 {count} 條任務',
+    batchPartialResult: '成功 {ok} 條，失敗 {failed} 條：',
     selected: '已選擇 {count} 項',
     approve: '同意',
     reject: '拒絕',
@@ -557,7 +585,8 @@ export default {
     workspaceGuardTitle: '無法提交：缺少完整工作臺身份',
     workspaceGuardHint:
       '您的帳號關聯業務單元角色，發起流程前請在頁面頂部選擇「業務單元 · 角色」工作臺，或登出後重新登入。僅儲存草稿不受影響。',
-    workspaceGuardToast: '請先選擇頂部工作臺或重新登入後再提交'
+    workspaceGuardToast: '請先選擇頂部工作臺或重新登入後再提交',
+    actionsBlockedByAllowedRoles: '目前角色沒有可用的發起操作，如需權限請聯絡管理員。',
   },
   applicationDetail: {
     back: '返回',
@@ -922,6 +951,8 @@ export default {
     goToApply: '前往申請'
   },
   notification: {
+    attachmentUpdates: '附件更新',
+    attachmentUpdatesGuide: '查看附件更新通知指南',
     title: '訊息中心',
     unread: '未讀訊息',
     all: '全部訊息',

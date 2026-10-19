@@ -216,3 +216,5 @@ data:
   # CONTENT_ORGANIZER_MODEL / _APPLICATION_NAME(默认 gemini-3.5-flash / Hermes Workflow)。
   CONTENT_ORGANIZER_PROMPT_SETTING_ID: "a20e508c-3101-4be2-a8dd-c3a98e6f560c"
   CONTENT_ORGANIZER_PROMPT_VARIABLE_ID: "02486f43-1614-4f07-b5c7-2b4bf5ecaec1"
+  # Pause durable Record Note notification delivery; keep pending intents.
+  PORTAL_RECORD_NOTE_DELIVERY_PAUSED: "false"

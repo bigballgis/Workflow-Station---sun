@@ -1,4 +1,11 @@
 export default {
+  relationTableBatch: {
+    inactive: 'Inactive ({count})',
+    active: 'Active ({count})',
+    inactiveConfirm: 'Set {count} selected row(s) to inactive? They will no longer be offered in Lookup fields.',
+    inactiveDone: '{count} row(s) set to inactive',
+    activeDone: '{count} row(s) set to active',
+  },
   app: {
     name: 'Admin Center',
     title: 'Workflow Platform'
@@ -1121,6 +1128,21 @@ export default {
     commonFailed: 'Operation failed',
     commonQueryFailed: 'Query failed',
     unknown: 'Unknown error',
+  },
+  tableDataNavigation: {
+    title: "Function Units",
+    common: "Common",
+    search: "Search Function Units or tables",
+    tableCount: "Tables: {count}",
+    readonly: "Read-only access",
+    writable: "Read/write access",
+    retry: "Retry",
+    loadFailed: "Unable to load deployed tables. Retry to load the navigation.",
+    noMatches: "No matching Function Units or tables",
+    noTables: "No deployed tables available",
+    selectTable: "Select a table from the Function Unit navigation",
+    unavailable: "This table is unavailable in the selected Function Unit. Select another table.",
+    guide: "Open the Table Data guide",
   },
   relationTable: {
     enabled: 'Enabled',

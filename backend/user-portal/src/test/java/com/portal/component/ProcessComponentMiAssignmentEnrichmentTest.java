@@ -1,7 +1,6 @@
 package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
-import com.portal.repository.ActionDefinitionRepository;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.common.i18n.I18nService;
@@ -29,7 +28,7 @@ class ProcessComponentMiAssignmentEnrichmentTest {
 
     @Mock private FavoriteProcessRepository favoriteProcessRepository;
     @Mock private ProcessInstanceRepository processInstanceRepository;
-    @Mock private ActionDefinitionRepository actionDefinitionRepository;
+    @Mock private ActionDefinitionLookupComponent actionDefinitionLookupComponent;
     @Mock private FunctionUnitAccessComponent functionUnitAccessComponent;
     @Mock private WorkflowEngineClient workflowEngineClient;
     @Mock private ProcessDraftComponent processDraftComponent;

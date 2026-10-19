@@ -9,6 +9,7 @@ import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TodoTaskQueryRequest;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.util.BatchTaskEligibility;
 import com.portal.util.BuRolePoolTasks;
 import com.portal.util.ListQuerySupport;
 import com.portal.util.TaskInfoListOps;
@@ -49,7 +50,7 @@ public class TodoListQueryComponent {
     public PortalListPage<TaskInfo> queryTodoList(String userId, TodoTaskQueryRequest request) {
         long started = System.nanoTime();
         TaskQueryRequest adapted = toTaskQuery(userId, request);
-        PageResponse<TaskInfo> page = queryMergedTodoPage(userId, adapted, request.page(), request.size());
+        PageResponse<TaskInfo> page = queryMergedTodoPage(userId, adapted, request);
         long total = page.getTotalElements();
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, TaskQueryComponent.TODO_LIST_KEY, request.page(), request.size(), total, started);
@@ -139,7 +140,9 @@ public class TodoListQueryComponent {
     }
 
     private PageResponse<TaskInfo> queryMergedTodoPage(
-            String userId, TaskQueryRequest adapted, int page, int size) {
+            String userId, TaskQueryRequest adapted, TodoTaskQueryRequest request) {
+        int page = request.page();
+        int size = request.size();
         TaskQueryRequest mineFetch = TaskQueryRequest.builder()
                 .userId(userId)
                 .page(0)
@@ -147,11 +150,26 @@ public class TodoListQueryComponent {
                 .build();
         List<TaskInfo> mine = mineTaskScanner.scanMineTasks(userId, mineFetch, null, size);
         List<TaskInfo> merged = TodoListUnion.merge(mine, fetchAllClaimPoolTasksPaged(userId));
+        if (request.batchGroup()) {
+            List<TaskInfo> atNode = merged.stream()
+                    .filter(t -> BatchTaskEligibility.isEligible(t, userId)
+                            && request.batchTaskDefinitionKey().equals(t.getTaskDefinitionKey()))
+                    .collect(Collectors.toCollection(ArrayList::new));
+            // The group key needs the release pinned at start, which enrichment fills in.
+            requestIdEnricher.enrichTaskRequestIds(atNode);
+            merged = atNode.stream()
+                    .filter(t -> BatchTaskEligibility.inGroup(t, request.batchGroupKey(), request.batchTaskDefinitionKey()))
+                    .collect(Collectors.toCollection(ArrayList::new));
+        }
         maybeEnrichRequestIds(merged, adapted);
         List<TaskInfo> filtered = TaskInfoQueryFilters.apply(merged, adapted);
         filtered = TaskInfoListOps.applySorting(filtered, adapted);
         List<TaskInfo> paged = new ArrayList<>(TaskInfoListOps.pageOf(filtered, page, size));
         requestIdEnricher.enrichTaskRequestIds(paged);
+        // Same rule as the Batch Actions groups, so the list can flag exactly those rows.
+        for (TaskInfo t : paged) {
+            t.setBatchGroupKey(BatchTaskEligibility.isEligible(t, userId) ? BatchTaskEligibility.groupKeyOf(t) : null);
+        }
         EngineTaskMapper.clearTaskVariablesForList(paged);
         return PageResponse.of(paged, page, size, filtered.size());
     }

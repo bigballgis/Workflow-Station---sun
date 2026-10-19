@@ -122,6 +122,12 @@ const routes: RouteRecordRaw[] = [
         redirect: { path: '/permissions' }
       },
       {
+        path: 'record-note-notifications/:id',
+        name: 'RecordNoteNotification',
+        component: () => import('@/views/notifications/RecordNoteNotification.vue'),
+        meta: { title: 'Record Note' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/index.vue'),

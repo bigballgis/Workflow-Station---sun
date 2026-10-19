@@ -16,6 +16,7 @@ const PATH_TITLE: Record<string, string> = {
   '/form-events-extend#inlineSubForm': 'nav.formCtlInlineForm',
   '/form-events-extend#linkForm': 'nav.formCtlLinkForm',
   '/form-events-extend#recordNote': 'nav.formCtlRecordNote',
+  '/form-ctl-record-note': 'nav.formCtlRecordNote',
   '/form-events-extend#miAssignment': 'nav.formCtlMiAssignment',
   '/form-events-layout': 'guides.formEventsLayout.title',
   '/form-upload': 'guides.formUpload.title',
@@ -31,6 +32,7 @@ const PATH_TITLE: Record<string, string> = {
   '/email-monitor': 'guides.emailMonitor.title',
   '/environment-variables': 'guides.environmentVariables.title',
   '/action-email': 'guides.actionEmail.title',
+  '/action-allowed-roles': 'guides.actionAllowedRoles.title',
 }
 
 for (const ctl of BASIC_FORM_CONTROLS) {

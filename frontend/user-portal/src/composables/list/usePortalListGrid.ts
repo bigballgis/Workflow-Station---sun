@@ -17,7 +17,8 @@ export interface PortalListPagePayload<T> {
  * session widths, and stale-response protection. The composable does not fetch.
  */
 export function usePortalListGrid<T extends object>(opts: {
-  storageKey: string
+  /** Session key for widths and column order; a getter lets one page keep separate layouts per view. */
+  storageKey: MaybeRefOrGetter<string>
   extraWidth?: MaybeRefOrGetter<number>
   fillViewport?: MaybeRefOrGetter<boolean>
   /** When set, only these fields render / persist order. Other declared columns stay on the payload. */
@@ -146,7 +147,7 @@ export function usePortalListGrid<T extends object>(opts: {
 
   function readStoredColumnOrder(): string[] {
     try {
-      const raw = sessionStorage.getItem(`${opts.storageKey}:order`)
+      const raw = sessionStorage.getItem(`${toValue(opts.storageKey)}:order`)
       if (!raw) return []
       const parsed = JSON.parse(raw) as { columnOrder?: string[] }
       return Array.isArray(parsed.columnOrder)
@@ -161,7 +162,7 @@ export function usePortalListGrid<T extends object>(opts: {
   function persistColumnOrder(): void {
     try {
       sessionStorage.setItem(
-        `${opts.storageKey}:order`,
+        `${toValue(opts.storageKey)}:order`,
         JSON.stringify({ columnOrder: [...columnOrder.value] }),
       )
     } catch {

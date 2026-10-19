@@ -568,6 +568,7 @@ public class AuthController {
                 .workspaceSwitcherVisible(workspaceSwitcherVisible)
                 .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
                 .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
+                .systemAdministrator(functionUnitAccessComponent.isSystemAdministrator(user.getId()))
                 .build();
     }
 

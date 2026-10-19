@@ -15,6 +15,8 @@ import com.developer.enums.FormType;
 import com.developer.enums.TableType;
 import com.developer.repository.*;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +92,23 @@ class FunctionUnitCloneBindingTest {
                 new com.developer.service.impl.FunctionUnitDocumentService(
                 org.mockito.Mockito.mock(com.developer.repository.AiDocumentRepository.class),
                 org.mockito.Mockito.mock(com.developer.repository.AiStudioThreadStateRepository.class)));
+    }
+
+    @Test
+    void cloneChecksLeadCapabilityBeforeAnySequenceOrContentWrite() {
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("Clone requires workspace lead"))
+                .when(functionUnitWorkspaceAccessService).assertCanAccess(1L, WorkspaceAccessAction.CLONE);
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class, () -> component.clone(1L, "Copy"));
+        verifyNoInteractions(sequenceSynchronizer);
+        verify(functionUnitRepository, never()).save(any());
+    }
+
+    @Test
+    void restoreChecksLeadCapabilityBeforeChangingStatus() {
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("Restore requires workspace lead"))
+                .when(functionUnitWorkspaceAccessService).assertCanAccess(1L, WorkspaceAccessAction.RESTORE);
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class, () -> component.restore(1L));
+        verify(functionUnitRepository, never()).save(any());
     }
 
     @Test

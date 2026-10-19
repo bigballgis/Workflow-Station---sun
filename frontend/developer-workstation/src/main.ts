@@ -36,6 +36,7 @@ import OwnerPlaceholderWidget from './components/designer/OwnerPlaceholderWidget
 import OwnerConfigEditor from './components/designer/OwnerConfigEditor.vue'
 import FormControlTypeSelect from './components/designer/FormControlTypeSelect.vue'
 import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.vue'
+import RecordNoteNotificationConfig from './components/designer/RecordNoteNotificationConfig.vue'
 import SensitiveMaskPropsEditor from './components/designer/SensitiveMaskPropsEditor.vue'
 import UploadMaxFilesEditor from './components/designer/UploadMaxFilesEditor.vue'
 import UploadMaxFileSizeEditor from './components/designer/UploadMaxFileSizeEditor.vue'
@@ -127,6 +128,7 @@ FcDesigner.component('Owner', OwnerPlaceholderWidget)
 FcDesigner.component('OwnerConfigEditor', OwnerConfigEditor)
 FcDesigner.component('FormControlTypeSelect', FormControlTypeSelect)
 FcDesigner.component('RecordNoteScopeSelect', RecordNoteScopeSelect)
+FcDesigner.component('RecordNoteNotificationConfig', RecordNoteNotificationConfig)
 FcDesigner.component('MiAssignment', MiAssignmentPlaceholderWidget)
 
 // Dedicated "Extend" palette group for our own business components (Sub-Table,
@@ -746,6 +748,7 @@ FcDesigner.addDragRule({
       },
       { type: 'input', field: 'panelTitle', title: 'Panel Title' },
       { type: 'switch', field: 'allowAttachment', title: 'Allow Attachments' },
+      { type: 'RecordNoteNotificationConfig', field: 'attachmentNotification', title: i18n.global.t('recordNoteNotification.title') },
       { type: 'inputNumber', field: 'maxFileSizeMb', title: 'Max File Size (MB)', props: { min: 1, max: 10 } },
       { type: 'inputNumber', field: 'pageSize', title: 'Visible Notes', props: { min: 1, max: 20 } },
       { type: 'switch', field: 'readonly', title: 'Readonly' }

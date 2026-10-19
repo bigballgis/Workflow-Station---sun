@@ -8,6 +8,8 @@ public enum NotificationType {
     TASK,
     /** 流程通知 */
     PROCESS,
+    /** Record Note 正式附件更新 */
+    ATTACHMENT_UPDATE,
     /** 系统通知 */
     SYSTEM,
     /** 提醒通知 */

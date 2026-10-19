@@ -1,6 +1,15 @@
 import applicationStatusLabels from '../application-status-labels.json'
 
 export default {
+  relationTableBatch: {
+    inactive: '批量 Inactive（{count}）',
+    active: '批量 Active（{count}）',
+    inactiveConfirm: '确定将选中的 {count} 行设为 Inactive？设为 Inactive 后，这些行不会再出现在 Lookup 字段的可选项中。',
+    inactiveDone: '已将 {count} 行设为 Inactive',
+    activeDone: '已将 {count} 行设为 Active',
+  },
+  recordNoteNotification: {"openRequest": "打开 Request", "caseNotes": "Case Notes", "transactionNotes": "Transaction Notes", "unavailable": "记录不可用，或你已无权访问。"},
+
   app: {
     name: '用户门户',
     title: '工作流平台'
@@ -350,6 +359,25 @@ export default {
     transfer: '转办',
     urge: '催办',
     batchUrge: '批量催办',
+    tabAll: '全部待办',
+    tabBatch: '可批量操作',
+    batchGroups: '任务组',
+    batchGroupsSummary: '{groups} 个任务组 · {count} 条待办',
+    batchGroupsEmpty: '当前没有可批量处理的任务',
+    batchGroupVersion: '流程版本',
+    batchMark: '可批量',
+    batchMarkHint: '可在「可批量操作」中一起通过或驳回，点击打开该任务组',
+    batchGroupCount: '待办数量',
+    batchGroupActions: '支持的批量操作',
+    batchPendingCount: '{count} 条待办',
+    viewTasks: '查看任务',
+    backToGroups: '返回任务组',
+    batchScopeThisPage: '选择范围：本页任务',
+    batchActionTitle: '批量 {action}（{count} 条）',
+    batchConfirm: '确认对选中的 {count} 条任务执行「{action}」？任务将直接流转到下一节点。',
+    batchCommentPrompt: '该操作要求填写处理意见，意见将写入每条选中的任务。',
+    batchAllSucceeded: '已处理 {count} 条任务',
+    batchPartialResult: '成功 {ok} 条，失败 {failed} 条：',
     selected: '已选择 {count} 项',
     approve: '同意',
     reject: '拒绝',
@@ -557,7 +585,8 @@ export default {
     workspaceGuardTitle: '无法提交：缺少完整工作台身份',
     workspaceGuardHint:
       '您的账号关联业务单元角色，发起流程前请在页面顶部选择「业务单元 · 角色」工作台，或退出后重新登录。仅保存草稿不受影响。',
-    workspaceGuardToast: '请先选择顶部工作台或重新登录后再提交'
+    workspaceGuardToast: '请先选择顶部工作台或重新登录后再提交',
+    actionsBlockedByAllowedRoles: '当前角色没有可用的发起操作，如需权限请联系管理员。',
   },
   applicationDetail: {
     back: '返回',
@@ -963,6 +992,8 @@ export default {
     goToApply: '前往申请'
   },
   notification: {
+    attachmentUpdates: '附件更新',
+    attachmentUpdatesGuide: '查看附件更新通知指南',
     title: '消息中心',
     unread: '未读消息',
     all: '全部消息',

@@ -68,6 +68,9 @@ public class ProcessDeploymentManager {
     private static final Pattern CALLED_ELEMENT_TYPE_PATTERN =
             Pattern.compile("\\s(?:\\w+:)?calledElementType=\"([^\"]*)\"");
 
+    /** {@code key:version:uuid}, the id format {@link #deployProcess} reports. */
+    private static final Pattern COMPOSITE_DEFINITION_ID = Pattern.compile("([^:]+):(\\d+):([^:]+)");
+
     @Autowired
     private RepositoryService repositoryService;
 
@@ -96,8 +99,9 @@ public class ProcessDeploymentManager {
             // Validate BPMN file format
             validateBpmnFile(enhancedBpmnXml);
 
-            // Every callActivity must name a process that is already deployed here.
-            validateCalledElementsAreDeployed(enhancedBpmnXml, request.getKey());
+            // Every callActivity must name a process that is already deployed here. Pinned
+            // calls come back with calledElement set to Flowable's real definition id.
+            enhancedBpmnXml = resolveCalledElements(enhancedBpmnXml, request.getKey());
 
             // Create deployment
             Deployment deployment = repositoryService.createDeployment()
@@ -392,8 +396,9 @@ public class ProcessDeploymentManager {
     }
 
     /**
-     * Refuse to deploy a process whose {@code callActivity} targets a process that is not
-     * deployed in this environment.
+     * Checks every {@code callActivity} target and returns the BPMN with pinned targets
+     * rewritten to Flowable's real definition ids; refuses to deploy a process whose call
+     * targets a process that is not deployed in this environment.
      *
      * <p>Flowable resolves {@code calledElement} lazily — at the moment the token reaches the
      * call activity — so without this check a deployment succeeds and then fails in production
@@ -402,12 +407,21 @@ public class ProcessDeploymentManager {
      *
      * <p>A process may call itself neither directly nor transitively; direct self-reference is
      * caught here, and the designer rejects longer cycles before deployment.
+     *
+     * <p>A pinned call arrives with the {@code key:version:uuid} id that {@link #deployProcess}
+     * reports (and admin-center stores). When Flowable's own id is just the uuid, that
+     * composite is rewritten to the real id, because Flowable looks the callee up by exactly
+     * this value at runtime.
+     *
+     * @return the BPMN, with pinned calls pointing at Flowable's real definition ids
      */
-    void validateCalledElementsAreDeployed(String bpmnXml, String deployingKey) {
+    String resolveCalledElements(String bpmnXml, String deployingKey) {
         if (bpmnXml == null || !bpmnXml.contains("calledElement")) {
             // Fast path: no cross-process calls in this diagram.
-            return;
+            return bpmnXml;
         }
+        StringBuilder out = new StringBuilder(bpmnXml.length());
+        int cursor = 0;
 
         // Each call activity is read on its own because calledElement means different things
         // depending on that element's calledElementType: a process KEY (follow the latest
@@ -423,9 +437,6 @@ public class ProcessDeploymentManager {
                 continue;
             }
             boolean byId = "id".equals(firstGroup(CALLED_ELEMENT_TYPE_PATTERN, attrs));
-            if (!checked.add((byId ? "id:" : "key:") + calledElement)) {
-                continue;
-            }
 
             // A definition id starts with its key ("key:version:uuid"), so this also catches a
             // call pinned to a version of the very process being deployed.
@@ -436,14 +447,23 @@ public class ProcessDeploymentManager {
                                 + "would start sub-process instances endlessly at runtime.");
             }
 
-            long deployed = byId
-                    ? repositoryService.createProcessDefinitionQuery()
-                            .processDefinitionId(calledElement)
-                            .count()
+            String realId = byId ? flowableDefinitionId(calledElement) : null;
+            if (realId != null && !realId.equals(calledElement)) {
+                out.append(bpmnXml, cursor, matcher.start(1));
+                out.append(CALLED_ELEMENT_PATTERN.matcher(attrs).replaceFirst(
+                        Matcher.quoteReplacement(" calledElement=\"" + realId + "\"")));
+                cursor = matcher.end(1);
+            }
+            if (!checked.add((byId ? "id:" : "key:") + calledElement)) {
+                continue;
+            }
+
+            boolean deployed = byId
+                    ? realId != null
                     : repositoryService.createProcessDefinitionQuery()
                             .processDefinitionKey(calledElement)
-                            .count();
-            if (deployed == 0) {
+                            .count() > 0;
+            if (!deployed) {
                 throw new WorkflowBusinessException("CALL_TARGET_NOT_DEPLOYED", byId
                         ? "Call activity is pinned to process definition '" + calledElement
                                 + "', which does not exist in this environment. Re-deploy the pinned "
@@ -453,6 +473,30 @@ public class ProcessDeploymentManager {
                                 + "deploy '" + deployingKey + "'.");
             }
         }
+        out.append(bpmnXml, cursor, bpmnXml.length());
+        return out.toString();
+    }
+
+    /**
+     * Flowable's own id for a pinned definition, or null when none is deployed. Accepts the
+     * real id, or the {@code key:version:uuid} composite built in {@link #deployProcess}
+     * when the real id is the bare uuid.
+     */
+    private String flowableDefinitionId(String pinnedId) {
+        if (repositoryService.createProcessDefinitionQuery().processDefinitionId(pinnedId).count() > 0) {
+            return pinnedId;
+        }
+        Matcher composite = COMPOSITE_DEFINITION_ID.matcher(pinnedId);
+        if (!composite.matches()) {
+            return null;
+        }
+        String rawId = composite.group(3);
+        long deployed = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(rawId)
+                .processDefinitionKey(composite.group(1))
+                .processDefinitionVersion(Integer.parseInt(composite.group(2)))
+                .count();
+        return deployed > 0 ? rawId : null;
     }
 
     /** The process key of a definition id of the form {@code key:version:uuid}. */

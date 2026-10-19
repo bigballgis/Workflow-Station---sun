@@ -232,6 +232,11 @@ public class TaskListResult {
          * Available action IDs for the task (extracted from BPMN extensionElements)
          */
         private java.util.List<String> actionIds;
+
+        /**
+         * Node allows To Do batch processing (BPMN custom:property allowBatch)
+         */
+        private Boolean allowBatch;
         
         /**
          * Assignment type description

@@ -108,7 +108,7 @@ export const EXTEND_INDEX_RELATED: GuideRelated[] = [
   { to: '/form-events-extend#linkForm', titleKey: 'nav.formCtlLinkForm' },
   { to: '/form-ctl-lookup', titleKey: 'nav.formCtlLookup' },
   { to: '/form-events-extend#owner', titleKey: 'nav.formCtlOwner' },
-  { to: '/form-events-extend#recordNote', titleKey: 'nav.formCtlRecordNote' },
+  { to: '/form-ctl-record-note', titleKey: 'nav.formCtlRecordNote' },
   { to: '/form-events-extend#miAssignment', titleKey: 'nav.formCtlMiAssignment' },
   { to: '/form-upload', titleKey: 'guides.formUpload.title' },
 ]

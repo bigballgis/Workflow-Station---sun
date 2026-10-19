@@ -171,7 +171,7 @@ class PortalRelationTablePropertyTest {
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
                 mock(com.platform.common.fk.PrimaryKeyAllocationService.class),
                 mock(com.portal.component.RelationTableComputedFieldRecalculator.class));
-        List<Map<String, Object>> results = service.searchForLookup(tableId, keyword, searchFields, "display_col", null, 10, 0);
+        List<Map<String, Object>> results = service.searchForLookup(tableId, keyword, searchFields, "display_col", null, 10, 0, false);
 
         // Each result should contain the keyword in at least one search field
         for (Map<String, Object> row : results) {
@@ -207,7 +207,8 @@ class PortalRelationTablePropertyTest {
                 "display_name",
                 null,
                 10,
-                0);
+                0,
+                false);
 
         assertThat(results).isEqualTo(mockResults);
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);

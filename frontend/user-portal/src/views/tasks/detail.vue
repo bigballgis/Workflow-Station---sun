@@ -430,16 +430,11 @@
       <TaskActionBar
         :is-completed-task="isCompletedTask"
         :claim-locked="claimLocked"
-        :show-implicit-save-action="showImplicitSaveAction"
-        :saving-task-form="savingTaskForm"
         :actions="taskInfo.actions"
         :can-delegate="!!String(taskInfo.assignee || '').trim()"
         :get-icon-component="getIconComponent"
         :get-action-label="getActionLabel"
-        @save="saveCurrentTaskFormWithMiPersist"
         @custom-action="handleCustomAction"
-        @approve="handleApprove"
-        @reject="handleReject"
       />
     </div>
 
@@ -625,7 +620,6 @@ const {
   processFormFormConfig,
   processFormNativeSubTableBindingIds,
   taskFormDTO,
-  hasConfiguredSaveAction,
   completedFormData,
   isCompletedTask,
   miSubProcessScopeName,
@@ -712,9 +706,7 @@ const resolveMiRowOwnershipPredicate = (binding: unknown) => {
 }
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
-const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, recordSubTableBatchChange, clearAutosaveTimer: clearFormAutosaveTimer, syncSubTableRowVersionsBeforeSubmit, resumeSubTableAutosave } = taskForm
-
-const showImplicitSaveAction = computed(() => !formReadOnly.value && !hasConfiguredSaveAction.value)
+const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, buildCurrentTaskFormSubmitPayload, recordSubTableBatchChange, clearAutosaveTimer: clearFormAutosaveTimer, syncSubTableRowVersionsBeforeSubmit, resumeSubTableAutosave } = taskForm
 
 /** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
 const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
@@ -856,8 +848,6 @@ const taskActions = useTaskActions({
 const {
   validateSubTableAssigneesForComplete,
   onActionDialogOpened,
-  handleApprove,
-  handleReject,
   handleDelegate,
   handleTransfer,
   handleUrge,

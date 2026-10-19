@@ -7,7 +7,7 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **26** | `index.yaml` |
+| 🔓 Open | **30** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 
@@ -25,6 +25,9 @@
 2026-10-19：#1677 已修复，Batch Assign批量解析已选人员姓名并保留搜索/统一分派选项，提交仍为用户ID。41项前端与4项后端测试通过；原任务UUID→姓名，两条样本反复打开取消后数据不变，pageerror0。未重跑完整审批流程。
 
 2026-10-19：#1678 已修复，General按显式分派字段解析姓名，不改写用户ID；用户确认问题已经解决。隔离申请的数据载入阻断记录保留，不视为自动化页面验收通过。
+2026-10-14：#1682（原目标分支 #1669）已修复 DW Public 只读设计器返回列表、子表导航及错误保存确认；两个 Public FU 的截图与交互回归已保留，账号本人登录验证仍待实测。
+
+2026-10-14：#1683（原目标分支 #1670）已修复同名导入、绑定视图和创建目标的工作区权限缺口及 SYS_ADMIN 方法门禁；143 后端/48 前端回归通过，服务端拒绝路径与浏览无隐式写入已验证。
 
 2026-09-18 复核补丁已并回 #1636 / #1639：同表交集行只递增一次版本、删除必须带读取版本、同父表不同 FK 正确投影，旧实例写校验改读 pinned catalog。
 
@@ -34,6 +37,9 @@
 
 | ID | 严重度 | 分类 | 描述 |
 |----|--------|------|------|
+| 1684 | major | bug | Record Note重复追加processInstanceId；目标分支独立复现，未在本次合并修复 |
+| 1685 | minor | quality | 前端Pinia、BPMN导入、AI/i18n测试既有失败；合并前独立worktree已复现 |
+| 1679 | major | quality | TaskActionService 引擎/lookup 异常静默返回空列表（目标分支原 #1666，合并时避重编号） |
 | 1666 | critical | architecture | Batch A39：引擎启动后本地落库及补偿均失败缺持久隔离；用户要求暂缓，仍阻塞 P4 发布 |
 | 1402 | major | architecture | VirtualGroupTaskServiceImpl 与工作流引擎未集成 |
 | 1405 | major | bug | ACTION 表单弹窗提交无服务端 API |
@@ -55,6 +61,7 @@
 | 1660 | minor | quality | workflow-engine-core 基线红：TaskManagerComponentMultiInstanceTest 5 个用例因 taskClaimSupport 未注入 NPE（已在 HEAD worktree 证实非新引入） |
 | 1661 | major | bug | FU 克隆/导入/回滚时 FORM_POPUP Action 的 `configJson.formId` 不重映射，弹窗仍指向源 FU 表单 |
 | 1662 | major | bug | platform-messaging `DefaultErrorHandler` recoverer 空实现，Kafka 重试用尽后消息静默丢弃（DLT 从未写入） |
+| 1666 | major | quality | TaskActionService 引擎/lookup 异常 catch→emptyList，与「无 actionIds」无法区分（Allowed Roles 轮次 3-A 暂不修） |
 ### Wontfix
 
 | ID | 分类 | 描述 |

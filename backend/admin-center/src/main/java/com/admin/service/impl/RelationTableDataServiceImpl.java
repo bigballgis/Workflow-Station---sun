@@ -249,7 +249,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                      List<String> searchFields, String displayField,
-                                                     String filterConditions, int limit, int offset) {
+                                                     String filterConditions, int limit, int offset,
+                                                     boolean includeInactive) {
         try {
             int safeLimit = Math.min(Math.max(1, limit), LOOKUP_MAX_LIMIT);
             int safeOffset = Math.max(0, offset);
@@ -267,6 +268,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             List<String> predicates = new ArrayList<>();
             List<Object> params = new ArrayList<>();
             params.add(tableId);
+            if (!includeInactive) {
+                predicates.add("status = 'ACTIVE'");
+            }
 
             for (LookupFilterCondition filter : parseLookupFilterConditions(filterConditions, allowedFields)) {
                 appendLookupFilterPredicate(predicates, params,
@@ -526,12 +530,28 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     public RelationTableDataRowDTO changeStatus(Long tableId, String rowId, String status) {
         requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
-        List<RelationFieldDTO> fields = getDeployedFields(tableDef);
-        String tableName = tableDef.getTableName();
+        return applyStatus(tableId, tableDef.getTableName(), hasStatusField(tableDef), rowId, status);
+    }
 
-        boolean hasStatusField = fields.stream()
+    @Override
+    @Transactional
+    public int changeStatusBatch(Long tableId, List<String> rowIds, String status) {
+        requireWriteAccess(tableId);
+        RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
+        boolean hasStatusField = hasStatusField(tableDef);
+        List<String> distinctIds = rowIds.stream().distinct().toList();
+        // A missing row throws and rolls the whole batch back.
+        distinctIds.forEach(rowId -> applyStatus(tableId, tableDef.getTableName(), hasStatusField, rowId, status));
+        return distinctIds.size();
+    }
+
+    private boolean hasStatusField(RelationTableDefinition tableDef) {
+        return getDeployedFields(tableDef).stream()
                 .anyMatch(f -> "status".equalsIgnoreCase(f.getFieldName()));
+    }
 
+    private RelationTableDataRowDTO applyStatus(Long tableId, String tableName, boolean hasStatusField,
+                                                String rowId, String status) {
         Map<String, Object> oldData = getRowData(tableId, rowId);
         if (oldData == null) {
             throw new RelationTableNotFoundException("Row not found: " + rowId);

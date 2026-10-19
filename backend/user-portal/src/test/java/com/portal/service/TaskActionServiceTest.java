@@ -1,13 +1,14 @@
 package com.portal.service;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.component.ActionDefinitionLookupComponent;
 import com.portal.dto.TaskActionInfo;
 import com.portal.entity.ActionDefinition;
 import com.portal.repository.ActionDefinitionRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,8 +32,14 @@ class TaskActionServiceTest {
     @Mock
     private ActionDefinitionRepository actionDefinitionRepository;
 
-    @InjectMocks
     private TaskActionService taskActionService;
+
+    @BeforeEach
+    void setUp() {
+        ActionDefinitionLookupComponent lookup =
+                new ActionDefinitionLookupComponent(actionDefinitionRepository);
+        taskActionService = new TaskActionService(workflowEngineClient, lookup);
+    }
 
     @Test
     @DisplayName("getTaskActions should resolve only requested dw action ids")

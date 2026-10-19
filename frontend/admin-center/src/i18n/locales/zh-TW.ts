@@ -1,4 +1,11 @@
 export default {
+  relationTableBatch: {
+    inactive: '批次 Inactive（{count}）',
+    active: '批次 Active（{count}）',
+    inactiveConfirm: '確定將選取的 {count} 列設為 Inactive？設為 Inactive 後，這些列不會再出現在 Lookup 欄位的可選項中。',
+    inactiveDone: '已將 {count} 列設為 Inactive',
+    activeDone: '已將 {count} 列設為 Active',
+  },
   app: {
     name: '管理中心',
     title: '工作流平臺'
@@ -1103,6 +1110,21 @@ export default {
     commonFailed: '操作失敗',
     commonQueryFailed: '查詢失敗',
     unknown: '未知錯誤',
+  },
+  tableDataNavigation: {
+    title: "功能單元",
+    common: "Common（公共表）",
+    search: "搜尋功能單元或表",
+    tableCount: "{count} 張表",
+    readonly: "唯讀權限",
+    writable: "讀寫權限",
+    retry: "重試",
+    loadFailed: "無法載入已部署的表，請重試載入導覽。",
+    noMatches: "沒有符合的功能單元或表",
+    noTables: "暫無已部署的表",
+    selectTable: "從功能單元導覽中選擇一張表",
+    unavailable: "目前功能單元中無法存取此表，請選擇其他表。",
+    guide: "開啟表資料管理指南",
   },
   relationTable: {
     enabled: '已啟用',

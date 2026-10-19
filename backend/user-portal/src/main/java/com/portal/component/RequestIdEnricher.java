@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -247,6 +248,27 @@ public class RequestIdEnricher {
             ProcessInstance request = requestOf.getOrDefault(pi.getId(), pi);
             task.setRequestId(buildRequestId(specs, request.getFunctionUnitCode(), request.getVariables()));
         }
+    }
+
+    /**
+     * Release version of each catalog row ({@code sys_function_units.id} → {@code version}, e.g.
+     * "1.0.23"), the number Developer Workstation Version Management shows. One query.
+     */
+    public Map<String, String> loadCatalogVersions(Collection<String> catalogIds) {
+        List<String> args = catalogIds == null ? List.of() : catalogIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        if (args.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = args.stream().map(c -> "?").collect(Collectors.joining(","));
+        Map<String, String> versions = new LinkedHashMap<>();
+        jdbcTemplate.query(
+                "SELECT id, version FROM sys_function_units WHERE id IN (" + placeholders + ")",
+                (RowCallbackHandler) rs -> versions.put(rs.getString("id"), rs.getString("version")),
+                args.toArray());
+        return versions;
     }
 
     /**

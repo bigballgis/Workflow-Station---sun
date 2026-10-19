@@ -84,7 +84,7 @@
       class="action-editor"
     >
       <div class="editor-header">
-        <el-button @click="handleBackToList">
+        <el-button data-read-only-allowed @click="handleBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('action.backToList') }}
         </el-button>
         <span class="action-name">{{ selectedAction.actionName }}</span>
@@ -411,12 +411,13 @@
           </el-form-item>
         </template>
 
-        <ActionPostEmailConfig
+        <ActionPostEmailRules
           v-if="selectedAction"
-          :model-value="actionConfig.postEmail || {}"
+          v-model="actionConfig.postEmailRules"
           :action-type="selectedAction.actionType"
           :function-unit-id="functionUnitId"
-          @update:model-value="actionConfig.postEmail = $event"
+          :field-options="postEmailFilterFieldOptions"
+          :refresh-field-options="loadPostEmailFilterFields"
         />
 
         <!-- 节点绑定配置 -->
@@ -472,23 +473,7 @@
             @update:model-value="(val: ConditionExpression[]) => actionConfig.visibilityCondition = val.length > 0 ? val : null"
           />
         </el-form-item>
-        <el-form-item :label="t('action.allowedRoles')">
-          <el-select
-            v-model="actionConfig.allowedRoles"
-            multiple
-            filterable
-            allow-create
-            :placeholder="t('action.allowedRolesPlaceholder')"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="role in availableRoles"
-              :key="role"
-              :label="role"
-              :value="role"
-            />
-          </el-select>
-        </el-form-item>
+        <ActionAllowedRolesField v-model="actionConfig.allowedRoles" />
         <el-form-item :label="t('action.sortOrder')">
           <el-input-number
             v-model="actionConfig.sortOrder"
@@ -528,7 +513,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import ActionColorField from './action-designer/ActionColorField.vue'
-import ActionPostEmailConfig from './action-designer/ActionPostEmailConfig.vue'
+import ActionAllowedRolesField from './action-designer/ActionAllowedRolesField.vue'
+import ActionPostEmailRules from './action-designer/ActionPostEmailRules.vue'
+import { useActionPostEmailFilterFields } from '@/composables/actionDesigner/useActionPostEmailFilterFields'
 import ActionCreateDialog from './action-designer/ActionCreateDialog.vue'
 import ActionTestDialog from './action-designer/ActionTestDialog.vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -547,11 +534,13 @@ const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()
+const {
+  fieldOptions: postEmailFilterFieldOptions,
+  loadFieldOptions: loadPostEmailFilterFields,
+} = useActionPostEmailFilterFields(() => props.functionUnitId)
 
 // 核心共享状态
 const selectedAction = ref<ActionDefinition | null>(null)
-// availableRoles：模板的 allowedRoles 下拉用，始终为空（保持原行为）
-const availableRoles = ref<string[]>([])
 
 // 节点绑定（独立，不依赖 config）
 const {
@@ -648,7 +637,13 @@ const {
   executeTest,
 } = useActionTest({ functionUnitId: props.functionUnitId, selectedAction, t })
 
-onMounted(loadActions)
+onMounted(async () => {
+  await Promise.all([
+    loadActions(),
+    store.fetchTables(props.functionUnitId),
+    loadPostEmailFilterFields(),
+  ])
+})
 </script>
 
 <style lang="scss" scoped>

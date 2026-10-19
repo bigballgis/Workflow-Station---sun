@@ -49,6 +49,15 @@ public interface RecordNoteRepository extends JpaRepository<RecordNote, String> 
 
     List<RecordNoteSummary> findByParentNoteIdInAndIsDeletedFalseOrderByCreatedAtAsc(Collection<String> parentNoteIds);
 
+    @Query("SELECT n FROM RecordNote n WHERE n.targetType=:type AND n.targetId=:target "
+            + "AND n.tableKind=:kind AND n.tableId=:table AND n.parentNoteId IS NULL AND n.isDeleted=false "
+            + "AND ((:draft=true AND n.createdBy=:user) OR (:draft=false AND n.processInstanceId=:process)) "
+            + "AND (:submission IS NULL OR n.submissionId=:submission) ORDER BY n.createdAt DESC")
+    Page<RecordNoteSummary> scopedNotes(@Param("type") String type,@Param("target") String target,
+            @Param("kind") String kind,@Param("table") String table,@Param("process") String process,
+            @Param("draft") boolean draft,@Param("user") String user,@Param("submission") String submission,Pageable pageable);
+
+
     /** All live notes anchored to a process instance, comments and attachments alike (archive). */
     List<RecordNote> findByTargetIdAndIsDeletedFalseOrderByCreatedAtAsc(String targetId);
 
@@ -62,7 +71,7 @@ public interface RecordNoteRepository extends JpaRepository<RecordNote, String> 
      * exists) to the freshly started instance. Restricted to the author's rows.
      */
     @Modifying
-    @Query("UPDATE RecordNote n SET n.targetId = :instanceId "
+    @Query("UPDATE RecordNote n SET n.targetId = :instanceId, n.processInstanceId = :instanceId "
             + "WHERE n.targetId = :draftId AND n.createdBy = :userId AND n.isDeleted = false")
     int adoptDraftTarget(@Param("draftId") String draftId, @Param("instanceId") String instanceId,
                          @Param("userId") String userId);

@@ -68,9 +68,11 @@ public class RecordNoteController {
             @RequestParam(required = false) String functionUnitId,
             @RequestParam(required = false) String processInstanceId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "5") int size) {
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false) String submissionId) {
         int safeSize = size < 1 ? 5 : Math.min(size, 100);
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
+        target.setSubmissionId(submissionId);
         return ApiResponse.success(
                 recordNoteComponent.list(userId, target, Math.max(page, 0), safeSize, processInstanceId));
     }
@@ -116,8 +118,16 @@ public class RecordNoteController {
             @RequestParam(required = false) List<String> inlineImageIds,
             @RequestParam(required = false) List<MultipartFile> files,
             @RequestParam(required = false) String processInstanceId,
-            @RequestParam(required = false) String taskId) {
+            @RequestParam(required = false) String taskId,
+            @RequestParam(required = false) String formKey,
+            @RequestParam(required = false) String controlId,
+            @RequestParam(required = false) String clientSubmissionId,
+            @RequestParam(required = false) String sourceView) {
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
+        target.setFormKey(formKey);
+        target.setControlId(controlId);
+        target.setClientSubmissionId(clientSubmissionId);
+        target.setSourceView(sourceView);
         return ApiResponse.success(recordNoteComponent.createComment(
                 userId, target, subject, bodyHtml, files, inlineImageIds, processInstanceId, taskId));
     }

@@ -609,5 +609,34 @@ class RelationTableDataServiceTest {
             assertThatThrownBy(() -> service.changeStatus(1L, "1", "Inactive"))
                     .isInstanceOf(RelationTableNotFoundException.class);
         }
+
+        @Test
+        @DisplayName("Batch: updates and audits each distinct row once")
+        void batchUpdatesEachDistinctRow() throws JsonProcessingException {
+            setupDeployedTableWithFields(1L, "test_table");
+            stubRowLookup(1L, "1", List.of(new LinkedHashMap<>(Map.of("id", 1L, "status", "ACTIVE"))));
+            stubRowLookup(1L, "2", List.of(new LinkedHashMap<>(Map.of("id", 2L, "status", "ACTIVE"))));
+            when(jdbcTemplate.update(contains("SET status"), any(Object[].class))).thenReturn(1);
+
+            int updated = service.changeStatusBatch(1L, List.of("1", "2", "1"), "INACTIVE");
+
+            assertThat(updated).isEqualTo(2);
+            verify(jdbcTemplate, times(2)).update(contains("SET status"), any(Object[].class));
+            verify(auditService).logStatusChange(eq(1L), eq("test_table"), eq("1"), eq("ACTIVE"), eq("INACTIVE"));
+            verify(auditService).logStatusChange(eq(1L), eq("test_table"), eq("2"), eq("ACTIVE"), eq("INACTIVE"));
+        }
+
+        @Test
+        @DisplayName("Batch: a missing row fails the whole batch")
+        void batchFailsWhenAnyRowMissing() throws JsonProcessingException {
+            setupDeployedTableWithFields(1L, "test_table");
+            stubRowLookup(1L, "1", List.of(new LinkedHashMap<>(Map.of("id", 1L, "status", "ACTIVE"))));
+            stubRowLookup(1L, "999", Collections.emptyList());
+            when(jdbcTemplate.update(contains("SET status"), any(Object[].class))).thenReturn(1);
+
+            assertThatThrownBy(() -> service.changeStatusBatch(1L, List.of("1", "999"), "INACTIVE"))
+                    .isInstanceOf(RelationTableNotFoundException.class)
+                    .hasMessageContaining("999");
+        }
     }
 }

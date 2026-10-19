@@ -250,6 +250,13 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         formDefinition.setFormName(request.getFormName());
         formDefinition.setFormType(request.getFormType());
         formDefinition.setScene(targetScene);
+        com.platform.common.recordnote.RecordNoteDesign.prepare(mergedConfigJson, false);
+        com.platform.common.recordnote.RecordNoteBpmnValidator.validate(java.util.List.of(mergedConfigJson),
+                formDefinition.getFunctionUnit().getProcessDefinition() == null ? null
+                        : formDefinition.getFunctionUnit().getProcessDefinition().getBpmnXml());
+        com.developer.entity.RecordNoteFormValidator.validate(formDefinition,mergedConfigJson,
+                formDefinition.getFunctionUnit().getProcessDefinition()==null?null
+                        :formDefinition.getFunctionUnit().getProcessDefinition().getBpmnXml());
         formDefinition.setConfigJson(mergedConfigJson);
         formDefinition.setDisplayName(request.getDescription());
         // Omitted (null) means "not sent by this caller" — leave the persisted value as-is.
@@ -897,6 +904,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(copiedConfig);
+        com.platform.common.recordnote.RecordNoteDesign.prepare(copiedConfig, true);
         savedCopy.setConfigJson(copiedConfig);
         savedCopy.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(copiedFieldPermissions, bindingIdMapping));
         savedCopy = formDefinitionRepository.save(savedCopy);
@@ -1018,6 +1026,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
         FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         FormConfigJsonBindingIdRewriter.regenerateBatchControlIds(copiedConfig);
+        com.platform.common.recordnote.RecordNoteDesign.prepare(copiedConfig, true);
         savedCopy.setConfigJson(copiedConfig);
         savedCopy.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(copiedFieldPermissions, bindingIdMapping));
         savedCopy = formDefinitionRepository.save(savedCopy);

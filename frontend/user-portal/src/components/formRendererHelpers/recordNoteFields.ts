@@ -30,21 +30,36 @@ export function collectRecordNoteFields(fields: FormField[] | undefined | null):
 }
 
 /**
- * Stable identity of a sub-table row — the RECORD-scope note anchor. Resolution
- * mirrors subTableRowMerge: declared PK first, then rowId, then the platform
- * id / id_idw alias pair. Unsaved rows have none (callers show a hint).
+ * Stable note anchor: the declared single PK, or the persisted platform UUID for
+ * composite/keyless rows. Business aliases do not establish row ownership.
  */
 export function resolveRowStableId(
   row: Record<string, unknown> | null | undefined,
   primaryKeyFields?: string[] | null,
 ): string | null {
   if (!row || typeof row !== 'object') return null
-  const candidates: unknown[] = []
-  const pk = primaryKeyFields?.[0]
-  if (pk) candidates.push((row as Record<string, unknown>)[pk])
-  candidates.push(row.rowId, row.id, row.id_idw)
-  for (const v of candidates) {
-    if (v != null && String(v).trim() !== '') return String(v)
+  const pk = primaryKeyFields?.length === 1 ? primaryKeyFields[0] : undefined
+  const value = pk ? row[pk] : row.platformRowUuid
+  return value != null && String(value).trim() !== '' ? String(value) : null
+}
+
+/** Shared by To Do, New Request, My Request/Audit and nested form extraction. */
+export function createRecordNoteFormField(props: Record<string, unknown> = {}): FormField {
+  const scope = props.scope === 'TABLE' ? 'TABLE' : 'RECORD'
+  return {
+    key: typeof props.controlId === 'string' ? `__recordNote_${props.controlId}` : `__recordNote_${scope.toLowerCase()}`,
+    label: '', type: 'recordNote', span: 24,
+    _recordNote: {
+      formKey: typeof props.formKey === 'string' ? props.formKey : undefined,
+      controlId: typeof props.controlId === 'string' ? props.controlId : undefined,
+      scope,
+      panelTitle: typeof props.panelTitle === 'string' ? props.panelTitle : undefined,
+      allowAttachment: props.allowAttachment !== false,
+      maxFileSizeMb: Number(props.maxFileSizeMb) || 10,
+      allowEditOwn: props.allowEditOwn !== false,
+      allowDelete: props.allowDelete === true,
+      readonly: props.readonly === true,
+      pageSize: Number(props.pageSize) || 5,
+    },
   }
-  return null
 }

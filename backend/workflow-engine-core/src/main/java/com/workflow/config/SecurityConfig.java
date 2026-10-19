@@ -41,6 +41,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/record-note-targets")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/health/**")).permitAll()

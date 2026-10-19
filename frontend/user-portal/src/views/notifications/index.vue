@@ -1,7 +1,14 @@
 <template>
   <div class="notifications-page">
     <div class="page-header">
-      <h1>{{ t('notification.title') }}</h1>
+      <h1>
+        {{ t('notification.title') }}
+        <PortalHelpLink
+          path="/form-ctl-record-note#open"
+          :ariaLabel="t('notification.attachmentUpdatesGuide')"
+          test-id="attachment-updates-guide-link"
+        />
+      </h1>
       <el-button @click="handleMarkAllAsRead">
         {{ t('notification.markAllAsRead') }}
       </el-button>
@@ -31,6 +38,10 @@
         <el-tab-pane
           :label="t('notification.process')"
           name="process"
+        />
+        <el-tab-pane
+          :label="t('notification.attachmentUpdates')"
+          name="attachment-updates"
         />
         <el-tab-pane
           :label="t('notification.permission')"
@@ -118,9 +129,10 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, CircleCheck, Document, Key, Setting, Warning } from '@element-plus/icons-vue'
+import { Bell, CircleCheck, Document, Key, Paperclip, Setting, Warning } from '@element-plus/icons-vue'
+import PortalHelpLink from '@/components/PortalHelpLink.vue'
 import { useNotificationStore } from '@/stores/notification'
-import type { NotificationData } from '@/api/notification'
+import type { NotificationData, NotificationParams } from '@/api/notification'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
@@ -132,7 +144,7 @@ const currentPage = ref(1)
 const pageSize = 20
 
 const getQueryParams = () => {
-  const params: any = { page: currentPage.value - 1, size: pageSize }
+  const params: NotificationParams = { page: currentPage.value - 1, size: pageSize }
   if (activeTab.value === 'unread') {
     params.isRead = false
   } else if (activeTab.value === 'system') {
@@ -141,6 +153,8 @@ const getQueryParams = () => {
     params.type = 'TASK'
   } else if (activeTab.value === 'process') {
     params.type = 'PROCESS'
+  } else if (activeTab.value === 'attachment-updates') {
+    params.type = 'ATTACHMENT_UPDATE'
   } else if (activeTab.value === 'permission') {
     params.type = 'PERMISSION'
   } else if (activeTab.value === 'approval') {
@@ -218,6 +232,7 @@ const getIcon = (type: string) => {
   const map: Record<string, any> = {
     TASK: Document,
     PROCESS: Bell,
+    ATTACHMENT_UPDATE: Paperclip,
     SYSTEM: Setting,
     REMINDER: Warning,
     PERMISSION: Key,
@@ -230,6 +245,7 @@ const getIconColor = (type: string) => {
   const map: Record<string, string> = {
     TASK: 'var(--success-green)',
     PROCESS: 'var(--warning-orange)',
+    ATTACHMENT_UPDATE: 'var(--info-blue)',
     SYSTEM: 'var(--info-blue)',
     REMINDER: 'var(--error-red)',
     PERMISSION: 'var(--info-blue)',
@@ -307,6 +323,8 @@ onMounted(() => {
         .notification-desc {
           font-size: 13px;
           color: var(--text-secondary);
+          white-space: pre-line;
+          overflow-wrap: anywhere;
           margin-bottom: 8px;
         }
         

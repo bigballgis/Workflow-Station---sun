@@ -2,7 +2,8 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { refreshToken as refreshAuthToken, clearAuth, getUser } from './auth'
 import i18n from '@/i18n'
-import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
+import { pickHttpErrorBodyMessage, pickHttpErrorCode } from '@/utils/httpErrorMessage'
+import { isAmTokenReauthCode, readAmToken, refreshAmToken } from '@/utils/amToken'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 declare module 'axios' {
@@ -79,6 +80,18 @@ api.interceptors.response.use(
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
+      }
+    }
+
+    // AI gateway rejected (or never got) the user's DSP AMToken: silently fetch a fresh one and
+    // replay the request once. If no new token comes back, fall through so the caller shows
+    // "sign in again" exactly as before.
+    if (originalRequest && !originalRequest._amTokenRetry
+      && isAmTokenReauthCode(pickHttpErrorCode(response?.data))) {
+      originalRequest._amTokenRetry = true
+      if (await refreshAmToken(originalRequest.headers['X-AM-Token'] ?? '')) {
+        originalRequest.headers['X-AM-Token'] = readAmToken()
+        return api(originalRequest)
       }
     }
 

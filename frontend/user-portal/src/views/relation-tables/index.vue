@@ -134,6 +134,24 @@
             >
               <el-icon><Upload /></el-icon> Import
             </el-button>
+            <template v-if="canWrite && selectedRows.length">
+              <el-button
+                type="warning"
+                plain
+                :loading="batchStatusLoading"
+                @click="handleBatchStatus('INACTIVE')"
+              >
+                {{ t('relationTableBatch.inactive', { count: selectedRows.length }) }}
+              </el-button>
+              <el-button
+                type="success"
+                plain
+                :loading="batchStatusLoading"
+                @click="handleBatchStatus('ACTIVE')"
+              >
+                {{ t('relationTableBatch.active', { count: selectedRows.length }) }}
+              </el-button>
+            </template>
             <span
               v-if="selectedRows.length"
               class="grid-hint"
@@ -445,7 +463,7 @@ import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { Search, Download, Plus, Upload, ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
@@ -1057,6 +1075,36 @@ const handleChangeStatus = async (row: Record<string, any>, status: string) => {
     await fetchData()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed')
+  }
+}
+
+const batchStatusLoading = ref(false)
+
+const handleBatchStatus = async (status: 'ACTIVE' | 'INACTIVE') => {
+  if (!selectedTableId.value) return
+  const ids = selectedRows.value.map(rowId).filter((id): id is string => id != null)
+  if (!ids.length) { ElMessage.error('No primary key on this table'); return }
+  if (status === 'INACTIVE') {
+    try {
+      await ElMessageBox.confirm(
+        t('relationTableBatch.inactiveConfirm', { count: ids.length }),
+        t('common.confirm'),
+        { type: 'warning' },
+      )
+    } catch {
+      return
+    }
+  }
+  batchStatusLoading.value = true
+  try {
+    const res = await relationTableApi.changeStatusBatch(selectedTableId.value, ids, status)
+    const count = res.data.updated
+    ElMessage.success(t(status === 'INACTIVE' ? 'relationTableBatch.inactiveDone' : 'relationTableBatch.activeDone', { count }))
+    await fetchData()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed')
+  } finally {
+    batchStatusLoading.value = false
   }
 }
 

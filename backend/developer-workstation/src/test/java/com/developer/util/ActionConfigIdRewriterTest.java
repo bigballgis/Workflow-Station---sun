@@ -3,6 +3,7 @@ package com.developer.util;
 import com.developer.entity.ActionDefinition;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,24 @@ class ActionConfigIdRewriterTest {
     void rewritePostEmail_skipsWhenDisabledOrMissing() {
         assertFalse(ActionConfigIdRewriter.rewritePostEmail(null, Map.of(), Map.of()));
         assertFalse(ActionConfigIdRewriter.rewritePostEmail(new HashMap<>(), Map.of(1L, 2L), Map.of()));
+    }
+
+    @Test
+    void rewritePostEmailRules_mapsTemplateAndConnection() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("postEmailRules", new ArrayList<>(List.of(new HashMap<>(Map.of(
+                "id", "r1",
+                "enabled", true,
+                "emailTemplateId", "12",
+                "connectionId", "uid-old")))));
+
+        assertTrue(ActionConfigIdRewriter.rewritePostEmail(
+                config, Map.of(12L, 99L), Map.of("uid-old", "uid-new")));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rules = (List<Map<String, Object>>) config.get("postEmailRules");
+        assertEquals("99", rules.get(0).get("emailTemplateId"));
+        assertEquals("uid-new", rules.get(0).get("connectionId"));
     }
 
     @Test

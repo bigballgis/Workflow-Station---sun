@@ -155,6 +155,17 @@ class NotificationControllerTest {
     }
 
     @Test
+    void getNotifications_attachmentUpdates_returnsIndependentCategory() throws Exception {
+        NotificationDto dto=NotificationDto.builder().id(5L).type("ATTACHMENT_UPDATE")
+                .title("Attachments updated").content("One attachment").isRead(false).build();
+        when(notificationService.getNotifications(USER_ID,0,20,"ATTACHMENT_UPDATE",null))
+                .thenReturn(PageResponse.of(List.of(dto),0,20,1));
+        mockMvc.perform(get("/notifications").header(USER_ID_HEADER,USER_ID).param("type","ATTACHMENT_UPDATE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content[0].type").value("ATTACHMENT_UPDATE"));
+    }
+
+    @Test
     @DisplayName("GET /notifications?type=INVALID - 无效类型返回错误")
     void getNotifications_invalidType_returnsError() throws Exception {
         mockMvc.perform(get("/notifications")

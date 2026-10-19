@@ -134,6 +134,8 @@ export const relationTableApi = {
     filterConditions?: LookupFilterCondition[]
     limit?: number
     offset?: number
+    /** Only for resolving an already-saved value by primary key; dropdown/search omit INACTIVE rows. */
+    includeInactive?: boolean
   }) => {
     const query = new URLSearchParams()
     if (params.keyword) query.append('keyword', params.keyword)
@@ -141,6 +143,7 @@ export const relationTableApi = {
     if (params.filterConditions?.length) query.append('filterConditions', JSON.stringify(params.filterConditions))
     if (params.limit) query.append('limit', String(params.limit))
     if (params.offset) query.append('offset', String(params.offset))
+    if (params.includeInactive) query.append('includeInactive', 'true')
     params.searchFields?.forEach(f => query.append('searchFields', f))
     return request.get<{ data: Record<string, any>[] }>(`/relation-tables/${tableId}/search?${query.toString()}`)
   },
@@ -178,6 +181,10 @@ export const relationTableApi = {
   /** 切换状态 ACTIVE/INACTIVE（需要 READ_WRITE） */
   changeStatus: (tableId: number, rowId: string, status: string) =>
     request.put<{ data: Record<string, any> }>(`/relation-tables/${tableId}/${rowId}/status`, { status }),
+
+  /** 批量切换 ACTIVE/INACTIVE（全部成功或全部回滚） */
+  changeStatusBatch: (tableId: number, rowIds: string[], status: 'ACTIVE' | 'INACTIVE') =>
+    request.put<{ data: { updated: number } }>(`/relation-tables/${tableId}/status/batch`, { rowIds, status }),
 
   /** 下载导入模板 (csv|xlsx) */
   downloadTemplate: (tableId: number, format: 'csv' | 'xlsx' = 'csv') =>

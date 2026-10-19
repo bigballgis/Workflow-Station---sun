@@ -1,4 +1,6 @@
 export default {
+  recordNoteNotification: {"title": "Attachment Notifications", "guide": "Record Note notification guide", "targets": "Target Sub-Task nodes", "assignmentHint": "Case Notes notify related rows; Transaction Notes notify this row only. Recipients follow each target node’s assignment configuration.", "loadFailed": "Cannot load task nodes. Reopen after saving the process design."},
+
   app: {
     name: 'Developer Workstation',
     title: 'Workflow Platform'
@@ -1193,13 +1195,29 @@ export default {
       emailBcc: 'Bcc',
       emailBccPlaceholder: 'Optional Bcc',
       attachments: 'Attachments',
+      addRule: 'Add email rule',
+      ruleNamePlaceholder: 'Rule {n}',
+      ruleEnabled: 'Enable this rule',
+      alwaysSend: 'Always send',
+      sendCondition: 'Send condition',
+      sendConditionHint:
+        'Same filter as Main Table View design. Leave empty to always send when this rule is enabled and the Action succeeds.',
+      editCondition: 'Edit send condition',
+      editConditionTitle: 'Send condition',
+      conditionalSendConfigured: 'Custom condition configured',
+      conditionalSend: 'Conditional ({count})',
+      duplicateRule: 'Duplicate',
+      deleteRuleConfirm: 'Remove this email rule?',
+      rulesLimitHint: 'Maximum {max} rules per Action.',
     },
     // Visibility, roles & sort order
     visibilityAndPermissions: 'Visibility & Permissions',
     visibilityCondition: 'Visibility Condition',
     visibilityConditionPlaceholder: 'e.g. formData.amount > 10000',
     allowedRoles: 'Allowed Roles',
-    allowedRolesPlaceholder: 'Select or enter roles',
+    allowedRolesPlaceholder: 'Select roles (leave empty for no restriction — all portal users)',
+    allowedRolesGuideLinkAria: 'Open the Allowed Roles guideline',
+    allowedRolesCatalogLoadFailed: 'Could not load roles. Saved role codes are still shown.',
     sortOrder: 'Sort Order',
     // Test dialog enhancements
     rawJson: 'Raw JSON',
@@ -1538,6 +1556,8 @@ export default {
     bindFormRequest: 'My Requests Form',
     bindFormRequestNone: 'Not bound',
     actionsTodoOnlyHint: 'Action buttons render on the To Do page, against the To Do form above.',
+    allowBatch: 'Allow batch processing',
+    allowBatchHint: 'When on, tasks at this node appear under To Do > Batch Actions and can be approved/rejected in bulk without filling the form. Only Approve/Reject-type actions are offered; an action that requires a comment asks for one shared comment.',
     formReadOnly: 'Form Read Only',
     availableActions: 'Available Actions',
     selectActions: 'Select Actions',

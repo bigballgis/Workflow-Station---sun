@@ -23,7 +23,7 @@ import java.util.Map;
  */
 @Entity
 @Table(name = "dw_form_definitions")
-@EntityListeners(AuditingEntityListener.class)
+@EntityListeners({AuditingEntityListener.class, RecordNoteDesignEntityListener.class})
 @Data
 @Builder
 @NoArgsConstructor

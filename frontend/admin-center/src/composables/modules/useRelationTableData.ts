@@ -6,7 +6,8 @@
  */
 
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useRelationTableNavigation } from './useRelationTableNavigation'
 import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@platform-shared/tableFkRuntime'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult, type LookupConfig, type LookupFilterCondition } from '@/api/relationTable'
@@ -18,16 +19,16 @@ export const RT_DATA_STATUS_COL_WIDTH = 100
 export const RT_DATA_ACTIONS_COL_WIDTH = 240
 
 export function useRelationTableData() {
-  const route = useRoute()
+  const { t } = useI18n()
   const tableListLoading = ref(false)
   const dataLoading = ref(false)
   const exporting = ref(false)
   const saving = ref(false)
   const tables = ref<RelationTableResponse[]>([])
-  const selectedTableId = ref<number | null>(null)
 
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
   const searchKeyword = ref('')
-  const tableSearchKeyword = ref('')
+  const tableListError = ref<string | null>(null)
   const fetchDataError = ref<string | null>(null)
 
   const dialogVisible = ref(false)
@@ -50,7 +51,25 @@ export function useRelationTableData() {
   const pendingImportFile = ref<File | null>(null)
 
   // ---- Computed ----
-  const selectedTable = computed(() => tables.value.find(t => t.id === selectedTableId.value) ?? null)
+  const { selectedTableId, selectedTable, activeGroupKey, selectedGroupLabel, selectionError, syncSelection, handleSelectTable } =
+    useRelationTableNavigation(tables, () => {
+      searchKeyword.value = ''
+      clearTimeout(searchTimer)
+      dataLoading.value = false
+      localStatusMap.value = {}
+      dialogVisible.value = false
+      importDialogVisible.value = false
+      pendingImportFile.value = null
+      importResult.value = null
+      fetchDataError.value = null
+      grid.displayRows.value.splice(0)
+      grid.columns.value = []
+      grid.gridSelectedRows.value = []
+      grid.pagination.total = 0
+      grid.beginQuery()
+      resetGridQuery()
+      void fetchData()
+    })
 
   /** Whether the current admin may write (add/edit/inactive/import) on the selected table. */
   const canWrite = computed(() => selectedTable.value?.permissionLevel !== 'READONLY')
@@ -64,22 +83,6 @@ export function useRelationTableData() {
         if (!a.isPrimaryKey && b.isPrimaryKey) return 1
         return a.sortOrder - b.sortOrder
       })
-  })
-
-  /**
-   * Deployed Tables panel list: scoped to the Function Unit selected via the nav sidebar
-   * (route.params.functionUnitCode), then narrowed further by the search box. FU grouping
-   * itself is now the nav sidebar's job (Relation Tables > Table Data > <Function Unit>) —
-   * this panel just lists that FU's tables (or all tables when no FU is selected).
-   */
-  const filteredTables = computed(() => {
-    const fuCode = route.params.functionUnitCode as string | undefined
-    const scoped = fuCode
-      ? tables.value.filter(t => (t.functionUnits || []).some(fu => fu.code === fuCode))
-      : tables.value
-    const kw = tableSearchKeyword.value.trim().toLowerCase()
-    if (!kw) return scoped
-    return scoped.filter(t => (t.displayName || '').toLowerCase().includes(kw) || (t.tableName || '').toLowerCase().includes(kw))
   })
 
   const isNumericType = (dt: string) => ['INTEGER', 'BIGINT', 'DECIMAL'].includes(dt)
@@ -118,16 +121,13 @@ export function useRelationTableData() {
   // ---- Fetch ----
   const fetchTables = async () => {
     tableListLoading.value = true
+    tableListError.value = null
     try {
       tables.value = await relationTableDataApi.getDeployedTables()
-      if (!selectedTableId.value && tables.value.length > 0) {
-        // Nav sidebar "Table Data > <Function Unit>" links here with the FU code as a route
-        // param — land on that FU's first table instead of the global first table.
-        selectedTableId.value = (filteredTables.value[0] ?? tables.value[0]).id
-        await fetchData()
-      }
-    } catch { tables.value = [] }
-    finally { tableListLoading.value = false }
+      syncSelection(true)
+    } catch {
+      tableListError.value = t('tableDataNavigation.loadFailed')
+    } finally { tableListLoading.value = false }
   }
 
   const fetchData = async () => {
@@ -159,25 +159,14 @@ export function useRelationTableData() {
     }
   }
 
-  let searchTimer: ReturnType<typeof setTimeout> | undefined
   watch(searchKeyword, () => {
     clearTimeout(searchTimer)
     searchTimer = setTimeout(() => {
       grid.resetPage()
       void fetchData()
     }, 300)
-  })
+  }, { flush: 'sync' })
   onBeforeUnmount(() => clearTimeout(searchTimer))
-
-  // ---- Navigation ----
-  const handleSelectTable = (index: string) => {
-    selectedTableId.value = Number(index)
-    searchKeyword.value = ''
-    localStatusMap.value = {}
-    fetchDataError.value = null
-    resetGridQuery()
-    void fetchData()
-  }
 
   const visibleFieldColumns = computed(() =>
     fieldColumns.value.filter(f => !isFkHidden(toFkMeta(f))),
@@ -337,6 +326,28 @@ export function useRelationTableData() {
     } catch (e: unknown) { notifyError((e as Error)?.message || 'Failed') }
   }
 
+  const selectedRowCount = computed(() => grid.gridSelectedRows.value.length)
+  const batchStatusLoading = ref(false)
+
+  const handleBatchStatus = async (status: 'ACTIVE' | 'INACTIVE') => {
+    if (!selectedTableId.value) return
+    const ids = grid.gridSelectedRows.value.map(row => row.rowId)
+    if (!ids.length) return
+    if (status === 'INACTIVE') {
+      try { await notifyConfirm(t('relationTableBatch.inactiveConfirm', { count: ids.length }), 'Confirm', { type: 'warning' }) }
+      catch { return }
+    }
+    batchStatusLoading.value = true
+    try {
+      const res = await relationTableDataApi.changeStatusBatch(selectedTableId.value, ids, status)
+      localStatusMap.value = { ...localStatusMap.value, ...Object.fromEntries(ids.map(id => [id, status])) }
+      notifySuccess(t(status === 'INACTIVE' ? 'relationTableBatch.inactiveDone' : 'relationTableBatch.activeDone', { count: res.updated }))
+      await fetchData()
+    } catch (e: unknown) {
+      notifyError((e as Error)?.message || 'Failed')
+    } finally { batchStatusLoading.value = false }
+  }
+
   const handleDelete = async (row: RelationTableDataRow) => {
     if (!selectedTableId.value) return
     try { await notifyConfirm('Are you sure to delete this record?', 'Confirm', { type: 'warning' }) }
@@ -436,20 +447,20 @@ export function useRelationTableData() {
   }
 
   // ---- Lifecycle ----
-  const init = () => fetchTables()
-  const refresh = () => { fetchTables(); if (selectedTableId.value) fetchData() }
+  const refresh = () => fetchTables()
 
   return {
     tableListLoading, dataLoading, exporting, saving,
     exportingTemplate, importDialogVisible, importing, importResult,
-    tables, selectedTableId, searchKeyword, tableSearchKeyword,
+    tables, tableListError, selectedTableId, searchKeyword, activeGroupKey, selectedGroupLabel, selectionError,
     fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
-    selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
+    selectedTable, canWrite, fieldColumns, visibleFieldColumns,
     isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
     lookupSelectedData, isLookupField, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
     fetchTables, fetchData, handleSelectTable,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
-    formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
+    selectedRowCount, batchStatusLoading, handleBatchStatus,
+    formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, refresh,
     grid,
     RT_DATA_STATUS_COL_WIDTH,
     RT_DATA_ACTIONS_COL_WIDTH,

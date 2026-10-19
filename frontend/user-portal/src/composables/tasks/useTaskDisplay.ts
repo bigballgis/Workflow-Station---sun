@@ -1,8 +1,8 @@
-import { markRaw, type Ref } from 'vue'
+import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
-import { Check, CircleCheck, CircleClose, Close, Files, Warning, Bell, User, Switch } from '@element-plus/icons-vue'
 import type { TaskActionInfo } from '@/api/task'
+import { actionIconComponent } from '@/utils/actionIcon'
 import { taskPriorityBand, type TaskPriorityBand } from '@/utils/taskPriority'
 import { useUserStore } from '@/stores/user'
 
@@ -119,20 +119,7 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
   }
 
   function getIconComponent(iconName?: string) {
-    if (!iconName) return null
-    const iconMap: Record<string, any> = {
-      'check': markRaw(Check),
-      'check-circle': markRaw(CircleCheck),
-      'times-circle': markRaw(CircleClose),
-      'close': markRaw(Close),
-      'file-alt': markRaw(Files),
-      'files': markRaw(Files),
-      'warning': markRaw(Warning),
-      'bell': markRaw(Bell),
-      'user': markRaw(User),
-      'switch': markRaw(Switch)
-    }
-    return iconMap[iconName] || markRaw(Check)
+    return actionIconComponent(iconName)
   }
 
   return {

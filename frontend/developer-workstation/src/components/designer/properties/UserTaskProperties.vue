@@ -174,6 +174,19 @@
               {{ actionIds.length }}
             </div>
           </div>
+          <!-- To Do「可批量操作」：MI 子任务不参与批量，子流程内节点不提供该开关 -->
+          <el-form-item
+            v-if="!parentIsMultiInstanceSubProcess"
+            :label="t('properties.allowBatch')"
+          >
+            <el-switch
+              v-model="allowBatch"
+              @change="updateExtProp('allowBatch', allowBatch)"
+            />
+            <div class="form-tip">
+              {{ t('properties.allowBatchHint') }}
+            </div>
+          </el-form-item>
         </el-form>
       </el-collapse-item>
       
@@ -368,6 +381,8 @@ const {
   updateExtProp,
 } = ctx
 
+const allowBatch = ref(false)
+
 /**
  * Only To Do (TASK-scene) designs may be bound here.
  *
@@ -500,6 +515,7 @@ async function loadPropertiesAsync() {
   requestFormId.value = (ext.requestFormId as number | undefined) ?? null
   requestFormName.value = (ext.requestFormName as string | undefined) ?? ''
   actionIds.value = ext.actionIds || []
+  allowBatch.value = ext.allowBatch === true
   timeoutEnabled.value = ext.timeoutEnabled || false
   timeoutDuration.value = ext.timeoutDuration || ''
   timeoutAction.value = ext.timeoutAction || 'remind'

@@ -1,4 +1,6 @@
 export default {
+  recordNoteNotification: {"title": "附件站内通知", "guide": "Record Note 附件通知指南", "targets": "目标 Sub-Task 节点", "assignmentHint": "Case Notes 汇总关联行；Transaction Notes 仅限当前行。接收人使用目标节点的分派配置。", "loadFailed": "无法加载任务节点，请保存流程设计后重新打开。"},
+
   app: {
     name: '开发工作站',
     title: '工作流平台'
@@ -1239,13 +1241,29 @@ export default {
       emailBcc: '密送',
       emailBccPlaceholder: '可选密送',
       attachments: '附件',
+      addRule: '添加发信规则',
+      ruleNamePlaceholder: '规则 {n}',
+      ruleEnabled: '启用此规则',
+      alwaysSend: '始终发送',
+      sendCondition: '发送条件',
+      sendConditionHint:
+        '与主表视图设计中的筛选相同。留空表示在本规则已启用且 Action 成功时始终发送。',
+      editCondition: '编辑发送条件',
+      editConditionTitle: '发送条件',
+      conditionalSendConfigured: '已配置自定义条件',
+      conditionalSend: '条件发送（{count}）',
+      duplicateRule: '复制',
+      deleteRuleConfirm: '确定删除此发信规则？',
+      rulesLimitHint: '每个 Action 最多 {max} 条规则。',
     },
     // Visibility, roles & sort order
     visibilityAndPermissions: '可见性与权限',
     visibilityCondition: '可见性条件',
     visibilityConditionPlaceholder: '例如 formData.amount > 10000',
     allowedRoles: '允许角色',
-    allowedRolesPlaceholder: '选择或输入角色',
+    allowedRolesPlaceholder: '选择角色（留空表示不限制，所有门户用户可见）',
+    allowedRolesGuideLinkAria: '打开允许角色指南',
+    allowedRolesCatalogLoadFailed: '无法加载角色列表，已保存的角色代码仍会显示。',
     sortOrder: '排序',
     // Test dialog enhancements
     rawJson: '原始 JSON',
@@ -1533,6 +1551,8 @@ export default {
     bindFormRequest: '「我的申请」表单',
     bindFormRequestNone: '未绑定',
     actionsTodoOnlyHint: '动作按钮在「待办」页面上、针对上方的待办表单显示。',
+    allowBatch: '允许批量处理',
+    allowBatchHint: '开启后，该节点的任务会出现在「待办 > 可批量操作」中，可不填表单直接批量通过/驳回。仅提供通过/驳回类动作；意见必填的动作会弹出一次统一意见。',
     formReadOnly: '表单只读',
     availableActions: '可用动作',
     selectActions: '选择动作',

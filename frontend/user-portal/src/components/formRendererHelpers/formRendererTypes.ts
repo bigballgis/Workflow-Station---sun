@@ -53,6 +53,8 @@ export interface FormField {
   _bindingId?: number  // set when type === 'subTable' | 'inlineSubForm'
   /** RecordNote panel config; only present when type === 'recordNote'. */
   _recordNote?: {
+    formKey?: string
+    controlId?: string
     scope: 'TABLE' | 'RECORD'
     panelTitle?: string
     allowAttachment?: boolean

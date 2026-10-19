@@ -388,6 +388,10 @@ export const relationTableDataApi = {
   changeStatus: (tableId: number, rowId: string, status: string) =>
     put<RelationTableDataRow>(`/relation-tables/data/${tableId}/${rowId}/status`, { status }),
 
+  /** 批量切换 ACTIVE/INACTIVE（全部成功或全部回滚） */
+  changeStatusBatch: (tableId: number, rowIds: string[], status: 'ACTIVE' | 'INACTIVE') =>
+    put<{ updated: number }>(`/relation-tables/data/${tableId}/status/batch`, { rowIds, status }),
+
   /** 查询审计日志 */
   queryAuditLogs: (
     tableId: number,
@@ -414,6 +418,8 @@ export const relationTableDataApi = {
     filterConditions?: LookupFilterCondition[]
     limit?: number
     offset?: number
+    /** Only for resolving an already-saved value by primary key; dropdown/search omit INACTIVE rows. */
+    includeInactive?: boolean
   }) => {
     const query = new URLSearchParams()
     if (params.keyword) query.append('keyword', params.keyword)
@@ -421,6 +427,7 @@ export const relationTableDataApi = {
     if (params.filterConditions?.length) query.append('filterConditions', JSON.stringify(params.filterConditions))
     if (params.limit) query.append('limit', String(params.limit))
     if (params.offset) query.append('offset', String(params.offset))
+    if (params.includeInactive) query.append('includeInactive', 'true')
     params.searchFields?.forEach(f => query.append('searchFields', f))
     return get<Record<string, unknown>[]>(`/relation-tables/data/${tableId}/search?${query.toString()}`)
   },
