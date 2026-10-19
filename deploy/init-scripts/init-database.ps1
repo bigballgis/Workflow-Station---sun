@@ -157,7 +157,8 @@ $migrations = @(
     "00-schema/89-dw-table-sla-config.sql",
     "00-schema/90-up-sla-recalc-jobs.sql",
     "00-schema/91-dw-ai-document-minor-renumber.sql",
-    "00-schema/92-we-action-email-deliveries.sql"
+    "00-schema/92-we-action-email-deliveries.sql",
+    "00-schema/96-up-sub-table-audit-latest-index.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

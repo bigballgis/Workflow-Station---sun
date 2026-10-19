@@ -8,7 +8,7 @@ import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
-    /** 调用方自己处理失败（如有本地回落），不弹全局错误提示；401 刷新与登录跳转照常 */
+    /** Let the caller handle failures without a global toast; retain 401 refresh and login redirects. */
     silentError?: boolean
   }
 }

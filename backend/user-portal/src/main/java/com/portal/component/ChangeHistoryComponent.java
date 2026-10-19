@@ -246,16 +246,8 @@ public class ChangeHistoryComponent {
             String normalizedName,
             List<SubTableChange> changes) {
         if (changes.isEmpty()) return;
-        List<String> rowIds = changes.stream().map(SubTableChange::getRowIdentifier).distinct().toList();
-        Map<SubTableAuditKey, ChangeHistory> latest = new HashMap<>();
-        // Ordinary import/save callers are not subject to the workspace's 200-row bound.
-        for (int offset = 0; offset < rowIds.size(); offset += 200) {
-            List<String> chunk = rowIds.subList(offset, Math.min(offset + 200, rowIds.size()));
-            for (ChangeHistory record : changeHistoryRepository.findLatestSubTableChanges(
-                    context.getProcessInstanceId(), normalizedName, chunk, chunk.contains(null))) {
-                latest.put(new SubTableAuditKey(record.getRowIdentifier(), record.getFieldName(), record.getChangeType()), record);
-            }
-        }
+        Map<ChangeHistoryRepository.AuditCell, ChangeHistoryRepository.AuditCellSnapshot> latest = SubTableAuditLatestLookup.load(
+                changeHistoryRepository, context.getProcessInstanceId(), normalizedName, changes);
         Instant now = Instant.now();
         List<ChangeHistory> records = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -275,10 +267,10 @@ public class ChangeHistoryComponent {
                         valueForField(change.getNewValues(), fieldName))) {
                     continue;
                 }
-                ChangeHistory lastRecord = latest.get(new SubTableAuditKey(change.getRowIdentifier(), fieldName, changeType));
+                ChangeHistoryRepository.AuditCellSnapshot lastRecord = latest.get(new ChangeHistoryRepository.AuditCell(change.getRowIdentifier(), fieldName, changeType));
                 if (lastRecord != null
-                        && Objects.equals(lastRecord.getOldValue(), oldVal)
-                        && Objects.equals(lastRecord.getNewValue(), newVal)) {
+                        && Objects.equals(lastRecord.oldValue(), oldVal)
+                        && Objects.equals(lastRecord.newValue(), newVal)) {
                     log.debug(
                             "Skipping duplicate sub-table field change record (cross-save): process={}, table={}, row={}, field={}, type={}",
                             context.getProcessInstanceId(), normalizedName, change.getRowIdentifier(), fieldName,
@@ -316,8 +308,6 @@ public class ChangeHistoryComponent {
         });
     }
 
-    private record SubTableAuditKey(String rowIdentifier, String fieldName, ChangeType changeType) { }
-
     private void persistSubTableHistory(List<ChangeHistory> records) {
         if (records.size() <= 200) {
             changeHistoryRepository.saveAll(records);
@@ -325,27 +315,10 @@ public class ChangeHistoryComponent {
         }
         // IDENTITY prevents Hibernate batching; these immutable audit rows need no generated IDs back.
         // JdbcTemplate joins the existing requires-new transaction through the same DataSource.
-        jdbcTemplate.batchUpdate("""
-                INSERT INTO up_change_history (process_instance_id, task_instance_id, stage_id, user_id,
-                    timestamp, field_name, old_value, new_value, change_type, sub_table_name, row_identifier, is_concurrent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, records, 200, (statement, record) -> {
-            statement.setString(1, record.getProcessInstanceId());
-            statement.setString(2, record.getTaskInstanceId());
-            statement.setString(3, record.getStageId());
-            statement.setString(4, record.getUserId());
-            statement.setTimestamp(5, java.sql.Timestamp.from(record.getTimestamp()));
-            statement.setString(6, record.getFieldName());
-            statement.setString(7, record.getOldValue());
-            statement.setString(8, record.getNewValue());
-            statement.setString(9, record.getChangeType().name());
-            statement.setString(10, record.getSubTableName());
-            statement.setString(11, record.getRowIdentifier());
-            statement.setBoolean(12, record.getIsConcurrent());
-        });
+        SubTableAuditBatchWriter.insert(jdbcTemplate, records);
     }
 
-    private static Set<String> changedSubTableFieldNames(SubTableChange change) {
+    static Set<String> changedSubTableFieldNames(SubTableChange change) {
         Set<String> fieldNames = new TreeSet<>();
         if (change.getOldValues() != null) {
             fieldNames.addAll(change.getOldValues().keySet());
@@ -503,7 +476,7 @@ public class ChangeHistoryComponent {
         });
     }
 
-    private ChangeType mapSubTableChangeType(String changeType) {
+    static ChangeType mapSubTableChangeType(String changeType) {
         return switch (changeType) {
             case "ROW_ADD" -> ChangeType.SUB_TABLE_ROW_ADD;
             case "ROW_UPDATE" -> ChangeType.SUB_TABLE_ROW_UPDATE;

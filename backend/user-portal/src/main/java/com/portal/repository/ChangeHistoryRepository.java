@@ -56,6 +56,40 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
         return queryLatestSubTableChanges(processId, tableName, concrete, includeNull);
     }
 
+    /** Exact changed-cell keys let PostgreSQL seek one latest record instead of sorting all row history. */
+    record AuditCell(String rowIdentifier, String fieldName, com.portal.enums.ChangeType changeType) { }
+    record AuditCellSnapshot(AuditCell cell, String oldValue, String newValue) { }
+
+    @Query(value = """
+            SELECT latest.row_identifier, latest.field_name, latest.change_type, latest.old_value, latest.new_value
+            FROM jsonb_to_recordset(CAST(:cellsJson AS jsonb))
+                AS cells("rowIdentifier" text, "fieldName" text, "changeType" text)
+            CROSS JOIN LATERAL (
+                (SELECT * FROM up_change_history
+                 WHERE process_instance_id = :processId AND sub_table_name = :tableName
+                   AND row_identifier = cells."rowIdentifier"
+                   AND field_name = cells."fieldName" AND change_type = cells."changeType"
+                 ORDER BY timestamp DESC, id DESC LIMIT 1)
+                UNION ALL
+                (SELECT * FROM up_change_history
+                 WHERE cells."rowIdentifier" IS NULL AND row_identifier IS NULL
+                   AND process_instance_id = :processId AND sub_table_name = :tableName
+                   AND field_name = cells."fieldName" AND change_type = cells."changeType"
+                 ORDER BY timestamp DESC, id DESC LIMIT 1)
+            ) latest
+            """, nativeQuery = true)
+    List<Object[]> queryLatestAuditCells(@Param("processId") String processId,
+            @Param("tableName") String tableName, @Param("cellsJson") String cellsJson);
+
+    default List<AuditCellSnapshot> findLatestAuditCells(String processId, String tableName, List<AuditCell> cells) {
+        if (cells.isEmpty()) return List.of();
+        return queryLatestAuditCells(processId, tableName,
+                com.platform.common.util.JsonUtils.toJson(cells.stream().distinct().toList())).stream()
+                .map(row -> new AuditCellSnapshot(new AuditCell((String) row[0], (String) row[1],
+                        com.portal.enums.ChangeType.valueOf((String) row[2])), (String) row[3], (String) row[4]))
+                .toList();
+    }
+
     /**
      * Find all distinct function unit codes that have change history records,
      * resolved through the process instance link.

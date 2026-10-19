@@ -73,6 +73,11 @@ public final class SubTableRowKeySupport {
             return;
         }
         String c = pkCols.get(0);
+        // Only these configured aliases can be substituted. Avoid parsing every opaque
+        // UUID/manual key (and throwing NumberFormatException) in repeated row lookups.
+        if (!"id".equalsIgnoreCase(c) && !"id_idw".equalsIgnoreCase(c)) {
+            return;
+        }
         Object cur = rowKey.get(c);
         if (tryWholeNumber(cur) != null) {
             return;

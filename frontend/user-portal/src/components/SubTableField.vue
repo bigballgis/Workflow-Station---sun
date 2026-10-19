@@ -496,6 +496,9 @@
                   :host-task-id="taskId"
                   :host-primary-form-data="primaryFormData"
                   :host-primary-table-id="primaryTableId ?? null"
+                  :host-primary-table-display-name="primaryTableDisplayName"
+                  :host-sub-table-bindings-for-context="subTableBindingsForContext"
+                  :host-parent-tables-by-id="parentTablesById"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
                 />
               </el-row>

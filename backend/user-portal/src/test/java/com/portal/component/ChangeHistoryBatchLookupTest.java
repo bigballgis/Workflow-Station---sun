@@ -40,16 +40,17 @@ class ChangeHistoryBatchLookupTest {
             changes.add(change("row-" + row, before, after));
         }
         component.recordSubTableChangesWithName(context, "synthetic-lines", changes);
-        verify(repository).findLatestSubTableChanges(eq("synthetic-process"), eq("synthetic-lines"), argThat(ids -> ids.size() == 200), eq(false));
-        verify(jdbc).batchUpdate(anyString(), argThat(records -> records.size() == 9600), eq(200),
-                org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.ParameterizedPreparedStatementSetter<ChangeHistory>>any());
+        verify(repository).findLatestAuditCells(eq("synthetic-process"), eq("synthetic-lines"), argThat(cells ->
+                cells.size() == 9600 && cells.stream().map(ChangeHistoryRepository.AuditCell::rowIdentifier).distinct().count() == 200
+                && cells.stream().allMatch(cell -> cell.changeType() == ChangeType.SUB_TABLE_ROW_UPDATE)));
+        assertBoundedMultiRowInserts(9600);
         verifyNoMoreInteractions(repository);
     }
 
     @Test void exactLatestPairDeduplicatesButDifferentPairAndRowRemain() {
-        when(repository.findLatestSubTableChanges(any(), any(), anyList(), eq(false))).thenReturn(List.of(
-                ChangeHistory.builder().rowIdentifier("one").fieldName("caption").changeType(ChangeType.SUB_TABLE_ROW_UPDATE)
-                        .oldValue("a").newValue("b").build()));
+        when(repository.findLatestAuditCells(any(), any(), anyList())).thenReturn(List.of(
+                new ChangeHistoryRepository.AuditCellSnapshot(
+                        new ChangeHistoryRepository.AuditCell("one", "caption", ChangeType.SUB_TABLE_ROW_UPDATE), "a", "b")));
         component.recordSubTableChangesWithName(context, "synthetic-lines", List.of(
                 change("one", Map.of("caption", "a"), Map.of("caption", "b")),
                 change("two", Map.of("caption", "a"), Map.of("caption", "b"))));
@@ -69,14 +70,12 @@ class ChangeHistoryBatchLookupTest {
         List<SubTableChange> changes = java.util.stream.IntStream.range(0, 401)
                 .mapToObj(index -> change("row-" + index, Map.of("caption", "before"), Map.of("caption", "after"))).toList();
         component.recordSubTableChangesWithName(context, "synthetic-lines", changes);
-        verify(repository, times(3)).findLatestSubTableChanges(any(), any(), argThat(ids -> !ids.isEmpty() && ids.size() <= 200), eq(false));
-        verify(jdbc).batchUpdate(anyString(), argThat(records -> records.size() == 401), eq(200),
-                org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.ParameterizedPreparedStatementSetter<ChangeHistory>>any());
+        verify(repository, times(3)).findLatestAuditCells(any(), any(), argThat(cells -> !cells.isEmpty() && cells.size() <= 200));
+        assertBoundedMultiRowInserts(401);
     }
 
     @Test void auditInsertFailureDoesNotPrintBoundFieldValues() {
-        when(jdbc.batchUpdate(anyString(), anyCollection(), eq(200),
-                org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.ParameterizedPreparedStatementSetter<ChangeHistory>>any()))
+        when(jdbc.update(anyString(), any(org.springframework.jdbc.core.PreparedStatementSetter.class)))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("SYNTHETIC-PRIVATE-AUDIT-VALUE"));
         var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ChangeHistoryComponent.class);
         var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
@@ -92,5 +91,21 @@ class ChangeHistoryBatchLookupTest {
 
     private static SubTableChange change(String row, Map<String, Object> before, Map<String, Object> after) {
         return SubTableChange.builder().rowIdentifier(row).changeType("ROW_UPDATE").oldValues(before).newValues(after).build();
+    }
+
+    private void assertBoundedMultiRowInserts(int rows) {
+        var sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        var setters = org.mockito.ArgumentCaptor.forClass(org.springframework.jdbc.core.PreparedStatementSetter.class);
+        verify(jdbc, times((rows + 199) / 200)).update(sql.capture(), setters.capture());
+        assertThat(sql.getAllValues().stream().mapToLong(value -> value.chars().filter(c -> c == '?').count()).sum())
+                .isEqualTo(rows * 12L);
+        assertThat(sql.getAllValues()).allSatisfy(value ->
+                assertThat(value.chars().filter(c -> c == '?').count()).isBetween(12L, 2400L));
+        var statement = mock(java.sql.PreparedStatement.class);
+        try {
+            for (var setter : setters.getAllValues()) setter.setValues(statement);
+            verify(statement, times(rows)).setBoolean(anyInt(), eq(false));
+            verify(statement, times(rows)).setString(anyInt(), eq("synthetic-process"));
+        } catch (java.sql.SQLException error) { throw new AssertionError(error); }
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -124,7 +125,7 @@ class TaskFormDefinitionLoaderTest {
                 .thenReturn(List.of(catalogBpmn("42")));
         when(jdbcTemplate.query(argThat(sql -> sql != null && sql.contains("content_type = 'FORM'")),
                 any(RowMapper.class), eq("cat-leave"), eq("42")))
-                .thenReturn(List.of(form("Pinned Leave")));
+                .thenReturn(List.of(new LinkedHashMap<>(form("Pinned Leave"))));
 
         assertThat(loader.fetchTaskFormByStageId(SHARED_STAGE, PROCESS_INSTANCE, DW_URL))
                 .containsEntry("formName", "Pinned Leave");

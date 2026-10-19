@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 // @ts-ignore - 无 TS 类型声明
-import BpmnModdle from 'bpmn-moddle'
+import { BpmnModdle } from 'bpmn-moddle'
 import {
   bpmnIoCustomModdleDescriptor,
   workflowPlatformModdleDescriptor,
