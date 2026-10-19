@@ -1,0 +1,106 @@
+/** Real, tagged synthetic DW Preview only. No route interception, canvas injection or form save. */
+import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
+import { chromium } from 'playwright'
+import { loginViaDwPassword } from './playwright-login.mjs'
+
+const unitId = process.env.FIXTURE_UNIT_ID
+const mode = process.env.FIXTURE_PREVIEW_MODE || 'data'
+assert.match(unitId || '', /^\d+$/)
+assert.ok(['data', 'assign', 'role'].includes(mode))
+const browser = await chromium.launch({ headless: true })
+const origin = 'http://localhost:3102'
+try {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
+  let pageErrors = 0
+  page.on('pageerror', () => pageErrors++)
+  await loginViaDwPassword(page, { loginOrigin: origin })
+  const unit = await (await page.request.get(`${origin}/api/v1/function-units/${unitId}`)).json()
+  assert.ok(unit.data?.tags?.includes('batch-verification-synthetic'), 'Refusing a non-synthetic FU')
+  const forms = await (await page.request.get(`${origin}/api/v1/function-units/${unitId}/forms`)).json()
+  const original = forms.data.find(form => form.formType === 'TASK' && form.formName === 'Synthetic TASK')
+  assert.ok(original?.configJson?.batchForms)
+  await page.goto(`${origin}/dev/function-units/${unitId}`)
+  await page.getByRole('tab', { name: /Form/ }).click()
+  await page.getByRole('row').filter({ hasText: 'Synthetic TASK' }).getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.locator('.form-editor-view .fc-designer-wrapper').first().waitFor()
+  await page.locator('.form-editor-view .header-actions').getByRole('button', { name: 'Preview', exact: true }).click()
+  const preview = page.locator('.form-preview-dialog').last()
+  await preview.waitFor()
+  const writes = []
+  page.on('request', request => { if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method())) writes.push(new URL(request.url()).pathname) })
+  const mainKey = preview.locator('.el-form-item').filter({ hasText: 'Case key' }).locator('input').first()
+  if (await mainKey.count()) await mainKey.fill('SYNTHETIC-PREVIEW')
+  const workspace = page.locator('.batch-edit-dialog')
+  const open = async () => { await preview.getByRole('button', { name: 'Batch Edit', exact: true }).click(); await workspace.waitFor() }
+  await open()
+  assert.match(await workspace.innerText(), /Preview only.*two sample rows/)
+  const shot = fileURLToPath(new URL(`../developer-workstation/verification-screenshots/2026-10-17_batch-preview-${mode}-${unitId}.png`, import.meta.url))
+  if (mode === 'data') {
+    const rows = workspace.locator('.el-table__body-wrapper tbody tr')
+    await rows.nth(0).getByRole('textbox').fill('Synthetic cancelled')
+    await workspace.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.locator('.el-message-box').getByRole('button', { name: 'OK', exact: true }).click()
+    await workspace.waitFor({ state: 'hidden' })
+    assert.equal(await preview.locator('.el-table__body-wrapper tbody tr').count(), 0)
+    await open()
+    await rows.nth(0).getByRole('textbox').fill('Synthetic first')
+    await rows.nth(1).getByRole('textbox').fill('Synthetic second')
+    await workspace.locator('.el-table__header-wrapper .el-checkbox').click()
+    const amount = workspace.locator('.batch-edit-dialog__uniform .el-form-item').filter({ hasText: 'Amount' })
+    await amount.locator('.el-select').click()
+    await page.locator('.el-select-dropdown:visible').getByRole('option', { name: 'Set value', exact: true }).click()
+    await amount.locator('.el-input-number input').fill('0')
+    await workspace.screenshot({ path: shot })
+    await workspace.getByRole('button', { name: 'Apply to page', exact: true }).click()
+    await workspace.waitFor({ state: 'hidden' })
+    const table = preview.locator('.el-table__body-wrapper tbody')
+    assert.match(await table.innerText(), /Synthetic first/); assert.match(await table.innerText(), /Synthetic second/)
+    assert.equal(await table.locator('tr').count(), 2)
+    await open()
+    await workspace.getByRole('button', { name: 'Add', exact: true }).click()
+    await rows.nth(2).getByRole('textbox').fill('Synthetic added')
+    await rows.nth(2).locator('.el-input-number input').fill('3')
+    await workspace.getByRole('button', { name: 'Apply to page', exact: true }).click()
+    await workspace.waitFor({ state: 'hidden' })
+    assert.equal(await table.locator('tr').count(), 3)
+    assert.match(await table.innerText(), /Synthetic added/)
+    assert.match(await table.innerText(), /SYNTHETIC-\d{6}/, 'Preview sequence must retain its configured prefix and padding')
+    await preview.locator('.sub-table-field').first().screenshot({ path: shot.replace('.png', '-added.png') })
+    await open()
+    await workspace.locator('.el-table__header-wrapper .el-checkbox').click()
+    await workspace.getByRole('button', { name: 'Delete', exact: true }).click()
+    await page.locator('.el-message-box').getByRole('button', { name: 'OK', exact: true }).click()
+    await workspace.getByRole('button', { name: 'Apply to page', exact: true }).click()
+    await workspace.waitFor({ state: 'hidden' })
+    assert.equal(await table.locator('tr').count(), 0)
+  } else {
+    const editor = workspace.locator('.batch-assignment-editor')
+    assert.equal(await editor.locator('.el-table__body-wrapper tbody tr').count(), 2)
+    await editor.locator('.el-table__header-wrapper .el-checkbox').click()
+    const uniform = editor.locator('.batch-assignment-editor__uniform')
+    await uniform.locator('.el-select').first().click()
+    await page.locator('.el-select-dropdown:visible').getByRole('option', { name: mode === 'role' ? 'Assign by role' : 'Assign by person', exact: true }).click()
+    if (mode === 'assign') {
+      await uniform.locator('.el-select').last().locator('input').fill('Sample')
+      await page.locator('.el-select-dropdown:visible').getByRole('option', { name: 'Sample user 1', exact: true }).click()
+    } else {
+      await uniform.locator('.el-cascader').click()
+      await page.locator('.el-cascader-panel:visible').getByText('Sample Business Unit 1', { exact: true }).click()
+      await page.getByText('Batch Assign', { exact: true }).click()
+      await uniform.locator('.el-select').last().click()
+      await page.locator('.el-select-dropdown:visible').getByRole('option', { name: 'Sample Role A', exact: true }).click()
+    }
+    await workspace.screenshot({ path: shot })
+    await workspace.getByRole('button', { name: 'Apply to page', exact: true }).click()
+    await workspace.waitFor({ state: 'hidden' })
+  }
+  await open()
+  await page.setViewportSize({ width: 600, height: 800 })
+  await workspace.screenshot({ path: shot.replace('.png', '-narrow.png') })
+  assert.equal(pageErrors, 0)
+  assert.deepEqual(writes, [], 'Preview must not save, allocate real keys or invoke task actions')
+  const reloaded = await (await page.request.get(`${origin}/api/v1/function-units/${unitId}/forms`)).json()
+  assert.deepEqual(reloaded.data.find(form => form.id === original.id).configJson, original.configJson)
+  console.log(JSON.stringify({ step: 'synthetic-designer-batch-preview', unitId, mode, pageErrors, writes: writes.length, screenshot: shot }))
+} finally { await browser.close() }

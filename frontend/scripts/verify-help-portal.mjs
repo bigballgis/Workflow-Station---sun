@@ -701,6 +701,23 @@ try {
   const subTableShot = resolve(DW_SHOTS, `${DATE}_help-portal-form-ctl-sub-table.png`)
   await page.screenshot({ path: subTableShot, fullPage: true })
   console.log(`screenshot ${subTableShot}`)
+  const batchSection = subTableArticle.locator('#batch')
+  rec('Batch Preview distinguishes local samples from real task creation',
+    (await batchSection.textContent())?.includes('Sample users, business units, roles and generated keys do not reserve numbers') === true)
+  rec('Batch assignment warning says the action already happened and must not be repeated',
+    (await batchSection.textContent())?.includes('that action has already happened. Do not repeat it.') === true)
+  const batchHelpText = await batchSection.textContent() || ''
+  rec('New Request batch help requires refresh after a published design change',
+    ['checks the published batch design again', 'blocked before a process is created',
+      'Refresh the request form', 'Existing instances retain their own batch design'].every(text => batchHelpText.includes(text)))
+  rec('Batch assignment help locates recorded results and distinguishes them from saved values or current status',
+    ['open Flow History to see recorded verification results', 'not current task status',
+      'Saving assignment values alone does not prove task creation.', 'If the record could not be saved'].every(
+      text => batchHelpText.includes(text)))
+  await batchSection.screenshot({ path: resolve(DW_SHOTS, `${DATE}_help-sub-table-batch-outcome.png`) })
+  await page.setViewportSize({ width: 600, height: 800 })
+  await batchSection.screenshot({ path: resolve(DW_SHOTS, `${DATE}_help-sub-table-batch-outcome-narrow.png`) })
+  await page.setViewportSize({ width: 1400, height: 900 })
 
   await page.goto('http://localhost:3000/help/form-events-extend#lookup', {
     waitUntil: 'domcontentloaded',

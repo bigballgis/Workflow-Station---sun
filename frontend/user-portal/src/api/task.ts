@@ -1,5 +1,6 @@
 import type { AxiosRequestConfig } from 'axios'
 import { request } from './request'
+import type { BatchAssignmentVerification } from './process'
 
 import type { ListColumnFilterRequest, ListColumnMeta } from '@platform-shared/list/columnMeta'
 
@@ -205,6 +206,12 @@ export interface TaskCompleteRequest {
     emptied: boolean
     deletedRows?: Array<Record<string, unknown>>
   }>
+  subTableBatchChanges?: Array<{
+    batchControlId: string
+    bindingId: string
+    operation: 'EDIT'
+    rowPatches: Array<{ rowId: string; rowKey: Record<string, unknown>; fields: string[] }>
+  }>
 }
 
 /** Historic user-task node that the current task may be returned to (engine uses taskId = activityId). */
@@ -341,8 +348,11 @@ export function reassignTask(taskId: string, targetUserId: string) {
 }
 
 // Complete task
+export interface TaskCompletionResult {
+  batchAssignmentVerification: BatchAssignmentVerification
+}
 export function completeTask(taskId: string, data: TaskCompleteRequest) {
-  return request.post(`/tasks/${taskId}/complete`, data)
+  return request.post<{ data?: TaskCompletionResult | null }>(`/tasks/${taskId}/complete`, data)
 }
 
 export interface TaskDelegateRequest {

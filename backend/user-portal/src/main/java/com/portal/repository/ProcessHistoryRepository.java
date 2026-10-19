@@ -20,6 +20,8 @@ public interface ProcessHistoryRepository extends JpaRepository<ProcessHistory, 
      */
     List<ProcessHistory> findByProcessInstanceIdOrderByOperationTimeAsc(String processInstanceId);
 
+    List<ProcessHistory> findByProcessInstanceIdAndOperationTypeOrderByOperationTimeAsc(String processInstanceId, String operationType);
+
     /**
      * 根据任务ID查询历史记录
      */

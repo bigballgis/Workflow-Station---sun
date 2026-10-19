@@ -38,7 +38,11 @@ final class CatalogPinnedTaskFormLoader {
             if (formId == null) {
                 return Collections.emptyMap();
             }
-            return loadCatalogForm(jdbcTemplate, objectMapper, catalogId.trim(), formId);
+            Map<String, Object> form = loadCatalogForm(jdbcTemplate, objectMapper, catalogId.trim(), formId);
+            if (!form.isEmpty()) {
+                form.put("sourceId", String.valueOf(formId));
+            }
+            return form;
         } catch (RuntimeException e) {
             log.debug("Catalog-pinned task form lookup failed for catalog {}, stage {}: {}",
                     catalogId, stageId, e.getMessage());
@@ -101,6 +105,9 @@ final class CatalogPinnedTaskFormLoader {
             return;
         }
         form.put("configJson", nestedConfigJson(objectMapper, parsed.get("configJson")));
+        if (parsed.containsKey("fieldPermissions")) {
+            form.put("publishedFieldPermissions", parsed.get("fieldPermissions"));
+        }
         if (parsed.containsKey("tableBindings")) {
             form.put("tableBindings", parsed.get("tableBindings"));
         }

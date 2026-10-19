@@ -37,6 +37,17 @@ public class WorkflowEngineTaskClient {
 
     // ==================== Task queries ====================
 
+    /** Write authorization cannot degrade a failed engine lookup into an ordinary task. */
+    public Map<String, Object> requireTaskWriteContext(String taskId) {
+        String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "?includeWriteContext=true";
+        ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(url, HttpMethod.GET,
+                engine.authorizedGetEntity(), new ParameterizedTypeReference<Map<String, Object>>() { });
+        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new com.portal.exception.PortalException("503", "Task write scope cannot be verified");
+        }
+        return ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+    }
+
     /**
      * Queries user todo tasks
      */

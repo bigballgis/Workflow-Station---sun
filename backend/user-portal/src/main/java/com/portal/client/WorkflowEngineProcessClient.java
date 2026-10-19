@@ -87,17 +87,23 @@ public class WorkflowEngineProcessClient {
      */
     public Map<String, Object> startProcess(String processDefinitionKey, String businessKey,
                                                        String startUserId, Map<String, Object> variables) {
+        return startProcess(processDefinitionKey, businessKey, startUserId, variables, null);
+    }
+
+    public Map<String, Object> startProcess(String processDefinitionKey, String businessKey,
+            String startUserId, Map<String, Object> variables, String expectedProcessDefinitionId) {
         if (!engine.isAvailable()) {
             throw new IllegalStateException("Workflow engine unavailable, cannot start process: " + processDefinitionKey);
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances";
+            String url = engine.engineUrl() + "/api/v1/processes/instances" + (expectedProcessDefinitionId == null ? "" : "/pinned");
 
             Map<String, Object> request = new HashMap<>();
             request.put("processDefinitionKey", processDefinitionKey);
             request.put("businessKey", businessKey);
             request.put("startUserId", startUserId);
             request.put("variables", variables);
+            if (expectedProcessDefinitionId != null) request.put("expectedProcessDefinitionId", expectedProcessDefinitionId);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -354,11 +360,25 @@ public class WorkflowEngineProcessClient {
      * @return BPMN XML string, or Optional.empty() on failure
      */
     public Optional<String> getBpmnXml(String processDefinitionKey) {
+        return fetchBpmnXml(processDefinitionKey, null);
+    }
+
+    /** Strict instance-bound read; unavailable deployment data is never replaced with the latest key. */
+    public Optional<String> getBpmnXml(String processDefinitionKey, String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            throw new com.portal.exception.PortalException("409", "Instance BPMN source is required");
+        }
+        return fetchBpmnXml(processDefinitionKey, processInstanceId);
+    }
+
+    private Optional<String> fetchBpmnXml(String processDefinitionKey, String processInstanceId) {
         if (!engine.isAvailable()) {
+            if (processInstanceId != null) throw new com.portal.exception.PortalException("503", "Instance BPMN source is unavailable");
             return Optional.empty();
         }
         try {
             String url = engine.engineUrl() + "/api/v1/processes/definitions/" + SafeUrlInput.requirePathToken(processDefinitionKey) + "/bpmn";
+            if (processInstanceId != null) url += "?processInstanceId=" + SafeUrlInput.encodeQueryValue(processInstanceId);
             HttpHeaders headers = new HttpHeaders();
             engine.forwardInboundAuthorization(headers);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
@@ -371,15 +391,24 @@ public class WorkflowEngineProcessClient {
                 if (data instanceof Map) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> dataMap = (Map<String, Object>) data;
+                    if (processInstanceId != null && (!processInstanceId.equals(dataMap.get("processInstanceId"))
+                            || !processDefinitionKey.equals(dataMap.get("processDefinitionKey"))
+                            || !(dataMap.get("processDefinitionId") instanceof String definition) || definition.isBlank())) {
+                        throw new IllegalStateException("Instance BPMN response does not identify its deployed source");
+                    }
                     Object bpmnXml = dataMap.get("bpmnXml");
-                    if (bpmnXml instanceof String) {
-                        return Optional.of((String) bpmnXml);
+                    if (bpmnXml instanceof String xml && (processInstanceId == null || !xml.isBlank())) {
+                        return Optional.of(xml);
                     }
                 }
             }
         } catch (Exception e) {
+            if (processInstanceId != null) {
+                throw new com.portal.exception.PortalException("409", "Instance deployed BPMN cannot be read", e);
+            }
             log.warn("Failed to get BPMN XML for processDefinitionKey={}: {}", processDefinitionKey, e.getMessage());
         }
+        if (processInstanceId != null) throw new com.portal.exception.PortalException("409", "Instance deployed BPMN response is invalid");
         return Optional.empty();
     }
 }

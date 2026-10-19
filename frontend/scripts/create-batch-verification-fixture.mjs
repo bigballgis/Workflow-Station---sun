@@ -1,0 +1,164 @@
+/** Creates only synthetic, explicitly tagged FU designs through the real DW API. */
+import { chromium } from 'playwright'
+import { loginViaDwPassword } from './playwright-login.mjs'
+import { waitForFixtureDeployment } from './fixture-deployment.mjs'
+
+const origin = 'http://localhost:3000'
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage()
+  await loginViaDwPassword(page)
+  const api = async (method, path, data) => {
+    const response = await page.request.fetch(`${origin}/api/v1${path}`, { method, data })
+    const body = await response.json()
+    if (!response.ok() || body.success === false) {
+      throw new Error(`${method} ${path}: HTTP ${response.status()} ${body.message || body.error?.message || ''}`)
+    }
+    return body.data
+  }
+  const suffix = process.env.FIXTURE_SUFFIX || Date.now().toString(36)
+  if (!/^[a-z0-9]+$/.test(suffix)) throw new Error('Synthetic suffix must be an alphanumeric fixture identifier')
+  if (process.env.FIXTURE_UNIT_ID && !/^\d+$/.test(process.env.FIXTURE_UNIT_ID)) throw new Error('Invalid synthetic FU ID')
+  const pkStrategy = process.env.FIXTURE_PK_STRATEGY ?? 'manual'
+  if (!['manual', 'uuid', 'prefixedSequence'].includes(pkStrategy)) throw new Error('Unsupported synthetic PK strategy')
+  const automaticPk = pkStrategy !== 'manual'
+  const batchMode = process.env.FIXTURE_BATCH_MODE ?? (process.env.FIXTURE_EDIT_ONLY === '1' ? 'edit' : 'all')
+  if (!['all', 'add', 'edit', 'delete', 'assign'].includes(batchMode)) throw new Error('Unsupported synthetic batch mode')
+  const assignment = batchMode === 'assign'
+  const directMi = process.env.FIXTURE_DIRECT_MI === '1'
+  if (directMi && !assignment) throw new Error('Direct MI fixture requires assignment mode')
+  const startsInMi = process.env.FIXTURE_STARTS_IN_MI === '1'
+  if (startsInMi && !directMi) throw new Error('Initial MI fixture requires direct MI mode')
+  const clearCreatedAssignee = process.env.FIXTURE_CLEAR_CREATED_ASSIGNEE === '1'
+  if (clearCreatedAssignee && !assignment) throw new Error('Assignment failure fixture requires assignment mode')
+  const wrongCreatedAssignee = process.env.FIXTURE_WRONG_CREATED_ASSIGNEE === '1'
+  if (wrongCreatedAssignee && (!assignment || clearCreatedAssignee)) throw new Error('Wrong-person fixture requires exclusive assignment failure mode')
+  const assignmentMode = process.env.FIXTURE_ASSIGNMENT_MODE ?? 'both'
+  if (!['both', 'role', 'user'].includes(assignmentMode)) throw new Error('Unsupported synthetic assignment mode')
+  const extraCreatedGroup = process.env.FIXTURE_EXTRA_CREATED_CANDIDATE_GROUP === '1'
+  if (extraCreatedGroup && (!assignment || assignmentMode !== 'role' || clearCreatedAssignee || wrongCreatedAssignee)) {
+    throw new Error('Extra-candidate fixture requires exclusive role-only failure mode')
+  }
+  const assignmentOnly = process.env.FIXTURE_ASSIGN_ONLY === '1'
+  const readonlyNumber = process.env.FIXTURE_READONLY_NUMBER === '1'
+  const readonlyDefault = process.env.FIXTURE_READONLY_DEFAULT ?? '0'
+  const inputLimits = process.env.FIXTURE_INPUT_LIMITS === '1'
+  const extraCount = Number(process.env.FIXTURE_EXTRA_FIELDS ?? '0')
+  if (!Number.isInteger(extraCount) || extraCount < 0 || extraCount > 48 || (extraCount && process.env.FIXTURE_UNIT_ID)) {
+    throw new Error('Wide fixtures require a new synthetic FU and between 0 and 48 extra fields')
+  }
+  const extraFields = Array.from({ length: extraCount }, (_, index) => ({ fieldName: `synthetic_extra_${index}`,
+    dataType: 'VARCHAR', length: 100, nullable: true, displayName: `Synthetic field ${index + 1}` }))
+  const pkField = automaticPk ? 'entry_token' : 'line_key'
+  const fkField = automaticPk ? 'owner_ref' : 'case_ref'
+  const textField = automaticPk ? 'item_label' : 'caption'
+  const numberField = automaticPk ? 'units' : 'amount'
+  const teams = await api('GET', '/function-units/my-dev-groups')
+  const teamId = teams.groups?.[0]?.id
+  if (!teamId) throw new Error('Test account has no selectable development team')
+  const unit = process.env.FIXTURE_UNIT_ID ? await api('GET', `/function-units/${process.env.FIXTURE_UNIT_ID}`) : await api('POST', '/function-units', {
+    name: `Batch verification ${suffix}`, tags: ['batch-verification-synthetic'],
+    virtualGroupIds: [teamId],
+    description: 'Isolated synthetic acceptance fixture. No production business data.',
+  })
+  if (!unit.tags?.includes('batch-verification-synthetic')) throw new Error('Refusing non-synthetic FU')
+  console.log(JSON.stringify({ step: 'unit-created', fixtureUnitId: unit.id }))
+  const base = `/function-units/${unit.id}`
+  const existingTables = await api('GET', `${base}/tables`)
+  const main = existingTables.find(t => t.tableType === 'MAIN') || await api('POST', `${base}/tables`, {
+    tableName: `batch_case_${suffix}`, tableType: 'MAIN', tableDisplayName: 'Synthetic case',
+    fields: [{ fieldName: 'case_key', dataType: 'VARCHAR', length: 64, nullable: false,
+      isPrimaryKey: true, pkGeneration: { strategy: 'manual' }, displayName: 'Case key' }],
+  })
+  const child = existingTables.find(t => t.tableType === 'SUB') || await api('POST', `${base}/tables`, {
+    tableName: `batch_lines_${suffix}`, tableType: 'SUB', tableDisplayName: 'Synthetic lines',
+    fields: [
+      { fieldName: pkField, dataType: 'VARCHAR', length: 64, nullable: false,
+        isPrimaryKey: true, pkGeneration: { strategy: pkStrategy,
+          ...(pkStrategy === 'prefixedSequence' ? { prefix: 'SYNTHETIC-', padWidth: 6, scope: 'perTable', startValue: 1 } : {}) }, displayName: 'Line key' },
+      { fieldName: fkField, dataType: 'VARCHAR', length: 64, nullable: false,
+        isForeignKey: true, refTableId: main.id, refPrimaryKeyFields: ['case_key'], displayName: 'Case reference' },
+      { fieldName: textField, dataType: 'VARCHAR', length: 100, nullable: false, displayName: 'Caption' },
+      { fieldName: numberField, dataType: 'INTEGER', nullable: false, displayName: 'Amount',
+        ...(readonlyNumber && readonlyDefault !== 'missing' ? { defaultValue: readonlyDefault } : {}) },
+      ...(assignment ? ['handler_code', 'pool_code', 'unit_code'].map(fieldName => ({ fieldName, dataType: 'VARCHAR', length: 100, nullable: true, displayName: fieldName })) : []),
+      ...extraFields,
+    ],
+  })
+  const forms = []
+  const existingForms = await api('GET', `${base}/forms`)
+  for (const formType of ['PROCESS', 'TASK']) {
+    const form = existingForms.find(f => f.formType === formType) || await api('POST', `${base}/forms`, {
+      formName: `Synthetic ${formType}`, formType, scene: 'TASK', configJson: { rule: [], options: {} },
+    })
+    const bindings = await api('GET', `${base}/forms/${form.id}/bindings`)
+    const mainBinding = bindings.find(b => b.bindingType === 'PRIMARY') || await api('POST', `${base}/forms/${form.id}/bindings`, {
+      tableId: main.id, bindingType: 'PRIMARY', bindingMode: 'EDITABLE', sortOrder: 0,
+    })
+    const binding = bindings.find(b => b.bindingType === 'SUB') || await api('POST', `${base}/forms/${form.id}/bindings`, {
+      tableId: child.id, bindingType: 'SUB', bindingMode: 'EDITABLE', subMode: 'FULL',
+      bindingLinkMode: assignment ? 'miParticipantRow' : 'structuralFk', foreignKeyField: fkField, sortOrder: 1,
+    })
+    const rowRule = [
+      ...(!automaticPk ? [{ type: 'input', field: pkField, title: 'Line key', validate: [{ required: true }] }] : []),
+      { type: 'input', field: textField, title: 'Caption', validate: [{ required: true }], ...(inputLimits ? { props: { maxlength: 12 } } : {}) },
+      { type: 'inputNumber', field: numberField, title: 'Amount', validate: [{ required: true }], ...(inputLimits ? { props: { min: 0, max: 10 } } : {}) },
+      ...extraFields.map(field => ({ type: 'input', field: field.fieldName, title: field.displayName })),
+    ]
+    const configJson = {
+      rule: [
+        { type: 'input', field: 'case_key', title: 'Case key', props: { _bindingId: mainBinding.id } },
+        { type: 'subTable', field: `lines_${binding.id}`, title: 'Synthetic lines',
+          batchControlId: `batch-${suffix}-${formType}`, props: {
+            _bindingId: binding.id, allowAdd: true, allowEdit: true, allowDelete: true,
+            allowBatchAdd: batchMode === 'all' || batchMode === 'add',
+            allowBatchEdit: batchMode === 'all' || batchMode === 'edit' || (assignment && !assignmentOnly),
+            allowBatchDelete: batchMode === 'all' || batchMode === 'delete', allowBatchAssign: assignment,
+          } },
+      ], options: { form: { labelPosition: 'top' } },
+      subForms: { [binding.id]: { rule: rowRule, options: {} } },
+      batchForms: { [binding.id]: { schemaVersion: 1, rule: [...rowRule, ...(assignment ? [{ type: 'miAssignment' }] : [])], options: {} } },
+    }
+    await api('PUT', `${base}/forms/${form.id}`, {
+      formName: form.formName, formType, scene: 'TASK', configJson,
+      fieldPermissions: Object.fromEntries(['case_key', ...[pkField, textField, numberField, ...extraFields.map(field => field.fieldName), ...(assignment ? ['handler_code', 'pool_code', 'unit_code'] : [])].map(f => `${binding.id}:${f}`)]
+        .map(f => [f, readonlyNumber && formType === 'TASK' && f === `${binding.id}:${numberField}` ? 'READONLY' : 'EDITABLE'])),
+    })
+    forms.push({ id: form.id, type: formType, bindingId: binding.id })
+  }
+  const property = (name, value) => `<custom:property name="${name}" value="${value}"/>`
+  const bpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn" xmlns:custom="http://workflow.platform/schema/custom" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="BatchVerification">
+<bpmn:process id="batch_verify_${suffix}" name="Synthetic batch verification" isExecutable="true">
+<bpmn:startEvent id="Start"><bpmn:extensionElements><custom:properties>${property('formId', forms[0].id)}</custom:properties></bpmn:extensionElements></bpmn:startEvent>
+<bpmn:sequenceFlow id="StartToIntake" sourceRef="Start" targetRef="${startsInMi ? 'AssignedRows' : 'Intake'}"/>
+${startsInMi ? '' : `<bpmn:userTask id="Intake" name="Synthetic intake" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[0].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>
+<bpmn:sequenceFlow id="IntakeToReview" sourceRef="Intake" targetRef="${directMi ? 'AssignedRows' : 'Review'}"/>`}
+${directMi ? '' : `<bpmn:userTask id="Review" name="Synthetic batch review" flowable:assignee="\${initiator}"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('assigneeType', 'INITIATOR')}</custom:properties></bpmn:extensionElements></bpmn:userTask>`}
+${assignment ? `${directMi ? '' : '<bpmn:sequenceFlow id="ReviewToAssigned" sourceRef="Review" targetRef="AssignedRows"/>'}
+<bpmn:subProcess id="AssignedRows"><bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="syntheticAssignmentRows" flowable:elementVariable="item"/>
+<bpmn:startEvent id="AssignedStart"/><bpmn:sequenceFlow id="AssignedFlow" sourceRef="AssignedStart" targetRef="AssignedWork"/>
+<bpmn:userTask id="AssignedWork" name="Synthetic assigned work"><bpmn:extensionElements><custom:properties>${property('formId', forms[1].id)}${property('subTableName', child.tableName)}${property('subTableId', child.id)}${property('assigneeMode', assignmentMode)}${property('assigneeType', 'ELEMENT_VARIABLE')}${property('assigneeField', 'handler_code')}${property('roleField', 'pool_code')}${property('buField', 'unit_code')}</custom:properties>${clearCreatedAssignee ? '<flowable:taskListener event="assignment" expression="${task.assignee == null ? null : task.setAssignee(null)}"/>' : ''}${wrongCreatedAssignee ? '<flowable:taskListener event="assignment" expression="${task.assignee == null || task.assignee == &quot;synthetic-wrong-person&quot; ? null : task.setAssignee(&quot;synthetic-wrong-person&quot;)}"/>' : ''}${extraCreatedGroup ? '<flowable:taskListener event="create" expression="${task.addCandidateGroup(&quot;synthetic-extra-group&quot;)}"/>' : ''}</bpmn:extensionElements></bpmn:userTask>
+<bpmn:sequenceFlow id="AssignedEndFlow" sourceRef="AssignedWork" targetRef="AssignedEnd"/><bpmn:endEvent id="AssignedEnd"/></bpmn:subProcess>
+<bpmn:sequenceFlow id="AssignedToEnd" sourceRef="AssignedRows" targetRef="End"/>` : '<bpmn:sequenceFlow id="ReviewToEnd" sourceRef="Review" targetRef="End"/>'}<bpmn:endEvent id="End"/>
+</bpmn:process>
+<bpmndi:BPMNDiagram id="FixtureDiagram"><bpmndi:BPMNPlane id="FixturePlane" bpmnElement="batch_verify_${suffix}">
+<bpmndi:BPMNShape id="StartShape" bpmnElement="Start"><dc:Bounds x="100" y="112" width="36" height="36"/></bpmndi:BPMNShape>
+${startsInMi ? '' : '<bpmndi:BPMNShape id="IntakeShape" bpmnElement="Intake"><dc:Bounds x="180" y="90" width="100" height="80"/></bpmndi:BPMNShape>'}
+${directMi ? '' : '<bpmndi:BPMNShape id="ReviewShape" bpmnElement="Review"><dc:Bounds x="330" y="90" width="100" height="80"/></bpmndi:BPMNShape>'}
+<bpmndi:BPMNShape id="EndShape" bpmnElement="End"><dc:Bounds x="480" y="112" width="36" height="36"/></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="StartEdge" bpmnElement="StartToIntake"><di:waypoint x="136" y="130"/><di:waypoint x="180" y="130"/></bpmndi:BPMNEdge>
+${startsInMi ? '' : '<bpmndi:BPMNEdge id="IntakeEdge" bpmnElement="IntakeToReview"><di:waypoint x="280" y="130"/><di:waypoint x="330" y="130"/></bpmndi:BPMNEdge>'}
+${directMi ? '' : '<bpmndi:BPMNEdge id="ReviewEdge" bpmnElement="ReviewToEnd"><di:waypoint x="430" y="130"/><di:waypoint x="480" y="130"/></bpmndi:BPMNEdge>'}
+</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>`
+  await api('POST', `${base}/process`, { bpmnXml })
+  const validation = await api('GET', `${base}/validate`)
+  console.log(JSON.stringify({ step: 'design-created', fixtureUnitId: unit.id, forms, validation }))
+  const deploy = await api('POST', `${base}/deploy`, { environment: 'DEVELOPMENT', autoEnable: true,
+    conflictStrategy: 'FAIL', changeLog: 'Synthetic batch acceptance fixture' })
+  console.log(JSON.stringify({ step: 'deploy-requested', fixtureUnitId: unit.id, deploy }))
+  await waitForFixtureDeployment(api, deploy.deploymentId)
+  console.log(JSON.stringify({ step: 'deployed', fixtureUnitId: unit.id }))
+} finally {
+  await browser.close()
+}

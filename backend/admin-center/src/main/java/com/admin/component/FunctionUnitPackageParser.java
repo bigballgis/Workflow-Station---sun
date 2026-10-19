@@ -161,6 +161,8 @@ public class FunctionUnitPackageParser {
                 continue;
             }
             Map<String, Object> formData = readJsonMap(file.getValue(), fileName);
+            try { com.platform.common.form.SubTableBatchDefinition.validate(formData.get("configJson")); }
+            catch (IllegalArgumentException invalid) { throw new IOException("Invalid batch definition in " + fileName, invalid); }
             String formName = stringOrNull(formData.get("formName"));
             if (formName == null) {
                 formName = basename(fileName);

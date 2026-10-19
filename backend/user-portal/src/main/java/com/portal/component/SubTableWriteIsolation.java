@@ -34,6 +34,8 @@ class SubTableWriteIsolation {
 
     static final String EMPTIED_KEYS_FIELD = "emptiedSubTableKeys";
     static final String SCOPES_FIELD = "subTableBindingScopes";
+    /** Server-owned instance metadata; never accept it from a form or completion request. */
+    static final String BATCH_RUNTIME_FIELD = com.portal.util.SubTableBatchMetadata.RUNTIME_FIELD;
 
     static void stripTransportMetadata(Map<String, Object> variables) {
         if (variables == null) {
@@ -41,6 +43,8 @@ class SubTableWriteIsolation {
         }
         variables.remove(EMPTIED_KEYS_FIELD);
         variables.remove(SCOPES_FIELD);
+        variables.remove(BATCH_RUNTIME_FIELD);
+        variables.remove(com.portal.util.SubTableBatchMetadata.DELETED_ROWS_FIELD);
     }
 
     static Set<String> normalizeEmptiedKeys(List<String> declared) {
@@ -62,7 +66,12 @@ class SubTableWriteIsolation {
             Map<String, Object> baselineVariables,
             List<String> emptiedSubTableKeys,
             List<SubTableBindingScope> scopes,
-            String functionUnitCode, String catalogId, String stageId) {
+            String functionUnitCode, String catalogId, String stageId, List<com.portal.dto.SubTableBatchChange> batchChanges) {
+        Request(Map<String, Object> formData, Map<String, Object> inbound, Map<String, Object> baselineVariables,
+                List<String> emptiedSubTableKeys, List<SubTableBindingScope> scopes, String functionUnitCode,
+                String catalogId, String stageId) {
+            this(formData, inbound, baselineVariables, emptiedSubTableKeys, scopes, functionUnitCode, catalogId, stageId, null);
+        }
         Request(Map<String, Object> formData, Map<String, Object> inbound,
                 Map<String, Object> baselineVariables, List<String> emptiedSubTableKeys,
                 List<SubTableBindingScope> scopes, String functionUnitCode) {
@@ -76,6 +85,9 @@ class SubTableWriteIsolation {
      */
     @SuppressWarnings("unchecked")
     void apply(Request request) {
+        if (request != null && request.inbound() != null) {
+            SubTableBatchWorkspaceContext.validate(request.baselineVariables(), request.inbound());
+        }
         if (request == null || request.inbound() == null
                 || !(request.inbound().get("__subTables__") instanceof Map<?, ?>)) {
             return;
@@ -91,6 +103,7 @@ class SubTableWriteIsolation {
                 request.scopes() == null ? List.of() : List.copyOf(request.scopes());
         Map<String, SubTableWriteDesign.Binding> frozen = writeDesign == null ? null
                 : writeDesign.resolve(request.catalogId(), request.stageId());
+        frozen = SubTableBatchScopeDesign.overlay(frozen, baselineVars, request.batchChanges());
         requireScopesForFrozenMultiBindings(frozen, submitted, bindingScopes);
         if (merger.isMiSubTaskSubmission(request.formData())) {
             Map<String, Object> rowKey = merger.resolveCurrentItemRowKey(request.formData());

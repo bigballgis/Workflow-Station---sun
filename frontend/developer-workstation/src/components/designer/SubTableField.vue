@@ -6,6 +6,14 @@
         v-if="editable"
         class="actions"
       >
+        <SubTableBatchPreview
+          v-if="batchPreview && (batchPreview.invalid || Object.values(batchPreview.flags).some(Boolean))"
+          :definition="batchPreview" :config="config" :model-value="tableData" :primary-form-data="primaryFormData"
+          :primary-table-id="primaryTableId" :primary-table-display-name="primaryTableDisplayName"
+          :parent-tables-by-id="parentTablesById" :preview-table-bindings="previewTableBindings"
+          @update:model-value="rows => emit('update:modelValue', rows)"
+          @update:primary-form-data="value => emit('update:primaryFormData', value)"
+        />
         <el-button
           size="small"
           @click.stop="handleExport"
@@ -299,6 +307,7 @@ import { computed, inject, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Loading, Document, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
+import SubTableBatchPreview from './SubTableBatchPreview.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
 import { isUploadColumn } from './uploadFieldUtils'
@@ -418,6 +427,7 @@ const props = withDefaults(defineProps<{
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   previewTableBindings?: import('@/utils/tableFkRuntime').BindingContextInput[]
   assignmentConfig?: AssignmentConfig
+  batchPreview?: import('@/utils/batchSubTablePreview').BatchPreviewDefinition
 }>(), {
   // Per-op switches default OPEN. Without an explicit default, Vue casts an *absent*
   // Boolean prop to false (not undefined), which would hide Add/Edit/Delete at every

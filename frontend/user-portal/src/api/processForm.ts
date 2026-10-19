@@ -46,6 +46,9 @@ export interface TaskFormData {
   subTableBindings: SubTableBindingData[]
   processFormRef: ProcessFormData
   formReadOnly?: boolean
+  /** Current form's server-filtered frozen batch controls, keyed by batchControlId. */
+  subTableBatchCapabilities?: Record<string, unknown>
+  subTableBatchRuntimeEnabled?: boolean
   requestIdConfig?: RequestIdConfig | null
 }
 
@@ -87,6 +90,8 @@ export interface TaskFormSubmitRequest {
     emptied: boolean
     deletedRows?: Array<Record<string, unknown>>
   }>
+  /** Server-validated declarations for changes originating in Batch Edit. */
+  subTableBatchChanges?: import('@platform-shared/batch/workspaceTypes').SubTableBatchChange[]
   /** Present only when the user clicked a SAVE Action (autosave omits this). */
   actionId?: string
 }

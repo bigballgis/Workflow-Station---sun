@@ -16,4 +16,7 @@ public class AllocatePrimaryKeyRequest {
     private Integer count;
 
     private String scopeKey;
+
+    /** Optional frozen batch control; ordinary single-row allocation keeps its existing contract. */
+    private String batchControlId;
 }

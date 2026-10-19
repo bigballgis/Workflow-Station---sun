@@ -7,6 +7,8 @@ import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
+import { validateEnabledBatchControlIds, findBatchFormIssue } from '@/utils/batchSubTableConfig'
+import { findBatchMembershipIssue } from '@/utils/batchSubTableMembership'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -30,11 +32,13 @@ import {
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
 interface UseFormSaveOptions {
+  configHydrationBlocked?: Readonly<Ref<boolean>>
   functionUnitId: number
   store: { updateForm: (functionUnitId: number, formId: number, payload: Record<string, any>) => Promise<any> }
   selectedForm: Ref<FormDefinition | null>
   designerRef: Ref<any>
   subDesignerRefs: Ref<any[]>
+  batchDesignerRefs: Ref<any[]>
   designerSubBindings: ComputedRef<Array<{
     bindingId: number
     bindingType: string
@@ -43,11 +47,14 @@ interface UseFormSaveOptions {
     tableDisplayName?: string
   }>>
   subFormCache: Ref<Record<number, { rule: any[]; options: any }>>
+  batchFormCache: Ref<Record<number, { rule: any[]; options: any }>>
+  batchFormVisited: Ref<Set<number>>
   relationViewState: Ref<Record<number, { allFields: any[]; viewFields: any[] }>>
   subTableViewState: Ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>
   subTableListViewRefs: Ref<Record<number, any>>
   getActiveDesignerRef: () => DesignerLike
   getPrimaryBindingFieldDefinitions: () => FieldDefinition[]
+  getBatchTableFields?: (tableId: number) => FieldDefinition[]
   syncSubTableListViewFromFormRules: (bindingId: number, rule: any[]) => void
   loadForms: () => Promise<void>
   autoSaving: Ref<boolean>
@@ -77,9 +84,9 @@ interface UseFormSaveOptions {
  */
 export function useFormSave(options: UseFormSaveOptions) {
   const {
-    functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
-    subFormCache, relationViewState, subTableViewState, subTableListViewRefs,
-    getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
+    functionUnitId, store, selectedForm, designerRef, subDesignerRefs, batchDesignerRefs, designerSubBindings,
+    subFormCache, batchFormCache, batchFormVisited, relationViewState, subTableViewState, subTableListViewRefs,
+    getActiveDesignerRef, getPrimaryBindingFieldDefinitions, getBatchTableFields,
     syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime,
     provisionAndRepairForSave, willProvisionOnSave, blockingProgress, getBpmnXml, t,
     hasMainTableTab,
@@ -202,6 +209,10 @@ export function useFormSave(options: UseFormSaveOptions) {
 
   async function handleSaveForm(isManual = false): Promise<boolean> {
     if (!selectedForm.value) return false
+    if (options.configHydrationBlocked?.value) {
+      if (isManual) ElMessage.warning(t('form.configNotReady'))
+      return false
+    }
     // Forms without a Main Table tab (ACTION forms with no PRIMARY binding) never mount the
     // main fc-designer, so designerRef.value is legitimately null here — not "not ready".
     const mainTablePresent = hasMainTableTab ? hasMainTableTab.value : true
@@ -261,6 +272,11 @@ export function useFormSave(options: UseFormSaveOptions) {
       const invalidPlaceholders = subTableRules.filter((r: any) => !r._bindingId)
       if (invalidPlaceholders.length > 0) {
         if (isManual) ElMessage.error(t('form.subTableBindingRequired'))
+        return false
+      }
+
+      if (!validateEnabledBatchControlIds(subTableRules)) {
+        if (isManual) ElMessage.error(t('form.batchControlIdInvalid'))
         return false
       }
 
@@ -378,6 +394,64 @@ export function useFormSave(options: UseFormSaveOptions) {
         }
       })
 
+      // Batch Form has its own canvas and configJson container. Preserve unopened
+      // canvases first, then apply any mounted/cached Batch Form state.
+      const batchForms: Record<number, { schemaVersion: 1; rule: any[]; options: any }> = {}
+      const savedBatchForms = selectedForm.value.configJson?.batchForms || {}
+      for (const [key, existing] of Object.entries(savedBatchForms)) {
+        const bindingId = Number(key)
+        if (!Number.isFinite(bindingId) || !existing) continue
+        if ((existing as { schemaVersion?: unknown }).schemaVersion !== 1
+          || !Array.isArray((existing as { rule?: unknown }).rule)) throw new Error(t('form.batchFormInvalid'))
+        const rule = stripFormCreateRulesDisabledDeep((existing as { rule: unknown[] }).rule) as any[]
+        prepareFormCreateRulesForPersist(rule)
+        batchForms[bindingId] = {
+          schemaVersion: 1,
+          rule,
+          options: serializeFormCreateOptionsForPersist((existing as { options?: Record<string, unknown> }).options),
+        }
+      }
+      designerSubBindings.value
+        .filter((binding) => binding.bindingType === 'SUB')
+        .forEach((binding) => {
+          let collected: { schemaVersion: 1; rule: any[]; options: any } | null = null
+          const index = designerSubBindings.value.findIndex((candidate) => candidate.bindingId === binding.bindingId)
+          const batchRef = batchFormVisited.value.has(binding.bindingId)
+            ? batchDesignerRefs.value[index]
+            : null
+          const liveRule = batchRef?.getRule?.()
+          if (batchRef && !Array.isArray(liveRule)) throw new Error(t('form.batchFormInvalid'))
+          if (Array.isArray(liveRule)) {
+            const rule = stripFormCreateRulesDisabledDeep(liveRule) as any[]
+            ensureFormCreateRulesValidationDeep(rule)
+            prepareFormCreateRulesForPersist(rule)
+            collected = {
+              schemaVersion: 1,
+              rule,
+              options: serializeFormCreateOptionsForPersist(batchRef.getOption?.()),
+            }
+          }
+          if (!collected && batchFormCache.value[binding.bindingId]) {
+            const cached = batchFormCache.value[binding.bindingId]
+            const rule = stripFormCreateRulesDisabledDeep(cached.rule || []) as any[]
+            prepareFormCreateRulesForPersist(rule)
+            collected = { schemaVersion: 1, rule, options: serializeFormCreateOptionsForPersist(cached.options) }
+          }
+          if (collected) batchForms[binding.bindingId] = collected
+        })
+
+      const batchFormIssue = findBatchFormIssue(subTableRules, batchForms)
+      if (batchFormIssue) {
+        if (isManual) ElMessage.error({ message: t(`form.${batchFormIssue.key}`, batchFormIssue.params), duration: 10000 })
+        return false
+      }
+      const membershipIssue = findBatchMembershipIssue(subTableRules, batchForms, selectedForm.value.tableBindings ?? [],
+        tableId => getBatchTableFields?.(tableId) ?? [], selectedForm.value.fieldPermissions ?? {})
+      if (membershipIssue) {
+        if (isManual) ElMessage.error({ message: t(`form.${membershipIssue.key}`, membershipIssue.params), duration: 10000 })
+        return false
+      }
+
       // Collect relation table view fields
       const relationViews: Record<number, { viewFields: any[]; allFields: any[] }> = {}
       designerSubBindings.value.forEach((binding) => {
@@ -450,6 +524,7 @@ export function useFormSave(options: UseFormSaveOptions) {
         rule,
         options,
         subForms,
+        batchForms,
         relationViews,
         subListViews,
       }

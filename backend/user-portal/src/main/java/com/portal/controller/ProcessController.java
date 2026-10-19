@@ -49,6 +49,12 @@ public class ProcessController {
     private final TaskProcessComponent taskProcessComponent;
     private final ActionPostEmailComponent actionPostEmailComponent;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.portal.component.PortalBatchPrimaryKeyAllocationComponent portalBatchPrimaryKeyAllocationComponent;
+
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
     public ApiResponse<List<ProcessDefinitionInfo>> getDefinitions(
@@ -77,9 +83,12 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam(required = false) String taskId,
-            @RequestParam(required = false) String processInstanceId) {
+            @RequestParam(required = false) String processInstanceId,
+            @RequestParam(defaultValue = "false") boolean forStart) {
         requireFunctionUnitContentAccess(userId, functionUnitId, taskId, processInstanceId);
-        Map<String, Object> content = processComponent.getFunctionUnitContent(functionUnitId);
+        if (forStart && (taskId != null || processInstanceId != null)) throw new IllegalArgumentException("Start content cannot use task or instance access");
+        Map<String, Object> content = forStart ? processComponent.getFunctionUnitStartContent(functionUnitId)
+                : processComponent.getFunctionUnitContent(functionUnitId);
         return ApiResponse.success(content);
     }
 
@@ -105,6 +114,9 @@ public class ProcessController {
             @RequestParam(required = false) String taskId,
             @Valid @RequestBody com.portal.dto.AllocatePrimaryKeyRequest request) {
         requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
+        if (request.getBatchControlId() != null) {
+            return ApiResponse.success(portalBatchPrimaryKeyAllocationComponent.allocate(taskId, userId, request));
+        }
         return ApiResponse.success(portalPrimaryKeyAllocationComponent.allocate(functionUnitId, request));
     }
     
@@ -625,6 +637,7 @@ public class ProcessController {
         }
         log.debug("ProcessController.getProcessHistory called with processId: {}", processId);
         List<Map<String, Object>> history = processComponent.getProcessHistory(processId);
+        if (detail != null) history = batchAssignmentHistory.merge(processId, history);
         log.debug("ProcessController.getProcessHistory returning {} records", history.size());
         return ApiResponse.success(history);
     }

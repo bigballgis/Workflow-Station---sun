@@ -33,6 +33,7 @@ export interface PreviewSubTableBinding {
   /** Presentation designed on the canvas (rule.props). */
   compactCells?: boolean
   assignmentConfig?: AssignmentConfig
+  batchPreview?: import('@/utils/batchSubTablePreview').BatchPreviewDefinition
 }
 
 /** Render sub-table preview (table + Add) when list columns or sub-form rule exist. */

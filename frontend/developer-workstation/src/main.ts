@@ -7,6 +7,7 @@ import '@fontsource-variable/inter'
 import FcDesigner from '@form-create/designer'
 import formCreateMenus from '@form-create/designer/src/config/menu'
 import { ensureEmptyRuleComponentEvents } from '@/utils/formCreateDefaultEvents'
+import { createBatchControlId, initializeBatchControlIdOnEnable } from '@/utils/batchSubTableConfig'
 // Import form-create styles
 import '@form-create/designer/src/style/index.css'
 import '@form-create/designer/src/style/icon.css'
@@ -183,6 +184,9 @@ FcDesigner.addDragRule({
     if (rule._bindingId !== undefined) {
       rule.props._bindingId = rule._bindingId
     }
+    if (rule.batchControlId !== undefined) {
+      rule.props.batchControlId = rule.batchControlId
+    }
     rule.props._displayTitle = typeof rule.title === 'string' ? rule.title : ''
   },
   // Move temporary props-panel values back to their canonical top-level fields.
@@ -200,9 +204,17 @@ FcDesigner.addDragRule({
         : ''
       delete rule.props._displayTitle
     }
+    if (rule.props && rule.props.batchControlId !== undefined) {
+      rule.batchControlId = rule.props.batchControlId
+      delete rule.props.batchControlId
+    }
   },
   // Keep canonical top-level fields in sync while the props panel is being edited.
   watch: {
+    allowBatchAdd: initializeBatchControlIdOnEnable,
+    allowBatchEdit: initializeBatchControlIdOnEnable,
+    allowBatchDelete: initializeBatchControlIdOnEnable,
+    allowBatchAssign: initializeBatchControlIdOnEnable,
     _bindingId({ value, rule }: { value: any; rule: any }) {
       rule._bindingId = value ?? null
     },
@@ -214,6 +226,7 @@ FcDesigner.addDragRule({
     const r = {
       type: 'subTable',
       _bindingId: null,
+      batchControlId: createBatchControlId(),
       title: 'Sub-Table',
       props: {
         _bindingId: null,

@@ -78,6 +78,8 @@ export interface FormField {
   allowAdd?: boolean
   allowEdit?: boolean
   allowDelete?: boolean
+  /** Stable designer identity used to look up the server-frozen batch control. */
+  batchControlId?: string
   /**
    * Presentation, designed on the form canvas. `compactCells` keeps lookup/user
    * cells to a single line instead of expanding a detail block below them.

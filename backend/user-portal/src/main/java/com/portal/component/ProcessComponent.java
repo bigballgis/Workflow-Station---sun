@@ -180,6 +180,10 @@ public class ProcessComponent {
         return processStartComponent.startProcess(userId, processKey, request);
     }
 
+    public ProcessInstanceInfo startProcessFromServer(String userId, String processKey, ProcessStartRequest request) {
+        return processStartComponent.startProcessFromServer(userId, processKey, request);
+    }
+
     // ==================== Process queries ====================
 
     /**
@@ -718,12 +722,24 @@ public class ProcessComponent {
         return payload;
     }
 
-    /**
-     * Returns full function unit content without permission check (internal).
-     * Primary source: admin-center (function unit catalog with BPMN, forms, etc.).
-     * If admin-center returns no BPMN, falls back to workflow-engine (deployed BPMN by functionUnitCode).
-     * Results are cached in-memory (5 min TTL) to avoid repeated admin-center HTTP round-trips.
-     */
+    /** Start pages need an authoritative read, not the five-minute task-content cache or engine fallback. */
+    public Map<String, Object> getFunctionUnitStartContent(String functionUnitIdOrCode) {
+        String catalogId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
+        return SubTableBatchStartContext.forPage(getPublishedStartContent(catalogId), catalogId);
+    }
+
+    Map<String, Object> getPublishedStartContent(String catalogId) {
+        String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(catalogId) + "/content?forStart=true";
+        Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(restTemplate.getForObject(url, Map.class));
+        if (!Boolean.TRUE.equals(payload.get("startContentAuthoritative"))) {
+            throw new IllegalStateException("Authoritative published start content is unavailable; Admin Center must support the start-content contract");
+        }
+        Map<String, Object> enriched = enrichRelationTableIdentity(enrichMiAssignments(payload));
+        attachRequestIdConfig(enriched);
+        return enriched;
+    }
+
+    /** Internal task content: existing five-minute cache and BPMN fallback remain unchanged. */
     public Map<String, Object> getFunctionUnitContent(String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}", functionUnitIdOrCode);
 

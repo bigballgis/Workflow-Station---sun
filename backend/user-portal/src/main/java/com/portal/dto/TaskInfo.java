@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -139,6 +142,7 @@ public class TaskInfo {
     private String batchGroupKey;
 
     /** 流程变量 */
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> variables;
 
     /**

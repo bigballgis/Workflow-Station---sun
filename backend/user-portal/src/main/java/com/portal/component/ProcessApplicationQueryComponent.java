@@ -370,7 +370,8 @@ public class ProcessApplicationQueryComponent {
                 ? new HashMap<>(info.getVariables()) : new HashMap<>();
         Map<String, Object> current = vars.get("__subTables__") instanceof Map<?, ?> m
                 ? (Map<String, Object>) m : null;
-        engineSubTableHydrator.mergeFromEngine(processId, current).ifPresent(result -> {
+        engineSubTableHydrator.mergeFromEngine(processId, current,
+                SubTableBatchDeletedRows.read(instance.getVariables())).ifPresent(result -> {
             vars.put("__subTables__", result.mergedSubTables());
             if (result.rowCount() != null && vars.get("rowCount") == null) {
                 vars.put("rowCount", result.rowCount());
@@ -422,6 +423,8 @@ public class ProcessApplicationQueryComponent {
                     continue;
                 }
                 String key = String.valueOf(e.getKey());
+                // Engine variables are never an authoritative source for local batch capabilities/deletions.
+                if (com.portal.util.SubTableBatchMetadata.isLocalField(key)) continue;
                 if ("__subTables__".equals(key) || vars.get(key) != null || clearedByUser.contains(key)) {
                     continue;
                 }

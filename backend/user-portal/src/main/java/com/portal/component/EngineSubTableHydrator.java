@@ -47,6 +47,11 @@ public class EngineSubTableHydrator {
      * @return the merged result when something changed; empty when nothing to fill or on failure
      */
     public Optional<MergeResult> mergeFromEngine(String processInstanceId, Map<String, Object> currentSubTables) {
+        return mergeFromEngine(processInstanceId, currentSubTables, Map.of());
+    }
+
+    public Optional<MergeResult> mergeFromEngine(String processInstanceId, Map<String, Object> currentSubTables,
+                                                Map<String, SubTableBatchDeletedRows.Store> deletedRows) {
         if (workflowEngineClient == null) {
             return Optional.empty();
         }
@@ -66,8 +71,11 @@ public class EngineSubTableHydrator {
                 Object existing = merged.get(key);
                 boolean existingEmpty = !(existing instanceof List<?> l) || l.isEmpty();
                 if (existingEmpty && e.getValue() instanceof List<?> incoming && !incoming.isEmpty()) {
-                    merged.put(key, e.getValue());
-                    changed = true;
+                    List<?> allowed = SubTableBatchDeletedRows.filter(incoming, deletedRows.get(key));
+                    if (!allowed.isEmpty()) {
+                        merged.put(key, allowed);
+                        changed = true;
+                    }
                 }
             }
             if (!changed) {

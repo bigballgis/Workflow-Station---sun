@@ -40,6 +40,14 @@ class ProcessControllerProcessDetailSecurityTest {
     @InjectMocks
     private ProcessController processController;
 
+    @Mock
+    private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+
+    @org.junit.jupiter.api.BeforeEach
+    void injectHistory() {
+        org.springframework.test.util.ReflectionTestUtils.setField(processController, "batchAssignmentHistory", batchAssignmentHistory);
+    }
+
     @Test
     void getProcessDetail_rejectsNullUserIdWithoutLoadingProcess() {
         assertThatThrownBy(() -> processController.getProcessDetail(null, "proc-1"))

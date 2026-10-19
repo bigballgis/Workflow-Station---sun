@@ -37,6 +37,7 @@ export interface SubTableBinding {
   dialogColumns?: Column[]
   /** Designer PK field names (from admin tableBindings); preferred over hardcoded id/rowId. */
   primaryKeyFields?: string[]
+  fieldDefinitions?: BindingFieldDefinition[]
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>
@@ -94,6 +95,7 @@ export interface NestedSubTableDescriptor {
 
 /** Structural mirror of SubTableField.vue props — composables accept the component's props object. */
 export interface SubTableFieldProps {
+  batchCapability?: unknown
   title: string
   columns: Column[]
   /** Form-design canvas columns for Add/Edit row dialog (Designer parity). */

@@ -75,7 +75,7 @@ class ProcessControllerTaskContentAccessTest {
         when(processComponent.getFunctionUnitContent(FU_KEY)).thenReturn(Map.of("forms", java.util.List.of()));
 
         ApiResponse<Map<String, Object>> response =
-                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null);
+                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, false);
 
         assertThat(response.isSuccess()).isTrue();
         // Role gate must NOT run when the task grant succeeds — that's the whole point of the bypass.
@@ -87,7 +87,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("denied"))
                 .when(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, null, null))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, null, null, false))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
 
         verify(taskQueryComponent, never()).getTaskById(anyString());
@@ -102,7 +102,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("denied"))
                 .when(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, false))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
 
         verify(taskProcessComponent, never()).canViewTaskForm(any(TaskInfo.class), anyString(), any());
@@ -116,7 +116,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("denied"))
                 .when(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, false))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
     }
 
@@ -126,7 +126,7 @@ class ProcessControllerTaskContentAccessTest {
         doThrow(new FunctionUnitAccessComponent.FunctionUnitDisabledException("Function unit is disabled"))
                 .when(functionUnitAccessComponent).requireEnabledFunctionUnit(USER_ID, FU_KEY);
 
-        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null))
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, false))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitDisabledException.class);
 
         verify(processComponent, never()).getFunctionUnitContent(anyString());
@@ -139,7 +139,7 @@ class ProcessControllerTaskContentAccessTest {
         when(processComponent.getFunctionUnitContent(FU_KEY)).thenReturn(Map.of());
 
         ApiResponse<Map<String, Object>> response =
-                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null);
+                processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, false);
 
         assertThat(response.isSuccess()).isTrue();
         verify(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
@@ -158,11 +158,27 @@ class ProcessControllerTaskContentAccessTest {
         when(processComponent.getFunctionUnitContent(pin)).thenReturn(Map.of("version", "1.0.1"));
 
         ApiResponse<Map<String, Object>> response =
-                processController.getFunctionUnitContent(USER_ID, pin, TASK_ID, null);
+                processController.getFunctionUnitContent(USER_ID, pin, TASK_ID, null, false);
 
         assertThat(response.isSuccess()).isTrue();
         verify(functionUnitAccessComponent, never()).requireEnabledFunctionUnit(anyString(), anyString());
         verify(functionUnitAccessComponent, never()).checkFunctionUnitAccess(anyString(), anyString());
+    }
+
+    @Test void startContentUsesFreshPublishedReadAfterTheOrdinaryRoleGate() {
+        when(processComponent.getFunctionUnitStartContent(FU_KEY)).thenReturn(Map.of("synthetic", true));
+        assertThat(processController.getFunctionUnitContent(USER_ID, FU_KEY, null, null, true).isSuccess()).isTrue();
+        verify(functionUnitAccessComponent).checkFunctionUnitAccess(USER_ID, FU_KEY);
+        verify(processComponent, never()).getFunctionUnitContent(anyString());
+    }
+
+    @Test void aTaskReadGrantCannotBeReusedAsAStartContentGrant() {
+        when(taskQueryComponent.getTaskById(TASK_ID)).thenReturn(Optional.of(taskOf(FU_KEY)));
+        when(functionUnitAccessComponent.requireEnabledFunctionUnit(USER_ID, FU_KEY)).thenReturn("fu-id");
+        when(taskProcessComponent.canViewTaskForm(any(TaskInfo.class), eq(USER_ID), isNull())).thenReturn(true);
+        assertThatThrownBy(() -> processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, true))
+                .hasMessageContaining("Start content cannot use task or instance access");
+        verify(processComponent, never()).getFunctionUnitStartContent(anyString());
     }
 
     @Test
@@ -179,7 +195,7 @@ class ProcessControllerTaskContentAccessTest {
         when(processComponent.getFunctionUnitContent(pin)).thenReturn(Map.of("version", "1.0.1"));
 
         ApiResponse<Map<String, Object>> response =
-                processController.getFunctionUnitContent(USER_ID, pin, null, processId);
+                processController.getFunctionUnitContent(USER_ID, pin, null, processId, false);
 
         assertThat(response.isSuccess()).isTrue();
         verify(functionUnitAccessComponent, never()).requireEnabledFunctionUnit(anyString(), anyString());

@@ -126,6 +126,10 @@ public class ProcessEngineComponent {
 
             // Verify process definition exists
             ProcessDefinition processDefinition = getProcessDefinition(request.getProcessDefinitionKey());
+            if (request.getExpectedProcessDefinitionId() != null
+                    && !processDefinition.getId().equals(request.getExpectedProcessDefinitionId())) {
+                throw new IllegalStateException("Process deployment changed; reload and retry");
+            }
 
             // Start process instance with start user
             ProcessInstance processInstance;
@@ -133,19 +137,13 @@ public class ProcessEngineComponent {
                 // Set start user ID
                 org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(request.getStartUserId());
                 try {
-                    processInstance = runtimeService.startProcessInstanceByKey(
-                        request.getProcessDefinitionKey(),
-                        request.getBusinessKey(),
-                        request.getVariables());
+                    processInstance = startValidatedDefinition(request, processDefinition);
                 } finally {
                     // Clear authenticated user ID
                     org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(null);
                 }
             } else {
-                processInstance = runtimeService.startProcessInstanceByKey(
-                    request.getProcessDefinitionKey(),
-                    request.getBusinessKey(),
-                    request.getVariables());
+                processInstance = startValidatedDefinition(request, processDefinition);
             }
 
             ProcessInstanceResult result = ProcessInstanceResult.builder()
@@ -738,6 +736,12 @@ public class ProcessEngineComponent {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition key must not be empty", request.getProcessDefinitionKey())));
         }
+    }
+
+    private ProcessInstance startValidatedDefinition(StartProcessRequest request, ProcessDefinition definition) {
+        return request.getExpectedProcessDefinitionId() == null
+                ? runtimeService.startProcessInstanceByKey(request.getProcessDefinitionKey(), request.getBusinessKey(), request.getVariables())
+                : runtimeService.startProcessInstanceById(definition.getId(), request.getBusinessKey(), request.getVariables());
     }
 
     private ProcessDefinition getProcessDefinition(String processDefinitionKey) {

@@ -238,6 +238,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                         processDefinitionId, taskDefinitionKey, null);
             } catch (Exception e) {
                 log.warn("ensureMultiInstanceExtendedTaskForPreassignedTask failed for {}: {}", taskId, e.getMessage());
+                recordAssignmentFailure(taskId, processInstanceId, taskDefinitionKey, e.getMessage(), "ERROR", e);
             }
             return;
         }

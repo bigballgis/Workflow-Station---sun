@@ -145,6 +145,11 @@ public class CalledProcessSyncComponent {
         }
         ProcessInstance caller = callerOpt.get();
         CallOutputs outputs = readCallOutputs(caller.getProcessDefinitionKey(), calledOpt.get().getCallActivityId());
+        if (outputs.onceTargets().stream().anyMatch(com.portal.util.SubTableBatchMetadata::isLocalField)
+                || outputs.rowMappings().stream().anyMatch(mapping ->
+                        com.portal.util.SubTableBatchMetadata.isLocalField(mapping.get("from")))) {
+            throw new IllegalArgumentException("Call output mapping cannot read or write local batch metadata");
+        }
         Map<String, Object> vars = caller.getVariables() != null ? new HashMap<>(caller.getVariables()) : new HashMap<>();
         boolean changed = false;
 

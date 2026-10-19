@@ -547,7 +547,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     .formData(formData)
                     .businessKey(businessKey)
                     .build();
-            ProcessInstanceInfo created = processComponent.startProcess(userId, view.functionUnitCode(), request);
+            ProcessInstanceInfo created = processComponent.startProcessFromServer(userId, view.functionUnitCode(), request);
             log.info("CSV import created process {} for user {} at row {}", created.getId(), userId, rowNumber);
             return true;
         } catch (Exception ex) {

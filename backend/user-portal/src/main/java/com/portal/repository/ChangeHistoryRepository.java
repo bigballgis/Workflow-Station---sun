@@ -1,7 +1,6 @@
 package com.portal.repository;
 
 import com.portal.entity.ChangeHistory;
-import com.portal.enums.ChangeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -30,12 +29,32 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
     @Query("DELETE FROM ChangeHistory c WHERE c.processInstanceId IN :processInstanceIds")
     void deleteByProcessInstanceIdIn(@Param("processInstanceIds") List<String> processInstanceIds);
 
-    /**
-     * Find the most recent change record for a specific sub-table row change,
-     * ordered by timestamp descending. Used for deduplication on re-save.
-     */
-        ChangeHistory findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndFieldNameAndChangeTypeOrderByTimestampDesc(
-            String processInstanceId, String subTableName, String rowIdentifier, String fieldName, ChangeType changeType);
+    /** One bounded lookup for the changed rows, not one history query per edited cell. */
+    @Query(value = """
+            SELECT DISTINCT ON (row_identifier, field_name, change_type) * FROM up_change_history
+            WHERE process_instance_id = :processId AND sub_table_name = :tableName
+              AND (row_identifier IN (:rowIds) OR (:includeNull = true AND row_identifier IS NULL))
+            ORDER BY row_identifier, field_name, change_type, timestamp DESC, id DESC
+            """, nativeQuery = true)
+    List<ChangeHistory> queryLatestSubTableChanges(@Param("processId") String processId,
+            @Param("tableName") String tableName, @Param("rowIds") List<String> rowIds,
+            @Param("includeNull") boolean includeNull);
+
+    @Query(value = """
+            SELECT DISTINCT ON (field_name, change_type) * FROM up_change_history
+            WHERE process_instance_id = :processId AND sub_table_name = :tableName AND row_identifier IS NULL
+            ORDER BY field_name, change_type, timestamp DESC, id DESC
+            """, nativeQuery = true)
+    List<ChangeHistory> queryLatestNullIdentityChanges(@Param("processId") String processId,
+            @Param("tableName") String tableName);
+
+    default List<ChangeHistory> findLatestSubTableChanges(String processId, String tableName,
+            List<String> rowIds, boolean includeNull) {
+        List<String> concrete = rowIds.stream().filter(java.util.Objects::nonNull).toList();
+        // An all-null native IN list is bound as bytea by Hibernate, not varchar.
+        if (concrete.isEmpty()) return includeNull ? queryLatestNullIdentityChanges(processId, tableName) : List.of();
+        return queryLatestSubTableChanges(processId, tableName, concrete, includeNull);
+    }
 
     /**
      * Find all distinct function unit codes that have change history records,

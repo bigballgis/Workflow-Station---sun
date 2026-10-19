@@ -1,4 +1,5 @@
 import { ref, watch, type Ref } from 'vue'
+import type { TaskFormSubmitRequest } from '@/api/processForm'
 import { subTableStoreKey } from './subTableStore'
 import { bindingDeclaresMiParticipantRow } from './miBindingKindFromConfig'
 import { ElMessage } from 'element-plus'
@@ -31,6 +32,15 @@ import {
 import { projectSavedRowsForBinding } from './subTableFilterProjection'
 import { stampAuthoritativeRowVersions } from './subTableRowVersionSync'
 import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScopedSubTables'
+import { mergeBatchChanges, beginBatchSave } from '@/utils/subTableBatchChanges'
+import { batchMembershipBindings } from '@/utils/subTableBatchScope'
+import { projectWritableSubTables } from './writableSubTableProjection'
+
+type TaskFormSnapshot = {
+  fieldValues?: Record<string, unknown>
+  subTableBatchCapabilities?: Record<string, unknown>
+  subTableBatchRuntimeEnabled?: boolean
+}
 
 function subTableSliceUnchanged(
   snapshot: Record<string, any>,
@@ -60,7 +70,7 @@ export function useTaskForm(options: {
   isMiSubTaskMode: Ref<boolean>
   isCompletedTask: Ref<boolean>
   effectiveTaskId: Ref<string>
-  taskFormDTO?: Ref<{ fieldValues?: Record<string, any> } | null>
+  taskFormDTO?: Ref<TaskFormSnapshot | null>
   /** Binding-id → relation-table-id map; used to protect MI collection slices from id_idw scrub on save. */
   bindingRelationTableMap?: Ref<Map<number, number | null>>
   miSubProcessScopeName?: Ref<string | null | undefined>
@@ -95,8 +105,13 @@ export function useTaskForm(options: {
   const formLabelWidth = ref('160px')
   const formFormOptions = ref<Record<string, unknown>>({})
   const savingTaskForm = ref(false)
-  const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
+  const taskFormDTO = options.taskFormDTO ?? ref<TaskFormSnapshot | null>(null)
   const loadedSubTableBaseline = ref<Record<string, unknown>>({})
+  const pendingSubTableBatchChanges = ref<NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>>([])
+
+  function recordSubTableBatchChange(change: NonNullable<TaskFormSubmitRequest['subTableBatchChanges']>[number]) {
+    pendingSubTableBatchChanges.value = mergeBatchChanges(pendingSubTableBatchChanges.value, change)
+  }
   function captureLoadedSubTableBaseline(source: unknown = formData.value.__subTables__): void {
     loadedSubTableBaseline.value = JSON.parse(JSON.stringify(
       source && typeof source === 'object' && !Array.isArray(source) ? source : {},
@@ -152,7 +167,13 @@ export function useTaskForm(options: {
     }
   }
 
+  function resolveSubTableSubmitBindings() {
+    return batchMembershipBindings(options.subTableBindings.value,
+      pendingSubTableBatchChanges.value, taskFormDTO.value?.subTableBatchCapabilities)
+  }
+
   function buildSubTableSubmitPayload() {
+    const submitBindings = resolveSubTableSubmitBindings()
     const snapshot = (formData.value.__subTables__ as Record<string, any>) || {}
     const subTables: Record<string, any> = { ...snapshot }
     /**
@@ -170,7 +191,7 @@ export function useTaskForm(options: {
      */
     // 主键列 + 子表结构外键：flatten 按父行替换顶层子行时要靠它们解析归属。
     const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
-      options.subTableBindings.value,
+      submitBindings,
     )
     let miParentIdIdw: string | number | null = null
     let miCollectionSliceKeys: Set<string> | null = null
@@ -182,7 +203,7 @@ export function useTaskForm(options: {
       if (parentIdIdw != null && String(parentIdIdw).trim() !== '') {
         miParentIdIdw = parentIdIdw
         miCollectionSliceKeys = buildMiCollectionSliceKeySet(
-          options.subTableBindings.value,
+          submitBindings,
           options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
           options.miSubProcessScopeName?.value,
         )
@@ -201,9 +222,9 @@ export function useTaskForm(options: {
      */
     const emptiedSubTableKeys: string[] = []
     const subTableBindingScopes: SubTableBindingScope[] = []
-    const sharedKeys = storeKeysSharedByMultipleBindings(options.subTableBindings.value)
+    const sharedKeys = storeKeysSharedByMultipleBindings(submitBindings)
 
-    for (const binding of options.subTableBindings.value) {
+    for (const binding of submitBindings) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
       const existing = getSavedSubTableRows(subTables, binding)
       /**
@@ -277,11 +298,13 @@ export function useTaskForm(options: {
       // Shared store keys union-merge so a later binding cannot drop another binding's rows.
       stampBindingTableNameAliases(subTables, subTableData, binding, out, sharedKeys)
       const storeKey = subTableStoreKey(binding)
-      if (storeKey && sharedKeys.has(storeKey)) {
+      const batchClaimsBinding = pendingSubTableBatchChanges.value.some(change =>
+        change.bindingId === String(binding.bindingId))
+      if (storeKey && (sharedKeys.has(storeKey) || batchClaimsBinding)) {
         const scoped = projectSavedRowsForBinding(
           out,
           binding,
-          options.subTableBindings.value,
+          submitBindings,
           {
             formData: formData.value as Record<string, unknown>,
             primaryTableId: options.primaryTableBinding?.value?.tableId ?? null,
@@ -290,23 +313,31 @@ export function useTaskForm(options: {
           },
         ) ?? out
         const scope = buildBindingScopeFromBaseline(binding, scoped, emptiedThisBinding,
-          loadedSubTableBaseline.value, options.subTableBindings.value, {
+          loadedSubTableBaseline.value, submitBindings, {
             formData: formData.value,
             primaryTableId: options.primaryTableBinding?.value?.tableId,
             primaryPkFields: options.primaryTableBinding?.value?.primaryKeyFields,
             primaryFieldDefinitions: options.primaryTableBinding?.value?.fieldDefinitions,
           })
-        if (scope) subTableBindingScopes.push(scope)
+        if (scope) {
+          const explicitlyDeleted = pendingSubTableBatchChanges.value.some(change =>
+            change.bindingId === scope.bindingId && change.operation === 'DELETE')
+          if (explicitlyDeleted && !scope.rowKeys.length && scope.deletedRows?.length) {
+            scope.emptied = true
+            if (!emptiedSubTableKeys.includes(scope.storeKey)) emptiedSubTableKeys.push(scope.storeKey)
+          }
+          subTableBindingScopes.push(scope)
+        }
       }
     }
 
     if (!options.isMiSubTaskMode.value) {
       syncStaleSiblingSubTableSlicesFromActiveBindings(
         subTables,
-        options.subTableBindings.value,
+        submitBindings,
         snapshot,
       )
-      for (const binding of options.subTableBindings.value) {
+      for (const binding of submitBindings) {
         if (!Array.isArray(binding.formFields) || binding.formFields.length === 0) continue
         const live = subTables[String(binding.bindingId)]
         if (!Array.isArray(live) || live.length === 0) continue
@@ -317,16 +348,16 @@ export function useTaskForm(options: {
       // slices (other nodes' binding ids), or reload hydrates the old value. Update-only by row PK;
       // MI collection slices stay excluded (09be69f8 / #1442 leak guards).
       const collectionSliceKeys = buildMiCollectionSliceKeySet(
-        options.subTableBindings.value,
+        submitBindings,
         options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
         options.miSubProcessScopeName?.value,
       )
       // MI collection 的设计器主键 —— 用来识别「主键就是参与者键」的 binding，
       // 那种 binding 不能驱动兄弟切片同步（见被调函数说明）。读配置，不猜列名。
-      const miCollectionPk = options.subTableBindings.value
+      const miCollectionPk = submitBindings
         .filter(b => bindingDeclaresMiParticipantRow(b as never))
         .flatMap(b => (b as { primaryKeyFields?: string[] | null }).primaryKeyFields ?? [])
-      for (const binding of options.subTableBindings.value) {
+      for (const binding of submitBindings) {
         syncMiLinkChildEditedRowsIntoSiblingSlices(
           subTables,
           binding,
@@ -339,7 +370,7 @@ export function useTaskForm(options: {
 
     removeRowsWithMissingParentsFromCanonicalStore(
       subTables,
-      options.subTableBindings.value,
+      submitBindings,
       {
         formData: formData.value,
         primaryTableId: options.primaryTableBinding?.value?.tableId,
@@ -363,7 +394,7 @@ export function useTaskForm(options: {
     stampAuthoritativeRowVersions(
       subTables as Record<string, unknown>,
       loadedSubTableBaseline.value,
-      options.subTableBindings.value,
+      submitBindings,
     )
     for (const key of Object.keys(subTableData)) {
       const rows = subTables[key]
@@ -372,6 +403,17 @@ export function useTaskForm(options: {
       }
     }
 
+    if (taskFormDTO.value?.subTableBatchRuntimeEnabled === true) {
+      const writableBindings = submitBindings.filter(binding => binding.bindingMode !== 'READONLY')
+      const bindingIds = new Set(writableBindings.map(binding => String(binding.bindingId)))
+      const projected = projectWritableSubTables(subTables, writableBindings)
+      return {
+        formData: { __subTables__: projected },
+        subTableData: projectWritableSubTables(subTableData, writableBindings),
+        emptiedSubTableKeys: emptiedSubTableKeys.filter(key => Object.prototype.hasOwnProperty.call(projected, key)),
+        subTableBindingScopes: subTableBindingScopes.filter(scope => bindingIds.has(scope.bindingId)),
+      }
+    }
     return {
       formData: { __subTables__: subTables },
       subTableData,
@@ -422,26 +464,41 @@ export function useTaskForm(options: {
       // 流程变量。Complete 请求在顶层携带这两项，由 `SubTableWriteIsolation` 消费。
       emptiedSubTableKeys: subTablePayload.emptiedSubTableKeys,
       subTableBindingScopes: subTablePayload.subTableBindingScopes,
+      ...(pendingSubTableBatchChanges.value.length ? { subTableBatchChanges: pendingSubTableBatchChanges.value } : {}),
     }
   }
 
   async function saveCurrentTaskForm(actionId?: string) {
-    if (formReadOnly.value || !options.effectiveTaskId.value) return
+    if (formReadOnly.value || !options.effectiveTaskId.value || savingTaskForm.value) return
     savingTaskForm.value = true
+    let restore: (() => void) | undefined
+    let persisted = false
     try {
+      await pauseSubTableAutosave()
       const payload = buildCurrentTaskFormSubmitPayload()
+      const pageSnapshot = JSON.stringify(formData.value.__subTables__)
+      restore = beginBatchSave(pendingSubTableBatchChanges, payload)
       await submitTaskForm(options.effectiveTaskId.value, { ...payload, actionId })
+      persisted = true
       // #1446: align local slices with what was just persisted; otherwise post-save
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
-      formData.value = { ...formData.value, __subTables__: payload.formData.__subTables__ }
+      if (JSON.stringify(formData.value.__subTables__) === pageSnapshot) {
+        const tables = taskFormDTO.value?.subTableBatchRuntimeEnabled === true
+          ? { ...formData.value.__subTables__, ...payload.formData.__subTables__ }
+          : payload.formData.__subTables__
+        formData.value = { ...formData.value, __subTables__: tables }
+      }
       if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
       ElMessage.success(t('task.operationSuccess'))
     } catch (error) {
+      if (!persisted) restore?.()
       console.error('[TaskForm] save failed:', error)
       ElMessage.error(t('task.operationFailed'))
     } finally {
       savingTaskForm.value = false
+      resumeSubTableAutosave()
+      if (pendingSubTableBatchChanges.value.length) scheduleSubTableAutosave()
     }
   }
 
@@ -451,6 +508,7 @@ export function useTaskForm(options: {
     refreshSavedSubTableVersions,
     syncSubTableRowVersionsBeforeSubmit,
     resumeSubTableAutosave,
+    pauseSubTableAutosave,
   } = createSubTableAutosave({
     formReadOnly,
     isCompletedTask: options.isCompletedTask,
@@ -460,7 +518,17 @@ export function useTaskForm(options: {
     formData,
     taskFormDTO,
     loadedSubTableBaseline,
-    buildSubTableSubmitPayload,
+    buildSubTableSubmitPayload: () => {
+      const payload = buildSubTableSubmitPayload()
+      return {
+        ...payload,
+        ...(pendingSubTableBatchChanges.value.length
+          ? { subTableBatchChanges: pendingSubTableBatchChanges.value }
+          : {}),
+      }
+    },
+    beginSave: payload => beginBatchSave(pendingSubTableBatchChanges, payload),
+    onError: () => ElMessage.error(t('task.operationFailed')),
   })
 
   function getCurrentFormFieldKeys(): string[] {
@@ -472,6 +540,7 @@ export function useTaskForm(options: {
   }
 
   return {
+    resolveSubTableSubmitBindings,
     formFields,
     formTabs,
     formFieldsAfterTabs,
@@ -484,6 +553,7 @@ export function useTaskForm(options: {
     taskFormDTO,
     saveCurrentTaskForm,
     buildCurrentTaskFormSubmitPayload,
+    recordSubTableBatchChange,
     buildSubTableSubmitPayload,
     loadedSubTableBaseline,
     captureLoadedSubTableBaseline,

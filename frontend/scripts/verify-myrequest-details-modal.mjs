@@ -79,6 +79,9 @@ if (detailRows.length >= 2) {
   for (const row of detailRows) classified.push(await classifyRow(page, row.rowId))
   const unprocessed = classified.find((row) => row.opened && isBlankDisplayId(row.id))
   const completed = classified.find((row) => row.opened && UUID_RE.test(row.id))
+  if (process.env.MI_FIXTURE_ONLY === '1' && (!unprocessed || !completed)) {
+    fail('Synthetic fixture must demonstrate both an unprocessed row and a filled UUID row; unit coverage is not a substitute')
+  }
   if (!unprocessed || !completed) {
     // The id-vs-sub_task_id mapping can only be compared when this application happens to have BOTH
     // an unprocessed sub-task (blank display id) and a completed one (allocated UUID). Every row
@@ -112,6 +115,7 @@ if (detailRows.length >= 2) {
   console.log(`PASS: Details mapping on ${unprocessed.rowId} (blank id) and ${completed.rowId} (UUID)`)
   console.log('[saved]', shotOpen, shotDone)
 } else {
+  if (process.env.MI_FIXTURE_ONLY === '1') fail('Synthetic fixture must expose both participant Details links')
   const shot = screenshotPath(`app-${appId.slice(0, 8)}-details-unprocessed`)
   await page.locator('.sub-table-field').first().screenshot({ path: shot }).catch(async () => {
     await page.screenshot({ path: shot, fullPage: false })

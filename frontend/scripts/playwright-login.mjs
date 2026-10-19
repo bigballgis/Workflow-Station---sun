@@ -88,9 +88,17 @@ export async function loginViaUnifiedSso(page, app, opts = {}) {
  * same workspace the reporter saw.
  */
 export async function loginViaPortalPassword(page, opts = {}) {
+  if (process.env.MI_FIXTURE_ONLY === '1') {
+    page.on('pageerror', () => { throw new Error('Browser runtime error in isolated MI fixture') })
+    await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style')
+      style.textContent = '.header-right, .info-section .el-descriptions__content, .sub-table-lookup-preview, .assignee-cell { opacity: 0 !important; }'
+      document.head.appendChild(style)
+    }, { once: true }))
+  }
   const user = opts.user ?? process.env.LOGIN_USER ?? 'developer'
   const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'password'
-  const origin = (opts.loginOrigin ?? 'http://localhost:3000').replace(/\/$/, '')
+  const origin = (opts.loginOrigin ?? process.env.ORIGIN ?? 'http://localhost:3000').replace(/\/$/, '')
   const wantBu = opts.buCode ?? process.env.LOGIN_BU_CODE
   const wantRole = opts.roleCode ?? process.env.LOGIN_ROLE_CODE
 

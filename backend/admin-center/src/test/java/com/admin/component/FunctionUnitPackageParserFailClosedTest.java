@@ -19,6 +19,18 @@ class FunctionUnitPackageParserFailClosedTest {
     private final FunctionUnitPackageParser parser = new FunctionUnitPackageParser(new ObjectMapper());
 
     @Test
+    void unsupportedBatchSchemaCannotEnterCatalogEvenWhenDisabled() throws Exception {
+        String form = """
+                {"formId":11,"configJson":{"rule":[],"batchForms":{
+                  "101":{"schemaVersion":1.5,"rule":[{"type":"input","field":"value"}]}
+                }}}
+                """;
+        byte[] zip = zipWithEntry("forms/form_0.json", form.getBytes(StandardCharsets.UTF_8));
+        assertThatThrownBy(() -> parser.parseZipBytes(zip)).isInstanceOf(IOException.class)
+                .hasMessageContaining("batch");
+    }
+
+    @Test
     void invalidFormJson_throws() throws Exception {
         byte[] zip = zipWithEntry("forms/form_1.json", "{not-json".getBytes(StandardCharsets.UTF_8));
         assertThatThrownBy(() -> parser.parseZipBytes(zip))

@@ -20,27 +20,43 @@ final class CatalogFormSnapshot {
     private CatalogFormSnapshot() {
     }
 
-    record Payload(String configJson, List<TableBindingDTO> tableBindings, boolean freezeBindings) {
+    record Payload(String configJson, List<TableBindingDTO> tableBindings, boolean freezeBindings,
+                   Map<String, String> publishedFieldPermissions) {
     }
 
     static Payload unwrap(ObjectMapper objectMapper, String contentData) {
         if (contentData == null || contentData.isBlank()) {
-            return new Payload(contentData, null, false);
+            return new Payload(contentData, null, false, null);
         }
         Object raw;
         try {
             raw = objectMapper.readValue(contentData, Object.class);
         } catch (Exception e) {
-            return new Payload(contentData, null, false);
+            return new Payload(contentData, null, false, null);
         }
         if (!(raw instanceof Map<?, ?> parsed) || !isFullFormWrapper(parsed)) {
-            return new Payload(contentData, null, false);
+            return new Payload(contentData, null, false, null);
         }
         String configJson = stringifyConfig(objectMapper, parsed.get("configJson"));
         if (!parsed.containsKey("tableBindings")) {
-            return new Payload(configJson, null, false);
+            return new Payload(configJson, null, false, permissions(parsed));
         }
-        return new Payload(configJson, mapBindings(parsed.get("tableBindings")), true);
+        return new Payload(configJson, mapBindings(parsed.get("tableBindings")), true, permissions(parsed));
+    }
+
+    private static Map<String, String> permissions(Map<?, ?> parsed) {
+        if (parsed.get("fieldPermissions") == null) return null; // Legacy wrapper may serialize absent authority as null.
+        if (!(parsed.get("fieldPermissions") instanceof Map<?, ?> raw)) {
+            throw new AdminBusinessException("INVALID_FORM_SNAPSHOT", "Catalog field permissions must be an object");
+        }
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        raw.forEach((key, value) -> {
+            if (!(key instanceof String name) || !("EDITABLE".equals(value) || "READONLY".equals(value))) {
+                throw new AdminBusinessException("INVALID_FORM_SNAPSHOT", "Catalog field permission is invalid");
+            }
+            result.put(name, (String) value);
+        });
+        return result;
     }
 
     private static boolean isFullFormWrapper(Map<?, ?> parsed) {

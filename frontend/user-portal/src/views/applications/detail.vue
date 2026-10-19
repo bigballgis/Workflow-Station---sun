@@ -394,6 +394,8 @@
         >
           <div class="section history-section">
             <div class="section-content">
+              <BatchAssignmentHistory v-if="batchAssignmentHistory.length" :records="batchAssignmentHistory" />
+              <el-alert v-if="batchHistoryLoadError" :title="t('task.batchHistory.loadFailed')" type="warning" :closable="false" show-icon />
               <ProcessHistory
                 :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
                 :show-header="false"
@@ -503,6 +505,7 @@ import { createApplicationDetailNodeFormMap } from '@/composables/applicationDet
 import { createApplicationDetailBottomBindings } from '@/composables/applicationDetail/useApplicationDetailBottomBindings'
 import { createApplicationDetailPreviousForms } from '@/composables/applicationDetail/useApplicationDetailPreviousForms'
 import { createApplicationDetailHistory } from '@/composables/applicationDetail/useApplicationDetailHistory'
+import BatchAssignmentHistory from '@/components/BatchAssignmentHistory.vue'
 import { createApplicationDetailSecondary } from '@/composables/applicationDetail/useApplicationDetailSecondary'
 import { createApplicationDetailLoaders } from '@/composables/applicationDetail/useApplicationDetailLoaders'
 import { createApplicationDetailActions } from '@/composables/applicationDetail/useApplicationDetailActions'
@@ -586,6 +589,8 @@ const {
   subTaskDetailLinkableBindings,
   showCurrentFormSection,
   historyRecords,
+  batchAssignmentHistory,
+  batchHistoryLoadError,
   displayCurrentStepLabel,
   workflowDiagramBadgeLabel,
   getCurrentAssigneeDisplay,

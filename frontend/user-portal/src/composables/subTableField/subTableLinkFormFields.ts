@@ -5,6 +5,7 @@ import {
   stripLinkFormDesignerTableLabel
 } from '@/composables/tasks/shared'
 import type { SubTableBinding } from './subTableFieldTypes'
+import { readSubTableRows } from '@/composables/tasks/subTableStore'
 import { linkFormTableMatchKey, normalizeFkIdForMatch } from './subTableLinkFormRowMatch'
 
 export function countLinkFormFields(formFields?: FormField[]): number {
@@ -259,6 +260,8 @@ export function collectNestedSavedRowsForLinkForm(
   boundId: unknown,
   boundName: string | undefined
 ): any[] {
+  const canonicalRows = binding ? readSubTableRows(rowSub, binding) : undefined
+  if (canonicalRows !== undefined) return canonicalRows
   const seenArr = new Set<any>()
   const chunks: any[][] = []
   const addArr = (v: unknown) => {

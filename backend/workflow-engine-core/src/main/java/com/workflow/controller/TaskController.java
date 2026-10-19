@@ -67,6 +67,9 @@ public class TaskController {
     private final com.workflow.component.MultiInstanceDataResolver multiInstanceDataResolver;
     private final TaskHistoryAssembler taskHistoryAssembler;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.workflow.component.TaskWriteContextResolver taskWriteContextResolver;
+
     /**
      * Query task list.
      */
@@ -257,10 +260,12 @@ public class TaskController {
     @Operation(summary = "Get Task Details", description = "Get task details by ID")
     public ResponseEntity<ApiResponse<TaskListResult.TaskInfo>> getTask(
             @Parameter(description = "Task ID", required = true)
-            @PathVariable String taskId) {
+            @PathVariable String taskId,
+            @RequestParam(value = "includeWriteContext", defaultValue = "false") boolean includeWriteContext) {
         
         log.info("Getting task details: {}", taskId);
         TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
+        if (includeWriteContext) taskInfo.setWriteContext(taskWriteContextResolver.resolve(taskId));
         return ResponseEntity.ok(ApiResponse.success(taskInfo));
     }
     

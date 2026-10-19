@@ -29,7 +29,7 @@ console.log('[task]', taskId)
 
 const fields = await readPeopleInlineFields(page)
 const shot = screenshotPath(`task-${taskId.slice(0, 8)}-people-inline-uuid`)
-await page.locator('.sub-table-inline-form').first().screenshot({ path: shot }).catch(async () => {
+await page.locator('.sub-table-inline-form').filter({ has: page.locator('.el-form-item__label', { hasText: /^age$/i }) }).first().screenshot({ path: shot }).catch(async () => {
   await page.locator('.sub-table-field').first().screenshot({ path: shot }).catch(async () => {
     await page.screenshot({ path: shot, fullPage: true })
   })
@@ -42,6 +42,7 @@ if (fields?.length) {
   if (!subTaskId) fail(`People sub_task_id empty (id=${id})`)
   console.log(`PASS: People id=${id}, sub_task_id=${subTaskId}`)
 } else {
+  if (process.env.MI_FIXTURE_ONLY === '1') fail('Synthetic fixture must expose the People UUID field')
   console.log('PASS: no People inline on live To Do; UUID mapping covered by subTableRowRuntime + linkFormMiIsolation tests')
 }
 console.log('[saved]', shot)

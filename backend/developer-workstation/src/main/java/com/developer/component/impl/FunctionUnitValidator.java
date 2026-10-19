@@ -54,6 +54,13 @@ class FunctionUnitValidator {
         }
 
         // BPMN-DMN cross-reference validation
+        functionUnit.getFormDefinitions().forEach(form -> {
+            try { com.platform.common.form.SubTableBatchDefinition.validate(form.getConfigJson()); }
+            catch (IllegalArgumentException invalid) {
+                result.addError("INVALID_BATCH_DEFINITION", "Form \"" + form.getFormName() + "\": "
+                        + invalid.getMessage(), String.valueOf(form.getId()));
+            }
+        });
         validateBpmnDmnCrossReferences(functionUnit, result);
 
         // DECISION_TABLE action config validation

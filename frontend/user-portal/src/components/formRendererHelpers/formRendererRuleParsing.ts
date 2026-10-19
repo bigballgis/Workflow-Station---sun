@@ -240,6 +240,7 @@ export function extractFieldsRecursive(
         label: getLayoutLabel(item),
         type: 'subTable',
         _bindingId: Number(bindingId),
+        ...(typeof item.batchControlId === 'string' ? { batchControlId: item.batchControlId } : {}),
         // 逐操作权限：仅在显式为 false 时下发（undefined 由 SubTableField 回退到 editable）
         ...(props?.allowAdd === false ? { allowAdd: false } : {}),
         ...(props?.allowEdit === false ? { allowEdit: false } : {}),

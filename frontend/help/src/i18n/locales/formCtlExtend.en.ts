@@ -8,7 +8,18 @@ export default {
   catalogExtendBody:
     'Labels below match this control’s Component props. Designer locale is English. Blank means the listed default unless the row says required.',
   subTable: {
-    summary: 'Bound child grid (help_pr_line). Binding, Allow Add/Edit/Delete, List View columns.',
+    batchTitle: 'Batch workspace in User Portal',
+    batchPreviewHint: 'Open Form Preview, then Batch Edit beside Export. Preview uses the current batch design, including unsaved changes. An empty grid supplies two sample rows. Apply changes only the preview; Cancel leaves it unchanged. Sample users, business units, roles and generated keys do not reserve numbers, save business records or create tasks.',
+    batchBody: 'Open Batch Edit to the left of Export. Its commands depend on the enabled batch permissions and your current task. Add-only keeps existing rows read-only; Delete-only allows selection without field changes. Existing requests do not gain this workspace when a designer later enables it. Changes in this dialog remain private until Apply.',
+    batchAddHint: 'Enter 1–200 rows, click Add, then fill the new rows. Select a parent when the dropdown is shown. Required fields and manually entered keys must be complete. Generated keys are prepared on Apply; Cancel does not allocate them.',
+    batchDeleteHint: 'Select rows on the current page and confirm Delete. Removing a newly added draft only discards that draft. Related child data or a changed saved row can block deletion. No child tasks are cancelled.',
+    batchSetHint: 'First tick the rows on the left; the workspace shows the selected count. Uniform values affect only checked rows, including newly added rows, and are applied when you click Apply to page. With no selection, Apply asks you to select rows and retains your draft. Add uses configured defaults; it does not copy saved rows. No change preserves each value. Set value accepts zero, false and an empty string where allowed. Clear value must satisfy required-field validation. Existing keys, foreign keys and calculated fields are read-only.',
+    batchApplyHint: 'Validates the whole batch, up to 200 affected rows, then updates the page once. Fix a reported error before retrying; reopen if the table changed while the dialog was open. The normal Save or auto-save still has to succeed. Apply does not create tasks.',
+    batchCancelHint: 'Discards the private workspace; confirm before closing with unapplied changes. The original page is unchanged.',
+    batchStartHint: 'New Request checks the published batch design again on Submit Application. If it changed while the page was open, submission is blocked before a process is created. Refresh the request form and check the restored draft before submitting again. Existing instances retain their own batch design.',
+    batchOutcomeHint: 'An assignment warning after submission or task completion means that action has already happened. Do not repeat it. Open My Requests, select the application and open Flow History to see recorded verification results and affected task IDs. These describe the result at submission or completion, not current task status. If the record could not be saved, the warning says so; contact an administrator. Saving assignment values alone does not prove task creation.',
+    batchAssignHint: 'When allowed, initial assignment is edited inside the same workspace. Use each row’s person or BU and Role fields, or select rows in the assignment grid and set a uniform target. Only configured modes are shown. A changed target is required; clearing assignment is not supported. Ordinary field edits and assignment are validated together on Apply. A directory error is shown and blocks changed assignment; it does not mean the directory has no results. Saving these values does not create or reassign a task.',
+    summary: 'Bound child grid (help_pr_line). Individual and batch permissions, List View columns.',
     crumb: 'Developer Workstation · Function Units · Form Design · Controls · Extend · Sub-Table',
     intro:
       'Grid of a bound SUB table. Attach the table in [[/table-bindings]] first. On Purchase Request this is help_pr_line. Differs from [[/form-ctl-lookup]] (search-and-pick one row) and Inline Form (the same SUB form in place, no grid).',
@@ -16,10 +27,14 @@ export default {
     whatBody:
       'A grid of SUB table rows on the form. On Purchase Request that is help_pr_line. The person adds, edits, and deletes rows when those Allow switches are on. Event value is the row list after those edits; empty means no rows.',
     howBody:
-      'Select the placeholder. Sub Table Binding: choose the SUB already attached in [[/table-bindings]] (help_pr_line). Tick Allow Add, Allow Edit, Allow Delete as needed. Compact cells keeps lookup and user cells on one line. Open List View to pick Table Columns and Extend Action (Link Form or Lookup columns). Save the form. Preview the grid.',
-    propsFigure: 'Form Design. Sub-Table selected. Right panel: Sub Table Binding, Allow Add / Edit / Delete, Compact cells.',
+      'Select the placeholder. Sub Table Binding: choose the SUB already attached in [[/table-bindings]] (help_pr_line). Set the Batch switches only for a separately designed batch form; all four are off by default. Batch Add, Edit, Delete, and Assign are independent and do not change the existing Allow Add, Allow Edit, or Allow Delete switches. Then tick the individual-row Allow switches as needed. Compact cells keeps lookup and user cells on one line. Open List View to pick Table Columns and Extend Action (Link Form or Lookup columns). Save the form. Preview the grid.',
+    propsFigure: 'Form Design. Sub-Table selected. Right panel: batch permissions, individual-row Allow Add / Edit / Delete, Compact cells.',
     catBinding: 'Required. The SUB or ACTION table this grid shows. Blank: the canvas reads No Sub Table selected, and save is blocked.',
     catSelect: 'Dropdown placeholder on Sub Table Binding. Empty list reads No Sub Tables available — bind a SUB table in [[/table-bindings]] first.',
+    catAllowBatchAdd: 'Off by default. Allows the Batch Edit workspace to add business rows only when the batch form and runtime authorization are valid. It does not change Allow Add.',
+    catAllowBatchEdit: 'Off by default. Allows the Batch Edit workspace to change the fields included in its separate batch form, subject to runtime authorization. It does not change Allow Edit.',
+    catAllowBatchDelete: 'Off by default. Allows the Batch Edit workspace to delete authorized business rows. It does not change Allow Delete.',
+    catAllowBatchAssign: 'Off by default. Allows the Batch Edit workspace to configure an initial assignee or BU and Role only before the related subtask exists. It never reassigns an existing task.',
     catAllowAdd: 'On: people can add rows. Off hides Add. ACTION bindings omit this row.',
     catAllowEdit: 'On: people can edit rows. Off is view-only. ACTION bindings omit this row.',
     catAllowDelete: 'On: people can delete rows. Off keeps rows. ACTION bindings omit this row.',

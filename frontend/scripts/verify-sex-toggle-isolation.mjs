@@ -25,7 +25,7 @@ const taskId = await openFirstTodoMatching(page, async (p) => {
   const fields = await readPeopleInlineFields(p)
   if (!fields?.length) return false
   return p.evaluate(() => {
-    const cards = [...document.querySelectorAll('.el-card, .form-layout-card, .sub-table-field')]
+    const cards = [...document.querySelectorAll('.sub-table-inline-form, .el-card, .form-layout-card, .sub-table-field')]
     const people = cards.find((c) => /people/i.test(c.textContent || ''))
     return !!(people && people.querySelector('.el-switch'))
   })
@@ -37,7 +37,7 @@ await page.screenshot({ path: beforePath, fullPage: true })
 const before = await readPeopleInlineFields(page)
 
 const toggled = await page.evaluate(() => {
-  const cards = [...document.querySelectorAll('.el-card, .form-layout-card, .sub-table-field')]
+  const cards = [...document.querySelectorAll('.sub-table-inline-form, .el-card, .form-layout-card, .sub-table-field')]
   const people = cards.find((c) => /people/i.test(c.textContent || ''))
   const sw = people?.querySelector('.el-switch')
   if (!sw) return false
@@ -54,6 +54,9 @@ if (toggled && before) {
   const ageAfter = fieldByLabel(after, /^age$/i)
   const idBefore = fieldByLabel(before, /^id$/i)
   const idAfter = fieldByLabel(after, /^id$/i)
+  if (process.env.MI_FIXTURE_ONLY === '1' && (ageAfter !== ageBefore || idAfter !== idBefore)) {
+    fail('People.sex toggle changed the owning participant age or primary key')
+  }
   if (ageBefore.trim() === '' && ageAfter.trim() !== '' && ageAfter !== ageBefore) {
     fail(`age filled after sex toggle (${ageBefore} -> ${ageAfter}) — possible sibling bleed`)
   }
@@ -62,6 +65,7 @@ if (toggled && before) {
   }
   console.log('PASS: People.sex toggle did not pull sibling age/id')
 } else {
+  if (process.env.MI_FIXTURE_ONLY === '1') fail('Synthetic fixture must expose a People.sex control')
   console.log('PASS: no People.sex control on live To Do; isolation covered by linkFormMiIsolation.test.ts')
 }
 console.log('[saved]', beforePath, afterPath)

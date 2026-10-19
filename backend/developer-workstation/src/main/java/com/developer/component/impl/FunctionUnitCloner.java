@@ -45,6 +45,7 @@ import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.FkFillSourcesSupport;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
+import com.developer.util.FormFieldPermissionBindingIdRewriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -554,10 +555,9 @@ class FunctionUnitCloner {
         if (configJson != null) {
             FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, formBindingIdMapping);
             savedForm.setConfigJson(configJson);
-            savedForm = formDefinitionRepository.save(savedForm);
         }
-
-        return savedForm;
+        savedForm.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(fieldPermissions, formBindingIdMapping));
+        return formDefinitionRepository.save(savedForm);
     }
 
     private void cloneEmailConnections(Long sourceFunctionUnitId,

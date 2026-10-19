@@ -30,8 +30,14 @@ await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_
  * later node (common when attachments were added on start / My Request and the
  * current assignee tasks have not reached that form), walk running My Requests.
  */
-let taskId = null
-const todos = preferMiTasks(
+let taskId = process.env.TASK_ID || null
+if (taskId) await openPortalTask(page, taskId)
+if (taskId && process.env.APP_ID && (await countSubTableRows(page, 'attachment')).count <= 0) {
+  await page.goto(`${MI_PORTAL_ORIGIN}/portal/applications/${process.env.APP_ID}`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.sub-table-field').first().waitFor()
+  taskId = process.env.APP_ID
+}
+const todos = taskId ? [] : preferMiTasks(
   await listPortalTodoTasks(page),
   /fu-20260422|subtask demo/i,
 ).slice(0, 8)
@@ -42,7 +48,12 @@ for (const row of todos) {
     break
   }
 }
-if (!taskId) {
+if (!taskId && process.env.APP_ID) {
+  await page.goto(`${MI_PORTAL_ORIGIN}/portal/applications/${process.env.APP_ID}`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.sub-table-field').first().waitFor()
+  if ((await countSubTableRows(page, 'attachment')).count > 0) taskId = process.env.APP_ID
+}
+if (!taskId && !process.env.APP_ID && !process.env.TASK_ID) {
   const apps = preferMiApplications(await listPortalApplications(page, MI_PORTAL_ORIGIN))
   for (const row of apps.slice(0, 8)) {
     await page.goto(`${MI_PORTAL_ORIGIN}/portal/applications/${row.id}`, { waitUntil: 'domcontentloaded' })
@@ -87,6 +98,9 @@ await page.locator('.sub-table-field').filter({ hasText: gridTitle || /participa
 
 if (!attachment.found || attachment.count < 1) {
   fail(`Attachment rows=${attachment.count} (expected at least 1)`)
+}
+if (process.env.MI_FIXTURE_ONLY === '1' && (!collection.found || collection.count !== 1)) {
+  fail('Synthetic MI task must expose its one participant collection row alongside the shared attachment')
 }
 if (collectionFileLeaks > 0) {
   fail(`collection table has ${collectionFileLeaks} pure id+file leak row(s)`)

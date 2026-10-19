@@ -9,6 +9,7 @@ export const MI_REGRESSION_SCENARIOS = [
     unitTests: [
       'mcyInitiatorMyRequest.test.ts',
       'miDetailsFieldMapping.test.ts',
+      'linkFormChildSeed.test.ts',
       'mergeSubTableRowsMiMerge.test.ts',
       'mergeMiCollectionSubTableRows.test.ts',
       'dropSubsumedSubTableRows.test.ts',

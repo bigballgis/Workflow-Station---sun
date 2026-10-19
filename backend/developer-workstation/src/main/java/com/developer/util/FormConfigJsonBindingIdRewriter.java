@@ -3,6 +3,7 @@ package com.developer.util;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +33,7 @@ public final class FormConfigJsonBindingIdRewriter {
 
     private static final String[] BINDING_KEYED_FIELDS = {
             "subForms",
+            "batchForms",
             "subListViews",
             "relationViews",
             "subTablePortalViews"
@@ -43,6 +45,48 @@ public final class FormConfigJsonBindingIdRewriter {
     /** Legacy entry point (clone / form copy): binding ids only. */
     public static void remapBindingIds(Map<String, Object> configJson, Map<Long, Long> bindingIdMapping) {
         remapIds(configJson, bindingIdMapping, Map.of(), Map.of(), Map.of());
+    }
+
+    /**
+     * Form copy creates a new design surface. Batch-control identities therefore
+     * must not be shared with the source form; import and rollback intentionally
+     * do not call this method because they preserve the same design identity.
+     */
+    public static void regenerateBatchControlIds(Map<String, Object> configJson) {
+        if (configJson == null) {
+            return;
+        }
+        regenerateBatchControlIdsInRules(configJson.get("rule"));
+        regenerateBatchControlIdsInFormContainer(configJson.get("subForms"));
+        regenerateBatchControlIdsInFormContainer(configJson.get("batchForms"));
+    }
+
+    private static void regenerateBatchControlIdsInFormContainer(Object container) {
+        if (!(container instanceof Map<?, ?> forms)) {
+            return;
+        }
+        for (Object form : forms.values()) {
+            if (form instanceof Map<?, ?> formMap) {
+                regenerateBatchControlIdsInRules(formMap.get("rule"));
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void regenerateBatchControlIdsInRules(Object ruleObj) {
+        if (!(ruleObj instanceof List<?> rules)) {
+            return;
+        }
+        for (Object item : rules) {
+            if (!(item instanceof Map<?, ?> rawNode)) {
+                continue;
+            }
+            Map<String, Object> node = (Map<String, Object>) rawNode;
+            if ("subTable".equals(node.get("type")) && node.containsKey("batchControlId")) {
+                node.put("batchControlId", "stbc_" + UUID.randomUUID());
+            }
+            regenerateBatchControlIdsInRules(node.get("children"));
+        }
     }
 
     /**
@@ -72,6 +116,7 @@ public final class FormConfigJsonBindingIdRewriter {
         }
         remapRuleBindingIds(configJson.get("rule"), ctx);
         remapSubFormRules(configJson.get("subForms"), ctx);
+        remapSubFormRules(configJson.get("batchForms"), ctx);
         remapSubListViewColumnBindingRefs(configJson.get("subListViews"), ctx);
         remapPortalViewsValues(configJson.get("subTablePortalViews"), ctx);
     }

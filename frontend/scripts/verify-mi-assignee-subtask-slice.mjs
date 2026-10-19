@@ -34,11 +34,14 @@ console.log('[task]', taskId)
 
 const table = pickMiCollectionTable(await listMiCollectionTables(page))
 const shot = screenshotPath(`task-${taskId.slice(0, 8)}-assignee-subtask-slice`)
-await page.locator('.sub-table-field').first().screenshot({ path: shot }).catch(async () => {
+await page.locator('.sub-table-field').filter({ hasText: table?.title || /sub task|participant/i }).first().screenshot({ path: shot }).catch(async () => {
   await page.screenshot({ path: shot, fullPage: true })
 })
 
 if (!table) fail('collection table not found on assignee To Do')
+if (process.env.MI_FIXTURE_ONLY === '1' && (!/sub\s*task/i.test(table.title) || table.rows.length !== 1)) {
+  fail('Synthetic fixture must show exactly the current participant Sub Task row, not a shared attachment table')
+}
 if (table.rows.length < 1) fail(`collection "${table.title}" has 0 rows`)
 console.log(`PASS: assignee collection "${table.title}" visible (${table.rows.length} row(s))`)
 console.log('[saved]', shot)

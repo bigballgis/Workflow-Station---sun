@@ -163,8 +163,14 @@ public class FunctionUnitContentComponent {
      */
     @Transactional(readOnly = true)
     public FunctionUnitContentResponse assembleFunctionUnitContent(String id) {
+        return assembleFunctionUnitContent(id, false);
+    }
+
+    /** Start consistency checks must see the committed catalog, never a cached assembly. */
+    @Transactional(readOnly = true)
+    public FunctionUnitContentResponse assembleFunctionUnitContent(String id, boolean forStart) {
         // Check cache first
-        CachedContent cached = assembledContentCache.get(id);
+        CachedContent cached = forStart ? null : assembledContentCache.get(id);
         if (cached != null && !cached.isExpired()) {
             return cached.response();
         }
@@ -211,6 +217,7 @@ public class FunctionUnitContentComponent {
         bindingLoader.attachTableBindings(forms);
 
         FunctionUnitContentResponse response = FunctionUnitContentResponse.builder()
+                .startContentAuthoritative(forStart ? true : null)
                 .id(unit.getId())
                 .name(unit.getName())
                 .code(unit.getCode())
@@ -222,7 +229,7 @@ public class FunctionUnitContentComponent {
                 .dataTables(dataTables)
                 .build();
         // Cache the assembled result
-        assembledContentCache.put(id, new CachedContent(response, System.currentTimeMillis()));
+        if (!forStart) assembledContentCache.put(id, new CachedContent(response, System.currentTimeMillis()));
         return response;
     }
 
@@ -302,6 +309,7 @@ public class FunctionUnitContentComponent {
                 .name(content.getContentName())
                 .sourceId(content.getSourceId())
                 .data(snapshot.configJson())
+                .publishedFieldPermissions(payload.publishedFieldPermissions())
                 .formType(snapshot.formType())
                 // Lets the portal tell a node's To Do design from its My Requests one.
                 .scene(snapshot.scene())

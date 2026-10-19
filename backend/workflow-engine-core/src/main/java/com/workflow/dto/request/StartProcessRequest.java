@@ -13,6 +13,9 @@ public class StartProcessRequest {
     
     @NotBlank(message = "Process definition key is required")
     private String processDefinitionKey;
+
+    /** Optional optimistic deployment pin; never selects an older definition. */
+    private String expectedProcessDefinitionId;
     
     private String businessKey;
     

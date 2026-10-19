@@ -383,7 +383,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             if (e.getCause() != null && e.getCause().getMessage() != null) {
                 errorMsg = e.getCause().getMessage();
             }
-            response.setMessage(i18nService.getMessage("deploy.failed") + ": " + errorMsg);
+            response.setMessage(errorMsg);
 
             for (DeployResponse.DeployStep step : steps) {
                 if ("RUNNING".equals(step.getStatus())) {

@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,6 +38,7 @@ public class ProcessInstanceInfo {
     private String currentStepName;
     private String currentAssignee;
     private String candidateUsers;
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> variables;
 
     /**
@@ -55,6 +59,9 @@ public class ProcessInstanceInfo {
      * 无鉴权、URL 即凭据，且经 Kong 的 {@code /api/ap/*} 浏览器可直达。真实原因只写服务端日志。
      */
     private String firstStepError;
+
+    /** Only direct initial Batch Assign: the instance exists even when verification is FAILED/UNCONFIRMED. */
+    private BatchAssignmentVerification batchAssignmentVerification;
 
     /** 发起时钉死的功能单元目录 ID（admin sys_function_units.id） */
     private String functionUnitCatalogId;

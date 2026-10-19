@@ -136,7 +136,8 @@ public class TaskDetailQueryComponent {
         }
         Map<String, Object> current = merged.get("__subTables__") instanceof Map<?, ?> m
                 ? (Map<String, Object>) m : null;
-        engineSubTableHydrator.mergeFromEngine(processInstanceId, current).ifPresent(result -> {
+        engineSubTableHydrator.mergeFromEngine(processInstanceId, current,
+                SubTableBatchDeletedRows.read(pi.getVariables())).ifPresent(result -> {
             Map<String, Object> cur = result.mergedSubTables();
             merged.put("__subTables__", cur);
             if (result.rowCount() != null && merged.get("rowCount") == null) {

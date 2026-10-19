@@ -1,5 +1,7 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
+import { batchAssignmentFeedback } from '@/utils/batchAssignmentFeedback'
 import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
+import { projectWritableSubTables, type WritableSubTableBinding } from './writableSubTableProjection'
 import {
   stampCanonicalStoreRows,
   storeKeysSharedByMultipleBindings,
@@ -28,6 +30,7 @@ function unwrapCompleteFormPayload(built: Record<string, any>): {
   formData: Record<string, any>
   emptiedSubTableKeys?: string[]
   subTableBindingScopes?: TaskCompleteRequest['subTableBindingScopes']
+  subTableBatchChanges?: TaskCompleteRequest['subTableBatchChanges']
 } {
   if (
     built != null
@@ -42,6 +45,7 @@ function unwrapCompleteFormPayload(built: Record<string, any>): {
       formData: built.formData as Record<string, any>,
       emptiedSubTableKeys: built.emptiedSubTableKeys,
       subTableBindingScopes: built.subTableBindingScopes,
+      subTableBatchChanges: built.subTableBatchChanges,
     }
   }
   return { formData: built }
@@ -98,6 +102,7 @@ export function useTaskActions(options: {
   taskId: MaybeRef<string>
   taskInfo: Ref<Record<string, any>>
   subTableBindings: Ref<any[]>
+  resolveSubTableSubmitBindings?: () => WritableSubTableBinding[]
   formData: Ref<Record<string, any>>
   /** Whether the current Task Form is entirely read-only. */
   formReadOnly?: MaybeRef<boolean>
@@ -253,20 +258,12 @@ export function useTaskActions(options: {
     currentFormData.__subTables__ = mergedSub
     return currentFormData
   }
-  function buildUserSubmittedFormData(engineFormData: Record<string, any>): Record<string, any> {
+  function buildUserSubmittedFormData(engineFormData: Record<string, any>, bindings: WritableSubTableBinding[]): Record<string, any> {
     const submitted: Record<string, any> = { ...engineFormData }
     delete submitted.__subTables__
     if (unref(options.formReadOnly ?? false)) return submitted
     const engineSubTables = (engineFormData.__subTables__ as Record<string, any>) || {}
-    const submittedSubTables: Record<string, any> = {}
-    for (const binding of options.subTableBindings.value) {
-      if (binding?.bindingMode === 'READONLY') continue
-      const key = subTableStoreKey(binding)
-      if (key && Object.prototype.hasOwnProperty.call(engineSubTables, key)) {
-        // Keep []: an empty current editable grid is an explicit delete-all submission.
-        submittedSubTables[key] = engineSubTables[key]
-      }
-    }
+    const submittedSubTables = projectWritableSubTables(engineSubTables, bindings)
     if (Object.keys(submittedSubTables).length > 0) {
       submitted.__subTables__ = submittedSubTables
     }
@@ -308,21 +305,23 @@ export function useTaskActions(options: {
       const rawBuilt = options.buildFormPayloadForComplete
         ? options.buildFormPayloadForComplete()
         : buildLegacyCompleteFormData()
-      const { formData: built, emptiedSubTableKeys, subTableBindingScopes } =
+      const { formData: built, emptiedSubTableKeys, subTableBindingScopes, subTableBatchChanges } =
         unwrapCompleteFormPayload(rawBuilt)
       const engineFormData: Record<string, any> = { ...built }
+      const submitBindings = options.resolveSubTableSubmitBindings
+        ? options.resolveSubTableSubmitBindings() : options.subTableBindings.value
       engineFormData.__subTables__ = canonicalizeSubTablesForSubmit(
         (built.__subTables__ as Record<string, any>) || {},
-        options.subTableBindings.value,
+        submitBindings,
       )
-      const submittedFormData = buildUserSubmittedFormData(engineFormData)
+      const submittedFormData = buildUserSubmittedFormData(engineFormData, submitBindings)
       Object.assign(variables, engineFormData)
       const pid = resolveProcessTaskId(options.taskId)
       if (!pid) {
         ElMessage.warning(t('task.operationFailed'))
         return
       }
-      await completeTask(pid, {
+      const completion = await completeTask(pid, {
         taskId: pid,
         action: options.currentApproveAction.value,
         actionId: options.currentActionId?.value || undefined,
@@ -331,8 +330,19 @@ export function useTaskActions(options: {
         formData: submittedFormData,
         emptiedSubTableKeys,
         subTableBindingScopes,
+        subTableBatchChanges,
       })
-      ElMessage.success(t('task.operationSuccess'))
+      const assignmentResult = completion.data?.batchAssignmentVerification
+      if (assignmentResult && (assignmentResult.status !== 'VERIFIED' || assignmentResult.historyRecorded === false)) {
+        ElMessage({
+          type: 'warning',
+          message: batchAssignmentFeedback(assignmentResult, t, 'task'),
+          duration: 0,
+          showClose: true,
+        })
+      } else {
+        ElMessage.success(t('task.operationSuccess'))
+      }
       options.approveDialogVisible.value = false
       router.push('/tasks')
     } catch (e) {

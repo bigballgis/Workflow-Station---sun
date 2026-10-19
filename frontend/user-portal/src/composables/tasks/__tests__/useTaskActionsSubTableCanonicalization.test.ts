@@ -1,8 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { PLATFORM_ROW_UUID_FIELD } from '@/utils/subTableRowIdentity'
+import type { TaskCompleteRequest } from '@/api/task'
 const pushMock = vi.fn()
-const completeTaskMock = vi.fn(async () => ({}))
+const completeTaskMock = vi.fn(async (_taskId: string, _payload: TaskCompleteRequest) => ({}))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushMock }),
 }))
@@ -17,7 +18,7 @@ vi.mock('element-plus', () => ({
   },
 }))
 vi.mock('@/api/task', () => ({
-  completeTask: (...args: any[]) => completeTaskMock(...args),
+  completeTask: (...args: Parameters<typeof completeTaskMock>) => completeTaskMock(...args),
   delegateTask: vi.fn(),
   transferTask: vi.fn(),
   urgeTask: vi.fn(),
@@ -107,6 +108,29 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     expect(Object.keys(subTables)).toEqual(['dw:acq correspondence'])
     expect(String(subTables['dw:acq correspondence'][0][PLATFORM_ROW_UUID_FIELD])).not.toBe('')
     expect(subTables['ACQ Correspondence']).toBeUndefined()
+  })
+  it('uses frozen submit bindings for Complete instead of filtering an accepted draft with live metadata', async () => {
+    const resolveSubTableSubmitBindings = vi.fn(() => [{ bindingId: 69, tableName: 'frozen_lines',
+      bindingMode: 'EDITABLE', primaryKeyFields: ['line_key'] }])
+    const actions = useTaskActions({
+      taskId: 'task-1', taskInfo: ref({}),
+      subTableBindings: ref([{ bindingId: 69, tableName: 'live_lines', bindingMode: 'READONLY', primaryKeyFields: ['wrong_key'] }]),
+      resolveSubTableSubmitBindings,
+      formData: ref({}), submitting: ref(false), approveDialogVisible: ref(true), approveDialogTitle: ref(''),
+      currentApproveAction: ref('APPROVE'), approveForm: { comment: '' }, actionDialogVisible: ref(false),
+      actionDialogTitle: ref(''), currentAction: ref(''), actionForm: { targetUserId: '', reason: '' },
+      userOptions: ref([]), userSearchLoading: ref(false), loadTaskDetail: vi.fn(async () => {}),
+      buildFormPayloadForComplete: () => ({ formData: { __subTables__: {
+        'dw:frozen_lines': [{ line_key: 'L1', description: 'draft', _wsRowVersion: 1 }],
+      } }, emptiedSubTableKeys: [] }),
+    })
+    await actions.submitApprove()
+    const payload = completeTaskMock.mock.calls[0]?.[1]
+    expect(payload?.formData?.__subTables__).toEqual({
+      'dw:frozen_lines': [{ line_key: 'L1', description: 'draft', _wsRowVersion: 1 }],
+    })
+    expect(payload?.variables?.__subTables__).toEqual(payload?.formData?.__subTables__)
+    expect(resolveSubTableSubmitBindings).toHaveBeenCalledTimes(1)
   })
   it('uses buildFormPayloadForComplete when provided (Save parity path)', async () => {
     const buildFormPayloadForComplete = vi.fn(() => ({

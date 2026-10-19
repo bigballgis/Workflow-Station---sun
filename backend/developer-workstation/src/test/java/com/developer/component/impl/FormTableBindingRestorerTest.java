@@ -74,6 +74,7 @@ class FormTableBindingRestorerTest {
                 .formName("HMDC Case Form")
                 .formType(FormType.PROCESS)
                 .configJson(mcyCaseFormConfigJson())
+                .fieldPermissions(Map.of("271:card_number", "READONLY", "273:file", "HIDDEN", "legal_hold", "EDITABLE"))
                 .build();
 
         when(formTableBindingRepository.countByFormId(50019L)).thenReturn(0L);
@@ -97,6 +98,7 @@ class FormTableBindingRestorerTest {
                 form, List.of(caseTable, txTable, attachmentTable));
 
         assertThat(repaired).isTrue();
+        assertThat(form.getFieldPermissions()).isEqualTo(Map.of("9002:card_number", "READONLY", "9003:file", "HIDDEN", "legal_hold", "EDITABLE"));
         ArgumentCaptor<FormTableBinding> captor = ArgumentCaptor.forClass(FormTableBinding.class);
         verify(formTableBindingRepository, atLeastOnce()).save(captor.capture());
         assertThat(captor.getAllValues()).anyMatch(b -> b.getBindingType() == BindingType.PRIMARY

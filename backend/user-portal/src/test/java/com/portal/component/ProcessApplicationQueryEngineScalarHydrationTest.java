@@ -165,4 +165,41 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
         assertNull(info.getVariables().get("__subTables__"),
                 "__subTables__ has its own per-slice merge rules and must not be bulk-copied here");
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "__subTableBatchRuntime__", "__subTableBatchDeletedRows__" })
+    void engineCannotCreateLocalBatchMetadata(String reserved) {
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("output_text", null);
+        ProcessInstance instance = storedInstance("COMPLETED", stored);
+        ProcessInstanceRepository repository = mock(ProcessInstanceRepository.class);
+        when(repository.findById(PID)).thenReturn(Optional.of(instance));
+
+        ProcessInstanceInfo info = newComponent(repository, engineWith(Map.of(
+                reserved, Map.of("untrusted", true), "output_text", "done"))).getProcessDetail(PID);
+
+        assertEquals("done", info.getVariables().get("output_text"));
+        org.junit.jupiter.api.Assertions.assertFalse(instance.getVariables().containsKey(reserved));
+        org.junit.jupiter.api.Assertions.assertFalse(info.getVariables().containsKey(reserved));
+        verify(repository).save(instance);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "__subTableBatchRuntime__", "__subTableBatchDeletedRows__" })
+    void existingLocalMetadataSurvivesScalarHydration(String reserved) {
+        Map<String, Object> trusted = Map.of("server", "immutable");
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put(reserved, trusted);
+        stored.put("output_text", null);
+        ProcessInstance instance = storedInstance("COMPLETED", stored);
+        ProcessInstanceRepository repository = mock(ProcessInstanceRepository.class);
+        when(repository.findById(PID)).thenReturn(Optional.of(instance));
+
+        newComponent(repository, engineWith(Map.of(reserved, "forged", "output_text", "done"))).getProcessDetail(PID);
+
+        assertEquals(trusted, instance.getVariables().get(reserved));
+        assertEquals("done", instance.getVariables().get("output_text"));
+    }
 }

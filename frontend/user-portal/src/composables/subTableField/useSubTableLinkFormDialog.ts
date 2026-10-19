@@ -1,7 +1,7 @@
 import { computed, ref, unref, type Ref } from 'vue'
-import { PLATFORM_ROW_UUID_FIELD } from '@/utils/subTableRowIdentity'
 import { mergeSubTableRowsByRowId, stripLinkFormDesignerTableLabel } from '@/composables/tasks/shared'
 import type { Column, SubTableBinding, SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
+import { linkedFormSeedRow } from './subTableLinkFormSeed'
 import {
   isLinkFormBoundToHostGrid,
   isMiStyleParentRowForLinkForm,
@@ -55,7 +55,8 @@ export function useSubTableLinkFormDialog(
     const boundKey = linkFormTableMatchKey(boundNameRaw)
 
     const matches = list.filter(item => {
-      if (boundId != null && Number(item.bindingId) === Number(boundId)) return true
+      // An explicit binding reference is authoritative; labels cannot substitute another table.
+      if (boundId != null) return Number(item.bindingId) === Number(boundId)
       if (boundNameRaw && item.tableName === boundNameRaw) return true
       if (boundKey && linkFormTableMatchKey(item.tableName) === boundKey) return true
       if (boundNameStripped || boundId != null) {
@@ -179,33 +180,15 @@ export function useSubTableLinkFormDialog(
     return merged
   }
 
-  /**
-   * 行标识：**先配置主键**，其次平台生成的行标识。取不到返回 null（= 判不出身份）。
-   *
-   * <p>原来是 `['row_id', 'id_idw', ...pk, 'id']` —— 把猜的名字排在配置主键前面。这三个字面量
-   * 都已删除：`id` 在 dev 是 13 张表的业务列且无一是主键，`row_id` 在有些表是配置主键、
-   * 另一些表是普通列，`id_idw` 在当前库里 0 行存在。判不出身份就返回 null，不猜。
-   */
-  function linkFormRowIdentity(row: Record<string, any> | null | undefined): string | null {
-    if (!row || typeof row !== 'object') return null
-    const pk = selectedLinkBinding.value?.primaryKeyFields ?? []
-    for (const k of [...pk, PLATFORM_ROW_UUID_FIELD]) {
-      const name = String(k ?? '').trim()
-      if (!name) continue
-      const v = normalizeFkIdForMatch(row[name])
-      if (v != null) return v
-    }
-    return null
-  }
-
   function buildLinkedFormData(
     binding?: SubTableBinding,
     opts?: { readonly?: boolean },
-    /** 正在打开的那一行；用来判断 `binding.data[0]` 是不是它本人。 */
+    /** Clicked host row: same-table identity or the configured parent of a linked child. */
     parentRowForSeed?: Record<string, any> | null,
   ): Record<string, any> {
     /**
-     * 播种用的行：**只按身份挑正在打开的那一行；挑不到就用空行，绝不退回 `data[0]`。**
+     * Self links match row identity; child links match the configured FK to this parent.
+     * No unique match means an empty model, never an arbitrary data[0].
      *
      * <p>`data[0]` 是池子第一行 —— 新建的父行还没有自己的数据时，它就是**上一个父行**。
      * 拿它播种等于「猜这一行是谁」：会把别人的字段值和 `__subTables__` 整份继承过来，
@@ -215,42 +198,14 @@ export function useSubTableLinkFormDialog(
      * <p>身份判不出时**宁可空**：空表单最多让用户重填，而猜错会把别人的数据写到这一行名下
      * —— 后者是静默的数据污染，且会顺着保存一路扩散。
      */
-    const rows = Array.isArray(binding?.data) ? (binding!.data as Record<string, any>[]) : []
-    const wantKey = linkFormRowIdentity(parentRowForSeed)
-    const matched = wantKey == null
-      ? undefined
-      : rows.find(r => r && typeof r === 'object' && linkFormRowIdentity(r) === wantKey)
-    const raw: Record<string, any> = matched ?? {}
+    const raw: Record<string, any> = linkedFormSeedRow(props, binding, parentRowForSeed) ?? {}
     const next: Record<string, any> = {}
     const modalOpts = { readonly: opts?.readonly ?? !props.editable }
     if (binding?.formFields?.length) {
       // Descends through layout containers so a block's nested fields are seeded too
       // (an Assignment Mode block owns its pickers as children) — see the helper.
       Object.assign(next, seedLinkedFormDataFromFields(binding.formFields, raw, modalOpts))
-      /**
-       * 带上嵌套切片，让 `PortalFormFields` 能读到孙行、`saveLinkedFormData` 能写回去。
-       *
-       * <p><b>但只有当 `raw` 就是正在打开的那一行时才可以带。</b>`raw` 取自
-       * `binding.data[0]`：新行还没有自己的数据时，`data[0]` 是**上一个父行** ——
-       * 无条件复制会把它的 `__subTables__` 整份继承过来。嵌套切片属于**某一行**，
-       * 不是这张表的公共属性。
-       *
-       * <p>实测（task a736e30f）每新建一个 transaction 就多继承一份：
-       * `TRANS-000017 = TRANS-000016 的全部 + 自己的 50`，且**被持久化进库**，
-       * 表现为「新增一条后其它的不见了、保存后又变 3 条」。
-       *
-       * <p>判据是行标识相等（`row_id` / 设计器主键）。判不出身份时**不带**——
-       * 宁可让新行从空开始（用户自己加的行不会丢），也不能继承别人的数据。
-       */
-      /**
-       * 只有当 `raw` **确实是**正在打开的那一行时才带上它的嵌套切片。
-       *
-       * <p>`raw` 只可能是「按身份挑中的本人」或空对象（见上），所以这里带上的一定是
-       * 这一行自己的切片。嵌套切片属于某一行，不是这张表的公共属性。
-       *
-       * <p>身份判不出（新行还没分配标识）时 `raw` 为空 → 不带：宁可从空开始，
-       * 用户自己加的行会通过 `onNestedRowsUpdate` 正常写进来。
-       */
+      // Only the uniquely resolved row owns this nested slice; foreign siblings cannot seed it.
       if (raw.__subTables__ && typeof raw.__subTables__ === 'object') {
         next.__subTables__ = raw.__subTables__
       }

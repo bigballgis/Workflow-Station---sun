@@ -247,6 +247,11 @@ public class WorkflowEngineClient {
         return processClient.startProcess(processDefinitionKey, businessKey, startUserId, variables);
     }
 
+    public Map<String, Object> startProcessWithDeploymentPin(String processDefinitionKey, String businessKey,
+            String startUserId, Map<String, Object> variables, String expectedProcessDefinitionId) {
+        return processClient.startProcess(processDefinitionKey, businessKey, startUserId, variables, expectedProcessDefinitionId);
+    }
+
     /**
      * Deletes runtime and historic process instances on engine (internal purge; permitAll, no JWT)
      */
@@ -299,6 +304,10 @@ public class WorkflowEngineClient {
      */
     public Optional<Map<String, Object>> getTaskById(String taskId) {
         return taskClient.getTaskById(taskId);
+    }
+
+    public Map<String, Object> requireTaskWriteContext(String taskId) {
+        return taskClient.requireTaskWriteContext(taskId);
     }
 
     /**
@@ -563,6 +572,10 @@ public class WorkflowEngineClient {
      */
     public Optional<String> getBpmnXml(String processDefinitionKey) {
         return processClient.getBpmnXml(processDefinitionKey);
+    }
+
+    public Optional<String> getBpmnXml(String processDefinitionKey, String processInstanceId) {
+        return processClient.getBpmnXml(processDefinitionKey, processInstanceId);
     }
 
     /**

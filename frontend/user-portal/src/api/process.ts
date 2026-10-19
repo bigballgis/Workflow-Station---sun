@@ -14,6 +14,19 @@ export interface ProcessDefinition {
   isFavorite?: boolean
 }
 
+export interface BatchAssignmentVerification {
+  status: 'VERIFIED' | 'FAILED' | 'UNCONFIRMED'
+  issues: Array<{ taskId: string | null; reasonCode: string }>
+  historyRecorded?: boolean
+}
+
+export interface BatchAssignmentHistoryRecord {
+  id: string
+  taskId?: string | null
+  operationTime: string
+  batchAssignmentVerification: BatchAssignmentVerification
+}
+
 export interface ProcessInstance {
   id: string
   processDefinitionId: string
@@ -38,6 +51,8 @@ export interface ProcessInstance {
    * 不含具体原因（原文带 AP webhook URL，等同凭据），排查看服务端日志。
    */
   firstStepError?: string | null
+  /** Start already succeeded; this observation never authorizes retrying it. */
+  batchAssignmentVerification?: BatchAssignmentVerification | null
   variables?: Record<string, unknown>
 }
 
@@ -52,7 +67,14 @@ export interface MyApplicationQueryRequest {
   keyword?: string
 }
 
+export interface BatchStartContext {
+  schemaVersion: number
+  catalogId: string
+  definitionDigest: string
+}
+
 export interface ProcessStartRequest {
+  batchStartContext?: BatchStartContext
   /** 与路径 /processes/{processKey}/start 一致；省略时由后端用路径参数补全 */
   processDefinitionKey?: string
   businessKey?: string
@@ -84,6 +106,7 @@ export interface AuditFunctionUnit {
 }
 
 export interface FunctionUnitContent {
+  batchStartContext?: BatchStartContext
   id: string
   name: string
   code: string
@@ -286,6 +309,10 @@ export const processApi = {
       Object.keys(params).length > 0 ? { params } : undefined,
     )
   },
+
+  getFunctionUnitStartContent(functionUnitId: string) {
+    return request.get<FunctionUnitContent>(`/processes/function-units/${functionUnitId}/content`, { params: { forStart: true } })
+  },
   
   // 获取功能单元特定类型的内容
   getFunctionUnitContents(functionUnitId: string, contentType: string) {
@@ -347,7 +374,7 @@ export const processApi = {
   /** Allocate PK for sub-table add-row (PRD S5); taskId 同 getFunctionUnitContent（任务参与人放行） */
   allocatePrimaryKeys(
     functionUnitId: string,
-    payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string },
+    payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string; batchControlId?: string },
     taskId?: string,
   ) {
     return request.post<{ values: string[] }>(

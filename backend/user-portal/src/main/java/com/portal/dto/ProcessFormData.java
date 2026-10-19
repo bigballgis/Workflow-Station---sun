@@ -1,5 +1,8 @@
 package com.portal.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.portal.util.SubTableBatchMetadata;
+
 import lombok.Data;
 import lombok.Builder;
 
@@ -17,6 +20,7 @@ public class ProcessFormData {
     private String formName;
     private String formType;
     private Map<String, Object> configJson;
+    @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> fieldValues;
     private List<SubTableBindingData> subTableBindings;
     private boolean editable;

@@ -53,6 +53,9 @@ public class TaskCompleteRequest {
      */
     private List<SubTableBindingScope> subTableBindingScopes;
 
+    /** Batch Edit transport declarations; validated before task completion reaches Flowable. */
+    private List<SubTableBatchChange> subTableBatchChanges;
+
     /**
      * Developer Workstation Action id that triggered this complete.
      * Optional; used only to send a configured post-action email.

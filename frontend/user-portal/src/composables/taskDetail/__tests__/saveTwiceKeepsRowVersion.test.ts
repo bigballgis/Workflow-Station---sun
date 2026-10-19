@@ -105,4 +105,36 @@ describe('non-MI Save clicked twice', () => {
 
     expect(sentVersions).toEqual([1, 5])
   })
+
+  it('keeps Edit and Assign declarations separate for one batch control', () => {
+    const taskForm = useTaskForm({
+      subTableBindings: ref([]),
+      isMiSubTaskMode: ref(false),
+      isCompletedTask: ref(false),
+      effectiveTaskId: ref('task-1'),
+    })
+
+    taskForm.recordSubTableBatchChange({
+      batchControlId: 'lines-control',
+      bindingId: '101',
+      operation: 'EDIT',
+      rowPatches: [{ rowId: 'L1', rowKey: { id: 'L1' }, fields: ['quantity'] }],
+    })
+    taskForm.recordSubTableBatchChange({
+      batchControlId: 'lines-control',
+      bindingId: '101',
+      operation: 'ASSIGN',
+      rowPatches: [{
+        rowId: 'L1',
+        rowKey: { id: 'L1' },
+        fields: ['assigneeId'],
+        assignment: { mode: 'PERSON', assigneeId: 'U1' },
+      }],
+    })
+
+    expect(taskForm.buildCurrentTaskFormSubmitPayload().subTableBatchChanges).toEqual([
+      expect.objectContaining({ operation: 'EDIT', rowPatches: [expect.objectContaining({ fields: ['quantity'] })] }),
+      expect.objectContaining({ operation: 'ASSIGN', rowPatches: [expect.objectContaining({ fields: ['assigneeId'] })] }),
+    ])
+  })
 })

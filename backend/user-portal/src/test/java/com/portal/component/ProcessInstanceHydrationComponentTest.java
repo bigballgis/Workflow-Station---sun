@@ -116,6 +116,24 @@ class ProcessInstanceHydrationComponentTest {
     }
 
     @Test
+    void doesNotHydrateBatchRuntimeMetadataFromEngineVariables() {
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.empty());
+        when(userDisplayNameResolver.resolve("system")).thenReturn("system");
+        when(processInstanceRepository.save(any(ProcessInstance.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID, Map.of(
+                "processDefinitionKey", "Process_MCY",
+                "variables", Map.of(
+                        "functionUnitId", "cat-1",
+                        "functionUnitCode", "FU-MCY",
+                        "businessValue", "keep",
+                        SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("forged", true))));
+
+        assertThat(result.getVariables()).containsEntry("businessValue", "keep")
+                .doesNotContainKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+    }
+
+    @Test
     void pinsLiveDesignerIdWhenFunctionUnitCodeIsKnown() {
         when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.empty());
         when(userDisplayNameResolver.resolve("system")).thenReturn("system");

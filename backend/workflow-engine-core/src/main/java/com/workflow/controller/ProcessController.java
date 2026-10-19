@@ -1,6 +1,7 @@
 package com.workflow.controller;
 
 import com.workflow.component.ProcessEngineComponent;
+import com.workflow.component.InstanceBpmnReader;
 import com.workflow.dto.request.ProcessDefinitionRequest;
 import com.workflow.dto.request.StartProcessRequest;
 import com.workflow.dto.response.ApiResponse;
@@ -43,6 +44,7 @@ public class ProcessController {
 
     private final ProcessEngineComponent processEngineComponent;
     private final org.flowable.engine.RuntimeService runtimeService;
+    private final InstanceBpmnReader instanceBpmnReader;
 
     /**
      * 部署流程定义
@@ -106,6 +108,16 @@ public class ProcessController {
             log.warn("Failed to start process instance: {}", result.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error("START_FAILED", result.getMessage()));
         }
+    }
+
+    /** A distinct route makes an older engine reject pinned starts before creating any instance. */
+    @PostMapping("/instances/pinned")
+    public ResponseEntity<ApiResponse<ProcessInstanceResult>> startPinnedProcessInstance(
+            @RequestBody @Valid StartProcessRequest request) {
+        if (request.getExpectedProcessDefinitionId() == null || request.getExpectedProcessDefinitionId().isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("START_FAILED", "Expected deployment ID is required"));
+        }
+        return startProcessInstance(request);
     }
 
     /**
@@ -263,18 +275,28 @@ public class ProcessController {
      * 根据流程定义 key 获取 BPMN XML
      */
     @GetMapping("/definitions/{processDefinitionKey}/bpmn")
-    @Operation(summary = "Get BPMN XML", description = "Get BPMN XML content by process definition key")
+    @Operation(summary = "Get BPMN XML", description = "Read latest by key, or the exact deployed definition of an active processInstanceId")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBpmnXml(
             @Parameter(description = "Process definition key")
-            @PathVariable String processDefinitionKey) {
-        String bpmnXml = processEngineComponent.getBpmnXml(processDefinitionKey);
+            @PathVariable String processDefinitionKey,
+            @RequestParam(required = false) String processInstanceId) {
+        Map<String, Object> result = new HashMap<>();
+        String bpmnXml;
+        if (processInstanceId == null) {
+            bpmnXml = processEngineComponent.getBpmnXml(processDefinitionKey);
+        } else {
+            var source = instanceBpmnReader.read(processDefinitionKey, processInstanceId);
+            bpmnXml = source.bpmnXml();
+            result.put("processInstanceId", source.processInstanceId());
+            result.put("processDefinitionId", source.processDefinitionId());
+        }
         if (bpmnXml == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("NOT_FOUND", "Process definition not found: " + processDefinitionKey));
         }
-        return ResponseEntity.ok(ApiResponse.success(Map.of(
-                "processDefinitionKey", processDefinitionKey,
-                "bpmnXml", bpmnXml)));
+        result.put("processDefinitionKey", processDefinitionKey);
+        result.put("bpmnXml", bpmnXml);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     /**

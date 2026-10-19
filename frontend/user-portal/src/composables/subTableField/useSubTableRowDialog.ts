@@ -23,6 +23,8 @@ import { processApi } from '@/api/process'
 import { isAssignmentConfigured } from '@/utils/miAssignmentConfig'
 import { sameSubTableRow } from '@/composables/tasks/shared'
 import type { SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
+import { prepareBatchAdd, type PreparedBatchRows } from '@/utils/subTableBatchAdd'
+import { parseSubTableBatchCapability, type BatchRowDesign } from '@/utils/subTableBatchCapability'
 
 /** Add/Edit row dialog state machine + FK/PK runtime bridge (prepare / finalize on save). */
 export function useSubTableRowDialog(
@@ -148,6 +150,45 @@ export function useSubTableRowDialog(
     )
   }
 
+  const batchRowDesign = computed(() => parseSubTableBatchCapability(props.batchCapability)?.rowDesign)
+  const batchParentSelection = computed(() => props.parentRow ? null : resolveBindingParentSelection(
+    toFieldFkMetas(batchRowDesign.value?.binding.fieldDefinitions), batchRowDesign.value?.binding.filterFkFieldName,
+    props.subTableBindingsForContext ?? props.linkedSubTableBindings, props.bindingId,
+  ))
+
+  async function prepareBatchRows(newRows: Array<Record<string, unknown>>, parentValue?: string, design?: BatchRowDesign): Promise<PreparedBatchRows> {
+    if (!props.functionUnitId || !props.taskId) throw new Error(t('common.operationFailed'))
+    const control = parseSubTableBatchCapability(props.batchCapability)
+    if (!control) throw new Error(t('common.operationFailed'))
+    const allocate: AllocatePrimaryKeysFn = async payload => {
+      const response = await processApi.allocatePrimaryKeys(props.functionUnitId!,
+        { ...payload, batchControlId: control.batchControlId }, props.taskId)
+      const body = unwrapPortalApiPayload(response) as { values?: string[] } | null
+      if (!Array.isArray(body?.values)) throw new Error(t('common.operationFailed'))
+      return body.values
+    }
+    const selection = batchParentSelection.value
+    const parent = selection?.options.find(option => option.value === parentValue)
+    if (selection && selection.options.length > 1 && !parent) throw new Error(t('subTable.parentSelectionStale'))
+    if (!design) throw new Error(t('common.operationFailed'))
+    const frozen = design.binding
+    const context = buildRowAddContext(props.primaryFormData ?? {}, props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+      parent?.row ?? props.parentRow, parent?.tableId ?? props.parentTableId,
+      { bindingId: props.bindingId ?? undefined, tableId: frozen.tableId, filterFkRefTableId: frozen.filterFkRefTableId },
+      parent?.bindingId ?? props.parentBindingId)
+    return prepareBatchAdd({
+      rows: newRows, fieldDefinitions: frozen.fieldDefinitions,
+      rowAddContext: context, tableId: frozen.tableId,
+      allocatePrimaryKeys: allocate, functionUnitId: props.functionUnitId,
+      parentTablesById: design.parentTablesById, parentTableDisplayNamesById: parentTableDisplayNamesById(),
+      primaryTableId: props.primaryTableId, primaryTableDisplayName: props.primaryTableDisplayName,
+      tableDisplayName: props.title, autoEnsurePrimaryRecord: props.primaryFormData != null,
+      bindingLinkMode: frozen.bindingLinkMode, bindingForeignKeyField: frozen.foreignKeyField,
+      fkFillSources: frozen.fkFillSources, filterFkFieldName: frozen.filterFkFieldName,
+      primaryKeyFields: frozen.primaryKeyFields, parentTableId: props.parentTableId, t,
+    })
+  }
+
   async function openAddRowDialog() {
     if (!props.editable) return
     parentSelection.value = props.parentRow
@@ -199,7 +240,7 @@ export function useSubTableRowDialog(
       editingRowSnapshot.value = null
       dialogVisible.value = true
     } catch (e) {
-      ElMessage.error(resolveUserFacingHttpMessage(e, t('common.operationFailed')))
+      ElMessage.error(resolveUserFacingHttpMessage(e, t))
     }
   }
 
@@ -431,6 +472,8 @@ export function useSubTableRowDialog(
     handleAdd,
     openEditDialog,
     handleDialogSave,
-    deleteRow
+    deleteRow,
+    batchParentSelection,
+    prepareBatchRows
   }
 }

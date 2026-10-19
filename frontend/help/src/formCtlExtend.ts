@@ -37,6 +37,10 @@ const EXTEND: FormCtlDef[] = [
     catalog: [
       row('subTable', 'Sub Table Binding', 'catBinding'),
       row('subTable', 'Select Sub Table', 'catSelect'),
+      row('subTable', 'Allow Batch Add', 'catAllowBatchAdd'),
+      row('subTable', 'Allow Batch Edit', 'catAllowBatchEdit'),
+      row('subTable', 'Allow Batch Delete', 'catAllowBatchDelete'),
+      row('subTable', 'Allow Batch Assign', 'catAllowBatchAssign'),
       row('subTable', 'Allow Add', 'catAllowAdd'),
       row('subTable', 'Allow Edit', 'catAllowEdit'),
       row('subTable', 'Allow Delete', 'catAllowDelete'),

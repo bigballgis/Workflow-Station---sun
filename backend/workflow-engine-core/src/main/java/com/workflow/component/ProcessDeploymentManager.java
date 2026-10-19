@@ -129,13 +129,15 @@ public class ProcessDeploymentManager {
                                 processDefinition.getKey(),
                                 processDefinition.getVersion(),
                                 rawId);
-                return DeploymentResult.success(
+                DeploymentResult result = DeploymentResult.success(
                     deployment.getId(),
                     compositeId,
                     processDefinition.getKey(),
                     processDefinition.getName(),
                     processDefinition.getVersion()
                 );
+                result.setEngineProcessDefinitionId(rawId);
+                return result;
             } else {
                 return DeploymentResult.failure("Deployment succeeded but no process definition found");
             }

@@ -43,11 +43,13 @@ describe('readOnlyDesignerInteraction', () => {
   it('allows all form table-navigation and sub-table inspection tabs', () => {
     const root = designerTemplate('FormDesigner')
     const tabs = root.querySelectorAll('.designer-nav-btn, .sub-inner-tab-btn')
-    expect(tabs.length).toBe(6)
+    // Main/Sub/Action/Relation navigation plus Form/Batch Form/List inspection.
+    expect(tabs.length).toBe(7)
     tabs.forEach(expectInspectionClickAllowed)
     const save = Array.from(root.querySelectorAll('el-button'))
       .find(button => button.getAttribute('@click') === 'saveChanges')!
     expect(isReadOnlyAllowedTarget(save)).toBe(false)
+    expect(save.getAttribute(':disabled')).toBe('savingForm || batchSaveBlocked || designerReadOnly')
   })
 
   it('allows targets marked data-read-only-allowed', () => {

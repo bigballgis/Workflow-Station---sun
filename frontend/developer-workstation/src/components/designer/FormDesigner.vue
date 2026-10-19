@@ -122,7 +122,7 @@
           <el-button
             type="primary"
             :loading="savingForm"
-            :disabled="savingForm || designerReadOnly"
+            :disabled="savingForm || batchSaveBlocked || designerReadOnly"
             @click="saveChanges"
           >
             {{ t('common.save') }}
@@ -350,6 +350,12 @@
                   @click="subTableActiveTab = 'form'"
                 >{{ t('subTableView.formDesign') }}</button>
                 <button
+                  v-if="binding.bindingType === 'SUB'"
+                  class="sub-inner-tab-btn"
+                  :class="{ 'is-active': subTableActiveTab === 'batchForm' }"
+                  @click="handleBatchFormTabChange(binding, index); subTableActiveTab = 'batchForm'"
+                >{{ t('subTableView.batchForm') }}</button>
+                <button
                   v-if="binding.subMode !== 'FORM_ONLY' && binding.bindingType !== 'ACTION'"
                   class="sub-inner-tab-btn"
                   :class="{ 'is-active': subTableActiveTab === 'listView' }"
@@ -379,6 +385,27 @@
                       height="calc(100vh - 320px)"
                       @active="onSubDesignerStructureChange"
                       @change-field="onSubDesignerStructureChange"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stored independently from the legacy single-row sub form. -->
+              <div v-show="subTableActiveTab === 'batchForm' && binding.bindingType === 'SUB'">
+                <div
+                  class="fc-designer-wrapper"
+                  @input="onDesignerContentInput"
+                  @change="onDesignerContentInput"
+                  :style="designerZoomStyle"
+                >
+                  <div class="fc-designer-zoom-stage">
+                    <fc-designer
+                      :ref="batchDrafts.refFor(binding.bindingId)"
+                      :locale="fcDesignerEnLocale"
+                      :config="designerConfig"
+                      height="calc(100vh - 320px)"
+                      @active="onDesignerStructureChange"
+                      @change-field="onDesignerStructureChange"
                     />
                   </div>
                 </div>
@@ -922,6 +949,9 @@ import {
   buildDefaultFormCreateOptions,
   buildDesignerUpdateDefaultRule,
   ensureEmptyRuleComponentEvents,
+  prepareFormCreateRulesForPersist,
+  serializeFormCreateOptionsForPersist,
+  inflateComponentEventsForDesigner,
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
 import { buildSelectDefaultValuePropRule } from '@/utils/formCreateSelectDefaultValue'
@@ -939,7 +969,7 @@ import {
   PREVIEW_SUBTABLE_DIALOG_KEY,
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
-import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, isInlineSubFormDropAllowed, walkFormCreateRules } from '@/utils/formDesigner'
+import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, isInlineSubFormDropAllowed, mergeLoadedFormOptions, walkFormCreateRules } from '@/utils/formDesigner'
 import {
   copyStartFormAdvancedUploadAcrossCanvases,
   findTaskSceneProcessForm,
@@ -948,7 +978,7 @@ import {
 } from '@/utils/copyStartFormAdvancedUpload'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
-import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
+import { mapFormCreateRulesReadonlyDeep, stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
 import { formatSubTableBindingOptionLabel } from '@/utils/bindingDisplayHelpers'
 import { filterOutTableAuditFields } from '@/utils/tableAuditFields'
@@ -977,6 +1007,8 @@ import { useFormPreviewBuild } from '@/composables/formDesigner/useFormPreviewBu
 import { useFormSave } from '@/composables/formDesigner/useFormSave'
 import { useFormNodeBinding } from '@/composables/formDesigner/useFormNodeBinding'
 import { useFormLifecycle } from '@/composables/formDesigner/useFormLifecycle'
+import { useDesignerHydration } from '@/composables/formDesigner/useDesignerHydration'
+import { useBatchDesignerDrafts } from '@/composables/formDesigner/useBatchDesignerDrafts'
 import { useBlockingProgress } from '@/composables/useBlockingProgress'
 import BlockingProgressOverlay from '@/components/common/BlockingProgressOverlay.vue'
 import {
@@ -995,8 +1027,17 @@ const designerReadOnly = computed(() => isFunctionUnitReadOnly(store.current))
 
 // ── Core shared state ───────────────────────────────────────────────────────
 const selectedForm = ref<FormDefinition | null>(null)
+const designerHydration = useDesignerHydration()
 const designerRef = ref<any>(null)
 const subDesignerRefs = ref<any[]>([])
+const batchDrafts = useBatchDesignerDrafts({
+  formId: () => selectedForm.value?.id,
+  bindingIds: () => designerSubBindings.value.map(binding => binding.bindingId),
+  collect: collectBatchDesignerDraft,
+  reportFailure: () => ElMessage.error(t('form.configNotReady')),
+})
+const { refs: batchDesignerRefs, cache: batchFormCache, visited: batchFormVisited } = batchDrafts
+const batchSaveBlocked = computed(() => designerHydration.blocked.value || batchDrafts.failed.value)
 const activeDesignerTab = ref<string>('main')
 const linkFormComponents = ref<Array<{
   id: number
@@ -1231,6 +1272,61 @@ function switchToBinding(id: string) {
   })
 }
 
+function collectBatchDesignerDraft(canvas: { getRule?: () => unknown; getOption?: () => Record<string, unknown> }) {
+  const rule = canvas.getRule?.()
+  if (!Array.isArray(rule)) throw new Error(t('form.batchFormInvalid'))
+  const persistedRule = stripFormCreateRulesDisabledDeep(rule) as any[]
+  prepareFormCreateRulesForPersist(persistedRule)
+  return { rule: persistedRule, options: serializeFormCreateOptionsForPersist(canvas.getOption?.()) }
+}
+
+function loadBatchDesigner(binding: { bindingId: number }, index: number): boolean {
+  const designer = batchDesignerRefs.value[index]
+  if (!designer?.setRule || !designer.setOption) return false
+  const saved = selectedForm.value?.configJson?.batchForms?.[binding.bindingId]
+    || selectedForm.value?.configJson?.batchForms?.[String(binding.bindingId)]
+  const source = batchFormCache.value[binding.bindingId] || saved
+  try {
+    const rule = stripFormCreateRulesDisabledDeep(cloneFormRules(source?.rule || []) as unknown[]) as any[]
+    inflateComponentEventsForDesigner(rule)
+    walkRulesEnsureComponentEvents(rule)
+    designer.setRule(rule)
+    if (designer.activeModule) designer.activeModule = 'base'
+    designer.setOption(mergeLoadedFormOptions(source?.options, defaultFormOption.value, t('form.clickToUpload')))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function handleBatchFormTabChange(binding: { bindingId: number }, index: number) {
+  if (batchFormVisited.value.has(binding.bindingId)) return
+  const generation = designerHydration.token()
+  const loaded = designerHydration.track(generation)
+  nextTick(() => designerHydration.whenMounted(generation, () => batchDesignerRefs.value[index], () => {
+    if (!designerHydration.current(generation)) return
+    if (loadBatchDesigner(binding, index)) batchFormVisited.value.add(binding.bindingId)
+    else {
+      designerHydration.fail(generation)
+      ElMessage.error(t('form.configNotReady'))
+    }
+    loaded()
+  }))
+}
+
+function getBatchFormForPreview(bindingId: number): unknown {
+  if (batchDrafts.failed.value) throw new Error(t('form.configNotReady'))
+  const index = designerSubBindings.value.findIndex(binding => binding.bindingId === bindingId)
+  const live = batchFormVisited.value.has(bindingId) ? batchDesignerRefs.value[index] : undefined
+  if (live) {
+    const rule = live.getRule?.()
+    if (!Array.isArray(rule)) throw new Error(t('form.batchFormInvalid'))
+    return { schemaVersion: 1, rule: cloneFormRules(rule), options: live.getOption?.() }
+  }
+  return batchFormCache.value[bindingId] ? { schemaVersion: 1, ...batchFormCache.value[bindingId] }
+    : selectedForm.value?.configJson?.batchForms?.[bindingId]
+}
+
 // Default form options — label left-aligned + empty Form event handlers (onChange, onSubmit, …)
 const defaultFormOption = computed(() => buildDefaultFormCreateOptions({
   form: { labelPosition: 'left' },
@@ -1249,6 +1345,7 @@ function getActiveDesignerRef(): { getRule?: () => unknown[]; setRule?: (r: unkn
   if (!Number.isFinite(bindingId)) return null
   const index = designerSubBindings.value.findIndex((b) => b.bindingId === bindingId)
   if (index < 0) return null
+  if (subTableActiveTab.value === 'batchForm') return batchDesignerRefs.value[index]
   return subDesignerRefs.value[index]
 }
 
@@ -1594,6 +1691,7 @@ const {
   makeLookupPreviewItem,
   getTableName,
   getAssignmentConfig: resolveAssignmentConfigForTable,
+  getBatchForm: getBatchFormForPreview,
   t,
 })
 
@@ -1685,18 +1783,23 @@ const {
 
 // ── Form persistence + field permissions ────────────────────────────────────
 const formSave = useFormSave({
+  configHydrationBlocked: batchSaveBlocked,
   functionUnitId: props.functionUnitId,
   store: store as any,
   selectedForm,
   designerRef,
   subDesignerRefs,
+  batchDesignerRefs,
   designerSubBindings,
   subFormCache,
+  batchFormCache,
+  batchFormVisited,
   relationViewState,
   subTableViewState,
   subTableListViewRefs,
   getActiveDesignerRef,
   getPrimaryBindingFieldDefinitions,
+  getBatchTableFields: tableId => store.tables.find(table => table.id === tableId)?.fieldDefinitions ?? [],
   syncSubTableListViewFromFormRules,
   loadForms: () => formLifecycle.loadForms(),
   autoSaving: ref(false),
@@ -1762,6 +1865,7 @@ const {
 
 // ── Form list/selection lifecycle ───────────────────────────────────────────
 const formLifecycle = useFormLifecycle({
+  hydration: designerHydration,
   functionUnitId: props.functionUnitId,
   store: store as any,
   selectedForm,
@@ -1924,6 +2028,7 @@ async function handleBindingUpdate() {
       selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
       // Reset sub designer state so new tabs render cleanly
       subDesignerRefs.value = []
+      batchDrafts.reset()
       // Restore any pending auto-fill seeds before Vue renders the new tabs
       subFormCache.value = { ...pendingSubFormCacheSeed.value }
       pendingSubFormCacheSeed.value = {}
@@ -2151,6 +2256,10 @@ const designerConfig = computed(() => ({
         }
 
         return [
+          { type: 'switch', field: 'allowBatchAdd', title: t('form.subTablePermission.allowBatchAdd'), value: false },
+          { type: 'switch', field: 'allowBatchEdit', title: t('form.subTablePermission.allowBatchEdit'), value: false },
+          { type: 'switch', field: 'allowBatchDelete', title: t('form.subTablePermission.allowBatchDelete'), value: false },
+          { type: 'switch', field: 'allowBatchAssign', title: t('form.subTablePermission.allowBatchAssign'), value: false },
           { type: 'switch', field: 'allowAdd', title: t('form.subTablePermission.allowAdd'), value: true },
           { type: 'switch', field: 'allowEdit', title: t('form.subTablePermission.allowEdit'), value: true },
           { type: 'switch', field: 'allowDelete', title: t('form.subTablePermission.allowDelete'), value: true },

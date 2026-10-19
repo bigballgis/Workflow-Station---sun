@@ -344,10 +344,9 @@ public class SubTableChangeHistoryPropertyTest {
                                 .changeType(ChangeType.SUB_TABLE_ROW_ADD)
                                 .build();
                 when(changeHistoryRepository
-                                .findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndFieldNameAndChangeTypeOrderByTimestampDesc(
-                                                "process-1", "acq_transaction", "ACQ-DC-PW-TRANS-000003", "arn",
-                                                ChangeType.SUB_TABLE_ROW_ADD))
-                                .thenReturn(persisted);
+                                .findLatestSubTableChanges("process-1", "acq_transaction",
+                                                List.of("ACQ-DC-PW-TRANS-000003"), false))
+                                .thenReturn(List.of(persisted));
                 SubTableChange duplicateChange = SubTableChange.builder()
                                 .changeType("ROW_ADD")
                                 .rowIdentifier("ACQ-DC-PW-TRANS-000003")

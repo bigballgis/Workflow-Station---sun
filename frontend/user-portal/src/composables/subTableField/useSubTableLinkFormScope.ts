@@ -1,6 +1,7 @@
 import type { FormField } from '@/components/formRendererHelpers'
 import { extractUserIdFromCellValue } from '@/components/subTableAddDialogHelpers'
 import type { SubTableBinding, SubTableFieldProps } from './subTableFieldTypes'
+import { isConfiguredParticipantChild, matchConfiguredParticipantChildRow } from './linkedChildScope'
 import {
   buildFkListForChildMatch,
   filterLinkedChildRowsByMiTaskStatus,
@@ -138,6 +139,9 @@ export function useSubTableLinkFormScope(
     binding?: SubTableBinding
   ): boolean {
     if (!childRow || typeof childRow !== 'object') return false
+    const configuredMatch = matchConfiguredParticipantChildRow(childRow as Record<string, unknown>, binding, props,
+      resolveSubTableRowPk(parentRow))
+    if (configuredMatch !== null) return configuredMatch
     if (!isMiStyleParentRowForLinkForm(parentRow)) return true
     const parentKey =
       normalizeFkIdForMatch(parentRow.id_idw)
@@ -165,7 +169,7 @@ export function useSubTableLinkFormScope(
     rows: any[],
     binding?: SubTableBinding
   ): any[] {
-    if (!isMiStyleParentRowForLinkForm(parentRow) || !Array.isArray(rows) || rows.length === 0) return rows
+    if ((!isMiStyleParentRowForLinkForm(parentRow) && !isConfiguredParticipantChild(binding, props)) || !Array.isArray(rows) || rows.length === 0) return rows
     return rows.filter(r => miLinkFormChildRowMatchesParent(parentRow, r, binding))
   }
 
@@ -226,12 +230,16 @@ export function useSubTableLinkFormScope(
     if (!Array.isArray(rows) || rows.length === 0) return []
     let candidates = filterRowsByMiLinkFormParent(parentRow, rows, binding)
     candidates = filterLinkedChildRowsByParentAssignee(parentRow, candidates)
-    candidates = filterLinkedChildRowsByParentIdIdw(parentRow, candidates)
+    // Child rows own a different PK and reference the participant by structural FK.
+    const isParticipantChild = isConfiguredParticipantChild(binding, props)
+    if (!isParticipantChild) candidates = filterLinkedChildRowsByParentIdIdw(parentRow, candidates)
     const scoped = filterLinkedChildRowsByMiTaskStatus(parentRow, candidates)
     if (scoped.length > 0) {
       candidates = scoped
     } else if (isTerminalMiParticipantRow(parentRow)) {
-      candidates = filterLinkedChildRowsByParentIdIdw(parentRow, rows)
+      candidates = isParticipantChild
+        ? filterRowsByMiLinkFormParent(parentRow, rows, binding)
+        : filterLinkedChildRowsByParentIdIdw(parentRow, rows)
       if (candidates.length === 0) return []
     }
     if (candidates.length === 1) return candidates

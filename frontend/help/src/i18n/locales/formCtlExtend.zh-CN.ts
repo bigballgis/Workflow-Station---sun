@@ -8,7 +8,18 @@ export default {
   catalogExtendBody:
     '下列标签对应该控件 Component 属性。设计器界面是英文。空白表示该行写明的默认值，除非标明必填。',
   subTable: {
-    summary: '绑定的子表网格（help_pr_line）。绑定、允许增删改、List View 列。',
+    batchPreviewHint: '打开 Form Preview，再点击 Export 左侧的 Batch Edit。预览使用当前批量设计，包括尚未保存的修改；空表提供两条示例记录。Apply 只更新预览，Cancel 保持原预览不变。示例用户、BU、角色及生成的主键不会预留号码、保存业务记录或创建任务。',
+    batchTitle: 'User Portal 批量工作区',
+    batchBody: '点击 Export 左侧的 Batch Edit。可用命令由批量开关和当前任务权限决定。仅新增模式下已有行只读；仅删除模式下可选行，不能改字段。设计器后来开启批量功能不会让旧申请获得此工作区。点击 Apply 前，弹窗中的草稿不写回页面。',
+    batchAddHint: '输入 1–200 行并点击 Add，再填写新增行。显示父记录下拉框时需选择父记录。必填字段和人工主键必须完整。自动主键在 Apply 时准备；Cancel 不分配主键。',
+    batchDeleteHint: '选中当前页的行并确认 Delete。删除刚新增的草稿只移除草稿。关联子数据或已变化的保存行会阻止删除，不会取消子任务。',
+    batchSetHint: '先勾选左侧目标行，工作区会显示选中数量。统一赋值仅作用于勾选行，也支持新增行，在点击 Apply to page 时应用。未选中任何行时会提示选择并保留草稿。Add 只带入已配置的默认值，不会复制已有行。No change 保留各行原值；Set value 可设置字段允许的零、false 和空串；Clear value 仍需通过必填校验。已有主键、外键和计算字段只读。',
+    batchApplyHint: '整批校验最多 200 个受影响行，成功后一次更新页面。报错时先修正再应用；弹窗打开后表格已变化时需重新打开。原有 Save 或自动保存仍须成功。Apply 不创建任务。',
+    batchCancelHint: '丢弃独立草稿；有未应用修改时关闭需确认。原页面数据不变。',
+    batchStartHint: 'New Request 在 Submit Application 时再次核对已发布的批量设计。页面打开期间设计发生变化时，会在创建流程前阻止提交。请刷新申请表单，检查恢复的草稿后再提交。已有实例保留各自的批量设计。',
+    batchOutcomeHint: '提交申请或完成任务后出现分派警告，表示该动作已经执行，请勿重复操作。进入 My Requests，打开申请详情的 Flow History，可查看已保存的核对结果及相关任务 ID；记录反映提交或完成时的结果，不代表当前任务状态。核对记录保存失败时会单独提示，请联系管理员。仅保存分派配置不能证明任务已创建。',
+    batchAssignHint: '权限允许时，在同一工作区配置初次分派。逐行选择个人或 BU+Role；也可在分派表格选中行后设置统一目标。只显示配置允许的模式。修改目标后必须填写完整，暂不支持清空分派。Apply 将普通字段和分派草稿一起校验。目录查询失败会显示错误并阻止已修改的分派，不代表没有查询结果。保存配置不会创建或改派任务。',
+    summary: '绑定的子表网格（help_pr_line）。逐行与批量权限、List View 列。',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls · Extend · Sub-Table',
     intro:
       '绑定 SUB 表的网格。先在 [[/table-bindings]] 挂表。采购申请上是 help_pr_line。和 [[/form-ctl-lookup]]（搜一行）以及 Inline Form（同一张 SUB 表单铺在原位、没有网格）不同。',
@@ -16,10 +27,14 @@ export default {
     whatBody:
       '表单上的 SUB 表行网格。采购申请上是 help_pr_line。Allow 开关打开时可以增删改行。事件里的 value 是改完后的行列表，空表示没有行。',
     howBody:
-      '选中占位。Sub Table Binding 选已在 [[/table-bindings]] 挂上的 SUB 表（help_pr_line）。按需要勾 Allow Add、Allow Edit、Allow Delete。Compact cells 让 lookup 和用户单元格保持一行。打开 List View 勾 Table Columns，并用 Extend Action 加 Link Form 或 Lookup 列。保存表单。预览网格。',
-    propsFigure: '表单设计。选中 Sub-Table。右侧：Sub Table Binding、Allow Add / Edit / Delete、Compact cells。',
+      '选中占位。Sub Table Binding 选已在 [[/table-bindings]] 挂上的 SUB 表（help_pr_line）。Batch 四项开关只用于已单独设计批量表单的子表，默认都关闭；Batch Add、Edit、Delete、Assign 相互独立，也不改变原有 Allow Add、Allow Edit、Allow Delete。再按需要勾逐行操作的 Allow 开关。Compact cells 让 lookup 和用户单元格保持一行。打开 List View 勾 Table Columns，并用 Extend Action 加 Link Form 或 Lookup 列。保存表单。预览网格。',
+    propsFigure: '表单设计。选中 Sub-Table。右侧：批量权限、逐行 Allow Add / Edit / Delete、Compact cells。',
     catBinding: '必填。网格显示的 SUB 或 ACTION 表。空白时画布显示 No Sub Table selected，且无法保存。',
     catSelect: 'Sub Table Binding 的下拉占位。空列表显示 No Sub Tables available — 先在 [[/table-bindings]] 绑定一张 SUB 表。',
+    catAllowBatchAdd: '默认关闭。仅在批量表单和运行时授权均有效时，允许 Batch Edit 工作区新增业务行；不改变 Allow Add。',
+    catAllowBatchEdit: '默认关闭。仅在运行时授权允许时，允许 Batch Edit 工作区修改独立批量表单包含的字段；不改变 Allow Edit。',
+    catAllowBatchDelete: '默认关闭。允许 Batch Edit 工作区删除已授权的业务行；不改变 Allow Delete。',
+    catAllowBatchAssign: '默认关闭。仅在关联子任务尚未生成时，允许 Batch Edit 工作区配置初次办理人或 BU+Role；绝不改派已有任务。',
     catAllowAdd: '打开：可以新增行。关闭则没有 Add。ACTION 绑定不显示这一行。',
     catAllowEdit: '打开：可以编辑行。关闭则只读。ACTION 绑定不显示这一行。',
     catAllowDelete: '打开：可以删除行。关闭则行保留。ACTION 绑定不显示这一行。',

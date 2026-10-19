@@ -465,7 +465,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         ValidationResult validationResult = validate(id);
         if (!validationResult.isValid()) {
             throw new DeveloperBusinessException("BIZ_INVALID_FUNCTION_UNIT",
-                    "Function unit validation failed, cannot publish",
+                    "Please correct the following before publishing: " + validationResult.getErrors().stream()
+                            .map(ValidationResult.ValidationError::getMessage)
+                            .collect(java.util.stream.Collectors.joining("; ")),
                     "Please fix validation errors before retrying");
         }
 

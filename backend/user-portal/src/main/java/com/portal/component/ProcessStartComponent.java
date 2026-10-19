@@ -119,6 +119,9 @@ public class ProcessStartComponent {
      */
     private volatile TransactionTemplate txTemplate;
 
+    @Autowired
+    private SubTableBatchAssignmentHistory batchAssignmentHistory;
+
     private TransactionTemplate tx() {
         TransactionTemplate t = txTemplate;
         if (t == null) {
@@ -186,7 +189,7 @@ public class ProcessStartComponent {
 
     /**
      * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved
-     * Flowable process definition key.
+     * Flowable process definition key and exact deployment definition ID.
      *
      * <p>
      * Before: {@code deployProcess} was called on <em>every</em> start. A
@@ -199,13 +202,13 @@ public class ProcessStartComponent {
      * 500 =
      * {@code portal.deploy_process_failed}. Keying by BPMN content hash means
      * exactly one request deploys an
-     * unchanged definition and every other reuses the resolved key; a changed BPMN
+     * unchanged definition and every other reuses the resolved deployment; a changed BPMN
      * (new hash) redeploys once.
      * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine
      * deployment self-heals.
      * </p>
      */
-    private final java.util.concurrent.ConcurrentHashMap<String, String> deployedProcessKeyCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, DeploymentPin> deployedProcessKeyCache = new java.util.concurrent.ConcurrentHashMap<>();
     /**
      * Per-cache-key locks so concurrent starts of the same definition serialize the
      * single deploy (not the map bin).
@@ -222,7 +225,7 @@ public class ProcessStartComponent {
     // confined to the
     // short tx() blocks; all HTTP runs connection-free. See txTemplate javadoc.
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
-        return startProcess(userId, processKey, request, false);
+        return startProcess(userId, processKey, request, false, false);
     }
 
     /**
@@ -231,11 +234,16 @@ public class ProcessStartComponent {
      */
     public ProcessInstanceInfo startProcessFromInternal(
             String userId, String processKey, ProcessStartRequest request) {
-        return startProcess(userId, processKey, request, true);
+        return startProcess(userId, processKey, request, true, true);
+    }
+
+    /** CSV is a server producer, not an internal caller: ordinary FU/workspace authorization still applies. */
+    public ProcessInstanceInfo startProcessFromServer(String userId, String processKey, ProcessStartRequest request) {
+        return startProcess(userId, processKey, request, false, true);
     }
 
     private ProcessInstanceInfo startProcess(
-            String userId, String processKey, ProcessStartRequest request, boolean internal) {
+            String userId, String processKey, ProcessStartRequest request, boolean internal, boolean serverProduced) {
         if (processKey == null || processKey.isEmpty()) {
             throw new IllegalArgumentException("Process key cannot be empty");
         }
@@ -246,9 +254,12 @@ public class ProcessStartComponent {
         ActiveCatalogPin pin = resolveActiveCatalogPin(userId, processKey, internal);
 
         LoadedStartDefinition def = loadProcessDefinitionForStart(pin, processKey);
+        var currentContext = SubTableBatchStartContext.capture(def.catalogContent(), pin, new ObjectMapper());
+        SubTableBatchStartContext.validate(request.getBatchStartContext(), currentContext, serverProduced,
+                i18nService.getMessage("portal.batch.start_context_changed"));
 
         // actualProcessKey is the key used to start (Flowable uses BPMN <process id>)
-        final String actualProcessKey = deployAndResolveProcessKey(processKey, def);
+        final DeploymentPin deployment = deployAndResolveProcessKey(processKey, def);
 
         // Start instance: strip forged workspace keys; UBR users need valid JWT
         // workspace context (matches hasContext)
@@ -269,13 +280,17 @@ public class ProcessStartComponent {
         }
         processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables);
         isolateStartSubTables(variables, request, pin.code(), pin.catalogId());
+        // Build the capability contract before Flowable starts, from this exact
+        // catalog response. It stays only in local ProcessInstance.variables.
+        Map<String, Object> persistedVariables = withBatchRuntimeSnapshot(variables, def.catalogContent(), pin);
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
                 pin.code(), submittedSnapshot, variables);
+        var initialAssignments = SubTableBatchInitialMiPreflight.prepare(
+                def.bpmnXml(), deployment.key(), variables, persistedVariables, jdbcTemplate);
         Map<String, Object> data;
         try {
-            data = workflowEngineClient.startProcess(
-                    actualProcessKey, request.getBusinessKey(), userId, variables);
+            data = startPinnedProcess(deployment, request.getBusinessKey(), userId, variables, persistedVariables);
         } catch (RuntimeException ex) {
             // If the start failed (e.g. engine no longer has the deployment we cached),
             // drop the cache entry
@@ -296,9 +311,17 @@ public class ProcessStartComponent {
         // behaviour, where the
         // row was not visible until the whole method committed after all the engine
         // round-trips.
-        tx().executeWithoutResult(status -> persistRunningProcessInstance(
-                flowableProcessInstanceId, data, processKey, def.processName(), request,
-                userId, startUserDisplayName, variables, pin));
+        try {
+            tx().executeWithoutResult(status -> persistRunningProcessInstance(
+                    flowableProcessInstanceId, data, processKey, def.processName(), request,
+                    userId, startUserDisplayName, persistedVariables, pin));
+        } catch (RuntimeException persistFailure) {
+            boolean compensated = compensateUnpersistedEngineStart(flowableProcessInstanceId);
+            log.error("Failed to persist local process instance {} after Flowable start; engine compensationSucceeded={}",
+                    flowableProcessInstanceId, compensated, persistFailure);
+            throw new IllegalStateException("Could not persist process start; the engine instance was "
+                    + (compensated ? "cancelled" : "flagged for operator remediation"), persistFailure);
+        }
         // Engine HTTP (claim/complete first task, query next) — runs with NO ambient tx
         // / no connection held.
         // Its own internal writes are individually transactional
@@ -325,18 +348,39 @@ public class ProcessStartComponent {
             calledProcessSync.recordCalledWork(flowableProcessInstanceId, outcome.calledWorkStatus);
         }
 
-        return buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
+        ProcessInstanceInfo result = buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);
+        var assignmentPlan = initialAssignments.isEmpty() ? outcome.assignmentPlan
+                : new SubTableBatchInitialMiOutcome.Plan(flowableProcessInstanceId, deployment.definitionId(), initialAssignments);
+        var observation = SubTableBatchCompletionObservation.observe(assignmentPlan, workflowEngineClient);
+        if (assignmentPlan != null) observation = batchAssignmentHistory.record(assignmentPlan, observation, userId, outcome.initiatorTaskIdForHistory);
+        result.setBatchAssignmentVerification(observation);
+        return result;
     }
 
     record ActiveCatalogPin(String catalogId, String code, String versionLabel) {
+    }
+
+    record DeploymentPin(String key, String definitionId) { }
+
+    private Map<String, Object> startPinnedProcess(DeploymentPin deployment, String businessKey, String userId,
+            Map<String, Object> engineVariables, Map<String, Object> persistedVariables) {
+        if (!persistedVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+            return workflowEngineClient.startProcess(deployment.key(), businessKey, userId, engineVariables);
+        }
+        if (deployment.definitionId() == null || deployment.definitionId().isBlank()) {
+            throw new IllegalStateException("Frozen batch start requires a verified deployment ID");
+        }
+        return workflowEngineClient.startProcessWithDeploymentPin(deployment.key(), businessKey, userId,
+                engineVariables, deployment.definitionId());
     }
 
     /**
      * Process name / BPMN XML / deployed process key loaded from FU content for one
      * start request.
      */
-    private record LoadedStartDefinition(String processName, String bpmnXml, String flowableProcessKey) {
+    private record LoadedStartDefinition(
+            String processName, String bpmnXml, String flowableProcessKey, Map<String, Object> catalogContent) {
     }
 
     /**
@@ -352,6 +396,8 @@ public class ProcessStartComponent {
         String firstStepError;
         /** Engine status when the request went straight into a Function Unit call; else null. */
         Map<String, Object> calledWorkStatus;
+        /** Server-only scope retained only after the first task actually completes. */
+        SubTableBatchInitialMiOutcome.Plan assignmentPlan;
     }
 
     /**
@@ -363,6 +409,22 @@ public class ProcessStartComponent {
         variables.put("initiator", userId);
         variables.put("functionUnitId", catalogId);
         variables.put("functionUnitCode", catalogCode);
+    }
+
+    /**
+     * Copies engine variables into the local persistence representation and adds
+     * the catalog-pinned batch contract only there. Keeping this boundary explicit
+     * prevents a future engine call from accidentally receiving the reserved key.
+     */
+    static Map<String, Object> withBatchRuntimeSnapshot(
+            Map<String, Object> engineVariables, Map<String, Object> catalogContent, ActiveCatalogPin pin) {
+        Map<String, Object> persistedVariables = new HashMap<>(engineVariables);
+        ObjectMapper mapper = new ObjectMapper();
+        SubTableBatchRuntimeSnapshot.capture(catalogContent, pin, mapper).ifPresent(snapshot -> {
+            persistedVariables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot);
+            SubTableBatchInitialRows.initialize(persistedVariables, snapshot, mapper);
+        });
+        return persistedVariables;
     }
 
     private ActiveCatalogPin resolveActiveCatalogPin(String userId, String processKey, boolean internal) {
@@ -391,6 +453,7 @@ public class ProcessStartComponent {
         // Load process definition name and BPMN XML
         String processName = processKey;
         String bpmnXml = null;
+        Map<String, Object> catalogContent = null;
 
         // Prefer deployed process definition key from API response (most reliable).
         // admin-center API returns this in
@@ -398,8 +461,9 @@ public class ProcessStartComponent {
         String flowableProcessKey = null;
 
         try {
-            Map<String, Object> content = processComponent.getFunctionUnitContent(pin.catalogId());
+            Map<String, Object> content = processComponent.getPublishedStartContent(pin.catalogId());
             if (content != null) {
+                catalogContent = content;
                 if (content.get("name") != null) {
                     processName = (String) content.get("name");
                 }
@@ -425,10 +489,10 @@ public class ProcessStartComponent {
         if (bpmnXml == null) {
             throw new IllegalStateException("Cannot obtain process definition BPMN: " + processKey);
         }
-        return new LoadedStartDefinition(processName, bpmnXml, flowableProcessKey);
+        return new LoadedStartDefinition(processName, bpmnXml, flowableProcessKey, catalogContent);
     }
 
-    private String deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
+    private DeploymentPin deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
         // Check Flowable engine availability
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException(
@@ -450,7 +514,7 @@ public class ProcessStartComponent {
         // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path:
         // already deployed.
         final String cacheKey = deploymentCacheKey(processKey, def.bpmnXml());
-        String cached = deployedProcessKeyCache.get(cacheKey);
+        DeploymentPin cached = deployedProcessKeyCache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
@@ -477,8 +541,10 @@ public class ProcessStartComponent {
                 flowableProcessKey = deployedKey.toString();
                 log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
             }
-            deployedProcessKeyCache.put(cacheKey, flowableProcessKey);
-            return flowableProcessKey;
+            Object definitionId = deployed.get("engineProcessDefinitionId");
+            DeploymentPin deployment = new DeploymentPin(flowableProcessKey, definitionId instanceof String id ? id : null);
+            deployedProcessKeyCache.put(cacheKey, deployment);
+            return deployment;
         }
     }
 
@@ -598,6 +664,29 @@ public class ProcessStartComponent {
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);
     }
 
+    /**
+     * A Flowable start precedes the local ProcessInstance insert. If that insert
+     * fails, remove the engine instance synchronously so it cannot become an
+     * orphan that later hydrates against a newer catalog definition.
+     */
+    private boolean compensateUnpersistedEngineStart(String processInstanceId) {
+        try {
+            if (workflowEngineClient.cancelProcessInstance(processInstanceId,
+                    "Portal ProcessInstance persistence failed").isPresent()) {
+                return true;
+            }
+        } catch (RuntimeException ex) {
+            log.error("Engine cancellation failed for unpersisted process instance {}", processInstanceId, ex);
+        }
+        try {
+            // Last-resort cleanup is intentionally scoped to the just-created ID.
+            return workflowEngineClient.purgeProcessInstance(processInstanceId);
+        } catch (RuntimeException ex) {
+            log.error("Engine purge failed for unpersisted process instance {}", processInstanceId, ex);
+            return false;
+        }
+    }
+
     private FirstTaskOutcome autoCompleteFirstTask(
             String flowableProcessInstanceId, String userId, Map<String, Object> variables, ActiveCatalogPin pin) {
         // Auto-complete only when the first user task is a true initiator / start-form
@@ -631,9 +720,11 @@ public class ProcessStartComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
-            // Do not throw; the instance already exists and its first task stays open for retry.
-            // Still report it — swallowing this is what made a failed submission look successful.
-            if (outcome.firstStepError == null) {
+            // Do not throw: the instance already exists. Preserve the original first-step
+            // error when completion has not succeeded; do not turn it into a green submit.
+            // A retained batch plan proves engine completion succeeded. Its post-commit
+            // observation will warn FAILED/UNCONFIRMED; never invite a duplicate submit.
+            if (outcome.assignmentPlan == null && outcome.firstStepError == null) {
                 outcome.firstStepError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             }
         }
@@ -674,7 +765,12 @@ public class ProcessStartComponent {
             meetingParticipantVariablesPersistence.persistIfApplicable(
                     flowableProcessInstanceId, variables, pin.code());
             processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(pi -> {
-                pi.setVariables(new HashMap<>(variables));
+                Map<String, Object> mergedVariables = new HashMap<>();
+                if (pi.getVariables() != null) {
+                    mergedVariables.putAll(pi.getVariables());
+                }
+                mergedVariables.putAll(variables);
+                pi.setVariables(mergedVariables);
                 processInstanceRepository.save(pi);
             });
         }
@@ -687,13 +783,14 @@ public class ProcessStartComponent {
         // inject
         computeSubTableConditionVariables(variables);
 
-        injectMiCollectionsForFirstTask(firstTask, firstTaskDefKey, flowableProcessInstanceId, pin, variables);
+        var assignmentPlan = injectMiCollectionsForFirstTask(firstTask, firstTaskDefKey, flowableProcessInstanceId, pin, variables);
 
         // Complete first task
         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                 taskId, userId, "SUBMIT", variables);
         String failure = firstStepErrorOf(completeResult);
         if (failure == null) {
+            outcome.assignmentPlan = assignmentPlan;
             log.info("First task completed successfully: {}", taskId);
             // §6.3: this node's Case Handler must hold the actual operator *before* the
             // snapshot freezes. The initiator's own first step is a Complete too, and the
@@ -719,21 +816,36 @@ public class ProcessStartComponent {
      * <p>Submitting completes the first task here, not through the To Do path, so an MI
      * sub-process reached from it — directly, or after Function Unit calls, which cannot set this
      * process' variables — used to get no collection, and the request failed with "Variable
-     * '...collection' was not found" when the token reached it. Only collections not already set
-     * are added: flows that prepare their own (the meeting demo above) keep theirs.
+     * '...collection' was not found" when the token reached it. Legacy prepared collections remain;
+     * enhanced instances must instead consume the server-validated frozen assignment collection.
      */
-    private void injectMiCollectionsForFirstTask(Map<String, Object> firstTask, String firstTaskDefKey,
+    private SubTableBatchInitialMiOutcome.Plan injectMiCollectionsForFirstTask(Map<String, Object> firstTask, String firstTaskDefKey,
                                                  String processInstanceId, ActiveCatalogPin pin,
                                                  Map<String, Object> variables) {
+        ProcessInstance instance = processInstanceRepository.findById(processInstanceId)
+                .orElseThrow(() -> new IllegalStateException("Process instance is missing before first-task completion"));
+        Map<String, Object> baseline = instance.getVariables();
+        if (baseline == null) throw new IllegalStateException("Process variables are missing before first-task completion");
+        boolean enhanced = baseline.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
         if (miCollectionVariableBuilder == null || firstTaskDefKey == null || firstTaskDefKey.isBlank()) {
-            return;
+            if (enhanced) throw new IllegalStateException("Frozen first-task assignment context is missing");
+            return null;
         }
         Object keyObj = firstTask.get("processDefinitionKey");
         String processKey = keyObj != null && !keyObj.toString().isBlank() ? keyObj.toString() : pin.code();
         Map<String, Object> withCollections = new HashMap<>(variables);
-        miCollectionVariableBuilder.injectMiCollectionFromBpmn(
-                processKey, firstTaskDefKey, processInstanceId, withCollections);
-        withCollections.forEach(variables::putIfAbsent);
+        if (enhanced) {
+            var expected = miCollectionVariableBuilder.injectMiCollectionForFirstTask(
+                    processKey, firstTaskDefKey, processInstanceId, withCollections, baseline);
+            variables.putAll(withCollections);
+            return expected.isEmpty() ? null : new SubTableBatchInitialMiOutcome.Plan(
+                    processInstanceId, instance.getProcessDefinitionId(), expected);
+        } else {
+            miCollectionVariableBuilder.injectMiCollectionFromBpmn(
+                    processKey, firstTaskDefKey, processInstanceId, withCollections);
+            withCollections.forEach(variables::putIfAbsent);
+            return null;
+        }
     }
 
     /**

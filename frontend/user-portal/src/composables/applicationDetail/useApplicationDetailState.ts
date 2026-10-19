@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { ProcessInstance } from '@/api/process'
+import type { ProcessInstance, BatchAssignmentHistoryRecord } from '@/api/process'
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import type { HistoryRecord } from '@/components/ProcessHistory.vue'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
@@ -221,6 +221,8 @@ export function createApplicationDetailState(options: {
 
   // Flow history records
   const historyRecords = ref<HistoryRecord[]>([])
+  const batchAssignmentHistory = ref<BatchAssignmentHistoryRecord[]>([])
+  const batchHistoryLoadError = ref(false)
   const snapshotActivityId = ref<string | null>(snapshotTaskDefinitionKey || null)
 
   return {
@@ -273,6 +275,8 @@ export function createApplicationDetailState(options: {
     showCurrentFormSection,
     hasSubTaskFormSchema,
     historyRecords,
+    batchAssignmentHistory,
+    batchHistoryLoadError,
     snapshotActivityId,
     /** Deferred diagram parse gate — mirrors the original `let diagramParseScheduled`. */
     diagramParseScheduled: false,

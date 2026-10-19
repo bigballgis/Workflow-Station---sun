@@ -229,8 +229,10 @@
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
               :field-permissions="selectedNodeForm.isCurrentTask ? taskFieldPermissions : undefined"
-              @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
-              @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
+              :sub-table-batch-capabilities="selectedNodeForm?.isCurrentTask ? taskFormDTO?.subTableBatchCapabilities : undefined"
+              :on-sub-table-batch-change="selectedNodeForm?.isCurrentTask ? recordSubTableBatchChange : undefined"
+              @update:model-value="val => { if (selectedNodeForm?.isCurrentTask) formData = { ...formData, ...val } }"
+              @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm?.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
           </div>
           <el-empty
@@ -358,6 +360,8 @@
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
               :field-permissions="taskFieldPermissions"
+              :sub-table-batch-capabilities="taskFormDTO?.subTableBatchCapabilities"
+              :on-sub-table-batch-change="recordSubTableBatchChange"
               @update:model-value="val => formData = { ...formData, ...val }"
               @update:sub-table-data="syncMainSubTableRows"
               @save="saveCurrentTaskFormWithMiPersist"
@@ -702,7 +706,7 @@ const resolveMiRowOwnershipPredicate = (binding: unknown) => {
 }
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
-const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer, syncSubTableRowVersionsBeforeSubmit, resumeSubTableAutosave } = taskForm
+const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, buildCurrentTaskFormSubmitPayload, recordSubTableBatchChange, clearAutosaveTimer: clearFormAutosaveTimer, syncSubTableRowVersionsBeforeSubmit, resumeSubTableAutosave } = taskForm
 
 /** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
 const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
@@ -832,6 +836,7 @@ const taskActions = useTaskActions({
     await syncSubTableRowVersionsBeforeSubmit()
   },
   onSubmitSettled: resumeSubTableAutosave,
+  resolveSubTableSubmitBindings: taskForm.resolveSubTableSubmitBindings,
   buildFormPayloadForComplete: () => {
     const payload = buildCurrentTaskFormSubmitPayload()
     if (isMiSubTaskMode.value) {

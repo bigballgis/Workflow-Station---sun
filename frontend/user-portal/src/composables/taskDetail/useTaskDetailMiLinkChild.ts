@@ -1,5 +1,5 @@
 import { processApi } from '@/api/process'
-import { writeSubTableRows } from '@/composables/tasks/subTableStore'
+import { writeSubTableRows, type SubTableStoreBindingLike } from '@/composables/tasks/subTableStore'
 import {
   ensureAutoPrimaryKeysForRows,
   repairMisassignedPrimaryKeyFromParentId,
@@ -61,7 +61,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
   function patchMiParentRowsWithNestedChildSlice(
     parentRows: any[],
     myRowId: MiParticipantRowId,
-    childBinding: { bindingId: number; tableName: string },
+    childBinding: { bindingId: number; tableName: string } & SubTableStoreBindingLike,
     childSlice: any[],
     childFkConfig?: Parameters<typeof scopeMiLinkChildRowsForParentRow>[2],
   ): any[] {
@@ -296,9 +296,9 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     childRows: any[]
   ) {
     // child binding 的 FK 配置：把子行归到哪个父行，靠设计器声明的外键列，不猜列名。
-    const childFkConfig = miChildFkConfigOfBinding(
-      subTableBindings.value.find(b => b.bindingId === childBinding.bindingId) as never,
-    )
+    const configuredBinding = subTableBindings.value.find(b => b.bindingId === childBinding.bindingId)
+    if (!configuredBinding) throw new Error('MI child binding is unavailable')
+    const childFkConfig = miChildFkConfigOfBinding(configuredBinding as never)
     const rid = ctx.currentMiRowId.value
     if (rid == null) return
     const myRowId = rid
@@ -308,7 +308,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       parentBinding.data = patchMiParentRowsWithNestedChildSlice(
         Array.isArray(parentBinding.data) ? parentBinding.data : [],
         myRowId,
-        childBinding,
+        configuredBinding,
         childRows,
         childFkConfig,
       )

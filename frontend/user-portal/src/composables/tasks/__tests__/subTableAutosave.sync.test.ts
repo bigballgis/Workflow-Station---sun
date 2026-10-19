@@ -12,6 +12,24 @@ vi.mock('@/api/processForm', () => ({
 import { createSubTableAutosave } from '../subTableAutosave'
 
 describe('syncSubTableRowVersionsBeforeSubmit', () => {
+  it('serializes a second save behind the first request and its version refresh', async () => {
+    let finishFirst: () => void = () => {}
+    submitTaskForm.mockImplementationOnce(() => new Promise<void>(resolve => { finishFirst = resolve }))
+      .mockResolvedValue(undefined)
+    getTaskFormData.mockResolvedValue({ fieldValues: { __subTables__: {} } })
+    const build = vi.fn(() => ({ formData: {}, subTableBindingScopes: [] }))
+    const autosave = createSubTableAutosave({ formReadOnly: ref(false), isCompletedTask: ref(false),
+      isMiSubTaskMode: ref(false), effectiveTaskId: ref('task-1'), subTableBindings: ref([]),
+      formData: ref({}), taskFormDTO: ref(null), loadedSubTableBaseline: ref({}),
+      buildSubTableSubmitPayload: build, delayMs: 0 })
+    autosave.scheduleSubTableAutosave()
+    await vi.waitFor(() => expect(submitTaskForm).toHaveBeenCalledTimes(1))
+    autosave.scheduleSubTableAutosave()
+    await vi.waitFor(() => expect(build).toHaveBeenCalledTimes(1))
+    finishFirst()
+    await vi.waitFor(() => expect(submitTaskForm).toHaveBeenCalledTimes(2))
+    await autosave.pauseSubTableAutosave()
+  })
   beforeEach(() => {
     submitTaskForm.mockReset()
     getTaskFormData.mockReset()
@@ -47,7 +65,7 @@ describe('syncSubTableRowVersionsBeforeSubmit', () => {
       loadedSubTableBaseline: ref({ 'dw:p0_dual_file': [{ id: 'F1', _wsRowVersion: 1 }] }),
       buildSubTableSubmitPayload: () => ({
         formData: { __subTables__: {} },
-        subTableBindingScopes: [{ bindingId: '50705' }],
+        subTableBindingScopes: [{ bindingId: '50705', storeKey: 'dw:p0_dual_file', rowKeys: [], emptied: false }],
       }),
       delayMs: 0,
     })
@@ -88,7 +106,7 @@ describe('syncSubTableRowVersionsBeforeSubmit', () => {
       loadedSubTableBaseline: ref({}),
       buildSubTableSubmitPayload: () => ({
         formData: {},
-        subTableBindingScopes: [{ bindingId: '50705' }],
+        subTableBindingScopes: [{ bindingId: '50705', storeKey: 'dw:p0_dual_file', rowKeys: [], emptied: false }],
       }),
       delayMs: 10_000,
     })

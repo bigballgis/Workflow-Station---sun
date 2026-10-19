@@ -4,6 +4,13 @@
       <span class="title">{{ title }}</span>
       <div class="actions">
         <el-button
+          v-if="canBatchWorkspace"
+          size="small"
+          @click="openBatchWorkspace"
+        >
+          {{ t('subTable.batchEdit') }}
+        </el-button>
+        <el-button
           v-if="editable"
           size="small"
           @click="handleExport"
@@ -35,6 +42,7 @@
       >
     </div>
 
+    <el-alert v-if="assignmentLabelError" :title="assignmentLabelError" type="error" :closable="false" />
     <div class="sub-table-scroll-wrapper">
       <el-table
         v-loading="loading === true"
@@ -66,6 +74,7 @@
                 {{ formatTaskStatus(scope.row[col.field]) }}
               </el-tag>
             </template>
+            <span v-else-if="isAssignmentPersonColumn(col.field)">{{ assignmentPersonLabel(scope.row[col.field]) }}</span>
             <template v-else-if="isUploadColumn(col, scope.row[col.field])">
               <span
                 v-if="uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field])"
@@ -563,6 +572,36 @@
       The standalone user-picker dialog was removed together with the inline Assign/Reassign button:
       assignment now happens only through the row Edit dialog's assignee field.
     -->
+    <SubTableBatchEditDialog
+      v-if="batchWorkspaceCapability"
+      v-model:visible="batchDialogVisible"
+      :rows="rows"
+      :capability="batchWorkspaceCapability"
+      :row-identity="resolveBatchRowIdentity"
+      :allow-edit="canBatchEdit"
+      :field-definitions="batchWorkspaceCapability.rowDesign?.binding.fieldDefinitions"
+      :parent-selection="batchParentSelection"
+      :prepare-rows="(draftRows, value) => prepareBatchRows(draftRows, value, batchWorkspaceCapability?.rowDesign)"
+      :show-assign="canBatchAssign"
+      :assignment-capability="batchAssignCapability"
+      :row-scope-key="resolveBatchRowScopeKey"
+      :show-delete="canBatchDelete"
+      :show-add="canBatchAdd"
+      @apply="applyBatchEdit"
+      @apply-workspace="applyBatchWorkspace"
+      @open-delete="batchDeleteDialogVisible = true"
+    />
+    <SubTableBatchDeleteDialog
+      v-if="batchDeleteCapability"
+      v-model:visible="batchDeleteDialogVisible"
+      :rows="rows"
+      :columns="columns"
+      :batch-control-id="batchDeleteCapability.batchControlId"
+      :binding-id="batchDeleteCapability.bindingId"
+      :row-identity="resolveBatchRowIdentity"
+      :row-scope-key="resolveBatchRowScopeKey"
+      @apply="applyBatchDelete"
+    />
   </div>
 </template>
 
@@ -572,6 +611,8 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Document, Search, Close, Download, Upload } from '@element-plus/icons-vue'
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import SubTableAddDialog from './SubTableAddDialog.vue'
+import SubTableBatchEditDialog from './SubTableBatchEditDialog.vue'
+import SubTableBatchDeleteDialog from './SubTableBatchDeleteDialog.vue'
 import {
   resolveDisplayValue,
   isUserSnapshotLikeObject,
@@ -606,12 +647,20 @@ import {
 } from '@/composables/subTableField/useSubTableLookupCells'
 import { useSubTableStatusColumns } from '@/composables/subTableField/useSubTableStatusColumns'
 import { useSubTableRowKeys } from '@/composables/subTableField/useSubTableRowKeys'
+import { rowKeyForScope } from '@/composables/tasks/subTableCanonicalStamp'
+import { allowsFrozenBatchAdd, allowsFrozenBatchAssign, allowsFrozenBatchDelete, allowsFrozenBatchEdit, extractBatchEditableFields, parseSubTableBatchCapability } from '@/utils/subTableBatchCapability'
+import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
+import type { SubTableBatchChange } from '@/utils/subTableBatchChanges'
+import { batchScopeIdentity } from '@/utils/subTableBatchScope'
+import { pkNeedsAllocation } from '@/utils/subTableRowRuntime/pkPredicates'
+import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import { useSubTableLinkFormScope } from '@/composables/subTableField/useSubTableLinkFormScope'
 import { useSubTableLinkFormDialog } from '@/composables/subTableField/useSubTableLinkFormDialog'
 import { useSubTableLinkFormOpen } from '@/composables/subTableField/useSubTableLinkFormOpen'
 import { useSubTableFileDownload } from '@/composables/subTableField/useSubTableFileDownload'
 import { formatAssigneeDisplayLabel, useSubTableAssignment } from '@/composables/subTableField/useSubTableAssignment'
 import { useSubTableAssigneeHydration } from '@/composables/subTableField/useSubTableAssigneeHydration'
+import { useSubTableAssignmentLabels } from '@/composables/subTableField/useSubTableAssignmentLabels'
 import { useSubTablePollingSync } from '@/composables/subTableField/useSubTablePollingSync'
 import { useSubTableRowDialog } from '@/composables/subTableField/useSubTableRowDialog'
 import { useSubTableDialogOverlay } from '@/composables/subTableAddDialog/useSubTableDialogOverlay'
@@ -639,6 +688,10 @@ const props = withDefaults(defineProps<{
   allowAdd?: boolean
   allowEdit?: boolean
   allowDelete?: boolean
+  /** Current task form's server-filtered frozen capability for this control. */
+  batchCapability?: unknown
+  /** Registers a transport-only batch declaration with the owning task form. */
+  onBatchChange?: (change: SubTableBatchChange) => void
   loading?: boolean
   rowFormulas?: RowFormulaRule[]
   summaryColumns?: string[]
@@ -754,6 +807,142 @@ const isActionBinding = computed(() => props.bindingType === 'ACTION')
 const canAdd = computed(() => !isActionBinding.value && props.editable === true && props.allowAdd !== false)
 const canEdit = computed(() => !isActionBinding.value && props.editable === true && props.allowEdit !== false)
 const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
+const batchDialogVisible = ref(false)
+const batchDeleteDialogVisible = ref(false)
+const batchAddCapability = computed(() => {
+  const capability = parseSubTableBatchCapability(props.batchCapability)
+  return allowsFrozenBatchAdd(capability, props.bindingId) && capability && extractBatchEditableFields(capability) ? capability : null
+})
+const batchEditCapability = computed(() => {
+  const capability = parseSubTableBatchCapability(props.batchCapability)
+  return allowsFrozenBatchEdit(capability, props.bindingId) && capability && extractBatchEditableFields(capability)
+    ? capability
+    : null
+})
+const batchAssignCapability = computed(() => {
+  const capability = parseSubTableBatchCapability(props.batchCapability)
+  return allowsFrozenBatchAssign(capability, props.bindingId) && capability ? capability : null
+})
+const batchDeleteCapability = computed(() => {
+  const capability = parseSubTableBatchCapability(props.batchCapability)
+  return allowsFrozenBatchDelete(capability, props.bindingId) && capability ? capability : null
+})
+const batchWorkspaceCapability = computed(() => batchEditCapability.value ?? batchAddCapability.value
+  ?? batchAssignCapability.value
+  ?? (batchDeleteCapability.value && extractBatchEditableFields(batchDeleteCapability.value) ? batchDeleteCapability.value : null))
+
+/** Batch edit never falls back to legacy id/name guesses: it requires a server rowKey or one configured PK. */
+function resolveBatchRowIdentity(row: Record<string, unknown>): string | null {
+  const frozen = parseSubTableBatchCapability(props.batchCapability)?.rowDesign?.binding.primaryKeyFields
+  return batchScopeIdentity(row, frozen ?? props.primaryKeyFields)
+}
+
+function resolveBatchRowScopeKey(row: Record<string, unknown>): Record<string, unknown> | null {
+  const frozen = parseSubTableBatchCapability(props.batchCapability)?.rowDesign?.binding.primaryKeyFields
+  return rowKeyForScope(row, frozen ?? props.primaryKeyFields)
+}
+
+const canBatchEdit = computed(() => !!batchEditCapability.value
+  && !isActionBinding.value
+  && props.editable === true
+  && rows.value.every(row => resolveBatchRowIdentity(row) !== null))
+const canBatchAssign = computed(() => !!batchAssignCapability.value
+  && !isActionBinding.value
+  && props.editable === true
+  && rows.value.every(row => resolveBatchRowIdentity(row) !== null && resolveBatchRowScopeKey(row) !== null))
+const canBatchDelete = computed(() => !!batchDeleteCapability.value
+  && !isActionBinding.value
+  && props.editable === true
+  && rows.value.every(row => resolveBatchRowIdentity(row) !== null && resolveBatchRowScopeKey(row) !== null))
+const canBatchAdd = computed(() => !!batchAddCapability.value && !isActionBinding.value && props.editable === true
+  && props.bindingLinkMode !== 'miParticipantRow' && props.tableId != null && !!props.functionUnitId)
+const canBatchWorkspace = computed(() => canBatchEdit.value || canBatchAssign.value || canBatchDelete.value || canBatchAdd.value)
+
+function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, updatePage = true) {
+  const capability = batchEditCapability.value
+  if (!capability || !canBatchEdit.value) return
+  const fieldsByRow = new Map<string, { fields: Set<string>; rowKey: Record<string, unknown> }>()
+  const addFields = (rowId: string, fields: Record<string, unknown>) => {
+    const row = rows.value.find(candidate => resolveBatchRowIdentity(candidate) === rowId)
+    const rowKey = row && resolveBatchRowScopeKey(row)
+    if (!rowKey) return
+    const existing = fieldsByRow.get(rowId) ?? { fields: new Set<string>(), rowKey }
+    Object.keys(fields).forEach(field => existing.fields.add(field))
+    fieldsByRow.set(rowId, existing)
+  }
+  changes.rowPatches?.forEach(patch => addFields(patch.rowId, patch.fields))
+  changes.uniformPatches?.forEach(patch => patch.rowIds.forEach(rowId => addFields(rowId, patch.fields)))
+  const rowPatches = [...fieldsByRow.entries()].map(([rowId, patch]) => ({
+    rowId,
+    rowKey: patch.rowKey,
+    fields: [...patch.fields],
+  }))
+  if (!rowPatches.length) return
+  if (updatePage) { rows.value = nextRows; emit('update:modelValue', [...rows.value]) }
+  props.onBatchChange?.({
+    batchControlId: capability.batchControlId,
+    bindingId: capability.bindingId,
+    operation: 'EDIT',
+    rowPatches,
+  })
+}
+
+function openBatchWorkspace() {
+  if (batchWorkspaceCapability.value && canBatchWorkspace.value) batchDialogVisible.value = true
+  else if (canBatchDelete.value) batchDeleteDialogVisible.value = true
+}
+
+function applyBatchAdd(prepared: PreparedBatchRows, fields: string[]) {
+  const capability = batchAddCapability.value
+  if (!capability || !canBatchAdd.value) return
+  const rowPatches = prepared.rows.map(row => {
+    const rowId = resolveBatchRowIdentity(row)
+    const rowKey = resolveBatchRowScopeKey(row)
+    if (!rowId || !rowKey) throw new Error(t('common.operationFailed'))
+    return { rowId, rowKey, fields }
+  })
+  if (prepared.primaryFormDataPatch) emit('update:primaryFormData', prepared.primaryFormDataPatch)
+  if (prepared.parentRowPatch) emit('update:parentRow', prepared.parentRowPatch)
+  props.onBatchChange?.({ batchControlId: capability.batchControlId, bindingId: capability.bindingId, operation: 'ADD', rowPatches })
+}
+
+function applyBatchWorkspace(nextRows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows, assignment?: SubTableBatchChange) {
+  if (!canBatchWorkspace.value) return
+  if (assignment && (!canBatchAssign.value || assignment.operation !== 'ASSIGN'
+    || assignment.batchControlId !== batchAssignCapability.value?.batchControlId
+    || assignment.bindingId !== batchAssignCapability.value?.bindingId)) throw new Error(t('common.operationFailed'))
+  if (prepared && !canBatchAdd.value) throw new Error(t('common.operationFailed'))
+  if ((changes.rowPatches?.length || changes.uniformPatches?.length) && !canBatchEdit.value) throw new Error(t('common.operationFailed'))
+  const removed = new Set(changes.deletedRowIds ?? [])
+  const capability = batchDeleteCapability.value
+  const rowPatches = rows.value.filter(row => removed.has(resolveBatchRowIdentity(row) ?? ''))
+    .map(row => {
+      const rowId = resolveBatchRowIdentity(row)
+      const rowKey = resolveBatchRowScopeKey(row)
+      if (!rowId || !rowKey) throw new Error(t('common.operationFailed'))
+      return { rowId, rowKey }
+    })
+  if (rowPatches.length && (!canBatchDelete.value || rowPatches.some(patch => !patch.rowKey))) throw new Error(t('common.operationFailed'))
+  applyBatchEdit(nextRows, changes, false)
+  if (prepared) {
+    const definitions = batchAddCapability.value?.rowDesign?.binding.fieldDefinitions ?? []
+    const fields = (extractBatchEditableFields(batchWorkspaceCapability.value!) ?? [])
+      .filter(field => !definitions.some(definition => definition.fieldName === field.field && (definition.isForeignKey || definition.isComputed || (definition.isPrimaryKey && pkNeedsAllocation(definition)))))
+      .map(field => field.field)
+    applyBatchAdd(prepared, fields)
+  }
+  if (rowPatches.length && capability) props.onBatchChange?.({ batchControlId: capability.batchControlId, bindingId: capability.bindingId, operation: 'DELETE', rowPatches })
+  if (assignment) props.onBatchChange?.(assignment)
+  rows.value = nextRows
+  emit('update:modelValue', [...rows.value])
+}
+
+function applyBatchDelete(nextRows: Array<Record<string, unknown>>, change: SubTableBatchChange) {
+  if (!canBatchDelete.value) return
+  rows.value = nextRows
+  emit('update:modelValue', [...rows.value])
+  props.onBatchChange?.(change)
+}
 
 function ownerChipsForRow(col: Column, row: Record<string, unknown>) {
   const display = row[`${col.field}__display`]
@@ -952,6 +1141,9 @@ function handleExport() {
 }
 
 const rows = ref<any[]>([])
+const { isAssignmentPersonColumn, assignmentPersonLabel, assignmentLabelError } = useSubTableAssignmentLabels(
+  rows, computed(() => effectiveAssignmentConfig.value?.assigneeField), t,
+)
 
 // Lookup cells (scalar PK hydration watch registers first — same effect order as before the split)
 const { effectiveLookupRowForCell, shouldShowLookupBackfill, lookupTagDisplayText } =
@@ -1055,7 +1247,9 @@ const {
   handleAdd,
   openEditDialog,
   handleDialogSave,
-  deleteRow
+  deleteRow,
+  batchParentSelection,
+  prepareBatchRows
 } = useSubTableRowDialog(props, rows, emit, t, assignment)
 /** Test-facing binding (wrapper.vm.editingRowIndex) — see comment above. */
 void editingRowIndex

@@ -57,6 +57,9 @@ public class TaskController {
     private final I18nService i18nService;
     private final RestTemplate restTemplate;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
@@ -193,7 +196,7 @@ public class TaskController {
 
     @Operation(summary = "Complete task")
     @PostMapping("/{taskId}/complete")
-    public ApiResponse<Void> completeTask(
+    public ApiResponse<com.portal.dto.TaskCompletionResult> completeTask(
             @PathVariable String taskId,
             @CurrentUserId String userId,
             @Valid @RequestBody TaskCompleteRequest request) {
@@ -201,15 +204,17 @@ public class TaskController {
             throw new PortalException("401", "Authentication required");
         }
         request.setTaskId(taskId);
-        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
+        var observationPlan = actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
                 .actionId(request.getActionId())
                 .operation(completeOperation(request.getAction()))
                 .taskId(taskId)
                 .operatorId(userId)
                 .comment(request.getComment())
-                .build(), () -> taskProcessComponent.completeTask(request, userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null)));
-        return ApiResponse.success();
+                .build(), () -> { return taskProcessComponent.completeTaskWithObservationPlan(request, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null)); });
+        var observation = taskProcessComponent.observeCompletion(observationPlan);
+        if (observationPlan != null) observation = batchAssignmentHistory.record(observationPlan, observation, userId, taskId);
+        return ApiResponse.success(observation == null ? null : new com.portal.dto.TaskCompletionResult(observation));
     }
 
     @Operation(summary = "To Do batch groups (process version + node with allowBatch)")

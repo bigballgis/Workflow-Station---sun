@@ -13,6 +13,18 @@ class CatalogFormSnapshotTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
+    void carriesPublishedPermissionsWithoutReconstructingLegacyAuthority() {
+        CatalogFormSnapshot.Payload payload = CatalogFormSnapshot.unwrap(objectMapper,
+                "{\"formType\":\"TASK\",\"configJson\":{},\"fieldPermissions\":{\"101:amount\":\"READONLY\"}}");
+        assertThat(payload.publishedFieldPermissions()).isEqualTo(java.util.Map.of("101:amount", "READONLY"));
+        assertThat(CatalogFormSnapshot.unwrap(objectMapper,
+                "{\"formType\":\"TASK\",\"configJson\":{},\"fieldPermissions\":null}").publishedFieldPermissions()).isNull();
+        assertThatThrownBy(() -> CatalogFormSnapshot.unwrap(objectMapper,
+                "{\"formType\":\"TASK\",\"configJson\":{},\"fieldPermissions\":{\"101:amount\":\"UNKNOWN\"}}"))
+                .isInstanceOf(AdminBusinessException.class);
+    }
+
+    @Test
     void legacyBareConfigJsonIsNotFrozen() {
         CatalogFormSnapshot.Payload payload = CatalogFormSnapshot.unwrap(objectMapper, "{\"rule\":[]}");
         assertThat(payload.freezeBindings()).isFalse();

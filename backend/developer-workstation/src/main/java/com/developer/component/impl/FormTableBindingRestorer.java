@@ -17,6 +17,7 @@ import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
+import com.developer.util.FormFieldPermissionBindingIdRewriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -150,6 +151,7 @@ public class FormTableBindingRestorer {
 
         FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, bindingIdMapping);
         form.setConfigJson(configJson);
+        form.setFieldPermissions(FormFieldPermissionBindingIdRewriter.remap(form.getFieldPermissions(), bindingIdMapping));
         if (primaryTable != null && form.getBoundTable() == null) {
             form.setBoundTable(primaryTable);
         }
