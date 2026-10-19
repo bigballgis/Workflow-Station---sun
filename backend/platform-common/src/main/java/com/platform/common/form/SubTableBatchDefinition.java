@@ -33,12 +33,14 @@ public final class SubTableBatchDefinition {
     public static void validateForm(Object rawForm, boolean assign) {
         Map<?, ?> form = validateStoredForm(rawForm);
         List<?> rules = (List<?>) form.get("rule");
-        if (rules.isEmpty()) throw invalid("Batch form rule is required");
-        if (assign && !containsAssignment(rules)) throw invalid("Batch Assign requires an miAssignment component");
+        if (rules.isEmpty()) throw invalid("Batch form rule is required. Open Sub Table > Batch Form and add the fields to process.");
+        if (assign && !containsAssignment(rules)) throw invalid("Batch Assign requires an miAssignment component. "
+                + "Add MI Assignment to Batch Form, or turn off Allow Batch Assign for ordinary row editing.");
     }
 
     private static Map<?, ?> validateStoredForm(Object rawForm) {
-        if (!(rawForm instanceof Map<?, ?> form)) throw invalid("batchForms definition is missing");
+        if (!(rawForm instanceof Map<?, ?> form)) throw invalid("batchForms definition is missing. "
+                + "Open Sub Table > this binding > Batch Form and design its batch fields before publishing.");
         Object version = form.get("schemaVersion");
         if (!(version instanceof Number) || !versionOne(version)) throw invalid("Unsupported batch form schemaVersion");
         if (!(form.get("rule") instanceof List<?> rules)) throw invalid("Batch form rule must be an array");
@@ -60,15 +62,35 @@ public final class SubTableBatchDefinition {
             Object rawId = rule.get("batchControlId");
             if (!(rawId instanceof String id) || id.isBlank()) throw invalid("batchControlId is required");
             if (!ids.add(id)) throw invalid("Duplicate batchControlId");
-            String binding = bindingId(props.get("_bindingId"));
-            validateForm(forms.get(binding), Boolean.TRUE.equals(props.get("allowBatchAssign")));
+            try {
+                String binding = resolveBindingId(rule);
+                validateForm(forms.get(binding), Boolean.TRUE.equals(props.get("allowBatchAssign")));
+            } catch (IllegalArgumentException error) {
+                Object title = rule.containsKey("title") ? rule.get("title") : id;
+                throw invalid("Sub-Table \"" + title + "\": " + error.getMessage());
+            }
         }
         rule.values().stream().filter(child -> child instanceof List<?> || child instanceof Map<?, ?>)
                 .forEach(child -> visit(child, forms, ids));
     }
 
+    /** Designer saves use the root slot; imported/API-created forms may use props. */
+    public static String resolveBindingId(Map<?, ?> rule) {
+        Map<?, ?> props = rule.get("props") instanceof Map<?, ?> map ? map : Map.of();
+        Object root = rule.get("_bindingId");
+        Object nested = props.get("_bindingId");
+        if (rule.containsKey("_bindingId")) {
+            String binding = bindingId(root);
+            if (props.containsKey("_bindingId") && !binding.equals(bindingId(nested))) {
+                throw invalid("Sub-Table has conflicting bindings. Select its Sub Table Binding again and save.");
+            }
+            return binding;
+        }
+        return bindingId(nested);
+    }
+
     private static String bindingId(Object raw) {
-        if (raw == null) throw invalid("Batch _bindingId is required");
+        if (raw == null) throw invalid("Batch _bindingId is required. Select Sub Table Binding in the control's Props and save again.");
         String value = raw.toString();
         if (!value.matches("[1-9][0-9]*")) throw invalid("Batch binding ID must be a positive integer");
         try { Long.parseLong(value); }

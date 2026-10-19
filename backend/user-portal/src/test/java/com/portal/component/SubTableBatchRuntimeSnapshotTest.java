@@ -12,6 +12,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchRuntimeSnapshotTest {
+    @Test
+    @SuppressWarnings("unchecked")
+    void capturesDesignerSavedRootBindingWithTheSameCapabilitiesAsApiForms() {
+        Map<String, Object> config = config(true, "designer-control");
+        Map<String, Object> rule = (Map<String, Object>) ((List<?>) config.get("rule")).get(0);
+        rule.put("_bindingId", 101);
+        rule.put("props", Map.of("allowBatchEdit", true, "allowBatchAdd", "true"));
+        Map<String, Object> snapshot = SubTableBatchRuntimeSnapshot.capture(content(config), pin, objectMapper).orElseThrow();
+        Map<String, Object> projection = SubTableBatchRuntimeSnapshot.projectForForm(
+                Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, snapshot), "form-1", objectMapper);
+        assertThat((Map<String, Object>) projection.get("designer-control")).containsEntry("bindingId", "101");
+    }
+
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ProcessStartComponent.ActiveCatalogPin pin =

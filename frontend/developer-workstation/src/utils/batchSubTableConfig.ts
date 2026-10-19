@@ -26,6 +26,7 @@ const BATCH_OPERATION_FIELDS = [
 ] as const
 
 type RuleLike = {
+  title?: unknown
   batchControlId?: unknown
   _bindingId?: unknown
   props?: Record<string, unknown>
@@ -84,17 +85,36 @@ export function validateEnabledBatchForms(
   rules: RuleLike[],
   batchForms: Record<string, BatchFormLike> | undefined,
 ): boolean {
+  return findBatchFormIssue(rules, batchForms) === null
+}
+
+export interface BatchDesignIssue {
+  key: string
+  params: Record<string, string>
+}
+
+export function batchControlLabel(rule: RuleLike): string {
+  return typeof rule.title === 'string' && rule.title.trim()
+    ? rule.title : String(rule._bindingId ?? rule.props?._bindingId ?? 'Sub-Table')
+}
+
+export function findBatchFormIssue(
+  rules: RuleLike[], batchForms: Record<string, BatchFormLike> | undefined,
+): BatchDesignIssue | null {
   for (const rule of rules) {
     if (!hasEnabledBatchOperation(rule)) continue
+    const params = { subTable: batchControlLabel(rule) }
     const rawBindingId = rule._bindingId ?? rule.props?._bindingId
-    if (rawBindingId === null || rawBindingId === undefined || String(rawBindingId).trim() === '') return false
+    if (rawBindingId === null || rawBindingId === undefined || String(rawBindingId).trim() === '') {
+      return { key: 'batchMissingBinding', params }
+    }
     const batchForm = batchForms?.[String(rawBindingId)]
     if (batchForm?.schemaVersion !== 1 || !Array.isArray(batchForm.rule) || batchForm.rule.length === 0) {
-      return false
+      return { key: 'batchMissingForm', params }
     }
     if (rule.props?.allowBatchAssign === true && !containsMiAssignment(batchForm.rule)) {
-      return false
+      return { key: 'batchMissingAssignment', params }
     }
   }
-  return true
+  return null
 }

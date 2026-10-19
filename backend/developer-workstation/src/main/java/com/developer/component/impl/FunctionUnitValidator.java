@@ -57,7 +57,8 @@ class FunctionUnitValidator {
         functionUnit.getFormDefinitions().forEach(form -> {
             try { com.platform.common.form.SubTableBatchDefinition.validate(form.getConfigJson()); }
             catch (IllegalArgumentException invalid) {
-                result.addError("INVALID_BATCH_DEFINITION", invalid.getMessage(), String.valueOf(form.getId()));
+                result.addError("INVALID_BATCH_DEFINITION", "Form \"" + form.getFormName() + "\": "
+                        + invalid.getMessage(), String.valueOf(form.getId()));
             }
         });
         validateBpmnDmnCrossReferences(functionUnit, result);

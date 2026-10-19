@@ -296,6 +296,16 @@ describe('formCreateDefaultEvents', () => {
     expect(serialized).toContain('$inject.api.setValue("x", 1)')
   })
 
+  it('serializes the form-create __origin instead of its runtime injection adapter', () => {
+    const adapter = Object.assign(function () { throw new Error('Adapter must never execute') }, { __origin: '$FNX:' })
+    const rules: Record<string, unknown>[] = [{ type: 'input', field: 'caption', on: { change: adapter } }]
+    prepareFormCreateRulesForPersist(rules)
+    expect(rules[0].on).toBeUndefined()
+    const script = '$FNX:\n$inject.api.setValue("caption", "value")\n'
+    adapter.__origin = script
+    expect(serializeComponentEventHandlerForPersist(adapter)).toBe(script.trim())
+  })
+
   it('serializeFormCreateOptionsForPersist covers all form-level event keys', () => {
     const options: Record<string, unknown> = {}
     for (const { name, params } of FORM_LEVEL_EVENT_DEFS) {

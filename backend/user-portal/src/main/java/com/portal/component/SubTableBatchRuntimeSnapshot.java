@@ -170,7 +170,7 @@ final class SubTableBatchRuntimeSnapshot {
                 if (!controlIds.add(controlId)) {
                     throw new IllegalArgumentException("Duplicate batchControlId in published catalog: " + controlId);
                 }
-                String bindingId = requiredBindingId(props.get("_bindingId"), sourceId, controlId);
+                String bindingId = com.platform.common.form.SubTableBatchDefinition.resolveBindingId(rule);
                 Map<String, Object> batchForm = mapValue(batchForms.get(bindingId));
                 com.platform.common.form.SubTableBatchDefinition.validateForm(batchForm,
                         Boolean.TRUE.equals(props.get("allowBatchAssign")));
@@ -258,13 +258,6 @@ final class SubTableBatchRuntimeSnapshot {
         result.put("allowEdit", props.get("allowEdit"));
         result.put("allowDelete", props.get("allowDelete"));
         return result;
-    }
-
-    private static String requiredBindingId(Object rawBindingId, String sourceId, String controlId) {
-        if (rawBindingId instanceof Number number) {
-            return String.valueOf(number.longValue());
-        }
-        return requiredText(rawBindingId, "_bindingId for control " + controlId + " in form " + sourceId);
     }
 
     private static String requiredText(Object value, String description) {

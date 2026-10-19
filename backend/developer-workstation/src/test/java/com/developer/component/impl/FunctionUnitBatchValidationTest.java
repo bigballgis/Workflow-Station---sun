@@ -13,6 +13,7 @@ class FunctionUnitBatchValidationTest {
     void publicationRejectsUnsupportedBatchSchemaButAcceptsLegacyForms() {
         FunctionUnit unit = new FunctionUnit();
         FormDefinition form = new FormDefinition();
+        form.setFormName("New request");
         form.setConfigJson(Map.of("rule", List.of()));
         unit.getFormDefinitions().add(form);
         FunctionUnitValidator validator = new FunctionUnitValidator();
@@ -24,6 +25,9 @@ class FunctionUnitBatchValidationTest {
         ValidationResult invalid = new ValidationResult();
         validator.validate(unit, invalid);
         assertThat(invalid.isValid()).isFalse();
-        assertThat(invalid.getErrors()).anySatisfy(error -> assertThat(error.getCode()).isEqualTo("INVALID_BATCH_DEFINITION"));
+        assertThat(invalid.getErrors()).anySatisfy(error -> {
+            assertThat(error.getCode()).isEqualTo("INVALID_BATCH_DEFINITION");
+            assertThat(error.getMessage()).contains("New request");
+        });
     }
 }

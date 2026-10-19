@@ -1,6 +1,7 @@
 import type { FieldDefinition, TableBinding } from '@/api/functionUnit'
+import { batchControlLabel, type BatchDesignIssue } from './batchSubTableConfig'
 
-interface MembershipRule { _bindingId?: unknown; props?: Record<string, unknown> }
+interface MembershipRule { title?: unknown; _bindingId?: unknown; props?: Record<string, unknown> }
 interface BatchForm { rule?: unknown }
 
 /** Add/Delete stay on business bindings; Add must expose every required user-entered field. */
@@ -9,25 +10,38 @@ export function validateBatchMembershipDesign(
   fieldsForTable: (tableId: number) => FieldDefinition[],
   permissions: Record<string, string> = {},
 ): boolean {
+  return findBatchMembershipIssue(rules, forms, bindings, fieldsForTable, permissions) === null
+}
+
+export function findBatchMembershipIssue(
+  rules: MembershipRule[], forms: Record<string, BatchForm>, bindings: TableBinding[],
+  fieldsForTable: (tableId: number) => FieldDefinition[], permissions: Record<string, string> = {},
+): BatchDesignIssue | null {
   for (const rule of rules) {
     const add = rule.props?.allowBatchAdd === true
     if (!add && rule.props?.allowBatchDelete !== true) continue
     const bindingId = String(rule._bindingId ?? rule.props?._bindingId)
+    const params = { subTable: batchControlLabel(rule) }
     const binding = bindings.find(item => String(item.id) === bindingId)
     if (!binding || binding.bindingType !== 'SUB' || binding.bindingMode !== 'EDITABLE'
-      || (binding.bindingLinkMode ?? 'structuralFk') !== 'structuralFk') return false
+      || (binding.bindingLinkMode ?? 'structuralFk') !== 'structuralFk') return { key: 'batchBusinessBinding', params }
     if (!add) continue
     const fields = fieldsForTable(binding.tableId)
-    if (!fields.length) return false
+    if (!fields.length) return { key: 'batchMissingTableFields', params }
     const represented = fieldNames(forms[bindingId]?.rule)
+    const missing = fields.filter(field => !field.isForeignKey && !field.isComputed && !autoPrimaryKey(field)
+      && (field.nullable === false || field.isPrimaryKey) && !represented.has(field.fieldName))
+    if (missing.length) return { key: 'batchMissingRequiredFields', params: {
+      ...params, fields: missing.map(field => field.fieldName).join(', '),
+    } }
     for (const field of fields) {
       if (field.isForeignKey || field.isComputed || autoPrimaryKey(field)) continue
       if ((field.nullable === false || field.isPrimaryKey) && permissions[`${bindingId}:${field.fieldName}`] === 'READONLY'
-        && !verifiedReadonlyDefault(field)) return false
-      if ((field.nullable === false || field.isPrimaryKey) && !represented.has(field.fieldName)) return false
+        && !verifiedReadonlyDefault(field)) return { key: field.isPrimaryKey ? 'batchReadonlyPrimaryKey' : 'batchReadonlyRequiredField',
+          params: { ...params, field: field.fieldName } }
     }
   }
-  return true
+  return null
 }
 
 function verifiedReadonlyDefault(field: FieldDefinition): boolean {

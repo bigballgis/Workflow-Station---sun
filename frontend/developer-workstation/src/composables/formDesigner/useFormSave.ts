@@ -7,8 +7,8 @@ import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
-import { validateEnabledBatchControlIds, validateEnabledBatchForms } from '@/utils/batchSubTableConfig'
-import { validateBatchMembershipDesign } from '@/utils/batchSubTableMembership'
+import { validateEnabledBatchControlIds, findBatchFormIssue } from '@/utils/batchSubTableConfig'
+import { findBatchMembershipIssue } from '@/utils/batchSubTableMembership'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -440,13 +440,15 @@ export function useFormSave(options: UseFormSaveOptions) {
           if (collected) batchForms[binding.bindingId] = collected
         })
 
-      if (!validateEnabledBatchForms(subTableRules, batchForms)) {
-        if (isManual) ElMessage.error(t('form.batchFormInvalid'))
+      const batchFormIssue = findBatchFormIssue(subTableRules, batchForms)
+      if (batchFormIssue) {
+        if (isManual) ElMessage.error({ message: t(`form.${batchFormIssue.key}`, batchFormIssue.params), duration: 10000 })
         return false
       }
-      if (!validateBatchMembershipDesign(subTableRules, batchForms, selectedForm.value.tableBindings ?? [],
-        tableId => getBatchTableFields?.(tableId) ?? [], selectedForm.value.fieldPermissions ?? {})) {
-        if (isManual) ElMessage.error(t('form.batchMembershipInvalid'))
+      const membershipIssue = findBatchMembershipIssue(subTableRules, batchForms, selectedForm.value.tableBindings ?? [],
+        tableId => getBatchTableFields?.(tableId) ?? [], selectedForm.value.fieldPermissions ?? {})
+      if (membershipIssue) {
+        if (isManual) ElMessage.error({ message: t(`form.${membershipIssue.key}`, membershipIssue.params), duration: 10000 })
         return false
       }
 

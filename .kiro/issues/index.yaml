@@ -4854,3 +4854,68 @@
     审计N+1修复后保存约1.8~2.2秒；同数据普通无业务改值Save约1.2~1.3秒，不能作SLO豁免。
     后续分别收紧UI挂载与测量保存链固定成本，不通过省略权限/校验/审计或提高超时伪造PASS。
     A25/P4未通过，A39/#1666仍按用户要求延期。
+
+- id: "1673"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: major
+  category: bug
+  summary: "界面保存的批量子表顶层绑定ID被发布校验和运行时快照拒绝，错误缺少定位指引"
+  file: "backend/platform-common/src/main/java/com/platform/common/form/SubTableBatchDefinition.java"
+  detail: |
+    共享解析器接受设计器顶层_bindingId及历史props槽；双槽冲突、非法标识仍拒绝。
+    发布校验与Portal批量快照复用解析器；保存提示区分绑定、表单、分派、必填字段和只读限制。
+    发布失败保留表单与子表名称、原因和修正步骤，移除重复Deploy failed前缀。
+    FU50022正常认证GET校验由INVALID_BATCH_DEFINITION变valid；未改其设计或代为部署。
+    隔离克隆50073复现旧UI错误，50074真实UI Save、GET重读及完整部署SUCCESS，DB确认版本1.0.0。
+    前端50项、后端34项专项测试通过；本地相关服务已重建，截图保存在DW verification-screenshots。
+    未重测完整审批流及全部导入/回滚入口；未修改既有实例快照或业务记录。
+
+- id: "1674"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: major
+  category: bug
+  summary: "Batch Form正常保存将框架事件适配器当脚本持久化，发布后Portal无法打开"
+  file: "frontend/developer-workstation/src/utils/formCreateDefaultEvents/componentEvents.ts"
+  detail: |
+    保存沿form-create __origin提取真实事件源，移除空事件，保留真实脚本；循环origin明确拒绝。
+    Portal仅接受空事件和既有版本精确生成的适配器字符串，不执行脚本、不修改发布配置。
+    真实脚本、追加代码及隐藏事件槽仍拦截，错误标出字段/事件及Batch Form修正路径。
+    原FU50022 v1.0.5同一content?forStart=true接口由400变200，原Portal新建申请页恢复且pageerror0。
+    隔离副本50075真实Batch Form挂载/Save/GET重读，caption/line_key/amount均无空on事件。
+    前端43项、后端33项专项测试通过，构建并重建user-portal和DW frontend；截图保留。
+    上一轮1673仅测到部署，本次补Portal打开；未提交申请、未验证完整审批及任务批量写入。
+
+- id: "1675"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: minor
+  category: bug
+  summary: "批量新增未选行时统一赋值被忽略，错误误指向Caption必填且重复堆叠"
+  file: "frontend/shared/src/batch/BatchWorkspace.vue"
+  detail: |
+    真实隔离FU50076/UUID任务复现2已有+3新增、Caption/Amount统一值6且零勾选时报Caption第3行。
+    对照勾选三条新增行后保存成功、UUID唯一、已有两行不变，证实统一赋值合并没有丢失。
+    新增选中数量与默认值/勾选指引，零勾选且有统一意图时先明确提示选行并保留草稿，重复提示合并。
+    不自动选择全表、不复制已有行、不改变字段默认值/权限/主键分配与批量提交语义。
+    新版真实任务05f5addd-cb68-11f1-967e-82c0efc60df9重复同场景：先提示选行，再勾选Apply保存5行。
+    GET重读新增三行文字6/数字6及唯一UUID，原两行不变，pageerror0；30项专项测试通过。
+    Portal/DW/help已构建重建，三语文案与既有帮助同步；截图保留在Portal verification-screenshots。
+    未修改用户原FU或申请；未完成测试任务、未重跑完整审批流及跨页选择场景。
+
+- id: "1676"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: major
+  category: bug
+  summary: "同表双外键case_ref2批量增改被表级case_ref非空校验误拒绝"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableBatchAddedRowGuard.java"
+  detail: |
+    标量元数据校验不再把另一绑定的FK非空约束施加于当前行；FK存在性/归属仍由SubTableBindingScopeGuard负责。
+    非空FK类型、普通必填字段、计算字段和数值规则保持校验；新增/批改/普通增强实例共享同一校验点。
+    回归测试先红后绿，54项Add/Edit/TaskPermissions/BindingScope/Membership专项测试通过，Portal后端已打包重建。
+    克隆源FU50022为隔离50078，任务a69e428f-cb69-11f1-967e-82c0efc60df9真实UI Add修前400缺case_ref。
+    同任务修后Add成功，继续Batch Edit到999保存成功；GET重读ref2关联正确、ref为空且原ref下两行不变。
+    真实请求篡改ref2为其他主记录返回403，GET确认业务数据不变；浏览器pageerror0，截图保留。
+    未修改原FU或用户申请，未完成测试任务及完整审批流程。

@@ -24,7 +24,7 @@ final class SubTableBatchFormRules {
     private static void collect(Object value, Map<String, Map<?, ?>> fields) {
         if (value instanceof List<?> list) { list.forEach(item -> collect(item, fields)); return; }
         if (!(value instanceof Map<?, ?> rule)) return;
-        if (rule.get("on") != null && (!(rule.get("on") instanceof Map<?, ?> events) || !events.isEmpty())) fail("Batch field event scripts are unsupported");
+        validateEvents(rule);
         if (rule.get("field") instanceof String name && !name.isBlank() && !"miAssignment".equals(rule.get("type"))) {
             if (!TYPES.contains(String.valueOf(rule.get("type")))) fail("Batch field control is unsupported: " + name);
             if (fields.put(name, rule) != null) fail("Batch field is duplicated: " + name);
@@ -37,6 +37,21 @@ final class SubTableBatchFormRules {
             }
         }
         collect(rule.get("children"), fields);
+    }
+
+    private static void validateEvents(Map<?, ?> rule) {
+        for (String key : List.of("on", "_on", "hook", "_hook")) {
+            Object raw = rule.get(key);
+            if (raw == null) continue;
+            String field = String.valueOf(rule.get("field"));
+            if (!(raw instanceof Map<?, ?>)) fail("Batch field event scripts are unsupported: " + field + ". Remove custom events in Batch Form.");
+            for (Map.Entry<?, ?> event : ((Map<?, ?>) raw).entrySet()) {
+                if (!SubTableBatchEventMetadata.isEmpty(event.getValue())) {
+                    fail("Batch field event scripts are unsupported: " + field + " (" + event.getKey()
+                            + "). Open this field in Batch Form and remove its custom event script.");
+                }
+            }
+        }
     }
 
     static void validateRow(Map<?, ?> form, Map<?, ?> row) {

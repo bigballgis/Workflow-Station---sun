@@ -14,6 +14,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SubTableBatchEditedRowValidationTest {
+    @Test
+    void editingAlternateBindingRowsDoesNotRequireTheOtherForeignKey() {
+        List<?> fields = List.of(
+                Map.of("fieldName", "primary_ref", "isForeignKey", true, "dataType", "VARCHAR", "nullable", false),
+                Map.of("fieldName", "secondary_ref", "isForeignKey", true, "dataType", "VARCHAR", "nullable", false),
+                Map.of("fieldName", "quantity", "dataType", "INTEGER", "nullable", false));
+        assertThatCode(() -> SubTableBatchEditedRowGuard.validateMetadata(fields, Map.of("secondary_ref", "P1", "quantity", 8)))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> SubTableBatchEditedRowGuard.validateMetadata(fields, Map.of("secondary_ref", "P1")))
+                .hasMessageContaining("requires field quantity");
+    }
     static List<Map<String, Object>> invalidRows() {
         return List.of(row("2", false, "2026-10-18", "ok"), row(2147483648L, false, "2026-10-18", "ok"),
                 row(1, "false", "2026-10-18", "ok"), row(1, false, "2026-02-30", "ok"),

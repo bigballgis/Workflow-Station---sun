@@ -23,6 +23,8 @@ interface WorkspaceState {
   apply(): Promise<void>
   close(): Promise<boolean>
   editableRow(row: Record<string, unknown>, field: string): boolean
+  uniformMode: Record<string, 'none' | 'set' | 'clear'>
+  uniformValues: Record<string, unknown>
 }
 
 const capability: SubTableBatchCapability = {
@@ -55,6 +57,35 @@ function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown
 }
 
 describe('batch workspace Add/Delete transaction', () => {
+  it('explains pending uniform values with no selected rows before checking blank new fields', async () => {
+    const { wrapper, state, prepareRows } = workspace()
+    state.addDraftRows()
+    state.uniformMode.description = 'set'
+    state.uniformValues.description = '6'
+    vi.mocked(ElMessage.error).mockClear()
+    await state.apply()
+    expect(ElMessage.error).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'subTable.batchSelectUniformRows' }))
+    expect(prepareRows).not.toHaveBeenCalled()
+    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
+    expect(state.draftRows[2]!.description).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('applies uniform values only to selected added rows without modifying saved rows', async () => {
+    const { wrapper, state, prepareRows } = workspace()
+    state.addCount = 3
+    state.addDraftRows()
+    state.uniformMode.description = 'set'
+    state.uniformValues.description = '6'
+    state.onSelectionChange(state.draftRows.slice(2))
+    await state.apply()
+    expect(prepareRows).toHaveBeenCalledWith([{ description: '6' }, { description: '6' }, { description: '6' }], '')
+    expect(wrapper.emitted('apply-workspace')?.[0]?.[0]).toEqual([
+      ...initialRows, ...[1, 2, 3].map(index => ({ line_key: `N${index}`, description: '6' })),
+    ])
+    expect(initialRows.map(row => row.description)).toEqual(['first', 'second'])
+    wrapper.unmount()
+  })
   it('locates the actual page and row when only an existing row on page two is invalid', async () => {
     const { wrapper, state } = workspace()
     await wrapper.setProps({ rows: Array.from({ length: 22 }, (_, index) => ({ line_key: `L${index + 1}`, description: 'valid' })) })

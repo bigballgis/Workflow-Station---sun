@@ -13,6 +13,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchAddedRowGuardTest {
     @Test
+    void alternateForeignKeyPresenceBelongsToBindingScopeNotTableNullability() {
+        Map<String, Object> field = Map.of("fieldName", "primary_ref", "dataType", "VARCHAR",
+                "nullable", false, "isForeignKey", true);
+        Map<String, Object> alternateRow = Map.of("secondary_ref", "P1", "quantity", 3);
+        assertThatCode(() -> SubTableBatchAddedRowGuard.validateField(field, alternateRow)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> SubTableBatchAddedRowGuard.validateField(field, Map.of("primary_ref", 3)))
+                .hasMessageContaining("invalid text type");
+        assertThatThrownBy(() -> SubTableBatchAddedRowGuard.validateField(Map.of("fieldName", "caption",
+                "dataType", "VARCHAR", "nullable", false), alternateRow)).hasMessageContaining("requires field caption");
+    }
+    @Test
     void frozenReadonlyFieldsCannotBeAddedThroughAnOtherwiseValidBatchForm() {
         assertThatThrownBy(() -> validate(Map.of("item_key", "L1", "quantity", 2, "enabled", false),
                 Map.of("quantity", "READONLY", "enabled", "EDITABLE", "recorded_at", "EDITABLE")))

@@ -13,7 +13,7 @@ export default {
     batchBody: '點擊 Export 左側的 Batch Edit。可用命令由批次開關與目前任務權限決定。僅新增模式下既有列唯讀；僅刪除模式下可選列，不能改欄位。設計器後來啟用批次功能不會讓舊申請取得此工作區。點擊 Apply 前，對話框草稿不會寫回頁面。',
     batchAddHint: '輸入 1–200 列並點擊 Add，再填寫新增列。顯示父記錄下拉選單時須選取父記錄。必填欄位與人工主鍵須完整。自動主鍵在 Apply 時準備；Cancel 不分配主鍵。',
     batchDeleteHint: '選取目前頁面的列並確認 Delete。刪除剛新增的草稿只移除草稿。關聯子資料或已變更的儲存列會阻止刪除，不會取消子任務。',
-    batchSetHint: '僅影響選取列。No change 保留各列原值；Set value 可設定欄位允許的零、false 與空字串；Clear value 仍須通過必填驗證。既有主鍵、外鍵與計算欄位唯讀。',
+    batchSetHint: '先勾選左側目標列，工作區會顯示選取數量。統一設定值僅作用於勾選列，也支援新增列，在點擊 Apply to page 時套用。未選取任何列時會提示選取並保留草稿。Add 只帶入已設定的預設值，不會複製既有列。No change 保留各列原值；Set value 可設定欄位允許的零、false 與空字串；Clear value 仍須通過必填驗證。既有主鍵、外鍵與計算欄位唯讀。',
     batchApplyHint: '整批驗證最多 200 個受影響列，成功後一次更新頁面。報錯時先修正再套用；對話框開啟後表格已變更時須重新開啟。原有 Save 或自動儲存仍須成功。Apply 不建立任務。',
     batchCancelHint: '丟棄獨立草稿；有尚未套用的變更時關閉須確認。原頁面資料不變。',
     batchStartHint: 'New Request 在 Submit Application 時再次核對已發佈的批次設計。頁面開啟期間設計發生變化時，會在建立流程前阻止提交。請重新整理申請表單，檢查還原的草稿後再提交。既有實例保留各自的批次設計。',

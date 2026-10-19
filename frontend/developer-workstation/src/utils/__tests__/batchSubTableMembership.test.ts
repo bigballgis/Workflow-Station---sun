@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateBatchMembershipDesign } from '../batchSubTableMembership'
+import { findBatchMembershipIssue, validateBatchMembershipDesign } from '../batchSubTableMembership'
 import type { FieldDefinition, TableBinding } from '@/api/functionUnit'
 
 const rules = [{ props: { _bindingId: 101, allowBatchAdd: true } }]
@@ -10,6 +10,23 @@ const fields: FieldDefinition[] = [
 ]
 
 describe('batch Add/Delete designer validation', () => {
+  it('identifies the exact sub-table and every missing required field', () => {
+    const amount: FieldDefinition = { fieldName: 'amount', dataType: 'INTEGER', nullable: false, isPrimaryKey: false }
+    expect(findBatchMembershipIssue([{ ...rules[0], title: 'New lines' }],
+      { '101': { rule: [{ field: 'description' }] } }, [binding], () => [...fields, amount])).toEqual({
+      key: 'batchMissingRequiredFields', params: { subTable: 'New lines', fields: 'item_key, amount' },
+    })
+  })
+
+  it('distinguishes invalid bindings, readonly keys and readonly defaults', () => {
+    const complete = { '101': { rule: fields.map(field => ({ field: field.fieldName })) } }
+    expect(findBatchMembershipIssue(rules, complete, [{ ...binding, bindingMode: 'READONLY' }], () => fields)?.key)
+      .toBe('batchBusinessBinding')
+    expect(findBatchMembershipIssue(rules, complete, [binding], () => fields, { '101:item_key': 'READONLY' }))
+      .toEqual({ key: 'batchReadonlyPrimaryKey', params: { subTable: '101', field: 'item_key' } })
+    expect(findBatchMembershipIssue(rules, complete, [binding], () => fields, { '101:description': 'READONLY' })?.key)
+      .toBe('batchReadonlyRequiredField')
+  })
   it('rejects a required readonly field without a valid literal default', () => {
     const complete = { '101': { rule: [{ field: 'description' }, { field: 'item_key' }, { field: 'amount' }] } }
     const amount: FieldDefinition = { fieldName: 'amount', dataType: 'INTEGER', nullable: false, isPrimaryKey: false }

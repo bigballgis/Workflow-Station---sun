@@ -5,9 +5,16 @@ import {
   initializeBatchControlIdOnEnable,
   validateEnabledBatchControlIds,
   validateEnabledBatchForms,
+  findBatchFormIssue,
 } from '../batchSubTableConfig'
 
 describe('createBatchControlId', () => {
+  it('gives different actionable reasons for an absent batch form and assignment component', () => {
+    const rule = { title: 'New lines', _bindingId: 101, props: { allowBatchAssign: true } }
+    expect(findBatchFormIssue([rule], {})).toEqual({ key: 'batchMissingForm', params: { subTable: 'New lines' } })
+    expect(findBatchFormIssue([rule], { '101': { schemaVersion: 1, rule: [{ type: 'input', field: 'name' }] } }))
+      .toEqual({ key: 'batchMissingAssignment', params: { subTable: 'New lines' } })
+  })
   it('initializes a legacy control only on explicit boolean opt-in and retains it across toggles', () => {
     const rule = { props: { allowBatchEdit: false } } as { batchControlId?: string; props: Record<string, unknown> }
     for (const value of [undefined, false, 'true', 1]) initializeBatchControlIdOnEnable({ value, rule })

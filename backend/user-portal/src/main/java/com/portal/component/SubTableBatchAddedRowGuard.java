@@ -75,7 +75,10 @@ final class SubTableBatchAddedRowGuard {
         String name = String.valueOf(field.get("fieldName"));
         Object value = row.get(name);
         boolean empty = value == null || "".equals(value);
-        if (empty && Boolean.FALSE.equals(field.get("nullable")) && !Boolean.TRUE.equals(field.get("isComputed"))) {
+        // FK presence/ownership is binding-scoped (SubTableBindingScopeGuard), not table-wide:
+        // rows linked through a second FK must leave the other binding's FK empty.
+        if (empty && Boolean.FALSE.equals(field.get("nullable")) && !Boolean.TRUE.equals(field.get("isComputed"))
+                && !Boolean.TRUE.equals(field.get("isForeignKey"))) {
             fail("Batch row requires field " + name);
         }
         if (empty) return;

@@ -48,6 +48,10 @@
     <el-divider v-if="fields.length" />
     <el-form v-if="fields.length" class="batch-edit-dialog__uniform" label-position="left" label-width="auto">
       <div class="batch-edit-dialog__uniform-title">{{ t('subTable.batchSetSelected') }}</div>
+      <p class="batch-edit-dialog__selection" role="status">
+        {{ t('subTable.batchSelectedCount', { count: selectedRowIds.size }) }}
+        {{ t('subTable.batchUniformSelectionHint') }}
+      </p>
       <el-form-item v-for="field in fields" :key="field.field" :label="field.label">
         <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode" :disabled="uniformReadonly(field.field)">
           <el-option :label="t('subTable.batchNoChange')" value="none" />
@@ -265,6 +269,10 @@ function collectChanges(): BatchDraftChangeSet {
 
 async function apply() {
   if (applying.value) return
+  if (!selectedRowIds.value.size && Object.values(uniformMode).some(mode => mode !== 'none')) {
+    ElMessage.error({ message: t('subTable.batchSelectUniformRows'), grouping: true, duration: 8000 })
+    return
+  }
   if (JSON.stringify(props.rows) !== JSON.stringify(baselineRows.value)) { ElMessage.error(t('subTable.batchStaleDraft')); return }
   const fresh = freshRows()
   const changes = collectChanges()

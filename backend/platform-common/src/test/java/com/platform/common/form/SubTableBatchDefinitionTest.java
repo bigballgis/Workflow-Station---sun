@@ -8,6 +8,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchDefinitionTest {
     @Test
+    void acceptsDesignerRootBindingAndRejectsConflictingBindingSlots() {
+        Map<String, Object> form = Map.of("schemaVersion", 1, "rule", List.of(Map.of("type", "input", "field", "value")));
+        Map<String, Object> designer = Map.of("type", "subTable", "title", "New lines", "_bindingId", 101,
+                "batchControlId", "designer-grid", "props", Map.of("allowBatchEdit", true));
+        assertThatCode(() -> SubTableBatchDefinition.validate(Map.of("rule", List.of(designer), "batchForms", Map.of("101", form))))
+                .doesNotThrowAnyException();
+        Map<String, Object> conflict = new java.util.HashMap<>(designer);
+        conflict.put("props", Map.of("allowBatchEdit", true, "_bindingId", 102));
+        assertThatThrownBy(() -> SubTableBatchDefinition.validate(Map.of("rule", List.of(conflict), "batchForms", Map.of("101", form))))
+                .hasMessageContaining("New lines").hasMessageContaining("conflicting");
+    }
+
+    @Test
     void legacyAndStrictBooleanDisabledFormsRemainUnchanged() {
         assertThatCode(() -> SubTableBatchDefinition.validate(Map.of("rule", List.of()))).doesNotThrowAnyException();
         assertThatCode(() -> SubTableBatchDefinition.validate(Map.of("batchForms", Map.of("101",
