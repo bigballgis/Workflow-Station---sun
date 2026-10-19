@@ -4854,6 +4854,17 @@
     审计N+1修复后保存约1.8~2.2秒；同数据普通无业务改值Save约1.2~1.3秒，不能作SLO豁免。
     后续分别收紧UI挂载与测量保存链固定成本，不通过省略权限/校验/审计或提高超时伪造PASS。
     A25/P4未通过，A39/#1666仍按用户要求延期。
+    2026-10-19经用户同意，仅接回zancun三个宽表文件，stash c908825ea4ef53455a80d381e4041b1ebd798010保留。
+    显示页按字段数预算缩小，不裁剪草稿/提交行；新增及错误定位复用页大小。新测试旧实现2红、恢复后7绿。
+    同一隔离200x51实例：每页1000输入降为150，打开1398ms→最终单独复测1050ms；仍超过200ms交互底线。
+    最终真改值保存1718/1810/1733ms，无业务改值保存1224/1208/1123ms；后台未改，不宣称1秒API达标。
+    200行全字段读回、201行400整批拒绝、分页第4行正确、Cancel零写入、数据库不变、pageErrors0。
+    Portal2380全量、专项28、构建Portal/DW及完整MI234+6通过；桌面/390窄屏截图保留，详batch-wide-render-budget-review.md。
+    最终增量：非id/id_idw主键跳过数字占位解析；审计改为精确cell索引标量读取与200记录参数化多值写入，事务/去重不变。
+    已有库须显式执行96号索引迁移，本地索引valid/ready；PG覆盖NULL/同时间ID排序/引号中文及跨chunk失败全回滚。
+    隐藏下拉选项153降为0，专项29通过；最终Portal2381、DW1151、后端专项444、common470（21跳过）、PG/H2共31及完整MI234+6通过。
+    正常样本保存1278/982/1010ms及922/796/774ms，无改值约359~425ms；实际click到paint首次288ms，仍不宣称严格SLO通过。
+    用户明确本轮按能用即可收口，不再以严格耗时或Clone/Restore回归阻塞；本条保留后续性能优化，未改权限，A39仍暂缓。
 
 - id: "1673"
   status: fixed
@@ -5027,7 +5038,8 @@
     全量类型检查仍为 282 条相同基线错误；1234567 本人登录仍未验证，Public UI 使用模拟只读状态。
 
 - id: "1684"
-  status: open
+  status: fixed
+  fixed_at: "2026-10-19"
   severity: major
   category: bug
   summary: "Record Note创建请求将target与payload的processInstanceId重复追加到FormData"
@@ -5036,9 +5048,13 @@
     合并common_0731_SELF_AP时运行其新增recordNotePlanSubmissionContext.test.ts发现，期望单值实际两值。
     独立worktree检出目标分支d69dd37eb重跑同一测试仍失败，确认不是本次冲突解决引入。
     本轮仅合并和验证，不改写目标分支既有业务实现；待另行修复并验证Record Note上传。
+    后续收口：相同身份只序列化一次；target/payload身份冲突在发送请求前拒绝，使用既有三语错误文案。
+    同一测试修前失败、修后通过，5项覆盖双来源/单来源/无来源及冲突，附件数组保留；Portal构建部署通过。
+    未重跑完整Record Note附件上传/通知投递链路，不以该单点修复宣称通知链路已验收。
 
 - id: "1685"
-  status: open
+  status: fixed
+  fixed_at: "2026-10-19"
   severity: minor
   category: quality
   summary: "前端全量测试已有Pinia初始化、BPMN模块导入及AI/i18n基线失败"
@@ -5047,3 +5063,20 @@
     customModdleRoundTrip默认导入构造器和i18n-no-chinese-comments测试。
     独立worktree检出合并前57a5bf01e，Portal同两文件及DW同三文件分别重现相同失败。
     不将既有失败当作本次合并回归，也不据其余测试通过宣称全量通过。
+    后续收口：补齐真实Pinia与matchMedia装配；BPMN v10使用命名导出；AI关闭按钮按图标定位而非按钮序号。
+    仅翻译i18n门禁列出的注释，不放宽测试条件。Pinia后暴露的真实嵌套上下文缺口由#1686修复。
+    最终Portal314文件2378项、DW182文件1151项全量测试通过；全量类型检查仍不通过，未计作本项测试通过。
+
+- id: "1686"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: major
+  category: bug
+  summary: "嵌套子表经过Inline Form或布局容器时丢失祖先FK/PK上下文"
+  file: "frontend/user-portal/src/components/PortalFormFields.vue"
+  detail: |
+    Pinia测试装配修正后原测试出现真实断言失败：主表名称、祖先绑定及字段池未传至嵌套子表。
+    补齐FormRendererFields/InlineForm/Link Form入口及递归布局传递，祖先字段池与当前宿主合并。
+    原失败断言转绿；补充card/row/tabs/collapse四类布局，临时去掉传递时4失败/3通过，恢复后7项全绿。
+    不按字段名猜主键，不改变后端权限、scope或主键分配规则；Portal构建与镜像重建后MI234+6通过。
+    真实未保存祖先行的嵌套Add UI尚未独立重跑；当前证据为上下文/分配编排单测及既有隔离MI界面回归。
