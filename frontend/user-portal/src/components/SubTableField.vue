@@ -42,6 +42,7 @@
       >
     </div>
 
+    <el-alert v-if="assignmentLabelError" :title="assignmentLabelError" type="error" :closable="false" />
     <div class="sub-table-scroll-wrapper">
       <el-table
         v-loading="loading === true"
@@ -73,6 +74,7 @@
                 {{ formatTaskStatus(scope.row[col.field]) }}
               </el-tag>
             </template>
+            <span v-else-if="isAssignmentPersonColumn(col.field)">{{ assignmentPersonLabel(scope.row[col.field]) }}</span>
             <template v-else-if="isUploadColumn(col, scope.row[col.field])">
               <span
                 v-if="uploadCellLabel(scope.row[col.field], uploadNames[scope.$index + '_' + col.field])"
@@ -658,6 +660,7 @@ import { useSubTableLinkFormOpen } from '@/composables/subTableField/useSubTable
 import { useSubTableFileDownload } from '@/composables/subTableField/useSubTableFileDownload'
 import { formatAssigneeDisplayLabel, useSubTableAssignment } from '@/composables/subTableField/useSubTableAssignment'
 import { useSubTableAssigneeHydration } from '@/composables/subTableField/useSubTableAssigneeHydration'
+import { useSubTableAssignmentLabels } from '@/composables/subTableField/useSubTableAssignmentLabels'
 import { useSubTablePollingSync } from '@/composables/subTableField/useSubTablePollingSync'
 import { useSubTableRowDialog } from '@/composables/subTableField/useSubTableRowDialog'
 import { useSubTableDialogOverlay } from '@/composables/subTableAddDialog/useSubTableDialogOverlay'
@@ -1138,6 +1141,9 @@ function handleExport() {
 }
 
 const rows = ref<any[]>([])
+const { isAssignmentPersonColumn, assignmentPersonLabel, assignmentLabelError } = useSubTableAssignmentLabels(
+  rows, computed(() => effectiveAssignmentConfig.value?.assigneeField), t,
+)
 
 // Lookup cells (scalar PK hydration watch registers first — same effect order as before the split)
 const { effectiveLookupRowForCell, shouldShowLookupBackfill, lookupTagDisplayText } =

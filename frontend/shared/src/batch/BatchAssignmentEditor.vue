@@ -18,7 +18,7 @@
           <template #default="scope">
             <el-select v-if="rowIntent[rowKey(scope.row)].mode === 'person'" v-model="rowIntent[rowKey(scope.row)].assigneeId"
               filterable remote reserve-keyword clearable :remote-method="query => searchUsers(`row:${rowKey(scope.row)}`, query)" :loading="userLoading[`row:${rowKey(scope.row)}`] === true" style="width:100%">
-              <el-option v-for="user in userOptions[`row:${rowKey(scope.row)}`]" :key="user.id" :label="user.name" :value="user.id" />
+              <el-option v-for="user in userOptionsFor(`row:${rowKey(scope.row)}`, rowIntent[rowKey(scope.row)].assigneeId)" :key="user.id" :label="user.name" :value="user.id" />
             </el-select>
           </template>
         </el-table-column>
@@ -52,7 +52,7 @@
       </el-form-item>
       <el-form-item v-if="uniform.mode === 'person'" :label="t('subTable.assignByPerson')">
         <el-select v-model="uniform.assigneeId" filterable remote reserve-keyword clearable :remote-method="query => searchUsers('uniform', query)" :loading="userLoading.uniform === true" style="width:100%">
-          <el-option v-for="user in userOptions.uniform" :key="user.id" :label="user.name" :value="user.id" />
+          <el-option v-for="user in userOptionsFor('uniform', uniform.assigneeId)" :key="user.id" :label="user.name" :value="user.id" />
         </el-select>
       </el-form-item>
       <template v-if="uniform.mode === 'role'">
@@ -74,6 +74,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BatchAssignmentCapability as SubTableBatchCapability } from './workspaceTypes'
 import type { BatchAssignmentDirectory } from './assignmentDirectoryTypes'
+import { useSelectedAssignmentUsers } from './useSelectedAssignmentUsers'
 import { assignmentStateChanged, collectBatchAssignments, initialBatchAssignment, type BatchAssignmentState, type BatchUniformAssignmentState } from './assignmentDraft'
 
 type RoleOption = { label: string; value: string }
@@ -87,7 +88,7 @@ const rowIntent = reactive<Record<string, BatchAssignmentState>>({})
 const baselines: Record<string, BatchAssignmentState> = {}
 const uniform = reactive<BatchUniformAssignmentState>({ mode: 'none', assigneeId: '', businessUnitId: '', businessUnitCode: '', roleCode: '' })
 const directory = props.createDirectory(t)
-const { userOptions, userLoading, searchUsers } = directory
+const { userLoading, searchUsers } = directory
 const businessUnits = computed(() => directory.businessUnits.value)
 const roleOptions = reactive<Record<string, RoleOption[]>>({})
 const roleLoading = reactive<Record<string, boolean>>({})
@@ -148,6 +149,8 @@ watch(() => props.rows.map(rowKey), () => {
   }
   page.value = Math.min(page.value, Math.max(1, Math.ceil(props.rows.length / 20)))
 }, { immediate: true })
+const selectedUserIds = computed(() => [...displayedRows.value.map(row => rowIntent[rowKey(row)]?.assigneeId ?? ''), uniform.assigneeId])
+const { userOptionsFor } = useSelectedAssignmentUsers(directory, selectedUserIds)
 async function loadDirectory() {
   if (!config.allowRole) return
   try {

@@ -5,8 +5,10 @@ import AssignmentEditor from '../SubTableBatchAssignmentEditor.vue'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import type { BatchAssignmentState, BatchUniformAssignmentState } from '@/utils/subTableBatchAssignmentDraft'
 
+const requestPost = vi.hoisted(() => vi.fn())
+
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
-vi.mock('@/api/request', () => ({ request: { get: vi.fn() } }))
+vi.mock('@/api/request', () => ({ request: { get: vi.fn(), post: requestPost } }))
 vi.mock('@/api/permission', () => ({ permissionApi: { getBusinessUnitsTree: vi.fn(), getBusinessUnitRoles: vi.fn(), getAvailableRoles: vi.fn() } }))
 const capability: SubTableBatchCapability = {
   batchControlId: 'assignment-grid', bindingId: '1', originalCrud: {},
@@ -19,6 +21,7 @@ type State = {
   uniform: BatchUniformAssignmentState
   collect(rows: Array<Record<string, unknown>>): { rows: Array<Record<string, unknown>>; change?: unknown }
   hasChanges(): boolean; selectBusinessUnit(key: string, value: string): Promise<void>
+  userOptionsFor(key: string, selectedId: string): Array<{ id: string; name: string }>
 }
 function editor(rows: Array<Record<string, unknown>>) {
   const wrapper = mount(AssignmentEditor, { props: { rows, capability, rowIdentity: row => String(row.key), rowScopeKey: row => ({ key: row.key }) },
@@ -27,6 +30,21 @@ function editor(rows: Array<Record<string, unknown>>) {
   return { wrapper, state: wrapper.findComponent({ name: 'BatchAssignmentEditor' }).vm as unknown as State }
 }
 describe('embedded assignment editor', () => {
+  it('hydrates stored user IDs together and retains names across searches and uniform assignment', async () => {
+    requestPost.mockResolvedValue({ data: [{ id: 'user-A', username: 'alice', name: 'Alice Example' }] })
+    const rows = [{ key: '1', handler: 'user-A' }, { key: '2', handler: 'user-A' }]
+    const { wrapper, state } = editor(rows)
+    await flushPromises()
+    expect(requestPost).toHaveBeenCalledWith('/tasks/users/summaries', { userIds: ['user-A'] }, expect.anything())
+    expect(state.userOptionsFor('row:1', 'user-A')).toContainEqual(expect.objectContaining({ id: 'user-A', name: 'Alice Example' }))
+    expect(state.hasChanges()).toBe(false)
+    expect(state.collect(rows)).toEqual({ rows })
+    state.uniform.mode = 'person'; state.uniform.assigneeId = 'user-A'
+    await flushPromises()
+    expect(state.userOptionsFor('uniform', 'user-A')[0]?.name).toBe('Alice Example')
+    expect(requestPost).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
   it('restores an existing BU+Role without declaring a change, coalescing same-BU queries', async () => {
     vi.mocked(permissionApi.getBusinessUnitsTree).mockResolvedValue({ data: [{ id: 'query-A', code: 'org-A', name: 'A' }] } as never)
     vi.mocked(permissionApi.getBusinessUnitRoles).mockResolvedValue({ data: [{ code: 'pool-A', name: 'A' }] } as never)

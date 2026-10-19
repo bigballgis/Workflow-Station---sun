@@ -5,7 +5,8 @@ import { permissionApi } from '@/api/permission'
 import { useBatchAssignmentDirectory } from '../useBatchAssignmentDirectory'
 
 const requestGet = vi.hoisted(() => vi.fn<(url: string, config?: unknown) => Promise<unknown>>())
-vi.mock('@/api/request', () => ({ request: { get: requestGet } }))
+const requestPost = vi.hoisted(() => vi.fn())
+vi.mock('@/api/request', () => ({ request: { get: requestGet, post: requestPost } }))
 vi.mock('@/api/permission', () => ({ permissionApi: { getBusinessUnitsTree: vi.fn(), getBusinessUnitRoles: vi.fn(), getAvailableRoles: vi.fn() } }))
 function directory() {
   let result!: ReturnType<typeof useBatchAssignmentDirectory>
@@ -14,6 +15,17 @@ function directory() {
 }
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 describe('batch assignment directory', () => {
+  it('loads saved-person summaries by distinct IDs without changing search options', async () => {
+    requestPost.mockResolvedValue({ data: [{ id: 'person-A', username: 'alice', name: 'Alice' }] })
+    const { wrapper, directory: value } = directory()
+    value.userOptions.uniform = [{ id: 'other', username: 'bob', name: 'Bob' }]
+    await expect(value.loadUsers(['person-A', 'person-A'])).resolves.toEqual([{ id: 'person-A', username: 'alice', name: 'Alice' }])
+    expect(requestPost).toHaveBeenCalledWith('/tasks/users/summaries', { userIds: ['person-A'] }, expect.anything())
+    expect(value.userOptions.uniform[0]?.id).toBe('other')
+    requestPost.mockResolvedValue({ data: [{ id: 'person-A', username: 'alice' }] })
+    await expect(value.loadUsers(['person-A'])).rejects.toThrow('common.operationFailed')
+    wrapper.unmount()
+  })
   it('uses actual BU codes and refuses a code-less BU rather than substituting its ID', async () => {
     vi.mocked(permissionApi.getBusinessUnitsTree).mockResolvedValue({ data: [{ id: 'query-id', name: 'unit', code: 'unit-code' }, { id: 'no-code', name: 'unit2' }] } as never)
     const { wrapper, directory: value } = directory()

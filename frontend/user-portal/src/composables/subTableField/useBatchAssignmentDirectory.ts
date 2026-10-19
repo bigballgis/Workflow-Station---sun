@@ -85,6 +85,16 @@ export function useBatchAssignmentDirectory(t: Translate) {
       } finally { if (!disposed && sequence === latestSearch.get(key)) userLoading[key] = false }
     }, 300))
   }
+  async function loadUsers(ids: string[]): Promise<UserOption[]> {
+    const result = requireArray(await request.post<unknown>('/tasks/users/summaries',
+      { userIds: [...new Set(ids)] }, { skipGlobalErrorHandler: true } as AxiosRequestConfig))
+    return result.map(user => {
+      if (!user || typeof user !== 'object' || !('id' in user) || typeof user.id !== 'string'
+        || !('username' in user) || typeof user.username !== 'string'
+        || !('name' in user) || typeof user.name !== 'string' || !user.name.trim()) throw new Error('common.operationFailed')
+      return { id: user.id, username: user.username, name: user.name }
+    })
+  }
   onBeforeUnmount(() => { disposed = true; searchTimers.forEach(clearTimeout) })
-  return { error, businessUnits, userOptions, userLoading, report, loadBusinessUnits, requireBusinessUnitCode, requireBusinessUnitId, loadRoles, searchUsers }
+  return { error, businessUnits, userOptions, userLoading, report, loadBusinessUnits, requireBusinessUnitCode, requireBusinessUnitId, loadRoles, searchUsers, loadUsers }
 }

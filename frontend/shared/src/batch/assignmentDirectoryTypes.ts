@@ -14,4 +14,5 @@ export interface BatchAssignmentDirectory {
   requireBusinessUnitId: (code: string) => string
   loadRoles: (businessUnitId?: string) => Promise<BatchRoleOption[]>
   searchUsers: (key: string, query: string) => void
+  loadUsers: (ids: string[]) => Promise<BatchUserOption[]>
 }

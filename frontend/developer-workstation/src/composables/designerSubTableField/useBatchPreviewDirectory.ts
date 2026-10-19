@@ -22,6 +22,7 @@ export function useBatchPreviewDirectory(t: (key: string) => string): BatchAssig
     },
     loadRoles: async () => DEMO_ROLE_OPTIONS.map(option => ({ ...option })),
     searchUsers: (key, query) => { directory.userOptions[key] = users.filter(user => user.name.toLowerCase().includes(query.toLowerCase())) },
+    loadUsers: async ids => users.filter(user => ids.includes(user.id)),
   }
   return directory
 }

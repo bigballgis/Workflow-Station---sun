@@ -4919,3 +4919,36 @@
     同任务修后Add成功，继续Batch Edit到999保存成功；GET重读ref2关联正确、ref为空且原ref下两行不变。
     真实请求篡改ref2为其他主记录返回403，GET确认业务数据不变；浏览器pageerror0，截图保留。
     未修改原FU或用户申请，未完成测试任务及完整审批流程。
+
+- id: "1677"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: major
+  category: bug
+  summary: "Batch Assign重新打开后人员选择框显示UUID而非姓名"
+  file: "frontend/shared/src/batch/useSelectedAssignmentUsers.ts"
+  detail: |
+    已存分派仅恢复assigneeId而未加载对应选项，远程搜索替换选项时也会丢失已选显示名。
+    共享编辑器按可见行批量解析去重ID，并保留已选姓名；Preview使用显式本地样本。
+    Portal新增有登录身份校验、最多200个ID的只读摘要接口，一次findAllById查询，仅返回id/username/name。
+    不将姓名写回分派字段，不改变初次分派资格/作用域/完成后生成任务的语义。
+    同一回归测试修前失败、修后通过；41项前端专项及4项后端测试通过。
+    原练习任务修前截图为UUID，修后同任务显示liam；两个样本各打开/取消两次、重读保存数据不变、pageerror0。
+    Portal后端与Portal/DW前端已构建重建；截图保留在Portal verification-screenshots。
+    未重跑完整审批流程；没有为姓名回显修改用户原任务或提交批量分派。
+
+- id: "1678"
+  status: fixed
+  fixed_at: "2026-10-19"
+  severity: minor
+  category: bug
+  summary: "General子表分派字段显示UUID而非姓名"
+  file: "frontend/user-portal/src/composables/subTableField/useSubTableAssignmentLabels.ts"
+  detail: |
+    General普通列未使用Batch Edit的人员摘要，显式assignmentConfig.assigneeField被当作普通字符串输出。
+    新增只读姓名解析，仅匹配显式分派字段，不按字段名或UUID猜测，不回写行数据；目录请求按200个ID分组。
+    同一组件测试修前失败、修后通过，补充实际列slot文本断言，覆盖assignee_id与自定义handler_code。
+    36项专项测试、234项MI单测和6类MI界面场景通过，Portal与DW前端已构建并重建。
+    真实General验收未通过：隔离申请已保存的规范子表行未载入General，不能将空表截图视为修复证据。
+    创建的隔离测试申请未完成审批，未改动用户原FU或原申请。
+    2026-10-19用户明确反馈该问题已经解决，据用户实际验收关闭；不将上述隔离申请验证记作通过。
