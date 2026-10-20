@@ -1,9 +1,10 @@
 <template>
   <BatchWorkspace
     :visible="visible" :rows="rows" :fields="fields" :row-identity="rowIdentity"
+    :rules="capability.batchForm.rule" :options="capability.batchForm.options" :selected-row-ids="selectedRowIds" :mode="mode"
     :field-write-modes="capability.rowDesign?.fieldWriteModes" :field-definitions="workspaceFields"
     :default-value-for-field="defaultValueForField" :format-error="formatError"
-    :show-add="showAdd" :show-delete="showDelete" :allow-edit="allowEdit" :show-assign="showAssign"
+    :allow-edit="allowEdit" :show-assign="showAssign && mode !== 'add'"
     :parent-selection="parentSelection" :prepare-rows="prepareRows"
     :collect-assignment="collectAssignment" :assignment-has-changes="assignmentHasChanges"
     @update:visible="emit('update:visible', $event)"
@@ -13,10 +14,10 @@
     <template #help>
       <DesignerHelpLink path="/form-ctl-sub-table#batch" :ariaLabel="t('subTable.batchGuideLinkAria')" test-id="batch-workspace-guide-link" />
     </template>
-    <template #assignment="{ rows: assignmentRows }">
+    <template #assignment="{ rows: assignmentRows, disabled, rule }">
       <SubTableBatchAssignmentEditor
         v-if="visible && showAssign && assignmentCapability && rowScopeKey" ref="assignmentEditor"
-        :rows="assignmentRows" :capability="assignmentCapability" :row-identity="rowIdentity" :row-scope-key="rowScopeKey"
+        :rule="rule" :options="capability.batchForm.options" :disabled="disabled" :rows="assignmentRows" :capability="assignmentCapability" :row-identity="rowIdentity" :row-scope-key="rowScopeKey"
       />
     </template>
   </BatchWorkspace>
@@ -40,6 +41,8 @@ import DesignerHelpLink from './DesignerHelpLink.vue'
 import SubTableBatchAssignmentEditor from './SubTableBatchAssignmentEditor.vue'
 
 const props = withDefaults(defineProps<{
+  selectedRowIds?: string[]
+  mode?: 'edit' | 'add'
   visible: boolean
   rows: Array<Record<string, unknown>>
   capability: SubTableBatchCapability
@@ -47,17 +50,14 @@ const props = withDefaults(defineProps<{
   showAssign?: boolean
   assignmentCapability?: SubTableBatchCapability | null
   rowScopeKey?: (row: Record<string, unknown>) => Record<string, unknown> | null
-  showDelete?: boolean
-  showAdd?: boolean
   allowEdit?: boolean
   fieldDefinitions?: BindingFieldDefinition[]
   parentSelection?: BindingParentSelection | null
   prepareRows?: (rows: Array<Record<string, unknown>>, parentValue?: string) => Promise<PreparedBatchRows>
-}>(), { allowEdit: true })
+}>(), { allowEdit: true, mode: 'edit' })
 const emit = defineEmits<{
   (event: 'update:visible', visible: boolean): void
   (event: 'apply', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet): void
-  (event: 'open-delete'): void
   (event: 'apply-workspace', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows, assignment?: SubTableBatchChange): void
 }>()
 const { t } = useI18n()

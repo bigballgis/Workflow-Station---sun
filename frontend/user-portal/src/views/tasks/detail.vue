@@ -403,6 +403,7 @@
           <TaskHistorySection
             v-if="detailUiPhase >= 3"
             :history-records="historyRecords"
+            :bpmn-xml="bpmnXml"
             :history-error="historyError"
             :show-header="false"
           />

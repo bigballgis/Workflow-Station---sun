@@ -1,322 +1,94 @@
-import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { defineComponent } from 'vue'
-import BatchWorkspace from '../SubTableBatchEditDialog.vue'
-import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
-import type { PreparedBatchRows } from '@/utils/subTableBatchAdd'
-
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => params ? `${key}:${JSON.stringify(params)}` : key }) }))
-vi.mock('@/api/request', () => ({ request: { get: vi.fn() } }))
-vi.mock('@/api/permission', () => ({ permissionApi: {} }))
-vi.mock('element-plus', () => ({
-  ElMessage: { error: vi.fn() }, ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') },
-}))
-
-interface WorkspaceState {
-  draftRows: Array<Record<string, unknown>>
-  addCount: number
-  page: number
-  addDraftRows(): void
-  onSelectionChange(rows: Array<Record<string, unknown>>): void
-  deleteSelected(): Promise<void>
-  apply(): Promise<void>
-  close(): Promise<boolean>
-  editableRow(row: Record<string, unknown>, field: string): boolean
-  uniformMode: Record<string, 'none' | 'set' | 'clear'>
-  uniformValues: Record<string, unknown>
-}
-
-const capability: SubTableBatchCapability = {
-  batchControlId: 'lines-grid', bindingId: '101', originalCrud: {},
-  capabilities: { allowBatchAdd: true, allowBatchDelete: true, allowBatchEdit: true, allowBatchAssign: false },
-  batchForm: { schemaVersion: 1, rule: [{ type: 'input', field: 'description', required: true }] },
-}
-const initialRows = [{ line_key: 'L1', description: 'first', hidden: 'keep-1' }, { line_key: 'L2', description: 'second', hidden: 'keep-2' }]
-const collectAssignment = vi.fn()
-const assignmentDirty = vi.fn(() => false)
-
-function workspace(prepareRows = vi.fn(async (rows: Array<Record<string, unknown>>): Promise<PreparedBatchRows> => ({
-  rows: rows.map((row, index) => ({ ...row, line_key: `N${index + 1}` })),
-}))) {
-  const wrapper = mount(BatchWorkspace, { props: {
-    visible: true, rows: initialRows, capability, showAdd: true, showDelete: true,
-    rowIdentity: row => String(row.line_key), prepareRows,
-  }, global: { stubs: {
-    ElDialog: { template: '<div><slot name="header"/><slot/><slot name="footer"/></div>' },
-    DesignerHelpLink: { props: ['path', 'ariaLabel', 'testId'], template: '<a :href="path" :data-testid="testId"/>' },
-    ElTable: { name: 'ElTable', props: ['data'], template: '<div />' }, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' },
-    ElFormItem: { template: '<div><slot/></div>' }, ElInputNumber: true, ElButton: { template: '<button><slot/></button>' },
-    ElPagination: true, ElDivider: true, ElSelect: true, ElOption: true, ElInput: true,
-    SubTableBatchAssignmentEditor: defineComponent({
-      name: 'SubTableBatchAssignmentEditor',
-      setup(_, { expose }) { expose({ collect: collectAssignment, hasChanges: assignmentDirty }); return () => null },
-    }),
-  } } })
-  return { wrapper, state: wrapper.findComponent({ name: 'BatchWorkspace' }).vm as unknown as WorkspaceState, prepareRows }
-}
-
-describe('batch workspace Add/Delete transaction', () => {
-  it('explains pending uniform values with no selected rows before checking blank new fields', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.addDraftRows()
-    state.uniformMode.description = 'set'
-    state.uniformValues.description = '6'
-    vi.mocked(ElMessage.error).mockClear()
-    await state.apply()
-    expect(ElMessage.error).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'subTable.batchSelectUniformRows' }))
-    expect(prepareRows).not.toHaveBeenCalled()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    expect(state.draftRows[2]!.description).toBeNull()
-    wrapper.unmount()
-  })
-
-  it('applies uniform values only to selected added rows without modifying saved rows', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.addCount = 3
-    state.addDraftRows()
-    state.uniformMode.description = 'set'
-    state.uniformValues.description = '6'
-    state.onSelectionChange(state.draftRows.slice(2))
-    await state.apply()
-    expect(prepareRows).toHaveBeenCalledWith([{ description: '6' }, { description: '6' }, { description: '6' }], '')
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[0]).toEqual([
-      ...initialRows, ...[1, 2, 3].map(index => ({ line_key: `N${index}`, description: '6' })),
-    ])
-    expect(initialRows.map(row => row.description)).toEqual(['first', 'second'])
-    wrapper.unmount()
-  })
-  it('locates the actual page and row when only an existing row on page two is invalid', async () => {
-    const { wrapper, state } = workspace()
-    await wrapper.setProps({ rows: Array.from({ length: 22 }, (_, index) => ({ line_key: `L${index + 1}`, description: 'valid' })) })
-    await wrapper.setProps({ visible: false })
-    await wrapper.setProps({ visible: true })
-    state.draftRows[20]!.description = ''
-    state.page = 1
-    vi.mocked(ElMessage.error).mockClear()
-    await state.apply()
-    expect(ElMessage.error).toHaveBeenLastCalledWith('subTable.batchInvalidField:{"row":21,"label":"description"}')
-    expect(state.page).toBe(2)
+import { ElMessage } from 'element-plus'
+import { workspace, state, rows } from './batchWorkspaceTestHelpers'
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() }, ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) } }))
+describe('selected-row Batch Form', () => {
+  it('honors disabled layout ancestors when collecting user input', async () => {
+    const wrapper = workspace({ rules: [{ type: 'elCard', props: { disabled: true }, children: [{ type: 'input', field: 'caption', title: 'Caption' }] }] })
+    state(wrapper).setValue('caption', 'must not write')
+    await state(wrapper).apply()
     expect(wrapper.emitted('apply')).toBeUndefined()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    wrapper.unmount()
   })
-
-  it('locates an invalid added row after deleting an existing row', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.onSelectionChange([state.draftRows[0]!])
-    await state.deleteSelected()
-    state.addDraftRows()
-    vi.mocked(ElMessage.error).mockClear()
-    await state.apply()
-    expect(ElMessage.error).toHaveBeenLastCalledWith('subTable.batchInvalidField:{"row":2,"label":"description"}')
-    expect(prepareRows).not.toHaveBeenCalled()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    wrapper.unmount()
-  })
-
-  it('does not emit data updates for an unchanged workspace', async () => {
-    const { wrapper, state } = workspace()
-    await state.apply()
+  it('starts unchanged, including fields with designer defaults', async () => {
+    const wrapper = workspace({ defaultValueForField: () => 'default' })
+    expect(state(wrapper).values).toEqual({})
+    await state(wrapper).apply()
     expect(wrapper.emitted('apply')).toBeUndefined()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
     expect(wrapper.emitted('update:visible')).toEqual([[false]])
-    wrapper.unmount()
   })
-
-  it('confirms discarding an Assignment-only draft and keeps it when dismissal is cancelled', async () => {
-    const { wrapper, state } = workspace()
-    await wrapper.setProps({ showAssign: true, allowEdit: false, showAdd: false, showDelete: false,
-      assignmentCapability: { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } },
-      rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
-    assignmentDirty.mockReturnValueOnce(true)
-    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
-    expect(await state.close()).toBe(false)
-    expect(wrapper.emitted('update:visible')).toBeUndefined()
+  it('fills once and changes only selected rows, preserving hidden values', async () => {
+    const wrapper = workspace()
+    state(wrapper).setValue('caption', 'Shared')
+    await state(wrapper).apply()
+    expect(wrapper.emitted('apply')![0]![0]).toEqual(rows.map((row, i) => i < 2 ? { ...row, caption: 'Shared' } : row))
+    expect(wrapper.emitted('apply')![0]![1]).toMatchObject({ uniformPatches: [{ rowIds: ['one', 'two'], fields: { caption: { kind: 'set', value: 'Shared' } } }] })
+  })
+  it('preserves zero and false as explicit changes', async () => {
+    const wrapper = workspace()
+    state(wrapper).setValue('amount', 0); state(wrapper).setValue('active', false)
+    await state(wrapper).apply()
+    expect(wrapper.emitted('apply')![0]![0]).toMatchObject([{ amount: 0, active: false }, { amount: 0, active: false }, { amount: 3, active: true }])
+  })
+  it('distinguishes a cleared field from untouched fields', async () => {
+    const wrapper = workspace()
+    state(wrapper).setValue('amount', null)
+    await state(wrapper).apply()
+    expect(wrapper.emitted('apply')![0]![0]).toMatchObject([{ caption: 'A', amount: null }, { caption: 'B', amount: null }, { caption: 'C', amount: 3 }])
+  })
+  it('rejects clearing a required field atomically', async () => {
+    const wrapper = workspace()
+    state(wrapper).setValue('caption', null)
+    await state(wrapper).apply()
     expect(wrapper.emitted('apply')).toBeUndefined()
-    wrapper.unmount()
+    expect(ElMessage.error).toHaveBeenCalledWith('Error: subTable.batchInvalidField')
   })
-
-  it('does not apply valid Assignment when an ordinary field fails validation', async () => {
-    const { wrapper, state } = workspace()
-    await wrapper.setProps({ showAssign: true, assignmentCapability: { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } }, rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
-    state.draftRows[0]!.description = ''
-    collectAssignment.mockImplementation((rows: Array<Record<string, unknown>>) => ({ rows, change: { rowPatches: [{ rowId: 'L1' }] } }))
-    await state.apply()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    expect(wrapper.emitted('update:visible')).toBeUndefined()
-    expect(state.draftRows[0]!.description).toBe('')
-    wrapper.unmount()
-  })
-  it('keeps Assignment inside the workspace and applies both drafts in one event', async () => {
-    const { wrapper, state } = workspace()
-    const assignCapability = { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } }
-    await wrapper.setProps({ showAssign: true, assignmentCapability: assignCapability, rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
-    state.draftRows[0]!.description = 'ordinary draft'
-    const change = { batchControlId: 'lines-grid', bindingId: '101', operation: 'ASSIGN', rowPatches: [{ rowId: 'L1', rowKey: { line_key: 'L1' }, fields: ['handler_code'], assignment: { mode: 'PERSON', assigneeId: 'user-new' } }] }
-    collectAssignment.mockImplementation((rows: Array<Record<string, unknown>>) => ({ rows: rows.map((row, index) => index === 0 ? { ...row, handler_code: 'user-new' } : row), change }))
-    expect(wrapper.findComponent({ name: 'SubTableBatchAssignmentEditor' }).exists()).toBe(true)
-    await state.apply()
+  it('does not change protected fields even if an update event is forged', async () => {
+    const wrapper = workspace({ fieldWriteModes: { caption: 'READONLY' }, fieldDefinitions: [{ fieldName: 'amount', isPrimaryKey: true }] })
+    state(wrapper).setValue('caption', 'bad'); state(wrapper).setValue('amount', 8)
+    await state(wrapper).apply()
     expect(wrapper.emitted('apply')).toBeUndefined()
-    const event = wrapper.emitted('apply-workspace')?.[0]
-    expect(event?.[0]).toEqual([{ ...initialRows[0], description: 'ordinary draft', handler_code: 'user-new' }, initialRows[1]])
-    expect(event?.[3]).toEqual(change)
-    wrapper.unmount()
   })
-
-  it('retains both drafts and emits nothing when Assignment validation fails', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    await wrapper.setProps({ showAssign: true, assignmentCapability: { ...capability, assignmentConfig: { allowUser: true, allowRole: false, assigneeField: 'handler_code' } }, rowScopeKey: (row: Record<string, unknown>) => ({ line_key: row.line_key }) })
-    state.draftRows[0]!.description = 'ordinary draft'
-    collectAssignment.mockImplementation(() => { throw new Error('subTable.batchAssignmentRequired') })
-    await state.apply()
+  it('passes only the outer selection to assignment collection', async () => {
+    const collect = vi.fn(selected => ({ rows: selected, change: undefined }))
+    const wrapper = workspace({ showAssign: true, collectAssignment: collect, assignmentHasChanges: () => true })
+    await state(wrapper).apply()
+    expect(collect).toHaveBeenCalledWith(rows.slice(0, 2))
+  })
+  it('allows ordinary edits when an untouched assignment block is not mounted in a lazy tab', async () => {
+    const collect = vi.fn(() => { throw new Error('editor is not mounted') })
+    const wrapper = workspace({ showAssign: true, collectAssignment: collect, assignmentHasChanges: () => false })
+    state(wrapper).setValue('caption', 'Ordinary edit')
+    await state(wrapper).apply()
+    expect(collect).not.toHaveBeenCalled()
+    expect(wrapper.emitted('apply')).toHaveLength(1)
+  })
+  it('rejects changes to a selected record while the form is open', async () => {
+    const wrapper = workspace()
+    state(wrapper).setValue('amount', 7)
+    await wrapper.setProps({ rows: rows.map((row, i) => i === 0 ? { ...row, amount: 99 } : row) })
+    await state(wrapper).apply()
     expect(wrapper.emitted('apply')).toBeUndefined()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    expect(wrapper.emitted('update:visible')).toBeUndefined()
-    expect(prepareRows).not.toHaveBeenCalled()
-    expect(state.draftRows[0]!.description).toBe('ordinary draft')
-    wrapper.unmount()
   })
-  it('uses the frozen read-only field policy and typed literal defaults for new rows', async () => {
-    const { wrapper, state } = workspace()
-    await wrapper.setProps({ capability: { ...capability,
-      batchForm: { schemaVersion: 1, rule: [{ type: 'inputNumber', field: 'quantity' }] },
-      rowDesign: { binding: { tableId: 20, bindingType: 'SUB', bindingMode: 'EDITABLE', bindingLinkMode: 'structuralFk',
-        primaryKeyFields: ['line_key'], fieldDefinitions: [{ fieldName: 'quantity' }] },
-        fields: [{ fieldName: 'quantity', dataType: 'INTEGER', defaultValue: '0' }], parentTablesById: {},
-        fieldWriteModes: { quantity: 'READONLY' },
-      },
-    } })
-    state.addDraftRows()
-    const added = state.draftRows[2]!
-    expect(added.quantity).toBe(0)
-    expect(state.editableRow(added, 'quantity')).toBe(false)
-    wrapper.unmount()
+  it('preserves concurrent updates to unselected rows', async () => {
+    const wrapper = workspace()
+    state(wrapper).setValue('amount', 7)
+    await wrapper.setProps({ rows: rows.map((row, i) => i === 2 ? { ...row, caption: 'Other edit' } : row) })
+    await state(wrapper).apply()
+    expect((wrapper.emitted('apply')![0]![0] as typeof rows)[2]!.caption).toBe('Other edit')
   })
-  it('does not replace table data when selection changes', async () => {
-    const { wrapper, state } = workspace()
-    const data = wrapper.getComponent({ name: 'ElTable' }).props('data')
-    state.onSelectionChange([state.draftRows[0]!])
-    await wrapper.vm.$nextTick()
-    expect(wrapper.getComponent({ name: 'ElTable' }).props('data')).toBe(data)
-    wrapper.unmount()
+  it('keeps designed field columns instead of flattening their spans', () => {
+    const wrapper = workspace({ rules: [
+      { type: 'input', field: 'caption', col: { span: 12 } },
+      { type: 'inputNumber', field: 'amount', col: { span: 12, offset: 0 } },
+    ] })
+    expect(wrapper.findAll('[span="12"]')).toHaveLength(2)
   })
-  it('does not prompt to discard an already applied workspace when the dialog reports its close', async () => {
-    const { wrapper, state } = workspace()
-    state.draftRows[0]!.description = 'applied value'
-    await state.apply()
-    await wrapper.setProps({ visible: false })
-    vi.mocked(ElMessageBox.confirm).mockClear()
-    await state.close()
-    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-  it('links its header to the existing Sub-Table batch guideline', () => {
-    const { wrapper } = workspace()
-    expect(wrapper.get('[data-testid="batch-workspace-guide-link"]').attributes('href')).toBe('/form-ctl-sub-table#batch')
-    wrapper.unmount()
-  })
-  it('keeps saved rows read-only in Add-only mode while accepting new rows', async () => {
-    const { wrapper, state } = workspace()
-    await wrapper.setProps({ allowEdit: false, showDelete: false })
-    state.draftRows[0]!.description = 'attempted existing edit'
-    state.addDraftRows()
-    state.draftRows[2]!.description = 'new description'
-    await state.apply()
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[0]).toEqual([
-      ...initialRows, { line_key: 'N1', description: 'new description' },
-    ])
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[1]).toEqual({})
-    wrapper.unmount()
-  })
-
-  it('accepts only the deletion in Delete-only mode', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    await wrapper.setProps({ allowEdit: false, showAdd: false })
-    state.draftRows[1]!.description = 'attempted existing edit'
-    state.onSelectionChange([state.draftRows[0]!])
-    await state.deleteSelected()
-    await state.apply()
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[0]).toEqual([initialRows[1]])
-    expect(prepareRows).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-  it('can delete the last saved rows without preparing additions', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.onSelectionChange([...state.draftRows])
-    await state.deleteSelected()
-    await state.apply()
-    expect(prepareRows).not.toHaveBeenCalled()
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[0]).toEqual([])
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[1]).toEqual({ deletedRowIds: ['L1', 'L2'] })
-    wrapper.unmount()
-  })
-
-  it('rejects duplicated prepared identities without emitting page changes', async () => {
-    const prepare = vi.fn(async (rows: Array<Record<string, unknown>>): Promise<PreparedBatchRows> => ({
-      rows: rows.map(row => ({ ...row, line_key: 'L1' })),
-    }))
-    const { wrapper, state } = workspace(prepare)
-    state.addDraftRows()
-    state.draftRows[2]!.description = 'duplicate'
-    await state.apply()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    expect(wrapper.emitted('update:visible')).toBeUndefined()
-    wrapper.unmount()
-  })
-
-  it('refuses applying a stale baseline after polling changed the page', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.addDraftRows()
-    state.draftRows[2]!.description = 'new'
-    await wrapper.setProps({ rows: [{ ...initialRows[0]!, description: 'external edit' }, initialRows[1]!] })
-    await state.apply()
-    expect(prepareRows).not.toHaveBeenCalled()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    expect(state.draftRows[0]!.description).toBe('first')
-    wrapper.unmount()
-  })
-  it('applies mixed edits, additions and deletions as one event with untouched hidden fields', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.draftRows[1]!.description = 'edited'
-    state.addCount = 2
-    state.addDraftRows()
-    state.draftRows[2]!.description = 'new-one'
-    state.draftRows[3]!.description = 'new-two'
-    state.onSelectionChange([state.draftRows[0]!])
-    await state.deleteSelected()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    await state.apply()
-    expect(prepareRows).toHaveBeenCalledTimes(1)
-    expect(wrapper.emitted('apply-workspace')?.[0]?.[0]).toEqual([
-      { line_key: 'L2', description: 'edited', hidden: 'keep-2' },
-      { line_key: 'N1', description: 'new-one' }, { line_key: 'N2', description: 'new-two' },
-    ])
-    expect(initialRows[0]!.description).toBe('first')
-    expect(initialRows[1]!.description).toBe('second')
-    wrapper.unmount()
-  })
-
-  it('removes new drafts without requesting any primary keys', async () => {
-    const { wrapper, state, prepareRows } = workspace()
-    state.addDraftRows()
-    state.onSelectionChange([state.draftRows[2]!])
-    await state.deleteSelected()
-    await state.close()
-    expect(prepareRows).not.toHaveBeenCalled()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    wrapper.unmount()
-  })
-
-  it('retains the draft and emits nothing when preparation fails', async () => {
-    const prepare = vi.fn(async (): Promise<PreparedBatchRows> => { throw new Error('allocation failed') })
-    const { wrapper, state } = workspace(prepare)
-    state.addDraftRows()
-    state.draftRows[2]!.description = 'new'
-    await state.apply()
-    expect(wrapper.emitted('apply-workspace')).toBeUndefined()
-    expect(wrapper.emitted('update:visible')).toBeUndefined()
-    expect(state.draftRows).toHaveLength(3)
-    wrapper.unmount()
+  it('renders the configured layout without row tables or internal checkboxes', () => {
+    const wrapper = workspace({ rules: [{ type: 'elCard', props: { header: 'Designed card' }, children: [{ type: 'input', field: 'caption', title: 'Caption' }, { type: 'miAssignment' }] }] })
+    expect(wrapper.findComponent({ name: 'BatchDesignedForm' }).exists()).toBe(true)
+    expect(wrapper.findAll('input')).toHaveLength(1)
+    expect(wrapper.find('table').exists()).toBe(false)
+    expect(wrapper.find('[type="checkbox"]').exists()).toBe(false)
   })
 })

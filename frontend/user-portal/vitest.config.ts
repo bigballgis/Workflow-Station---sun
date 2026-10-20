@@ -51,6 +51,6 @@ export default defineConfig({
       '@platform-shared': resolve(__dirname, '../shared/src'),
     },
     // Keep in sync with vite.config.ts — shared SFCs need bare imports pinned to this app.
-    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue'],
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue', '@form-create/element-ui'],
   },
 })

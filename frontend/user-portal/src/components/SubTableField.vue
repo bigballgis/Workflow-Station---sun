@@ -3,8 +3,11 @@
     <div class="sub-table-header">
       <span class="title">{{ title }}</span>
       <div class="actions">
+        <el-button v-if="canBatchAdd" size="small" @click="openBatchAdd">{{ t('subTable.batchAdd') }}</el-button>
+        <el-button v-if="canBatchDelete" size="small" :disabled="!selectedIds.length || selectedIds.length > 200" @click="deleteBatchSelection">{{ t('subTable.batchDelete') }}</el-button>
         <el-button
-          v-if="canBatchWorkspace"
+          v-if="canBatchEdit || canBatchAssign"
+          :disabled="!selectedIds.length || selectedIds.length > 200"
           size="small"
           @click="openBatchWorkspace"
         >
@@ -45,6 +48,7 @@
     <el-alert v-if="assignmentLabelError" :title="assignmentLabelError" type="error" :closable="false" />
     <div class="sub-table-scroll-wrapper">
       <el-table
+        ref="selectionTable"
         v-loading="loading === true"
         :data="rows"
         size="small"
@@ -53,7 +57,10 @@
         style="width: 100%"
         :show-summary="hasSummary"
         :summary-method="getSummaryMethod"
+        :row-key="batchTableRowKey"
+        @selection-change="onSelectionChange"
       >
+        <el-table-column v-if="canBatchEdit || canBatchAssign || canBatchDelete" type="selection" width="48" :reserve-selection="true" :selectable="row => resolveBatchRowIdentity(row) !== null" />
         <el-table-column
           v-for="col in columns"
           :key="col.field"
@@ -580,6 +587,8 @@
       v-model:visible="batchDialogVisible"
       :rows="rows"
       :capability="batchWorkspaceCapability"
+      :selected-row-ids="batchTargetIds"
+      :mode="batchMode"
       :row-identity="resolveBatchRowIdentity"
       :allow-edit="canBatchEdit"
       :field-definitions="batchWorkspaceCapability.rowDesign?.binding.fieldDefinitions"
@@ -588,22 +597,9 @@
       :show-assign="canBatchAssign"
       :assignment-capability="batchAssignCapability"
       :row-scope-key="resolveBatchRowScopeKey"
-      :show-delete="canBatchDelete"
-      :show-add="canBatchAdd"
+
       @apply="applyBatchEdit"
       @apply-workspace="applyBatchWorkspace"
-      @open-delete="batchDeleteDialogVisible = true"
-    />
-    <SubTableBatchDeleteDialog
-      v-if="batchDeleteCapability"
-      v-model:visible="batchDeleteDialogVisible"
-      :rows="rows"
-      :columns="columns"
-      :batch-control-id="batchDeleteCapability.batchControlId"
-      :binding-id="batchDeleteCapability.bindingId"
-      :row-identity="resolveBatchRowIdentity"
-      :row-scope-key="resolveBatchRowScopeKey"
-      @apply="applyBatchDelete"
     />
   </div>
 </template>
@@ -611,11 +607,12 @@
 <script setup lang="ts">
 import { ref, watch, computed, withDefaults, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useBatchSelection } from '@platform-shared/batch/useBatchSelection'
 import { Plus, Document, Search, Close, Download, Upload } from '@element-plus/icons-vue'
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableBatchEditDialog from './SubTableBatchEditDialog.vue'
-import SubTableBatchDeleteDialog from './SubTableBatchDeleteDialog.vue'
 import {
   resolveDisplayValue,
   isUserSnapshotLikeObject,
@@ -811,7 +808,9 @@ const canAdd = computed(() => !isActionBinding.value && props.editable === true 
 const canEdit = computed(() => !isActionBinding.value && props.editable === true && props.allowEdit !== false)
 const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
 const batchDialogVisible = ref(false)
-const batchDeleteDialogVisible = ref(false)
+const batchMode = ref<'edit' | 'add'>('edit')
+const batchTargetIds = ref<string[]>([])
+function batchTableRowKey(row: Record<string, unknown>) { return resolveBatchRowIdentity(row) ?? `unselected:${rows.value.indexOf(row)}` }
 const batchAddCapability = computed(() => {
   const capability = parseSubTableBatchCapability(props.batchCapability)
   return allowsFrozenBatchAdd(capability, props.bindingId) && capability && extractBatchEditableFields(capability) ? capability : null
@@ -891,8 +890,30 @@ function applyBatchEdit(nextRows: Array<Record<string, unknown>>, changes: Batch
 }
 
 function openBatchWorkspace() {
-  if (batchWorkspaceCapability.value && canBatchWorkspace.value) batchDialogVisible.value = true
-  else if (canBatchDelete.value) batchDeleteDialogVisible.value = true
+  if (!selectedIds.value.length || selectedIds.value.length > 200) return
+  batchMode.value = 'edit'
+  batchTargetIds.value = [...selectedIds.value]
+  batchDialogVisible.value = true
+}
+function openBatchAdd() {
+  batchMode.value = 'add'
+  batchTargetIds.value = []
+  batchDialogVisible.value = true
+}
+async function deleteBatchSelection() {
+  const capability = batchDeleteCapability.value
+  if (!capability || !canBatchDelete.value || !selectedRows.value.length || selectedRows.value.length > 200) return
+  const targets = JSON.parse(JSON.stringify(selectedRows.value)) as Array<Record<string, unknown>>
+  try { await ElMessageBox.confirm(t('subTable.batchDeleteConfirm', { count: targets.length }), t('subTable.deleteConfirm'), { type: 'warning' }) } catch { return }
+  const rowPatches = targets.map(row => ({ rowId: resolveBatchRowIdentity(row)!, rowKey: resolveBatchRowScopeKey(row)! }))
+  if (targets.some(row => JSON.stringify(rows.value.find(current => resolveBatchRowIdentity(current) === resolveBatchRowIdentity(row))) !== JSON.stringify(row))) {
+    ElMessage.error(t('subTable.batchStaleDraft')); return
+  }
+  const removed = new Set(rowPatches.map(patch => patch.rowId))
+  applyBatchDelete(rows.value.filter(row => !removed.has(resolveBatchRowIdentity(row)!)), {
+    batchControlId: capability.batchControlId, bindingId: capability.bindingId, operation: 'DELETE', rowPatches,
+  })
+  clearSelection()
 }
 
 function applyBatchAdd(prepared: PreparedBatchRows, fields: string[]) {
@@ -1144,6 +1165,8 @@ function handleExport() {
 }
 
 const rows = ref<any[]>([])
+const { selectedIds, selectedRows, selectionTable, onSelectionChange, clearSelection } = useBatchSelection(rows, resolveBatchRowIdentity)
+watch(() => [props.bindingId, JSON.stringify(props.batchCapability)], clearSelection)
 const { isAssignmentPersonColumn, assignmentPersonLabel, assignmentLabelError } = useSubTableAssignmentLabels(
   rows, computed(() => effectiveAssignmentConfig.value?.assigneeField), t,
 )

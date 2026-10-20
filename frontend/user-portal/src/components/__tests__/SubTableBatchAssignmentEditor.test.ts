@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { permissionApi } from '@/api/permission'
 import AssignmentEditor from '../SubTableBatchAssignmentEditor.vue'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
-import type { BatchAssignmentState, BatchUniformAssignmentState } from '@/utils/subTableBatchAssignmentDraft'
+import type { BatchUniformAssignmentState } from '@/utils/subTableBatchAssignmentDraft'
 
 const requestPost = vi.hoisted(() => vi.fn())
 
@@ -17,26 +17,43 @@ const capability: SubTableBatchCapability = {
   batchForm: { schemaVersion: 1, rule: [{ type: 'miAssignment' }] },
 }
 type State = {
-  rowIntent: Record<string, BatchAssignmentState>; roleOptions: Record<string, Array<{ value: string }>>
+  uniformRoleOptions: Array<{ value: string }>
   uniform: BatchUniformAssignmentState
   collect(rows: Array<Record<string, unknown>>): { rows: Array<Record<string, unknown>>; change?: unknown }
-  hasChanges(): boolean; selectBusinessUnit(key: string, value: string): Promise<void>
+  hasChanges(): boolean; selectUniformBusinessUnit(value: string): Promise<void>
   userOptionsFor(key: string, selectedId: string): Array<{ id: string; name: string }>
 }
 function editor(rows: Array<Record<string, unknown>>) {
   const wrapper = mount(AssignmentEditor, { props: { rows, capability, rowIdentity: row => String(row.key), rowScopeKey: row => ({ key: row.key }) },
-    global: { stubs: { ElTable: true, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' }, ElFormItem: true, ElDivider: true,
+    global: { stubs: { ElRow: { template: '<div><slot/></div>' }, ElCol: { template: '<div><slot/></div>' }, ElTable: true, ElTableColumn: true, ElForm: { template: '<div><slot/></div>' }, ElFormItem: { template: '<div><slot/></div>', methods: { validate: () => Promise.resolve() } }, ElDivider: true,
       ElPagination: true, ElSelect: true, ElOption: true, ElAlert: true, ElCascader: true } } })
   return { wrapper, state: wrapper.findComponent({ name: 'BatchAssignmentEditor' }).vm as unknown as State }
 }
 describe('embedded assignment editor', () => {
-  it('hydrates stored user IDs together and retains names across searches and uniform assignment', async () => {
+  it('renders a real person picker for an existing Assignment marker without children', async () => {
+    const { wrapper } = editor([{ key: '1' }])
+    await wrapper.findAll('[role="radio"]')[0]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAllComponents({ name: 'BatchAssignmentInput' })).toHaveLength(1)
+    expect(wrapper.findComponent({ name: 'BatchAssignmentInput' }).props('rule').field).toBe('handler')
+    expect(wrapper.findComponent({ name: 'BatchAssignmentInput' }).find('el-select-stub').exists()).toBe(true)
+    wrapper.unmount()
+  })
+  it('renders BU and Role for an existing marker, with Role disabled until BU is chosen', async () => {
+    const { wrapper } = editor([{ key: '1' }])
+    await wrapper.findAll('[role="radio"]')[1]!.trigger('click')
+    await flushPromises()
+    const controls = wrapper.findAllComponents({ name: 'BatchAssignmentInput' })
+    expect(controls.map(control => control.props('rule').field)).toEqual(['org', 'pool'])
+    expect(controls[1]!.find('el-select-stub').attributes('disabled')).toBe('true')
+    wrapper.unmount()
+  })
+  it('hydrates only the chosen uniform user and keeps existing assignments unchanged by default', async () => {
     requestPost.mockResolvedValue({ data: [{ id: 'user-A', username: 'alice', name: 'Alice Example' }] })
     const rows = [{ key: '1', handler: 'user-A' }, { key: '2', handler: 'user-A' }]
     const { wrapper, state } = editor(rows)
     await flushPromises()
-    expect(requestPost).toHaveBeenCalledWith('/tasks/users/summaries', { userIds: ['user-A'] }, expect.anything())
-    expect(state.userOptionsFor('row:1', 'user-A')).toContainEqual(expect.objectContaining({ id: 'user-A', name: 'Alice Example' }))
+    expect(requestPost).not.toHaveBeenCalled()
     expect(state.hasChanges()).toBe(false)
     expect(state.collect(rows)).toEqual({ rows })
     state.uniform.mode = 'person'; state.uniform.assigneeId = 'user-A'
@@ -51,13 +68,11 @@ describe('embedded assignment editor', () => {
     const rows = [{ key: '1', handler: null, org: 'org-A', pool: 'pool-A' }, { key: '2', handler: null, org: 'org-A', pool: 'pool-A' }]
     const { wrapper, state } = editor(rows)
     await flushPromises()
-    expect(state.rowIntent['1']?.businessUnitId).toBe('query-A')
-    expect(state.roleOptions['1']).toEqual([{ value: 'pool-A', label: 'A' }])
-    expect(permissionApi.getBusinessUnitRoles).toHaveBeenCalledTimes(1)
+    expect(permissionApi.getBusinessUnitRoles).not.toHaveBeenCalled()
     expect(state.hasChanges()).toBe(false)
     expect(state.collect(rows)).toEqual({ rows })
     await wrapper.setProps({ rows: [{ ...rows[0]!, label: 'ordinary edit' }, rows[1]!] })
-    expect(state.rowIntent['1']?.businessUnitId).toBe('query-A')
+    expect(state.uniform.mode).toBe('none')
     wrapper.unmount()
   })
   it('rejects the first A response after A→B→A, retaining only the latest generation', async () => {
@@ -69,11 +84,11 @@ describe('embedded assignment editor', () => {
     vi.mocked(permissionApi.getBusinessUnitRoles).mockImplementationOnce(() => new Promise(resolve => { resolveFirst = value => resolve(value as never) }))
     vi.mocked(permissionApi.getBusinessUnitRoles).mockResolvedValueOnce({ data: [{ code: 'B-pool' }] } as never)
     vi.mocked(permissionApi.getBusinessUnitRoles).mockResolvedValueOnce({ data: [{ code: 'latest-A' }] } as never)
-    const first = state.selectBusinessUnit('1', 'A')
-    await state.selectBusinessUnit('1', 'B')
-    await state.selectBusinessUnit('1', 'A')
+    const first = state.selectUniformBusinessUnit('A')
+    await state.selectUniformBusinessUnit('B')
+    await state.selectUniformBusinessUnit('A')
     resolveFirst({ data: [{ code: 'obsolete-A' }] }); await first
-    expect(state.roleOptions['1']?.map(role => role.value)).toEqual(['latest-A'])
+    expect(state.uniformRoleOptions.map(role => role.value)).toEqual(['latest-A'])
     wrapper.unmount()
   })
 })

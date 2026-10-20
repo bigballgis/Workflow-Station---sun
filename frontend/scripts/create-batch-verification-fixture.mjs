@@ -105,6 +105,18 @@ try {
       { type: 'inputNumber', field: numberField, title: 'Amount', validate: [{ required: true }], ...(inputLimits ? { props: { min: 0, max: 10 } } : {}) },
       ...extraFields.map(field => ({ type: 'input', field: field.fieldName, title: field.displayName })),
     ]
+    const designedBatch = process.env.FIXTURE_DESIGNED_BATCH === '1'
+    const batchRule = designedBatch ? [
+      { type: 'elCard', props: { header: 'Designed batch layout', shadow: 'never' }, style: { width: '100%', backgroundColor: '#f6fbff' }, children: [
+        { ...rowRule.find(rule => rule.field === textField), value: 'Designed default', col: { span: 12 }, props: { placeholder: 'Configured caption', size: 'small', clearable: true }, style: { width: '237px' } },
+        { ...rowRule.find(rule => rule.field === numberField), value: 5, col: { span: 12 }, props: { controlsPosition: 'right', min: 0, max: 100 }, style: { width: '173px' } },
+      ] },
+      ...(assignment ? [{ type: 'miAssignment', input: false, style: { width: '100%', marginTop: '17px' }, children: [
+        { type: 'input', field: 'handler_code', title: 'Designed person', props: { clearable: true, filterable: true, placeholder: 'Choose a person' }, style: { width: '287px' } },
+        { type: 'input', field: 'unit_code', title: 'Designed unit', props: { clearable: true }, col: { span: 12 } },
+        { type: 'input', field: 'pool_code', title: 'Designed role', props: { clearable: true }, col: { span: 12 } },
+      ] }] : []),
+    ] : [...rowRule, ...(assignment ? [{ type: 'miAssignment' }] : [])]
     const configJson = {
       rule: [
         { type: 'input', field: 'case_key', title: 'Case key', props: { _bindingId: mainBinding.id } },
@@ -117,7 +129,7 @@ try {
           } },
       ], options: { form: { labelPosition: 'top' } },
       subForms: { [binding.id]: { rule: rowRule, options: {} } },
-      batchForms: { [binding.id]: { schemaVersion: 1, rule: [...rowRule, ...(assignment ? [{ type: 'miAssignment' }] : [])], options: {} } },
+      batchForms: { [binding.id]: { schemaVersion: 1, rule: batchRule, options: designedBatch ? { form: { labelPosition: 'top', size: 'small' }, row: { gutter: 8 } } : {} } },
     }
     await api('PUT', `${base}/forms/${form.id}`, {
       formName: form.formName, formType, scene: 'TASK', configJson,

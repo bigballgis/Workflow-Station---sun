@@ -67,7 +67,7 @@ export default defineConfig({
       },
     ],
     // frontend/shared SFCs import vue-i18n / element-plus icons; pin them to this app's copy.
-    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue'],
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue', '@form-create/element-ui'],
   },
   server: {
     port: 3002,

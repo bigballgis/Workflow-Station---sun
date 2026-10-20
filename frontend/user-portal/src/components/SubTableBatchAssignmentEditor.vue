@@ -1,5 +1,5 @@
 <template>
-  <BatchAssignmentEditor ref="editor" v-bind="$props" :create-directory="useBatchAssignmentDirectory" />
+  <BatchAssignmentEditor ref="editor" v-bind="$props" :create-directory="useBatchAssignmentDirectory" :field-write-modes="capability.rowDesign?.fieldWriteModes" />
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -8,6 +8,9 @@ import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import { useBatchAssignmentDirectory } from '@/composables/subTableField/useBatchAssignmentDirectory'
 
 defineProps<{
+  rule?: Record<string, any>
+  options?: Record<string, any>
+  disabled?: boolean
   rows: Array<Record<string, unknown>>
   capability: SubTableBatchCapability
   rowIdentity: (row: Record<string, unknown>) => string | null

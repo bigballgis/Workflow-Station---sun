@@ -8,7 +8,7 @@
       >
         <SubTableBatchPreview
           v-if="batchPreview && (batchPreview.invalid || Object.values(batchPreview.flags).some(Boolean))"
-          :definition="batchPreview" :config="config" :model-value="tableData" :primary-form-data="primaryFormData"
+          :definition="batchPreview" :config="config" :selected-row-ids="selectedIds" :row-identity="batchRowIdentity" :model-value="tableData" :primary-form-data="primaryFormData"
           :primary-table-id="primaryTableId" :primary-table-display-name="primaryTableDisplayName"
           :parent-tables-by-id="parentTablesById" :preview-table-bindings="previewTableBindings"
           @update:model-value="rows => emit('update:modelValue', rows)"
@@ -48,12 +48,16 @@
 
     <div class="table-scroll-wrap">
     <el-table
+        ref="selectionTable"
+      :row-key="batchTableRowKey"
+      @selection-change="onSelectionChange"
       v-loading="loading"
       :data="tableData"
       size="small"
       border
       :max-height="config.maxHeight || 300"
     >
+      <el-table-column v-if="editable && batchPreview && (batchPreview.flags.edit || batchPreview.flags.assign || batchPreview.flags.delete)" type="selection" width="48" :reserve-selection="true" :selectable="row => batchRowIdentity(row) !== null" />
       <el-table-column
         v-for="col in displayColumns"
         :key="col.field"
@@ -303,7 +307,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, provide, ref } from 'vue'
+import { computed, inject, provide, ref, watch } from 'vue'
+import { useBatchSelection } from '@platform-shared/batch/useBatchSelection'
+import { encodeCompositePrimaryKey } from '@/utils/tableFkRuntime'
 import { useI18n } from 'vue-i18n'
 import { Plus, Loading, Document, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
@@ -730,6 +736,14 @@ const {
   handlePageChange,
   exposed,
 } = useSubTableData(props)
+const batchPrimaryKeys = computed(() => (props.config.fieldDefinitions ?? []).filter(field => field.isPrimaryKey).map(field => field.fieldName))
+function batchRowIdentity(row: Record<string, unknown>) {
+  const keys = batchPrimaryKeys.value.length ? batchPrimaryKeys.value : ['platformRowUuid']
+  return encodeCompositePrimaryKey(keys, row)
+}
+function batchTableRowKey(row: Record<string, unknown>) { return batchRowIdentity(row) ?? `unselected:${tableData.value.indexOf(row)}` }
+const { selectedIds, selectionTable, onSelectionChange, clearSelection } = useBatchSelection(tableData, batchRowIdentity)
+watch(() => props.config.bindingId, clearSelection)
 
 // 单元格富文本净化 + 上传文件展示/下载
 const {

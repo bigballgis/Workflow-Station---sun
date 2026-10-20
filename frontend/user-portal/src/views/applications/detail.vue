@@ -398,6 +398,7 @@
               <el-alert v-if="batchHistoryLoadError" :title="t('task.batchHistory.loadFailed')" type="warning" :closable="false" show-icon />
               <ProcessHistory
                 :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
+                :bpmn-xml="bpmnXml"
                 :show-header="false"
                 :show-refresh="false"
               />

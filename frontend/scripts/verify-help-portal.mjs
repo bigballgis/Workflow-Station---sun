@@ -702,8 +702,9 @@ try {
   await page.screenshot({ path: subTableShot, fullPage: true })
   console.log(`screenshot ${subTableShot}`)
   const batchSection = subTableArticle.locator('#batch')
-  rec('Batch Preview distinguishes local samples from real task creation',
-    (await batchSection.textContent())?.includes('Sample users, business units, roles and generated keys do not reserve numbers') === true)
+  const batchHelpTextForPreview = await batchSection.textContent() || ''
+  rec('Batch Preview uses outer selection and one Batch Form',
+    ['select rows in the outer grid', 'Fill the Batch Form once'].every(text => batchHelpTextForPreview.includes(text)))
   rec('Batch assignment warning says the action already happened and must not be repeated',
     (await batchSection.textContent())?.includes('that action has already happened. Do not repeat it.') === true)
   const batchHelpText = await batchSection.textContent() || ''

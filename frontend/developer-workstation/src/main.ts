@@ -5,6 +5,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import '@fontsource-variable/inter'
 import FcDesigner from '@form-create/designer'
+import DesignedFormTitle from '@platform-shared/batch/DesignedFormTitle.vue'
 import formCreateMenus from '@form-create/designer/src/config/menu'
 import { ensureEmptyRuleComponentEvents } from '@/utils/formCreateDefaultEvents'
 import { createBatchControlId, initializeBatchControlIdOnEnable } from '@/utils/batchSubTableConfig'
@@ -80,6 +81,7 @@ setUploadAuthRefresher(async () => {
 FcDesigner.useLocale(enLocale)
 app.use(FcDesigner)
 app.use(FcDesigner.formCreate)
+FcDesigner.component('FcTitle', DesignedFormTitle)
 const formCreateWithParser =
   (formCreateFactory as { default?: { parser?: (name: string, config: unknown) => void } }).default ??
   formCreateFactory

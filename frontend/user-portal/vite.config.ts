@@ -31,7 +31,7 @@ export default defineConfig({
     // frontend/shared is not a package: bare imports inside its SFCs (vue-i18n, element-plus
     // icons) cannot node-resolve upward from there. Dedupe pins them to this app's copy
     // (plugin-vue already does this for 'vue' itself).
-    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue']
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue', '@form-create/element-ui']
   },
   // sockjs-client (pulled in by the STOMP/WebSocket client) is CommonJS written for a Node/webpack
   // world and dereferences the bare identifier `global` at module load. `vite build` shims it, the

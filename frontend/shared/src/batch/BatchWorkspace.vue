@@ -1,373 +1,167 @@
 <template>
-  <el-dialog
-    class="batch-edit-dialog"
-    top="24px"
-    :model-value="visible"
-    :title="t('subTable.batchEdit')"
-    width="min(1120px, calc(100vw - 32px))"
-    append-to-body
-    :close-on-click-modal="false"
-    @update:model-value="close"
-  >
-    <template #header>
-      <div class="batch-edit-dialog__title">
-        <span class="el-dialog__title">{{ t('subTable.batchEdit') }}</span>
-        <slot name="help" />
-      </div>
-    </template>
-    <p class="batch-edit-dialog__hint">{{ draftHint ?? t('subTable.batchEditDraftHint') }}</p>
-    <el-form v-if="showAdd" label-width="auto" class="batch-edit-dialog__add">
-      <el-form-item v-if="parentSelection && parentSelection.options.length > 1" :label="t('subTable.relatedParent', { tableName: parentSelection.parentTableName })" required>
-        <el-select v-model="selectedParentValue">
-          <el-option v-for="parent in parentSelection.options" :key="parent.value" :value="parent.value" :label="parent.label" />
-        </el-select>
-      </el-form-item>
-      <el-form-item :label="t('subTable.batchAddCount')">
-        <el-input-number v-model="addCount" :min="1" :max="200" :precision="0" />
-        <el-button :disabled="applying || freshCount + addCount > 200" @click="addDraftRows">{{ t('subTable.add') }}</el-button>
-      </el-form-item>
+  <el-dialog class="batch-edit-dialog" top="24px" :model-value="visible" :title="t(mode === 'add' ? 'subTable.batchAdd' : 'subTable.batchEdit')"
+    width="min(960px, calc(100vw - 32px))" append-to-body :close-on-click-modal="false" :before-close="beforeClose">
+    <template #header><div class="batch-edit-dialog__title"><span class="el-dialog__title">{{ t(mode === 'add' ? 'subTable.batchAdd' : 'subTable.batchEdit') }}</span><slot name="help" /></div></template>
+    <el-alert v-if="unsupportedControl" :title="t('subTable.batchUnsupportedControl', { type: unsupportedControl })" type="error" :closable="false" />
+    <template v-else>
+    <el-form v-if="mode === 'add'" label-width="auto">
+      <template v-if="mode === 'add'">
+        <el-form-item v-if="parentSelection && parentSelection.options.length > 1" :label="t('subTable.relatedParent', { tableName: parentSelection.parentTableName })" required>
+          <el-select v-model="selectedParentValue"><el-option v-for="parent in parentSelection.options" :key="parent.value" :value="parent.value" :label="parent.label" /></el-select>
+        </el-form-item>
+        <el-form-item :label="t('subTable.batchAddCount')"><el-input-number v-model="addCount" :min="1" :max="200" :precision="0" /></el-form-item>
+      </template>
     </el-form>
-    <div v-if="fields.length || showAdd || showDelete" class="batch-edit-dialog__table">
-      <el-table :data="displayedRows" border size="small" max-height="420" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="48" />
-        <el-table-column type="index" :index="rowIndex => (page - 1) * pageSize + rowIndex + 1" width="58" />
-        <el-table-column
-          v-for="field in fields"
-          :key="field.field"
-          :label="field.label"
-          :min-width="180"
-        >
-          <template #default="scope">
-            <BatchFieldInput v-model="scope.row[field.field]" :field="field" :disabled="!editableRow(scope.row, field.field)" />
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="draftRows.length" layout="prev, pager, next" />
-    </div>
-
-    <el-divider v-if="fields.length" />
-    <el-form v-if="fields.length" class="batch-edit-dialog__uniform" label-position="left" label-width="auto">
-      <div class="batch-edit-dialog__uniform-title">{{ t('subTable.batchSetSelected') }}</div>
-      <p class="batch-edit-dialog__selection" role="status">
-        {{ t('subTable.batchSelectedCount', { count: selectedRowIds.size }) }}
-        {{ t('subTable.batchUniformSelectionHint') }}
-      </p>
-      <el-form-item v-for="field in fields" :key="field.field" :label="field.label">
-        <el-select v-model="uniformMode[field.field]" class="batch-edit-dialog__mode" :persistent="false" :disabled="uniformReadonly(field.field)">
-          <el-option :label="t('subTable.batchNoChange')" value="none" />
-          <el-option :label="t('subTable.batchSetValue')" value="set" />
-          <el-option :label="t('subTable.batchClearValue')" value="clear" />
-        </el-select>
-        <BatchFieldInput
-          v-if="uniformMode[field.field] === 'set'"
-          v-model="uniformValues[field.field]"
-          :field="field"
-          class="batch-edit-dialog__uniform-value"
-        />
-      </el-form-item>
-    </el-form>
-    <slot v-if="visible && showAssign" name="assignment" :rows="assignmentRows" />
-
-    <template #footer>
-      <el-button @click="close">{{ t('common.cancel') }}</el-button>
-      <el-button v-if="showDelete" type="danger" plain :disabled="!selectedRowIds.size" @click="deleteSelected">{{ t('subTable.delete') }}</el-button>
-      <el-button type="primary" :loading="applying" :disabled="!draftRows.length && !deletedRowIds.length" @click="apply">{{ t('subTable.batchApply') }}</el-button>
+    <BatchDesignedForm v-if="visible" :rules="rules" :options="options" :readonly-field="readonly"
+      :initial-values="mode === 'add' ? initialValues : undefined" @change="setValue">
+      <template #assignment="{ rule }"><slot v-if="showAssign" name="assignment" :rule="rule" :rows="assignmentRows" :disabled="options?.form?.disabled === true || rule.props?.disabled === true || rule.props?.readonly === true" /></template>
+    </BatchDesignedForm>
     </template>
+    <template #footer><el-button @click="close">{{ t('common.cancel') }}</el-button><el-button type="primary" :loading="applying" :disabled="!!unsupportedControl || (mode !== 'add' && !targetIds.length)" @click="apply">{{ t('subTable.batchApply') }}</el-button></template>
   </el-dialog>
 </template>
-
 <script setup lang="ts">
-import { computed, defineComponent, h, reactive, ref, resolveComponent, toRaw, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { BindingParentSelection } from '../tableFkRuntime'
 import type { PreparedBatchRows, BatchWorkspaceField, BatchAssignmentCollection, SubTableBatchChange } from './workspaceTypes'
 import { firstBatchFieldError } from './validation'
 import type { BatchEditableField } from './fields'
-import type { BatchDraftChangeSet } from './draft'
-import { applyBatchDraft } from './draft'
-
-type BatchField = BatchEditableField
-
-const BatchFieldInput = defineComponent({
-  name: 'BatchFieldInput',
-  props: {
-    modelValue: { type: null, default: undefined },
-    field: { type: Object as () => BatchField, required: true },
-    disabled: Boolean,
-  },
-  emits: ['update:modelValue'],
-  setup(props, { emit }) {
-    const update = (value: unknown) => emit('update:modelValue', value)
-    return () => {
-      if (props.disabled) return h('span', String(props.modelValue ?? ''))
-      if (props.field.type === 'switch') return h(resolveComponent('el-switch'), { modelValue: props.modelValue, 'onUpdate:modelValue': update })
-      if (props.field.type === 'inputNumber' || props.field.type === 'number') return h(resolveComponent('el-input-number'), {
-        modelValue: props.modelValue, 'onUpdate:modelValue': update, min: props.field.min, max: props.field.max, style: 'width: 100%',
-      })
-      if (props.field.type === 'select') return h(resolveComponent('el-select'), { modelValue: props.modelValue, 'onUpdate:modelValue': update, clearable: true, style: 'width: 100%' }, () =>
-        props.field.options.map(option => h(resolveComponent('el-option'), { key: String(option.value), label: option.label, value: option.value })))
-      if (props.field.type === 'date' || props.field.type === 'datePicker' || props.field.type === 'datetime') return h(resolveComponent('el-date-picker'), {
-        modelValue: props.modelValue,
-        'onUpdate:modelValue': update,
-        type: props.field.type === 'datetime' ? 'datetime' : 'date',
-        valueFormat: props.field.type === 'datetime' ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD',
-        style: 'width: 100%',
-      })
-      return h(resolveComponent('el-input'), { modelValue: props.modelValue, 'onUpdate:modelValue': update, maxlength: props.field.maxlength, clearable: true })
-    }
-  },
-})
-
+import { applyBatchDraft, type BatchDraftChangeSet, type BatchFieldIntent } from './draft'
+import { batchRuleChildren, unsupportedBatchControl } from './batchFormRules'
+import BatchDesignedForm from './BatchDesignedForm.vue'
 const props = withDefaults(defineProps<{
-  visible: boolean
-  draftHint?: string
-  rows: Array<Record<string, unknown>>
-  fields: BatchEditableField[]
+  visible: boolean; rows: Array<Record<string, unknown>>; fields: BatchEditableField[]
+  rules: Array<Record<string, any>>; options?: Record<string, any>; selectedRowIds?: string[]; mode?: 'edit' | 'add'
   fieldWriteModes?: Record<string, 'EDITABLE' | 'READONLY'>
-  defaultValueForField: (field: BatchEditableField) => unknown
-  formatError: (error: unknown) => string
+  defaultValueForField: (field: BatchEditableField) => unknown; formatError: (error: unknown) => string
   rowIdentity: (row: Record<string, unknown>) => string | null
-  showAssign?: boolean
-  collectAssignment?: (rows: Array<Record<string, unknown>>) => BatchAssignmentCollection
-  assignmentHasChanges?: () => boolean
-  showDelete?: boolean
-  showAdd?: boolean
-  allowEdit?: boolean
-  fieldDefinitions?: BatchWorkspaceField[]
+  showAssign?: boolean; collectAssignment?: (rows: Array<Record<string, unknown>>) => BatchAssignmentCollection
+  assignmentHasChanges?: () => boolean; allowEdit?: boolean; fieldDefinitions?: BatchWorkspaceField[]
   parentSelection?: BindingParentSelection | null
   prepareRows?: (rows: Array<Record<string, unknown>>, parentValue?: string) => Promise<PreparedBatchRows>
-}>(), { allowEdit: true })
-
+}>(), { allowEdit: true, mode: 'edit' })
 const emit = defineEmits<{
   (event: 'update:visible', visible: boolean): void
   (event: 'apply', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet): void
-  (event: 'open-delete'): void
   (event: 'apply-workspace', rows: Array<Record<string, unknown>>, changes: BatchDraftChangeSet, prepared?: PreparedBatchRows, assignment?: SubTableBatchChange): void
 }>()
-
 const { t } = useI18n()
-const draftRows = ref<Array<Record<string, unknown>>>([])
-const uniformMode = reactive<Record<string, 'none' | 'set' | 'clear'>>({})
-const uniformValues = reactive<Record<string, unknown>>({})
-const selectedRowIds = ref<Set<string>>(new Set())
+const values = reactive<Record<string, any>>({})
+const initialValues = ref<Record<string, unknown>>({})
+const intents = reactive<Record<string, BatchFieldIntent>>({})
+const baselineRows = ref<Array<Record<string, unknown>>>([])
+const targetIds = ref<string[]>([])
 const selectedParentValue = ref('')
 const addCount = ref(1)
-const page = ref(1)
-// Preserve twenty-row pages for ordinary forms; wide forms target at most 200 mounted cells.
-const pageSize = computed(() => Math.max(1, Math.min(20, Math.floor(200 / Math.max(1, props.fields.length)))))
-const displayedRows = computed(() => draftRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const applying = ref(false)
-const baselineRows = ref<Array<Record<string, unknown>>>([])
-let temporaryKeys = new WeakMap<Record<string, unknown>, string>()
-const deletedRowIds = ref<string[]>([])
-const assignmentRows = computed(() => draftRows.value.filter(row => !temporaryKeys.has(toRaw(row))))
-const freshCount = computed(() => draftRows.value.filter(row => temporaryKeys.has(toRaw(row))).length)
+const fieldMap = computed(() => new Map(props.fields.map(field => [field.field, field])))
+const unsupportedControl = computed(() => unsupportedBatchControl(props.rules, new Set(fieldMap.value.keys())))
+const ruleMap = computed(() => {
+  const map = new Map<string, Record<string, any>>()
+  function visit(rules: Array<Record<string, any>>, inheritedReadonly = false) {
+    for (const rule of rules) {
+      const locked = inheritedReadonly || rule.props?.disabled === true || rule.props?.readonly === true
+      if (rule.field) map.set(rule.field, { ...rule, props: { ...rule.props, disabled: locked } })
+      visit(batchRuleChildren(rule), locked)
+      for (const control of Array.isArray(rule.control) ? rule.control : []) {
+        if (Array.isArray(control.rule)) visit(control.rule, locked)
+      }
+    }
+  }
+  visit(props.rules)
+  return map
+})
+const definitions = computed(() => new Map((props.fieldDefinitions ?? []).map(field => [field.fieldName, field])))
+const assignmentRows = computed(() => baselineRows.value.filter(row => targetIds.value.includes(props.rowIdentity(row)!)))
 
-const fields = computed(() => props.fields)
-const frozenFields = computed(() => new Map((props.fieldDefinitions ?? [])
-  .map(field => [field.fieldName, field])))
-
-function resetDraft() {
-  baselineRows.value = JSON.parse(JSON.stringify(props.rows))
-  draftRows.value = JSON.parse(JSON.stringify(props.rows))
-  selectedParentValue.value = ''
-  page.value = 1
-  temporaryKeys = new WeakMap()
-  deletedRowIds.value = []
-  selectedRowIds.value = new Set()
-  for (const key of Object.keys(uniformMode)) delete uniformMode[key]
-  for (const key of Object.keys(uniformValues)) delete uniformValues[key]
-  for (const field of fields.value) uniformMode[field.field] = 'none'
+function readonly(name: string): boolean {
+  const def = definitions.value.get(name)
+  const rule = ruleMap.value.get(name)
+  return props.options?.form?.disabled === true || rule?.props?.disabled === true || rule?.props?.readonly === true || (props.mode === 'edit' && !props.allowEdit) || props.fieldWriteModes?.[name] === 'READONLY'
+    || !!def?.isComputed || !!def?.isForeignKey || !!(def?.isPrimaryKey && (props.mode === 'edit' || def.requiresAllocation))
 }
-
+function setValue(name: string, value: unknown) {
+  if (readonly(name)) return
+  values[name] = value
+  intents[name] = value == null || value === '' ? { kind: 'clear' } : { kind: 'set', value }
+}
 watch(() => props.visible, visible => {
-  if (visible) resetDraft()
+  if (!visible) return
+  baselineRows.value = JSON.parse(JSON.stringify(props.rows))
+  targetIds.value = [...new Set(props.selectedRowIds ?? [])]
+  for (const name of Object.keys(values)) delete values[name]
+  for (const name of Object.keys(intents)) delete intents[name]
+  if (props.mode === 'add') for (const field of props.fields) if (!readonly(field.field)) values[field.field] = props.defaultValueForField(field)
+  initialValues.value = { ...values }
+  selectedParentValue.value = ''
+  addCount.value = 1
 }, { immediate: true })
-
 async function close() {
-  if (!props.visible) return true
   if (applying.value) return false
-  if (JSON.stringify(draftRows.value) !== JSON.stringify(baselineRows.value)
-    || Object.values(uniformMode).some(mode => mode !== 'none') || props.assignmentHasChanges?.()) {
+  if (Object.keys(intents).length || props.assignmentHasChanges?.()) {
     try { await ElMessageBox.confirm(t('subTable.batchDiscardConfirm'), t('common.cancel'), { type: 'warning' }) } catch { return false }
   }
   emit('update:visible', false)
   return true
 }
-
-function draftIdentity(row: Record<string, unknown>): string | null {
-  return temporaryKeys.get(toRaw(row)) ?? props.rowIdentity(row)
+async function beforeClose(done: () => void) { if (await close()) done() }
+function assertFresh() {
+  const current = new Map(props.rows.map(row => [props.rowIdentity(row), row]))
+  for (const row of assignmentRows.value) if (JSON.stringify(current.get(props.rowIdentity(row))) !== JSON.stringify(row)) throw new Error(t('subTable.batchStaleDraft'))
+  if (targetIds.value.length !== assignmentRows.value.length) throw new Error(t('subTable.batchStaleDraft'))
 }
-
-function editableRow(row: Record<string, unknown>, fieldName: string): boolean {
-  const fresh = temporaryKeys.has(toRaw(row))
-  if (!fresh && props.allowEdit === false) return false
-  if (props.fieldWriteModes?.[fieldName] === 'READONLY') return false
-  const definition = frozenFields.value.get(fieldName)
-  return !definition?.isComputed && !definition?.isForeignKey && !(definition?.isPrimaryKey && (!fresh || definition.requiresAllocation === true))
-}
-
-function uniformReadonly(fieldName: string): boolean {
-  const definition = frozenFields.value.get(fieldName)
-  return (!props.allowEdit && !props.showAdd) || props.fieldWriteModes?.[fieldName] === 'READONLY'
-    || !!(definition?.isPrimaryKey || definition?.isForeignKey || definition?.isComputed)
-}
-
-async function deleteSelected(): Promise<void> {
-  try { await ElMessageBox.confirm(t('subTable.batchDeleteConfirm', { count: selectedRowIds.value.size }), t('subTable.deleteConfirm'), { type: 'warning' }) }
-  catch { return }
-  const next: Array<Record<string, unknown>> = []
-  for (const row of draftRows.value) {
-    const key = draftIdentity(row)
-    if (!key || !selectedRowIds.value.has(key)) { next.push(row); continue }
-    if (!temporaryKeys.has(toRaw(row))) deletedRowIds.value.push(key)
-  }
-  draftRows.value = next
-  selectedRowIds.value = new Set()
-}
-
-function addDraftRows() {
-  if (freshCount.value + addCount.value > 200) { ElMessage.error(t('subTable.batchLimit')); return }
-  for (let index = 0; index < addCount.value; index++) {
-    const row = Object.fromEntries(fields.value.map(field => [field.field, props.defaultValueForField(field)]))
-    temporaryKeys.set(row, `draft:${crypto.randomUUID()}`)
-    draftRows.value.push(row)
-  }
-  page.value = Math.ceil(draftRows.value.length / pageSize.value)
-}
-
-function onSelectionChange(selected: Array<Record<string, unknown>>) {
-  selectedRowIds.value = new Set(selected
-    .map(row => draftIdentity(row))
-    .filter((value): value is string => !!value))
-}
-
-function collectChanges(): BatchDraftChangeSet {
-  const baselineById = new Map(baselineRows.value.map(row => [props.rowIdentity(row), row]))
-  const rowPatches = draftRows.value.flatMap(row => {
-    if (temporaryKeys.has(toRaw(row))) return []
-    const rowId = props.rowIdentity(row)
-    const baseline = rowId ? baselineById.get(rowId) : null
-    if (!baseline || !rowId) return []
-    const changed = Object.fromEntries(fields.value
-      .filter(field => editableRow(row, field.field) && !Object.is(row[field.field], baseline[field.field]))
-      .map(field => [field.field, { kind: 'set' as const, value: row[field.field] }]))
-    return Object.keys(changed).length ? [{ rowId, fields: changed }] : []
-  })
-  const rowIds = [...selectedRowIds.value].filter(id => baselineById.has(id))
-  const uniformFields = Object.fromEntries(fields.value.flatMap((field) => {
-    if (props.allowEdit === false || uniformReadonly(field.field)) return []
-    const mode = uniformMode[field.field] ?? 'none'
-    if (mode === 'none') return []
-    return [[field.field, mode === 'clear' ? { kind: 'clear' as const } : { kind: 'set' as const, value: uniformValues[field.field] }]]
-  }))
-  return {
-    ...(rowPatches.length ? { rowPatches } : {}),
-    ...(rowIds.length && Object.keys(uniformFields).length ? { uniformPatches: [{ rowIds, fields: uniformFields }] } : {}),
-    ...(deletedRowIds.value.length ? { deletedRowIds: [...deletedRowIds.value] } : {}),
-  }
-}
-
 async function apply() {
   if (applying.value) return
-  if (!selectedRowIds.value.size && Object.values(uniformMode).some(mode => mode !== 'none')) {
-    ElMessage.error({ message: t('subTable.batchSelectUniformRows'), grouping: true, duration: 8000 })
-    return
-  }
-  if (JSON.stringify(props.rows) !== JSON.stringify(baselineRows.value)) { ElMessage.error(t('subTable.batchStaleDraft')); return }
-  const fresh = freshRows()
-  const changes = collectChanges()
-  let existing = applyBatchDraft(props.rows, row => props.rowIdentity(row) ?? '', changes)
-  let assignment: SubTableBatchChange | undefined
-  try {
-    if (props.showAssign) {
-      if (!props.collectAssignment) throw new Error(t('common.operationFailed'))
-      const collected = props.collectAssignment(existing)
-      existing = collected.rows
-      assignment = collected.change
-    }
-  } catch (error) {
-    ElMessage.error(props.formatError(error))
-    return
-  }
-  const changedIds = new Set([...(changes.rowPatches ?? []).map(patch => patch.rowId), ...(changes.uniformPatches ?? []).flatMap(patch => patch.rowIds)])
-  const affectedIds = new Set([...changedIds, ...(changes.deletedRowIds ?? []), ...(assignment?.rowPatches ?? []).map(patch => patch.rowId)])
-  if (affectedIds.size + fresh.length > 200) { ElMessage.error(t('subTable.batchLimit')); return }
-  if (!affectedIds.size && !fresh.length) { emit('update:visible', false); return }
-  const error = validateRows(existing.filter(row => changedIds.has(props.rowIdentity(row) ?? '')), fresh)
-  if (error) { page.value = Math.ceil(error.row / pageSize.value); ElMessage.error(t('subTable.batchInvalidField', { row: error.row, label: error.label })); return }
   applying.value = true
   try {
-    const prepared = fresh.length ? await props.prepareRows?.(fresh, selectedParentValue.value) : undefined
-    if (fresh.length && !prepared) throw new Error(t('common.operationFailed'))
-    if (JSON.stringify(props.rows) !== JSON.stringify(baselineRows.value)) throw new Error(t('subTable.batchStaleDraft'))
-    if (prepared) validatePreparedIdentities(prepared)
-    if (prepared || deletedRowIds.value.length || assignment) emit('apply-workspace', [...existing, ...(prepared?.rows ?? [])], changes, prepared, assignment)
-    else emit('apply', existing, changes)
+    if (unsupportedControl.value) throw new Error(t('subTable.batchUnsupportedControl', { type: unsupportedControl.value }))
+    assertFresh()
+    if ((props.mode === 'edit' && (!targetIds.value.length || targetIds.value.length > 200))
+      || (props.mode === 'add' && (!Number.isInteger(addCount.value) || addCount.value < 1 || addCount.value > 200))) throw new Error(t('subTable.batchLimit'))
+    const fields = props.fields.filter(field => !readonly(field.field))
+    const patch = Object.fromEntries(fields.filter(field => intents[field.field]).map(field => [field.field, intents[field.field]!]))
+    const changes: BatchDraftChangeSet = Object.keys(patch).length && props.mode === 'edit' ? { uniformPatches: [{ rowIds: [...targetIds.value], fields: patch }] } : {}
+    let next = applyBatchDraft(props.rows, row => props.rowIdentity(row)!, changes)
+    let assignment: SubTableBatchChange | undefined
+    if (props.showAssign && props.assignmentHasChanges?.()) {
+      if (!props.collectAssignment) throw new Error(t('common.operationFailed'))
+      const collected = props.collectAssignment(next.filter(row => targetIds.value.includes(props.rowIdentity(row)!)))
+      const byId = new Map(collected.rows.map(row => [props.rowIdentity(row), row]))
+      next = next.map(row => byId.get(props.rowIdentity(row)) ?? row)
+      assignment = collected.change
+    }
+    let prepared: PreparedBatchRows | undefined
+    if (props.mode === 'add') {
+      const row = Object.fromEntries(fields.map(field => [field.field, intents[field.field]?.kind === 'clear' ? null : values[field.field]]))
+      const fresh = Array.from({ length: addCount.value }, () => JSON.parse(JSON.stringify(row)))
+      const error = firstBatchFieldError(fresh, fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false })))
+      if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+      if (!props.prepareRows) throw new Error(t('common.operationFailed'))
+      prepared = await props.prepareRows(fresh, selectedParentValue.value)
+      const known = new Set(props.rows.map(props.rowIdentity))
+      for (const added of prepared.rows) {
+        const key = props.rowIdentity(added)
+        if (!key || known.has(key)) throw new Error(t('subTable.batchDuplicateIdentity'))
+        known.add(key)
+      }
+      if (prepared.rows.length !== fresh.length) throw new Error(t('common.operationFailed'))
+      next = [...props.rows, ...prepared.rows]
+    } else if (Object.keys(patch).length) {
+      const error = firstBatchFieldError(next.filter(row => targetIds.value.includes(props.rowIdentity(row)!)), fields)
+      if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+    }
+    assertFresh()
+    if (prepared || assignment) emit('apply-workspace', next, changes, prepared, assignment)
+    else if (Object.keys(patch).length) emit('apply', next, changes)
     emit('update:visible', false)
   } catch (error) { ElMessage.error(props.formatError(error)) }
   finally { applying.value = false }
 }
-
-function validateRows(affectedExisting: Array<Record<string, unknown>>, fresh: Array<Record<string, unknown>>) {
-  const editableFields = fields.value.filter(field => !uniformReadonly(field.field))
-  const addedFields = fields.value.filter(field => {
-    const definition = frozenFields.value.get(field.field)
-    return !definition?.isForeignKey && !definition?.isComputed && !(definition?.isPrimaryKey && definition.requiresAllocation === true)
-  })
-  const requiredAddedFields = addedFields.map(field => ({ ...field, required: field.required
-    || frozenFields.value.get(field.field)?.nullable === false }))
-  const existingError = firstBatchFieldError(affectedExisting, editableFields)
-  if (existingError) {
-    const identity = props.rowIdentity(affectedExisting[existingError.row - 1]!)
-    return { ...existingError, row: draftRows.value.findIndex(row => draftIdentity(row) === identity) + 1 }
-  }
-  const addedError = firstBatchFieldError(fresh, requiredAddedFields)
-  if (!addedError) return null
-  const addedPositions = draftRows.value.flatMap((row, index) => temporaryKeys.has(toRaw(row)) ? [index + 1] : [])
-  return { ...addedError, row: addedPositions[addedError.row - 1]! }
-}
-
-function validatePreparedIdentities(prepared: PreparedBatchRows): void {
-  const known = new Set(props.rows.map(props.rowIdentity))
-  for (const row of prepared.rows) {
-    const key = props.rowIdentity(row)
-    if (!key || known.has(key)) throw new Error(t('subTable.batchDuplicateIdentity'))
-    known.add(key)
-  }
-}
-
-function freshRows(): Array<Record<string, unknown>> {
-  return draftRows.value.filter(row => temporaryKeys.has(toRaw(row))).map(row => {
-    const result = { ...row }
-    if (!selectedRowIds.value.has(draftIdentity(row) ?? '')) return result
-    for (const field of fields.value) {
-      if (!editableRow(row, field.field) || uniformReadonly(field.field)) continue
-      const mode = uniformMode[field.field]
-      if (mode === 'set') result[field.field] = uniformValues[field.field]
-      else if (mode === 'clear') result[field.field] = null
-    }
-    return result
-  })
-}
 </script>
-
 <style scoped>
-/* ElDialog teleports its content without the caller's scope attribute. Keep these rules scoped by its dedicated class. */
-:global(.el-dialog.batch-edit-dialog) { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); margin-bottom: 24px; }
-:global(.el-dialog.batch-edit-dialog .el-dialog__body) { overflow-y: auto; min-height: 0; }
-:global(.el-dialog.batch-edit-dialog .el-dialog__header), :global(.el-dialog.batch-edit-dialog .el-dialog__footer) { flex-shrink: 0; }
-.batch-edit-dialog__title { display: flex; align-items: center; gap: 8px; }
-.batch-edit-dialog__title :deep(.designer-help-link) { color: var(--el-color-danger); }
-.batch-edit-dialog__hint { margin-top: 0; color: var(--el-text-color-secondary); }
-.batch-edit-dialog__table { overflow-x: auto; }
-.batch-edit-dialog__uniform { max-width: 760px; }
-.batch-edit-dialog__uniform-title { margin-bottom: 12px; font-weight: 600; }
-.batch-edit-dialog__mode { width: 145px; margin-right: 12px; }
-.batch-edit-dialog__uniform-value { width: min(420px, 100%); vertical-align: middle; }
-@media (max-width: 640px) {
-  .batch-edit-dialog__mode { width: 100%; margin: 0 0 8px; }
-  .batch-edit-dialog__uniform-value { width: 100%; }
-}
+:global(.el-dialog.batch-edit-dialog) { display:flex; flex-direction:column; max-height:calc(100dvh - 48px); margin-bottom:24px; }
+:global(.el-dialog.batch-edit-dialog .el-dialog__body) { overflow:auto; min-height:0; }
+.batch-edit-dialog__title { display:flex; align-items:center; gap:8px; }
 </style>

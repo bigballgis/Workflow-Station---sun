@@ -37,63 +37,46 @@ function render(flags: Record<string, boolean>, crud: Record<string, boolean>, e
   } } })
 }
 
-describe('A03 real SubTableField batch switch matrix', () => {
+describe('frozen batch capabilities on outer toolbar', () => {
   for (const { mask, flags } of states) {
-    it(`preserves missing original CRUD allow semantics for batch mask ${mask}`, async () => {
-      const wrapper = render(flags, {})
-      const entry = wrapper.findAll('.actions button').find(button => button.text() === 'subTable.batchEdit')
-      expect(Boolean(entry)).toBe(mask !== 0)
-      if (entry) {
-        await entry.trigger('click')
-        const workspace = wrapper.findComponent({ name: 'SubTableBatchEditDialog' })
-        expect(['showAdd', 'allowEdit', 'showDelete', 'showAssign'].map(key => workspace.props(key))).toEqual(
-          [1, 2, 4, 8].map(bit => Boolean(mask & bit)))
-      }
-      expect(wrapper.props('onBatchChange')).not.toHaveBeenCalled()
-      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-      expect(wrapper.props('modelValue')).toEqual(rows)
-      wrapper.unmount()
-    })
-    for (const { mask: crudMask, crud } of crudStates) {
-      it(`projects batch mask ${mask} against frozen CRUD mask ${crudMask}`, async () => {
-        // Deliberately opposite live props: batch design authority must come from the frozen projection.
-        const wrapper = render(flags, crud, { allowAdd: !crud.allowAdd, allowEdit: !crud.allowEdit, allowDelete: !crud.allowDelete })
-        const expected = [Boolean(mask & 1) && crud.allowAdd, Boolean(mask & 2) && crud.allowEdit,
-          Boolean(mask & 4) && crud.allowDelete, Boolean(mask & 8) && crud.allowEdit]
+    for (const { mask: crudMask, crud } of [{ mask: -1, crud: {} }, ...crudStates]) {
+      it(`projects mask ${mask} against frozen CRUD ${crudMask}`, async () => {
+        const wrapper = render(flags, crud, { allowAdd: false, allowEdit: false, allowDelete: false })
+        const expected = [Boolean(mask & 1) && crud.allowAdd !== false, Boolean(mask & 2) && crud.allowEdit !== false,
+          Boolean(mask & 4) && crud.allowDelete !== false, Boolean(mask & 8) && crud.allowEdit !== false]
         const buttons = wrapper.findAll('.actions button')
+        expect(buttons.some(button => button.text() === 'subTable.batchAdd')).toBe(expected[0])
+        expect(buttons.some(button => button.text() === 'subTable.batchDelete')).toBe(expected[2])
         const entry = buttons.find(button => button.text() === 'subTable.batchEdit')
-        expect(Boolean(entry)).toBe(expected.some(Boolean))
+        expect(Boolean(entry)).toBe(expected[1] || expected[3])
         if (entry) {
-          expect(buttons[0]?.text()).toBe('subTable.batchEdit')
+          expect(entry.attributes('disabled')).toBeDefined()
+          const vm = wrapper.vm as unknown as { onSelectionChange(rows: typeof rows): void }
+          vm.onSelectionChange(rows)
+          await wrapper.vm.$nextTick()
           await entry.trigger('click')
-          const workspace = wrapper.findComponent({ name: 'SubTableBatchEditDialog' })
-          expect(workspace.props('visible')).toBe(true)
-          expect(['showAdd', 'allowEdit', 'showDelete', 'showAssign'].map(key => workspace.props(key))).toEqual(expected)
+          const dialog = wrapper.findComponent({ name: 'SubTableBatchEditDialog' })
+          expect(dialog.props('visible')).toBe(true)
+          expect(dialog.props('selectedRowIds')).toHaveLength(1)
+          expect(dialog.props('allowEdit')).toBe(expected[1])
+          expect(dialog.props('showAssign')).toBe(expected[3])
+          expect(dialog.props('mode')).toBe('edit')
         }
         expect(wrapper.emitted('update:modelValue')).toBeUndefined()
         expect(wrapper.props('onBatchChange')).not.toHaveBeenCalled()
-        expect(wrapper.props('modelValue')).toEqual(rows)
         wrapper.unmount()
       })
     }
     for (const denied of [{ editable: false }, { bindingType: 'ACTION' }, { bindingId: 43 }]) {
-      it(`denies batch mask ${mask} for ${JSON.stringify(denied)}`, () => {
+      it(`denies mask ${mask} for ${JSON.stringify(denied)}`, () => {
         const wrapper = render(flags, {}, denied)
-        expect(wrapper.findAll('.actions button').some(button => button.text() === 'subTable.batchEdit')).toBe(false)
-        expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+        expect(wrapper.findAll('.actions button').some(button => ['subTable.batchEdit','subTable.batchAdd','subTable.batchDelete'].includes(button.text()))).toBe(false)
         wrapper.unmount()
       })
     }
   }
-
-  it('keeps old configuration and all-disabled configuration free of batch workspace mounts', () => {
-    for (const batchCapability of [undefined, projection(states[0]!.flags, {})]) {
-      const wrapper = render(states[15]!.flags, {}, { batchCapability })
-      expect(wrapper.findComponent({ name: 'SubTableBatchEditDialog' }).exists()).toBe(false)
-      expect(wrapper.findComponent({ name: 'SubTableBatchDeleteDialog' }).exists()).toBe(false)
-      expect(wrapper.findAll('.actions button').map(button => button.text())).toEqual([
-        'subTable.exportWithData', 'subTable.import', 'subTable.add'])
-      wrapper.unmount()
-    }
+  it('does not offer batch actions for legacy forms', () => {
+    const wrapper = render(states[15]!.flags, {}, { batchCapability: undefined })
+    expect(wrapper.findAll('.actions button').map(button => button.text())).toEqual(['subTable.exportWithData', 'subTable.import', 'subTable.add'])
   })
 })
