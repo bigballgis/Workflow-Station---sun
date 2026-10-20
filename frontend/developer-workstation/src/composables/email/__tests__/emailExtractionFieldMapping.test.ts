@@ -4,6 +4,7 @@ import {
   invalidAttachmentTargets,
   isAttachmentsSource,
   isRawEmlSource,
+  isRichBodySource,
   onSourceChange,
   previewAttachmentNames,
   previewRawEmlFilename,
@@ -58,6 +59,15 @@ describe('emailExtractionFieldMapping', () => {
       [{ target: 'quote_files', source: 'RAW_EML', type: 'DIRECT' }],
       [fileField, textField],
     )).toEqual([])
+  })
+
+  it('locks HTML_RICH to DIRECT and keeps all targets', () => {
+    expect(isRichBodySource('HTML_RICH')).toBe(true)
+    expect(typesForSource('HTML_RICH')).toEqual(['DIRECT'])
+    const row: ExtractionFieldRule = { target: '', source: 'HTML_RICH', type: 'LABEL' }
+    onSourceChange(row)
+    expect(row.type).toBe('DIRECT')
+    expect(targetOptionsForRow(row, [fileField, textField])).toHaveLength(2)
   })
 
   it('previews sample attachment filenames', () => {

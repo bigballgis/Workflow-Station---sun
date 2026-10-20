@@ -57,6 +57,11 @@ public class EmailExtractionSpec {
         /** Plain-text + HTML body (QQ forwards often have HTML only). */
         TEXT_AND_HTML,
         /**
+         * HTML body kept as sanitized rich text for an editor field ({@link RuleType#DIRECT});
+         * plain-only mail becomes escaped {@code <p>} paragraphs. Anchor rules read its text view.
+         */
+        HTML_RICH,
+        /**
          * All non-inline attachments of this email, stored into one FILE field
          * ({@link RuleType#DIRECT} only).
          */

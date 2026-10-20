@@ -174,6 +174,45 @@ class EmailFieldExtractorTest {
     }
 
     @Test
+    void htmlRichDirect_keepsSanitizedFormattingForEditorField() {
+        String html = "<html><head><style>p{}</style></head><body>"
+                + "<p>Hi <strong>team</strong></p><p onclick=\"x()\">line</p></body></html>";
+        EmailMessage email = new EmailMessage("m-rich", "s", "a@b.com", "Hi team\nline", html, Map.of());
+
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(field("email_body", Source.HTML_RICH, RuleType.DIRECT)));
+
+        ExtractionResult result = EmailFieldExtractor.extract(email, spec);
+
+        assertThat(result.getFields()).containsEntry("email_body", "<p>Hi <strong>team</strong></p><p>line</p>");
+    }
+
+    @Test
+    void htmlRichDirect_plainOnlyMailBecomesParagraphs() {
+        EmailMessage email = new EmailMessage("m-rich2", "s", "a@b.com", "a <b>\nc\n\nd", null, Map.of());
+
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(field("email_body", Source.HTML_RICH, RuleType.DIRECT)));
+
+        ExtractionResult result = EmailFieldExtractor.extract(email, spec);
+
+        assertThat(result.getFields()).containsEntry("email_body", "<p>a &lt;b&gt;<br>c</p><p>d</p>");
+    }
+
+    @Test
+    void htmlDirect_stillReturnsPlainText() {
+        EmailMessage email = new EmailMessage("m-html2", "s", "a@b.com", null,
+                "<p>Hi <strong>team</strong></p>", Map.of());
+
+        EmailExtractionSpec spec = new EmailExtractionSpec();
+        spec.setFields(List.of(field("email_body", Source.HTML, RuleType.DIRECT)));
+
+        ExtractionResult result = EmailFieldExtractor.extract(email, spec);
+
+        assertThat(result.getFields()).containsEntry("email_body", "Hi team");
+    }
+
+    @Test
     void textDirect_keepsPlainWhenHtmlAlternativeAlsoPresent() {
         EmailMessage email = new EmailMessage("m-text", "s", "a@b.com",
                 "hello all,\n\nthis is a test email",

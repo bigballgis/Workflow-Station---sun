@@ -81,6 +81,7 @@ const sections: GuideSection[] = [
       { code: 'Template Name', hintKey: 'emailSendGuide.fTemplateName' },
       { code: 'Subject', hintKey: 'emailSendGuide.fTemplateSubject' },
       { code: 'Insert Variable', hintKey: 'emailSendGuide.fInsertVariable' },
+      { code: 'Rich text (keeps editor formatting)', hintKey: 'emailSendGuide.fInsertRichText' },
       { code: 'Body', hintKey: 'emailSendGuide.fTemplateBody' },
       { code: 'PR Approved Notice', hintKey: 'emailSendGuide.templateNameSample' },
     ],

@@ -16,12 +16,14 @@ import java.util.regex.Pattern;
  *   <li>{@code ${subTableHtml:bindingId:col1=Header 1,col2=Header 2}} — selected columns with custom headers</li>
  *   <li>{@code ${subTableField:bindingId:fieldName}} — scalar from sub-table rows</li>
  *   <li>{@code ${lookupField:sourceField:targetAttr}} — attribute on Lookup/Related embedded RT row</li>
+ *   <li>{@code ${richText:field}} — editor (rich-text) field rendered as HTML, see {@link RichTextEmailHtml}</li>
  *   <li>{@code ${variable}} — top-level process variable; sub-table columns fallback when absent.
  *       Missing or null values resolve to empty (the placeholder is not left in the output).</li>
  * </ul>
  */
 public final class EmailTemplateResolver {
 
+    private static final Pattern RICH_TEXT = Pattern.compile("\\$\\{richText:([^}]+)}");
     private static final Pattern SUB_TABLE_HTML = Pattern.compile("\\$\\{subTableHtml:([^}]+)}");
     private static final Pattern SUB_TABLE_FIELD = Pattern.compile("\\$\\{subTableField:([^:}]+):([^}]+)}");
     private static final Pattern LOOKUP_FIELD = Pattern.compile("\\$\\{lookupField:([^:}]+):([^}]+)}");
@@ -34,6 +36,18 @@ public final class EmailTemplateResolver {
         if (template == null) {
             return null;
         }
+        return resolveTokens(replaceRichText(template, variables, false), variables);
+    }
+
+    /** HTML bodies: escape scalar ${var} values so subject text like {@code <Test>} stays text. */
+    public static String resolveHtml(String template, Map<String, Object> variables) {
+        if (template == null) {
+            return null;
+        }
+        return resolveTokens(replaceRichText(template, variables, true), htmlEscapedScalars(variables));
+    }
+
+    private static String resolveTokens(String template, Map<String, Object> variables) {
         String withTables = replaceSubTableHtml(template, variables);
         String withSubFields = replaceSubTableFields(withTables, variables);
         String withLookupFields = replaceLookupFields(withSubFields, variables);
@@ -41,9 +55,24 @@ public final class EmailTemplateResolver {
         return resolveBareSubTableFields(withTopLevel, variables);
     }
 
-    /** HTML bodies: escape scalar ${var} values so subject text like {@code <Test>} stays text. */
-    public static String resolveHtml(String template, Map<String, Object> variables) {
-        return resolve(template, htmlEscapedScalars(variables));
+    /**
+     * {@code ${richText:field}}: editor HTML inlined as sanitized, editor-styled markup in HTML bodies
+     * and as plain text elsewhere. Literal {@code ${} in the content is neutralised so it is never
+     * expanded by later token passes.
+     */
+    private static String replaceRichText(String template, Map<String, Object> variables, boolean html) {
+        Matcher matcher = RICH_TEXT.matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            Object value = variables != null ? variables.get(matcher.group(1).trim()) : null;
+            String raw = value != null ? value.toString() : "";
+            String rendered = html
+                    ? RichTextEmailHtml.forEmail(raw).replace("${", "&#36;{")
+                    : RichTextEmailHtml.toPlainText(raw);
+            matcher.appendReplacement(out, Matcher.quoteReplacement(rendered));
+        }
+        matcher.appendTail(out);
+        return out.toString();
     }
 
     private static Map<String, Object> htmlEscapedScalars(Map<String, Object> variables) {

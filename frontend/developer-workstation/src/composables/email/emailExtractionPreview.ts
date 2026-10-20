@@ -70,7 +70,7 @@ export function sourceText(sample: ExtractionSamplePreview, source?: string): st
     const plain = sample.text?.trim() ?? ''
     return plain || stripHtml(sample.html)
   }
-  if (source === 'TEXT_AND_HTML') return combinedSampleTextAndHtml(sample)
+  if (source === 'TEXT_AND_HTML' || source === 'HTML_RICH') return combinedSampleTextAndHtml(sample)
   return sample.text
 }
 

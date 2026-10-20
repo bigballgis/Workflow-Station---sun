@@ -144,7 +144,7 @@ Generate data with the following JSON structure, wrapped in the markers:
       "folderLabel": "INBOX",
       "actionType": "START_PROCESS|APPEND_SUB_TABLE",
       "targetFormName": "formName of an existing form, or null",
-      "extractionRules": { "fields": [ { "target": "MAIN table fieldName", "source": "SUBJECT|FROM|TO|CC|REPLY_TO|DATE|MESSAGE_ID|TEXT|HTML|TEXT_AND_HTML|ATTACHMENTS|RAW_EML|HEADER|CONST", "type": "DIRECT|CONST|LABEL|BETWEEN|REGEX|HEADER", "label": "label text for LABEL", "before": "for BETWEEN", "after": "for BETWEEN", "pattern": "for REGEX", "group": 1, "header": "for HEADER", "value": "for CONST", "required": false } ] },
+      "extractionRules": { "fields": [ { "target": "MAIN table fieldName", "source": "SUBJECT|FROM|TO|CC|REPLY_TO|DATE|MESSAGE_ID|TEXT|HTML|TEXT_AND_HTML|HTML_RICH (DIRECT only, for editor/rich-text fields)|ATTACHMENTS|RAW_EML|HEADER|CONST", "type": "DIRECT|CONST|LABEL|BETWEEN|REGEX|HEADER", "label": "label text for LABEL", "before": "for BETWEEN", "after": "for BETWEEN", "pattern": "for REGEX", "group": 1, "header": "for HEADER", "value": "for CONST", "required": false } ] },
       "correlation": null,
       "pollIntervalSeconds": 60,
       "reviewOnMissing": true

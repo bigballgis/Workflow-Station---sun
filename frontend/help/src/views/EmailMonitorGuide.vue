@@ -143,6 +143,7 @@ const sections: GuideSection[] = [
       { code: 'Message-ID', hintKey: 'emailMonitorGuide.fSourceMessageId' },
       { code: 'Source · Body / constant', hintKey: 'emailMonitorGuide.fSourceGroupBody' },
       { code: 'Text + HTML (recommended)', hintKey: 'emailMonitorGuide.fSourceTextAndHtml' },
+      { code: 'HTML body (keep formatting)', hintKey: 'emailMonitorGuide.fSourceHtmlRich' },
       { code: 'Method · Direct (whole value)', hintKey: 'emailMonitorGuide.fMethodDirect' },
       { code: 'Method · LABEL / BETWEEN / REGEX', hintKey: 'emailMonitorGuide.fMethodParse' },
       { code: 'Rule', hintKey: 'emailMonitorGuide.fRule' },

@@ -352,6 +352,8 @@ export default {
       "Required at send time. Use Insert Variable (same tokens as Body). Do not type $\'name\' or quoted field names. If every token is empty at send, the run fails.",
     fInsertVariable:
       "Dropdown. Pick a main field, a Lookup / Related attribute, a sub-table (rendered as a table in the body), or an Admin Center TEXT environment variable (${\'{\'}env:key{\'}'}). VAULT keys are not listed. Inserts a token; do not wrap the name in quotes.",
+    fInsertRichText:
+      "Insert Variable group, listed only for main fields that a form shows with the Editor control. Inserts ${'{'}richText:field{'}'}: the body gets the editor content with the same look (paragraphs, bold, colours, lists, table borders, quotes); scripts and unsafe links are removed. In Subject it becomes plain text. The plain ${'{'}field{'}'} token still shows HTML tags as text.",
     fTemplateBody:
       'HTML of the message. Compose in Visual or HTML below. Empty body still sends if Subject is non-empty after variables.',
     bodyTitle: 'Visual and HTML',
@@ -677,8 +679,10 @@ export default {
       "Email attribute — Message-ID header, or imap-uid:{'{'}uid{'}'} when the header is missing. Method Direct. Use for trace/id columns; also stored on the process as business metadata.",
     fSourceTextAndHtml:
       'Body source — plain text plus HTML-derived text (recommended for forwarded/HTML-only mail). Use with LABEL, BETWEEN, or REGEX.',
+    fSourceHtmlRich:
+      "Body source — the whole email body as rich text for a field shown with the Editor control. Method locked to Direct (whole value). Paragraphs, bold, colours, lists, tables and links are kept; scripts, page styles and inline (cid) images are removed. Plain-text-only mail becomes paragraphs. To send it on with the same look, insert the field from Insert Variable → Rich text (keeps editor formatting), i.e. ${'{'}richText:field{'}'}.",
     fSource:
-      'Where to read. Email attributes group: Subject, From, To, Cc, Reply-To, Sent date, Message-ID. Body group: Text + HTML, HTML only, Header (advanced), Constant.',
+      'Where to read. Email attributes group: Subject, From, To, Cc, Reply-To, Sent date, Message-ID. Body group: Text + HTML, HTML only, HTML body (keep formatting), Header (advanced), Constant.',
     fMethodDirect:
       'Method — Direct (whole value). Used automatically for From, To, Cc, Reply-To, Sent date, Message-ID. Also available for Subject when you want the entire subject line without parsing. No Rule column needed.',
     fMethodParse:

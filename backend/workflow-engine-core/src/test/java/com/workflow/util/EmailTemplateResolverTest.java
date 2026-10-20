@@ -27,6 +27,36 @@ class EmailTemplateResolverTest {
     }
 
     @Test
+    void resolveHtml_richTextRendersEditorHtmlWhilePlainTokenStaysEscaped() {
+        Map<String, Object> vars = Map.of("email_body", "<p><strong>Hi</strong></p><script>x()</script>");
+        String result = EmailTemplateResolver.resolveHtml("${richText:email_body}|${email_body}", vars);
+
+        assertThat(result).startsWith("<p style=\"margin:15px 0;line-height:1.5\"><strong>Hi</strong></p>|");
+        assertThat(result).endsWith("&lt;p&gt;&lt;strong&gt;Hi&lt;/strong&gt;&lt;/p&gt;&lt;script&gt;x()&lt;/script&gt;");
+        assertThat(result.substring(0, result.indexOf('|'))).doesNotContain("script");
+    }
+
+    @Test
+    void resolveHtml_richTextDoesNotExpandTokensInsideContent() {
+        Map<String, Object> vars = Map.of("email_body", "<p>${secret} ${env:API_KEY}</p>", "secret", "S3CR3T");
+        String result = EmailTemplateResolver.resolveHtml("${richText:email_body}", vars);
+
+        assertThat(result).doesNotContain("S3CR3T").doesNotContain("${");
+        assertThat(result).contains("&#36;{secret} &#36;{env:API_KEY}");
+    }
+
+    @Test
+    void resolve_richTextInSubjectIsPlainText() {
+        Map<String, Object> vars = Map.of("email_body", "<p>Hello <b>World</b></p>");
+        assertThat(EmailTemplateResolver.resolve("Re: ${richText:email_body}", vars)).isEqualTo("Re: Hello World");
+    }
+
+    @Test
+    void resolveHtml_richTextMissingFieldIsEmpty() {
+        assertThat(EmailTemplateResolver.resolveHtml("a${richText:nope}b", Map.of())).isEqualTo("ab");
+    }
+
+    @Test
     void resolve_replacesSubTableHtmlWithRows() {
         Map<String, Object> vars = Map.of(
                 "__subTables__", Map.of(

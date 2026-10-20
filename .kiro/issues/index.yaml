@@ -5065,7 +5065,7 @@
     不将既有失败当作本次合并回归，也不据其余测试通过宣称全量通过。
     后续收口：补齐真实Pinia与matchMedia装配；BPMN v10使用命名导出；AI关闭按钮按图标定位而非按钮序号。
     仅翻译i18n门禁列出的注释，不放宽测试条件。Pinia后暴露的真实嵌套上下文缺口由#1686修复。
-    最终Portal314文件2378项、DW182文件1151项全量测试通过；全量类型检查仍不通过，未计作本项测试通过。
+    最终Portal314文件2378项、DW182文件1151项全量测试通过；全量类型检查仍不通过，未计作本项测试 pass。
 
 - id: "1686"
   status: fixed
@@ -5080,3 +5080,45 @@
     原失败断言转绿；补充card/row/tabs/collapse四类布局，临时去掉传递时4失败/3通过，恢复后7项全绿。
     不按字段名猜主键，不改变后端权限、scope或主键分配规则；Portal构建与镜像重建后MI234+6通过。
     真实未保存祖先行的嵌套Add UI尚未独立重跑；当前证据为上下文/分配编排单测及既有隔离MI界面回归。
+
+- id: "1687"
+  status: fixed
+  fixed_at: "2026-10-20"
+  severity: major
+  category: bug
+  summary: "Editor 富文本字段发信显示 HTML 源码；Email Monitor 写入 editor 字段只得到纯文本（丢格式）"
+  detail: |
+    根因：EmailTemplateResolver.resolveHtml 对所有标量变量 HTML 转义，editor 存的 <p>… 在邮件中成为字面标签；
+    EmailFieldExtractor 的 HTML/TEXT/TEXT_AND_HTML 来源均经 Jsoup .text() 转纯文本，无保留格式的写入来源。
+    修复：新增 util/RichTextEmailHtml（Jsoup Safelist 白名单净化 + 内联 wangeditor 默认样式，收发共用一处）；
+    Source.HTML_RICH（仅 DIRECT，纯文本邮件转 <p> 段落）；模板 token ${richText:field}（HTML 正文净化后原样插入、
+    内容中 ${ 中和为 &#36;{ 防二次展开；主题转纯文本）；${field} 仍转义不变。
+    DW：Insert Variable 新增「Rich text」分组（读表单配置 type=editor 的主表字段，非猜字段名）；
+    Email Monitor 来源下拉新增 HTML 正文（保留格式）；AiStructureValidator / generation.txt 同步；help 两篇文章三语。
+    验证：RichTextEmailHtmlTest / EmailTemplateResolverTest / EmailFieldExtractorTest、DW vitest 16 绿；
+    截图 frontend/user-portal/verification-screenshots/2026-10-20_richtext-editor-vs-email.png、
+    frontend/developer-workstation/verification-screenshots/2026-10-20_email-template-insert-variable-richtext.png。
+
+- id: "1688"
+  status: open
+  severity: major
+  category: security
+  summary: "Send Email HTML 正文中 ${subTableField:…}/${lookupField:…} 值未转义；标量值内的 ${x}/${env:KEY} 会被后续 token 轮次再次展开"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/util/EmailTemplateResolver.java"
+  detail: |
+    htmlEscapedScalars 只转义顶层 String 变量；replaceSubTableFields / replaceLookupFields 的值原样插入 HTML 正文（邮件内 HTML 注入）。
+    BpmnExtensionUtils.resolveExpression 逐变量 replace，且 ConfiguredEmailSender.applyTextEnv 在其后执行：
+    用户可控字段值若含 ${其它字段} 或 ${env:KEY} 会被展开（可泄露 TEXT 环境变量到邮件）。
+    ${richText:…} 已在 #1687 中和；其余路径待修（转义 + 对插入值中和 ${）。2026-10-20 在 #1687 中发现，本轮不修。
+
+- id: "1689"
+  status: open
+  severity: minor
+  category: quality
+  summary: "DW 重新部署后，已打开的页面懒加载旧 chunk 404，defineAsyncComponent 无 errorComponent → Email 模板 Body 等区域静默空白"
+  file: "frontend/developer-workstation/src/components/designer/EmailTemplateDesigner.vue"
+  detail: |
+    复现：DW 打开 FU 后重建 developer-workstation-frontend，再点 New Template → Body 无编辑器、无提示。
+    证据：旧 hash 的 /dev/assets/EmailBodySplitEditor-*.js 返回 404 text/html；新开页面正常（index.html 为 no-store）。
+    全应用无 vite:preloadError / 动态 import 失败处理。建议：main.ts 监听 vite:preloadError 提示刷新或自动 reload，
+    或给 defineAsyncComponent 配 errorComponent。临时规避：Ctrl+F5 刷新。

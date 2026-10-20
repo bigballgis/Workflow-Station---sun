@@ -3,8 +3,10 @@ import type { FormDefinition, TableDefinition } from '@/api/functionUnit'
 import type { RelationTableDTO } from '@/api/relationTable'
 import {
   EMAIL_VAR_GROUP_LOOKUP,
+  EMAIL_VAR_GROUP_RICH_TEXT,
   EMAIL_VAR_GROUP_SUBTABLES,
   buildEmailLookupVariableGroups,
+  buildEmailRichTextGroup,
   resolveEmailVariableGroupLabel,
   useEmailTemplateVariables,
 } from '../useEmailTemplateVariables'
@@ -97,9 +99,48 @@ describe('buildEmailLookupVariableGroups', () => {
   })
 })
 
+describe('buildEmailRichTextGroup', () => {
+  const table = {
+    id: 1,
+    tableName: 'email_case',
+    tableType: 'MAIN',
+    fieldDefinitions: [
+      { fieldName: 'email_body', displayName: 'Body', dataType: 'TEXT', nullable: true, isPrimaryKey: false },
+      { fieldName: 'email_subject', displayName: 'Subject', dataType: 'VARCHAR', nullable: true, isPrimaryKey: false },
+    ],
+  } as TableDefinition
+
+  it('offers richText tokens only for fields bound to an editor control', () => {
+    const forms = [{
+      id: 1,
+      formName: 'Main',
+      configJson: {
+        rule: [{
+          type: 'elCard',
+          children: [
+            { type: 'editor', field: 'email_body' },
+            { type: 'input', field: 'email_subject' },
+          ],
+        }],
+      },
+    } as FormDefinition]
+
+    const group = buildEmailRichTextGroup([table], forms)
+
+    expect(group?.label).toBe(EMAIL_VAR_GROUP_RICH_TEXT)
+    expect(group?.options).toEqual([{ token: '${richText:email_body}', label: 'Body (email_body)' }])
+  })
+
+  it('returns null when no form uses an editor control', () => {
+    const forms = [{ id: 1, formName: 'Main', configJson: { rule: [{ type: 'input', field: 'email_body' }] } } as FormDefinition]
+    expect(buildEmailRichTextGroup([table], forms)).toBeNull()
+  })
+})
+
 describe('resolveEmailVariableGroupLabel', () => {
   const t = (key: string, params?: Record<string, unknown>) => {
     if (key === 'emailTemplate.subTableGroup') return 'Sub-tables'
+    if (key === 'emailTemplate.richTextGroup') return 'Rich text'
     if (key === 'emailTemplate.lookupGroup') return `Lookup — ${params?.source}`
     return key
   }
@@ -107,6 +148,7 @@ describe('resolveEmailVariableGroupLabel', () => {
   it('maps sentinel labels', () => {
     expect(resolveEmailVariableGroupLabel(EMAIL_VAR_GROUP_SUBTABLES, t)).toBe('Sub-tables')
     expect(resolveEmailVariableGroupLabel(`${EMAIL_VAR_GROUP_LOOKUP}:User`, t)).toBe('Lookup — User')
+    expect(resolveEmailVariableGroupLabel(EMAIL_VAR_GROUP_RICH_TEXT, t)).toBe('Rich text')
     expect(resolveEmailVariableGroupLabel('Main Table', t)).toBe('Main Table')
   })
 })

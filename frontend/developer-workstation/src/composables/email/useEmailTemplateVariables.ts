@@ -3,6 +3,7 @@ import { functionUnitApi, type TableDefinition, type FormDefinition, type TableB
 import { connectionApi } from '@/api/connection'
 import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
 import { buildLookupCatalogGroups } from '@/utils/mainTableViewLookupCatalog'
+import { walkFormCreateRules } from '@/utils/formDesigner'
 
 export interface EmailVariableOption {
   /** Token inserted into the editor, e.g. ${fieldName} or ${subTableField:271:card_number} */
@@ -23,6 +24,7 @@ export const EMAIL_SUBJECT_VAR_EXAMPLE = '${name}'
 export const EMAIL_VAR_GROUP_SUBTABLES = '__SUBTABLES__'
 export const EMAIL_VAR_GROUP_LOOKUP = '__LOOKUP__'
 export const EMAIL_VAR_GROUP_ENV_TEXT = '__ENV_TEXT__'
+export const EMAIL_VAR_GROUP_RICH_TEXT = '__RICH_TEXT__'
 
 const TEXT_ENV_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 
@@ -65,6 +67,7 @@ async function loadTextEnvGroup(functionUnitId: number): Promise<EmailVariableGr
  * - sub-table fields   -> ${subTableField:<bindingId>:<fieldName>}
  * - sub-table tables   -> ${subTableHtml:<bindingId>:<col=Header,...>} (one row per record)
  * - lookup/related RT  -> ${lookupField:<sourceField>:<targetAttr>}
+ * - editor fields      -> ${richText:<fieldName>} (keeps the editor's formatting in HTML bodies)
  */
 export function useEmailTemplateVariables(functionUnitId: MaybeRefOrGetter<number>) {
   const groups = ref<EmailVariableGroup[]>([])
@@ -195,8 +198,10 @@ export function useEmailTemplateVariables(functionUnitId: MaybeRefOrGetter<numbe
       const subBindings = pickRepresentativeSubBindings(forms)
       const subHtmlGroup = buildSubTableHtmlGroup(tables, subBindings)
       const envGroup = await loadTextEnvGroup(id)
+      const richTextGroup = buildEmailRichTextGroup(tables, forms)
       groups.value = [
         ...buildMainFieldGroups(tables),
+        ...(richTextGroup ? [richTextGroup] : []),
         ...buildLookupFieldGroups(forms, relationTables),
         ...buildSubTableFieldGroups(tables, subBindings),
         ...(subHtmlGroup ? [subHtmlGroup] : []),
@@ -210,6 +215,37 @@ export function useEmailTemplateVariables(functionUnitId: MaybeRefOrGetter<numbe
   }
 
   return { groups, loading, load }
+}
+
+/**
+ * Pure builder for Insert Variable → Rich text: MAIN fields that any form renders with the
+ * `editor` control. Token form: ${richText:fieldName}
+ */
+export function buildEmailRichTextGroup(
+  tables: TableDefinition[],
+  forms: FormDefinition[],
+): EmailVariableGroup | null {
+  const editorFields = new Set<string>()
+  for (const form of forms || []) {
+    const rules = (form.configJson as { rule?: unknown } | undefined)?.rule
+    walkFormCreateRules(Array.isArray(rules) ? rules : [], (rule) => {
+      if (rule.type === 'editor' && typeof rule.field === 'string' && rule.field) {
+        editorFields.add(rule.field)
+      }
+    })
+  }
+  const options: EmailVariableOption[] = []
+  for (const tbl of tables || []) {
+    if (String(tbl.tableType || '').toUpperCase() !== 'MAIN') continue
+    for (const f of tbl.fieldDefinitions || []) {
+      if (!editorFields.has(f.fieldName)) continue
+      options.push({
+        token: `\${richText:${f.fieldName}}`,
+        label: `${f.displayName || f.fieldName} (${f.fieldName})`,
+      })
+    }
+  }
+  return options.length ? { label: EMAIL_VAR_GROUP_RICH_TEXT, options } : null
 }
 
 /**
@@ -255,6 +291,9 @@ export function resolveEmailVariableGroupLabel(
   }
   if (label === EMAIL_VAR_GROUP_ENV_TEXT) {
     return t('emailTemplate.envTextGroup')
+  }
+  if (label === EMAIL_VAR_GROUP_RICH_TEXT) {
+    return t('emailTemplate.richTextGroup')
   }
   return label
 }

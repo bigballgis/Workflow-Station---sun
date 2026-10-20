@@ -14,6 +14,7 @@ export interface ExtractionFieldRule {
     | 'TEXT'
     | 'HTML'
     | 'TEXT_AND_HTML'
+    | 'HTML_RICH'
     | 'ATTACHMENTS'
     | 'RAW_EML'
     | 'HEADER'

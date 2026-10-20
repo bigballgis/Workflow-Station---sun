@@ -5,13 +5,18 @@ export const ATTRIBUTE_SOURCES = [
   'SUBJECT', 'FROM', 'TO', 'CC', 'REPLY_TO', 'DATE', 'MESSAGE_ID',
 ] as const
 
-export const BODY_SOURCES = ['TEXT_AND_HTML', 'TEXT', 'HTML', 'HEADER', 'CONST'] as const
+export const BODY_SOURCES = ['TEXT_AND_HTML', 'TEXT', 'HTML', 'HTML_RICH', 'HEADER', 'CONST'] as const
 
 export const ATTACHMENT_SOURCES = ['ATTACHMENTS'] as const
 
 export const RAW_EML_SOURCES = ['RAW_EML'] as const
 
 export const LOCKED_ATTRIBUTE_SOURCES = ['FROM', 'TO', 'CC', 'REPLY_TO', 'DATE', 'MESSAGE_ID'] as const
+
+/** Whole HTML body kept as sanitized rich text for an editor field (DIRECT only). */
+export function isRichBodySource(source?: string): boolean {
+  return source === 'HTML_RICH'
+}
 
 const BODY_TYPES = ['LABEL', 'BETWEEN', 'REGEX', 'CONST', 'HEADER'] as const
 const SUBJECT_TYPES = ['DIRECT', 'LABEL', 'BETWEEN', 'REGEX'] as const
@@ -35,10 +40,11 @@ export function isFileField(option: SubTableFieldOption): boolean {
 export function isLockedAttributeSource(source?: string): boolean {
   return LOCKED_ATTRIBUTE_SOURCES.includes(source as typeof LOCKED_ATTRIBUTE_SOURCES[number])
     || isFileStoreSource(source)
+    || isRichBodySource(source)
 }
 
 export function typesForSource(source?: string): string[] {
-  if (isFileStoreSource(source)) {
+  if (isFileStoreSource(source) || isRichBodySource(source)) {
     return ['DIRECT']
   }
   if (source === 'SUBJECT') {

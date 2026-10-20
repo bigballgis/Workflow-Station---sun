@@ -4,6 +4,7 @@ import com.workflow.email.extract.EmailExtractionSpec.ColumnRule;
 import com.workflow.email.extract.EmailExtractionSpec.FieldRule;
 import com.workflow.email.extract.EmailExtractionSpec.PostProcess;
 import com.workflow.email.extract.EmailExtractionSpec.SubTableRule;
+import com.workflow.util.RichTextEmailHtml;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -111,6 +112,9 @@ public final class EmailFieldExtractor {
         if (source == EmailExtractionSpec.Source.SUBJECT) {
             return email.subject();
         }
+        if (source == EmailExtractionSpec.Source.HTML_RICH) {
+            return richBody(email);
+        }
         if (source == EmailExtractionSpec.Source.TEXT
                 || source == EmailExtractionSpec.Source.TEXT_AND_HTML
                 || source == EmailExtractionSpec.Source.HTML) {
@@ -131,7 +135,7 @@ public final class EmailFieldExtractor {
             case DATE -> readHeader(email, "date");
             case MESSAGE_ID -> email.messageId();
             case SUBJECT -> email.subject();
-            case ATTACHMENTS, RAW_EML, TEXT, HTML, TEXT_AND_HTML, HEADER, CONST -> null;
+            case ATTACHMENTS, RAW_EML, TEXT, HTML, TEXT_AND_HTML, HTML_RICH, HEADER, CONST -> null;
         };
     }
 
@@ -144,9 +148,17 @@ public final class EmailFieldExtractor {
             case FROM, TO, CC, REPLY_TO, DATE, MESSAGE_ID -> emailAttributeValue(email, source);
             case HTML -> htmlToText(email.html());
             case TEXT -> plainOrHtml(email);
-            case TEXT_AND_HTML -> combinedTextAndHtml(email);
+            case TEXT_AND_HTML, HTML_RICH -> combinedTextAndHtml(email);
             case HEADER, CONST, ATTACHMENTS, RAW_EML -> truncate(email.text());
         };
+    }
+
+    /** Sanitized HTML body for an editor field; plain-only mail is converted to paragraphs. */
+    static String richBody(EmailMessage email) {
+        if (StringUtils.hasText(email.html())) {
+            return RichTextEmailHtml.sanitize(email.html());
+        }
+        return RichTextEmailHtml.fromPlainText(email.text());
     }
 
     /** Plain body when present; HTML-only mail still falls back to stripped HTML. */

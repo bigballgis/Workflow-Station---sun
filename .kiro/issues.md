@@ -3,7 +3,7 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-19)
+## 统计 (截至 2026-10-20)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
@@ -13,6 +13,8 @@
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-10-20：#1687 已修复，Email Monitor `HTML_RICH` 保留 editor 格式、发信 `${richText:field}` 净化后插入 HTML 正文；engine/DW 单测与截图回归通过。
 
 2026-10-19：#1673 已修复，统一批量子表绑定 ID 解析并细化保存/发布错误提示；FU50022 校验通过，隔离副本50074真实界面保存后部署成功。
 
@@ -65,6 +67,8 @@
 | 1661 | major | bug | FU 克隆/导入/回滚时 FORM_POPUP Action 的 `configJson.formId` 不重映射，弹窗仍指向源 FU 表单 |
 | 1662 | major | bug | platform-messaging `DefaultErrorHandler` recoverer 空实现，Kafka 重试用尽后消息静默丢弃（DLT 从未写入） |
 | 1666 | major | quality | TaskActionService 引擎/lookup 异常 catch→emptyList，与「无 actionIds」无法区分（Allowed Roles 轮次 3-A 暂不修） |
+| 1688 | major | security | Send Email HTML 正文 `${subTableField}`/`${lookupField}` 未转义；标量值内 `${x}`/`${env:KEY}` 会被二次展开 |
+| 1689 | minor | quality | DW 重新部署后已打开页面懒加载旧 chunk 404，Email 模板 Body 等异步组件静默空白（无 preloadError 处理） |
 ### Wontfix
 
 | ID | 分类 | 描述 |

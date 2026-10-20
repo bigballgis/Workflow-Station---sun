@@ -28,6 +28,7 @@ describe('emailExtractionPreview body merge', () => {
     })
     expect(combinedSampleTextAndHtml(mail)).toBe('hello all,\r\n\r\nthis is a test email')
     expect(sourceText(mail, 'TEXT_AND_HTML')).toBe('hello all,\r\n\r\nthis is a test email')
+    expect(sourceText(mail, 'HTML_RICH')).toBe('hello all,\r\n\r\nthis is a test email')
   })
 
   it('TEXT keeps the plain part when HTML alternative exists', () => {

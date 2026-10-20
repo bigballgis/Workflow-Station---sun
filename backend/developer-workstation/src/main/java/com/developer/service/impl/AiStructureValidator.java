@@ -380,7 +380,7 @@ public class AiStructureValidator {
 
     private static final Set<String> EXTRACTION_SOURCES = Set.of(
             "SUBJECT", "FROM", "TO", "CC", "REPLY_TO", "DATE", "MESSAGE_ID", "TEXT", "HTML",
-            "TEXT_AND_HTML", "ATTACHMENTS", "RAW_EML", "HEADER", "CONST");
+            "TEXT_AND_HTML", "HTML_RICH", "ATTACHMENTS", "RAW_EML", "HEADER", "CONST");
 
     private static final Set<String> EXTRACTION_TYPES = Set.of(
             "DIRECT", "CONST", "LABEL", "BETWEEN", "REGEX", "HEADER");
