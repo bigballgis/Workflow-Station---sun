@@ -576,6 +576,7 @@ export default {
     pleaseCompleteForm: '请完善表单信息',
     pkGenerateFailed: '主键生成失败，请重试',
     processSubmitSuccess: '流程提交成功',
+    formPopupSubmitSuccess: '已保存。您仍可继续填写并正式提交申请。',
     batchAssignmentFailed: '申请已创建，但部分初次分派的目标缺失或与配置不符。请勿重复发起，请联系管理员核查实际任务。',
     batchAssignmentUnconfirmed: '申请已创建，但批量分派结果尚未全部核实。请勿重复发起，请核查实际任务。',
     firstStepIncomplete:

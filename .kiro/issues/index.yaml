@@ -5065,7 +5065,7 @@
     不将既有失败当作本次合并回归，也不据其余测试通过宣称全量通过。
     后续收口：补齐真实Pinia与matchMedia装配；BPMN v10使用命名导出；AI关闭按钮按图标定位而非按钮序号。
     仅翻译i18n门禁列出的注释，不放宽测试条件。Pinia后暴露的真实嵌套上下文缺口由#1686修复。
-    最终Portal314文件2378项、DW182文件1151项全量测试通过；全量类型检查仍不通过，未计作本项测试 pass。
+    最终Portal314文件2378项、DW182文件1151项全量测试通过；全量类型检查仍不通过，未计作本项测试通过。
 
 - id: "1686"
   status: fixed
@@ -5122,3 +5122,32 @@
     证据：旧 hash 的 /dev/assets/EmailBodySplitEditor-*.js 返回 404 text/html；新开页面正常（index.html 为 no-store）。
     全应用无 vite:preloadError / 动态 import 失败处理。建议：main.ts 监听 vite:preloadError 提示刷新或自动 reload，
     或给 defineAsyncComponent 配 errorComponent。临时规避：Ctrl+F5 刷新。
+
+- id: "1690"
+  status: fixed
+  fixed_at: "2026-10-20"
+  severity: major
+  category: bug
+  summary: "New Request（发起页）点击 FORM_POPUP 按钮不弹窗、不发邮件：start.vue handleAction 只处理 PROCESS_SUBMIT，后端 form-popup-submit 只有 task 维度"
+  file: "frontend/user-portal/src/views/processes/start.vue"
+  detail: |
+    DW 允许把任意 Action（含 FORM_POPUP）绑到第一个节点（useUserTaskActions 无过滤），发起页也会渲染该按钮，
+    但 handleAction 的 switch 只有 PROCESS_SUBMIT，其余落 default → 提示 unknownActionType，无弹窗、无任何 POST。
+    后端仅有 POST /tasks/{taskId}/actions/{actionId}/form-popup-submit（发起页尚无 taskId），
+    ActionPostEmailComponentImpl 的 OP_START 只匹配 PROCESS_SUBMIT，所以 FORM_POPUP 的 postEmailRules 在发起页永不触发。
+    2026-10-20 本地复现：MI demo 发起页注入 action 50384 → 点击后 visible dialogs=0、POST=0。
+    截图 frontend/user-portal/verification-screenshots/2026-10-20_new-request-form-popup-click.png。
+    已落地（2026-10-20）：POST /processes/{key}/actions/{actionId}/form-popup-submit；
+    start leaveFirstTaskOpen + 前端 FormPopupDialog；弹窗 Submit=start+ACTION 行+OP_FORM_POPUP。
+    单测 ProcessStartFormPopupComponentTest；Docker user-portal 重建。前端 dist 需本地 pnpm build 后重建 user-portal-frontend。
+
+- id: "1691"
+  status: fixed
+  fixed_at: "2026-10-20"
+  severity: minor
+  category: quality
+  summary: "start.vue 用 t('process.unknownActionType')，key 实际在 task 命名空间，提示显示原始 key"
+  file: "frontend/user-portal/src/views/processes/start.vue"
+  detail: |
+    start.vue handleAction default 分支用 process.unknownActionType；三语 locale 中该 key 位于 task.unknownActionType（行 481），
+    运行时 toast 显示字面量 "process.unknownActionType"（2026-10-20 截图同 #1690）。

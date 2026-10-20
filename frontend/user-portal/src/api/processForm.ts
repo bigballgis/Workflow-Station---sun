@@ -145,6 +145,24 @@ export function submitActionFormPopup(taskId: string, actionId: string, formData
   return request.post<{ data: void }>(`/tasks/${taskId}/actions/${actionId}/form-popup-submit`, { formData })
 }
 
+export function submitProcessStartFormPopup(
+  processKey: string,
+  actionId: string,
+  body: {
+    processInstanceId?: string
+    popupFormData: Record<string, unknown>
+    formData?: Record<string, unknown>
+    batchStartContext?: unknown
+    emptiedSubTableKeys?: string[]
+    subTableBindingScopes?: unknown[]
+  },
+) {
+  return request.post<{ data: { id?: string } }>(
+    `/processes/${encodeURIComponent(processKey)}/actions/${encodeURIComponent(actionId)}/form-popup-submit`,
+    body,
+  )
+}
+
 export function getChangeHistory(processInstanceId: string, rowIdentifier?: string, taskId?: string) {
   const query: string[] = []
   if (rowIdentifier) query.push('rowIdentifier=' + encodeURIComponent(rowIdentifier))

@@ -48,6 +48,7 @@ public class ProcessController {
     private final com.portal.component.AuditApplicationListQueryComponent auditApplicationListQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
     private final ActionPostEmailComponent actionPostEmailComponent;
+    private final com.portal.component.ProcessStartFormPopupComponent processStartFormPopupComponent;
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
@@ -387,6 +388,25 @@ public class ProcessController {
                         .comment(request.getRemark())
                         .build(),
                 () -> processComponent.startProcess(userId, processKey, request));
+        return ApiResponse.success(instance);
+    }
+
+    @PostMapping("/{processKey}/actions/{actionId}/form-popup-submit")
+    @Operation(summary = "New Request FORM_POPUP：发起（可选）并写入 ACTION 表")
+    public ApiResponse<ProcessInstanceInfo> submitStartFormPopup(
+            @CurrentUserId String userId,
+            @PathVariable String processKey,
+            @PathVariable String actionId,
+            @RequestBody @Valid ProcessStartFormPopupSubmitRequest request) {
+        ProcessInstanceInfo instance = actionPostEmailComponent.runWithPostEmail(
+                ActionPostEmailContext.builder()
+                        .actionId(actionId)
+                        .operation(ActionPostEmailContext.OP_FORM_POPUP)
+                        .functionUnitCode(processKey)
+                        .processInstanceId(request.getProcessInstanceId())
+                        .operatorId(userId)
+                        .build(),
+                () -> processStartFormPopupComponent.submit(userId, processKey, actionId, request));
         return ApiResponse.success(instance);
     }
 

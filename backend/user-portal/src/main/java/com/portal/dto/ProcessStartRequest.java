@@ -64,6 +64,13 @@ public class ProcessStartRequest {
      */
     private String actionId;
 
+    /**
+     * When true, the portal leaves the first user task open after Flowable start
+     * (skips initiator auto-complete). Used by New Request FORM_POPUP submit so
+     * the user can still Approve separately.
+     */
+    private Boolean leaveFirstTaskOpen;
+
     @Data
     @Builder
     @NoArgsConstructor

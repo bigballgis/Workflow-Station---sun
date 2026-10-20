@@ -576,6 +576,7 @@ export default {
     pleaseCompleteForm: 'Please complete the form',
     pkGenerateFailed: 'Failed to generate the primary key, please retry',
     processSubmitSuccess: 'Process submitted successfully',
+    formPopupSubmitSuccess: 'Saved. You can still submit the request when ready.',
     batchAssignmentFailed: 'Request created, but some initial assignments have missing or mismatched targets. Do not submit again; ask an administrator to inspect the actual tasks.',
     batchAssignmentUnconfirmed: 'Request created, but the batch assignment results are not fully verified. Do not submit again; inspect the actual tasks.',
     firstStepIncomplete:

@@ -328,7 +328,9 @@ public class ProcessStartComponent {
         // (captureTaskFormSnapshot is @Transactional;
         // the meeting-path save auto-commits); autoCompleteFirstTask never throws (see
         // its catch).
-        FirstTaskOutcome outcome = autoCompleteFirstTask(flowableProcessInstanceId, userId, variables, pin);
+        boolean leaveFirstTaskOpen = Boolean.TRUE.equals(request.getLeaveFirstTaskOpen());
+        FirstTaskOutcome outcome = autoCompleteFirstTask(
+                flowableProcessInstanceId, userId, variables, pin, leaveFirstTaskOpen);
         // TX2 (short): change history + current-node update grouped atomically (the
         // node update is a
         // @Modifying query that requires a transaction). First task completed via
@@ -688,7 +690,11 @@ public class ProcessStartComponent {
     }
 
     private FirstTaskOutcome autoCompleteFirstTask(
-            String flowableProcessInstanceId, String userId, Map<String, Object> variables, ActiveCatalogPin pin) {
+            String flowableProcessInstanceId,
+            String userId,
+            Map<String, Object> variables,
+            ActiveCatalogPin pin,
+            boolean leaveFirstTaskOpen) {
         // Auto-complete only when the first user task is a true initiator / start-form
         // node.
         // Approval-first flows (BU_ROLE, INITIATOR_BU_ROLE, etc.) must stay open for
@@ -705,7 +711,9 @@ public class ProcessStartComponent {
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
                     if (tasks != null && !tasks.isEmpty()) {
                         Map<String, Object> firstTask = tasks.get(0);
-                        if (BpmnInitiatorTaskDetection.shouldAutoCompleteFirstTask(firstTask)) {
+                        if (leaveFirstTaskOpen) {
+                            captureFirstTaskWithoutAutoComplete(outcome, firstTask);
+                        } else if (BpmnInitiatorTaskDetection.shouldAutoCompleteFirstTask(firstTask)) {
                             completeFirstTaskAndCaptureNext(
                                     outcome, firstTask, flowableProcessInstanceId, userId, variables, pin);
                         } else {

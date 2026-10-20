@@ -58,6 +58,21 @@ public class ActionFormPopupSubmitComponent {
 
     @Transactional
     public void submit(TaskInfo task, String actionId, Map<String, Object> formData, String userId) {
+        submitForProcessInstance(task.getProcessInstanceId(), actionId, formData, userId, task.getTaskId());
+    }
+
+    @Transactional
+    public void submitForProcessInstance(
+            String processInstanceId, String actionId, Map<String, Object> formData, String userId) {
+        submitForProcessInstance(processInstanceId, actionId, formData, userId, null);
+    }
+
+    private void submitForProcessInstance(
+            String processInstanceId,
+            String actionId,
+            Map<String, Object> formData,
+            String userId,
+            String taskIdForLog) {
         ActionDefinition action = actionDefinitionRepository.findFromDwById(actionId)
                 .orElseThrow(() -> new PortalException("404", "Action not found: " + actionId));
         if (!"FORM_POPUP".equals(action.getActionType())) {
@@ -72,9 +87,9 @@ public class ActionFormPopupSubmitComponent {
         ActionTableBinding binding = resolveActionTableBinding(formId);
         List<String> validColumns = loadFieldNames(binding.tableId());
 
-        ProcessInstance processInstance = processInstanceRepository.findById(task.getProcessInstanceId())
+        ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
                 .orElseThrow(() -> new PortalException("404",
-                        "Process instance not found: " + task.getProcessInstanceId()));
+                        "Process instance not found: " + processInstanceId));
         String requestId = readRequestId(processInstance);
 
         Map<String, Object> row = new LinkedHashMap<>();
@@ -109,7 +124,7 @@ public class ActionFormPopupSubmitComponent {
 
         insertRow(binding.tableId(), row);
         log.info("[ActionFormPopupSubmit] inserted row into {} for action {} (task {}, request {})",
-                binding.tableName(), actionId, task.getTaskId(), requestId);
+                binding.tableName(), actionId, taskIdForLog != null ? taskIdForLog : "-", requestId);
     }
 
     private Long readConfigFormId(String configJson) {

@@ -11,7 +11,8 @@
     "verify:mi:e2e": "node scripts/verify-mi-regression-all.mjs",
     "regression:mi": "node scripts/run-mi-regression.mjs",
     "regression:mi:unit-only": "node scripts/run-mi-regression.mjs --unit-only",
-    "regression:mi:screenshots": "node scripts/verify-mi-regression-all.mjs"
+    "regression:mi:screenshots": "node scripts/verify-mi-regression-all.mjs",
+    "verify:form-popup-post-email-local": "node scripts/verify-form-popup-post-email-local.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.0"

@@ -75,8 +75,8 @@ final class SubTableBatchRoleEligibility {
         Object id = baseline.get("activeBusinessUnitId");
         if (!(id instanceof String text) || !valid(text)) throw invalid();
         var codes = jdbc.queryForList("SELECT code FROM sys_business_units WHERE id = ? AND status = 'ACTIVE'", String.class, text);
-        if (codes.size() != 1 || !valid(codes.getFirst())) throw invalid();
-        return codes.getFirst();
+        if (codes.size() != 1 || !valid(codes.get(0))) throw invalid();
+        return codes.get(0);
     }
     private static boolean valid(String value) { return value != null && !value.isBlank() && value.equals(value.trim()); }
     private static PortalException invalid() { return new PortalException("403", "Initial assignment role target is not currently eligible"); }

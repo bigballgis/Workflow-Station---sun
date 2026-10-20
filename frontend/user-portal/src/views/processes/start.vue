@@ -272,11 +272,31 @@
         </div>
       </div>
     </div>
+
+    <FormPopupDialog
+      v-model="formPopupVisible"
+      :title="formPopupTitle"
+      :width="formPopupWidth"
+      :fields="formPopupFields"
+      :tabs="formPopupTabs"
+      :form-data="formPopupData"
+      :label-width="formLabelWidth"
+      :readonly="formPopupReadOnlyMode"
+      :submitting="submitting"
+      :sub-table-bindings="formPopupSubTableBindings"
+      :linked-sub-table-bindings="formPopupLinkedSubTableBindings ?? formPopupSubTableBindings"
+      :native-sub-table-binding-ids="formPopupNativeSubTableBindingIds"
+      :form-config="formPopupFormConfig"
+      :view-context="formPopupViewContext"
+      @update:form-data="val => formPopupData = { ...formPopupData, ...val }"
+      @update:sub-table-data="handleFormPopupSubTableUpdate"
+      @submit="submitFormPopup"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, toRef } from 'vue'
 import { batchAssignmentFeedback } from '@/utils/batchAssignmentFeedback'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -290,6 +310,8 @@ import WorkflowDiagramCollapsibleSection from '@/components/WorkflowDiagramColla
 import ProcessDiagram from '@/components/ProcessDiagram.vue'
 import ProcessHistory from '@/components/ProcessHistory.vue'
 import FormRenderer from '@/components/FormRenderer.vue'
+import FormPopupDialog from '@/components/tasks/FormPopupDialog.vue'
+import { useProcessStartFormPopup } from '@/composables/processStart/useProcessStartFormPopup'
 import { collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
 import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
@@ -823,27 +845,6 @@ const handleSaveDraft = async () => {
   }
 }
 
-// 处理动作按钮点击
-const handleAction = async (action: { id: string; label: string; action?: string; actionType?: string; configJson?: string }) => {
-  if (workspaceStartBlocked.value && isSubmitLikeAction(action)) {
-    ElMessage.warning(t('processStart.workspaceGuardToast'))
-    return
-  }
-  const startActionId = action.id === 'submit' ? undefined : action.id
-  switch (action.actionType) {
-    case 'PROCESS_SUBMIT':
-      await handleSubmit(startActionId)
-      break
-    default:
-      // 对于未知类型，尝试作为提交处理
-      if (action.action === 'submit') {
-        await handleSubmit(startActionId)
-      } else {
-        ElMessage.warning(t('process.unknownActionType', { type: action.actionType || action.action }))
-      }
-  }
-}
-
 /**
  * On submit, generate the MAIN table's auto-generated primary key if it has no value yet.
  * Already-filled PKs are left untouched (idempotent across draft reload / re-submit).
@@ -883,6 +884,48 @@ const ensureMainPrimaryKey = async () => {
   // Patches FormRenderer's own model and recomputes __request_id, then emits back to the parent.
   renderer.handlePrimaryFormDataPatch({ [pkField.fieldName]: value })
 }
+
+const {
+  formPopupVisible,
+  formPopupTitle,
+  formPopupFields,
+  formPopupTabs,
+  formPopupData,
+  formPopupWidth,
+  formPopupReadOnlyMode,
+  formPopupSubTableBindings,
+  formPopupLinkedSubTableBindings,
+  formPopupNativeSubTableBindingIds,
+  formPopupFormConfig,
+  formPopupViewContext,
+  openFormPopupFromStart,
+  submitFormPopup,
+  handleFormPopupSubTableUpdate,
+} = useProcessStartFormPopup({
+  t,
+  submitting,
+  cachedContentForms: toRef(caches, 'cachedContentForms'),
+  extractFieldsRecursive,
+  deriveColumnsFromBinding,
+  functionUnitCode,
+  batchStartContext,
+  validateMainForm: async () => {
+    if (!formRendererRef.value) return true
+    return formRendererRef.value.validate()
+  },
+  ensureMainPrimaryKey,
+  assembleStartPayload: () => {
+    const liveFormData = (formRendererRef.value as { getFormData?: () => Record<string, unknown> } | null)
+      ?.getFormData?.() ?? formData.value
+    formData.value = { ...liveFormData }
+    const assembled = assembleStartSubTables()
+    return {
+      formData: { ...liveFormData, __subTables__: assembled.subTables },
+      emptiedSubTableKeys: assembled.emptiedSubTableKeys,
+      subTableBindingScopes: assembled.subTableBindingScopes,
+    }
+  },
+})
 
 // 提交流程
 const handleSubmit = async (actionId?: string) => {
@@ -996,6 +1039,28 @@ const handleSubmit = async (actionId?: string) => {
   } finally {
     submitting.value = false
     currentAction.value = ''
+  }
+}
+
+const handleAction = async (action: { id: string; label: string; action?: string; actionType?: string; configJson?: string }) => {
+  if (workspaceStartBlocked.value && isSubmitLikeAction(action)) {
+    ElMessage.warning(t('processStart.workspaceGuardToast'))
+    return
+  }
+  const startActionId = action.id === 'submit' ? undefined : action.id
+  switch (action.actionType) {
+    case 'PROCESS_SUBMIT':
+      await handleSubmit(startActionId)
+      break
+    case 'FORM_POPUP':
+      await openFormPopupFromStart(action)
+      break
+    default:
+      if (action.action === 'submit') {
+        await handleSubmit(startActionId)
+      } else {
+        ElMessage.warning(t('task.unknownActionType', { type: action.actionType || action.action }))
+      }
   }
 }
 
