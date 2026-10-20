@@ -7,6 +7,7 @@ export interface BatchPreviewDefinition extends BatchAssignmentCapability {
   invalid: boolean
   flags: { add: boolean; edit: boolean; delete: boolean; assign: boolean }
   rule: Array<Record<string, unknown>>
+  options?: Record<string, unknown>
   fieldWriteModes: Record<string, 'EDITABLE' | 'READONLY'>
 }
 
@@ -29,7 +30,7 @@ export function buildBatchPreviewDefinition(
   const invalid = !batchControlId.trim() || !validForm || !assignmentValid
     || fields === null || (!fields.length && props.allowBatchAssign !== true)
   return {
-    batchControlId, bindingId, rule: rules, invalid,
+    batchControlId, bindingId, rule: rules, options: form?.options as Record<string, unknown> | undefined, invalid,
     fieldWriteModes: Object.fromEntries((fields ?? []).map(field => [field.field,
       permissions[`${bindingId}:${field.field}`] === 'READONLY' ? 'READONLY' : 'EDITABLE'])),
     ...(assignmentConfig ? { assignmentConfig } : {}),

@@ -7,32 +7,31 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('element-plus', () => ({ ElMessage: { info: vi.fn(), error: vi.fn() } }))
 const definition = { batchControlId: 'grid', bindingId: '21', invalid: false, fieldWriteModes: {},
   flags: { add: true, edit: true, delete: true, assign: false }, rule: [{ type: 'input', field: 'caption' }] }
-const workspace = defineComponent({ name: 'BatchWorkspace', props: ['visible', 'rows', 'showAdd', 'showDelete', 'prepareRows'],
+const workspace = defineComponent({ name: 'BatchWorkspace', props: ['visible', 'rows', 'mode', 'selectedRowIds', 'rules', 'prepareRows'],
   emits: ['apply', 'apply-workspace', 'update:visible'], template: '<div><slot name="assignment" :rows="rows"/></div>' })
 
 function preview(rows: Array<Record<string, unknown>> = []) {
-  return mount(SubTableBatchPreview, { props: { definition, modelValue: rows,
+  return mount(SubTableBatchPreview, { props: { definition, modelValue: rows, selectedRowIds: rows.map(row => String(row.key)), rowIdentity: row => String(row.key),
     config: { columns: [], bindingType: 'SUB', bindingMode: 'EDITABLE', bindingLinkMode: 'structuralFk', fieldDefinitions: [] } },
   global: { stubs: { BatchWorkspace: workspace, BatchAssignmentEditor: true, DesignerHelpLink: true,
     ElTooltip: { template: '<span><slot/></span>' }, ElButton: { template: '<button @click="$emit(\'click\')"><slot/></button>' } } } })
 }
 
 describe('local shared batch preview host', () => {
-  it('creates labelled local sample rows without writing back, and cancel leaves source unchanged', async () => {
+  it('requires an outer selection and never invents sample rows', async () => {
     const wrapper = preview()
-    await wrapper.get('button').trigger('click')
-    const shared = wrapper.findComponent(workspace)
-    expect(shared.props('rows')).toHaveLength(2)
-    expect(shared.props('rows')[0].platformRowUuid).not.toBe(shared.props('rows')[1].platformRowUuid)
+    await wrapper.findAll('button').find(button => button.text() === 'subTable.batchEdit')!.trigger('click')
+    expect(wrapper.findComponent(workspace).exists()).toBe(false)
+    const add = wrapper.findAll('button').find(button => button.text() === 'subTable.batchAdd')!
+    await add.trigger('click')
+    expect(wrapper.findComponent(workspace).props('mode')).toBe('add')
+    expect(wrapper.findComponent(workspace).props('rows')).toEqual([])
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-    shared.vm.$emit('update:visible', false)
-    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-    wrapper.unmount()
   })
   it('applies only to the parent preview after explicit shared apply, preserving hidden columns', async () => {
     const original = [{ key: 'one', caption: 'original', hidden: 'keep' }]
     const wrapper = preview(original)
-    await wrapper.get('button').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'subTable.batchEdit')!.trigger('click')
     const shared = wrapper.findComponent(workspace)
     const rows = shared.props('rows').map((row: Record<string, unknown>) => ({ ...row, caption: 'changed' }))
     shared.vm.$emit('apply', rows, {})
@@ -42,11 +41,13 @@ describe('local shared batch preview host', () => {
     wrapper.unmount()
   })
   it('does not offer membership mutations for an MI participant binding', async () => {
-    const wrapper = preview()
+    const wrapper = preview([{ key: 'one', caption: 'A' }])
     await wrapper.setProps({ config: { columns: [], bindingType: 'SUB', bindingMode: 'EDITABLE', bindingLinkMode: 'miParticipantRow' } })
-    await wrapper.get('button').trigger('click')
-    expect(wrapper.findComponent(workspace).props('showAdd')).toBe(false)
-    expect(wrapper.findComponent(workspace).props('showDelete')).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === 'subTable.batchEdit')!.trigger('click')
+    expect(wrapper.findAll('button').some(button => button.text() === 'subTable.batchAdd')).toBe(false)
+    expect(wrapper.findAll('button').some(button => button.text() === 'subTable.batchDelete')).toBe(false)
+    await (wrapper.vm as unknown as { deleteSelected(): Promise<void> }).deleteSelected()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     wrapper.unmount()
   })
 })

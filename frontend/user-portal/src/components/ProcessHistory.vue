@@ -14,7 +14,7 @@
       />
     </div>
 
-    <el-timeline v-if="records.length > 0">
+    <el-timeline v-if="businessRecords.length > 0">
       <el-timeline-item
         v-for="record in visibleRecords"
         :key="record.id"
@@ -39,7 +39,7 @@
 
           <div class="card-content">
             <div
-              v-if="record.assigneeName"
+              v-if="record.assigneeName && !isBoundaryEvent(record.activityType)"
               class="info-row"
             >
               <span class="label">{{ $t('task.assignee') }}:</span>
@@ -55,7 +55,7 @@
             </div>
 
             <div
-              v-if="record.action"
+              v-if="record.action && !isBoundaryEvent(record.activityType)"
               class="info-row"
             >
               <span class="label">{{ $t('task.action') }}:</span>
@@ -133,7 +133,7 @@
     </div>
 
     <el-empty
-      v-else-if="records.length === 0"
+      v-else-if="businessRecords.length === 0"
       :description="$t('common.noData')"
     />
   </div>
@@ -149,6 +149,7 @@ export type { HistoryRecord } from '@/types/historyRecord'
 
 interface Props {
   records: HistoryRecord[]
+  bpmnXml?: string
   showHeader?: boolean
   showRefresh?: boolean
   collapsible?: boolean
@@ -165,17 +166,46 @@ const props = withDefaults(defineProps<Props>(), {
 
 const expanded = ref(false)
 
+function isBoundaryEvent(activityType?: string): boolean {
+  const type = activityType?.split(':').pop()
+  return type === 'startEvent' || type === 'endEvent'
+}
+
+// Presentation only: retain the full history for diagram status and snapshots.
+// Scope comes from the deployed BPMN, never a demo-specific node name or id.
+const nestedBoundaryIds = computed(() => {
+  const ids = new Set<string>()
+  if (!props.bpmnXml) return ids
+  const doc = new DOMParser().parseFromString(props.bpmnXml, 'application/xml')
+  for (const element of Array.from(doc.getElementsByTagName('*'))) {
+    if (!isBoundaryEvent(element.localName)) continue
+    let parent = element.parentElement
+    while (parent && parent.localName !== 'process') {
+      if (parent.localName === 'subProcess' || parent.localName === 'transaction') {
+        ids.add(element.getAttribute('id') ?? '')
+        break
+      }
+      parent = parent.parentElement
+    }
+  }
+  return ids
+})
+
+const businessRecords = computed(() =>
+  props.records.filter(record => !nestedBoundaryIds.value.has(record.nodeId))
+)
+
 const canToggle = computed(() =>
-  props.collapsible && props.records.length > props.defaultVisibleCount
+  props.collapsible && businessRecords.value.length > props.defaultVisibleCount
 )
 
 const hiddenCount = computed(() =>
-  props.records.length - props.defaultVisibleCount
+  businessRecords.value.length - props.defaultVisibleCount
 )
 
 const visibleRecords = computed(() => {
-  if (!props.collapsible || expanded.value) return props.records
-  return props.records.slice(-props.defaultVisibleCount)
+  if (!props.collapsible || expanded.value) return businessRecords.value
+  return businessRecords.value.slice(-props.defaultVisibleCount)
 })
 
 const emit = defineEmits<{

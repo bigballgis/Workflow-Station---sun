@@ -8,17 +8,17 @@ export default {
   catalogExtendBody:
     '下列標籤對應此控制項 Component 屬性。設計器介面是英文。空白表示該列寫明的預設值，除非標明必填。',
   subTable: {
-    batchPreviewHint: '開啟 Form Preview，再點擊 Export 左側的 Batch Edit。預覽使用目前批次設計，包括尚未儲存的修改；空表提供兩條範例記錄。Apply 只更新預覽，Cancel 保持原預覽不變。範例使用者、BU、角色及產生的主鍵不會預留號碼、儲存業務記錄或建立任務。',
+    batchPreviewHint: '在 Form Preview 的外層子表勾選列，再點擊 Batch Edit。Batch Form 填寫一次，統一套用到選取列。Batch Add 不要求選列；Batch Delete 使用外層選取。Apply 只更新預覽資料。',
     batchTitle: 'User Portal 批次工作區',
-    batchBody: '點擊 Export 左側的 Batch Edit。可用命令由批次開關與目前任務權限決定。僅新增模式下既有列唯讀；僅刪除模式下可選列，不能改欄位。設計器後來啟用批次功能不會讓舊申請取得此工作區。點擊 Apply 前，對話框草稿不會寫回頁面。',
-    batchAddHint: '輸入 1–200 列並點擊 Add，再填寫新增列。顯示父記錄下拉選單時須選取父記錄。必填欄位與人工主鍵須完整。自動主鍵在 Apply 時準備；Cancel 不分配主鍵。',
-    batchDeleteHint: '選取目前頁面的列並確認 Delete。刪除剛新增的草稿只移除草稿。關聯子資料或已變更的儲存列會阻止刪除，不會取消子任務。',
-    batchSetHint: '先勾選左側目標列，工作區會顯示選取數量。統一設定值僅作用於勾選列，也支援新增列，在點擊 Apply to page 時套用。未選取任何列時會提示選取並保留草稿。Add 只帶入已設定的預設值，不會複製既有列。No change 保留各列原值；Set value 可設定欄位允許的零、false 與空字串；Clear value 仍須通過必填驗證。既有主鍵、外鍵與計算欄位唯讀。',
+    batchBody: '在外層子表勾選目標列，再點擊 Batch Edit。彈窗按儲存的 Batch Form 呈現佈局、控制項樣式和欄位屬性。欄位修改和分派共用同一批選取列。既有實例使用凍結的批次設計。',
+    batchAddHint: '點擊 Batch Add，輸入 1–200 列，填寫一次 Batch Form。每筆新增列使用相同填寫值；提示選擇父記錄時需先選擇。必填欄位和人工主鍵必須完整，自動主鍵和外鍵在 Apply 時準備。',
+    batchDeleteHint: '在外層子表勾選列，點擊 Batch Delete 並確認。只刪除選取列；關聯子資料或記錄變更可能阻止刪除，不會取消子任務。',
+    batchSetHint: '未操作的欄位保持不變，顯示設計預設值也不會自動寫入。填寫一次即可統一修改選取列，零和 false 都是有效值。使用控制項本身的操作清空欄位；清空必填欄位會阻止 Apply。取消並重新開啟可丟棄草稿。主鍵、外鍵和計算欄位保持受保護。',
     batchApplyHint: '整批驗證最多 200 個受影響列，成功後一次更新頁面。報錯時先修正再套用；對話框開啟後表格已變更時須重新開啟。原有 Save 或自動儲存仍須成功。Apply 不建立任務。',
     batchCancelHint: '丟棄獨立草稿；有尚未套用的變更時關閉須確認。原頁面資料不變。',
     batchStartHint: 'New Request 在 Submit Application 時再次核對已發佈的批次設計。頁面開啟期間設計發生變化時，會在建立流程前阻止提交。請重新整理申請表單，檢查還原的草稿後再提交。既有實例保留各自的批次設計。',
     batchOutcomeHint: '提交申請或完成任務後出現分派警告，表示該動作已經執行，請勿重複操作。進入 My Requests，開啟申請詳情的 Flow History，可查看已儲存的核對結果及相關任務 ID；記錄反映提交或完成時的結果，不代表目前任務狀態。核對記錄儲存失敗時會另行提示，請聯絡管理員。僅儲存分派設定不能證明任務已建立。',
-    batchAssignHint: '權限允許時，在同一工作區設定初次分派。逐列選取個人或 BU+Role；也可在分派表格選取列後設定統一目標。只顯示設定允許的模式。修改目標後須填寫完整，目前不支援清空分派。Apply 將一般欄位與分派草稿一起驗證。目錄查詢失敗會顯示錯誤並阻止已修改的分派，不代表沒有查詢結果。儲存設定不會建立或改派任務。',
+    batchAssignHint: 'Assignment Mode 按此子表的分派設定提供辦理人或業務單元、角色選擇器；既有表單僅儲存 Assignment 標記時也可使用。自訂子欄位保留其標籤和樣式。未選擇模式時保留各列分派；選擇模式並填寫一次目標，統一套用到外層選取列。需要業務單元時，先選擇業務單元再選擇角色。再次點擊目前模式可恢復不修改分派。儲存不會建立或改派任務。',
     summary: '繫結的子表網格（help_pr_line）。逐列與批次權限、List View 欄。',
     crumb: '開發工作站 · 功能單元 · 表單設計 · Controls · Extend · Sub-Table',
     intro:

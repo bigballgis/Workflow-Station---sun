@@ -8,17 +8,17 @@ export default {
   catalogExtendBody:
     '下列标签对应该控件 Component 属性。设计器界面是英文。空白表示该行写明的默认值，除非标明必填。',
   subTable: {
-    batchPreviewHint: '打开 Form Preview，再点击 Export 左侧的 Batch Edit。预览使用当前批量设计，包括尚未保存的修改；空表提供两条示例记录。Apply 只更新预览，Cancel 保持原预览不变。示例用户、BU、角色及生成的主键不会预留号码、保存业务记录或创建任务。',
+    batchPreviewHint: '在 Form Preview 的外层子表勾选行，再点击 Batch Edit。Batch Form 填写一次，统一应用到选中行。Batch Add 不要求选行；Batch Delete 使用外层选择。Apply 只更新预览数据。',
     batchTitle: 'User Portal 批量工作区',
-    batchBody: '点击 Export 左侧的 Batch Edit。可用命令由批量开关和当前任务权限决定。仅新增模式下已有行只读；仅删除模式下可选行，不能改字段。设计器后来开启批量功能不会让旧申请获得此工作区。点击 Apply 前，弹窗中的草稿不写回页面。',
-    batchAddHint: '输入 1–200 行并点击 Add，再填写新增行。显示父记录下拉框时需选择父记录。必填字段和人工主键必须完整。自动主键在 Apply 时准备；Cancel 不分配主键。',
-    batchDeleteHint: '选中当前页的行并确认 Delete。删除刚新增的草稿只移除草稿。关联子数据或已变化的保存行会阻止删除，不会取消子任务。',
-    batchSetHint: '先勾选左侧目标行，工作区会显示选中数量。统一赋值仅作用于勾选行，也支持新增行，在点击 Apply to page 时应用。未选中任何行时会提示选择并保留草稿。Add 只带入已配置的默认值，不会复制已有行。No change 保留各行原值；Set value 可设置字段允许的零、false 和空串；Clear value 仍需通过必填校验。已有主键、外键和计算字段只读。',
+    batchBody: '在外层子表勾选目标行，再点击 Batch Edit。弹窗按保存的 Batch Form 渲染布局、控件样式和字段属性。字段修改和分派共用同一批选中行。已有实例使用冻结的批量设计。',
+    batchAddHint: '点击 Batch Add，输入 1–200 行，填写一次 Batch Form。每条新增行使用相同填写值；提示选择父记录时需先选择。必填字段和人工主键必须完整，自动主键和外键在 Apply 时准备。',
+    batchDeleteHint: '在外层子表勾选行，点击 Batch Delete 并确认。只删除选中行；关联子数据或记录变化可能阻止删除，不会取消子任务。',
+    batchSetHint: '未操作的字段保持不变，显示设计默认值也不会自动写入。填写一次即可统一修改选中行，零和 false 都是有效值。使用控件自身的操作清空字段；清空必填字段会阻止 Apply。取消并重新打开可丢弃草稿。主键、外键和计算字段保持受保护。',
     batchApplyHint: '整批校验最多 200 个受影响行，成功后一次更新页面。报错时先修正再应用；弹窗打开后表格已变化时需重新打开。原有 Save 或自动保存仍须成功。Apply 不创建任务。',
     batchCancelHint: '丢弃独立草稿；有未应用修改时关闭需确认。原页面数据不变。',
     batchStartHint: 'New Request 在 Submit Application 时再次核对已发布的批量设计。页面打开期间设计发生变化时，会在创建流程前阻止提交。请刷新申请表单，检查恢复的草稿后再提交。已有实例保留各自的批量设计。',
     batchOutcomeHint: '提交申请或完成任务后出现分派警告，表示该动作已经执行，请勿重复操作。进入 My Requests，打开申请详情的 Flow History，可查看已保存的核对结果及相关任务 ID；记录反映提交或完成时的结果，不代表当前任务状态。核对记录保存失败时会单独提示，请联系管理员。仅保存分派配置不能证明任务已创建。',
-    batchAssignHint: '权限允许时，在同一工作区配置初次分派。逐行选择个人或 BU+Role；也可在分派表格选中行后设置统一目标。只显示配置允许的模式。修改目标后必须填写完整，暂不支持清空分派。Apply 将普通字段和分派草稿一起校验。目录查询失败会显示错误并阻止已修改的分派，不代表没有查询结果。保存配置不会创建或改派任务。',
+    batchAssignHint: 'Assignment Mode 按该子表的分派配置提供办理人或业务单元、角色选择器；已有表单只保存 Assignment 标记时也可使用。自定义子字段保留其标签和样式。未选择模式时保留各行分派；选择模式并填写一次目标，统一应用到外层选中行。需要业务单元时，先选择业务单元再选择角色。再次点击当前模式可恢复不修改分派。保存不会创建或改派任务。',
     summary: '绑定的子表网格（help_pr_line）。逐行与批量权限、List View 列。',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls · Extend · Sub-Table',
     intro:

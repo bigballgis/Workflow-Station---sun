@@ -1,20 +1,21 @@
 <template>
   <el-tooltip :disabled="!definition.invalid" :content="t('form.batchFormInvalid')">
-    <el-button size="small" :disabled="definition.invalid" @click="open">{{ t('subTable.batchEdit') }}</el-button>
+    <el-button v-if="definition.flags.edit || definition.flags.assign" size="small" :disabled="definition.invalid || !selectedRowIds.length || selectedRowIds.length > 200" @click="open">{{ t('subTable.batchEdit') }}</el-button>
   </el-tooltip>
+  <el-button v-if="businessRows && definition.flags.add" size="small" :disabled="definition.invalid" @click="openAdd">{{ t('subTable.batchAdd') }}</el-button>
+  <el-button v-if="businessRows && definition.flags.delete" size="small" :disabled="definition.invalid || !selectedRowIds.length || selectedRowIds.length > 200" @click="deleteSelected">{{ t('subTable.batchDelete') }}</el-button>
   <BatchWorkspace
-    v-if="visible" v-model:visible="visible" :rows="workingRows" :fields="fields" :row-identity="rowIdentity"
-    :draft-hint="t('subTable.batchPreviewHint')"
+    v-if="visible" v-model:visible="visible" :rows="modelValue ?? []" :fields="fields" :row-identity="rowIdentity"
+    :rules="definition.rule" :options="definition.options" :selected-row-ids="targetIds" :mode="mode"
     :field-definitions="workspaceFields" :default-value-for-field="defaultValueForField" :format-error="formatError"
     :field-write-modes="definition.fieldWriteModes"
-    :allow-edit="definition.flags.edit" :show-add="businessRows && definition.flags.add"
-    :show-delete="businessRows && definition.flags.delete" :show-assign="definition.flags.assign"
+    :allow-edit="definition.flags.edit" :show-assign="definition.flags.assign && mode !== 'add'"
     :prepare-rows="prepareRows" :collect-assignment="collectAssignment" :assignment-has-changes="assignmentHasChanges"
     @apply="rows => applyRows(rows)" @apply-workspace="(rows, _changes, prepared) => applyRows(rows, prepared)"
   >
     <template #help><DesignerHelpLink path="/form-ctl-sub-table#batch" :ariaLabel="t('subTable.batchGuideLinkAria')" /></template>
-    <template #assignment="{ rows }">
-      <BatchAssignmentEditor v-if="definition.flags.assign" ref="assignmentEditor" :rows="rows" :capability="definition"
+    <template #assignment="{ rows, disabled, rule }">
+      <BatchAssignmentEditor v-if="definition.flags.assign" ref="assignmentEditor" :rule="rule" :options="definition.options" :disabled="disabled" :rows="rows" :capability="definition" :field-write-modes="definition.fieldWriteModes"
         :row-identity="rowIdentity" :row-scope-key="rowScopeKey" :create-directory="useBatchPreviewDirectory" />
     </template>
   </BatchWorkspace>
@@ -22,12 +23,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import BatchWorkspace from '@platform-shared/batch/BatchWorkspace.vue'
 import BatchAssignmentEditor from '@platform-shared/batch/BatchAssignmentEditor.vue'
 import { extractBatchFields, type BatchEditableField } from '@platform-shared/batch/fields'
 import type { PreparedBatchRows } from '@platform-shared/batch/workspaceTypes'
-import { encodeCompositePrimaryKey, buildRowAddContext } from '@/utils/tableFkRuntime'
+import { buildRowAddContext } from '@/utils/tableFkRuntime'
 import { prepareSubTableAddRow } from '@/utils/subTableRowRuntime'
 import type { FieldDefinition } from '@/api/functionUnit'
 import { normalizeFieldDefinitionForRuntime } from '@/utils/formFieldMeta'
@@ -40,13 +42,15 @@ import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { useBatchPreviewDirectory } from '@/composables/designerSubTableField/useBatchPreviewDirectory'
 import DesignerHelpLink from './DesignerHelpLink.vue'
 
-const props = defineProps<SubTableFieldProps & { definition: BatchPreviewDefinition }>()
+const props = defineProps<SubTableFieldProps & { definition: BatchPreviewDefinition; selectedRowIds: string[]; rowIdentity: (row: Record<string, unknown>) => string | null }>()
 const emit = defineEmits<{
   (event: 'update:modelValue', rows: Array<Record<string, unknown>>): void
   (event: 'update:primaryFormData', value: Record<string, unknown>): void
 }>()
 const { t } = useI18n()
 const visible = ref(false)
+const mode = ref<'edit' | 'add'>('edit')
+const targetIds = ref<string[]>([])
 const workingRows = ref<Array<Record<string, unknown>>>([])
 const assignmentEditor = ref<InstanceType<typeof BatchAssignmentEditor>>()
 const fields = computed(() => extractBatchFields(props.definition.rule) ?? [])
@@ -63,21 +67,28 @@ function rowScopeKey(row: Record<string, unknown>): Record<string, unknown> {
   return primaryKeys.value.length && primaryKeys.value.every(field => row[field] != null && row[field] !== '')
     ? Object.fromEntries(primaryKeys.value.map(field => [field, row[field]])) : { platformRowUuid: row.platformRowUuid }
 }
-function rowIdentity(row: Record<string, unknown>): string | null {
-  const key = rowScopeKey(row)
-  return encodeCompositePrimaryKey(Object.keys(key), key)
-}
+function rowIdentity(row: Record<string, unknown>): string | null { return props.rowIdentity(row) }
 function open() {
-  workingRows.value = JSON.parse(JSON.stringify(props.modelValue ?? []))
-  if (!workingRows.value.length) workingRows.value = [1, 2].map(index => Object.fromEntries(fields.value.map(field => {
-    const initial = defaultValueForField(field)
-    const value = initial ?? (field.type === 'switch' ? false : ['number', 'inputNumber'].includes(field.type) ? index
-      : field.type === 'select' ? field.options[0]?.value : ['date', 'datePicker', 'datetime'].includes(field.type)
-        ? new Date().toISOString().slice(0, 10) : `${t('subTable.batchPreviewSample')} ${index}`)
-    return [field.field, value]
-  })))
-  for (const row of workingRows.value) row.platformRowUuid ??= crypto.randomUUID()
+  if (!props.selectedRowIds.length || props.selectedRowIds.length > 200) return
+  mode.value = 'edit'
+  targetIds.value = [...props.selectedRowIds]
+  workingRows.value = props.modelValue ?? []
   visible.value = true
+}
+function openAdd() {
+  mode.value = 'add'; targetIds.value = []; workingRows.value = props.modelValue ?? []; visible.value = true
+}
+async function deleteSelected() {
+  if (!businessRows.value || !props.definition.flags.delete) return
+  const targets = JSON.parse(JSON.stringify((props.modelValue ?? []).filter(row => props.selectedRowIds.includes(rowIdentity(row)!)))) as Array<Record<string, unknown>>
+  if (!targets.length || targets.length > 200) return
+  try { await ElMessageBox.confirm(t('subTable.batchDeleteConfirm', { count: targets.length }), t('subTable.deleteConfirm'), { type: 'warning' }) } catch { return }
+  const current = props.modelValue ?? []
+  if (targets.some(row => JSON.stringify(current.find(item => rowIdentity(item) === rowIdentity(row))) !== JSON.stringify(row))) {
+    ElMessage.error(t('subTable.batchStaleDraft')); return
+  }
+  const removed = new Set(targets.map(rowIdentity))
+  emit('update:modelValue', current.filter(row => !removed.has(rowIdentity(row))))
 }
 function defaultValueForField(field: BatchEditableField): unknown {
   const metadata = workspaceFields.value.find(item => item.fieldName === field.field)

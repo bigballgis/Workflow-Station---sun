@@ -18,6 +18,7 @@
       <ProcessHistory
         v-else-if="historyRecords.length > 0"
         :records="filteredRecords"
+        :bpmn-xml="bpmnXml"
         :show-header="false"
         :show-refresh="false"
         collapsible
@@ -40,6 +41,7 @@ import type { HistoryRecord } from '@/types/historyRecord'
 const props = defineProps<{
   historyRecords: HistoryRecord[]
   historyError: string | null
+  bpmnXml?: string
   showHeader?: boolean
 }>()
 

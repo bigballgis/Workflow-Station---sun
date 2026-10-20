@@ -22,6 +22,7 @@
       "vue": ["node_modules/vue"],
       "vue-i18n": ["node_modules/vue-i18n"],
       "element-plus": ["node_modules/element-plus"],
+      "@form-create/element-ui": ["node_modules/@form-create/element-ui"],
       "@element-plus/icons-vue": ["node_modules/@element-plus/icons-vue"]
     },
     "types": ["vite/client", "node"]
