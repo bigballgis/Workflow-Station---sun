@@ -42,8 +42,16 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
 
     @Override
     public <T> T runWithPostEmail(ActionPostEmailContext context, Supplier<T> action) {
-        ResolvedAction resolved = resolveIfNeeded(context);
+        boolean starting = context != null && ActionPostEmailContext.OP_START.equals(context.getOperation());
+        ResolvedAction resolved = starting ? null : resolveIfNeeded(context);
         T result = action.get();
+        if (starting) {
+            context = ActionPostEmailContext.builder().actionId(context.getActionId())
+                    .operation(context.getOperation()).functionUnitCode(context.getFunctionUnitCode())
+                    .processInstanceId(resolveProcessInstanceId(context, result))
+                    .operatorId(context.getOperatorId()).comment(context.getComment()).build();
+            resolved = resolveIfNeeded(context);
+        }
         if (resolved != null) {
             publishMatchingRules(context, resolved, result);
         }
@@ -95,16 +103,15 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 return onTask;
             }
         }
-        String functionUnitKey = resolveFunctionUnitKey(context);
-        if (!StringUtils.hasText(functionUnitKey)) {
-            return null;
-        }
-        return actionDefinitionRepository
-                .findCatalogActionForFunctionUnit(context.getActionId(), functionUnitKey)
-                .or(() -> actionDefinitionRepository.findDwActionForFunctionUnit(
-                        context.getActionId(), functionUnitKey))
-                .map(this::toInfo)
-                .orElse(null);
+        if (!StringUtils.hasText(context.getProcessInstanceId())) return null;
+        var instance = processInstanceRepository.findById(context.getProcessInstanceId())
+                .orElseThrow(() -> new com.platform.common.functionunit.FunctionUnitVersionException(
+                        "VERSION_RECOVERY_REQUIRED", context.getProcessInstanceId()));
+        String catalogId = ProcessVersionContext.of(instance).catalogId();
+        var matches = actionDefinitionRepository.findPinnedActions(catalogId, List.of(context.getActionId()));
+        if (matches.size() != 1) throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                "VERSION_SNAPSHOT_INCOMPLETE", catalogId);
+        return toInfo(matches.get(0));
     }
 
     private boolean taskBelongsToAnotherProcess(ActionPostEmailContext context) {
@@ -116,21 +123,9 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 .orElse(false);
     }
 
-    private String resolveFunctionUnitKey(ActionPostEmailContext context) {
-        if (StringUtils.hasText(context.getFunctionUnitCode())) {
-            return context.getFunctionUnitCode();
-        }
-        if (!StringUtils.hasText(context.getProcessInstanceId())) {
-            return null;
-        }
-        return processInstanceRepository.findById(context.getProcessInstanceId())
-                .map(ProcessInstance::getFunctionUnitCode)
-                .orElse(null);
-    }
-
     private TaskActionInfo toInfo(ActionDefinition action) {
         return TaskActionInfo.builder()
-                .actionId(action.getId())
+                .actionId(action.getSourceId() == null ? action.getId() : action.getSourceId())
                 .actionName(action.getActionName())
                 .actionType(action.getActionType())
                 .configJson(action.getConfigJson())

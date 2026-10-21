@@ -653,6 +653,7 @@ public class FunctionUnitExporter {
             Map<Long, String> tableIdToName) {
         Map<String, Object> map = new HashMap<>();
         map.put("bindingId", binding.getId());
+        map.put("tableId", binding.getTable() == null ? null : binding.getTable().getId());
         map.put("bindingType", binding.getBindingType().name());
         map.put("bindingMode", binding.getBindingMode().name());
         map.put("tableName", binding.getTableName());

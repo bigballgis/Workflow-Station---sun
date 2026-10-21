@@ -41,6 +41,23 @@ public class PortalPrimaryKeyAllocationComponent {
         return AllocatePrimaryKeyResponse.builder().values(values).build();
     }
 
+    public AllocatePrimaryKeyResponse allocateCatalog(String catalogId, AllocatePrimaryKeyRequest request) {
+        var snapshots = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        var table = snapshots.table(catalogId, String.valueOf(request.getTableId()));
+        var fields = com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields")).stream()
+                .filter(field -> request.getFieldName().equals(field.get("fieldName"))
+                        && Boolean.TRUE.equals(field.get("isPrimaryKey"))).toList();
+        if (fields.size() != 1) throw new PortalException("NOT_PK_FIELD", "Primary key field not found");
+        Object json = fields.get(0).get("pkGenerationJson");
+        if (json instanceof String text) json = snapshots.parse(text);
+        PkGenerationConfig config = json == null ? PkGenerationConfig.builder().strategy("manual").build()
+                : objectMapper.convertValue(json, PkGenerationConfig.class);
+        int count = request.getCount() == null ? 1 : request.getCount();
+        if (count < 1 || count > 1000) throw new IllegalArgumentException("Invalid allocation count");
+        return AllocatePrimaryKeyResponse.builder().values(primaryKeyAllocationService.allocate(
+                request.getTableId(), request.getFieldName(), config, count, "", "dw_pk_sequences")).build();
+    }
+
     /**
      * Package-visible for {@link ProcessSubTablePrimaryKeyEnricherComponent} and
      * {@link ComputedFieldRecalculator}.

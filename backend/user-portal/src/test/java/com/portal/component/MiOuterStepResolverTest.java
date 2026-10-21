@@ -23,6 +23,25 @@ class MiOuterStepResolverTest {
     private WorkflowEngineClient workflowEngineClient;
 
     @Test
+    void publishedDefinitionsWithTheSameKeyNeverShareAnMiMap() {
+        var old = com.portal.entity.ProcessInstance.builder().id("old").processDefinitionKey("proc")
+                .processDefinitionId("definition-v1").functionUnitCatalogId("catalog-v1").functionUnitCode("proc").build();
+        var next = com.portal.entity.ProcessInstance.builder().id("new").processDefinitionKey("proc")
+                .processDefinitionId("definition-v2").functionUnitCatalogId("catalog-v2").functionUnitCode("proc").build();
+        String xml = "<definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"><process id=\"proc\">"
+                + "<subProcess id=\"mi\" name=\"%s\"><multiInstanceLoopCharacteristics/>"
+                + "<userTask id=\"review\" name=\"Review\"/></subProcess></process></definitions>";
+        when(workflowEngineClient.getBpmnXml("proc", "old")).thenReturn(Optional.of(xml.formatted("Old MI")));
+        when(workflowEngineClient.getBpmnXml("proc", "new")).thenReturn(Optional.of(xml.formatted("New MI")));
+        var resolver = new MiOuterStepResolver(workflowEngineClient, new MiBpmnNameMapCache());
+        assertThat(resolver.lookup(old, "Review").outerName()).isEqualTo("Old MI");
+        assertThat(resolver.lookup(next, "Review").outerName()).isEqualTo("New MI");
+        assertThat(resolver.lookup(old, "Review").outerName()).isEqualTo("Old MI");
+        verify(workflowEngineClient, times(1)).getBpmnXml("proc", "old");
+        verify(workflowEngineClient, times(1)).getBpmnXml("proc", "new");
+    }
+
+    @Test
     @DisplayName("engine down is unknown, not ordinary-task")
     void engineDownIsUnknown() {
         when(workflowEngineClient.isAvailable()).thenReturn(false);

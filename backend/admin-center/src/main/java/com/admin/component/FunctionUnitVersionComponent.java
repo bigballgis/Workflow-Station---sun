@@ -37,6 +37,8 @@ public class FunctionUnitVersionComponent {
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitLookup functionUnitLookup;
     private final I18nService i18nService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.admin.repository.ActionDefinitionRepository versionActions;
 
     // Semantic version regex
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
@@ -425,11 +427,20 @@ public class FunctionUnitVersionComponent {
                     .contentName(content.getContentName())
                     .contentPath(content.getContentPath())
                     .contentData(content.getContentData())
+                    .sourceId(content.getSourceId())
                     .checksum(content.getChecksum())
                     .build();
             contentRepository.save(newContent);
         }
 
+        for (var action : versionActions.findByFunctionUnitId(source.getId())) {
+            versionActions.save(com.admin.entity.ActionDefinition.builder()
+                    .functionUnitId(newUnit.getId()).sourceId(action.getSourceId())
+                    .actionName(action.getActionName()).actionType(action.getActionType())
+                    .description(action.getDescription()).configJson(action.getConfigJson())
+                    .icon(action.getIcon()).buttonColor(action.getButtonColor()).isDefault(action.getIsDefault())
+                    .createdBy(creatorId).build());
+        }
         log.info("Created new version {} from {}", newVersion, source.getVersion());
         return newUnit;
     }

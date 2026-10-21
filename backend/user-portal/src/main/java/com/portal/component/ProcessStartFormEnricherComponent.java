@@ -60,6 +60,10 @@ public class ProcessStartFormEnricherComponent {
         if (variables == null) {
             return;
         }
+        if (variables.get("functionUnitId") != null) {
+            enrichCatalog(functionUnitCode, userId, variables);
+            return;
+        }
         Long fuId = requireFunctionUnitId(functionUnitCode);
         Long primaryTableId = loadPrimaryTableId(fuId);
         if (primaryTableId != null) {
@@ -80,6 +84,56 @@ public class ProcessStartFormEnricherComponent {
             // Not persisted yet: the case is submitted today.
             slaDueDateEnricher.stamp(functionUnitCode, variables, LocalDate.now());
         }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
+    private void enrichCatalog(String code, String userId, Map<String, Object> variables) {
+        String catalogId = String.valueOf(variables.get("functionUnitId"));
+        var reader = catalogSnapshots;
+        if (reader == null) reader = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        var tables = reader.contents(catalogId, "DATA_TABLE").stream()
+                .filter(t -> !"RELATION".equals(t.get("tableType"))).toList();
+        Map<String, Map<String, Object>> byName = new HashMap<>();
+        for (var table : tables) byName.put(String.valueOf(table.get("tableName")), table);
+        List<Map<String, Object>> primary = com.platform.common.functionunit.CatalogSnapshotReader.objects(
+                reader.processForm(catalogId, false).get("tableBindings")).stream()
+                .filter(b -> "PRIMARY".equals(b.get("bindingType"))).toList();
+        Long primaryId = primary.isEmpty() ? null : Long.valueOf(String.valueOf(primary.get(0).get("tableId")));
+        for (var table : tables) {
+            Long id = Long.valueOf(String.valueOf(table.get("tableId")));
+            if (!id.equals(primaryId)) continue;
+            for (var field : com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields"))) {
+                String name = String.valueOf(field.get("fieldName"));
+                if (!Boolean.TRUE.equals(field.get("isPrimaryKey")) || !isBlank(variables.get(name)) || field.get("pkGenerationJson") == null) continue;
+                PkGenerationConfig config = objectMapper.convertValue(field.get("pkGenerationJson"), PkGenerationConfig.class);
+                if ("manual".equalsIgnoreCase(config.getStrategy())) continue;
+                var values = primaryKeyAllocationService.allocate(id, name, config, 1, "", "dw_pk_sequences");
+                if (values.size() != 1) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+                variables.put(name, values.get(0));
+            }
+        }
+        Map<String, Long> aliases = new HashMap<>();
+        reader.tableAliases(catalogId).forEach((alias, table) -> aliases.put(alias, Long.valueOf(String.valueOf(table.get("tableId")))));
+        List<FkMeta> fks = new ArrayList<>();
+        for (var table : tables) {
+            for (var field : com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields"))) {
+                if (!Boolean.TRUE.equals(field.get("isForeignKey"))) continue;
+                var parent = byName.get(String.valueOf(field.get("refTableName")));
+                if (parent == null || !(field.get("refPrimaryKeyFields") instanceof List<?> keys)) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+                fks.add(new FkMeta(Long.valueOf(String.valueOf(table.get("tableId"))), String.valueOf(field.get("fieldName")),
+                        Long.valueOf(String.valueOf(parent.get("tableId"))), keys.stream().map(String::valueOf).toList()));
+            }
+        }
+        fillForeignKeys(variables, primaryId, aliases, fks);
+        processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(code, variables);
+        fillForeignKeys(variables, primaryId, aliases, fks);
+        ownerFieldComponent.applyOnSubmit(code, new OwnerFieldComponent.OwnerWriteContext(userId, userId, null, null, null), variables);
+        SystemAuditFieldFiller.fillOnInsert(variables, userDisplayNameResolver.resolve(userId));
+        computedFieldRecalculator.recalculate(code, variables);
+        requestIdEnricher.stampRequestId(code, variables);
+        if (slaDueDateEnricher != null) slaDueDateEnricher.stamp(code, variables, LocalDate.now());
     }
 
     private Long requireFunctionUnitId(String functionUnitCode) {

@@ -52,6 +52,8 @@ import java.util.*;
 @Slf4j
 public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogRuntimeRows runtimeRows;
     private final FunctionUnitRepository functionUnitRepository;
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final VersionRepository versionRepository;
@@ -278,6 +280,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             log.info("Archived function unit id={}, name={}", id, functionUnit.getName());
             return;
         }
+        runtimeRows.preserveDesignerFunctionUnit(id);
         // Foreign keys must be removed BEFORE the JPA cascade walks the table/field
         // graph. A dw_foreign_keys row's field_id/ref_field_id are NOT NULL, and they
         // are NOT mapped by an owning collection on FieldDefinition. So when the cascade

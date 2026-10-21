@@ -1,4 +1,5 @@
 import request from './request'
+import { withoutRuntimeVersionContext } from '@/utils/runtimeVersionSubmission'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 import type { PortalListPage } from '@/api/task'
 import type { MiAssignmentsMap } from '@/utils/miAssignmentConfig'
@@ -32,6 +33,9 @@ export interface ProcessInstance {
   processDefinitionId: string
   processDefinitionKey?: string
   processDefinitionName: string
+  functionUnitCatalogId?: string
+  functionUnitCode?: string
+  functionUnitVersionLabel?: string
   businessKey?: string
   startTime: string
   endTime?: string
@@ -192,7 +196,9 @@ export const processApi = {
 
   // 发起流程
   startProcess(processKey: string, data: ProcessStartRequest) {
-    return request.post<ProcessInstance>(`/processes/${processKey}/start`, data)
+    return request.post<ProcessInstance>(`/processes/${processKey}/start`, {
+      ...data, formData: data.formData && withoutRuntimeVersionContext(data.formData),
+    })
   },
 
   // 获取我的申请列表（兼容 GET：仅 page/size/status，无列声明）
@@ -267,7 +273,7 @@ export const processApi = {
 
   // 保存草稿
   saveDraft(processKey: string, formData: Record<string, unknown>) {
-    return request.post(`/processes/${processKey}/draft`, formData)
+    return request.post(`/processes/${processKey}/draft`, withoutRuntimeVersionContext(formData))
   },
 
   // 获取草稿
@@ -367,8 +373,8 @@ export const processApi = {
   },
 
   // 根据ID列表获取动作定义
-  getActionsByIds(ids: string[]) {
-    return request.get('/processes/actions', { params: { ids: ids.join(',') } })
+  getActionsByIds(ids: string[], catalogId: string) {
+    return request.get('/processes/actions', { params: { ids: ids.join(','), catalogId } })
   },
 
   /** Allocate PK for sub-table add-row (PRD S5); taskId 同 getFunctionUnitContent（任务参与人放行） */

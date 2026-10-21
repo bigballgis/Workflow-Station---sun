@@ -49,13 +49,14 @@ public class ConcurrentLastWriteWinsPropertyTest {
                 return new TaskInfo("stage_" + taskId, config.processInstanceId);
             }
         };
+        com.portal.testsupport.PortalVersionTestSupport.task(component);
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         // Both users loaded the same baseline
         Map<String, Object> baseline = new HashMap<>(config.initialVariables);
 
         // --- First submission ---
-        ProcessInstance pi1 = ProcessInstance.builder()
+        ProcessInstance pi1 = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("starter")
@@ -75,7 +76,7 @@ public class ConcurrentLastWriteWinsPropertyTest {
         afterFirst.putAll(config.firstSubmission);
 
         // --- Second submission (last write) ---
-        ProcessInstance pi2 = ProcessInstance.builder()
+        ProcessInstance pi2 = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("starter")

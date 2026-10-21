@@ -17,9 +17,8 @@ import java.util.Map;
  * Loads a Task Form from the Admin catalog snapshot pinned on the process instance.
  *
  * <p>BPMN {@code formId} comes from {@code sys_function_unit_contents} PROCESS rows; form JSON
- * from the FORM row whose {@code source_id} matches that id. Misses are empty, not live DW.
- *
- * <p>{@code null} from {@link #fetch} means the catalog query threw; empty means a definitive miss.
+ * from the FORM row whose {@code source_id} matches that id. Missing published metadata raises
+ * a version exception; only an explicitly formless BPMN node returns an empty form.
  */
 @Slf4j
 final class CatalogPinnedTaskFormLoader {
@@ -44,10 +43,35 @@ final class CatalogPinnedTaskFormLoader {
             }
             return form;
         } catch (RuntimeException e) {
-            log.debug("Catalog-pinned task form lookup failed for catalog {}, stage {}: {}",
-                    catalogId, stageId, e.getMessage());
-            return null;
+            if (e instanceof com.platform.common.functionunit.FunctionUnitVersionException version) throw version;
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
         }
+    }
+
+    static Map<String, Object> forInstance(JdbcTemplate jdbc, ObjectMapper mapper, String processId, String stageId) {
+        return forInstance(jdbc, mapper, processId, stageId, new com.platform.common.functionunit.CatalogSnapshotReader(jdbc, mapper));
+    }
+
+    static Map<String, Object> forInstance(JdbcTemplate jdbc, ObjectMapper mapper, String processId, String stageId,
+            com.platform.common.functionunit.CatalogSnapshotReader snapshots) {
+        var ids = jdbc.queryForList("SELECT function_unit_catalog_id FROM up_process_instance WHERE id=?", String.class, processId);
+        if (ids.size() != 1 || !StringUtils.hasText(ids.get(0))) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", processId);
+        }
+        Map<String, Object> form = fetch(jdbc, mapper, ids.get(0), stageId);
+        if (!form.isEmpty()) {
+            var snapshot = snapshots.form(ids.get(0), String.valueOf(form.get("sourceId")));
+            form.put("tableBindings", snapshot.get("tableBindings"));
+            if (snapshot.get("stageBindings") instanceof List<?> bindings) {
+                for (Object value : bindings) {
+                    if (value instanceof Map<?, ?> binding && stageId.equals(binding.get("stageId"))
+                            && (binding.get("scene") == null || "TASK".equals(binding.get("scene")))) {
+                        form.put("readOnly", Boolean.TRUE.equals(binding.get("readOnly")));
+                    }
+                }
+            }
+        }
+        return form;
     }
 
     private static Long resolveCatalogFormId(JdbcTemplate jdbcTemplate, String catalogId, String stageId) {
@@ -61,7 +85,7 @@ final class CatalogPinnedTaskFormLoader {
                         """,
                 String.class, catalogId);
         if (bpmnRows == null || bpmnRows.isEmpty() || !StringUtils.hasText(bpmnRows.get(0))) {
-            return null;
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
         }
         return ChangeHistoryBpmnFormResolver.resolveTaskFormIdFromStored(bpmnRows.get(0), stageId);
     }
@@ -77,9 +101,7 @@ final class CatalogPinnedTaskFormLoader {
                         """,
                 (ResultSet rs, int rowNum) -> mapCatalogForm(rs, objectMapper),
                 catalogId, String.valueOf(formId));
-        if (rows == null || rows.isEmpty()) {
-            return Collections.emptyMap();
-        }
+        if (rows == null || rows.size() != 1) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
         return rows.get(0);
     }
 
@@ -107,6 +129,7 @@ final class CatalogPinnedTaskFormLoader {
         form.put("configJson", nestedConfigJson(objectMapper, parsed.get("configJson")));
         if (parsed.containsKey("fieldPermissions")) {
             form.put("publishedFieldPermissions", parsed.get("fieldPermissions"));
+            form.put("fieldPermissions", parsed.get("fieldPermissions"));
         }
         if (parsed.containsKey("tableBindings")) {
             form.put("tableBindings", parsed.get("tableBindings"));
@@ -140,8 +163,7 @@ final class CatalogPinnedTaskFormLoader {
         try {
             return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            log.debug("Could not parse catalog form content_data: {}", e.getMessage());
-            return Collections.emptyMap();
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(null);
         }
     }
 }

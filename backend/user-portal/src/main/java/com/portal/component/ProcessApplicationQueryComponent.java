@@ -241,12 +241,12 @@ public class ProcessApplicationQueryComponent {
      * COMPLETED 实例不需要（列表显 '-'）。
      */
     Map<String, Map<String, String>> buildMiNodeNameMaps(List<ProcessInstance> pageContent) {
-        Set<String> keys = pageContent.stream()
-                .filter(i -> !"COMPLETED".equals(i.getStatus()))
-                .map(ProcessInstance::getProcessDefinitionKey)
-                .filter(k -> k != null && !k.isBlank())
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        return miOuterStepResolver.mapsFor(keys);
+        Map<String, Map<String, String>> byDefinition = new LinkedHashMap<>();
+        for (ProcessInstance instance : pageContent) {
+            if ("COMPLETED".equals(instance.getStatus()) || byDefinition.containsKey(instance.getProcessDefinitionId())) continue;
+            miOuterStepResolver.mapFor(instance).ifPresent(map -> byDefinition.put(instance.getProcessDefinitionId(), map));
+        }
+        return byDefinition;
     }
 
     /**
@@ -280,7 +280,7 @@ public class ProcessApplicationQueryComponent {
         String currentStepName = currentNode;
         Map<String, String> miMap = null;
         if (currentNode != null && miNameMapByProcessDefKey != null) {
-            miMap = miNameMapByProcessDefKey.get(instance.getProcessDefinitionKey());
+            miMap = miNameMapByProcessDefKey.get(instance.getProcessDefinitionId());
             if (miMap != null) {
                 currentStepName = miMap.getOrDefault(currentNode, currentNode);
             }
@@ -583,7 +583,7 @@ public class ProcessApplicationQueryComponent {
             info.setCurrentStepName(info.getCurrentNode());
         }
         Map<String, String> miMap = buildMiNodeNameMaps(List.of(instance))
-                .get(instance.getProcessDefinitionKey());
+                .get(instance.getProcessDefinitionId());
         String peopleDisplay = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
                 instance.getCurrentAssignee(), instance.getCandidateUsers(), new HashMap<>());
         info.setCurrentAssignee(OwnerCaseHandlerCalculator.applicationCurrentAssigneeDisplay(

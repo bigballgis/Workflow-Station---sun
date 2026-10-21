@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,13 +47,35 @@ class ProcessInstanceHydrationComponentTest {
 
     @Test
     void returnsLocalRowWhenPresent() {
-        ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("Process_MCY").build();
+        ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("Process_MCY")
+                .functionUnitCatalogId("fu-1").functionUnitCode("MCY").functionUnitVersionLabel("1.0.0").build();
         when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
 
         ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID);
 
         assertThat(result).isSameAs(local);
         verify(workflowEngineClient, never()).getProcessInstance(any());
+    }
+
+    @Test
+    void missingVersionLabelIsRecoveredFromThePersistedCatalog() throws Exception {
+        var local = ProcessInstance.builder().id(PI_ID).functionUnitCatalogId("fu-old")
+                .functionUnitCode("MCY").processDefinitionId("old-definition").build();
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
+        var row = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        when(row.getString("id")).thenReturn("fu-old");
+        when(row.getString("code")).thenReturn("MCY");
+        when(row.getString("version")).thenReturn("1.0.0");
+        when(jdbcTemplate.query(eq("SELECT id, code, version FROM sys_function_units WHERE id = ?"),
+                org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<Object>>any(), eq("fu-old")))
+                .thenAnswer(inv -> List.of(((org.springframework.jdbc.core.RowMapper<?>) inv.getArgument(1)).mapRow(row, 0)));
+        when(processInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var restored = hydrationComponent.requireProcessInstance(PI_ID);
+        assertThat(restored.getFunctionUnitCatalogId()).isEqualTo("fu-old");
+        assertThat(restored.getFunctionUnitVersionLabel()).isEqualTo("1.0.0");
+        assertThat(restored.getVariables()).containsEntry("functionUnitId", "fu-old");
+        verifyNoInteractions(restTemplate, workflowEngineClient);
     }
 
     @Test
@@ -64,7 +87,7 @@ class ProcessInstanceHydrationComponentTest {
                 "processDefinitionId", "Process_MCY:6:abc",
                 "startUserId", "user-dev",
                 "status", "active",
-                "variables", Map.of("case_number", "123", "functionUnitId", "fu-1")
+                "variables", Map.of("case_number", "123", "functionUnitId", "fu-1", "functionUnitCode", "MCY", "functionUnitVersionLabel", "1.0.0")
         )));
         when(workflowEngineClient.getProcessInstanceStatus(PI_ID)).thenReturn(Optional.of(Map.of(
                 "nextTaskName", "Case Submission",
@@ -81,6 +104,16 @@ class ProcessInstanceHydrationComponentTest {
         assertThat(result.getCurrentNode()).isEqualTo("Case Submission");
         assertThat(result.getVariables()).containsEntry("case_number", "123");
         verify(processInstanceRepository).save(any(ProcessInstance.class));
+    }
+
+    @Test
+    void unresolvedLegacyVersionCannotBeReplacedWithTheCurrentRelease() {
+        var legacy = ProcessInstance.builder().id(PI_ID).processDefinitionKey("Process_MCY").build();
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(legacy));
+        assertThatThrownBy(() -> hydrationComponent.requireProcessInstance(PI_ID))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        verify(processInstanceRepository, never()).save(any());
+        verifyNoInteractions(restTemplate);
     }
 
     @Test
@@ -104,7 +137,7 @@ class ProcessInstanceHydrationComponentTest {
                 "businessKey", "email:msg-1",
                 "startUserId", "system",
                 "status", "RUNNING",
-                "variables", Map.of("subject", "hello", "functionUnitId", "50030"));
+                "variables", Map.of("subject", "hello", "functionUnitId", "50030", "functionUnitCode", "MCY", "functionUnitVersionLabel", "1.0.0"));
 
         ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID, snapshot);
 
@@ -126,6 +159,7 @@ class ProcessInstanceHydrationComponentTest {
                 "variables", Map.of(
                         "functionUnitId", "cat-1",
                         "functionUnitCode", "FU-MCY",
+                        "functionUnitVersionLabel", "1.0.0",
                         "businessValue", "keep",
                         SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("forged", true))));
 
@@ -149,7 +183,7 @@ class ProcessInstanceHydrationComponentTest {
                 "status", "RUNNING",
                 "variables", Map.of(
                         "functionUnitId", "cat-uuid",
-                        "functionUnitCode", "FU-MCY"));
+                        "functionUnitCode", "FU-MCY", "functionUnitVersionLabel", "1.0.0"));
 
         ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID, snapshot);
 

@@ -24,6 +24,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -58,7 +59,7 @@ public class ProcessInstanceHydrationComponent {
     public ProcessInstance requireProcessInstance(String processInstanceId, Map<String, Object> engineSnapshot) {
         Optional<ProcessInstance> local = processInstanceRepository.findById(processInstanceId);
         if (local.isPresent()) {
-            return local.get();
+            return validateOrRestorePin(local.get());
         }
         if (hasUsableSnapshot(engineSnapshot)) {
             return persistFromEngineRow(processInstanceId, engineSnapshot, false);
@@ -70,7 +71,7 @@ public class ProcessInstanceHydrationComponent {
     protected ProcessInstance hydrateFromEngine(String processInstanceId) {
         Optional<ProcessInstance> raced = processInstanceRepository.findById(processInstanceId);
         if (raced.isPresent()) {
-            return raced.get();
+            return validateOrRestorePin(raced.get());
         }
 
         Map<String, Object> engineRow = workflowEngineClient.getProcessInstance(processInstanceId)
@@ -84,12 +85,12 @@ public class ProcessInstanceHydrationComponent {
             String processInstanceId, Map<String, Object> engineRow, boolean enrichLiveStatus) {
         Optional<ProcessInstance> raced = processInstanceRepository.findById(processInstanceId);
         if (raced.isPresent()) {
-            return raced.get();
+            return validateOrRestorePin(raced.get());
         }
 
         Map<String, Object> variables = extractVariables(engineRow);
         String processKey = stringValue(engineRow.get("processDefinitionKey"));
-        CatalogPin pin = resolveCatalogPin(variables, processKey);
+        CatalogPin pin = resolveCatalogPin(variables, stringValue(engineRow.get("processDefinitionId")));
 
         String startUserId = firstNonBlank(
                 stringValue(engineRow.get("startUserId")),
@@ -129,6 +130,8 @@ public class ProcessInstanceHydrationComponent {
                 .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
 
+        ProcessVersionContext.apply(entity, variables);
+        entity.setVariables(new HashMap<>(variables));
         try {
             ProcessInstance saved = processInstanceRepository.save(entity);
             log.info("Hydrated portal process instance {} from workflow engine (key={}, startUser={}, snapshot={})",
@@ -151,49 +154,66 @@ public class ProcessInstanceHydrationComponent {
 
     private record CatalogPin(String catalogId, String code, String versionLabel) {}
 
-    private CatalogPin resolveCatalogPin(Map<String, Object> variables, String processKey) {
+    private ProcessInstance validateOrRestorePin(ProcessInstance instance) {
+        if (StringUtils.hasText(instance.getFunctionUnitCatalogId())
+                && StringUtils.hasText(instance.getFunctionUnitCode())
+                && StringUtils.hasText(instance.getFunctionUnitVersionLabel())) {
+            if (instance.getVariables() != null) ProcessVersionContext.of(instance)
+                    .applyTo(new HashMap<>(instance.getVariables()));
+            return instance;
+        }
+        Map<String, Object> variables = instance.getVariables() == null
+                ? new HashMap<>() : new HashMap<>(instance.getVariables());
+        retainPersistedPin(variables, "functionUnitId", instance.getFunctionUnitCatalogId());
+        retainPersistedPin(variables, "functionUnitCode", instance.getFunctionUnitCode());
+        retainPersistedPin(variables, "functionUnitVersionLabel", instance.getFunctionUnitVersionLabel());
+        CatalogPin pin = resolveCatalogPin(variables, instance.getProcessDefinitionId());
+        instance.setFunctionUnitCatalogId(pin.catalogId());
+        instance.setFunctionUnitCode(pin.code());
+        instance.setFunctionUnitVersionLabel(pin.versionLabel());
+        Map<String, Object> restored = new HashMap<>(variables);
+        ProcessVersionContext.apply(instance, restored);
+        instance.setVariables(restored);
+        return processInstanceRepository.save(instance);
+    }
+
+    private void retainPersistedPin(Map<String, Object> variables, String key, String value) {
+        if (!StringUtils.hasText(value)) return;
+        Object previous = variables.putIfAbsent(key, value);
+        if (previous != null && !value.equals(String.valueOf(previous))) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_CONTEXT_MISMATCH", key);
+        }
+    }
+
+    private CatalogPin resolveCatalogPin(Map<String, Object> variables, String definitionId) {
         String catalogId = stringValue(variables.get("functionUnitId"));
         String code = stringValue(variables.get("functionUnitCode"));
         String version = stringValue(variables.get("functionUnitVersionLabel"));
-        if (StringUtils.hasText(catalogId) && StringUtils.hasText(code)) {
-            return new CatalogPin(catalogId, code, version != null ? version : "");
+        if (StringUtils.hasText(catalogId) && StringUtils.hasText(code) && StringUtils.hasText(version)) {
+            return new CatalogPin(catalogId, code, version);
         }
-        if (StringUtils.hasText(processKey)) {
-            Optional<CatalogPin> active = fetchActiveCatalogForStart(processKey);
-            if (active.isPresent()) {
-                return active.get();
-            }
-        }
+        List<CatalogPin> candidates;
         if (StringUtils.hasText(catalogId)) {
-            return new CatalogPin(catalogId, code != null ? code : "", version != null ? version : "");
-        }
-        return new CatalogPin(null, code != null ? code : "", version != null ? version : "");
-    }
-
-    private Optional<CatalogPin> fetchActiveCatalogForStart(String code) {
-        try {
-            String enc = URLEncoder.encode(code, StandardCharsets.UTF_8);
-            String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + enc + "/active-for-start";
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {});
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                return Optional.empty();
-            }
-            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
-            String id = stringValue(payload.get("id"));
-            if (!StringUtils.hasText(id)) {
-                return Optional.empty();
-            }
-            String versionLabel = payload.get("version") != null ? String.valueOf(payload.get("version")) : "";
-            String resolvedCode = stringValue(payload.get("code"));
-            return Optional.of(new CatalogPin(id, resolvedCode != null ? resolvedCode : code, versionLabel));
-        } catch (HttpClientErrorException.NotFound e) {
-            return Optional.empty();
-        } catch (Exception e) {
-            log.warn("fetchActiveCatalogForStart failed for {}: {}", code, e.getMessage());
-            return Optional.empty();
-        }
+            candidates = jdbcTemplate.query("SELECT id, code, version FROM sys_function_units WHERE id = ?",
+                    (rs, row) -> new CatalogPin(rs.getString("id"), rs.getString("code"), rs.getString("version")), catalogId);
+        } else if (StringUtils.hasText(definitionId)) {
+            candidates = jdbcTemplate.query("""
+                    SELECT DISTINCT fu.id, fu.code, fu.version FROM sys_function_units fu
+                    JOIN sys_function_unit_contents c ON c.function_unit_id=fu.id AND c.content_type='PROCESS'
+                    LEFT JOIN act_re_procdef pd ON pd.id_ = ?
+                    WHERE c.flowable_process_definition_id = ?
+                       OR c.flowable_process_definition_id = concat(pd.key_, ':', pd.version_, ':', pd.id_)
+                    UNION
+                    SELECT DISTINCT fu.id, fu.code, fu.version FROM sys_function_units fu
+                    JOIN up_process_instance pi ON pi.function_unit_catalog_id=fu.id
+                    WHERE pi.process_definition_id = ?
+                    """, (rs, row) -> new CatalogPin(rs.getString("id"), rs.getString("code"), rs.getString("version")),
+                    definitionId, definitionId, definitionId);
+        } else candidates = List.of();
+        if (candidates.size() != 1) throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                "VERSION_RECOVERY_REQUIRED", definitionId);
+        return candidates.get(0);
     }
 
     @SuppressWarnings("unchecked")

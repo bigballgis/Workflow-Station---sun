@@ -25,6 +25,24 @@ public class ActionDefinitionLookupComponent {
 
     private final ActionDefinitionRepository actionDefinitionRepository;
 
+    public List<ActionDefinition> resolvePinned(String catalogId, List<String> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        var definitions = actionDefinitionRepository.findPinnedActions(catalogId, ids);
+        Map<String, ActionDefinition> byId = new LinkedHashMap<>();
+        for (var action : definitions) {
+            byId.put(action.getId(), action);
+            if (action.getSourceId() != null) byId.put(action.getSourceId(), action);
+        }
+        List<ActionDefinition> result = new ArrayList<>();
+        for (String id : ids) {
+            var action = byId.get(id);
+            if (action == null) throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_SNAPSHOT_INCOMPLETE", catalogId);
+            result.add(action);
+        }
+        return result;
+    }
+
     /**
      * Returns definitions in the same order as {@code actionIds}, skipping unresolved ids.
      */

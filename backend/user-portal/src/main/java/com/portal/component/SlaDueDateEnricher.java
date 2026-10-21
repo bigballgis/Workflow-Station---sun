@@ -86,7 +86,7 @@ public class SlaDueDateEnricher {
 
     /** Computes the due date without touching {@code variables}, reading the current lead time. */
     public Result compute(String functionUnitCode, Map<String, Object> variables, LocalDate submittedDate) {
-        SlaSpec spec = resolveSpec(functionUnitCode);
+        SlaSpec spec = specForVariables(functionUnitCode, variables);
         if (!spec.isConfigured()) {
             return new Result(Result.Kind.NOT_CONFIGURED, null, null, null, null);
         }
@@ -99,7 +99,7 @@ public class SlaDueDateEnricher {
      */
     public Result compute(String functionUnitCode, Map<String, Object> variables, LocalDate submittedDate,
                           Integer leadTimeDays) {
-        SlaSpec spec = resolveSpec(functionUnitCode);
+        SlaSpec spec = specForVariables(functionUnitCode, variables);
         if (!spec.isConfigured()) {
             return new Result(Result.Kind.NOT_CONFIGURED, null, null, null, null);
         }
@@ -163,6 +163,24 @@ public class SlaDueDateEnricher {
     }
 
     /** Same PRIMARY-binding resolution as {@link RequestIdEnricher} and Admin's SlaPolicyComponent. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader snapshots;
+
+    private SlaSpec specForVariables(String code, Map<String, Object> variables) {
+        if (variables == null || variables.get("functionUnitId") == null) return resolveSpec(code);
+        String catalogId = String.valueOf(variables.get("functionUnitId"));
+        var reader = snapshots;
+        if (reader == null) reader = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        var tables = reader.contents(catalogId, "DATA_TABLE").stream().filter(t -> "MAIN".equals(t.get("tableType"))).toList();
+        if (tables.isEmpty() || tables.get(0).get("slaConfig") == null) return SlaSpec.NONE;
+        if (!(tables.get(0).get("slaConfig") instanceof Map<?, ?> config)
+                || !(config.get("dueDateField") instanceof String due) || due.isBlank()) {
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+        }
+        String start = "FIELD".equals(config.get("startDateSource")) ? String.valueOf(config.get("startDateField")) : null;
+        return new SlaSpec(start, due);
+    }
+
     private SlaSpec loadSpec(String functionUnitCode) {
         List<String> rows = jdbcTemplate.query(
                 """

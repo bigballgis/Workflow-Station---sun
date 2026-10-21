@@ -188,34 +188,6 @@ public class ProcessStartComponent {
     private String adminCenterUrl;
 
     /**
-     * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved
-     * Flowable process definition key and exact deployment definition ID.
-     *
-     * <p>
-     * Before: {@code deployProcess} was called on <em>every</em> start. A
-     * 200-concurrent start burst of the
-     * same function unit therefore fired 200 simultaneous engine deploys of an
-     * identical BPMN; Flowable dedups
-     * identical resources but concurrent deploys race on
-     * {@code ACT_RE_DEPLOYMENT}/{@code ACT_RE_PROCDEF}
-     * (unique key / optimistic lock / deadlock) and surface to the portal as HTTP
-     * 500 =
-     * {@code portal.deploy_process_failed}. Keying by BPMN content hash means
-     * exactly one request deploys an
-     * unchanged definition and every other reuses the resolved deployment; a changed BPMN
-     * (new hash) redeploys once.
-     * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine
-     * deployment self-heals.
-     * </p>
-     */
-    private final java.util.concurrent.ConcurrentHashMap<String, DeploymentPin> deployedProcessKeyCache = new java.util.concurrent.ConcurrentHashMap<>();
-    /**
-     * Per-cache-key locks so concurrent starts of the same definition serialize the
-     * single deploy (not the map bin).
-     */
-    private final java.util.concurrent.ConcurrentHashMap<String, Object> deployLocks = new java.util.concurrent.ConcurrentHashMap<>();
-
-    /**
      * Starts process
      * Via WorkflowEngineClient calling Flowable engine
      */
@@ -251,6 +223,7 @@ public class ProcessStartComponent {
             throw new IllegalArgumentException("User ID cannot be empty");
         }
 
+        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(request.getFormData());
         ActiveCatalogPin pin = resolveActiveCatalogPin(userId, processKey, internal);
 
         LoadedStartDefinition def = loadProcessDefinitionForStart(pin, processKey);
@@ -259,7 +232,7 @@ public class ProcessStartComponent {
                 i18nService.getMessage("portal.batch.start_context_changed"));
 
         // actualProcessKey is the key used to start (Flowable uses BPMN <process id>)
-        final DeploymentPin deployment = deployAndResolveProcessKey(processKey, def);
+        final DeploymentPin deployment = new DeploymentPin(def.flowableProcessKey(), def.definitionId());
 
         // Start instance: strip forged workspace keys; UBR users need valid JWT
         // workspace context (matches hasContext)
@@ -268,6 +241,7 @@ public class ProcessStartComponent {
         variables.remove("activeBusinessUnitId");
         variables.remove("activeRoleId");
         applyCatalogContextToVariables(variables, userId, pin.catalogId(), pin.code());
+        variables.put("functionUnitVersionLabel", pin.versionLabel());
         // Demo FU fu-20260403-a1b2c5: assign-participants node uses INITIATOR; scripts
         // still read participant_assigner_user_id
         if ("fu-20260403-a1b2c5".equals(pin.code())) {
@@ -288,19 +262,9 @@ public class ProcessStartComponent {
                 pin.code(), submittedSnapshot, variables);
         var initialAssignments = SubTableBatchInitialMiPreflight.prepare(
                 def.bpmnXml(), deployment.key(), variables, persistedVariables, jdbcTemplate);
-        Map<String, Object> data;
-        try {
-            data = startPinnedProcess(deployment, request.getBusinessKey(), userId, variables, persistedVariables);
-        } catch (RuntimeException ex) {
-            // If the start failed (e.g. engine no longer has the deployment we cached),
-            // drop the cache entry
-            // so the next attempt redeploys instead of being permanently poisoned by a
-            // stale "deployed" flag.
-            evictDeploymentCache(processKey, def.bpmnXml());
-            throw ex;
-        }
+        Map<String, Object> data = startPinnedProcess(deployment, request.getBusinessKey(), userId,
+                variables);
         if (data == null || data.get("processInstanceId") == null) {
-            evictDeploymentCache(processKey, def.bpmnXml());
             throw new IllegalStateException("Process start returned empty data: " + processKey);
         }
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
@@ -366,12 +330,9 @@ public class ProcessStartComponent {
     record DeploymentPin(String key, String definitionId) { }
 
     private Map<String, Object> startPinnedProcess(DeploymentPin deployment, String businessKey, String userId,
-            Map<String, Object> engineVariables, Map<String, Object> persistedVariables) {
-        if (!persistedVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
-            return workflowEngineClient.startProcess(deployment.key(), businessKey, userId, engineVariables);
-        }
+            Map<String, Object> engineVariables) {
         if (deployment.definitionId() == null || deployment.definitionId().isBlank()) {
-            throw new IllegalStateException("Frozen batch start requires a verified deployment ID");
+            throw new IllegalStateException("Process start requires a verified deployment ID");
         }
         return workflowEngineClient.startProcessWithDeploymentPin(deployment.key(), businessKey, userId,
                 engineVariables, deployment.definitionId());
@@ -382,7 +343,7 @@ public class ProcessStartComponent {
      * start request.
      */
     private record LoadedStartDefinition(
-            String processName, String bpmnXml, String flowableProcessKey, Map<String, Object> catalogContent) {
+            String processName, String bpmnXml, String flowableProcessKey, String definitionId, Map<String, Object> catalogContent) {
     }
 
     /**
@@ -452,135 +413,24 @@ public class ProcessStartComponent {
     }
 
     private LoadedStartDefinition loadProcessDefinitionForStart(ActiveCatalogPin pin, String processKey) {
-        // Load process definition name and BPMN XML
-        String processName = processKey;
-        String bpmnXml = null;
-        Map<String, Object> catalogContent = null;
-
-        // Prefer deployed process definition key from API response (most reliable).
-        // admin-center API returns this in
-        // ProcessContentDTO.flowableProcessDefinitionKey.
-        String flowableProcessKey = null;
-
-        try {
-            Map<String, Object> content = processComponent.getPublishedStartContent(pin.catalogId());
-            if (content != null) {
-                catalogContent = content;
-                if (content.get("name") != null) {
-                    processName = (String) content.get("name");
-                }
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> processes = (List<Map<String, Object>>) content.get("processes");
-                if (processes != null && !processes.isEmpty()) {
-                    // Read deployed process key from API response (most reliable)
-                    Object flowableKeyObj = processes.get(0).get("flowableProcessDefinitionKey");
-                    if (flowableKeyObj != null) {
-                        flowableProcessKey = flowableKeyObj.toString();
-                    }
-                    Object dataObj = processes.get(0).get("data");
-                    bpmnXml = (String) dataObj;
-                }
-            }
-        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException
-                | FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("Failed to get process info for {}: {}", processKey, e.getMessage(), e);
+        Map<String, Object> content = processComponent.getPublishedStartContent(pin.catalogId());
+        Object raw = content.get("processes");
+        if (!(raw instanceof List<?> processes) || processes.size() != 1
+                || !(processes.get(0) instanceof Map<?, ?> process)) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_SNAPSHOT_INCOMPLETE", pin.catalogId());
         }
-
-        if (bpmnXml == null) {
-            throw new IllegalStateException("Cannot obtain process definition BPMN: " + processKey);
+        Object definitionId = process.get("flowableProcessDefinitionId");
+        Object key = process.get("flowableProcessDefinitionKey");
+        Object xml = process.get("data");
+        if (!(definitionId instanceof String id) || id.isBlank()
+                || !(key instanceof String processDefinitionKey) || processDefinitionKey.isBlank()
+                || !(xml instanceof String bpmn) || bpmn.isBlank()) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_DEPLOYMENT_NOT_READY", pin.catalogId());
         }
-        return new LoadedStartDefinition(processName, bpmnXml, flowableProcessKey, catalogContent);
-    }
-
-    private DeploymentPin deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
-        // Check Flowable engine availability
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException(
-                    "Workflow engine unavailable, please check if workflow-engine-core service is running");
-        }
-
-        log.info("Using Flowable engine to start process: {}", processKey);
-
-        String flowableProcessKey = def.flowableProcessKey();
-        // If API lacks flowableProcessDefinitionKey, extract from BPMN XML
-        if (flowableProcessKey == null || flowableProcessKey.isEmpty()) {
-            flowableProcessKey = extractProcessIdFromBpmn(def.bpmnXml());
-            if (flowableProcessKey == null || flowableProcessKey.isEmpty()) {
-                throw new IllegalStateException(
-                        i18nService.getMessage("portal.process.bpmn_process_id_missing", processKey));
-            }
-        }
-
-        // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path:
-        // already deployed.
-        final String cacheKey = deploymentCacheKey(processKey, def.bpmnXml());
-        DeploymentPin cached = deployedProcessKeyCache.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-        // Double-checked locking on a per-key lock: concurrent starts of the same
-        // definition wait for the
-        // single in-flight deploy instead of each POSTing /deploy (which is what raced
-        // and 500'd under load).
-        Object lock = deployLocks.computeIfAbsent(cacheKey, k -> new Object());
-        synchronized (lock) {
-            cached = deployedProcessKeyCache.get(cacheKey);
-            if (cached != null) {
-                return cached;
-            }
-            Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, def.bpmnXml(),
-                    def.processName());
-            if (deployResult.isEmpty()) {
-                throw new IllegalStateException("Process deployment returned empty data: " + processKey);
-            }
-            Map<String, Object> deployed = deployResult.get();
-            log.info("Process definition deployed: {}", deployed);
-            // deployResult processDefinitionKey from Flowable response, validated
-            Object deployedKey = deployed.get("processDefinitionKey");
-            if (deployedKey != null && !deployedKey.toString().isEmpty()) {
-                flowableProcessKey = deployedKey.toString();
-                log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
-            }
-            Object definitionId = deployed.get("engineProcessDefinitionId");
-            DeploymentPin deployment = new DeploymentPin(flowableProcessKey, definitionId instanceof String id ? id : null);
-            deployedProcessKeyCache.put(cacheKey, deployment);
-            return deployment;
-        }
-    }
-
-    /**
-     * Cache key for a deployed definition: process key + BPMN content hash (a
-     * changed BPMN redeploys once).
-     */
-    private static String deploymentCacheKey(String processKey, String bpmnXml) {
-        return processKey + ":" + sha256(bpmnXml);
-    }
-
-    /**
-     * Force a redeploy of this definition on the next start (e.g. after a start
-     * failed because the engine
-     * lost/rolled back the deployment). Cheap no-op if the entry was never cached.
-     */
-    private void evictDeploymentCache(String processKey, String bpmnXml) {
-        deployedProcessKeyCache.remove(deploymentCacheKey(processKey, bpmnXml));
-    }
-
-    private static String sha256(String s) {
-        try {
-            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(s == null ? new byte[0] : s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(d.length * 2);
-            for (byte b : d) {
-                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
-            }
-            return sb.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            // SHA-256 is always present on a JRE; fall back to identity hash rather than
-            // fail the start.
-            return Integer.toHexString(java.util.Objects.hashCode(s));
-        }
+        return new LoadedStartDefinition(String.valueOf(content.get("name")), bpmn,
+                processDefinitionKey, id, content);
     }
 
     /**
@@ -866,7 +716,7 @@ public class ProcessStartComponent {
         processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(instance -> {
             MiOuterStepResolver.OuterLookup miLookup = miOuterStepResolver == null
                     ? MiOuterStepResolver.OuterLookup.unknown()
-                    : miOuterStepResolver.lookup(instance.getProcessDefinitionKey(), firstTaskName);
+                    : miOuterStepResolver.lookup(instance, firstTaskName);
             ownerFieldComponent.applyOnComplete(
                     instance.getFunctionUnitCode(), variables, userId, miLookup);
         });
@@ -964,7 +814,7 @@ public class ProcessStartComponent {
                 MiOuterStepResolver.OuterLookup miLookup = miOuterStepResolver == null
                         ? MiOuterStepResolver.OuterLookup.unknown()
                         : miOuterStepResolver.lookup(
-                                instance.getProcessDefinitionKey(), outcome.currentNodeName);
+                                instance, outcome.currentNodeName);
                 ownerFieldComponent.applyAssigneeSnapshot(
                         instance.getFunctionUnitCode(),
                         vars,

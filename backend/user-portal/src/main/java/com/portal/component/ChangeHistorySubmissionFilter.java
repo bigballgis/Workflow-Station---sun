@@ -46,33 +46,27 @@ public class ChangeHistorySubmissionFilter {
      */
     public List<String> rowIdentityFieldsForBinding(String processInstanceId, String stageId,
             String bindingId) {
-        List<String> designerPk = List.of();
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    """
-                            SELECT f.field_name
-                            FROM dw_form_table_bindings b
-                            JOIN dw_field_definitions f ON f.table_id = b.table_id
-                            WHERE b.id = ? AND COALESCE(f.is_primary_key, false) = true
-                            ORDER BY f.sort_order NULLS LAST, f.id
-                            """, Long.valueOf(bindingId));
-            List<String> names = new ArrayList<>();
-            for (Map<String, Object> row : rows) {
-                String name = stringValue(row.get("field_name"));
-                if (name != null)
-                    names.add(name);
+        Map<String, Object> form = loadTaskFormDefinition(processInstanceId, stageId);
+        for (var binding : com.platform.common.functionunit.CatalogSnapshotReader.objects(form.get("tableBindings"))) {
+            if (bindingId.equals(String.valueOf(binding.get("bindingId")))) {
+                Object keys = binding.get("primaryKeyFields");
+                if (!(keys instanceof List<?> list)) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(null);
+                return SubTableRowIdentity.identityFieldsFor(list.stream().map(String::valueOf).toList());
             }
-            designerPk = names;
-        } catch (RuntimeException ex) {
-            // Unresolvable configuration means "platform key only" — the same conservative answer
-            // as a table that declares no primary key. Never fall back to guessed column names.
-            log.warn("Could not resolve primary key for binding {}: {}", bindingId, ex.getMessage());
         }
-        return SubTableRowIdentity.identityFieldsFor(designerPk);
+        throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(processInstanceId);
     }
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader versionSnapshots;
+
+    private com.platform.common.functionunit.CatalogSnapshotReader snapshots() {
+        return versionSnapshots != null ? versionSnapshots
+                : new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+    }
+
 
     public Map<String, Object> copyPayload(Map<String, Object> source) {
         if (source == null || source.isEmpty())
@@ -85,7 +79,7 @@ public class ChangeHistorySubmissionFilter {
             Map<String, Object> submitted,
             Map<String, Object> enriched) {
         return retainUserEditableSubmission(submitted, enriched,
-                loadProcessFormDefinition(functionUnitCode));
+                resolveProcessFormDefinition(functionUnitCode, enriched));
     }
 
     public Map<String, Object> filterTaskSubmission(String processInstanceId,
@@ -124,7 +118,7 @@ public class ChangeHistorySubmissionFilter {
 
     public Map<String, Object> projectProcessAuditBaseline(String functionUnitCode,
             Map<String, Object> stored) {
-        return projectAuditBaseline(stored, loadProcessFormDefinition(functionUnitCode));
+        return projectAuditBaseline(stored, resolveProcessFormDefinition(functionUnitCode, stored));
     }
 
     Map<String, Object> projectAuditBaseline(Map<String, Object> stored,
@@ -266,6 +260,28 @@ public class ChangeHistorySubmissionFilter {
             aliasToBinding.put(normalizeAlias(id), id);
             aliasPriorities.put(normalizeAlias(id), 0);
         });
+        if (formDefinition.get("tableBindings") instanceof List<?>) {
+            for (var binding : com.platform.common.functionunit.CatalogSnapshotReader.objects(formDefinition.get("tableBindings"))) {
+                String id = stringValue(binding.get("bindingId"));
+                String type = stringValue(binding.get("bindingType"));
+                if (!"EDITABLE".equals(binding.get("bindingMode"))) {
+                    if ("PRIMARY".equals(type)) topLevelEditable.clear();
+                    else editableByBinding.remove(id);
+                }
+                if (!editableByBinding.containsKey(id)) continue;
+                String name = stringValue(binding.get("tableName"));
+                registerAlias(aliasToBinding, aliasPriorities, id, name, 1);
+                registerAlias(aliasToBinding, aliasPriorities, id, binding.get("tableDisplayName"), 2);
+                registerAlias(aliasToBinding, aliasPriorities, id,
+                        SubTableStoreKeys.storeKey(name, name, "RELATED".equals(type)), 1);
+                if (name != null) bindingToHistoryName.put(id, name);
+                if (binding.get("primaryKeyFields") instanceof List<?> keys) {
+                    primaryKeyFieldsByBinding.put(id, keys.stream().map(String::valueOf).toList());
+                }
+            }
+            return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
+                    aliasPriorities, primaryKeyFieldsByBinding);
+        }
         String formId = stringValue(formDefinition.get("formId"));
         if (formId == null)
             return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
@@ -453,6 +469,17 @@ public class ChangeHistorySubmissionFilter {
         priorities.putIfAbsent(normalized, priority);
     }
 
+    public Map<String, Object> resolveProcessFormDefinition(String code, Map<String, Object> variables) {
+        if (variables != null && variables.get("functionUnitId") != null) {
+            return snapshots().processForm(String.valueOf(variables.get("functionUnitId")), false);
+        }
+        return loadProcessFormDefinition(code);
+    }
+
+    public Object filterProcessSubTableBaseline(String code, Object tables, Map<String, Object> variables) {
+        return filterSubTableBaseline(tables, resolveProcessFormDefinition(code, variables));
+    }
+
     /** The process start form ({@link ProcessStartForm}). */
     private Map<String, Object> loadProcessFormDefinition(String functionUnitCode) {
         if (functionUnitCode == null || functionUnitCode.isBlank())
@@ -504,35 +531,7 @@ public class ChangeHistorySubmissionFilter {
         if (processInstanceId == null || processInstanceId.isBlank()
                 || stageId == null || stageId.isBlank())
             return Map.of();
-        Long bpmnFormId = ChangeHistoryBpmnFormResolver.resolve(
-                jdbcTemplate, processInstanceId, stageId.trim());
-        if (bpmnFormId != null) {
-            Map<String, Object> deployedForm = queryFormDefinition(
-                    """
-                            SELECT fd.id AS form_id, fd.config_json::text AS config_json,
-                            fd.field_permissions::text AS field_permissions,
-                            false AS read_only
-                            FROM dw_form_definitions fd
-                            WHERE fd.id = ? AND fd.form_type IN ('TASK', 'PROCESS')
-                            LIMIT 1
-                            """, bpmnFormId);
-            if (!deployedForm.isEmpty())
-                return deployedForm;
-        }
-        Map<String, Object> boundForm = queryFormDefinition(
-                """
-                          SELECT fd.id AS form_id, fd.config_json::text AS config_json,
-                              fd.field_permissions::text AS field_permissions,
-                              sb.read_only
-                        FROM up_process_instance pi
-                        INNER JOIN dw_function_units fu
-                            ON fu.code = COALESCE(NULLIF(pi.function_unit_code, ''), pi.process_definition_key)
-                        INNER JOIN dw_form_definitions fd ON fd.function_unit_id = fu.id
-                        INNER JOIN dw_form_stage_bindings sb ON sb.form_id = fd.id
-                        WHERE pi.id = ? AND sb.stage_id = ? AND fd.form_type = 'TASK'
-                        ORDER BY fd.id DESC LIMIT 1
-                        """, processInstanceId.trim(), stageId.trim());
-        return boundForm;
+        return CatalogPinnedTaskFormLoader.forInstance(jdbcTemplate, objectMapper, processInstanceId, stageId, snapshots());
     }
 
     static Long resolveTaskFormId(String bpmnXml, String stageId) {

@@ -81,6 +81,7 @@ public class MainTableViewRowQueryComponent {
         pageParams.add(query.page() * query.size());
         String orderBy = query.sql().orderBy(query.sortField(), query.sortDirection());
         String sql = "SELECT pi.id, pi.status, pi.start_time, pi.start_user_id, pi.start_user_name,"
+                + " pi.function_unit_catalog_id, pi.function_unit_code, pi.function_unit_version_label, pi.process_definition_id,"
                 + " pi.current_node, pi.variables::text AS variables"
                 + " FROM up_process_instance pi" + where
                 + orderBy
@@ -91,6 +92,10 @@ public class MainTableViewRowQueryComponent {
             while (rs.next()) {
                 ProcessInstance instance = new ProcessInstance();
                 instance.setId(rs.getString("id"));
+                instance.setFunctionUnitCatalogId(rs.getString("function_unit_catalog_id"));
+                instance.setFunctionUnitCode(rs.getString("function_unit_code"));
+                instance.setFunctionUnitVersionLabel(rs.getString("function_unit_version_label"));
+                instance.setProcessDefinitionId(rs.getString("process_definition_id"));
                 instance.setStatus(rs.getString("status"));
                 Timestamp startTime = rs.getTimestamp("start_time");
                 instance.setStartTime(startTime != null ? startTime.toLocalDateTime() : null);

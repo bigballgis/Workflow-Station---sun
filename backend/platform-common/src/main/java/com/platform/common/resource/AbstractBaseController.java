@@ -59,6 +59,7 @@ public abstract class AbstractBaseController {
      * using platform-common's ApiResponse.
      */
     protected <T> ResponseEntity<ApiResponse<T>> handleError(Exception e) {
+        if (e instanceof com.platform.common.functionunit.FunctionUnitVersionException version) throw version;
         if (e instanceof BusinessException be) {
             log.warn("Business error: {}", be.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

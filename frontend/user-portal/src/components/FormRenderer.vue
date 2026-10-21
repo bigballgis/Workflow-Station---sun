@@ -260,6 +260,7 @@ const businessLogicConfig = computed(() =>
 
 function isFieldReadonly(field: FormField): boolean {
   return isFormFieldReadonly(field, effectiveReadonly.value)
+    || props.fieldPermissions?.[field.key] === 'READONLY'
 }
 const activeTab = ref('')
 

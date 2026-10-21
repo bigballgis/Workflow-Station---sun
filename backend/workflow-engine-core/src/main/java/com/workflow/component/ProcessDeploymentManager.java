@@ -78,6 +78,9 @@ public class ProcessDeploymentManager {
     private RuntimeService runtimeService;
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate versionJdbc;
+
+    @Autowired
     private ServiceTaskFlowRefResolver serviceTaskFlowRefResolver;
 
     /**
@@ -202,6 +205,12 @@ public class ProcessDeploymentManager {
      */
     public void deleteProcessDefinition(String deploymentId, boolean cascade) {
         try {
+            if (versionJdbc.queryForObject("SELECT COUNT(*) FROM sys_function_unit_contents c "
+                    + "LEFT JOIN act_re_procdef p ON p.id_=c.flowable_process_definition_id "
+                    + "WHERE c.content_type='PROCESS' AND (c.flowable_deployment_id=? OR p.deployment_id_=?)",
+                    Long.class, deploymentId, deploymentId) > 0) {
+                throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_IN_USE", deploymentId);
+            }
             // Check for running process instances
             if (!cascade) {
                 long runningInstances = runtimeService.createProcessInstanceQuery()
@@ -219,6 +228,8 @@ public class ProcessDeploymentManager {
 
             repositoryService.deleteDeployment(deploymentId, cascade);
 
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (WorkflowValidationException e) {
             // Re-throw validation exceptions as-is
             throw e;
@@ -366,6 +377,8 @@ public class ProcessDeploymentManager {
                 }
             }
 
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (WorkflowValidationException e) {
             // Re-throw validation exceptions as-is
             throw e;
@@ -482,7 +495,7 @@ public class ProcessDeploymentManager {
      * real id, or the {@code key:version:uuid} composite built in {@link #deployProcess}
      * when the real id is the bare uuid.
      */
-    private String flowableDefinitionId(String pinnedId) {
+    String flowableDefinitionId(String pinnedId) {
         if (repositoryService.createProcessDefinitionQuery().processDefinitionId(pinnedId).count() > 0) {
             return pinnedId;
         }

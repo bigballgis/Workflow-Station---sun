@@ -473,7 +473,11 @@ class TaskProcessProperties {
         String userId = "user_1";
         String processDefinitionKey = "Process_1";
         String taskDefinitionKey = "Activity_assignment";
+        org.mockito.Mockito.lenient().when(taskFormComponent.filterVersionedSubmission(
+                any(), any(), org.mockito.ArgumentMatchers.anyMap())).thenAnswer(invocation -> invocation.getArgument(2));
         var instance = new com.portal.entity.ProcessInstance();
+        instance.setFunctionUnitCatalogId("release-v1");
+        instance.setFunctionUnitCode("Process_1");
         when(processInstanceRepository.findById("PI_" + taskId)).thenReturn(Optional.of(instance));
 
         Map<String, Object> taskMap = createTaskMap(taskId, "USER", userId);

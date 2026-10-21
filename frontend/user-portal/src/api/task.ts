@@ -1,5 +1,6 @@
 import type { AxiosRequestConfig } from 'axios'
 import { request } from './request'
+import { withoutRuntimeVersionContext } from '@/utils/runtimeVersionSubmission'
 import type { BatchAssignmentVerification } from './process'
 
 import type { ListColumnFilterRequest, ListColumnMeta } from '@platform-shared/list/columnMeta'
@@ -352,7 +353,11 @@ export interface TaskCompletionResult {
   batchAssignmentVerification: BatchAssignmentVerification
 }
 export function completeTask(taskId: string, data: TaskCompleteRequest) {
-  return request.post<{ data?: TaskCompletionResult | null }>(`/tasks/${taskId}/complete`, data)
+  return request.post<{ data?: TaskCompletionResult | null }>(`/tasks/${taskId}/complete`, {
+    ...data,
+    variables: data.variables && withoutRuntimeVersionContext(data.variables),
+    formData: data.formData && withoutRuntimeVersionContext(data.formData),
+  })
 }
 
 export interface TaskDelegateRequest {

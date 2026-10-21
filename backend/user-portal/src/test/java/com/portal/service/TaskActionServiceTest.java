@@ -39,20 +39,23 @@ class TaskActionServiceTest {
         ActionDefinitionLookupComponent lookup =
                 new ActionDefinitionLookupComponent(actionDefinitionRepository);
         taskActionService = new TaskActionService(workflowEngineClient, lookup);
+        var hydration = org.mockito.Mockito.mock(com.portal.component.ProcessInstanceHydrationComponent.class);
+        org.mockito.Mockito.lenient().when(hydration.requireProcessInstance("case")).thenReturn(
+                com.portal.entity.ProcessInstance.builder().id("case").functionUnitCatalogId("v1").functionUnitCode("fixture").build());
+        org.springframework.test.util.ReflectionTestUtils.setField(taskActionService, "hydration", hydration);
     }
 
     @Test
-    @DisplayName("getTaskActions should resolve only requested dw action ids")
+    @DisplayName("getTaskActions should resolve only the requested published action ids")
     void getTaskActions_shouldResolveOnlyRequestedDwActionIds() {
         String taskId = "task-001";
         Map<String, Object> engineTask = Map.of(
-                "taskId", taskId,
+                "taskId", taskId, "processInstanceId", "case",
                 "processDefinitionKey", "DigitalLendingProcessV2",
                 "actionIds", List.of("19", "20"));
 
         when(workflowEngineClient.getTaskById(taskId)).thenReturn(Optional.of(engineTask));
-        when(actionDefinitionRepository.findAllById(List.of("19", "20"))).thenReturn(List.of());
-        when(actionDefinitionRepository.findFromDwByIds(List.of("19", "20"))).thenReturn(List.of(
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("19", "20"))).thenReturn(List.of(
                 action("20", "Submit Application"),
                 action("19", "Calculate EMI")));
 
@@ -67,19 +70,17 @@ class TaskActionServiceTest {
     }
 
     @Test
-    @DisplayName("getTaskActions should keep requested order across sys and dw sources")
+    @DisplayName("getTaskActions should keep requested order within the published release")
     void getTaskActions_shouldKeepRequestedOrderAcrossSources() {
         String taskId = "task-002";
         Map<String, Object> engineTask = Map.of(
-                "taskId", taskId,
+                "taskId", taskId, "processInstanceId", "case",
                 "actionIds", List.of("uuid-2", "19", "uuid-1"));
 
         when(workflowEngineClient.getTaskById(taskId)).thenReturn(Optional.of(engineTask));
-        when(actionDefinitionRepository.findAllById(List.of("uuid-2", "19", "uuid-1"))).thenReturn(List.of(
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("uuid-2", "19", "uuid-1"))).thenReturn(List.of(
                 action("uuid-1", "Last"),
-                action("uuid-2", "First")));
-        when(actionDefinitionRepository.findFromDwByIds(List.of("19"))).thenReturn(List.of(
-                action("19", "Middle")));
+                action("uuid-2", "First"), action("19", "Middle")));
 
         List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
 
@@ -90,20 +91,18 @@ class TaskActionServiceTest {
     }
 
     @Test
-    @DisplayName("getTaskActions should return empty when nothing resolves")
+    @DisplayName("getTaskActions should reject incomplete published action associations")
     void getTaskActions_shouldReturnEmptyWhenNothingResolves() {
         String taskId = "task-003";
         Map<String, Object> engineTask = Map.of(
-                "taskId", taskId,
+                "taskId", taskId, "processInstanceId", "case",
                 "actionIds", List.of("19", "20"));
 
         when(workflowEngineClient.getTaskById(taskId)).thenReturn(Optional.of(engineTask));
-        when(actionDefinitionRepository.findAllById(List.of("19", "20"))).thenReturn(List.of());
-        when(actionDefinitionRepository.findFromDwByIds(List.of("19", "20"))).thenReturn(List.of());
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("19", "20"))).thenReturn(List.of());
 
-        List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
-
-        assertTrue(actions.isEmpty());
+        org.junit.jupiter.api.Assertions.assertThrows(com.platform.common.functionunit.FunctionUnitVersionException.class,
+                () -> taskActionService.getTaskActions(taskId));
         verify(actionDefinitionRepository, never()).findByProcessDefinitionKey(anyString());
     }
 

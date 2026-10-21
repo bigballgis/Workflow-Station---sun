@@ -25,7 +25,7 @@ import static com.platform.common.util.StringUtils.maskEmail;
  *
  * <p>Shared by the BPMN Send Task ({@code SendEmailTaskDelegate}) and post-action emails configured
  * on Developer Workstation Actions, so recipient / template / connection resolution has a single
- * implementation. The variable map must carry {@code functionUnitId} and/or {@code functionUnitCode}.</p>
+ * implementation. The variable map must carry the request's pinned catalog {@code functionUnitId}.</p>
  */
 @Slf4j
 @Component
@@ -53,6 +53,8 @@ public class ConfiguredEmailSender {
             EMAIL_SUBJECT, EMAIL_BODY);
 
     private final AdminCenterClient adminCenterClient;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
     private final DeveloperWorkstationEmailTemplateClient emailTemplateClient;
     private final EmailAttachmentResolver emailAttachmentResolver;
     private final EmailSenderService emailSenderService;
@@ -77,16 +79,12 @@ public class ConfiguredEmailSender {
         if (!StringUtils.hasText(emailTo)) {
             throw configInvalid("email.send_task.missing_recipient");
         }
-        // Admin-center catalog id (UUID) for connection credentials; DW uses Long id / code for templates.
+        // Both credentials and templates resolve within the request's published catalog.
         String functionUnitId = resolveFunctionUnitId(variables);
         if (!StringUtils.hasText(functionUnitId)) {
             throw configInvalid("email.send_task.missing_function_unit_id");
         }
-        String dwFunctionUnitRef = resolveDwFunctionUnitRef(variables);
-        if (!StringUtils.hasText(dwFunctionUnitRef)) {
-            throw configInvalid("email.send_task.missing_function_unit_id");
-        }
-        ResolvedContent content = resolveEmailContent(config, dwFunctionUnitRef, variables);
+        ResolvedContent content = resolveEmailContent(config, functionUnitId, variables);
         EmailSendOptions options = buildOptions(config, content, variables);
         Map<String, Object> credentials = loadCredentials(functionUnitId, connectionId);
         deliver(logContext, connectionId, functionUnitId, config.get(EMAIL_TEMPLATE_ID), credentials, options);
@@ -188,18 +186,21 @@ public class ConfiguredEmailSender {
     }
 
     /**
-     * Prefer live Email Template content; legacy BPMN emailSubject/emailBody kept for already-deployed flows.
+     * Read the template from the release; inline content belongs to an already-deployed legacy BPMN.
      */
     private ResolvedContent resolveEmailContent(Map<String, String> config, String functionUnitId,
                                                 Map<String, Object> variables) {
         String emailTemplateId = config.get(EMAIL_TEMPLATE_ID);
         if (StringUtils.hasText(emailTemplateId)) {
-            Optional<DeveloperWorkstationEmailTemplateClient.EmailTemplateContent> templateOpt =
-                    emailTemplateClient.getTemplate(functionUnitId, emailTemplateId);
-            if (templateOpt.isEmpty()) {
+            var templates = catalogSnapshots.contents(functionUnitId, "EMAIL_TEMPLATE").stream()
+                    .filter(template -> emailTemplateId.equals(String.valueOf(template.get("templateId"))))
+                    .toList();
+            if (templates.size() != 1) {
                 throw configInvalid("email.send_task.template_not_found", functionUnitId, emailTemplateId);
             }
-            DeveloperWorkstationEmailTemplateClient.EmailTemplateContent tpl = templateOpt.get();
+            Map<String, Object> template = templates.get(0);
+            var tpl = new DeveloperWorkstationEmailTemplateClient.EmailTemplateContent(
+                    String.valueOf(template.get("subject")), String.valueOf(template.get("bodyHtml")));
             String subject = applyTextEnv(
                     EmailTemplateResolver.resolve(tpl.subject() != null ? tpl.subject() : "", variables), false);
             String body = applyTextEnv(
@@ -234,11 +235,8 @@ public class ConfiguredEmailSender {
         if (functionUnitId != null && StringUtils.hasText(functionUnitId.toString())) {
             return functionUnitId.toString();
         }
-        Object functionUnitCode = variables.get("functionUnitCode");
-        if (functionUnitCode != null && StringUtils.hasText(functionUnitCode.toString())) {
-            return adminCenterClient.resolveFunctionUnitIdByCode(functionUnitCode.toString()).orElse(null);
-        }
-        return null;
+        throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                "VERSION_RECOVERY_REQUIRED", String.valueOf(variables.get("functionUnitCode")));
     }
 
     /**

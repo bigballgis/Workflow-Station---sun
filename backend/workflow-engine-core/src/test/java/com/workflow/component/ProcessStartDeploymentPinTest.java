@@ -24,6 +24,7 @@ class ProcessStartDeploymentPinTest {
         when(repository.createProcessDefinitionQuery()).thenReturn(query);
         when(query.singleResult()).thenReturn(definition);
         when(definition.getId()).thenReturn("synthetic:2:current");
+        when(definition.getKey()).thenReturn("synthetic");
         when(instance.getId()).thenReturn("synthetic-instance");
         ReflectionTestUtils.setField(component, "repositoryService", repository);
         ReflectionTestUtils.setField(component, "runtimeService", runtime);
@@ -42,10 +43,19 @@ class ProcessStartDeploymentPinTest {
         verify(runtime, never()).startProcessInstanceByKey(anyString(), anyString(), anyMap());
     }
 
-    @Test void stalePinRejectsBeforeAnyEngineInstanceIsStarted() {
+    @Test void olderExactDefinitionIsValidEvenAfterAnotherVersionIsLatest() {
         var request = request("synthetic:1:old");
-        when(runtime.startProcessInstanceByKey("synthetic", request.getBusinessKey(), request.getVariables())).thenReturn(instance);
-        assertThatThrownBy(() -> component.startProcess(request)).hasMessageContaining("deployment changed");
+        when(definition.getId()).thenReturn("synthetic:1:old");
+        when(runtime.startProcessInstanceById("synthetic:1:old", request.getBusinessKey(), request.getVariables())).thenReturn(instance);
+        assertThat(component.startProcess(request).isSuccess()).isTrue();
+        verify(runtime).startProcessInstanceById("synthetic:1:old", request.getBusinessKey(), request.getVariables());
+        verify(runtime, never()).startProcessInstanceByKey(anyString(), anyString(), anyMap());
+    }
+
+    @Test void definitionFromAnotherKeyCannotBeStarted() {
+        var request = request("synthetic:2:current");
+        when(definition.getKey()).thenReturn("another-process");
+        assertThatThrownBy(() -> component.startProcess(request)).hasMessageContaining("VERSION_DEFINITION_MISMATCH");
         verifyNoInteractions(runtime);
     }
 

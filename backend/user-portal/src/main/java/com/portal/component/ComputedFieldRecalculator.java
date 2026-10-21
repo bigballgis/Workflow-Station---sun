@@ -73,6 +73,9 @@ public class ComputedFieldRecalculator {
                 }
             });
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
     private volatile boolean anyComputedField;
     private volatile long anyComputedFieldCheckedAt;
 
@@ -93,6 +96,11 @@ public class ComputedFieldRecalculator {
         if (!enabled || variables == null || variables.isEmpty()) {
             return;
         }
+        Object catalogId = variables.get("functionUnitId");
+        if (catalogId != null) {
+            applyMetadata(catalogMetadata(String.valueOf(catalogId)), variables);
+            return;
+        }
         if (!hasAnyComputedField()) {
             return;
         }
@@ -102,6 +110,10 @@ public class ComputedFieldRecalculator {
         Long functionUnitId = portalPrimaryKeyAllocationComponent
                 .resolveFunctionUnitIdForAllocation(functionUnitIdOrCode);
         FuComputedFields metadata = metadataFor(functionUnitId);
+        applyMetadata(metadata, variables);
+    }
+
+    private void applyMetadata(FuComputedFields metadata, Map<String, Object> variables) {
         if (metadata.isEmpty()) {
             return;
         }
@@ -171,6 +183,64 @@ public class ComputedFieldRecalculator {
             }
         }
         return SubTableNormalizer.normalize(slices, metadata::identify);
+    }
+
+    private final Map<String, FuComputedFields> catalogMetadataCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(32, 0.75f, true) {
+                @Override protected boolean removeEldestEntry(Map.Entry<String, FuComputedFields> entry) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
+
+    private FuComputedFields catalogMetadata(String catalogId) {
+        FuComputedFields existing = catalogMetadataCache.get(catalogId);
+        if (existing != null) return existing;
+        FuComputedFields loaded = loadCatalogMetadata(catalogId);
+        catalogMetadataCache.put(catalogId, loaded);
+        return loaded;
+    }
+
+    private FuComputedFields loadCatalogMetadata(String catalogId) {
+        var reader = catalogSnapshots;
+        if (reader == null) reader = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        List<Map<String, Object>> tables = reader.contents(catalogId, "DATA_TABLE");
+        List<FieldMeta> main = new ArrayList<>();
+        Map<Long, List<FieldMeta>> sub = new LinkedHashMap<>();
+        Map<String, SliceIdentity> aliases = new HashMap<>();
+        String mainName = null;
+        for (Map<String, Object> table : tables) {
+            if ("RELATION".equals(table.get("tableType"))) continue;
+            Long id = toLong(table.get("tableId"));
+            String name = String.valueOf(table.get("tableName"));
+            if (id == null || name.isBlank()) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+            SliceIdentity identity = new SliceIdentity(id, name);
+            aliases.put(name, identity);
+            aliases.put(name.toLowerCase(Locale.ROOT), identity);
+            aliases.put("dw:" + name.toLowerCase(Locale.ROOT), identity);
+            List<FieldMeta> fields = new ArrayList<>();
+            for (Map<String, Object> field : com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields"))) {
+                if (!Boolean.TRUE.equals(field.get("isComputed"))) continue;
+                if (!(field.get("computedField") instanceof Map<?, ?> formula)) {
+                    throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+                }
+                @SuppressWarnings("unchecked") Map<String, Object> typed = (Map<String, Object>) formula;
+                fields.add(ComputedFieldRowEvaluation.toMeta(String.valueOf(field.get("fieldName")), typed));
+            }
+            fields = ComputedFieldRowEvaluation.orderByDependency(fields);
+            if ("MAIN".equals(table.get("tableType"))) {
+                mainName = name;
+                main.addAll(fields);
+            } else sub.put(id, fields);
+        }
+        for (Map<String, Object> form : reader.contents(catalogId, "FORM")) {
+            for (Map<String, Object> binding : com.platform.common.functionunit.CatalogSnapshotReader.objects(form.get("tableBindings"))) {
+                Object name = binding.get("tableName");
+                if (name != null && aliases.containsKey(String.valueOf(name).toLowerCase(Locale.ROOT))) {
+                    aliases.put(String.valueOf(binding.get("bindingId")), aliases.get(String.valueOf(name).toLowerCase(Locale.ROOT)));
+                }
+            }
+        }
+        return new FuComputedFields(mainName, main, sub, aliases);
     }
 
     private FuComputedFields metadataFor(Long functionUnitId) {

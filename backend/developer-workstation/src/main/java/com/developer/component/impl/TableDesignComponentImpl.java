@@ -55,6 +55,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             new AuditFieldDef(com.platform.common.audit.SystemAuditFields.UPDATED_BY, DataType.VARCHAR, 64, true, "Updated By")
     );
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogRuntimeRows runtimeRows;
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FieldDefinitionRepository fieldDefinitionRepository;
     private final ForeignKeyRepository foreignKeyRepository;
@@ -563,6 +565,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     i18nService.getMessage("table.unbind_form_first"));
         }
         
+        runtimeRows.preserveDesignerTable(id);
         tableDefinitionRepository.delete(tableDefinition);
     }
     

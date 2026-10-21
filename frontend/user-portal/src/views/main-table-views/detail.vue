@@ -62,8 +62,6 @@ import {
 } from '@/composables/mainTableView/viewDetailForm'
 import { viewDetailRowQuery } from '@/composables/mainTableView/viewDetailQuery'
 import { mainTableViewApi } from '@/api/mainTableView'
-import { processApi } from '@/api/process'
-import { relationTableApi } from '@/api/relationTable'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -98,7 +96,6 @@ async function load() {
     const view = (viewsRes.data || []).find(v => v.id === viewId.value)
     viewName.value = view?.viewName || ''
     detailFormId.value = view?.detailFormId ?? null
-    if (!detailFormId.value) return
 
     // The row is fetched through the view's own data endpoint so that the view's
     // access rules and column projection apply here exactly as they do in the list.
@@ -110,20 +107,16 @@ async function load() {
     if (!row) return
     rowValues.value = row.values || {}
 
-    const [contentRes, lookupConfigsRes]: [any, any] = await Promise.all([
-      processApi.getFunctionUnitContent(functionUnitCode.value).catch(() => null),
-      relationTableApi.getLookupConfigs(detailFormId.value).catch(() => null),
-    ])
-    const lookupConfigs: Record<string, any> = {}
-    for (const lc of (lookupConfigsRes?.data || [])) {
-      let sf: string[] = []
-      try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
-      lookupConfigs[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
+    // The authorized row query returns its release's DETAIL form and binding metadata.
+    // Loading by current FU code would substitute a newer design for a historical row.
+    const form = row.detailForm
+    if (!form || !form.data) {
+      detailFormId.value = null
+      return
     }
-    lookupDbConfigs.value = lookupConfigs
-
-    const forms = contentRes?.data?.forms || contentRes?.forms || []
-    const form = forms.find((f: any) => String(f.sourceId) === String(detailFormId.value))
+    detailFormId.value = Number(form.sourceId)
+    lookupDbConfigs.value = {}
+    const forms = form.peerForms
     if (form?.data) {
       const config = typeof form.data === 'string' ? JSON.parse(form.data) : form.data
       const rules = Array.isArray(config?.rule) ? config.rule : []

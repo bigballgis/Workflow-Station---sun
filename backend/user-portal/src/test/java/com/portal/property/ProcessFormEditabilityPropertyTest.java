@@ -52,10 +52,11 @@ public class ProcessFormEditabilityPropertyTest {
                                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
                                 new ObjectMapper(), mock(JdbcTemplate.class),
                                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
-                ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
+                com.portal.testsupport.PortalVersionTestSupport.process(component);
+        ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
                 // Build a ProcessInstance with the given state
-                ProcessInstance processInstance = ProcessInstance.builder()
+                ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                                 .id(config.processInstanceId)
                                 .processDefinitionKey(config.processDefinitionKey)
                                 .processDefinitionName("Test Process")
@@ -102,9 +103,10 @@ public class ProcessFormEditabilityPropertyTest {
                                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
                                 new ObjectMapper(), mock(JdbcTemplate.class),
                                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
-                ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
+                com.portal.testsupport.PortalVersionTestSupport.process(component);
+        ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
-                ProcessInstance processInstance = ProcessInstance.builder()
+                ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                                 .id(processInstanceId)
                                 .processDefinitionKey("test-process")
                                 .startUserId("user-001")
@@ -145,13 +147,14 @@ public class ProcessFormEditabilityPropertyTest {
                                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
                                 new ObjectMapper(), mock(JdbcTemplate.class),
                                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
-                ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
+                com.portal.testsupport.PortalVersionTestSupport.process(component);
+        ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
                 ChangeHistorySubmissionFilter submissionFilter = mock(ChangeHistorySubmissionFilter.class);
                 when(submissionFilter.filterProcessSubmission(eq("test-process"), anyMap(), anyMap()))
                                 .thenReturn(formData);
                 ReflectionTestUtils.setField(component, "changeHistorySubmissionFilter", submissionFilter);
                 
-                ProcessInstance processInstance = ProcessInstance.builder()
+                ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                                 .id(processInstanceId)
                                 .processDefinitionKey("test-process")
                                 .functionUnitCode("test-process")

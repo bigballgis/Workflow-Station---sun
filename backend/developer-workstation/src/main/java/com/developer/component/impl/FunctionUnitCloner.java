@@ -229,6 +229,7 @@ class FunctionUnitCloner {
         Map<Long, Long> emailTemplateIdMapping = cloneEmailTemplates(id, cloned);
         ActionConfigIdRewriter.rewritePersistedActions(
                 actionDefinitionRepository.findByFunctionUnitId(cloned.getId()),
+                formIdMapping,
                 emailTemplateIdMapping,
                 connectionUidMapping,
                 actionDefinitionRepository::save);

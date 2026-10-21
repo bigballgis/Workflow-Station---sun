@@ -42,6 +42,8 @@ public class FunctionUnitImportController {
     
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.admin.component.FunctionUnitLifecycleComponent releaseReadiness;
     private final ProcessDeploymentComponent processDeploymentComponent;
     private final I18nService i18nService;
     
@@ -86,6 +88,8 @@ public class FunctionUnitImportController {
             result.put("status", "FAILED");
             result.put("message", e.getErrorMessage());
             return ResponseEntity.badRequest().body(result);
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to import function unit", e);
             result.put("status", "FAILED");
@@ -130,15 +134,12 @@ public class FunctionUnitImportController {
             if (deployToFlowable) {
                 processResult = processDeploymentComponent.deployFunctionUnitProcess(id);
                 
-                if (!processResult.isSuccess() && !processResult.isPartialSuccess()) {
-                    if (processResult.isEngineUnavailable()) {
-                        result.put("status", "FAILED");
-                        result.put("message", processResult.getMessage());
-                        result.put("errors", processResult.getErrors());
-                        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
-                    }
+                if (!processResult.isSuccess()) {
+                    result.put("status", "FAILED");
+                    result.put("errors", processResult.getErrors());
+                    result.put("message", processResult.getMessage());
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
                 }
-                
                 result.put("processDeployment", Map.of(
                         "success", processResult.isSuccess(),
                         "partialSuccess", processResult.isPartialSuccess(),
@@ -149,6 +150,7 @@ public class FunctionUnitImportController {
             }
             
             if (autoEnable) {
+                releaseReadiness.assertReadyForActivation(id);
                 functionUnit.markAsDeployed();
                 functionUnitManager.saveFunctionUnit(functionUnit);
                 
@@ -174,6 +176,8 @@ public class FunctionUnitImportController {
                         deployment = deploymentManager.executeDeployment(deployment.getId());
                         result.put("deploymentId", deployment.getId());
                     }
+                } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+                    throw e;
                 } catch (Exception e) {
                     log.warn("Failed to create deployment record for audit: {}", e.getMessage());
                 }
@@ -205,6 +209,8 @@ public class FunctionUnitImportController {
             
             return ResponseEntity.ok(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to deploy function unit", e);
             result.put("status", "FAILED");
@@ -224,6 +230,8 @@ public class FunctionUnitImportController {
         try {
             Map<String, Object> info = processDeploymentComponent.getProcessDeploymentInfo(id);
             return ResponseEntity.ok(info);
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to get process deployment info", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -258,6 +266,8 @@ public class FunctionUnitImportController {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
             }
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to deploy process to Flowable", e);
             result.put("success", false);
@@ -291,6 +301,8 @@ public class FunctionUnitImportController {
             return success ? ResponseEntity.ok(result) : 
                     ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to undeploy process", e);
             result.put("success", false);
@@ -319,6 +331,8 @@ public class FunctionUnitImportController {
             
             return ResponseEntity.ok(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to get deployed function units", e);
             result.put("error", i18nService.getMessage("admin.deploy.retrieve_deployed_list_failed"));
@@ -350,6 +364,8 @@ public class FunctionUnitImportController {
             
             return ResponseEntity.ok(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to enable function unit", e);
             result.put("status", "FAILED");
@@ -375,6 +391,8 @@ public class FunctionUnitImportController {
             
             return ResponseEntity.ok(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to disable function unit", e);
             result.put("status", "FAILED");
@@ -424,6 +442,8 @@ public class FunctionUnitImportController {
             result.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to activate version", e);
             result.put("status", "FAILED");
@@ -452,6 +472,8 @@ public class FunctionUnitImportController {
             
             return ResponseEntity.ok(result);
             
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to get version history", e);
             result.put("error", i18nService.getMessage("admin.fu.version_history_load_failed"));

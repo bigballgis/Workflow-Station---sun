@@ -115,7 +115,7 @@ class RequestIdEnricherTest {
                 .processDefinitionKey("Process_1")
                 .functionUnitCode("help_pr")
                 .functionUnitCatalogId("cat-help-pr")
-                .variables(vars("dept", "HR"))
+                .variables(vars("dept", "HR", "__request_id", "HR"))
                 .build();
         ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
         when(repo.findAllById(any())).thenReturn(List.of(instance));
@@ -147,7 +147,7 @@ class RequestIdEnricherTest {
     void calledUnitTaskCarriesTheCallingRequestsId() {
         ProcessInstance request = ProcessInstance.builder()
                 .id("purchase").processDefinitionKey("fu-purchase").functionUnitCode("fu-purchase")
-                .variables(vars("dept", "HR"))
+                .variables(vars("dept", "HR", "__request_id", "HR"))
                 .build();
         ProcessInstance vendorCheck = ProcessInstance.builder()
                 .id("vendor-check").processDefinitionKey("fu-vendor").functionUnitCode("fu-vendor")

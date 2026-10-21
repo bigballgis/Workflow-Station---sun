@@ -357,6 +357,7 @@ function isSubmitLikeAction(action: { action?: string; actionType?: string }) {
 }
 
 // 路由参数：key 是功能单元的 ID
+const loadedCatalogId = ref('')
 const functionUnitId = computed(() => route.params.key as string)
 
 // RecordNote on New Request: notes written before submit anchor on a per-form
@@ -495,6 +496,7 @@ const loadFunctionUnitContent = async () => {
       loadError.value = content.error
       return
     }
+    loadedCatalogId.value = content.id
     batchStartContext.value = content.batchStartContext
     stampAssignmentConfigsOnForms(content.forms, content.miAssignments)
 
@@ -765,7 +767,7 @@ const initActionButtons = async (actionIds: string[] | null) => {
 
   if (hadBpmnActionIds) {
     try {
-      const response = await processApi.getActionsByIds(actionIds!)
+      const response = await processApi.getActionsByIds(actionIds!, loadedCatalogId.value)
       const actions = response.data || response
       if (Array.isArray(actions) && actions.length > 0) {
         const user = getUser()

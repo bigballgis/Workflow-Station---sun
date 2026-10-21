@@ -67,10 +67,29 @@ class ActionConfigIdRewriterTest {
         AtomicInteger saves = new AtomicInteger();
         ActionConfigIdRewriter.rewritePersistedActions(
                 List.of(changed, untouched),
+                Map.of(),
                 Map.of(3L, 8L),
                 Map.of(),
                 action -> saves.incrementAndGet());
         assertEquals(1, saves.get());
         assertEquals("8", ((Map<?, ?>) changed.getConfigJson().get("postEmail")).get("emailTemplateId"));
+    }
+
+    @Test void popupFormReferenceIsRemappedWithItsPackage() {
+        ActionDefinition popup = ActionDefinition.builder().actionType(com.developer.enums.ActionType.FORM_POPUP)
+                .configJson(new HashMap<>(Map.of("formId", "401"))).build();
+        AtomicInteger saves = new AtomicInteger();
+        ActionConfigIdRewriter.rewritePersistedActions(List.of(popup), Map.of(401L, 17L), Map.of(), Map.of(),
+                action -> saves.incrementAndGet());
+        assertEquals(17L, popup.getConfigJson().get("formId"));
+        assertEquals(1, saves.get());
+    }
+
+    @Test void danglingPopupReferenceIsRejectedBeforePublishingBrokenContent() {
+        ActionDefinition popup = ActionDefinition.builder().actionType(com.developer.enums.ActionType.FORM_POPUP)
+                .configJson(new HashMap<>(Map.of("formId", 401))).build();
+        org.junit.jupiter.api.Assertions.assertThrows(com.developer.exception.DeveloperBusinessException.class,
+                () -> ActionConfigIdRewriter.rewritePersistedActions(List.of(popup), Map.of(), Map.of(), Map.of(),
+                        action -> org.junit.jupiter.api.Assertions.fail("Invalid action must not be saved")));
     }
 }

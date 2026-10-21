@@ -50,6 +50,7 @@ public class ConcurrentNonOverlapPropertyTest {
                 return new TaskInfo("stage_" + taskId, config.processInstanceId);
             }
         };
+        com.portal.testsupport.PortalVersionTestSupport.task(component);
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         // Initial process variables
@@ -60,7 +61,7 @@ public class ConcurrentNonOverlapPropertyTest {
         Map<String, Object> baselineForUser2 = new HashMap<>(initialVars);
 
         // User 1 submits first — disjoint fields
-        ProcessInstance processInstance1 = ProcessInstance.builder()
+        ProcessInstance processInstance1 = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("starter")
@@ -83,7 +84,7 @@ public class ConcurrentNonOverlapPropertyTest {
         afterUser1.putAll(config.user1Fields);
 
         // User 2 submits — process instance now has user1's changes
-        ProcessInstance processInstance2 = ProcessInstance.builder()
+        ProcessInstance processInstance2 = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("starter")

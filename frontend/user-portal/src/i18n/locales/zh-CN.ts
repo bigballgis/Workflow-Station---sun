@@ -593,6 +593,7 @@ export default {
     back: '返回',
     refresh: '刷新',
     applicationDetail: '申请详情',
+    functionUnitVersion: '功能单元版本',
     basicInfo: '基本信息',
     requestId: 'Request ID',
     processTitle: '流程标题',

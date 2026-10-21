@@ -48,6 +48,10 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
         if (!(subTablesObj instanceof Map<?, ?>)) {
             return;
         }
+        if (variables.get("functionUnitId") != null) {
+            enrichCatalog(String.valueOf(variables.get("functionUnitId")), (Map<String, Object>) subTablesObj);
+            return;
+        }
         Long functionUnitId = resolveFunctionUnitIdOrNull(functionUnitIdOrCode);
         if (functionUnitId == null) {
             log.debug("Skip sub-table PK enrich: function unit not resolved for {}", functionUnitIdOrCode);
@@ -65,6 +69,28 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
         if (allocated > 0) {
             log.info("Allocated {} missing sub-table PK value(s) for functionUnit={}", allocated, functionUnitIdOrCode);
         }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
+    private void enrichCatalog(String catalogId, Map<String, Object> slices) {
+        var reader = catalogSnapshots;
+        if (reader == null) reader = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        Map<String, Long> aliases = new HashMap<>();
+        reader.tableAliases(catalogId).forEach((alias, table) -> aliases.put(alias, Long.valueOf(String.valueOf(table.get("tableId")))));
+        Map<Long, List<AutoPkField>> fields = new HashMap<>();
+        for (var table : reader.contents(catalogId, "DATA_TABLE")) {
+            if ("RELATION".equals(table.get("tableType"))) continue;
+            List<AutoPkField> auto = new ArrayList<>();
+            for (var field : com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields"))) {
+                if (!Boolean.TRUE.equals(field.get("isPrimaryKey")) || field.get("pkGenerationJson") == null) continue;
+                PkGenerationConfig config = objectMapper.convertValue(field.get("pkGenerationJson"), PkGenerationConfig.class);
+                if (!"manual".equalsIgnoreCase(config.getStrategy())) auto.add(new AutoPkField(String.valueOf(field.get("fieldName")), config));
+            }
+            fields.put(Long.valueOf(String.valueOf(table.get("tableId"))), auto);
+        }
+        enrichSubTableMap(slices, aliases, fields);
     }
 
     private Long resolveFunctionUnitIdOrNull(String functionUnitIdOrCode) {
@@ -123,7 +149,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
                         continue;
                     }
                     List<String> values = primaryKeyAllocationService.allocate(
-                            tableId, pk.fieldName(), pk.config(), 1, "");
+                            tableId, pk.fieldName(), pk.config(), 1, "", "dw_pk_sequences");
                     if (values != null && !values.isEmpty()) {
                         row.put(pk.fieldName(), values.get(0));
                         allocated++;

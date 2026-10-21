@@ -200,6 +200,7 @@ public class FunctionUnitSnapshotRestorer {
 
         ActionConfigIdRewriter.rewritePersistedActions(
                 importWriter.findActionsByFunctionUnit(functionUnit.getId()),
+                formIdMapping,
                 emailTemplateIdMapping,
                 connectionUidMapping,
                 importWriter::saveAction);

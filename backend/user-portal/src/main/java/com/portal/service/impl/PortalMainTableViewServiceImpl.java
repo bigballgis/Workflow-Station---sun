@@ -65,6 +65,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    @Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader versionSnapshots;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final MainTableViewAccessResolver mainTableViewAccessResolver;
     private final MainTableViewInvolvementScope involvementScope;
@@ -213,6 +215,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .map(pi -> MainTableViewDataRow.builder()
                         .rowKey(pi.getId())
                         .processInstanceId(pi.getId())
+                        .detailForm(request.rowKey() == null ? null : releasedDetailForm(pi, view))
+                        .functionUnitVersionLabel(pi.getFunctionUnitVersionLabel())
                         .values(stripInternalKeys(projectInstanceRow(pi, view, fkSource, ownerCache)))
                         .build())
                 .toList();
@@ -242,6 +246,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                         .map(row -> MainTableViewDataRow.builder()
                                 .rowKey(row.instance().getId() + "|" + SubTableRowIdentity.identityOf(row.subRow()))
                                 .processInstanceId(row.instance().getId())
+                                .detailForm(detailRow ? releasedDetailForm(row.instance(), view) : null)
+                                .functionUnitVersionLabel(row.instance().getFunctionUnitVersionLabel())
                                 .values(subRowValues(row, view, fkSource, ownerCache, detailRow))
                                 .build())
                         .toList())
@@ -473,6 +479,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 }
             }
             if (changed) {
+                com.portal.component.ProcessVersionContext.apply(pi, vars);
                 computedFieldRecalculator.recalculate(pi.getFunctionUnitCode(), vars);
                 // An import may edit a field that feeds the Request ID; re-derive it so the stored
                 // identifier keeps matching the row it names.
@@ -1177,18 +1184,44 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         if (!detailRow) {
             return values;
         }
+        var pin = com.portal.component.ProcessVersionContext.of(row.instance());
+        var form = versionSnapshots.detailFormForView(pin.catalogId(), view.viewName());
+        if (form.isEmpty()) return values;
+        var bindings = com.platform.common.functionunit.CatalogSnapshotReader.objects(form.get("tableBindings"));
+        var nestedBindings = bindings.stream().filter(binding -> "SUB".equals(binding.get("bindingType")))
+                .map(binding -> new NestedBinding((String) binding.get("tableName"), (String) binding.get("foreignKeyField"))).toList();
+        var parentBindings = bindings.stream().filter(binding -> "PRIMARY".equals(binding.get("bindingType"))).toList();
+        List<String> parentKeys = parentBindings.isEmpty() ? List.of()
+                : ((List<?>) parentBindings.get(0).get("primaryKeyFields")).stream().map(String::valueOf).toList();
         Map<String, Object> nested = PortalMainTableViewNestedSubTables.forParentRow(
                 row.subRow(),
                 row.instance().getVariables(),
-                view.nestedSubBindings(),
+                nestedBindings,
                 // The parent's identity columns come from Table Design, not from a list of likely
                 // names: this view's parent may be keyed by `correspondence_id`, `case_number`, or
                 // anything else the designer chose.
-                designerPrimaryKeyFields(view.mainTableId()));
+                parentKeys);
         if (!nested.isEmpty()) {
             values.put(PortalMainTableViewNestedSubTables.STORE_KEY, nested);
         }
         return values;
+    }
+
+    private Map<String, Object> releasedDetailForm(ProcessInstance instance, ViewDefinition view) {
+        String catalog = com.portal.component.ProcessVersionContext.of(instance).catalogId();
+        Map<String, Object> form = versionSnapshots.detailFormForView(catalog, view.viewName());
+        if (form.isEmpty()) return Map.of();
+        Map<String, Object> result = new LinkedHashMap<>(form);
+        result.put("data", form.get("configJson"));
+        result.put("sourceId", form.get("formId"));
+        result.put("peerForms", versionSnapshots.contents(catalog, "FORM").stream().map(peer -> {
+            Map<String, Object> dto = new LinkedHashMap<>(peer);
+            dto.put("data", peer.get("configJson"));
+            dto.put("sourceId", peer.get("formId"));
+            dto.put("tableBindings", versionSnapshots.formBindings(catalog, peer));
+            return dto;
+        }).toList());
+        return result;
     }
 
     private ViewDefinition loadPublishedView(Long viewId) {
