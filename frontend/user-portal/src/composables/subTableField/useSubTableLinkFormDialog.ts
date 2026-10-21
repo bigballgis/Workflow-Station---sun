@@ -1,7 +1,9 @@
 import { computed, ref, unref, type Ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { mergeSubTableRowsByRowId, stripLinkFormDesignerTableLabel } from '@/composables/tasks/shared'
 import type { Column, SubTableBinding, SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
-import { linkedFormSeedRow } from './subTableLinkFormSeed'
+import { linkedFormSeedRow, sameTableLinkFormRow } from './subTableLinkFormSeed'
+import { isSameLinkFormTable } from './linkFormBindingScope'
 import {
   isLinkFormBoundToHostGrid,
   isMiStyleParentRowForLinkForm,
@@ -139,7 +141,8 @@ export function useSubTableLinkFormDialog(
     ) {
       mergeAllMatchingPeers()
       if (binding.formFields?.length && linkFormRowsLackFormPayload(pool, binding.formFields)) {
-        const overlap = peerSubTableDataByFormFieldOverlap(binding, props.linkedSubTableBindings ?? [])
+        const overlap = peerSubTableDataByFormFieldOverlap(binding, (props.linkedSubTableBindings ?? [])
+          .filter(peer => subTableBindingMatches(peer, binding)))
         if (overlap.length > 0) {
           pool = mergeSubTableRowsByRowId(pool, overlap, binding.primaryKeyFields ?? null)
         }
@@ -218,6 +221,10 @@ export function useSubTableLinkFormDialog(
     linkedFormData.value = { ...linkedFormData.value, [key]: value }
   }
 
+  function reportUnmatchedLinkFormRow(): void {
+    ElMessage.warning(t('linkForm.noMatchingRow'))
+  }
+
   /** Header close / Cancel: with To Do footer, discard edits; otherwise auto-save field link form when editable. */
   function closeLinkFormDetailDialog() {
     if (showLinkFormDetailActionFooter.value) {
@@ -253,10 +260,17 @@ export function useSubTableLinkFormDialog(
     const boundId = col.props?.boundSubTableBindingId
     const binding = selectedLinkBinding.value
     const boundName = col.props?.boundSubTableName || binding?.tableName
-
+    const parentRow = rows.value[linkRowIndex]
+    const sameTable = !!binding && isSameLinkFormTable(binding, props)
+    const selfBound = isLinkFormBoundToHostGrid(col, props, binding)
     const currentRows = linkedSubTableRows.value.length > 0 ? [...linkedSubTableRows.value] : [{}]
     currentRows[0] = { ...currentRows[0], ...linkedFormData.value }
-    const parentRow = linkRowIndex != null ? rows.value[linkRowIndex] : null
+    if (binding && sameTable && !selfBound && (!parentRow
+      || !sameTableLinkFormRow(props, binding, parentRow)
+      || !sameTableLinkFormRow(props, { ...binding, data: currentRows }, parentRow))) {
+      reportUnmatchedLinkFormRow()
+      return
+    }
     if (parentRow && isMiStyleParentRowForLinkForm(parentRow as Record<string, unknown>)) {
       const parentKey =
         normalizeFkIdForMatch(parentRow.id_idw)
@@ -274,10 +288,9 @@ export function useSubTableLinkFormDialog(
     }
     linkedSubTableRows.value = [...currentRows]
 
-    const selfBound = isLinkFormBoundToHostGrid(col, props, binding)
     const nextMainRows = rows.value.map((r, idx) => {
       if (idx !== linkRowIndex) return r
-      if (selfBound && r && typeof r === 'object') {
+      if ((selfBound || sameTable) && r && typeof r === 'object') {
         return mergeSelfBoundLinkFormIntoParentRow(r, currentRows[0] || {})
       }
       const base = (r && typeof r === 'object') ? { ...r } : {}
@@ -342,6 +355,7 @@ export function useSubTableLinkFormDialog(
     buildLinkFormPeerMap,
     collectLinkFormRowsFromProcessVariables,
     buildLinkedFormData,
+    reportUnmatchedLinkFormRow,
     updateLinkedFormField,
     closeLinkFormDetailDialog,
     saveLinkedFormData,

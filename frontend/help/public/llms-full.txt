@@ -54,6 +54,7 @@ Fail: Add a Primary first; A primary binding already exists; A conflicting table
 Related: /help/table-design , /help/form-ctl-sub-table , /help/form-ctl-lookup
 
 ## View Design (/help/view-design)
+Detail Form Save uses the explicitly chosen SUB table to complete a missing PRIMARY binding, even when new canvas inputs do not match table field names. Import Table Fields supplies controls that display existing row values; saving an arbitrary Input does not map it to an existing data column.
 
 Published list of one table. Access control decides who sees it in User Portal.
 
@@ -233,6 +234,11 @@ Sub-Table batch operations: /help/form-ctl-sub-table#batch. Select rows in the o
 New Request rechecks the published batch design on Submit Application. If it changed while the page was open, submission is blocked before process creation; refresh the form and check the restored draft before resubmitting. Existing instances retain their own batch design.
 Assignment warnings after submission or task completion mean the action has already happened: do not repeat it. Open My Requests → application detail → Flow History for saved verification results and affected task IDs. Records describe the submission/completion time, not current task status. A record-save failure is shown separately; contact an administrator. Saving assignment values alone does not prove task creation.
 Form Preview uses the same outer-row selection and one Batch Form. Batch Add works on an empty grid without inventing sample records. Apply changes only preview data; Cancel discards pending values. Preview does not save business data or create tasks.
+
+Link Form Bound Sub Table: duplicate table labels are disambiguated by configured filter foreign-key field and binding ID. Selecting a label still saves its binding ID; display suffixes do not rename tables or change foreign-key configuration.
+Same-table Link Form targets with different filter relationships must uniquely match the clicked row identity within the target binding. No unique match produces a message and no write; Portal does not choose the target binding's first row or borrow the source row.
+
+Sub-Table List View palette: Table Columns and Extend Action each have independent vertical collapse arrows. Collapsing Table Columns hides its table name, search and fields, moving Extend Action up; expanding restores the search. The × still hides the whole palette. Folding either section does not change configured columns or save the design.
 
 ## Layout and Auxiliary events (/help/form-events-layout)
 

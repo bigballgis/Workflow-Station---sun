@@ -17,6 +17,7 @@ export interface SubTableBindingOption {
   tableDisplayName?: string
   tableId?: number
   tableDescription?: string
+  filterFkFieldName?: string
 }
 
 export interface SubTableFormDesign {

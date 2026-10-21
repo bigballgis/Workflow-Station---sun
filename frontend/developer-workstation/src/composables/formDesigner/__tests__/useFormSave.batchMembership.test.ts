@@ -8,7 +8,8 @@ import type { FormDefinition } from '@/api/functionUnit'
 vi.mock('@/api/functionUnit', () => ({ functionUnitApi: { getDataTableColumns: vi.fn().mockResolvedValue({ data: [] }) } }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
-function setup(defaultValue?: string, loading = false, batchBlocked: Readonly<Ref<boolean>> = ref(false)) {
+function setup(defaultValue?: string, loading = false, batchBlocked: Readonly<Ref<boolean>> = ref(false),
+  provisionAndRepairForSave?: () => Promise<Record<string, unknown> | null>) {
   const rowRule = [{ type: 'inputNumber', field: 'amount', title: 'Amount' }]
   const rule = [{ type: 'subTable', field: 'lines', _bindingId: 101, batchControlId: 'synthetic-grid',
     props: { _bindingId: 101, allowBatchAdd: true } }]
@@ -33,11 +34,27 @@ function setup(defaultValue?: string, loading = false, batchBlocked: Readonly<Re
     getActiveDesignerRef: () => designer, getPrimaryBindingFieldDefinitions: () => [], getBatchTableFields,
     syncSubTableListViewFromFormRules: vi.fn(), loadForms: vi.fn(), autoSaving: ref(false), lastAutoSaveTime: ref(null),
     getBpmnXml: () => undefined, t: key => key,
+    provisionAndRepairForSave,
   })
   return { save, store, getBatchTableFields, form, batchDesignerRefs, batchFormCache, batchFormVisited }
 }
 
 describe('actual designer save membership wiring', () => {
+  it('keeps the explicitly selected bound table in the final update after repair', async () => {
+    const { save, store, form } = setup('0')
+    form.value.boundTableId = 20
+    expect(await save.handleSaveForm(true)).toBe(true)
+    expect(store.updateForm.mock.calls[0]![2].boundTableId).toBe(20)
+  })
+  it('preserves the actionable repair error rather than replacing it with a paste failure', async () => {
+    const repair = vi.fn().mockRejectedValue({ response: { status: 400,
+      data: { error: { code: 'INVALID_BOUND_TABLE', message: 'Configured table no longer exists.' } } } })
+    const { save, store } = setup('0', false, ref(false), repair)
+    vi.mocked(ElMessage.error).mockClear()
+    expect(await save.handleSaveForm(true)).toBe(false)
+    expect(store.updateForm).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith('Configured table no longer exists.')
+  })
   it('does not save stale config after batch unmount collection failed', async () => {
     const scope = effectScope()
     const drafts = scope.run(() => useBatchDesignerDrafts({ formId: () => 1, bindingIds: () => [101],

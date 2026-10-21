@@ -4,6 +4,7 @@ import {
 } from '@/composables/tasks/shared'
 import { getActiveMiFieldNames } from '@/composables/tasks/useMiConfig'
 import type { SubTableBinding } from './subTableFieldTypes'
+import { isSameLinkFormScope, type LinkFormBindingIdentity } from './linkFormBindingScope'
 
 export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
@@ -15,55 +16,43 @@ export function linkFormTableMatchKey(name?: string): string {
 }
 
 export function subTableBindingMatches(
-  target?: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null } | null,
-  source?: { bindingId: number; tableName: string; designerTableName?: string; tableId?: number | null } | null
+  target?: LinkFormBindingIdentity | null,
+  source?: LinkFormBindingIdentity | null
 ): boolean {
   if (!target || !source) return false
-  if (target.bindingId === source.bindingId) return true
-  if (target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)) return true
-  const targetDesignerName = normalizeSubTableName(target.designerTableName)
-  const sourceDesignerName = normalizeSubTableName(source.designerTableName)
-  if (targetDesignerName && sourceDesignerName && targetDesignerName === sourceDesignerName) return true
-  const targetName = normalizeSubTableName(target.tableName)
-  const sourceName = normalizeSubTableName(source.tableName)
-  return !!targetName && targetName === sourceName
+  return isSameLinkFormScope(target, source)
 }
 
 export type LinkFormHostGrid = {
   bindingId?: number | null
   title?: string
   tableId?: number | null
+  filterFkFieldName?: string | null
+  filterFkRefTableId?: number | null
 }
 
-function hostGridBindingIdent(host: LinkFormHostGrid): {
-  bindingId: number
-  tableName: string
-  tableId: number | null
-} {
+function hostGridBindingIdent(host: LinkFormHostGrid): LinkFormBindingIdentity {
   const bindingId = host.bindingId != null ? Number(host.bindingId) : Number.NaN
   const tableIdRaw = host.tableId != null ? Number(host.tableId) : Number.NaN
   return {
     bindingId: Number.isFinite(bindingId) ? bindingId : Number.MIN_SAFE_INTEGER,
     tableName: String(host.title ?? '').trim(),
     tableId: Number.isFinite(tableIdRaw) ? tableIdRaw : null,
+    filterFkFieldName: host.filterFkFieldName,
+    filterFkRefTableId: host.filterFkRefTableId,
   }
 }
 
 /**
  * Designer Link Form on a sub-table often binds to the same table as the grid
  * ({@code boundSubTableBindingId === host bindingId}, or a sibling MI binding of
- * the same designer table). Details must use the clicked row itself — there is
+ * the same designer table AND filter scope). Details must use the clicked row itself — there is
  * no nested {@code row.__subTables__[boundId]} child slice.
  */
 export function isLinkFormBoundToHostGrid(
   col: { props?: { boundSubTableBindingId?: number; boundSubTableName?: string } } | null | undefined,
   host: LinkFormHostGrid,
-  resolvedLinkBinding?: {
-    bindingId: number
-    tableName: string
-    designerTableName?: string
-    tableId?: number | null
-  } | null,
+  resolvedLinkBinding?: LinkFormBindingIdentity | null,
 ): boolean {
   const hostIdent = hostGridBindingIdent(host)
   const boundId = col?.props?.boundSubTableBindingId
@@ -77,6 +66,7 @@ export function isLinkFormBoundToHostGrid(
   if (resolvedLinkBinding) {
     return subTableBindingMatches(resolvedLinkBinding, hostIdent)
   }
+  if (boundId != null) return false
   const boundName = col?.props?.boundSubTableName
   return !!(
     boundName

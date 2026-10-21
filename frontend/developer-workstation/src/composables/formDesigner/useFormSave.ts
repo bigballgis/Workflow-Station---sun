@@ -7,6 +7,7 @@ import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { validateEnabledBatchControlIds, findBatchFormIssue } from '@/utils/batchSubTableConfig'
 import { findBatchMembershipIssue } from '@/utils/batchSubTableMembership'
 import {
@@ -553,8 +554,7 @@ export function useFormSave(options: UseFormSaveOptions) {
               nextConfig = repaired
             }
           } catch (e: unknown) {
-            console.error('[FormDesigner] provision/repair before save failed', e)
-            ElMessage.error(t('form.pasteConfigFailed'))
+            ElMessage.error(resolveUserFacingHttpMessage(e, t))
             return false
           }
         }
@@ -613,10 +613,10 @@ export function useFormSave(options: UseFormSaveOptions) {
             t('form.saveBlockingHint'),
           )
         }
-
         const updated = await store.updateForm(functionUnitId, selectedForm.value.id, {
           formName: selectedForm.value.formName,
           formType: selectedForm.value.formType,
+          boundTableId: selectedForm.value.boundTableId,
           description: selectedForm.value.description,
           configJson: nextConfig,
           ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions

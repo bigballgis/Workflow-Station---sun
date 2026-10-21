@@ -1200,6 +1200,7 @@ export default {
     evaluationFailed: '#ERR — formula could not be calculated ({code}). Fix the values it depends on.',
   },
   linkForm: {
+    noMatchingRow: 'No unique matching record was found in the selected binding. No changes have been applied.',
     defaultLinkText: 'Details',
     linkedForm: 'Linked Form',
     dialogTitleAddTable: 'Add {tableName}',

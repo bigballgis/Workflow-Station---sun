@@ -1194,6 +1194,7 @@ export default {
     evaluationFailed: '#ERR — 公式無法計算（{code}），請修正它依賴的欄位值。',
   },
   linkForm: {
+    noMatchingRow: '所選綁定中沒有唯一匹配的記錄，未套用任何修改。',
     defaultLinkText: '詳情',
     linkedForm: '關聯表單',
     dialogTitleAddTable: '新增 {tableName}',

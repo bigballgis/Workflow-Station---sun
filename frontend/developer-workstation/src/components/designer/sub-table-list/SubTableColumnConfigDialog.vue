@@ -22,7 +22,7 @@
           <el-option
             v-for="subTable in effectiveSubTableOptions"
             :key="subTable.bindingId"
-            :label="subTable.tableDisplayName || subTable.tableName"
+            :label="bindingOptionLabel(subTable)"
             :value="subTable.bindingId"
           />
         </el-select>
@@ -97,6 +97,13 @@ const effectiveSubTableOptions = computed(() => {
     { bindingId: bound, tableName: props.linkColumnConfig?.boundSubTableName || String(bound) },
   ]
 })
+
+function bindingOptionLabel(option: { bindingId: number; tableDisplayName?: string; tableName: string; filterFkFieldName?: string }) {
+  const name = option.tableDisplayName || option.tableName
+  const duplicates = effectiveSubTableOptions.value.filter(item => (item.tableDisplayName || item.tableName) === name)
+  if (duplicates.length < 2) return name
+  return `${name} [${[option.filterFkFieldName, `#${option.bindingId}`].filter(Boolean).join(' · ')}]`
+}
 
 defineEmits<{
   'update:showActionColumnConfig': [value: boolean]

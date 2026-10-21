@@ -2218,6 +2218,8 @@ export default {
     listView: '列表视图',
     tableColumns: '表字段',
     extendAction: 'Extend Action',
+    collapseSection: '收起{section}',
+    expandSection: '展开{section}',
     columns: '列',
     noFieldsImported: '暂未导入字段',
     displayLabel: '显示标签',

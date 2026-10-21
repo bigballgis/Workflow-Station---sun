@@ -5,14 +5,18 @@
       v-if="columnsPanelOpen"
       class="columns-panel"
     >
-      <div class="panel-section">
+      <div class="panel-section" :class="{ 'is-collapsed': tableColumnsCollapsed }">
         <div class="columns-panel-header">
-          <div class="columns-panel-title">
+          <button type="button" class="columns-panel-title section-toggle" data-testid="table-columns-toggle"
+            :aria-expanded="!tableColumnsCollapsed"
+            :aria-label="t(tableColumnsCollapsed ? 'subTableView.expandSection' : 'subTableView.collapseSection', { section: t('subTableView.tableColumns') })"
+            @click="tableColumnsCollapsed = !tableColumnsCollapsed">
             <el-icon style="margin-right: 6px;">
               <Menu />
             </el-icon>
             <span>{{ t('subTableView.tableColumns') }}</span>
-          </div>
+            <el-icon class="section-chevron"><ArrowRight v-if="tableColumnsCollapsed" /><ArrowDown v-else /></el-icon>
+          </button>
           <el-icon
             class="columns-panel-close"
             @click="columnsPanelOpen = false"
@@ -20,6 +24,7 @@
             <Close />
           </el-icon>
         </div>
+        <div v-show="!tableColumnsCollapsed" class="section-content">
         <div class="columns-panel-table-name">
           {{ binding.tableName }}
         </div>
@@ -61,18 +66,23 @@
             :image-size="40"
           />
         </div>
+        </div>
       </div>
 
-      <div class="panel-section extend-action-section">
+      <div class="panel-section extend-action-section" :class="{ 'is-collapsed': extendActionCollapsed }">
         <div class="columns-panel-header">
-          <div class="columns-panel-title">
+          <button type="button" class="columns-panel-title section-toggle" data-testid="extend-action-toggle"
+            :aria-expanded="!extendActionCollapsed"
+            :aria-label="t(extendActionCollapsed ? 'subTableView.expandSection' : 'subTableView.collapseSection', { section: t('subTableView.extendAction') })"
+            @click="extendActionCollapsed = !extendActionCollapsed">
             <el-icon style="margin-right: 6px;">
               <Operation />
             </el-icon>
             <span>{{ t('subTableView.extendAction') }}</span>
-          </div>
+            <el-icon class="section-chevron"><ArrowRight v-if="extendActionCollapsed" /><ArrowDown v-else /></el-icon>
+          </button>
         </div>
-        <div class="columns-field-list extend-action-list">
+        <div v-show="!extendActionCollapsed" class="columns-field-list extend-action-list">
           <div
             class="field-item link-form-item"
             :class="{ dragging: dragSourceKey === genericLinkFormKey }"
@@ -275,7 +285,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Search, Close, Menu, DArrowRight, EditPen, Link, Operation } from '@element-plus/icons-vue'
+import { Search, Close, Menu, DArrowRight, EditPen, Link, Operation, ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import SubTablePreviewDialog from './sub-table-list/SubTablePreviewDialog.vue'
 import SubTableColumnConfigDialog from './sub-table-list/SubTableColumnConfigDialog.vue'
@@ -301,6 +311,8 @@ const props = defineProps<SubTableListViewProps>()
 const emit = defineEmits<SubTableListViewEmit>()
 
 const columnsPanelOpen = ref(true)
+const tableColumnsCollapsed = ref(false)
+const extendActionCollapsed = ref(false)
 const fieldSearchKeyword = ref('')
 const showPreview = ref(false)
 /** Dummy model for read-only inline form-below preview (assignee pane). */
@@ -483,13 +495,20 @@ defineExpose({
   min-height: 0;
 }
 .panel-section:first-child {
-  flex: 1;
+  flex: 0 1 auto;
 }
+.panel-section.is-collapsed { flex: 0 0 auto; }
+.section-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.section-toggle { border: 0; background: transparent; padding: 0; color: inherit; font-family: inherit; cursor: pointer; flex: 1; text-align: left; min-width: 0; }
+.section-toggle:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 3px; }
+.section-chevron { margin-left: auto; margin-right: 8px; font-size: 12px; }
 .extend-action-section {
+  flex-shrink: 0;
   max-height: 40%;
   border-top: 1px solid var(--el-border-color-light);
 }
 .columns-panel-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -504,8 +523,8 @@ defineExpose({
 }
 .columns-panel-close { cursor: pointer; color: #999; font-size: 16px; }
 .columns-panel-close:hover { color: #333; }
-.columns-panel-table-name { padding: 8px 12px 4px; font-size: 13px; color: #666; font-style: italic; }
-.columns-panel-search { padding: 4px 8px 8px; }
+.columns-panel-table-name { flex-shrink: 0; padding: 8px 12px 4px; font-size: 13px; color: #666; font-style: italic; }
+.columns-panel-search { flex-shrink: 0; padding: 4px 8px 8px; }
 .columns-field-list { flex: 1; overflow-y: auto; padding: 0 4px; }
 
 .field-item {

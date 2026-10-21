@@ -1194,6 +1194,7 @@ export default {
     evaluationFailed: '#ERR — 公式无法计算（{code}），请修正它依赖的字段值。',
   },
   linkForm: {
+    noMatchingRow: '所选绑定中没有唯一匹配的记录，未应用任何修改。',
     defaultLinkText: '详情',
     linkedForm: '关联表单',
     dialogTitleAddTable: '添加 {tableName}',

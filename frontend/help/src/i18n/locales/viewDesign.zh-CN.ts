@@ -27,7 +27,7 @@ export default {
       'Name 是门户上的名称。Portal toolbar 的 Show Export button 默认关闭。Detail form 用于 SUB 表；主表行打开申请详情页，使用 No detail page。',
     catName: '门户视图列表里的名称，必填。',
     catExport: '打开：门户用户看到 Export。关闭是默认。',
-    catDetail: 'SUB 视图：打开一行用哪张表单。主表：No detail page。',
+    catDetail: 'SUB 视图：打开一行用哪张表单。主表：No detail page。创建 Detail Form 时选择 SUB 表；Save 按这个选择补齐缺失的表绑定，新画布也可保存。要展示已有行数据，请用 Import Table Fields 导入对应字段。',
     catSort: 'Sort by，然后 Then sort by。点箭头切换升序或降序。',
     catFilter: 'Filter by。Edit filters 打开条件对话框（Equals、Contains 等）。',
     accessTitle: '访问控制',

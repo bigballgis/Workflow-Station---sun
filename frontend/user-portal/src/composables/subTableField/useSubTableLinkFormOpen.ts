@@ -8,7 +8,6 @@ import {
   collapseMiLinkFormRowsForParent,
   filterLinkedChildRowsByMiTaskStatus,
   filterLinkedChildRowsByParentIdIdw,
-  isLinkFormBoundToHostGrid,
   isMiStyleParentRowForLinkForm,
   isTerminalMiParticipantRow,
   parentChildTaskStatusesMatch
@@ -24,6 +23,7 @@ import {
 } from './subTableLinkFormFields'
 import type { useSubTableLinkFormDialog } from './useSubTableLinkFormDialog'
 import type { useSubTableLinkFormScope } from './useSubTableLinkFormScope'
+import { openSameTableLinkForm } from './sameTableLinkFormOpen'
 
 /** Open flow for the Link Form detail modal: resolve the child rows that belong to the clicked parent row. */
 export function useSubTableLinkFormOpen(
@@ -101,10 +101,8 @@ export function useSubTableLinkFormOpen(
     activeLinkColumn.value = col
     activeLinkRowIndex.value = rowIndex
     const binding = resolveLinkBindingForColumn(col)
-    if (row && isLinkFormBoundToHostGrid(col, props, binding)) {
-      commitLinkFormDialogOpen(col, row, binding, [{ ...row }], true)
-      return
-    }
+    if (openSameTableLinkForm({ col, row, binding, host: props, unmatched: dialog.reportUnmatchedLinkFormRow,
+      open: data => commitLinkFormDialogOpen(col, row, binding, data, true) })) return
     const boundId = col.props?.boundSubTableBindingId
     const boundName = col.props?.boundSubTableName || binding?.tableName
     const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}

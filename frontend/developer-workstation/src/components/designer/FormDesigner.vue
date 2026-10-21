@@ -1137,6 +1137,7 @@ const designerSubBindings = computed(() => {
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
       foreignKeyField: b.foreignKeyField,
+      filterFkFieldName: tableInStore?.fieldDefinitions?.find(field => field.id === b.filterFkFieldId)?.fieldName,
       bindingLinkMode: b.bindingLinkMode,
       subMode: (b.subMode === 'FORM_ONLY') ? 'FORM_ONLY' : 'FULL',
     }

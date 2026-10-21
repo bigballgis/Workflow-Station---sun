@@ -2229,6 +2229,8 @@ export default {
     listView: 'List View',
     tableColumns: 'Table Columns',
     extendAction: 'Extend Action',
+    collapseSection: 'Collapse {section}',
+    expandSection: 'Expand {section}',
     columns: 'columns',
     noFieldsImported: 'No fields imported yet',
     displayLabel: 'Display Label',

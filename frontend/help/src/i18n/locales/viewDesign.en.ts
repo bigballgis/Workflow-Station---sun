@@ -27,7 +27,7 @@ export default {
       'Name is the portal label. Portal toolbar Show Export button is off until you tick it. Detail form is for SUB tables; Main Table rows open the request detail page and use No detail page.',
     catName: 'Required label in the portal view list.',
     catExport: 'On: portal users see Export. Off is the default.',
-    catDetail: 'SUB views: which form opens a row. Main Table: No detail page.',
+    catDetail: 'SUB views: which form opens a row. Main Table: No detail page. Choose the SUB table when creating a Detail Form; Save completes its missing table binding using that selection, including on a new canvas. Use Import Table Fields for controls that display existing row data.',
     catSort: 'Sort by, then Then sort by. Click the arrow for ascending or descending.',
     catFilter: 'Filter by. Edit filters opens the condition dialog (Equals, Contains, …).',
     accessTitle: 'Access control',

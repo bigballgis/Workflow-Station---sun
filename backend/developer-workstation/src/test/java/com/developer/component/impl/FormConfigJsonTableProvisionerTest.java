@@ -26,10 +26,13 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class FormConfigJsonTableProvisionerTest {
@@ -200,6 +203,60 @@ class FormConfigJsonTableProvisionerTest {
                 .satisfies(fk -> assertThat(fk.getIsForeignKey())
                         .as("auto-created FK column must be declared a foreign key")
                         .isTrue());
+    }
+
+    @Test
+    void provision_detailUsesExplicitBoundTableWithUnrelatedCanvasFields_andIsIdempotent() {
+        TableDefinition selected = TableDefinition.builder().id(20L).tableName("selected_lines")
+                .tableType(TableType.SUB).fieldDefinitions(new ArrayList<>()).build();
+        FormDefinition form = FormDefinition.builder().id(12L).formName("Detail")
+                .formType(FormType.DETAIL).boundTable(selected).build();
+        when(tableDefinitionRepository.findByFunctionUnitIdWithFields(7L)).thenReturn(List.of(selected));
+        when(formTableBindingRepository.findByFormIdWithTable(12L))
+                .thenAnswer(inv -> new ArrayList<>(savedBindings));
+        when(formTableBindingRepository.save(any(FormTableBinding.class))).thenAnswer(inv -> {
+            FormTableBinding binding = inv.getArgument(0);
+            binding.setId(nextId.getAndIncrement());
+            savedBindings.add(binding);
+            return binding;
+        });
+        Map<String, Object> config = Map.of("rule", List.of(
+                Map.of("type", "input", "field", "new_canvas_input", "title", "Input")));
+
+        provisioner.provision(7L, form, config);
+        provisioner.provision(7L, form, config);
+
+        assertThat(savedBindings).singleElement().satisfies(binding -> {
+            assertThat(binding.getBindingType()).isEqualTo(BindingType.PRIMARY);
+            assertThat(binding.getTable()).isSameAs(selected);
+        });
+        verify(tableDesignComponent, never()).create(any(), any());
+    }
+
+    @Test
+    void provision_detailRejectsBoundTableOutsideTheFunctionUnit() {
+        TableDefinition foreign = TableDefinition.builder().id(99L).tableType(TableType.SUB).build();
+        FormDefinition form = FormDefinition.builder().id(13L).formType(FormType.DETAIL).boundTable(foreign).build();
+        when(formTableBindingRepository.findByFormIdWithTable(13L)).thenReturn(List.of());
+        when(tableDefinitionRepository.findByFunctionUnitIdWithFields(7L)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> provisioner.provision(7L, form, Map.of("rule", List.of())))
+                .isInstanceOf(com.developer.exception.ResourceNotFoundException.class);
+        verify(formTableBindingRepository, never()).save(any());
+        verify(tableDesignComponent, never()).create(any(), any());
+    }
+
+    @Test
+    void provision_detailRejectsMainTableAsItsExplicitTarget() {
+        TableDefinition main = TableDefinition.builder().id(21L).tableType(TableType.MAIN).build();
+        FormDefinition form = FormDefinition.builder().id(14L).formType(FormType.DETAIL).boundTable(main).build();
+        when(formTableBindingRepository.findByFormIdWithTable(14L)).thenReturn(List.of());
+        when(tableDefinitionRepository.findByFunctionUnitIdWithFields(7L)).thenReturn(List.of(main));
+
+        assertThatThrownBy(() -> provisioner.provision(7L, form, Map.of("rule", List.of())))
+                .isInstanceOf(com.developer.exception.ResourceNotFoundException.class);
+        verify(formTableBindingRepository, never()).save(any());
+        verify(tableDesignComponent, never()).create(any(), any());
     }
 
     private final List<FormTableBinding> savedBindings = new ArrayList<>();

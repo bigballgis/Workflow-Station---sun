@@ -27,7 +27,7 @@ export default {
       'Name 是入口上的名稱。Portal toolbar 的 Show Export button 預設關閉。Detail form 用於 SUB 表；主表列開啟申請詳情頁，使用 No detail page。',
     catName: '入口檢視清單裡的名稱，必填。',
     catExport: '開啟：入口使用者看到 Export。關閉是預設。',
-    catDetail: 'SUB 檢視：開啟一列用哪張表單。主表：No detail page。',
+    catDetail: 'SUB 檢視：開啟一列用哪張表單。主表：No detail page。建立 Detail Form 時選擇 SUB 表；Save 按這個選擇補齊缺少的表繫結，新畫布也可儲存。要顯示現有列資料，請用 Import Table Fields 匯入對應欄位。',
     catSort: 'Sort by，然後 Then sort by。點箭頭切換升序或降序。',
     catFilter: 'Filter by。Edit filters 開啟條件對話框（Equals、Contains 等）。',
     accessTitle: '存取控制',

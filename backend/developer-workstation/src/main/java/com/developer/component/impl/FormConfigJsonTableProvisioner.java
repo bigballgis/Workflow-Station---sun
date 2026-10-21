@@ -14,6 +14,7 @@ import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
 import com.developer.enums.TableType;
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.TableDefinitionRepository;
@@ -201,14 +202,13 @@ public class FormConfigJsonTableProvisioner {
             List<String> created) {
         List<FieldDefinitionRequest> fields = FormCreateRuleToFieldMapper.fromRules(configJson.get("rule"));
         Set<String> names = fields.stream().map(FieldDefinitionRequest::getFieldName).collect(Collectors.toSet());
-        // A DETAIL form renders one row of a sub-table — MAIN rows open the request detail page —
-        // so its primary table is a SUB table. Never auto-create a MAIN table for one.
-        if (form.getFormType() == FormType.DETAIL) {
+        if (form.getFormType() == FormType.DETAIL) { // Explicit target, even on an empty/new canvas.
+            if (form.getBoundTable() == null) return null;
             return tables.stream()
+                    .filter(t -> Objects.equals(t.getId(), form.getBoundTable().getId()))
                     .filter(t -> t.getTableType() == TableType.SUB)
-                    .max((a, b) -> Integer.compare(score(a, names), score(b, names)))
-                    .filter(t -> score(t, names) > 0)
-                    .orElse(null);
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", form.getBoundTable().getId()));
         }
         TableDefinition matched = tables.stream()
                 .filter(t -> t.getTableType() == TableType.MAIN)

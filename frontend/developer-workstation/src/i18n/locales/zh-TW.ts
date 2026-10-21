@@ -2219,6 +2219,8 @@ export default {
     listView: '列表視圖',
     tableColumns: '表欄位',
     extendAction: 'Extend Action',
+    collapseSection: '收合{section}',
+    expandSection: '展開{section}',
     columns: '列',
     noFieldsImported: '暫未導入欄位',
     displayLabel: '顯示標籤',
