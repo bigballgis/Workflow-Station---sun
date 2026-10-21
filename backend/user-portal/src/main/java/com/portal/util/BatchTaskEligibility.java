@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * To Do「可批量操作」的唯一判据：列表、分组、批量提交三处共用，避免各写一份后漂移。
@@ -23,17 +24,33 @@ public final class BatchTaskEligibility {
     }
 
     /**
-     * 节点开了 allowBatch，且任务由当前用户本人办理（指派给我 / 我已认领）；
-     * 未认领的认领池任务、多实例子任务不参与。
+     * 节点开了 allowBatch，且当前用户能办这条任务：指派给我 / 我已认领；我可认领的 BU Role 认领池任务
+     * （批量提交时先替我认领）；或单条提交就能办的其他任务——候选人池（如多人的 HIERARCHY_ROLE）由
+     * 单条完成路径自动认领，委托同理。多实例子任务与普通任务同等对待。
+     *
+     * @param mayProcess 列表/分组传 {@link #isOpenCandidateTask}（任务已在我的 To Do 里，纯内存判断）；
+     *                   批量提交传 {@code TaskPermissionEvaluator#canProcessTask}（逐条权威复核）。
+     *                   放在最后求值。claimable 须先经 TaskPermissionEvaluator#annotateClaimState 填好。
      */
-    public static boolean isEligible(TaskInfo task, String userId) {
+    public static boolean isEligible(TaskInfo task, String userId, Predicate<TaskInfo> mayProcess) {
         return task != null
                 && userId != null
                 && task.isAllowBatch()
-                && !task.isMultiInstanceSubTask()
                 && task.getProcessDefinitionId() != null
                 && task.getTaskDefinitionKey() != null
-                && userId.equals(task.getAssignee());
+                && (userId.equals(task.getAssignee()) || task.isClaimable() || mayProcess.test(task));
+    }
+
+    /**
+     * 列表侧的「我能办」：To Do 里一条无人处理、有候选人、又不是 BU Role 认领池的任务——引擎正是因为我是
+     * 候选人/组成员才把它放进我的 To Do。不在列表上逐行跑 canProcessTask：它的虚拟组判断是一次未缓存的
+     * 远程调用（TaskPermissionEvaluator 也注明不要用它再过滤整张列表）。
+     */
+    public static boolean isOpenCandidateTask(TaskInfo task) {
+        boolean unassigned = task.getAssignee() == null || task.getAssignee().isBlank();
+        boolean hasCandidates = (task.getCandidateUserIds() != null && !task.getCandidateUserIds().isEmpty())
+                || (task.getCandidateGroupIds() != null && !task.getCandidateGroupIds().isEmpty());
+        return unassigned && hasCandidates && !BuRolePoolTasks.isClaimPoolTask(task);
     }
 
     /**

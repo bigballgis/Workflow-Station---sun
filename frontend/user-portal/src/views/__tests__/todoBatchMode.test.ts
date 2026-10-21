@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import TodoTasks from '../tasks/index.vue'
-import { queryTodoTasks, getBatchTaskGroups, batchCompleteTasks, type BatchTaskGroup } from '@/api/task'
+import BatchTaskGroups from '@/components/tasks/BatchTaskGroups.vue'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import { queryTodoTasks, getBatchTaskGroups, batchCompleteTasks, claimBatch, type BatchTaskGroup } from '@/api/task'
 import { TODO_TOOLBAR_QUERY_KEY } from '@/composables/tasks/todoToolbarQuery'
 
 vi.mock('@/api/task', () => ({
@@ -151,16 +153,53 @@ describe('To Do batch actions tab', () => {
     })
   })
 
-  it('names the Function Unit once, on the first of its step rows', async () => {
+  it('a claim on the All To Do tab reloads the Batch Actions groups (a claimed pool task can join one)', async () => {
+    vi.mocked(claimBatch).mockResolvedValue({
+      data: { claimed: 1, skipped: 0, failed: 0, remaining: 0, attemptedTaskIds: [] },
+    } as never)
+    messageBox.confirm.mockResolvedValue('confirm')
+    routeState.query = {}
+    const w = mountPage()
+    await flushPromises()
+
+    w.findComponent({ name: 'ElTableStub' }).vm.$emit('selection-change', [{ ...ROWS[0], assignee: null, claimable: true }])
+    await flushPromises()
+    await w.get('[data-test="todo-claim-selected-btn"]').trigger('click')
+    await flushPromises()
+
+    const claimedAt = vi.mocked(claimBatch).mock.invocationCallOrder[0]
+    expect(claimedAt).toBeDefined()
+    expect(Math.max(...vi.mocked(getBatchTaskGroups).mock.invocationCallOrder)).toBeGreaterThan(claimedAt)
+  })
+
+  it('task group columns resize by dragging the shared header handle, and the width is remembered', async () => {
+    routeState.query = { tab: 'batch' }
+    const w = mountPage()
+    await flushPromises()
+    const groupsTable = w.findComponent(BatchTaskGroups)
+    const headers = groupsTable.findAllComponents(ListColumnHeader)
+    expect(headers).toHaveLength(5)
+    expect(groupsTable.findAll('.col-resize-handle')).toHaveLength(5)
+
+    headers[1].vm.$emit('width-change', 333)
+    headers[1].vm.$emit('width-commit')
+    await flushPromises()
+
+    expect(groupsTable.findAll('colgroup col')[1].attributes('style')).toContain('width: 333px')
+    expect(sessionStorage.getItem('portal-list-layout:todo-batch-groups-v1')).toContain('"taskName":333')
+  })
+
+  it('merges the Function Unit cell across all of its step rows', async () => {
     vi.mocked(getBatchTaskGroups).mockResolvedValue({ data: [GROUP, SECOND_STEP] } as never)
     routeState.query = { tab: 'batch' }
     const w = mountPage()
     await flushPromises()
     const rows = w.findAll('[data-test="batch-group-row"]')
     expect(rows).toHaveLength(2)
-    expect(rows[0].get('.batch-groups__fu').text()).toContain('采购申请')
-    // No rowspan: every row keeps all its cells, so hover and alignment stay whole.
-    expect(rows[1].get('.batch-groups__fu').text()).toBe('')
+    const fu = rows[0].get('.batch-groups__fu')
+    expect(fu.text()).toContain('采购申请')
+    expect(fu.attributes('rowspan')).toBe('2')
+    expect(rows[1].find('.batch-groups__fu').exists()).toBe(false)
   })
 
   it('a drilled-in group queries the To Do list scoped to the group and leaves the badge alone', async () => {

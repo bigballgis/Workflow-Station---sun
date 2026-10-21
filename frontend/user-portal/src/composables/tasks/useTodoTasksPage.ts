@@ -51,8 +51,13 @@ export interface TodoBatchGroupRef {
  *   (To Do columns minus BATCH_GROUP_COMMON_FIELDS, no claim column); the server applies the
  *   batch eligibility filter. The group view keeps its own widths/order: a width dragged for the
  *   six To Do columns would otherwise pin the group's two columns and push the slack elsewhere.
+ * @param afterClaimChange runs with the grid reload after any claim / unclaim / reassign, for views
+ *   derived from the same tasks (the Batch Actions groups: a claim makes a pool task mine).
  */
-export function useTodoTasksPage(batchGroup: () => TodoBatchGroupRef | null = () => null) {
+export function useTodoTasksPage(
+  batchGroup: () => TodoBatchGroupRef | null = () => null,
+  afterClaimChange: () => Promise<void> = async () => {},
+) {
   const pendingTaskStore = usePendingTaskStore()
   const preferenceStore = useUserPreferenceStore()
   const { t } = useI18n()
@@ -104,7 +109,9 @@ export function useTodoTasksPage(batchGroup: () => TodoBatchGroupRef | null = ()
 
   const { claim, unclaim, forceUnclaim, reassign, claimAll, unclaimAll, claimSelected, unclaimSelected, prepareTodoOpen } =
     useTaskClaimActions({
-      reload: loadTasks,
+      reload: async () => {
+        await Promise.all([loadTasks(), afterClaimChange()])
+      },
       actingTaskId,
       submitting: claimAllBusy,
     })

@@ -78,7 +78,8 @@ export function attachColumnResizeGuide(
   handle: HTMLElement,
   startWidth: number,
 ): ColumnResizeGuide {
-  const table = handle.closest('.el-table') as HTMLElement | null
+  // el-table grids, or a native <table> that hosts the shared header (e.g. Portal To Do task groups).
+  const table = (handle.closest('.el-table') ?? handle.closest('table')) as HTMLElement | null
   const line = document.createElement('div')
   line.className = 'col-resize-guide'
   line.setAttribute('aria-hidden', 'true')

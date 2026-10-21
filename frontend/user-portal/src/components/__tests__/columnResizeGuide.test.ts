@@ -37,6 +37,28 @@ describe('attachColumnResizeGuide', () => {
     table.remove()
   })
 
+  it('spans a native <table> that hosts the shared header (no el-table around it)', () => {
+    const table = document.createElement('table')
+    Object.defineProperty(table, 'getBoundingClientRect', {
+      value: () => ({ top: 120, left: 0, right: 900, bottom: 330, width: 900, height: 210 }),
+    })
+    const th = document.createElement('th')
+    const handle = document.createElement('span')
+    Object.defineProperty(handle, 'getBoundingClientRect', {
+      value: () => ({ top: 120, left: 300, right: 320, bottom: 144, width: 8, height: 24 }),
+    })
+    th.appendChild(handle)
+    table.appendChild(th)
+    document.body.appendChild(table)
+
+    const guide = attachColumnResizeGuide(handle, 320)
+    const line = document.querySelector('.col-resize-guide') as HTMLElement
+    expect(line.style.top).toBe('120px')
+    expect(line.style.height).toBe('210px')
+    guide.detach()
+    table.remove()
+  })
+
   it('clips the guide to the scrollport so it does not paint through pagination', () => {
     const scroll = document.createElement('div')
     Object.defineProperty(scroll, 'getBoundingClientRect', {

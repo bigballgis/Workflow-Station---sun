@@ -26,8 +26,9 @@ import java.util.Optional;
 /**
  * To Do「可批量操作」：按「流程版本 + 节点」分组，以及对选中任务逐条执行同一个通过/驳回动作。
  *
- * <p>批量提交不信任前端：每条任务重新从引擎取，复核节点 allowBatch、本人办理、动作属于该节点、
- * 意见必填；随后走与单条 {@code POST /tasks/{id}/complete} 完全相同的路径（含动作后邮件），
+ * <p>批量提交不信任前端：每条任务重新从引擎取，复核节点 allowBatch、本人办理（未认领的 BU Role
+ * 认领池任务先替本人认领）、动作属于该节点、意见必填；随后走与单条 {@code POST /tasks/{id}/complete}
+ * 完全相同的路径（含动作后邮件），
  * 每条独立事务，单条失败不影响其他任务。
  */
 @Slf4j
@@ -45,7 +46,7 @@ public class BatchTaskComponent {
 
     public List<BatchTaskGroup> listGroups(String userId) {
         List<TaskInfo> eligible = todoListQueryComponent.listMergedTodoTasks(userId).stream()
-                .filter(t -> BatchTaskEligibility.isEligible(t, userId))
+                .filter(t -> BatchTaskEligibility.isEligible(t, userId, BatchTaskEligibility::isOpenCandidateTask))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         if (eligible.isEmpty()) {
             return List.of();
@@ -74,7 +75,8 @@ public class BatchTaskComponent {
                     first.getFunctionUnitName() != null ? first.getFunctionUnitName() : first.getProcessDefinitionName(),
                     first.getFunctionUnitCatalogId() == null ? null : versions.get(first.getFunctionUnitCatalogId()),
                     first.getTaskDefinitionKey(),
-                    first.getCurrentStepName() != null ? first.getCurrentStepName() : first.getTaskName(),
+                    // A group is one node: name it by the task, not the step (an MI task's step is its sub-process).
+                    first.getTaskName() != null ? first.getTaskName() : first.getCurrentStepName(),
                     tasks.size(),
                     actions));
         }
@@ -108,7 +110,9 @@ public class BatchTaskComponent {
         if ("COMPLETED".equalsIgnoreCase(task.getStatus())) {
             throw new PortalException("409", "Task already completed");
         }
-        if (!BatchTaskEligibility.isEligible(task, userId)) {
+        taskProcessComponent.annotateClaimState(task, userId, username);
+        if (!BatchTaskEligibility.isEligible(task, userId,
+                t -> taskProcessComponent.canProcessTask(t, userId, username))) {
             throw new PortalException("403", "Task is not available for batch processing");
         }
         TaskActionInfo action = taskActionService.getTaskActionsFromPayload(engineTask).stream()
@@ -123,6 +127,12 @@ public class BatchTaskComponent {
         String comment = request.comment() == null || request.comment().isBlank() ? null : request.comment().trim();
         if (BatchTaskEligibility.requiresComment(config) && comment == null) {
             throw new PortalException("400", "Comment is required");
+        }
+        if (task.isClaimable()) {
+            // Unclaimed BU Role pool task: picking it for the batch is the explicit claim. A colleague
+            // who claimed it meanwhile makes claimTask refuse, and only this row fails. Other candidate
+            // pools need nothing here: completeTask claims them, as for a single submit.
+            taskProcessComponent.claimTask(taskId, userId, username);
         }
 
         TaskCompleteRequest complete = TaskCompleteRequest.builder()

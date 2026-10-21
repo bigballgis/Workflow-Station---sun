@@ -518,7 +518,7 @@ const {
   submitAction,
   getPriorityLabel,
   getPriorityClass,
-} = useTodoTasksPage(() => groupRef.value)
+} = useTodoTasksPage(() => groupRef.value, loadGroups)
 
 /**
  * Group header values, read from the rows with the same helpers the hidden columns used.

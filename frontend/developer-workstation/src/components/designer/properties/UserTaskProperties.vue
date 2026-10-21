@@ -174,11 +174,8 @@
               {{ actionIds.length }}
             </div>
           </div>
-          <!-- To Do「可批量操作」：MI 子任务不参与批量，子流程内节点不提供该开关 -->
-          <el-form-item
-            v-if="!parentIsMultiInstanceSubProcess"
-            :label="t('properties.allowBatch')"
-          >
+          <!-- To Do「可批量操作」：所有 User Task（含多实例子流程内节点）都可开启 -->
+          <el-form-item :label="t('properties.allowBatch')">
             <el-switch
               v-model="allowBatch"
               @change="updateExtProp('allowBatch', allowBatch)"

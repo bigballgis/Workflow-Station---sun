@@ -7,11 +7,13 @@ import com.portal.dto.BatchTaskGroup;
 import com.portal.dto.TaskActionInfo;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
+import com.portal.exception.PortalException;
 import com.portal.service.TaskActionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -25,8 +27,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -153,6 +157,60 @@ class BatchTaskComponentTest {
     }
 
     @Test
+    void unclaimedPoolTaskIsClaimedForMeThenCompleted() {
+        engineTask("pool", null, true);
+        claimableForMe("pool");
+
+        BatchCompleteResponse result = component.complete("u1", "alice",
+                new BatchCompleteRequest(List.of("pool"), "a-approve", null));
+
+        assertThat(result.succeeded()).containsExactly("pool");
+        InOrder order = inOrder(taskProcessComponent);
+        order.verify(taskProcessComponent).claimTask("pool", "u1", "alice");
+        order.verify(taskProcessComponent).completeTask(any(), eq("u1"), eq("alice"));
+    }
+
+    @Test
+    void poolTaskAColleagueClaimedMeanwhileFailsAloneAndIsNotCompleted() {
+        engineTask("taken", null, true);
+        engineTask("ok", "u1", true);
+        claimableForMe("taken");
+        when(taskProcessComponent.claimTask("taken", "u1", "alice"))
+                .thenThrow(new PortalException("403", "You are not allowed to claim this task"));
+
+        BatchCompleteResponse result = component.complete("u1", "alice",
+                new BatchCompleteRequest(List.of("taken", "ok"), "a-approve", null));
+
+        assertThat(result.succeeded()).containsExactly("ok");
+        assertThat(result.failed()).extracting(BatchCompleteResponse.Failure::taskId).containsExactly("taken");
+        verify(taskProcessComponent, times(1)).completeTask(any(), any(), any());
+    }
+
+    @Test
+    void candidatePoolTaskIMayProcessIsCompletedAndLeftToTheSingleSubmitClaim() {
+        engineTask("candidate", null, true);
+        when(taskProcessComponent.canProcessTask(argThat(t -> "candidate".equals(t.getTaskId())), eq("u1"), eq("alice")))
+                .thenReturn(true);
+
+        BatchCompleteResponse result = component.complete("u1", "alice",
+                new BatchCompleteRequest(List.of("candidate"), "a-approve", null));
+
+        assertThat(result.succeeded()).containsExactly("candidate");
+        verify(taskProcessComponent, never()).claimTask(any(), any(), any());
+        verify(taskProcessComponent).completeTask(any(), eq("u1"), eq("alice"));
+    }
+
+    @Test
+    void poolTaskIsNotClaimedWhenTheBatchRequestIsInvalid() {
+        engineTask("pool", null, true);
+        claimableForMe("pool");
+
+        component.complete("u1", "alice", new BatchCompleteRequest(List.of("pool"), "a-reject", null));
+
+        verify(taskProcessComponent, never()).claimTask(any(), any(), any());
+    }
+
+    @Test
     void alreadyCompletedTaskReportsSo() {
         Map<String, Object> done = new HashMap<>();
         done.put("taskId", "done");
@@ -187,7 +245,9 @@ class BatchTaskComponentTest {
                 task("t1", PD, "dept", "u1", true),
                 task("t2", PD, "dept", "u1", true),
                 task("t3", PD, "finance", "u1", true),
-                task("pool-unclaimed", PD, "dept", null, true),
+                task("pool-not-mine", PD, "dept", null, true),
+                claimable(task("pool-claimable", PD, "dept", null, true)),
+                candidates(task("candidate-pool", PD, "dept", null, true), "u1", "u2"),
                 task("no-flag", PD, "dept", "u1", false)));
         engineTask("t1", "u1", true);
         engineTask("t3", "u1", true);
@@ -195,7 +255,7 @@ class BatchTaskComponentTest {
         List<BatchTaskGroup> groups = component.listGroups("u1");
 
         assertThat(groups).extracting(BatchTaskGroup::taskDefinitionKey, BatchTaskGroup::count)
-                .containsExactly(org.assertj.core.groups.Tuple.tuple("dept", 2),
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("dept", 4),
                         org.assertj.core.groups.Tuple.tuple("finance", 1));
         BatchTaskGroup dept = groups.get(0);
         assertThat(dept.version()).isEqualTo("1.0.23");
@@ -208,6 +268,22 @@ class BatchTaskComponentTest {
         assertThat(dept.actions().get(0).buttonColor()).isEqualTo("#2E7D32");
         // The raw configJson travels too, so the portal applies Allowed Roles as the task page does.
         assertThat(dept.actions().get(1).configJson()).isEqualTo("{\"requireComment\":true}");
+        // Groups trust To Do membership; the remote-backed canProcessTask is for the submit only.
+        verify(taskProcessComponent, never()).canProcessTask(any(), any(), any());
+    }
+
+    @Test
+    void nodesInsideOneMultiInstanceSubProcessAreNamedByTaskNotByTheSharedStep() {
+        TaskInfo first = task("t1", PD, "sub_form1", "u1", true);
+        TaskInfo second = task("t2", PD, "sub_form2", "u1", true);
+        first.setCurrentStepName("multi");
+        second.setCurrentStepName("multi");
+        when(todoListQueryComponent.listMergedTodoTasks("u1")).thenReturn(List.of(first, second));
+        engineTask("t1", "u1", true);
+        engineTask("t2", "u1", true);
+
+        assertThat(component.listGroups("u1")).extracting(BatchTaskGroup::nodeName)
+                .containsExactly("sub_form1", "sub_form2");
     }
 
     @Test
@@ -250,6 +326,26 @@ class BatchTaskComponentTest {
         payload.put("allowBatch", allowBatch);
         payload.put("actionIds", List.of("a-approve", "a-reject", "a-transfer"));
         when(workflowEngineClient.getTaskById(taskId)).thenReturn(Optional.of(Map.of("data", payload)));
+    }
+
+    /** What TaskPermissionEvaluator#annotateClaimState marks on a free BU Role pool task I am a candidate for. */
+    private void claimableForMe(String taskId) {
+        doAnswer(inv -> {
+            TaskInfo t = inv.getArgument(0);
+            t.setClaimable(taskId.equals(t.getTaskId()));
+            return null;
+        }).when(taskProcessComponent).annotateClaimState(any(TaskInfo.class), eq("u1"), eq("alice"));
+    }
+
+    private static TaskInfo candidates(TaskInfo task, String... userIds) {
+        task.setCandidateUserIds(List.of(userIds));
+        return task;
+    }
+
+    private static TaskInfo claimable(TaskInfo task) {
+        task.setClaimPoolTask(true);
+        task.setClaimable(true);
+        return task;
     }
 
     private static TaskInfo task(String id, String pd, String node, String assignee, boolean allowBatch) {

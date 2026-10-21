@@ -25,6 +25,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -81,12 +83,20 @@ class TodoListBatchGroupKeyTest {
                 task("eligible").build(),
                 task("no-batch-on-node").allowBatch(false).build(),
                 task("held-by-colleague").assignee("u-2").build(),
+                task("pool-i-may-claim").assignee(null).claimPoolTask(true).claimable(true).build(),
+                task("candidate-pool").assignee(null).candidateUserIds(List.of(ME, "u-2")).build(),
+                task("no-candidates").assignee(null).build(),
                 task("mi-subtask").multiInstanceSubTask(true).build());
 
         assertThat(keys).containsEntry("eligible", "fu:cat-1023")
                 .containsEntry("no-batch-on-node", "null")
                 .containsEntry("held-by-colleague", "null")
-                .containsEntry("mi-subtask", "null");
+                .containsEntry("pool-i-may-claim", "fu:cat-1023")
+                .containsEntry("candidate-pool", "fu:cat-1023")
+                .containsEntry("no-candidates", "null")
+                .containsEntry("mi-subtask", "fu:cat-1023");
+        // The list trusts To Do membership: canProcessTask's group check is a remote call per row.
+        verify(taskPermissionEvaluator, never()).canProcessTask(any(), any(), any());
     }
 
     /** A request with no pinned release groups by engine definition, as the Batch tab does. */

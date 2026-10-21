@@ -152,7 +152,7 @@ public class TodoListQueryComponent {
         List<TaskInfo> merged = TodoListUnion.merge(mine, fetchAllClaimPoolTasksPaged(userId));
         if (request.batchGroup()) {
             List<TaskInfo> atNode = merged.stream()
-                    .filter(t -> BatchTaskEligibility.isEligible(t, userId)
+                    .filter(t -> BatchTaskEligibility.isEligible(t, userId, BatchTaskEligibility::isOpenCandidateTask)
                             && request.batchTaskDefinitionKey().equals(t.getTaskDefinitionKey()))
                     .collect(Collectors.toCollection(ArrayList::new));
             // The group key needs the release pinned at start, which enrichment fills in.
@@ -168,7 +168,8 @@ public class TodoListQueryComponent {
         requestIdEnricher.enrichTaskRequestIds(paged);
         // Same rule as the Batch Actions groups, so the list can flag exactly those rows.
         for (TaskInfo t : paged) {
-            t.setBatchGroupKey(BatchTaskEligibility.isEligible(t, userId) ? BatchTaskEligibility.groupKeyOf(t) : null);
+            t.setBatchGroupKey(BatchTaskEligibility.isEligible(t, userId, BatchTaskEligibility::isOpenCandidateTask)
+                    ? BatchTaskEligibility.groupKeyOf(t) : null);
         }
         EngineTaskMapper.clearTaskVariablesForList(paged);
         return PageResponse.of(paged, page, size, filtered.size());
