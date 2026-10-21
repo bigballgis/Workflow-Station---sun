@@ -108,8 +108,9 @@ class TaskAssigneeResolverTest {
             assertThat(result.getAssignee()).isNull();
         }
 
+        /** A role with one holder is still the role's task: a one-candidate pool, never a direct assignment. */
         @Test
-        void singleCandidateAutoAssigns() {
+        void singleCandidateStaysInTheCandidatePool() {
             when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull())).thenReturn(BU_ID);
             when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, ROLE_ID))
                     .thenReturn(List.of("only-one"));
@@ -117,8 +118,9 @@ class TaskAssigneeResolverTest {
             TaskAssigneeResolver.ResolveResult result = resolver.resolve(
                     AssigneeType.HIERARCHY_ROLE, ROLE_ID, null, INITIATOR_ID, ANCHOR_USER_ID);
 
-            assertThat(result.getAssignee()).isEqualTo("only-one");
-            assertThat(result.isRequiresClaim()).isFalse();
+            assertThat(result.getAssignee()).isNull();
+            assertThat(result.getCandidateUsers()).containsExactly("only-one");
+            assertThat(result.isRequiresClaim()).isTrue();
         }
 
         @Test
@@ -185,7 +187,7 @@ class TaskAssigneeResolverTest {
         }
 
         /**
-         * Unlike HIERARCHY_ROLE, a one-person BU role is still a claim pool: the portal shows it under
+         * Like HIERARCHY_ROLE, a one-person BU role is still a claim pool: the portal shows it under
          * "Tasks to Claim" and the member must Hold it, so a second member added to the role later cannot
          * walk into a form someone is already editing.
          */

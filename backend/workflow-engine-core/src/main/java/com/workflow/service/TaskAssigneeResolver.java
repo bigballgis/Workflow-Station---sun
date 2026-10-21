@@ -256,7 +256,7 @@ public class TaskAssigneeResolver {
             }
         }
         String roleSummary = String.join(", ", roleIds);
-        return toPoolResult(AssigneeType.HIERARCHY_ROLE, new ArrayList<>(allCandidates),
+        return toClaimPoolResult(AssigneeType.HIERARCHY_ROLE, new ArrayList<>(allCandidates),
                 "No users with roles [" + roleSummary + "] in BU hierarchy for " + anchorUserId);
     }
 
@@ -293,36 +293,17 @@ public class TaskAssigneeResolver {
     }
 
     /**
-     * BU Role is the only pool the portal exposes as a claim pool ("Tasks to Claim"): a single
-     * eligible member must still claim before editing, otherwise the task would be pre-assigned
-     * and skip the Hold that keeps two members from overwriting each other.
+     * A role assignment (BU Role, and the hierarchy role types: Initiator / Current User [Parent] BU Role)
+     * always lands in the candidate pool, even when the role resolves to one person: the task belongs to
+     * the role, not to whoever holds it today. A member takes it by claiming (BU Role "Tasks to Claim")
+     * or by submitting it; pre-assigning would also skip the Hold that keeps two members from
+     * overwriting each other once the role gains a second holder.
      */
     private static ResolveResult toClaimPoolResult(AssigneeType type, List<String> candidates, String emptyMsg) {
         if (candidates == null || candidates.isEmpty()) {
             return ResolveResult.builder()
                     .assigneeType(type)
                     .errorMessage(emptyMsg)
-                    .build();
-        }
-        return ResolveResult.builder()
-                .candidateUsers(new ArrayList<>(candidates))
-                .assigneeType(type)
-                .requiresClaim(true)
-                .build();
-    }
-
-    private static ResolveResult toPoolResult(AssigneeType type, List<String> candidates, String emptyMsg) {
-        if (candidates == null || candidates.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(type)
-                    .errorMessage(emptyMsg)
-                    .build();
-        }
-        if (candidates.size() == 1) {
-            return ResolveResult.builder()
-                    .assignee(candidates.get(0))
-                    .assigneeType(type)
-                    .requiresClaim(false)
                     .build();
         }
         return ResolveResult.builder()
