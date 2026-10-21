@@ -12,6 +12,7 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.FunctionUnitDevGroupAssignment;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.SubTableViewConfig;
 import com.developer.entity.SubTableViewField;
@@ -28,6 +29,7 @@ import com.developer.repository.EmailTemplateRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FormTableBindingRepository;
+import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.SubTableViewConfigRepository;
@@ -54,6 +56,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -89,6 +92,7 @@ class FunctionUnitCloner {
     private final MainTableViewService mainTableViewService;
     private final TableDesignComponent tableDesignComponent;
     private final FunctionUnitDocumentService documentService;
+    private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
 
     @Transactional
     FunctionUnit clone(Long id, String newName) {
@@ -123,6 +127,7 @@ class FunctionUnitCloner {
                         : FunctionUnitStartupMode.STANDALONE)
                 .build();
         cloned = functionUnitRepository.save(cloned);
+        inheritDevGroups(id, cloned.getId());
 
         // Clone order: clone all ProcessDefinition dependencies (tables/forms/actions) first,
         // collect old→new ID map, then write process definition and rewrite BPMN ID references.
@@ -287,6 +292,23 @@ class FunctionUnitCloner {
 
         mainTableViewService.cloneViewsForFunctionUnit(id, cloned, tableMapping, formIdMapping);
         return cloned;
+    }
+
+    /**
+     * The copy joins the source's teams (Public included). Workspace access is decided by team
+     * membership alone, so a clone in no team is outside everyone's scope: nobody — SYS_ADMIN
+     * included — could edit it or even assign it a team afterwards.
+     */
+    private void inheritDevGroups(Long sourceId, Long clonedId) {
+        String operator = SecurityContextUtils.getCurrentUsername().orElse("system");
+        for (FunctionUnitDevGroupAssignment assignment : devGroupAssignmentRepository.findByFunctionUnitId(sourceId)) {
+            devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                    .functionUnitId(clonedId)
+                    .virtualGroupId(assignment.getVirtualGroupId())
+                    .createdAt(Instant.now())
+                    .createdBy(operator)
+                    .build());
+        }
     }
 
     /**

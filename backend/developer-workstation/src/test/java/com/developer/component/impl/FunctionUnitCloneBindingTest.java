@@ -103,6 +103,32 @@ class FunctionUnitCloneBindingTest {
         verify(functionUnitRepository, never()).save(any());
     }
 
+    /** A clone in no team is outside everyone's workspace scope; it must join the source's teams. */
+    @Test
+    void cloneJoinsEveryTeamOfTheSource() {
+        FunctionUnit source = FunctionUnit.builder().id(1L).name("Source").build();
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(source));
+        when(functionUnitRepository.existsByName("Copy")).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> {
+            FunctionUnit fu = inv.getArgument(0);
+            fu.setId(2L);
+            return fu;
+        });
+        when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(1L)).thenReturn(List.of(
+                com.developer.entity.FunctionUnitDevGroupAssignment.builder().functionUnitId(1L).virtualGroupId("vg-team-a").build(),
+                com.developer.entity.FunctionUnitDevGroupAssignment.builder().functionUnitId(1L).virtualGroupId("vg-dev-public").build()));
+
+        component.clone(1L, "Copy");
+
+        ArgumentCaptor<com.developer.entity.FunctionUnitDevGroupAssignment> saved =
+                ArgumentCaptor.forClass(com.developer.entity.FunctionUnitDevGroupAssignment.class);
+        verify(functionUnitDevGroupAssignmentRepository, times(2)).save(saved.capture());
+        assertEquals(List.of(2L, 2L), saved.getAllValues().stream()
+                .map(com.developer.entity.FunctionUnitDevGroupAssignment::getFunctionUnitId).toList());
+        assertEquals(List.of("vg-team-a", "vg-dev-public"), saved.getAllValues().stream()
+                .map(com.developer.entity.FunctionUnitDevGroupAssignment::getVirtualGroupId).toList());
+    }
+
     @Test
     void restoreChecksLeadCapabilityBeforeChangingStatus() {
         doThrow(new FunctionUnitWorkspaceAccessDeniedException("Restore requires workspace lead"))

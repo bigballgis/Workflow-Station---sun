@@ -138,7 +138,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 this.codeGenerator,
                 mainTableViewService,
                 tableDesignComponent,
-                documentService);
+                documentService,
+                functionUnitDevGroupAssignmentRepository);
         this.responseAssembler = new FunctionUnitResponseAssembler(functionUnitDevGroupAssignmentRepository);
     }
 
