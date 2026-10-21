@@ -3,6 +3,7 @@ package com.platform.common.relationtable;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.enums.RelationDataType;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -59,6 +60,13 @@ public class RelationTableTemplateService {
             Row header = sheet.createRow(0);
             for (int i = 0; i < cols.size(); i++) {
                 header.createCell(i).setCellValue(headerLabel(cols.get(i)));
+                RelationDataType type = cols.get(i).getDataType();
+                if (type == RelationDataType.DATE || type == RelationDataType.TIMESTAMP) {
+                    CellStyle style = wb.createCellStyle();
+                    style.setDataFormat(wb.createDataFormat().getFormat(type == RelationDataType.DATE
+                            ? "yyyy-mm-dd" : "yyyy-mm-dd hh:mm:ss"));
+                    sheet.setDefaultColumnStyle(i, style);
+                }
                 sheet.autoSizeColumn(i);
             }
             wb.write(out);
@@ -81,6 +89,8 @@ public class RelationTableTemplateService {
         RelationDataType t = f.getDataType() != null ? f.getDataType() : RelationDataType.VARCHAR;
         StringBuilder sb = new StringBuilder(t.getCode());
         if (f.getLength() != null && f.getLength() > 0) sb.append('(').append(f.getLength()).append(')');
+        if (t == RelationDataType.DATE) sb.append(" yyyy-MM-dd");
+        if (t == RelationDataType.TIMESTAMP) sb.append(" yyyy-MM-dd HH:mm:ss");
         if (Boolean.FALSE.equals(f.getNullable()) || Boolean.TRUE.equals(f.getIsPrimaryKey())) sb.append(" *required");
         return sb.toString();
     }

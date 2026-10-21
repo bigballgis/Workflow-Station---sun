@@ -75,6 +75,59 @@ class RelationRowValidatorTest {
     }
 
     @Test
+    void dateImport_normalizesUnambiguousYearFirstDatesAndMidnight() {
+        for (String name : List.of("effective_on", "renewal_day")) {
+            var fields = List.of(field(name, RelationDataType.DATE, true));
+            for (String input : List.of("2025-02-24", "2025/2/24", "2025/02/24",
+                    "2025-02-24T00:00", "2025-02-24T00:00:00")) {
+                var result = RelationRowValidator.validateRow(1, Map.of(name, input), fields);
+                assertThat(result.isValid()).as("%s: %s", name, input).isTrue();
+                assertThat(result.getValues()).containsEntry(name, "2025-02-24");
+            }
+        }
+    }
+
+    @Test
+    void dateImport_rejectsInvalidDatesAmbiguousOrderAndTimeLoss() {
+        var fields = List.of(field("effective_on", RelationDataType.DATE, true));
+        for (String input : List.of("2025-02-30", "2025-02-29", "2025/2/30",
+                "02/03/2025", "2025-13-01", "2025-02-24T13:45", "2025-02-24T00:00:00.001",
+                "2025-02-30T00:00", "2025-02-24T00:00:00+08:00")) {
+            var result = RelationRowValidator.validateRow(1, Map.of("effective_on", input), fields);
+            assertThat(result.isValid()).as(input).isFalse();
+            assertThat(result.getValues()).doesNotContainKey("effective_on");
+            assertThat(result.getErrors()).hasSize(1);
+        }
+        assertThat(RelationRowValidator.validateRow(1, Map.of("effective_on", "2024/2/29"), fields)
+                .getValues()).containsEntry("effective_on", "2024-02-29");
+    }
+
+    @Test
+    void timestampImport_acceptsExcelMinutePrecisionAndKeepsFractionalSeconds() {
+        var fields = List.of(field("recorded_at", RelationDataType.TIMESTAMP, true));
+        for (String input : List.of("2025-02-24 13:45:00", "2025-02-24 13:45",
+                "2025-02-24T13:45:00", "2025-02-24T13:45")) {
+            var result = RelationRowValidator.validateRow(1, Map.of("recorded_at", input), fields);
+            assertThat(result.isValid()).as(input).isTrue();
+            assertThat(result.getValues()).containsEntry("recorded_at", "2025-02-24T13:45");
+        }
+        var fractional = RelationRowValidator.validateRow(1,
+                Map.of("recorded_at", "2025-02-24T13:45:12.123"), fields);
+        assertThat(fractional.isValid()).isTrue();
+        assertThat(fractional.getValues()).containsEntry("recorded_at", "2025-02-24T13:45:12.123");
+    }
+
+    @Test
+    void timestampImport_rejectsInvalidDatesAndUnsupportedZones() {
+        var fields = List.of(field("recorded_at", RelationDataType.TIMESTAMP, true));
+        for (String input : List.of("2025-02-30 13:45:00", "2025-02-29T13:45:12",
+                "2025-02-24T24:00", "2025-02-24T13:45:00Z", "2025-02-24T13:45:00+08:00")) {
+            assertThat(RelationRowValidator.validateRow(1, Map.of("recorded_at", input), fields).isValid())
+                    .as(input).isFalse();
+        }
+    }
+
+    @Test
     void manualPrimaryKeyRequired() {
         var pk = RelationFieldDTO.builder().fieldName("id").dataType(RelationDataType.VARCHAR)
                 .nullable(true).isPrimaryKey(true)
