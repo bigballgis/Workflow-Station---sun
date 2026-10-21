@@ -202,7 +202,10 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       const latestByCode = new Map(
         functionUnitOptions.value.filter(fu => fu.code).map(fu => [fu.code, fu] as const),
       )
-      const assignedFus = data.functionUnits || []
+      // Version links share a code; keep one selected FU before remapping its catalog id.
+      const assignedFus = [...new Map(
+        (data.functionUnits || []).map(fu => [fu.code || fu.id, fu] as const),
+      ).values()]
       form.functionUnitIds = assignedFus.length
         ? assignedFus.map(fu => latestByCode.get(fu.code || '')?.id ?? fu.id)
         : [COMMON_OPTION_VALUE]
