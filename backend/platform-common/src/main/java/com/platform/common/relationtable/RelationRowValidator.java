@@ -8,6 +8,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,12 +30,14 @@ public final class RelationRowValidator {
     public static final Set<String> SYSTEM_FIELDS = Set.of(
             "created_at", "created_by", "updated_at", "updated_by", "status");
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final DateTimeFormatter SLASH_DATE_FMT = DateTimeFormatter.ofPattern("uuuu/M/d")
+            .withResolverStyle(ResolverStyle.STRICT);
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final List<DateTimeFormatter> TS_FMTS = List.of(
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+            DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm").withResolverStyle(ResolverStyle.STRICT));
 
     private RelationRowValidator() {
     }
@@ -163,9 +167,9 @@ public final class RelationRowValidator {
                 return null;
             case DATE:
                 try {
-                    return LocalDate.parse(text, DATE_FMT).toString();
-                } catch (Exception e) {
-                    result.addError(name, "Expected date yyyy-MM-dd, got: " + text);
+                    return parseDate(text).toString();
+                } catch (DateTimeParseException e) {
+                    result.addError(name, "Expected date yyyy-MM-dd or yyyy/M/d with no nonzero time, got: " + text);
                     return null;
                 }
             case TIME:
@@ -179,7 +183,7 @@ public final class RelationRowValidator {
                 for (DateTimeFormatter fmt : TS_FMTS) {
                     try {
                         return LocalDateTime.parse(text, fmt).toString();
-                    } catch (Exception ignored) {
+                    } catch (DateTimeParseException ignored) {
                         // try next format
                     }
                 }
@@ -198,6 +202,18 @@ public final class RelationRowValidator {
                 }
                 return text;
         }
+    }
+
+    /** Excel serial dates arrive as local date-times; only DATE fields may discard midnight. */
+    private static LocalDate parseDate(String text) {
+        if (text.contains("T")) {
+            LocalDateTime dateTime = LocalDateTime.parse(text, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            if (!dateTime.toLocalTime().equals(LocalTime.MIDNIGHT)) {
+                throw new DateTimeParseException("DATE must not discard a nonzero time", text, 0);
+            }
+            return dateTime.toLocalDate();
+        }
+        return LocalDate.parse(text, text.contains("/") ? SLASH_DATE_FMT : DATE_FMT);
     }
 
     /** Convenience: validate a batch of rows. */
