@@ -30,6 +30,7 @@ final class OwnerFieldMetadataCatalog {
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     private final PortalPrimaryKeyAllocationComponent portalPrimaryKeyAllocationComponent;
+    private final com.platform.common.functionunit.CatalogSnapshotReader snapshots;
 
     private final Map<Long, CachedMetadata> metadataCache = Collections.synchronizedMap(
             new LinkedHashMap<Long, CachedMetadata>(32, 0.75f, true) {
@@ -49,11 +50,15 @@ final class OwnerFieldMetadataCatalog {
         this.objectMapper = objectMapper;
         this.i18nService = i18nService;
         this.portalPrimaryKeyAllocationComponent = portalPrimaryKeyAllocationComponent;
+        this.snapshots = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
     }
 
     FuOwnerFields loadIfPresent(String functionUnitIdOrCode, Map<String, Object> variables) {
         if (variables == null || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
             return FuOwnerFields.EMPTY;
+        }
+        if (variables.get("functionUnitId") != null) {
+            return loadCatalog(String.valueOf(variables.get("functionUnitId")));
         }
         if (!hasAnyOwnerField()) {
             return FuOwnerFields.EMPTY;
@@ -61,6 +66,40 @@ final class OwnerFieldMetadataCatalog {
         Long functionUnitId = portalPrimaryKeyAllocationComponent
                 .resolveFunctionUnitIdForAllocation(functionUnitIdOrCode);
         return metadataFor(functionUnitId);
+    }
+
+    private FuOwnerFields loadCatalog(String catalogId) {
+        Map<String, List<String>> aliases = new HashMap<>();
+        for (var binding : snapshots.bindings(catalogId)) {
+            Object name = binding.get("tableName");
+            if (name != null) aliases.put(String.valueOf(binding.get("bindingId")), List.of(
+                    String.valueOf(binding.get("bindingId")), String.valueOf(name),
+                    String.valueOf(name).toLowerCase(Locale.ROOT), SubTableStoreKeys.dwKey(name)));
+        }
+        Map<String, OwnerFieldMeta> main = new LinkedHashMap<>();
+        Map<String, Map<String, OwnerFieldMeta>> sub = new LinkedHashMap<>();
+        for (var form : snapshots.contents(catalogId, "FORM")) {
+            try {
+                Object config = form.get("configJson");
+                String json = config instanceof String text ? text : objectMapper.writeValueAsString(config);
+                collectFromConfig(json, main, sub, aliases);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+            }
+        }
+        Map<String, List<OwnerFieldMeta>> fields = new LinkedHashMap<>();
+        sub.forEach((key, value) -> fields.put(key, List.copyOf(value.values())));
+        return new FuOwnerFields(List.copyOf(main.values()), fields);
+    }
+
+    List<String> primaryKeyFieldsForSlice(String sliceKey, Map<String, Object> variables) {
+        if (variables.get("functionUnitId") == null) return designerPrimaryKeyFieldsForSlice(sliceKey);
+        String catalogId = String.valueOf(variables.get("functionUnitId"));
+        var table = snapshots.tableAliases(catalogId).get(sliceKey);
+        if (table == null) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+        return com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields")).stream()
+                .filter(f -> Boolean.TRUE.equals(f.get("isPrimaryKey")))
+                .map(f -> String.valueOf(f.get("fieldName"))).toList();
     }
 
     FuOwnerFields loadIfPresent(String functionUnitIdOrCode) {

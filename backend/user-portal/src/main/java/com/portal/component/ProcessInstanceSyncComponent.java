@@ -86,7 +86,7 @@ public class ProcessInstanceSyncComponent {
                 ownerFieldComponent.applyAssigneeSnapshot(
                         instance.getFunctionUnitCode(), vars, assigneeUserId, candidateUserIds,
                         instance.getStatus(),
-                        miOuterStepResolver.lookup(instance.getProcessDefinitionKey(), nodeForMi));
+                        miOuterStepResolver.lookup(instance, nodeForMi));
                 OwnerFieldComponent.stripProcessWideCurrentItem(vars);
                 instance.setVariables(vars);
                 processInstanceRepository.save(instance);

@@ -112,6 +112,9 @@ class ChangeHistoryStatusFieldFilterTest {
                 eq(50206L)))
                 .thenReturn(List.of(bindingRow));
 
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(filter, jdbc,
+                "a486076b", "Activity_1413vht", "50206", Map.of("configJson", Map.of("rule", List.of(
+                Map.of("field", "card", "readonly", true), Map.of("field", "status"))), "fieldPermissions", Map.of()));
         Map<String, Object> submitted = Map.of(
                 "card", "123456789",
                 "status", "111",

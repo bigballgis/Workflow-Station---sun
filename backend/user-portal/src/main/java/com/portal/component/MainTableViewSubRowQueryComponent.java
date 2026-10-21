@@ -136,6 +136,7 @@ public class MainTableViewSubRowQueryComponent {
 
         return "(SELECT DISTINCT ON (pi.id, " + ROW_IDENTITY + ")"
                 + " pi.id, pi.status, pi.start_time, pi.start_user_id, pi.start_user_name,"
+                + " pi.function_unit_catalog_id, pi.function_unit_code, pi.function_unit_version_label, pi.process_definition_id,"
                 + " pi.current_node, pi.variables::text AS variables,"
                 + " expanded.elem AS sub_elem, expanded.slice_key, expanded.ord,"
                 + " " + ROW_IDENTITY + " AS row_identity"
@@ -162,6 +163,10 @@ public class MainTableViewSubRowQueryComponent {
             }
             ProcessInstance instance = new ProcessInstance();
             instance.setId(rs.getString("id"));
+            instance.setFunctionUnitCatalogId(rs.getString("function_unit_catalog_id"));
+            instance.setFunctionUnitCode(rs.getString("function_unit_code"));
+            instance.setFunctionUnitVersionLabel(rs.getString("function_unit_version_label"));
+            instance.setProcessDefinitionId(rs.getString("process_definition_id"));
             instance.setStatus(rs.getString("status"));
             Timestamp startTime = rs.getTimestamp("start_time");
             instance.setStartTime(startTime != null ? startTime.toLocalDateTime() : null);

@@ -178,7 +178,7 @@ class PortalMainTableViewImportTest {
 
     @Test
     void importViewCsv_existingProcessInstanceId_updatesRecord() {
-        ProcessInstance pi = ProcessInstance.builder()
+        ProcessInstance pi = ProcessInstance.builder().functionUnitCatalogId("release-v1")
                 .id("existing-1")
                 .startUserId(USER_ID)
                 .functionUnitCode(FU_CODE)

@@ -35,10 +35,10 @@ class PortalBatchPrimaryKeyAllocationComponentTest {
                 Map.of("capabilities", Map.of("allowBatchAdd", true), "originalCrud", Map.of(), "rowDesign",
                         Map.of("binding", Map.of("tableId", 20), "fields", List.of(Map.of("fieldName", "item_key", "isPrimaryKey", true,
                                 "pkGenerationJson", Map.of("strategy", "prefixedSequence", "prefix", "FROZEN-"))))))).build());
-        when(allocator.allocate(eq(20L), eq("item_key"), any(), eq(2), eq(""))).thenReturn(List.of("FROZEN-1", "FROZEN-2"));
+        when(allocator.allocate(eq(20L), eq("item_key"), any(), eq(2), eq(""), eq("dw_pk_sequences"))).thenReturn(List.of("FROZEN-1", "FROZEN-2"));
         assertThat(component.allocate("T1", "U1", request()).getValues()).containsExactly("FROZEN-1", "FROZEN-2");
         ArgumentCaptor<PkGenerationConfig> config = ArgumentCaptor.forClass(PkGenerationConfig.class);
-        verify(allocator).allocate(eq(20L), eq("item_key"), config.capture(), eq(2), eq(""));
+        verify(allocator).allocate(eq(20L), eq("item_key"), config.capture(), eq(2), eq(""), eq("dw_pk_sequences"));
         assertThat(config.getValue().getPrefix()).isEqualTo("FROZEN-");
     }
 

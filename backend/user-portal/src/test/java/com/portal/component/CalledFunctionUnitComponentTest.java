@@ -175,7 +175,7 @@ class CalledFunctionUnitComponentTest {
         parent.setId(PARENT_ID);
         parent.setProcessDefinitionKey("fu-purchase");
         when(processInstanceRepository.findById(PARENT_ID)).thenReturn(Optional.of(parent));
-        when(workflowEngineClient.getBpmnXml("fu-purchase")).thenReturn(Optional.of("""
+        when(workflowEngineClient.getBpmnXml("fu-purchase", PARENT_ID)).thenReturn(Optional.of("""
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                   xmlns:custom="http://custom.bpmn.io/schema">
                   <bpmn:process id="fu-purchase">

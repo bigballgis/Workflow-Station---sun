@@ -23,6 +23,9 @@ public class TaskActionService {
     
     private final WorkflowEngineClient workflowEngineClient;
     private final ActionDefinitionLookupComponent actionDefinitionLookupComponent;
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.portal.component.ProcessInstanceHydrationComponent hydration;
     
     /**
      * Returns the list of actions enabled for a task.
@@ -49,6 +52,8 @@ public class TaskActionService {
             
             return getTaskActionsFromPayload(data);
 
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException ex) {
+            throw ex;
         } catch (Exception e) {
             log.error("Error getting task actions for task: " + taskId, e);
             return Collections.emptyList();
@@ -68,7 +73,13 @@ public class TaskActionService {
         log.info("Found {} action IDs for task {}: {}", actionIds.size(), engineTask.get("taskId"), actionIds);
         // Resolve definitions only for this node's actionIds; do not fall back to all process actions
         // or todo detail would show buttons for unrelated nodes.
-        return fetchActionDefinitions(actionIds);
+        Object processId = engineTask.get("processInstanceId");
+        if (processId == null) throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                "VERSION_RECOVERY_REQUIRED", null);
+        var instance = hydration.requireProcessInstance(String.valueOf(processId));
+        String catalogId = com.portal.component.ProcessVersionContext.of(instance).catalogId();
+        return actionDefinitionLookupComponent.resolvePinned(catalogId, actionIds).stream()
+                .map(this::toTaskActionInfo).toList();
     }
     
     /**
@@ -94,25 +105,10 @@ public class TaskActionService {
         return out;
     }
 
-    private List<TaskActionInfo> fetchActionDefinitions(List<String> actionIds) {
-        try {
-            log.info("Fetching {} action definitions from database", actionIds.size());
-            List<TaskActionInfo> orderedActions = actionDefinitionLookupComponent.resolveByIdsInOrder(actionIds)
-                    .stream()
-                    .map(this::toTaskActionInfo)
-                    .collect(Collectors.toList());
-            log.info("Resolved {} action definitions from requested actionIds", orderedActions.size());
-            return orderedActions;
-        } catch (Exception e) {
-            log.error("Error fetching action definitions from database", e);
-            return Collections.emptyList();
-        }
-    }
-    
     /** Maps an ActionDefinition entity to TaskActionInfo. */
     private TaskActionInfo toTaskActionInfo(ActionDefinition action) {
         return TaskActionInfo.builder()
-            .actionId(action.getId())
+            .actionId(action.getSourceId() == null ? action.getId() : action.getSourceId())
             .actionName(action.getActionName())
             .actionType(action.getActionType())
             .description(action.getDescription())

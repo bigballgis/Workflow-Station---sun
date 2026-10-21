@@ -26,6 +26,9 @@ public class ActionDefinition {
     
     @Column(name = "function_unit_id", nullable = false, length = 64)
     private String functionUnitId;
+
+    @Column(name = "source_id", length = 64)
+    private String sourceId;
     
     @Column(name = "action_name", nullable = false, length = 100)
     private String actionName;

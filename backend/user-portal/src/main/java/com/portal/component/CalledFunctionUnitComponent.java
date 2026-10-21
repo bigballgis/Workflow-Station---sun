@@ -245,7 +245,7 @@ public class CalledFunctionUnitComponent {
         }
 
         try {
-            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey);
+            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey, parentProcessInstanceId);
             if (bpmnOpt.isEmpty()) {
                 return Map.of();
             }

@@ -59,6 +59,28 @@ public class MiOuterStepResolver {
                 .orElseGet(OuterLookup::unknown);
     }
 
+    public OuterLookup lookup(com.portal.entity.ProcessInstance instance, String currentNode) {
+        if (currentNode == null || currentNode.isBlank()) return OuterLookup.known(null);
+        return mapFor(instance).map(map -> OuterLookup.known(OwnerCaseHandlerCalculator.outerNameIfInner(currentNode, map)))
+                .orElseGet(OuterLookup::unknown);
+    }
+
+    Optional<Map<String, String>> mapFor(com.portal.entity.ProcessInstance instance) {
+        ProcessVersionContext.of(instance);
+        String definitionId = instance.getProcessDefinitionId();
+        if (definitionId == null) return Optional.empty();
+        Map<String, String> existing = cache.getIfPresent(definitionId);
+        if (existing != null) return Optional.of(existing);
+        try {
+            Optional<String> xml = workflowEngineClient.getBpmnXml(instance.getProcessDefinitionKey(), instance.getId());
+            return xml.map(bpmn -> cache.getOrLoad(definitionId,
+                    () -> BpmnMiXmlSupport.buildMiInnerTaskNameToSubProcessName(bpmn)));
+        } catch (RuntimeException ex) {
+            // FALLBACK(external): exact BPMN is unavailable; callers preserve the existing MAIN handler.
+            return Optional.empty();
+        }
+    }
+
     /**
      * Batch load for a My Request page. Missing keys mean unknown (do not treat as "not MI").
      */

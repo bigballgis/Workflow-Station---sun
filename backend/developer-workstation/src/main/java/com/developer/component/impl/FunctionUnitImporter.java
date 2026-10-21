@@ -306,6 +306,7 @@ public class FunctionUnitImporter {
         }
         ActionConfigIdRewriter.rewritePersistedActions(
                 importWriter.findActionsByFunctionUnit(functionUnit.getId()),
+                formIdMapping,
                 emailTemplateIdMapping,
                 connectionUidMapping,
                 importWriter::saveAction);

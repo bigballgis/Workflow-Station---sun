@@ -61,6 +61,12 @@ public class FunctionUnitPackageParser {
         addForms(rawFiles, forms);
         addActions(rawFiles, actions);
         addRelationTables(rawFiles, relationTables);
+        for (Map<String, Object> relation : relationTables) {
+            Map<String, Object> snapshot = new java.util.LinkedHashMap<>(relation);
+            snapshot.put("tableType", "RELATION");
+            contents.add(content(ContentType.DATA_TABLE, String.valueOf(relation.get("tableName")),
+                    "relation-tables/" + relation.get("tableName"), objectMapper.writeValueAsString(snapshot), null));
+        }
         addJsonDir(rawFiles, "connections/", connections);
         addJsonDir(rawFiles, "email-monitors/", emailMonitors);
         RecordNotePackageValidator.validate(contents, forms, objectMapper);

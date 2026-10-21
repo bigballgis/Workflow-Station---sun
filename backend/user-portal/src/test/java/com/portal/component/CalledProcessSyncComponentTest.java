@@ -137,7 +137,7 @@ class CalledProcessSyncComponentTest {
         rows.put("vendor-check", ProcessInstance.builder().id("vendor-check").processDefinitionKey("fu-vendor")
                 .parentProcessInstanceId("purchase").callActivityId("PR_Call_PrimaryVendor").build());
         rows.get("purchase").setVariables(new HashMap<>(Map.of("title", "Laptops")));
-        when(engine.getBpmnXml("fu-purchase")).thenReturn(Optional.of("""
+        when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                   xmlns:flowable="http://flowable.org/bpmn">
                   <bpmn:process id="fu-purchase">
@@ -169,7 +169,7 @@ class CalledProcessSyncComponentTest {
                 .parentProcessInstanceId("purchase").callActivityId("PR_Call_PrimaryVendor").build());
         Map<String, Object> trusted = Map.of("server", "immutable");
         rows.get("purchase").setVariables(new HashMap<>(Map.of(reserved, trusted, "title", "local")));
-        when(engine.getBpmnXml("fu-purchase")).thenReturn(Optional.of("""
+        when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                   xmlns:flowable="http://flowable.org/bpmn">
                   <bpmn:process id="fu-purchase">
@@ -197,7 +197,7 @@ class CalledProcessSyncComponentTest {
     void engineCannotCreateBatchMetadataOnLegacyCaller(String reserved) {
         rows.put("vendor-check", ProcessInstance.builder().id("vendor-check").processDefinitionKey("fu-vendor")
                 .parentProcessInstanceId("purchase").callActivityId("call").build());
-        when(engine.getBpmnXml("fu-purchase")).thenReturn(Optional.of("""
+        when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:f="http://flowable.org/bpmn">
                   <process id="fu-purchase"><callActivity id="call"><extensionElements>
                     <f:out source="result" target="%s"/>
@@ -222,7 +222,7 @@ class CalledProcessSyncComponentTest {
                 .variables(Map.of(reserved, Map.of("private", "server-owned"))).build());
         when(engine.getProcessInstance("child")).thenReturn(Optional.of(Map.of("variables", Map.of(
                 "__callRow", Map.of("platformRowUuid", "A")))));
-        when(engine.getBpmnXml("fu-purchase")).thenReturn(Optional.of("""
+        when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:c="http://custom.bpmn.io/schema">
                   <process id="fu-purchase"><callActivity id="call"><extensionElements><c:properties>
                     <c:property name="callRowsTable" value="lines"/>
@@ -251,7 +251,7 @@ class CalledProcessSyncComponentTest {
                 .variables(new HashMap<>(Map.of("check_result", "QUALIFIED"))).build());
         when(engine.getProcessInstance("check-b")).thenReturn(Optional.of(Map.of("variables", Map.of(
                 "__callRow", Map.of("platformRowUuid", "B", "vendor_name", "Initech")))));
-        when(engine.getBpmnXml("fu-purchase")).thenReturn(Optional.of("""
+        when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                                   xmlns:custom="http://custom.bpmn.io/schema">
                   <bpmn:process id="fu-purchase">

@@ -46,6 +46,9 @@ public class ProcessFormComponent {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
     private final PlatformTransactionManager platformTransactionManager;
 
     @Lazy
@@ -194,9 +197,13 @@ public class ProcessFormComponent {
                 : Collections.emptyMap();
 
         String processDefinitionKey = processInstance.getProcessDefinitionKey();
-
-        // Retrieve the PROCESS form definition for this function unit
-        Map<String, Object> formDefinition = fetchProcessFormDefinition(processDefinitionKey);
+        String catalogId = ProcessVersionContext.of(processInstance).catalogId();
+        var snapshots = catalogSnapshots != null ? catalogSnapshots
+                : new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        boolean editable = RETURN_TO_REQUESTER.equals(processInstance.getStatus());
+        Map<String, Object> formDefinition = snapshots.processForm(catalogId, !editable);
+        formDefinition.put("subTableBindings", formDefinition.get("tableBindings"));
+        formDefinition.put("catalogSnapshot", true);
 
         Map<String, Object> configJson = Collections.emptyMap();
         String formName = "Process Form";
@@ -204,14 +211,12 @@ public class ProcessFormComponent {
 
         if (formDefinition != null) {
             configJson = extractMapField(formDefinition, "configJson");
-            formName = formDefinition.get("name") != null
-                    ? (String) formDefinition.get("name")
+            formName = formDefinition.get("formName") != null
+                    ? (String) formDefinition.get("formName")
                     : "Process Form";
             subTableBindings = extractSubTableBindings(formDefinition);
-            attachMiAssignmentConfigs(subTableBindings, processDefinitionKey);
+            attachMiAssignmentConfigs(subTableBindings, processDefinitionKey, processInstanceId);
         }
-
-        boolean editable = RETURN_TO_REQUESTER.equals(processInstance.getStatus());
 
         // Readonly Request ID synthetic field: compute from the main-table config + variables.
         Map<String, Object> fieldValues = new HashMap<>(variables);
@@ -240,16 +245,18 @@ public class ProcessFormComponent {
                 .subTableBindings(subTableBindings)
                 .editable(editable)
                 .processState(processInstance.getStatus())
-                .requestIdConfig(buildRequestIdConfigMap(processInstance.getFunctionUnitCode()))
+                .requestIdConfig(requestIdConfigMap(requestIdEnricher().resolveCatalogConfigView(catalogId)))
                 .build();
     }
 
     /** Serialize the main-table Request ID config so the portal can recompute the field live. */
     Map<String, Object> buildRequestIdConfigMap(String functionUnitCode) {
         RequestIdEnricher.RequestIdConfigView cfg = requestIdEnricher().resolveConfigView(functionUnitCode);
-        if (cfg == null) {
-            return null;
-        }
+        return requestIdConfigMap(cfg);
+    }
+
+    private Map<String, Object> requestIdConfigMap(RequestIdEnricher.RequestIdConfigView cfg) {
+        if (cfg == null) return null;
         Map<String, Object> map = new HashMap<>();
         map.put("fieldNames", cfg.fieldNames());
         map.put("separator", cfg.separator());
@@ -264,6 +271,7 @@ public class ProcessFormComponent {
      * @param formData          form payload
      */
     public void submitProcessFormUpdate(String processInstanceId, String userId, Map<String, Object> formData) {
+        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(formData);
         log.info("Submitting process form update for process: {}, user: {}", processInstanceId, userId);
 
         ProcessInstance gate = requireProcessInstance(processInstanceId);
@@ -281,8 +289,16 @@ public class ProcessFormComponent {
         List<String> emptiedKeys = takeEmptiedSubTableKeys(inbound);
         List<SubTableBindingScope> bindingScopes = takeBindingScopes(inbound);
         SubTableWriteIsolation.stripTransportMetadata(inbound);
+        Map<String, Object> permissionContext = new HashMap<>(inbound);
+        ProcessVersionContext.apply(gate, permissionContext);
+        Map<String, Object> definition = changeHistorySubmissionFilter().resolveProcessFormDefinition(
+                gate.getFunctionUnitCode(), permissionContext);
+        var fieldMapper = new TaskFormFieldMapper();
+        Map<String, Object> permitted = fieldMapper.filterEditableFields(inbound, fieldMapper.extractFieldPermissions(definition));
+        inbound.clear();
+        inbound.putAll(permitted);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
-            gate.getFunctionUnitCode(), inbound, inbound);
+            gate.getFunctionUnitCode(), inbound, permissionContext);
 
         AtomicReference<Map<String, Object>> oldValuesRef = new AtomicReference<>();
 
@@ -316,6 +332,7 @@ public class ProcessFormComponent {
             // System audit fields: refresh updated_at/updated_by at real update
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
+            ProcessVersionContext.apply(processInstance, updatedVariables);
             recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
             // Request ID is platform-derived: recompute it here too, so a resubmit that edits a
             // contributing field cannot persist a stale or client-supplied identifier.
@@ -345,7 +362,7 @@ public class ProcessFormComponent {
                             gate.getFunctionUnitCode(), snapshotOldValues),
                     userChanges);
             Object filteredOldSubTables = changeHistorySubmissionFilter().filterProcessSubTableBaseline(
-                    gate.getFunctionUnitCode(), snapshotOldValues.get("__subTables__"));
+                    gate.getFunctionUnitCode(), snapshotOldValues.get("__subTables__"), snapshotOldValues);
             recordSubTableChangeHistory(context,
                     filteredOldSubTables,
                     userChanges.get("__subTables__"),
@@ -464,31 +481,6 @@ public class ProcessFormComponent {
     }
 
     // ==================== Private Helper Methods ====================
-
-    /**
-     * Resolves PROCESS form definition: prefer shared {@code dw_*} tables with developer-workstation;
-     * otherwise parse admin-center {@code GET /function-units/{id}/contents?type=FORM} package snapshot (includes formType).
-     * <p>
-     * Legacy code incorrectly called non-existent {@code /function-units/.../forms?formType=PROCESS}, causing 4xx/5xx.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchProcessFormDefinition(String processDefinitionKey) {
-        try {
-            Map<String, Object> fromDw = fetchProcessFormFromLocalDw(processDefinitionKey);
-            if (fromDw != null) {
-                log.debug("Resolved PROCESS form for {} from local dw_form_definitions", processDefinitionKey);
-                return fromDw;
-            }
-            Map<String, Object> fromAdmin = fetchProcessFormFromAdminCenter(processDefinitionKey);
-            if (fromAdmin != null) {
-                log.debug("Resolved PROCESS form for {} from admin-center contents", processDefinitionKey);
-                return fromAdmin;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to fetch PROCESS form definition for {}: {}", processDefinitionKey, e.getMessage());
-        }
-        return null;
-    }
 
     private Map<String, Object> fetchProcessFormFromLocalDw(String functionUnitCode) {
         if (functionUnitCode == null || functionUnitCode.isBlank()) {
@@ -753,6 +745,8 @@ public class ProcessFormComponent {
                             .bindingId(b.get("bindingId") != null ? ((Number) b.get("bindingId")).longValue() : null)
                             .tableId(asLong(b.get("tableId")))
                             .tableName((String) b.get("tableName"))
+                            .relationTableId(asLong(b.get("relationTableId")))
+                            .relationTableName((String) b.get("relationTableName"))
                             .tableDisplayName((String) b.get("tableDisplayName"))
                             .bindingType((String) b.get("bindingType"))
                             .bindingMode((String) b.get("bindingMode"))
@@ -764,92 +758,9 @@ public class ProcessFormComponent {
                             .build())
                     .toList();
 
-            // Resolve primary key field names from dw_field_definitions for each table
-            List<String> tableNames = result.stream()
-                    .map(SubTableBindingData::getTableName)
-                    .filter(t -> t != null && !t.isBlank())
-                    .distinct()
-                    .toList();
-            if (!tableNames.isEmpty()) {
-                Map<String, List<String>> pkByTable = new HashMap<>();
-                List<Map<String, Object>> pkRows = jdbcTemplate.queryForList(
-                        "SELECT td.table_name, fd.field_name FROM dw_field_definitions fd"
-                                + " INNER JOIN dw_table_definitions td ON td.id = fd.table_id"
-                                + " WHERE td.table_name IN ('"
-                                + String.join("','", tableNames)
-                                + "') AND fd.is_primary_key = true ORDER BY fd.sort_order");
-                for (Map<String, Object> row : pkRows) {
-                    String tn = (String) row.get("table_name");
-                    pkByTable.computeIfAbsent(tn, k -> new ArrayList<>())
-                            .add((String) row.get("field_name"));
-                }
-                for (SubTableBindingData b : result) {
-                    if (b.getTableName() != null) {
-                        b.setPrimaryKeyFields(pkByTable.get(b.getTableName()));
-                    }
-                }
-            }
-
-            attachRelationTableIdentity(result);
-
             return result;
         }
         return Collections.emptyList();
-    }
-
-    /**
-     * Stamps {@code relationTableId} / {@code relationTableName} onto bindings that target a RELATION
-     * table, so the portal can tell them apart from designer sub-tables.
-     *
-     * <p>Without this the portal filed both kinds under the same {@code dw:<name>} canonical key and
-     * MI row isolation treated a relation table's rows as one participant's — rejecting every Save on
-     * that task. Best-effort: a lookup failure simply leaves the fields null, i.e. the previous
-     * behaviour, rather than failing form load.
-     */
-    private void attachRelationTableIdentity(List<SubTableBindingData> bindings) {
-        List<Long> bindingIds = bindings.stream()
-                .map(SubTableBindingData::getBindingId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        if (bindingIds.isEmpty()) {
-            return;
-        }
-        try {
-            String placeholders = String.join(",", Collections.nCopies(bindingIds.size(), "?"));
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT b.id AS binding_id, b.relation_table_id, rt.table_name AS relation_table_name"
-                            + " FROM dw_form_table_bindings b"
-                            + " LEFT JOIN rt_table_definitions rt ON rt.id = b.relation_table_id"
-                            + " WHERE b.relation_table_id IS NOT NULL AND b.id IN (" + placeholders + ")",
-                    bindingIds.toArray());
-            if (rows.isEmpty()) {
-                return;
-            }
-            Map<Long, Map<String, Object>> byBindingId = new HashMap<>();
-            for (Map<String, Object> row : rows) {
-                Object id = row.get("binding_id");
-                if (id instanceof Number n) {
-                    byBindingId.put(n.longValue(), row);
-                }
-            }
-            for (SubTableBindingData b : bindings) {
-                Map<String, Object> row = b.getBindingId() != null ? byBindingId.get(b.getBindingId()) : null;
-                if (row == null) {
-                    continue;
-                }
-                Object rtId = row.get("relation_table_id");
-                if (rtId instanceof Number n) {
-                    b.setRelationTableId(n.longValue());
-                }
-                Object rtName = row.get("relation_table_name");
-                if (rtName != null) {
-                    b.setRelationTableName(String.valueOf(rtName));
-                }
-            }
-        } catch (RuntimeException e) {
-            log.debug("attachRelationTableIdentity skipped: {}", e.getMessage());
-        }
     }
 
     /**
@@ -858,13 +769,13 @@ public class ProcessFormComponent {
      * sub-table Add/Edit dialog renders the same Assignment Mode block as the Task Form (portal-design-parity).
      * Best-effort: BPMN fetch failure leaves bindings without assignmentConfig (dialog just omits the block).
      */
-    private void attachMiAssignmentConfigs(List<SubTableBindingData> bindings, String processDefinitionKey) {
+    private void attachMiAssignmentConfigs(List<SubTableBindingData> bindings, String processDefinitionKey, String processInstanceId) {
         if (bindings.isEmpty() || processDefinitionKey == null || processDefinitionKey.isBlank()
                 || workflowEngineClient == null) {
             return;
         }
         try {
-            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey);
+            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey, processInstanceId);
             if (bpmnOpt.isEmpty() || bpmnOpt.get().isBlank()) {
                 return;
             }
@@ -891,6 +802,6 @@ public class ProcessFormComponent {
         if (miOuterStepResolver == null || instance == null) {
             return MiOuterStepResolver.OuterLookup.known(null);
         }
-        return miOuterStepResolver.lookup(instance.getProcessDefinitionKey(), instance.getCurrentNode());
+        return miOuterStepResolver.lookup(instance, instance.getCurrentNode());
     }
 }

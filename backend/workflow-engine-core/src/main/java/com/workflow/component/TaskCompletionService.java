@@ -60,6 +60,8 @@ public class TaskCompletionService {
 
     @Autowired
     private RuntimeService runtimeService;
+    @Autowired
+    private RuntimeVersionWriteGuard versionWriteGuard;
 
     @Autowired
     private HistoryService historyService;
@@ -174,6 +176,10 @@ public class TaskCompletionService {
             }
 
             String processInstanceId = flowableTask.getProcessInstanceId();
+            if (variables != null && variables.keySet().stream().anyMatch(
+                    com.platform.common.functionunit.RuntimeVersionContext.metadataKeys()::contains)) {
+                versionWriteGuard.validate(processInstanceId, variables);
+            }
             String initiatorUserId = resolveInitiatorUserId(processInstanceId);
             if (processInstanceId != null) {
                 runtimeService.setVariable(processInstanceId, "currentUserId", normalizePortalUserIdForVariable(userId));
@@ -253,6 +259,8 @@ public class TaskCompletionService {
                 userId,
                 "Task completed successfully");
 
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (MultiInstanceDataResolver.OptimisticLockException e) {

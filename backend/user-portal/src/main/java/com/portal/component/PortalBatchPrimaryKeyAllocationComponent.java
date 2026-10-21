@@ -42,7 +42,7 @@ public class PortalBatchPrimaryKeyAllocationComponent {
         PkGenerationConfig config = rawConfig instanceof Map<?, ?> json && !json.isEmpty()
                 ? mapper.convertValue(json, PkGenerationConfig.class) : PkGenerationConfig.builder().strategy("uuid").build();
         if ("manual".equals(config.getStrategy())) throw forbidden("Manual keys cannot be allocated");
-        List<String> values = allocator.allocate(request.getTableId(), request.getFieldName(), config, count, "");
+        List<String> values = allocator.allocate(request.getTableId(), request.getFieldName(), config, count, "", "dw_pk_sequences");
         return AllocatePrimaryKeyResponse.builder().values(values).build();
     }
 

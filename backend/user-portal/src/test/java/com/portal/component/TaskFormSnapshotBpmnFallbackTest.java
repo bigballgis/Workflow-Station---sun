@@ -52,6 +52,9 @@ class TaskFormSnapshotBpmnFallbackTest {
                 mock(RestTemplate.class), new ObjectMapper(), jdbcTemplate,
                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
 
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(component, jdbcTemplate,
+                "process-atm", "Activity_092hlui", "320", Map.of("configJson", Map.of("rule",
+                List.of(Map.of("field", "case_number", "readonly", true))), "fieldPermissions", Map.of()));
         Map<String, Object> variables = new HashMap<>();
         variables.put("case_number", "ATM-DC-PW-000001");
         variables.put("__subTables__", Map.of(

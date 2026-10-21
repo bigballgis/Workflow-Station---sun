@@ -1,6 +1,8 @@
 package com.developer.util;
 
 import com.developer.entity.ActionDefinition;
+import com.developer.enums.ActionType;
+import com.developer.exception.DeveloperBusinessException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,7 +11,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Rewrites Action {@code config_json.postEmailRules} template / connection ids after clone, import, or rollback.
+ * Rewrites Action form, template and connection references after clone, import, or rollback.
  */
 public final class ActionConfigIdRewriter {
 
@@ -105,6 +107,7 @@ public final class ActionConfigIdRewriter {
 
     public static void rewritePersistedActions(
             List<ActionDefinition> actions,
+            Map<Long, Long> formIdMapping,
             Map<Long, Long> emailTemplateIdMapping,
             Map<String, String> connectionUidMapping,
             Consumer<ActionDefinition> saver) {
@@ -117,7 +120,17 @@ public final class ActionConfigIdRewriter {
                 continue;
             }
             Map<String, Object> copy = new HashMap<>(config);
-            if (rewritePostEmail(copy, emailTemplateIdMapping, connectionUidMapping)) {
+            boolean changed = false;
+            if (action.getActionType() == ActionType.FORM_POPUP && copy.get("formId") != null) {
+                Long mapped = formIdMapping.get(parseLong(copy.get("formId")));
+                if (mapped == null) {
+                    throw new DeveloperBusinessException("BIZ_ACTION_FORM_NOT_FOUND",
+                            "Action form reference is not present in the Function Unit package");
+                }
+                copy.put("formId", mapped);
+                changed = true;
+            }
+            if (rewritePostEmail(copy, emailTemplateIdMapping, connectionUidMapping) || changed) {
                 action.setConfigJson(copy);
                 saver.accept(action);
             }

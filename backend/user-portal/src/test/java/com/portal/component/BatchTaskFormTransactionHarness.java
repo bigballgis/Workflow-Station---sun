@@ -58,7 +58,7 @@ final class BatchTaskFormTransactionHarness {
             repository = repository(failAfterWrite);
         } else {
             repository = jpa.repository();
-            repository.saveAndFlush(ProcessInstance.builder().id("synthetic-process").processDefinitionKey("synthetic-key")
+            repository.saveAndFlush(ProcessInstance.builder().functionUnitCatalogId("release-v1").id("synthetic-process").processDefinitionKey("synthetic-key")
                     .startUserId("synthetic-user").status("RUNNING").functionUnitCode("synthetic-unit")
                     .variables(mapper.convertValue(baseline, new TypeReference<Map<String, Object>>() { })).build());
         }
@@ -73,6 +73,7 @@ final class BatchTaskFormTransactionHarness {
         component = new TaskFormComponent(mock(ProcessFormComponent.class), mock(ChangeHistoryComponent.class),
                 repository, engine, mock(RestTemplate.class), mapper, metadata,
                 jpa == null ? new DataSourceTransactionManager(source) : jpa.transactionManager());
+        com.portal.testsupport.PortalVersionTestSupport.task(component);
         TaskFormDefinitionLoader loader = mock(TaskFormDefinitionLoader.class);
         when(loader.fetchTaskFormByStageId(eq("review"), eq("synthetic-process"), any())).thenReturn(
                 Map.of("sourceId", "form-one", "fieldPermissions", Map.of("101:caption", "EDITABLE"), "configJson", Map.of(),
@@ -88,7 +89,7 @@ final class BatchTaskFormTransactionHarness {
 
     private ProcessInstanceRepository repository(boolean failAfterWrite) {
         ProcessInstanceRepository repository = mock(ProcessInstanceRepository.class);
-        when(repository.findById("synthetic-process")).thenAnswer(invocation -> Optional.of(ProcessInstance.builder()
+        when(repository.findById("synthetic-process")).thenAnswer(invocation -> Optional.of(ProcessInstance.builder().functionUnitCatalogId("release-v1")
                 .id("synthetic-process").functionUnitCode("synthetic-unit").variables(read()).build()));
         when(repository.save(any(ProcessInstance.class))).thenAnswer(invocation -> {
             ProcessInstance instance = invocation.getArgument(0);

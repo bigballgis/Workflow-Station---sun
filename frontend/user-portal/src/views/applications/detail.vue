@@ -80,6 +80,12 @@
             <el-descriptions-item :label="t('applicationDetail.processType')">
               {{ processInfo.processDefinitionName || '-' }}
             </el-descriptions-item>
+            <el-descriptions-item
+              v-if="processInfo.functionUnitVersionLabel"
+              :label="t('applicationDetail.functionUnitVersion')"
+            >
+              {{ processInfo.functionUnitVersionLabel }}
+            </el-descriptions-item>
             <el-descriptions-item :label="t('applicationDetail.initiator')">
               {{ processInfo.startUserName || processInfo.startUserId || '-' }}
             </el-descriptions-item>

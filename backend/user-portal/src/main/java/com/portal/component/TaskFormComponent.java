@@ -671,6 +671,7 @@ public class TaskFormComponent {
             List<SubTableBindingScope> subTableBindingScopes,
             List<com.portal.dto.SubTableBatchChange> subTableBatchChanges) {
         log.info("Submitting task form for task: {}, user: {}", taskId, userId);
+        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(formData);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
 
@@ -697,7 +698,8 @@ public class TaskFormComponent {
                 requireProcessInstance(taskInfo.processInstanceId).getVariables()), workflowEngineClient);
 
         // Filter: reject fields the form marks READONLY (an absent key means editable)
-        Map<String, Object> editableData = filterEditableFields(formData, fieldPermissions);
+        Map<String, Object> editableData = formDefinition != null && Boolean.TRUE.equals(formDefinition.get("readOnly"))
+                ? new HashMap<>() : filterEditableFields(formData, fieldPermissions);
 
         if (editableData.isEmpty()) {
             // Warn, not debug: the caller submitted values and we are persisting none of them, yet
@@ -719,7 +721,9 @@ public class TaskFormComponent {
                 if (fuCode != null && !fuCode.isBlank()) {
                     ProcessSubTablePrimaryKeyEnricherComponent enricher = subTablePrimaryKeyEnricher();
                     if (enricher != null) {
-                        enricher.allocateMissingPrimaryKeysInVariables(fuCode, editableData);
+                        Map<String, Object> pkContext = new HashMap<>(editableData);
+                        ProcessVersionContext.apply(pi, pkContext);
+                        enricher.allocateMissingPrimaryKeysInVariables(fuCode, pkContext);
                     }
                 }
             });
@@ -837,6 +841,7 @@ public class TaskFormComponent {
             // System audit fields: refresh updated_at/updated_by at real update
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
+            ProcessVersionContext.apply(processInstance, updatedVariables);
             recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
             // Request ID is platform-derived: recompute it from the main-table config so a task
             // that edits a contributing field cannot leave the persisted identifier stale, and a
@@ -1188,6 +1193,7 @@ public class TaskFormComponent {
         SubTableNestingSanitizer.stripDeepNestedSubTables(merged);
         // The merge can pull a client-supplied Request ID in from completedVariables; re-derive it
         // so a snapshot capture never rewrites the stored identifier with an unstamped value.
+        ProcessVersionContext.apply(processInstance, merged);
         requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), merged);
         stampSlaDueDate(processInstance, merged);
         processInstance.setVariables(merged);
@@ -1203,6 +1209,15 @@ public class TaskFormComponent {
      * persists permissions sparsely). When fieldPermissions is empty, accepts all fields
      * (backward compatible). See {@link TaskFormFieldMapper#filterEditableFields}.
      */
+    public Map<String, Object> filterVersionedSubmission(String processId, String stageId, Map<String, Object> payload) {
+        Map<String, Object> form = fetchTaskFormByStageId(stageId, processId);
+        if (form != null && Boolean.TRUE.equals(form.get("readOnly"))) return new HashMap<>();
+        Map<String, Object> filtered = filterEditableFields(payload,
+                form == null ? Collections.emptyMap() : fieldMapper().extractFieldPermissions(form));
+        filterSubTableFieldsInPlace(filtered, processId, stageId);
+        return filtered;
+    }
+
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
             Map<String, String> fieldPermissions) {
         return fieldMapper().filterEditableFields(formData, fieldPermissions);
@@ -1276,8 +1291,7 @@ public class TaskFormComponent {
 
     /**
      * Loads Task Form definition by stageId (taskDefinitionKey), scoped to the process instance's function unit.
-     * Prefers developer-workstation; falls back to local
-     * {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
+     * Reads the BPMN/form snapshot assigned to this instance.
      *
      * <p>{@code processInstanceId} is what identifies the function unit: the same BPMN node id may be bound
      * in several units, so an unscoped lookup can return a different unit's form.</p>
@@ -1294,7 +1308,7 @@ public class TaskFormComponent {
         if (miOuterStepResolver == null || instance == null) {
             return MiOuterStepResolver.OuterLookup.known(null);
         }
-        return miOuterStepResolver.lookup(instance.getProcessDefinitionKey(), instance.getCurrentNode());
+        return miOuterStepResolver.lookup(instance, instance.getCurrentNode());
     }
 
     // ========== Inner data class ==========

@@ -67,11 +67,15 @@ public interface FunctionUnitContentRepository extends JpaRepository<FunctionUni
     long countByFunctionUnitIdAndContentType(String functionUnitId, ContentType contentType);
     
     /**
-     * 根据流程定义Key查找内容（flowable_process_definition_id 以 processKey: 开头）
-     * 返回最新部署的记录（按 createdAt 降序取第一条）
-     * 使用 JOIN FETCH 避免懒加载问题，CONCAT() 替代 || 提高兼容性
+     * 根据引擎 process key 查找关联发布（definition id 可能仅为 UUID）
+     * 优先启用的发布，否则返回最新内容记录；只返回一个候选以界定查询成本
+     * 通过 act_re_procdef 精确关联，避免依赖 definition id 的字符串格式
      */
-    @Query("SELECT c FROM FunctionUnitContent c JOIN FETCH c.functionUnit WHERE c.flowableProcessDefinitionId LIKE CONCAT(:processKey, ':%') ORDER BY c.createdAt DESC")
+    @Query(value = "SELECT c.* FROM sys_function_unit_contents c "
+            + "JOIN sys_function_units u ON u.id=c.function_unit_id "
+            + "JOIN act_re_procdef p ON p.id_=c.flowable_process_definition_id "
+            + "WHERE c.content_type='PROCESS' AND p.key_=:processKey "
+            + "ORDER BY COALESCE(u.enabled,false) DESC,c.created_at DESC LIMIT 1", nativeQuery = true)
     List<FunctionUnitContent> findAllByProcessDefinitionKey(@Param("processKey") String processKey);
 
     /**

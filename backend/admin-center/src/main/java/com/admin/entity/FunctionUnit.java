@@ -50,6 +50,9 @@ public class FunctionUnit {
     
     @Column(name = "checksum", length = 64)
     private String checksum;
+
+    @Column(name = "content_checksum", length = 64)
+    private String contentChecksum;
     
     @Column(name = "digital_signature", columnDefinition = "TEXT")
     private String digitalSignature;

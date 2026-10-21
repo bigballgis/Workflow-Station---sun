@@ -73,7 +73,7 @@ class SubTableBatchStartContextTest {
         var cases = Map.of("tableName", "synthetic_cases", "tableType", "MAIN", "fields", List.of(
                 Map.of("fieldName", "case_token", "dataType", "TEXT", "isPrimaryKey", true)));
         return new LinkedHashMap<>(Map.of("code", "synthetic", "version", "1", "forms", List.of(form),
-                "processes", List.of(Map.of("data", bpmn("synthetic"))), "dataTables", List.of(
+                "processes", List.of(Map.of("data", bpmn("synthetic"), "flowableProcessDefinitionKey", "synthetic", "flowableProcessDefinitionId", "synthetic:1:released")), "dataTables", List.of(
                         Map.of("data", mapper.writeValueAsString(entries)), Map.of("data", mapper.writeValueAsString(cases)))));
     }
 

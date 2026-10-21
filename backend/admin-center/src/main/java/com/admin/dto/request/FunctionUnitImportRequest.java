@@ -30,8 +30,8 @@ public class FunctionUnitImportRequest {
     private String fileName;
     
     /**
-     * Explicit false rejects in-place overwrite of the same code+version.
-     * Null / omitted keeps the historical behaviour (overwrite in place).
+     * Retained for transport compatibility. Released content is immutable; this flag
+     * never permits replacing a different package at the same code+version.
      */
     private Boolean overwrite;
     

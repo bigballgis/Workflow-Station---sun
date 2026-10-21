@@ -105,6 +105,8 @@ public class TaskApprovalCompletionComponent {
     SubTableBatchInitialMiOutcome.Plan handleApproval(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
         String taskId = task.getTaskId();
         String action = request.getAction();
+        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(request.getVariables());
+        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(request.getFormData());
 
         taskFormComponent.validateSubTableBatchChanges(task.getTaskDefinitionKey(),
                 task.getProcessInstanceId(), request.getSubTableBatchChanges());
@@ -127,6 +129,9 @@ public class TaskApprovalCompletionComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+        Map<String, Object> permitted = taskFormComponent.filterVersionedSubmission(task.getProcessInstanceId(), task.getTaskDefinitionKey(), variables);
+        variables.clear();
+        variables.putAll(permitted);
         SubTableWriteIsolation.stripTransportMetadata(variables);
         Map<String, Object> submittedSnapshot = taskFormComponent.copyChangeHistorySubmission(request.getFormData());
         if (submittedSnapshot == null) {
@@ -270,6 +275,7 @@ public class TaskApprovalCompletionComponent {
                 // one-level structure before persisting the approval write-back.
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
+                ProcessVersionContext.apply(syncInstance, mergedVars);
                 stampRequestId(syncInstance.getFunctionUnitCode(), mergedVars);
                 if (slaDueDateEnricher != null) {
                     slaDueDateEnricher.stamp(syncInstance.getFunctionUnitCode(), mergedVars,
@@ -479,7 +485,7 @@ public class TaskApprovalCompletionComponent {
         if (node == null || node.isBlank()) {
             node = instance != null ? instance.getCurrentNode() : null;
         }
-        return miOuterStepResolver.lookup(processKey, node);
+        return instance == null ? MiOuterStepResolver.OuterLookup.unknown() : miOuterStepResolver.lookup(instance, node);
     }
 
     /**
@@ -775,6 +781,7 @@ public class TaskApprovalCompletionComponent {
         if (submission != null) {
             merged.putAll(submission);
         }
+        processInstance.ifPresent(instance -> ProcessVersionContext.apply(instance, merged));
         recalculateComputedFields(functionUnitCode, merged);
         return merged;
     }

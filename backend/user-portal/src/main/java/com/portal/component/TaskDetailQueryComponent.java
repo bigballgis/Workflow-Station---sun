@@ -73,6 +73,8 @@ public class TaskDetailQueryComponent {
             attachActions(taskId, data, taskInfo);
             requestIdEnricher.enrichTaskRequestIds(List.of(taskInfo));
             return Optional.of(taskInfo);
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("Failed to get task by id {} from Flowable: {}", taskId, e.getMessage());
             return Optional.empty();
@@ -161,6 +163,8 @@ public class TaskDetailQueryComponent {
             List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
             log.info("[PERF] detail.getTaskActions took {} ms", (System.nanoTime() - tActions) / 1_000_000L);
             taskInfo.setActions(actions != null ? actions : Collections.emptyList());
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("Failed to get actions for task {}: {}", taskId, e.getMessage(), e);
             taskInfo.setActions(Collections.emptyList());

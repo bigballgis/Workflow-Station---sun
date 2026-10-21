@@ -49,13 +49,11 @@ class SubTableWriteDesign {
                 ? String.valueOf(selectedId).equals(String.valueOf(form.get("formId")))
                 : ProcessStartForm.matches(form)).toList();
         if (selected.isEmpty() && forms.stream().noneMatch(f -> f.containsKey("tableBindings"))) {
-            // FALLBACK(migration): pre-freeze catalog packages contain bare configJson.
-            // Retire only after those pinned instances have completed; never upgrade their semantics.
-            return null;
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
         }
         if (selected.size() != 1) throw invalid("Pinned form is missing or ambiguous");
         Map<String, Object> form = selected.get(0);
-        if (!form.containsKey("tableBindings")) return null; // Same legacy package contract above.
+        if (!form.containsKey("tableBindings")) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
         Map<String, Map<String, Object>> tables = new LinkedHashMap<>();
         for (Map<String, Object> table : contents(catalogId, "DATA_TABLE")) {
             String tableName = normalizedName(table.get("tableName"));
