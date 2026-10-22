@@ -3,16 +3,20 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-20)
+## 统计 (截至 2026-10-21)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **28** | `index.yaml` |
+| 🔓 Open | **29** | `index.yaml` |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-10-21：#1692 已修复 Portal Select 三入口多选配置丢失及数组默认值标量化；全量2406项、build、容器重建及隔离响应UI红→绿通过。未验证实际业务保存回显及双FU样本，类型检查存量错误未变。见 `docs/verification/2026-10-21-select-multiple.md`。
+
+2026-10-21：创建手工Select测试FU50097时另发现#1693：中文FU名称生成的流程code不满足XML ID规则，创建失败；暂用英文名称完成测试FU，范围外问题待处理。
 
 2026-10-20：#1687 已修复，Email Monitor `HTML_RICH` 保留 editor 格式、发信 `${richText:field}` 净化后插入 HTML 正文；engine/DW 单测与截图回归通过。
 

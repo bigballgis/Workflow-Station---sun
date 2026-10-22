@@ -3,6 +3,7 @@ import { isFormCreateRuleReadonly, applyDesignerHideFlagToFormField } from '@/co
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import { applyFormCreateValidationToFormField } from '@/utils/formCreateValidateRules'
 import { applySensitiveMaskFromRule } from '@/utils/applySensitiveMaskFromRule'
+import { applySelectPropsFromRule } from '@/utils/applySelectPropsFromRule'
 import { applyUploadPropsFromRule, type UploadSceneFlagsArg } from '@/utils/applyUploadPropsFromRule'
 import { mapDesignerUploadToPortalFieldType } from '@platform-shared/upload/uploadRuleType'
 
@@ -55,6 +56,7 @@ export function convertFormCreateRule(rule: any, blockedFieldKeys?: UploadSceneF
     placeholder: rule.props?.placeholder || '',
     span: rule.col?.span || 24
   }
+  applySelectPropsFromRule(field, rule)
   applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
 
   // 处理选项 (rule.options or rule.props.options)

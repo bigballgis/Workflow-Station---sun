@@ -8,6 +8,22 @@ import {
 } from '../formCreateRuleDefaults'
 
 describe('formCreateRuleDefaults (portal)', () => {
+  it.each([{ value: [1] }, { value: [1, 2] }, { value: [] }])('preserves multiple Select array default $value', ({ value }) => {
+    expect(resolveRuleDefaultValue({
+      type: 'select', value, props: { multiple: true },
+      options: [{ label: 'First', value: 1 }, { label: 'Second', value: 2 }, { label: 'Combined', value: '1,2' }],
+    })).toEqual(value.length ? value : undefined)
+  })
+
+  it.each([{ value: 'First', expected: [1] }, { value: ['1', 'Second'], expected: [1, 2] }])(
+    'coerces each multiple Select default without collapsing the array', ({ value, expected }) => {
+      expect(resolveRuleDefaultValue({
+        type: 'select', props: { multiple: true, value },
+        options: [{ label: 'First', value: 1 }, { label: 'Second', value: 2 }],
+      })).toEqual(expected)
+    },
+  )
+
   it('applyRuleDefaultToFormField sets field.defaultValue from rule.props.value', () => {
     const field: { defaultValue?: unknown } = {}
     const rule = {
