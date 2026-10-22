@@ -48,8 +48,11 @@ public class CatalogSnapshotReader {
         java.util.ArrayList<Map<String, Object>> result = new java.util.ArrayList<>();
         for (var raw : objects(form.get("tableBindings"))) {
             boolean related = "RELATED".equals(raw.get("bindingType"));
-            var matches = tables.stream().filter(t -> java.util.Objects.equals(t.get("tableName"), raw.get("tableName")))
-                    .filter(t -> related == "RELATION".equals(t.get("tableType"))).toList();
+            if (related && sameId(raw.get("relationTableId"), SYSTEM_USERS_RELATION_TABLE_ID)) {
+                result.add(systemUsersBinding(raw));
+                continue;
+            }
+            var matches = tables.stream().filter(t -> boundTable(t, raw, related)).toList();
             if (matches.size() != 1) throw invalid(catalogId);
             var table = matches.get(0);
             Map<String, Object> binding = new java.util.LinkedHashMap<>(raw);
@@ -60,6 +63,8 @@ public class CatalogSnapshotReader {
             if (related) {
                 binding.put("relationTableId", tableId);
                 binding.put("relationTableName", table.get("tableName"));
+                // DW exports RELATED bindings without a name; give them the table's, as the live loader did.
+                binding.putIfAbsent("tableName", table.get("tableName"));
             }
             var fields = objects(table.get("fields"));
             java.util.ArrayList<Map<String, Object>> definitions = new java.util.ArrayList<>();
@@ -89,6 +94,37 @@ public class CatalogSnapshotReader {
             result.add(binding);
         }
         return result;
+    }
+
+    /**
+     * The platform's built-in Users relation (sys_users). It is virtual: there is no rt_ table row, so
+     * no package carries its structure and the snapshot has no table for it.
+     */
+    public static final long SYSTEM_USERS_RELATION_TABLE_ID = -1_000_000_001L;
+
+    /**
+     * A binding names its table. A RELATED binding exported by Developer Workstation carries only its
+     * relationTableId, so without a name it is matched by that id (as the live binding loader joined rt_).
+     */
+    private static boolean boundTable(Map<String, Object> table, Map<String, Object> raw, boolean related) {
+        if (related != "RELATION".equals(table.get("tableType"))) return false;
+        if (raw.get("tableName") != null || !related) return java.util.Objects.equals(table.get("tableName"), raw.get("tableName"));
+        return sameId(table.get("relationTableId"), raw.get("relationTableId"));
+    }
+
+    private static boolean sameId(Object a, Object b) {
+        return a != null && b != null && String.valueOf(a).trim().equals(String.valueOf(b).trim());
+    }
+
+    /** Same shape the live binding loader gave it: a RELATION binding with no table row and no fields. */
+    private static Map<String, Object> systemUsersBinding(Map<String, Object> raw) {
+        Map<String, Object> binding = new java.util.LinkedHashMap<>(raw);
+        binding.put("tableId", null);
+        binding.put("tableType", "RELATION");
+        binding.put("fieldDefinitions", List.of());
+        binding.put("columns", List.of());
+        binding.put("data", List.of());
+        return binding;
     }
 
     public Map<String, Map<String, Object>> tableAliases(String catalogId) {
