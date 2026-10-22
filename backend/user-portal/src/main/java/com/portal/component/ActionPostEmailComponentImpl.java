@@ -49,6 +49,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
             context = ActionPostEmailContext.builder().actionId(context.getActionId())
                     .operation(context.getOperation()).functionUnitCode(context.getFunctionUnitCode())
                     .processInstanceId(resolveProcessInstanceId(context, result))
+                    .taskId(context.getTaskId())
                     .operatorId(context.getOperatorId()).comment(context.getComment()).build();
             resolved = resolveIfNeeded(context);
         }
@@ -67,7 +68,8 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
             return true;
         }
         return ActionPostEmailContext.OP_FORM_POPUP.equals(context.getOperation())
-                && !StringUtils.hasText(context.getProcessInstanceId());
+                && !StringUtils.hasText(context.getProcessInstanceId())
+                && !StringUtils.hasText(context.getTaskId());
     }
 
     @Override
