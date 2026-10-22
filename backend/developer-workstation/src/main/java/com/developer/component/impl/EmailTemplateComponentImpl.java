@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.component.EmailResourceUsageChecker;
 import com.developer.component.EmailTemplateComponent;
 import com.developer.dto.EmailTemplateRequest;
 import com.developer.dto.EmailTemplateResponse;
@@ -25,6 +26,7 @@ public class EmailTemplateComponentImpl implements EmailTemplateComponent {
     private final EmailTemplateRepository emailTemplateRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final I18nService i18nService;
+    private final EmailResourceUsageChecker emailResourceUsageChecker;
 
     @Override
     @Transactional(readOnly = true)
@@ -88,7 +90,9 @@ public class EmailTemplateComponentImpl implements EmailTemplateComponent {
     @Override
     @Transactional
     public void delete(Long functionUnitId, Long templateId) {
-        emailTemplateRepository.delete(getEntity(functionUnitId, templateId));
+        EmailTemplate template = getEntity(functionUnitId, templateId);
+        emailResourceUsageChecker.assertTemplateUnused(functionUnitId, templateId);
+        emailTemplateRepository.delete(template);
     }
 
     private void ensureFunctionUnitExists(Long functionUnitId) {

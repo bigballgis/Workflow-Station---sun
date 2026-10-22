@@ -124,6 +124,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { emailTemplateApi, type EmailTemplate, type EmailTemplateRequest } from '@/api/emailTemplate'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import { isMessageBoxCancel } from '@/utils/connectionValidation'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
@@ -292,8 +293,9 @@ async function handleDelete(row: EmailTemplate) {
     await emailTemplateApi.delete(props.functionUnitId, row.id)
     ElMessage.success(t('common.deleteSuccess'))
     await loadTemplates()
-  } catch {
-    // cancelled or failed
+  } catch (error) {
+    if (isMessageBoxCancel(error)) return
+    ElMessage.error(resolveUserFacingHttpMessage(error, t) || t('common.deleteFailed'))
   }
 }
 

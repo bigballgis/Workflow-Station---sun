@@ -137,6 +137,7 @@ import {
 } from '@/api/emailMonitor'
 import { connectionApi, type EmailConnection } from '@/api/connection'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import { isMessageBoxCancel } from '@/utils/connectionValidation'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
@@ -300,8 +301,9 @@ async function handleDelete(row: EmailMonitorRule) {
     await emailMonitorApi.delete(props.functionUnitId, row.id)
     ElMessage.success(t('common.deleteSuccess'))
     await loadRules()
-  } catch {
-    // cancelled or failed
+  } catch (error) {
+    if (isMessageBoxCancel(error)) return
+    ElMessage.error(resolveUserFacingHttpMessage(error, t) || t('common.deleteFailed'))
   }
 }
 

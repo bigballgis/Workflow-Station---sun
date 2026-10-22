@@ -4,6 +4,7 @@ import com.developer.client.AdminCenterEnvironmentClient;
 import com.developer.client.AdminCenterSystemImapClient;
 import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.component.EmailConnectionComponent;
+import com.developer.component.EmailResourceUsageChecker;
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
 import com.developer.dto.VaultEnvOption;
@@ -43,6 +44,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final AdminCenterSystemSmtpClient adminCenterSystemSmtpClient;
     private final AdminCenterSystemImapClient adminCenterSystemImapClient;
     private final AdminCenterEnvironmentClient adminCenterEnvironmentClient;
+    private final EmailResourceUsageChecker emailResourceUsageChecker;
 
     /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
@@ -190,7 +192,9 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     @Override
     @Transactional
     public void delete(Long functionUnitId, Long connectionId) {
-        emailConnectionRepository.delete(getEntity(functionUnitId, connectionId));
+        EmailConnection connection = getEntity(functionUnitId, connectionId);
+        emailResourceUsageChecker.assertConnectionUnused(functionUnitId, connection);
+        emailConnectionRepository.delete(connection);
     }
 
     @Override

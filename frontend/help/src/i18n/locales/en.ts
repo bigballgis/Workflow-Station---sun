@@ -314,7 +314,7 @@ export default {
       "Process Design: Send task selected. Click {'{'} {'}'} beside To to insert a main-table field as ${\'{'}fieldName{\'}'}.",
     connectionTitle: 'First: an Outbound connection',
     connectionBody:
-      'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and Password (VAULT) — pick a VAULT key from Admin Center → Environment variables. Host, port, and Use TLS come from System Config. Use Test before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead.',
+      'Open Connections. Set Direction to Outbound (send). Fill the sender address, SMTP username, and Password (VAULT) — pick a VAULT key from Admin Center → Environment variables. Host, port, and Use TLS come from System Config. Use Test before you wire the process. The same email cannot have two connections in the same direction — edit the existing row or pick Inbound instead. Delete is blocked while Email Monitor, Action Design, or a Send Email task still references the connection.',
     connectionCatalogLead: 'Field catalog — every control on New / Edit Connection (Outbound) and Test.',
     fDirection:
       'Required. Outbound (send) for this job; Inbound (monitor) is for Email Monitor. A legacy Both row must be saved as one of those two.',
@@ -344,7 +344,7 @@ export default {
     fSendTest: 'Sends one trial message using this outbound connection and the test recipient.',
     templateTitle: 'Write an Email Template',
     templateBody:
-      'Open Email Templates. Give the template a name, write Subject and Body, then tick Enabled. Use Insert Variable for a main field, a Lookup or Related attribute, or a sub-table (rendered as a table). Do not type quoted field names.',
+      'Open Email Templates. Give the template a name, write Subject and Body, then tick Enabled. Use Insert Variable for a main field, a Lookup or Related attribute, or a sub-table (rendered as a table). Do not type quoted field names. Delete is blocked while Action Design or a Send Email task still references the template.',
     templateCatalogLead: 'Field catalog — every control on New / Edit Template.',
     templateNameSample: 'Template name in the screenshot (Purchase Request demo).',
     fTemplateName: 'Required. Name in the Send Task Template list. Blank blocks save.',
@@ -543,7 +543,7 @@ export default {
     startEventFigure: 'Start event StartEvent_Email: Vendor quote to PR bound, Subject Filter Quote, extraction configured.',
     inboundTitle: 'First: an Inbound connection',
     inboundBody:
-      'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address, IMAP username, and Password (VAULT) from Admin Center → Environment variables. IMAP host, port, and SSL come from System Config. There is no inbound connection until Direction is Inbound.',
+      'Open Connections. Set Direction to Inbound (monitor). Fill the mailbox address, IMAP username, and Password (VAULT) from Admin Center → Environment variables. IMAP host, port, and SSL come from System Config. There is no inbound connection until Direction is Inbound. Delete is blocked while an Email Monitor still uses this connection.',
     inboundCatalogLead: 'Field catalog — every control on New / Edit Connection (Inbound).',
     fDirection: 'Required. Must be Inbound (monitor) or this mailbox never appears under Email Monitors.',
     fDirectionInbound: 'Choice: poll this mailbox with IMAP. Outbound (send) is for Send email, not this page.',

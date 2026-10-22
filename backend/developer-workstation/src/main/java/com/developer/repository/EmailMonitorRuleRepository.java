@@ -29,5 +29,7 @@ public interface EmailMonitorRuleRepository extends JpaRepository<EmailMonitorRu
 
     boolean existsByFunctionUnitIdAndStartEventIdAndIdNot(Long functionUnitId, String startEventId, Long id);
 
+    boolean existsByFunctionUnitIdAndConnectionUid(Long functionUnitId, String connectionUid);
+
     void deleteByFunctionUnitId(Long functionUnitId);
 }

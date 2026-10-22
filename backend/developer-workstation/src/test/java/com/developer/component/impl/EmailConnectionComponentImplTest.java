@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.client.AdminCenterEnvironmentClient;
+import com.developer.component.EmailResourceUsageChecker;
 import com.developer.client.AdminCenterSystemImapClient;
 import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.entity.EmailConnection;
@@ -56,6 +57,9 @@ class EmailConnectionComponentImplTest {
 
     @Mock
     private AdminCenterEnvironmentClient adminCenterEnvironmentClient;
+
+    @Mock
+    private EmailResourceUsageChecker emailResourceUsageChecker;
 
     @InjectMocks
     private EmailConnectionComponentImpl emailConnectionComponent;
@@ -330,6 +334,32 @@ class EmailConnectionComponentImplTest {
 
         assertEquals("CONFLICT_CONNECTION_NAME", ex.getErrorCode());
         verify(adminCenterSystemImapClient, never()).fetchSystemImapEndpoint();
+    }
+
+    @Test
+    void delete_unused_deletes() {
+        EmailConnection connection = sampleConnection(EmailConnectionDirection.OUTBOUND);
+        when(emailConnectionRepository.findById(10L)).thenReturn(Optional.of(connection));
+
+        emailConnectionComponent.delete(1L, 10L);
+
+        verify(emailResourceUsageChecker).assertConnectionUnused(1L, connection);
+        verify(emailConnectionRepository).delete(connection);
+    }
+
+    @Test
+    void delete_inUse_doesNotDelete() {
+        EmailConnection connection = sampleConnection(EmailConnectionDirection.OUTBOUND);
+        when(emailConnectionRepository.findById(10L)).thenReturn(Optional.of(connection));
+        org.mockito.Mockito.doThrow(new DeveloperBusinessException("CONFLICT_CONNECTION_IN_USE", "in use"))
+                .when(emailResourceUsageChecker).assertConnectionUnused(1L, connection);
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> emailConnectionComponent.delete(1L, 10L));
+
+        assertEquals("CONFLICT_CONNECTION_IN_USE", ex.getErrorCode());
+        verify(emailConnectionRepository, never()).delete(any());
     }
 
     @Test
