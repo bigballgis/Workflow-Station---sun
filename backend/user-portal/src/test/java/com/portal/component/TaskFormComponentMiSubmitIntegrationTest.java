@@ -37,11 +37,13 @@ class TaskFormComponentMiSubmitIntegrationTest {
     private static final String STAGE_ID = "stage-1";
 
     private TaskFormComponent component(JdbcTemplate jdbcTemplate, WorkflowEngineClient workflowEngineClient) {
-        return new TaskFormComponent(
+        var component = new TaskFormComponent(
                 mock(ProcessFormComponent.class), mock(ChangeHistoryComponent.class),
                 processInstanceRepository, workflowEngineClient,
                 mock(RestTemplate.class), new ObjectMapper(), jdbcTemplate,
                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
+        com.portal.testsupport.PortalVersionTestSupport.task(component);
+        return component;
     }
 
     private final ProcessInstanceRepository processInstanceRepository = mock(ProcessInstanceRepository.class);
@@ -67,6 +69,7 @@ class TaskFormComponentMiSubmitIntegrationTest {
     private ProcessInstance processInstanceWithVariables(Map<String, Object> variables) {
         ProcessInstance pi = new ProcessInstance();
         pi.setId(PROCESS_INSTANCE_ID);
+        pi.setFunctionUnitCatalogId("release-v1");
         pi.setFunctionUnitCode("fu-test");
         pi.setVariables(new HashMap<>(variables));
         return pi;
@@ -317,10 +320,15 @@ class TaskFormComponentMiSubmitIntegrationTest {
     void submitTaskForm_rederivesRequestIdInsteadOfTrustingTheClientValue() {
         JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
         // RequestIdEnricher resolves the PRIMARY-table config through this same JdbcTemplate.
-        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), anyString()))
-                .thenReturn(List.of("{\"fieldNames\":[\"I\",\"idncfm\"],\"separator\":\"_\"}"));
+
         TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
 
+        var requestIds = new RequestIdEnricher(jdbcTemplate, new ObjectMapper(), processInstanceRepository);
+        var snapshots = mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+        when(snapshots.contents("release-v1", "DATA_TABLE")).thenReturn(List.of(Map.of("tableType", "MAIN",
+                "requestIdConfig", Map.of("fieldNames", List.of("I", "idncfm"), "separator", "_"))));
+        org.springframework.test.util.ReflectionTestUtils.setField(requestIds, "catalogSnapshots", snapshots);
+        org.springframework.test.util.ReflectionTestUtils.setField(taskFormComponent, "requestIdEnricher", requestIds);
         Map<String, Object> baseline = new HashMap<>();
         baseline.put("I", "ORIG");
         baseline.put("idncfm", "Meeting-000001");

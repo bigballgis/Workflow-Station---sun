@@ -64,9 +64,14 @@ class ProcessStartFormPopupComponentTest {
                 .formData(Map.of("title", "t"))
                 .build();
 
-        ProcessInstanceInfo result = component.submit("user-1", "fu-x", "50384", req);
+        ActionTableRowRef row = new ActionTableRowRef("row-1");
+        when(actionFormPopupSubmitComponent.submitForProcessInstance(
+                "pi-1", "50384", req.getPopupFormData(), "user-1")).thenReturn(row);
 
-        assertThat(result.getId()).isEqualTo("pi-1");
+        ProcessStartFormPopupOutcome result = component.submit("user-1", "fu-x", "50384", req);
+
+        assertThat(result.instance().getId()).isEqualTo("pi-1");
+        assertThat(result.actionRow()).isEqualTo(row);
         verify(actionFormPopupSubmitComponent).submitForProcessInstance(
                 "pi-1", "50384", req.getPopupFormData(), "user-1");
     }

@@ -55,7 +55,7 @@ class ActionPostEmailComponentImplTest {
         component = new ActionPostEmailComponentImpl(
                 taskActionService, taskQueryComponent, actionDefinitionRepository,
                 processInstanceRepository, eventPublisher, new ObjectMapper(), ruleConditionEvaluator);
-        org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any()))
+        org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any(), any()))
                 .thenAnswer(inv -> {
                     List<?> conditions = inv.getArgument(1);
                     int n = conditions == null ? 0 : conditions.size();
@@ -123,36 +123,33 @@ class ActionPostEmailComponentImplTest {
     }
 
     @Test
-    void startWithoutFunctionUnit_doesNotLookUpBareActionId() {
-        component.runWithPostEmail(ActionPostEmailContext.builder()
-                .actionId("99")
-                .operation(ActionPostEmailContext.OP_START)
-                .operatorId("u1")
-                .build(), () -> ProcessInstanceInfo.builder().id("pi-1").build());
+    void startWithoutPinnedInstanceCannotResolveByCurrentFunctionUnit() {
+        org.junit.jupiter.api.Assertions.assertThrows(com.platform.common.functionunit.FunctionUnitVersionException.class,
+                () -> component.runWithPostEmail(ActionPostEmailContext.builder().actionId("99")
+                        .operation(ActionPostEmailContext.OP_START).operatorId("u1").build(),
+                        () -> ProcessInstanceInfo.builder().id("pi-1").build()));
         verify(eventPublisher, never()).publish(any());
         verify(actionDefinitionRepository, never()).findById(any());
-        verify(actionDefinitionRepository, never()).findFromDwById(any());
     }
 
     @Test
-    void startRejectsActionFromAnotherFunctionUnit() {
-        when(actionDefinitionRepository.findCatalogActionForFunctionUnit("99", "fu-a"))
-                .thenReturn(java.util.Optional.empty());
-        when(actionDefinitionRepository.findDwActionForFunctionUnit("99", "fu-a"))
-                .thenReturn(java.util.Optional.empty());
-        component.runWithPostEmail(ActionPostEmailContext.builder()
-                .actionId("99")
-                .operation(ActionPostEmailContext.OP_START)
-                .functionUnitCode("fu-a")
-                .operatorId("u1")
-                .build(), () -> ProcessInstanceInfo.builder().id("pi-1").build());
+    void startRejectsActionFromAnotherRelease() {
+        when(processInstanceRepository.findById("pi-1")).thenReturn(java.util.Optional.of(
+                ProcessInstance.builder().id("pi-1").functionUnitCatalogId("v1").functionUnitCode("fu-a").build()));
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("99"))).thenReturn(List.of());
+        org.junit.jupiter.api.Assertions.assertThrows(com.platform.common.functionunit.FunctionUnitVersionException.class,
+                () -> component.runWithPostEmail(ActionPostEmailContext.builder().actionId("99")
+                        .operation(ActionPostEmailContext.OP_START).functionUnitCode("fu-a").operatorId("u1").build(),
+                        () -> ProcessInstanceInfo.builder().id("pi-1").build()));
         verify(eventPublisher, never()).publish(any());
     }
 
     @Test
     void startPublishesWhenActionBelongsToFunctionUnit() {
-        when(actionDefinitionRepository.findCatalogActionForFunctionUnit("12", "fu-a"))
-                .thenReturn(java.util.Optional.of(ActionDefinition.builder()
+        when(processInstanceRepository.findById("pi-9")).thenReturn(java.util.Optional.of(
+                ProcessInstance.builder().id("pi-9").functionUnitCatalogId("v1").functionUnitCode("fu-a").build()));
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("12")))
+                .thenReturn(List.of(ActionDefinition.builder()
                         .id("12").actionName("Submit").actionType("PROCESS_SUBMIT").configJson(enabledJson()).build()));
         when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
         component.runWithPostEmail(ActionPostEmailContext.builder()
@@ -170,9 +167,9 @@ class ActionPostEmailComponentImplTest {
     @Test
     void withdrawWithoutTaskUsesInstanceFunctionUnit() {
         when(processInstanceRepository.findById("pi-1")).thenReturn(java.util.Optional.of(
-                ProcessInstance.builder().id("pi-1").functionUnitCode("fu-a").build()));
-        when(actionDefinitionRepository.findCatalogActionForFunctionUnit("8", "fu-a"))
-                .thenReturn(java.util.Optional.of(ActionDefinition.builder()
+                ProcessInstance.builder().id("pi-1").functionUnitCatalogId("v1").functionUnitCode("fu-a").build()));
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("8")))
+                .thenReturn(List.of(ActionDefinition.builder()
                         .id("8").actionName("Withdraw").actionType("WITHDRAW").configJson(enabledJson()).build()));
         when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
         component.runWithPostEmail(ActionPostEmailContext.builder()
@@ -206,9 +203,9 @@ class ActionPostEmailComponentImplTest {
         when(taskQueryComponent.getTaskById("t1")).thenReturn(java.util.Optional.empty());
         when(taskActionService.getTaskActions("t1")).thenReturn(List.of());
         when(processInstanceRepository.findById("pi-1")).thenReturn(java.util.Optional.of(
-                ProcessInstance.builder().id("pi-1").functionUnitCode("fu-a").build()));
-        when(actionDefinitionRepository.findCatalogActionForFunctionUnit("8", "fu-a"))
-                .thenReturn(java.util.Optional.of(ActionDefinition.builder()
+                ProcessInstance.builder().id("pi-1").functionUnitCatalogId("v1").functionUnitCode("fu-a").build()));
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("8")))
+                .thenReturn(List.of(ActionDefinition.builder()
                         .id("8").actionName("Withdraw").actionType("WITHDRAW").configJson(enabledJson()).build()));
         when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
         component.runWithPostEmail(ActionPostEmailContext.builder()
@@ -240,11 +237,51 @@ class ActionPostEmailComponentImplTest {
         when(taskQueryComponent.getTaskById("t1")).thenReturn(java.util.Optional.of(
                 com.portal.dto.TaskInfo.builder().processInstanceId("pi-1").build()));
         when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
-        when(ruleConditionEvaluator.evaluate(org.mockito.ArgumentMatchers.eq("pi-1"), any()))
+        when(ruleConditionEvaluator.evaluate(org.mockito.ArgumentMatchers.eq("pi-1"), any(), any()))
                 .thenReturn(new boolean[] { true, false });
 
         component.runWithPostEmail(ctx("7", ActionPostEmailContext.OP_SAVE), () -> "ok");
         verify(eventPublisher, times(1)).publish(any());
+    }
+
+    @Test
+    void formPopupTask_passesInsertedActionRowToEvaluator() {
+        when(taskActionService.getTaskActions("t1")).thenReturn(List.of(action("7", "FORM_POPUP", rulesJson())));
+        when(taskQueryComponent.getTaskById("t1")).thenReturn(java.util.Optional.of(
+                com.portal.dto.TaskInfo.builder().processInstanceId("pi-1").build()));
+        when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+        ActionTableRowRef row = new ActionTableRowRef("row-a");
+
+        component.runWithPostEmail(ctx("7", ActionPostEmailContext.OP_FORM_POPUP), () -> row);
+
+        verify(ruleConditionEvaluator).evaluate(
+                org.mockito.ArgumentMatchers.eq("pi-1"), any(), org.mockito.ArgumentMatchers.eq(row));
+    }
+
+    @Test
+    void formPopupStart_usesOutcomeInstanceAndActionRow() {
+        when(processInstanceRepository.findById("pi-9")).thenReturn(java.util.Optional.of(
+                ProcessInstance.builder().id("pi-9").functionUnitCatalogId("v1").functionUnitCode("fu-a").build()));
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("12")))
+                .thenReturn(List.of(ActionDefinition.builder()
+                        .id("12").actionName("Popup").actionType("FORM_POPUP").configJson(rulesJson()).build()));
+        when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+        ActionTableRowRef row = new ActionTableRowRef("row-b");
+        ProcessStartFormPopupOutcome outcome =
+                new ProcessStartFormPopupOutcome(ProcessInstanceInfo.builder().id("pi-9").build(), row);
+
+        component.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId("12")
+                .operation(ActionPostEmailContext.OP_FORM_POPUP)
+                .functionUnitCode("fu-a")
+                .operatorId("u1")
+                .build(), () -> outcome);
+
+        verify(ruleConditionEvaluator).evaluate(
+                org.mockito.ArgumentMatchers.eq("pi-9"), any(), org.mockito.ArgumentMatchers.eq(row));
+        ArgumentCaptor<ActionEmailRequestedEvent> captor = ArgumentCaptor.forClass(ActionEmailRequestedEvent.class);
+        verify(eventPublisher, times(2)).publish(captor.capture());
+        assertEquals("pi-9", captor.getValue().getProcessInstanceId());
     }
 
     private static String enabledJson() {

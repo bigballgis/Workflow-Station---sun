@@ -40,6 +40,7 @@ public final class FunctionUnitManagerTestFactory {
         FunctionUnitLookup lookup = new FunctionUnitLookup(functionUnitRepository, i18nService);
         FunctionUnitVersionComponent versionComponent = new FunctionUnitVersionComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, lookup, i18nService);
+        org.springframework.test.util.ReflectionTestUtils.setField(versionComponent, "versionActions", actionDefinitionRepository);
         RelationTableDefinitionRepository relationTableDefinitionRepository =
                 Mockito.mock(RelationTableDefinitionRepository.class);
         RelationTableStructureImporter relationTableStructureImporter = new RelationTableStructureImporter(
@@ -66,6 +67,18 @@ public final class FunctionUnitManagerTestFactory {
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(com.admin.repository.FunctionUnitAuditAccessRepository.class),
                 validationComponent, versionComponent, lookup, i18nService);
+        var snapshots = Mockito.mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(contentComponent, "catalogSnapshots", snapshots);
+        org.springframework.test.util.ReflectionTestUtils.setField(lifecycleComponent, "versionJdbc", jdbcTemplate);
+        org.springframework.test.util.ReflectionTestUtils.setField(lifecycleComponent, "versionSnapshots", snapshots);
+        // Existing lifecycle properties model fully deployed releases without historical instances.
+        // Readiness/refusal boundaries are exercised separately by runtime version verification.
+        Mockito.lenient().when(jdbcTemplate.queryForObject(
+                Mockito.startsWith("SELECT COUNT(*) FROM sys_function_unit_contents"), Mockito.eq(Long.class), Mockito.anyString()))
+                .thenReturn(1L);
+        Mockito.lenient().when(jdbcTemplate.queryForObject(
+                Mockito.startsWith("SELECT COUNT(*) FROM up_process_instance"), Mockito.eq(Long.class), Mockito.anyString()))
+                .thenReturn(0L);
         PortalRuntimePurgeClient purgeClient = new PortalRuntimePurgeClient(restTemplate);
 
         return new FunctionUnitManagerComponent(

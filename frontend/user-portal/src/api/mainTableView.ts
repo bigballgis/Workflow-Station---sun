@@ -86,6 +86,8 @@ export interface MainTableViewDataRow {
    */
   rowKey: string
   processInstanceId: string
+  detailForm?: Record<string, unknown> | null
+  functionUnitVersionLabel?: string | null
   values: Record<string, unknown>
 }
 

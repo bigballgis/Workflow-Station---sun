@@ -72,12 +72,12 @@ class CatalogPinnedTaskFormLoaderTest {
     }
 
     @Test
-    void preservesPublishedPermissionAuthorityWithoutChangingLegacyPermissionSelection() {
+    void ordinaryTasksUsePublishedPermissionAuthority() {
         Map<String, Object> form = new java.util.HashMap<>(Map.of("fieldPermissions", Map.of()));
         CatalogPinnedTaskFormLoader.applyContentData(form, objectMapper,
                 "{\"formType\":\"TASK\",\"configJson\":{},\"fieldPermissions\":{\"101:restricted\":\"READONLY\"}}");
         assertThat(form.get("publishedFieldPermissions")).isEqualTo(Map.of("101:restricted", "READONLY"));
-        assertThat(form.get("fieldPermissions")).isEqualTo(Map.of());
+        assertThat(form.get("fieldPermissions")).isEqualTo(Map.of("101:restricted", "READONLY"));
     }
 
     @Test
@@ -86,8 +86,8 @@ class CatalogPinnedTaskFormLoaderTest {
                 eq(String.class), eq(CATALOG)))
                 .thenReturn(List.of());
 
-        assertThat(CatalogPinnedTaskFormLoader.fetch(jdbcTemplate, objectMapper, CATALOG, STAGE))
-                .isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> CatalogPinnedTaskFormLoader.fetch(jdbcTemplate, objectMapper, CATALOG, STAGE))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
     }
 
     @Test
@@ -99,8 +99,8 @@ class CatalogPinnedTaskFormLoaderTest {
                 any(RowMapper.class), eq(CATALOG), eq("42")))
                 .thenReturn(List.of());
 
-        assertThat(CatalogPinnedTaskFormLoader.fetch(jdbcTemplate, objectMapper, CATALOG, STAGE))
-                .isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> CatalogPinnedTaskFormLoader.fetch(jdbcTemplate, objectMapper, CATALOG, STAGE))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
     }
 
     @Test
@@ -109,8 +109,8 @@ class CatalogPinnedTaskFormLoaderTest {
                 eq(String.class), eq(CATALOG)))
                 .thenThrow(new IllegalStateException("relation does not exist"));
 
-        assertThat(CatalogPinnedTaskFormLoader.fetch(jdbcTemplate, objectMapper, CATALOG, STAGE))
-                .isNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> CatalogPinnedTaskFormLoader.fetch(jdbcTemplate, objectMapper, CATALOG, STAGE))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
     }
 
     @Test

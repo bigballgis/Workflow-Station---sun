@@ -23,26 +23,22 @@ import static org.mockito.Mockito.when;
  */
 class TaskFormComponentSubTableFieldPermissionTest {
 
-    private TaskFormComponent component(JdbcTemplate jdbcTemplate) {
-        return new TaskFormComponent(
+    private TaskFormComponent component(JdbcTemplate jdbcTemplate, String processId, String stageId, Map<String, String> permissions) {
+        var component = new TaskFormComponent(
                 mock(ProcessFormComponent.class), mock(ChangeHistoryComponent.class),
                 mock(ProcessInstanceRepository.class), mock(WorkflowEngineClient.class),
                 mock(RestTemplate.class), new ObjectMapper(), jdbcTemplate,
                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(component, jdbcTemplate, processId, stageId, "50192",
+                Map.of("fieldPermissions", permissions, "configJson", Map.of(), "tableBindings", List.of(
+                Map.of("bindingId", "50544", "tableName", "members", "bindingType", "SUB", "bindingMode", "EDITABLE",
+                "primaryKeyFields", List.of("id_idw")))));
+        return component;
     }
 
     @Test
     void dropsOnlyReadonlyCompositeKeyedFieldFromNumericBindingSlice() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.anyString(),
-                eq("process-1"), eq("sub-task-stage")))
-                .thenReturn(List.of(Map.of(
-                        "form_id", "50192",
-                        "config_json", "{}",
-                        "field_permissions",
-                        "{\"50544:bu_code\":\"READONLY\",\"50544:role_code\":\"READONLY\","
-                                + "\"50544:name\":\"EDITABLE\",\"50544:assignee\":\"EDITABLE\"}",
-                        "read_only", false)));
 
         Map<String, Object> editableData = new HashMap<>();
         Map<String, Object> subTables = new HashMap<>();
@@ -51,7 +47,7 @@ class TaskFormComponentSubTableFieldPermissionTest {
                 "bu_code", "FIN", "role_code", "MANAGER")))));
         editableData.put("__subTables__", subTables);
 
-        component(jdbcTemplate).filterSubTableFieldsForTesting(editableData, "process-1", "sub-task-stage");
+        component(jdbcTemplate, "process-1", "sub-task-stage", Map.of("50544:bu_code", "READONLY", "50544:role_code", "READONLY", "50544:name", "EDITABLE", "50544:assignee", "EDITABLE")).filterSubTableFieldsForTesting(editableData, "process-1", "sub-task-stage");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> filteredSubTables = (Map<String, Object>) editableData.get("__subTables__");
@@ -75,14 +71,6 @@ class TaskFormComponentSubTableFieldPermissionTest {
         // are dropped. (#1524-class regression: treating "no explicit EDITABLE entry" as
         // "not editable" wiped every field but id_idw/bu_code/role_code from every save.)
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.anyString(),
-                eq("process-3"), eq("sub-task-stage")))
-                .thenReturn(List.of(Map.of(
-                        "form_id", "50192",
-                        "config_json", "{}",
-                        "field_permissions",
-                        "{\"50544:bu_code\":\"READONLY\",\"50544:role_code\":\"READONLY\"}",
-                        "read_only", false)));
 
         Map<String, Object> editableData = new HashMap<>();
         Map<String, Object> subTables = new HashMap<>();
@@ -91,7 +79,7 @@ class TaskFormComponentSubTableFieldPermissionTest {
                 "bu_code", "FIN", "role_code", "MANAGER")))));
         editableData.put("__subTables__", subTables);
 
-        component(jdbcTemplate).filterSubTableFieldsForTesting(editableData, "process-3", "sub-task-stage");
+        component(jdbcTemplate, "process-3", "sub-task-stage", Map.of("50544:bu_code", "READONLY", "50544:role_code", "READONLY")).filterSubTableFieldsForTesting(editableData, "process-3", "sub-task-stage");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> filteredSubTables = (Map<String, Object>) editableData.get("__subTables__");
@@ -108,13 +96,6 @@ class TaskFormComponentSubTableFieldPermissionTest {
     @Test
     void unconfiguredBindingKeepsEveryFieldUnchanged() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.anyString(),
-                eq("process-2"), eq("other-stage")))
-                .thenReturn(List.of(Map.of(
-                        "form_id", "50193",
-                        "config_json", "{}",
-                        "field_permissions", "{}",
-                        "read_only", false)));
 
         Map<String, Object> editableData = new HashMap<>();
         Map<String, Object> subTables = new HashMap<>();
@@ -122,7 +103,7 @@ class TaskFormComponentSubTableFieldPermissionTest {
                 "id_idw", "ROW-1", "bu_code", "FIN")))));
         editableData.put("__subTables__", subTables);
 
-        component(jdbcTemplate).filterSubTableFieldsForTesting(editableData, "process-2", "other-stage");
+        component(jdbcTemplate, "process-2", "other-stage", Map.of()).filterSubTableFieldsForTesting(editableData, "process-2", "other-stage");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> filteredSubTables = (Map<String, Object>) editableData.get("__subTables__");

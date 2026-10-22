@@ -46,6 +46,9 @@ class FunctionUnitComponentImplTest {
     
     @Mock
     private FunctionUnitRepository functionUnitRepository;
+
+    @Mock
+    private com.platform.common.functionunit.CatalogRuntimeRows runtimeRows;
     
     @Mock
     private ProcessDefinitionRepository processDefinitionRepository;
@@ -111,6 +114,7 @@ class FunctionUnitComponentImplTest {
     
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(functionUnitComponent, "runtimeRows", runtimeRows);
         // 清理 SecurityContext
         SecurityContextHolder.clearContext();
         lenient().doNothing().when(functionUnitWorkspaceAccessService)

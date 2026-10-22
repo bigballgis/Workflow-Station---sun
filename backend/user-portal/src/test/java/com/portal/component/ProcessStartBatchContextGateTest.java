@@ -62,13 +62,15 @@ class ProcessStartBatchContextGateTest {
         when(content.getPublishedStartContent("synthetic-catalog"))
                 .thenReturn(SubTableBatchStartContextTest.content(false, "Legacy"))
                 .thenReturn(SubTableBatchStartContextTest.content(true, "Server"));
-        // Engine availability stops these calls immediately after the gate, before any real start.
+        ReflectionTestUtils.setField(component, "portalWorkspaceAuthService", mock(com.portal.service.PortalWorkspaceAuthService.class));
+        doThrow(new IllegalStateException("Enrichment boundary reached")).when(enricher).enrichOnInsert(any(), any(), any());
+        // Reaching enrichment proves the context gate passed, before any Engine start.
         assertThatThrownBy(() -> component.startProcess("synthetic-user", "synthetic", ProcessStartRequest.builder().build()))
-                .hasMessageContaining("Workflow engine unavailable");
+                .hasMessageContaining("Enrichment boundary reached");
         assertThatThrownBy(() -> component.startProcessFromServer("synthetic-user", "synthetic", ProcessStartRequest.builder().build()))
-                .hasMessageContaining("Workflow engine unavailable");
+                .hasMessageContaining("Enrichment boundary reached");
         verify(access, times(2)).checkFunctionUnitAccess("synthetic-user", "synthetic-catalog");
-        verify(engine, times(2)).isAvailable();
-        verifyNoInteractions(enricher);
+        verifyNoInteractions(engine);
+        verify(enricher, times(2)).enrichOnInsert(any(), any(), any());
     }
 }

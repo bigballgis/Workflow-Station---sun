@@ -259,7 +259,7 @@ public class OwnerFieldComponent {
                 continue;
             }
             List<Map<String, Object>> previousRows = OwnerFieldRowSupport.previousSliceRows(previousSlices, slice.getKey());
-            List<String> pkFields = metadataCatalog.designerPrimaryKeyFieldsForSlice(slice.getKey());
+            List<String> pkFields = metadataCatalog.primaryKeyFieldsForSlice(slice.getKey(), variables);
             for (Object row : rows) {
                 if (row instanceof Map<?, ?> rowMap) {
                     Map<String, Object> typed = (Map<String, Object>) rowMap;
@@ -296,7 +296,7 @@ public class OwnerFieldComponent {
             if (metas == null || metas.isEmpty() || !(slice.getValue() instanceof List<?> rows)) {
                 continue;
             }
-            List<String> pkFields = metadataCatalog.designerPrimaryKeyFieldsForSlice(slice.getKey());
+            List<String> pkFields = metadataCatalog.primaryKeyFieldsForSlice(slice.getKey(), variables);
             for (Object row : rows) {
                 if (row instanceof Map<?, ?> rowMap) {
                     Map<String, Object> typed = (Map<String, Object>) rowMap;

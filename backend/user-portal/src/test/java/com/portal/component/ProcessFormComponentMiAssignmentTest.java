@@ -53,14 +53,14 @@ class ProcessFormComponentMiAssignmentTest {
 
     @Test
     void stampsAssignmentConfigOnMatchingBindingByTableName() {
-        when(workflowEngineClient.getBpmnXml("proc-key")).thenReturn(Optional.of(bpmnWithMiUserTask(
+        when(workflowEngineClient.getBpmnXml("proc-key", "case-v1")).thenReturn(Optional.of(bpmnWithMiUserTask(
                 "subtable", "both", "assignee", "role_code", "bu_code")));
 
         List<SubTableBindingData> bindings = new ArrayList<>();
         bindings.add(binding("subtable"));
         bindings.add(binding("attachment"));
 
-        ReflectionTestUtils.invokeMethod(newComponent(), "attachMiAssignmentConfigs", bindings, "proc-key");
+        ReflectionTestUtils.invokeMethod(newComponent(), "attachMiAssignmentConfigs", bindings, "proc-key", "case-v1");
 
         assertThat(bindings.get(0).getAssignmentConfig())
                 .containsEntry("allowUser", true)
@@ -73,12 +73,12 @@ class ProcessFormComponentMiAssignmentTest {
 
     @Test
     void leavesBindingsUnstampedWhenBpmnFetchFails() {
-        when(workflowEngineClient.getBpmnXml("proc-key")).thenReturn(Optional.empty());
+        when(workflowEngineClient.getBpmnXml("proc-key", "case-v1")).thenReturn(Optional.empty());
 
         List<SubTableBindingData> bindings = new ArrayList<>();
         bindings.add(binding("subtable"));
 
-        ReflectionTestUtils.invokeMethod(newComponent(), "attachMiAssignmentConfigs", bindings, "proc-key");
+        ReflectionTestUtils.invokeMethod(newComponent(), "attachMiAssignmentConfigs", bindings, "proc-key", "case-v1");
 
         assertThat(bindings.get(0).getAssignmentConfig()).isNull();
     }
@@ -88,7 +88,7 @@ class ProcessFormComponentMiAssignmentTest {
         List<SubTableBindingData> bindings = new ArrayList<>();
         bindings.add(binding("subtable"));
 
-        ReflectionTestUtils.invokeMethod(newComponent(), "attachMiAssignmentConfigs", bindings, (String) null);
+        ReflectionTestUtils.invokeMethod(newComponent(), "attachMiAssignmentConfigs", bindings, (String) null, "case-v1");
 
         assertThat(bindings.get(0).getAssignmentConfig()).isNull();
         verifyNoInteractions(workflowEngineClient);

@@ -11,10 +11,12 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.FieldDefinition;
+import com.developer.enums.BindingType;
 import com.developer.enums.TableType;
 import com.developer.util.DesignerFilterOperators;
 import com.platform.common.i18n.I18nService;
@@ -44,6 +46,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
+    private final FormTableBindingRepository formTableBindingRepository;
     private final I18nService i18nService;
     
     @Override
@@ -326,20 +329,9 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
             return;
         }
         
-        Object formIdObj = config.get("formId");
-        if (formIdObj == null) {
+        Long formId = parseFormId(config.get("formId"));
+        if (formId == null) {
             return;
-        }
-        
-        Long formId;
-        if (formIdObj instanceof Number) {
-            formId = ((Number) formIdObj).longValue();
-        } else {
-            try {
-                formId = Long.parseLong(formIdObj.toString());
-            } catch (NumberFormatException e) {
-                return;
-            }
         }
         
         FormDefinition form = formDefinitionRepository.findById(formId)
@@ -356,6 +348,9 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
             ActionType.APPROVE, ActionType.REJECT, ActionType.TRANSFER, ActionType.DELEGATE,
             ActionType.URGE, ActionType.ROLLBACK, ActionType.WITHDRAW, ActionType.DRAFT,
             ActionType.SAVE, ActionType.PROCESS_SUBMIT, ActionType.PROCESS_REJECT, ActionType.FORM_POPUP);
+
+    /** {@code condition.conditions[].source} value for a field on the popup form's ACTION table. */
+    private static final String POST_EMAIL_ACTION_SOURCE = "ACTION";
 
     @SuppressWarnings("unchecked")
     private void validatePostEmail(ActionDefinition action) {
@@ -387,7 +382,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                             DesignerFilterOperators.MAX_POST_EMAIL_RULES));
         }
         java.util.Set<String> ids = new java.util.HashSet<>();
-        java.util.Set<String> allowedFields = allowedMainTableFilterFields(action.getFunctionUnit().getId());
+        PostEmailFilterFields allowedFields = allowedPostEmailFilterFields(action);
         for (int i = 0; i < rules.size(); i++) {
             if (!(rules.get(i) instanceof Map<?, ?> ruleMap)) {
                 throw invalidRule(i);
@@ -408,25 +403,46 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         }
     }
 
-    private java.util.Set<String> allowedMainTableFilterFields(Long functionUnitId) {
-        java.util.Set<String> allowed = new java.util.HashSet<>(DesignerFilterOperators.SYSTEM_FILTER_FIELDS);
-        for (TableDefinition table : tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId)) {
-            if (table.getTableType() != TableType.MAIN) {
-                continue;
-            }
+    /** {@code main} also holds system fields; {@code action} is empty unless the action is a FORM_POPUP. */
+    private record PostEmailFilterFields(java.util.Set<String> main, java.util.Set<String> action) {}
+
+    private PostEmailFilterFields allowedPostEmailFilterFields(ActionDefinition action) {
+        java.util.Set<String> main = new java.util.HashSet<>(DesignerFilterOperators.SYSTEM_FILTER_FIELDS);
+        java.util.Set<String> actionFields = new java.util.HashSet<>();
+        Long actionTableId = popupActionTableId(action);
+        for (TableDefinition table : tableDefinitionRepository.findByFunctionUnitIdWithFields(
+                action.getFunctionUnit().getId())) {
             if (table.getFieldDefinitions() == null) {
                 continue;
             }
-            for (FieldDefinition field : table.getFieldDefinitions()) {
-                allowed.add(field.getFieldName());
+            java.util.Set<String> target = table.getTableType() == TableType.MAIN ? main
+                    : table.getId().equals(actionTableId) ? actionFields : null;
+            if (target == null) {
+                continue;
             }
-            break;
+            for (FieldDefinition field : table.getFieldDefinitions()) {
+                target.add(field.getFieldName());
+            }
         }
-        return allowed;
+        return new PostEmailFilterFields(main, actionFields);
+    }
+
+    /** The ACTION table bound to a FORM_POPUP's own popup form, or null when there is none. */
+    private Long popupActionTableId(ActionDefinition action) {
+        if (action.getActionType() != ActionType.FORM_POPUP || action.getConfigJson() == null) {
+            return null;
+        }
+        Long formId = parseFormId(action.getConfigJson().get("formId"));
+        if (formId == null) {
+            return null;
+        }
+        return formTableBindingRepository.findByFormIdAndBindingType(formId, BindingType.ACTION)
+                .map(b -> b.getTableId())
+                .orElse(null);
     }
 
     @SuppressWarnings("unchecked")
-    private void validateFilterConfig(Map<String, Object> node, java.util.Set<String> allowedFields, int depth) {
+    private void validateFilterConfig(Map<String, Object> node, PostEmailFilterFields allowedFields, int depth) {
         if (depth > DesignerFilterOperators.MAX_NEST_DEPTH) {
             throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_DEPTH",
                     i18nService.getMessage("action.email_filter_depth"),
@@ -450,8 +466,9 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                             i18nService.getMessage("action.email_filter_invalid"),
                             i18nService.getMessage("action.email_filter_invalid_hint"));
                 }
+                java.util.Set<String> scope = filterFieldScope(cond.get("source"), allowedFields);
                 String fieldName = cond.get("fieldName") != null ? cond.get("fieldName").toString().trim() : "";
-                if (!hasText(fieldName) || !allowedFields.contains(fieldName)) {
+                if (!hasText(fieldName) || !scope.contains(fieldName)) {
                     throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_FIELD",
                             i18nService.getMessage("action.email_filter_field"),
                             i18nService.getMessage("action.email_filter_field_hint", fieldName));
@@ -481,6 +498,32 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
             throw new DeveloperBusinessException("ACTION_EMAIL_INCOMPLETE",
                     i18nService.getMessage("action.email_incomplete"),
                     i18nService.getMessage("action.email_incomplete_hint"));
+        }
+    }
+
+    private java.util.Set<String> filterFieldScope(Object source, PostEmailFilterFields allowedFields) {
+        if (!hasText(source)) {
+            return allowedFields.main();
+        }
+        if (POST_EMAIL_ACTION_SOURCE.equals(source.toString().trim())) {
+            return allowedFields.action();
+        }
+        throw new DeveloperBusinessException("ACTION_EMAIL_FILTER_INVALID",
+                i18nService.getMessage("action.email_filter_invalid"),
+                i18nService.getMessage("action.email_filter_invalid_hint"));
+    }
+
+    private static Long parseFormId(Object formIdObj) {
+        if (formIdObj == null) {
+            return null;
+        }
+        if (formIdObj instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(formIdObj.toString());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

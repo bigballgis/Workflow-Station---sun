@@ -112,4 +112,25 @@ class MainTableViewRowQuerySqlTest {
                 query(List.of(new ListColumnFilter("secret", "contains", "x", null)), null)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+    @Test
+    void projectedRowsRetainTheirPersistedReleaseContext() throws Exception {
+        var rs = mock(java.sql.ResultSet.class);
+        when(rs.next()).thenReturn(true, false);
+        when(rs.getString("id")).thenReturn("request-old");
+        when(rs.getString("function_unit_catalog_id")).thenReturn("catalog-v1");
+        when(rs.getString("function_unit_code")).thenReturn("fu-atm");
+        when(rs.getString("function_unit_version_label")).thenReturn("1.0.0");
+        when(rs.getString("process_definition_id")).thenReturn("definition-v1");
+
+        when(jdbcTemplate.query(any(PreparedStatementCreator.class), any(ResultSetExtractor.class)))
+                .thenReturn(1L)
+                .thenAnswer(call -> call.<ResultSetExtractor<?>>getArgument(1).extractData(rs));
+        var page = component.query(query(List.of(), null));
+        var instance = page.instances().get(0);
+        assertThat(instance.getFunctionUnitCatalogId()).isEqualTo("catalog-v1");
+        assertThat(instance.getFunctionUnitCode()).isEqualTo("fu-atm");
+        assertThat(instance.getFunctionUnitVersionLabel()).isEqualTo("1.0.0");
+        assertThat(instance.getProcessDefinitionId()).isEqualTo("definition-v1");
+    }
+
 }

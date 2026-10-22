@@ -44,6 +44,9 @@ public class FunctionUnitContentComponent {
     private final FormTableBindingLoader bindingLoader;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
     /**
      * In-memory cache for assembled function unit content (forms + bindings + BPMN + data tables).
      * Key: functionUnitId. TTL: 5 min. Avoids repeated DB queries + JOINs for the same FU.
@@ -73,6 +76,12 @@ public class FunctionUnitContentComponent {
                                        String contentName, String contentData, String sourceId) {
         FunctionUnit functionUnit = functionUnitLookup.getById(functionUnitId);
 
+        if (Boolean.TRUE.equals(functionUnit.getProcessDeployed())
+                || functionUnit.getStatus() == com.admin.enums.FunctionUnitStatus.DEPLOYED
+                || jdbcTemplate.queryForObject("SELECT COUNT(*) FROM up_process_instance WHERE function_unit_catalog_id=?",
+                        Long.class, functionUnitId) > 0) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_CONTENT_IMMUTABLE", functionUnitId);
+        }
         String contentChecksum = ChecksumUtils.sha256Hex(contentData);
         String contentPath = "/" + contentType.name().toLowerCase() + "s/" + contentName;
 
@@ -93,7 +102,7 @@ public class FunctionUnitContentComponent {
 
     /**
      * Get function unit by process definition key
-     * Locate via content whose flowable_process_definition_id starts with processKey:
+     * Locate through the Engine repository; a long process key can have a UUID-only definition id.
      */
     @Transactional(readOnly = true)
     public FunctionUnit getFunctionUnitByProcessKey(String processKey) {
@@ -152,12 +161,7 @@ public class FunctionUnitContentComponent {
 
     /**
      * Assemble full function unit content (BPMN, forms, data tables, etc.).
-     * <p>FORM {@code data} is the catalog {@code content_data} snapshot. Live
-     * {@code dw_form_definitions} supplies {@code form_type}/{@code scene} only, except DETAIL
-     * (Main Table View addresses those forms by live id — see
-     * {@link #appendDetailFormsMissingFromSnapshot}). PROCESS/TASK/ACTION tableBindings come from
-     * the catalog snapshot when present; live {@code dw_form_table_bindings} is only attached for
-     * DETAIL and legacy configJson-only rows.
+     * <p>Forms and their metadata are read exclusively from the selected release snapshot.
      *
      * <p><b>Validates: Requirements 6.1, 6.2, 6.3</b>
      */
@@ -194,9 +198,8 @@ public class FunctionUnitContentComponent {
                         .sourceId(content.getSourceId())
                         .data(data)
                         .type(ContentType.PROCESS.name())
-                        .flowableProcessDefinitionKey(content.getFlowableProcessDefinitionId() != null
-                                ? content.getFlowableProcessDefinitionId()
-                                : processKey)
+                        .flowableProcessDefinitionKey(processKey)
+                        .flowableProcessDefinitionId(content.getFlowableProcessDefinitionId())
                         .build());
             } else if (content.getContentType() == ContentType.FORM) {
                 forms.add(assembleFormContent(content, data));
@@ -211,10 +214,14 @@ public class FunctionUnitContentComponent {
             }
         }
 
-        appendDetailFormsMissingFromSnapshot(unit, forms);
 
-        // Attach tableBindings to each form
-        bindingLoader.attachTableBindings(forms);
+        var bindingMapper = objectMapper.copy().configure(
+                com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        for (FormContentDTO form : forms) {
+            var snapshot = catalogSnapshots.form(id, form.getSourceId());
+            form.setTableBindings(catalogSnapshots.formBindings(id, snapshot).stream()
+                    .map(binding -> bindingMapper.convertValue(binding, TableBindingDTO.class)).toList());
+        }
 
         FunctionUnitContentResponse response = FunctionUnitContentResponse.builder()
                 .startContentAuthoritative(forStart ? true : null)
@@ -248,62 +255,9 @@ public class FunctionUnitContentComponent {
         }
     }
 
-    /**
-     * Adds the Function Unit's DETAIL forms that {@code sys_function_unit_contents} does not carry.
-     *
-     * <p>The content rows are written only at import/deploy time, so a form created in the designer
-     * afterwards is invisible here. That is tolerable for TASK/PROCESS forms, which a running
-     * process reaches through its BPMN, but not for DETAIL forms: a Main Table View stores its
-     * {@code detail_form_id} live in {@code dw_main_table_view_configs}, and the portal resolves
-     * that id against this list. When the id is not in it the record page has nothing to render and
-     * reports "This record could not be loaded" — for every view whose detail form post-dates the
-     * last deploy.
-     *
-     * <p>Scoped to DETAIL on purpose. These forms are addressed by id from live view config rather
-     * than by the deployed process, so the snapshot is the wrong authority for them; widening this
-     * to every form type would quietly change what a deployed version means.
-     *
-     * <p>Best-effort: any lookup failure leaves the assembled list untouched.
-     */
-    private void appendDetailFormsMissingFromSnapshot(FunctionUnit unit, List<FormContentDTO> forms) {
-        if (unit == null || unit.getCode() == null || unit.getCode().isBlank()) {
-            return;
-        }
-        // id 留空是对的：这些表单没有对应的 content 行，而下游一律按 sourceId 匹配。
-        Set<String> known = forms.stream()
-                .map(FormContentDTO::getSourceId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                    SELECT f.id, f.form_name, f.config_json::text AS config_json, f.form_type, f.scene
-                    FROM dw_form_definitions f
-                    INNER JOIN dw_function_units d ON d.id = f.function_unit_id
-                    WHERE d.code = ? AND f.form_type = 'DETAIL'
-                    """, unit.getCode());
-            for (Map<String, Object> row : rows) {
-                String sourceId = String.valueOf(row.get("id"));
-                if (known.contains(sourceId)) {
-                    continue;
-                }
-                forms.add(FormContentDTO.builder()
-                        .name((String) row.get("form_name"))
-                        .sourceId(sourceId)
-                        .data((String) row.get("config_json"))
-                        .formType((String) row.get("form_type"))
-                        .scene((String) row.get("scene"))
-                        .type(ContentType.FORM.name())
-                        .build());
-            }
-        } catch (Exception e) {
-            log.warn("Could not add live DETAIL forms for function unit {}: {}",
-                    unit.getCode(), e.getMessage());
-        }
-    }
-
     private FormContentDTO assembleFormContent(FunctionUnitContent content, String data) {
         CatalogFormSnapshot.Payload payload = CatalogFormSnapshot.unwrap(objectMapper, data);
-        FormDefinitionSnapshot snapshot = formSnapshotWithLiveMeta(content, payload.configJson());
+        FormDefinitionSnapshot snapshot = formSnapshot(content, payload.configJson());
         FormContentDTO form = FormContentDTO.builder()
                 .id(content.getId())
                 .name(content.getContentName())
@@ -315,57 +269,27 @@ public class FunctionUnitContentComponent {
                 .scene(snapshot.scene())
                 .type(ContentType.FORM.name())
                 .build();
-        boolean detail = "DETAIL".equals(snapshot.formType());
-        if (payload.freezeBindings() && !detail) {
+        if (payload.freezeBindings()) {
             List<TableBindingDTO> frozen = payload.tableBindings();
             form.setTableBindings(frozen != null ? frozen : List.of());
         }
+        if (form.getTableBindings() == null) form.setTableBindings(List.of());
         return form;
     }
 
     private record FormDefinitionSnapshot(String configJson, String formType, String scene) {}
 
-    /**
-     * Snapshot {@code content_data} is the deployed form JSON. Live DW supplies
-     * {@code form_type}/{@code scene}; DETAIL still takes live {@code config_json} because
-     * Main Table View addresses those forms by current {@code detail_form_id}.
-     */
-    private FormDefinitionSnapshot formSnapshotWithLiveMeta(
+    private FormDefinitionSnapshot formSnapshot(
             FunctionUnitContent content, String snapshotData) {
-        if (content.getSourceId() == null) {
-            return new FormDefinitionSnapshot(snapshotData, null, null);
-        }
         try {
-            Long sourceIdLong = Long.parseLong(content.getSourceId());
-            org.springframework.jdbc.core.ResultSetExtractor<FormDefinitionSnapshot> extractor = rs -> {
-                if (!rs.next()) {
-                    return null;
-                }
-                String formType = rs.getString("form_type");
-                String scene = rs.getString("scene");
-                String liveConfig = rs.getString("config_json");
-                boolean detail = "DETAIL".equals(formType);
-                String config = detail && liveConfig != null ? liveConfig : snapshotData;
-                return new FormDefinitionSnapshot(config, formType, scene);
-            };
-            FormDefinitionSnapshot meta = jdbcTemplate.query(
-                    """
-                            SELECT config_json::text AS config_json, form_type, scene
-                            FROM dw_form_definitions
-                            WHERE id = ?
-                            """,
-                    extractor,
-                    sourceIdLong);
-            if (meta != null) {
-                return meta;
-            }
-        } catch (NumberFormatException e) {
-            log.warn("Invalid sourceId format: {}", content.getSourceId());
-        } catch (Exception e) {
-            log.warn("Could not fetch live form meta for form sourceId={}, using content_data: {}",
-                    content.getSourceId(), e.getMessage());
+            com.fasterxml.jackson.databind.JsonNode wrapper = objectMapper.readTree(content.getContentData());
+            return new FormDefinitionSnapshot(snapshotData,
+                    wrapper.path("formType").isTextual() ? wrapper.get("formType").asText() : null,
+                    wrapper.path("scene").isTextual() ? wrapper.get("scene").asText() : null);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_SNAPSHOT_INCOMPLETE", content.getId());
         }
-        return new FormDefinitionSnapshot(snapshotData, null, null);
     }
 
     /**

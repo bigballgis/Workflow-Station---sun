@@ -201,6 +201,7 @@ public class ServiceTaskExecutor implements JavaDelegate {
             throw e;
         }
         if (!outputVariables.isEmpty()) {
+            com.platform.common.functionunit.RuntimeVersionContext.requireUnchanged(variables, outputVariables);
             execution.setVariables(outputVariables);
         }
 

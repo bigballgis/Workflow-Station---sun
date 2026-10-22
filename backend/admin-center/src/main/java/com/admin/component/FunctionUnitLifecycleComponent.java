@@ -48,6 +48,21 @@ public class FunctionUnitLifecycleComponent {
     private final FunctionUnitVersionComponent versionComponent;
     private final FunctionUnitLookup functionUnitLookup;
     private final I18nService i18nService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate versionJdbc;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader versionSnapshots;
+
+    /** Activation changes the launch pointer only after the complete release can execute. */
+    public void assertReadyForActivation(String catalogId) {
+        Long definitions = versionJdbc.queryForObject("SELECT COUNT(*) FROM sys_function_unit_contents c "
+                + "JOIN act_re_procdef p ON p.id_=c.flowable_process_definition_id "
+                + "WHERE c.function_unit_id=? AND c.content_type='PROCESS'", Long.class, catalogId);
+        if (definitions == null || definitions != 1) {
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+        }
+        for (var form : versionSnapshots.contents(catalogId, "FORM")) versionSnapshots.formBindings(catalogId, form);
+    }
 
     /**
      * Validate function unit: structure/dependency/trial deploy.
@@ -157,9 +172,8 @@ public class FunctionUnitLifecycleComponent {
      * Whether running process instances exist
      */
     public boolean hasRunningInstances(String functionUnitId) {
-        // Simplified: should call process engine
-        // Returns false here (no running instances)
-        return false;
+        return versionJdbc.queryForObject("SELECT COUNT(*) FROM up_process_instance WHERE function_unit_catalog_id=? "
+                + "AND status NOT IN ('COMPLETED','CANCELLED','TERMINATED','REJECTED')", Long.class, functionUnitId) > 0;
     }
 
     /**
@@ -234,6 +248,10 @@ public class FunctionUnitLifecycleComponent {
                     "Cannot delete: there are running process instances");
         }
 
+        if (versionJdbc.queryForObject("SELECT COUNT(*) FROM up_process_instance WHERE function_unit_catalog_id=?",
+                Long.class, functionUnitId) > 0) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_IN_USE", functionUnitId);
+        }
         log.info("Deleting function unit cascade: {} ({})", unit.getName(), functionUnitId);
 
         // Delete access permissions
@@ -362,6 +380,12 @@ public class FunctionUnitLifecycleComponent {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<String> disableOtherVersions(String code, String enabledVersion, String operatorId) {
+        // Serialize launch-pointer changes for this FU; the existing unique index is the final guard.
+        versionJdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtext(?))", Object.class, code);
+        if (enabledVersion != null) {
+            FunctionUnit target = functionUnitLookup.getByCodeAndVersion(code, enabledVersion);
+            assertReadyForActivation(target.getId());
+        }
         log.info("Disabling other versions for code: {}, keeping enabled: {}, operator: {}",
                 code, enabledVersion, operatorId);
 

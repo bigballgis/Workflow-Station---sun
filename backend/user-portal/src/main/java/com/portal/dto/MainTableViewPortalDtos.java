@@ -118,8 +118,14 @@ public final class MainTableViewPortalDtos {
     public record MainTableViewDataRow(
             String rowKey,
             String processInstanceId,
-            Map<String, Object> values
-    ) {}
+            Map<String, Object> values,
+            Map<String, Object> detailForm,
+            String functionUnitVersionLabel
+    ) {
+        public MainTableViewDataRow(String rowKey, String processInstanceId, Map<String, Object> values) {
+            this(rowKey, processInstanceId, values, null, null);
+        }
+    }
 
     @Builder
     public record MainTableViewDataPage(

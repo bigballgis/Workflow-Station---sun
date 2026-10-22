@@ -268,6 +268,9 @@ class ChangeHistorySubmissionFilterTest {
                 "config_json", "{\"rule\":[{\"field\":\"case_number\",\"readonly\":true}]}",
                 "field_permissions", "{}",
                 "read_only", false)));
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(bpmnFallbackFilter, jdbcTemplate,
+                "process-atm", "Activity_092hlui", "320", Map.of("configJson", Map.of("rule",
+                List.of(Map.of("field", "case_number", "readonly", true))), "fieldPermissions", Map.of()));
         Map<String, Object> form = bpmnFallbackFilter.resolveTaskFormDefinition(
                 "process-atm", "Activity_092hlui");
         assertThat(form).isNotEmpty();
@@ -339,6 +342,12 @@ class ChangeHistorySubmissionFilterTest {
                 "row_id", "ROW-1",
                 "assignee_id", "user-2",
                 "assignee_display_name", "System Derived Name"))));
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(bpmnFallbackFilter, jdbcTemplate,
+                "process-1", "assignment-stage", "50193", Map.of("configJson", Map.of("rule", List.of(), "subForms",
+                Map.of("transactions", Map.of("rule", List.of(Map.of("field", "assignee_id"),
+                Map.of("field", "assignee_display_name", "readonly", true))))), "fieldPermissions", Map.of(),
+                "tableBindings", List.of(Map.of("bindingId", "transactions", "bindingType", "SUB", "bindingMode", "EDITABLE",
+                "tableName", "transactions", "primaryKeyFields", List.of("row_id")))));
         Map<String, Object> actual = bpmnFallbackFilter.filterTaskSubmission(
                 "process-1", "assignment-stage", submitted, submitted);
         @SuppressWarnings("unchecked")
@@ -716,10 +725,12 @@ class ChangeHistorySubmissionFilterTest {
                         "field_permissions",
                         "{\"bu_code\":\"READONLY\",\"50544:bu_code\":\"READONLY\",\"50544:name\":\"EDITABLE\"}",
                         "read_only", false)));
-        Map<String, java.util.Set<String>> result = resolverFilter
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(resolverFilter, jdbcTemplate,
+                "process-9", "participants-stage", "70001", Map.of("configJson", Map.of(), "fieldPermissions", Map.of("bu_code", "READONLY", "50544:bu_code", "READONLY", "50544:name", "EDITABLE")));
+        Map<String, java.util.Set<String>> firstResult = resolverFilter
                 .resolveSubFormFieldPermissionsByBinding("process-9", "participants-stage");
-        assertThat(result).containsOnlyKeys("50544");
-        assertThat(result.get("50544")).containsExactly("bu_code");
+        assertThat(firstResult).containsOnlyKeys("50544");
+        assertThat(firstResult.get("50544")).containsExactly("bu_code");
     }
 
     @Test
@@ -733,6 +744,8 @@ class ChangeHistorySubmissionFilterTest {
                         "config_json", "{}",
                         "field_permissions", "{\"name\":\"READONLY\"}",
                         "read_only", false)));
+        com.portal.testsupport.PortalVersionTestSupport.publishedTask(resolverFilter, jdbcTemplate,
+                "process-9", "participants-stage", "70001", Map.of("configJson", Map.of(), "fieldPermissions", Map.of("name", "READONLY")));
         Map<String, java.util.Set<String>> result = resolverFilter
                 .resolveSubFormFieldPermissionsByBinding("process-9", "participants-stage");
         assertThat(result).isEmpty();

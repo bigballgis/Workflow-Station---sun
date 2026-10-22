@@ -89,20 +89,25 @@ public class FunctionUnitImportComponent {
         FunctionUnit existingByCode = resolveExistingByCode(packageContent);
         rejectNameCollision(packageContent, existingByCode);
 
-        FunctionUnit overwriteTarget = null;
         boolean versioned = false;
+        if (existingByCode != null) packageContent.setCode(existingByCode.getCode());
+        String fingerprint = packageFingerprint(parsed);
         if (existingByCode != null) {
             packageContent.setCode(existingByCode.getCode());
             versioned = true;
             Optional<FunctionUnit> existingSameVersion = functionUnitRepository.findByCodeAndVersion(
                     existingByCode.getCode(), packageContent.getVersion());
             if (existingSameVersion.isPresent()) {
-                if (Boolean.FALSE.equals(request.getOverwrite())) {
-                    throw new AdminBusinessException("FU_IMPORT_VERSION_EXISTS",
-                            i18nService.getMessage("admin.fu.import_version_exists",
-                                    existingByCode.getCode(), packageContent.getVersion()));
+                FunctionUnit published = existingSameVersion.get();
+                boolean same = fingerprint.equals(published.getContentChecksum())
+                        || request.getFileContent() != null && !request.getFileContent().isBlank()
+                        && ChecksumUtils.sha256Hex(request.getFileContent()).equals(published.getChecksum());
+                if (!same) {
+                    throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                            "VERSION_IMPORT_CONFLICT", published.getId());
                 }
-                overwriteTarget = existingSameVersion.get();
+                restoreActionSourceIds(published, parsed.getActions());
+                return ImportResult.success(FunctionUnitInfo.fromEntity(published), true);
             }
         }
 
@@ -113,25 +118,36 @@ public class FunctionUnitImportComponent {
 
         List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
 
-        FunctionUnit functionUnit = overwriteTarget != null
-                ? overwriteFunctionUnit(overwriteTarget, packageContent, request, importerId)
-                : createFunctionUnit(packageContent, request, importerId);
+        FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId);
+        functionUnit.setContentChecksum(fingerprint);
+        functionUnitRepository.save(functionUnit);
 
-        if (overwriteTarget == null && existingByCode != null && packageContent.getCode() != null) {
+        if (existingByCode != null && packageContent.getCode() != null) {
             functionUnitAccessService.copyAccessFromSiblingVersions(
                     packageContent.getCode(), functionUnit.getId());
             functionUnitAuditAccessService.copyAuditAccessFromSiblingVersions(
                     packageContent.getCode(), functionUnit.getId());
         }
 
+        Map<Long, Long> relationIds = relationTableStructureImporter.importRelationTables(
+                parsed.getRelationTables(), importerId, functionUnit.getId());
+        for (var content : packageContent.getContents()) {
+            if (content.getContentType() != ContentType.DATA_TABLE) continue;
+            Map<String, Object> table = objectMapper.readValue(content.getContentData(), new com.fasterxml.jackson.core.type.TypeReference<>() { });
+            if (!"RELATION".equals(table.get("tableType"))) continue;
+            Object sourceId = table.get("relationTableId");
+            if (sourceId == null || !relationIds.containsKey(Long.valueOf(String.valueOf(sourceId)))) {
+                throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_SNAPSHOT_INCOMPLETE", functionUnit.getId());
+            }
+            table.put("relationTableId", relationIds.get(Long.valueOf(String.valueOf(sourceId))));
+            content.setContentData(objectMapper.writeValueAsString(table));
+        }
         saveDependencies(functionUnit, packageContent.getDependencies());
         saveContents(functionUnit, packageContent.getContents());
         if (parsed.getForms() != null) {
             saveContents(functionUnit, parsed.getForms());
         }
         saveImportedActions(functionUnit.getId(), parsed.getActions());
-        relationTableStructureImporter.importRelationTables(
-                parsed.getRelationTables(), importerId, functionUnit.getId());
         emailConnectionSyncComponent.syncConnections(functionUnit.getId(), parsed.getConnections());
         emailMonitorSyncComponent.syncMonitorRules(functionUnit.getId(), parsed.getEmailMonitors());
 
@@ -389,27 +405,31 @@ public class FunctionUnitImportComponent {
         }
     }
 
-    private FunctionUnit overwriteFunctionUnit(FunctionUnit existing,
-                                               FunctionUnitManagerComponent.FunctionPackageContent packageContent,
-                                               FunctionUnitImportRequest request,
-                                               String importerId) {
-        contentRepository.deleteByFunctionUnitId(existing.getId());
-        dependencyRepository.deleteByFunctionUnitId(existing.getId());
-        functionUnitRepository.flush();
+    private String packageFingerprint(FunctionUnitPackageParser.ParsedImportPackage parsed) throws IOException {
+        Map<String, Object> content = new java.util.TreeMap<>();
+        Map<String, Object> packageData = objectMapper.convertValue(parsed.getPackageContent(),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        packageData.put("contents", sortedComponents(packageData.get("contents")));
+        content.put("package", packageData);
+        content.put("forms", sortedComponents(parsed.getForms()));
+        content.put("actions", sortedComponents(parsed.getActions()));
+        content.put("relations", sortedComponents(parsed.getRelationTables()));
+        content.put("connections", sortedComponents(parsed.getConnections()));
+        content.put("monitors", sortedComponents(parsed.getEmailMonitors()));
+        content.put("iconSvg", parsed.getIconSvg());
+        return ChecksumUtils.sha256Hex(objectMapper.copy()
+                .configure(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+                .writeValueAsString(content));
+    }
 
-        existing.setDescription(packageContent.getDescription());
-        if (packageContent.getVersion() != null && !packageContent.getVersion().isBlank()) {
-            existing.setVersion(packageContent.getVersion());
-        }
-        existing.setPackagePath(request.getFilePath());
-        existing.setPackageSize(request.getFileContent() != null ? (long) request.getFileContent().length() : 0L);
-        existing.setChecksum(ChecksumUtils.sha256Hex(request.getFileContent()));
-        existing.setImportedAt(Instant.now());
-        existing.setImportedBy(importerId);
-        if (request.getIconSvg() != null) {
-            existing.setIconSvg(request.getIconSvg());
-        }
-        return functionUnitRepository.save(existing);
+    private List<String> sortedComponents(Object value) throws IOException {
+        if (value == null) return List.of();
+        var list = objectMapper.convertValue(value, new com.fasterxml.jackson.core.type.TypeReference<List<Object>>() { });
+        var serializer = objectMapper.copy().configure(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+        List<String> normalized = new ArrayList<>();
+        for (Object component : list) normalized.add(serializer.writeValueAsString(component));
+        normalized.sort(String::compareTo);
+        return normalized;
     }
 
     private FunctionUnit createFunctionUnit(FunctionUnitManagerComponent.FunctionPackageContent packageContent,
@@ -469,6 +489,24 @@ public class FunctionUnitImportComponent {
         }
     }
 
+    /** Re-importing the verified original package may repair missing identity metadata only. */
+    private void restoreActionSourceIds(FunctionUnit release, List<Map<String, Object>> packaged) {
+        var stored = actionDefinitionRepository.findByFunctionUnitId(release.getId());
+        if (stored.stream().noneMatch(action -> action.getSourceId() == null)) return;
+        for (var action : stored) {
+            if (action.getSourceId() != null) continue;
+            var matches = packaged.stream().filter(candidate -> action.getActionName().equals(candidate.get("actionName"))
+                    && action.getActionType().equals(candidate.get("actionType"))
+                    && java.util.Objects.equals(action.getConfigJson(), resolveActionConfigJson(candidate.get("configJson"))))
+                    .toList();
+            if (matches.size() != 1 || matches.get(0).get("actionId") == null) {
+                throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", release.getId());
+            }
+            action.setSourceId(String.valueOf(matches.get(0).get("actionId")));
+            actionDefinitionRepository.save(action);
+        }
+    }
+
     private void saveImportedActions(String functionUnitId, List<Map<String, Object>> actions) {
         actionDefinitionRepository.deleteByFunctionUnitId(functionUnitId);
         // Hibernate otherwise flushes INSERTs before this DELETE, colliding with
@@ -489,6 +527,7 @@ public class FunctionUnitImportComponent {
             }
             ActionDefinition actionDef = ActionDefinition.builder()
                     .functionUnitId(functionUnitId)
+                    .sourceId(actionData.get("actionId") == null ? null : String.valueOf(actionData.get("actionId")))
                     .actionName(actionName)
                     .actionType(actionType)
                     .description(actionData.get("description") != null

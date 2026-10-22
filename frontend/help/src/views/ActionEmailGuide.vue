@@ -86,6 +86,7 @@ const sections: GuideSection[] = [
       { code: 'Always send', hintKey: 'actionEmailGuide.cAlwaysSend' },
       { code: 'Edit send condition', hintKey: 'actionEmailGuide.cEditCondition' },
       { code: 'Equals, Contains, …', hintKey: 'actionEmailGuide.cOperators' },
+      { code: 'Action table: …', hintKey: 'actionEmailGuide.cActionTableFields' },
     ],
   },
   {

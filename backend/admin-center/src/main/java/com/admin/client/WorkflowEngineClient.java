@@ -92,7 +92,11 @@ public class WorkflowEngineClient {
                 if (data != null) {
                     ProcessDeploymentResult result = new ProcessDeploymentResult();
                     result.setDeploymentId((String) data.get("deploymentId"));
-                    result.setProcessDefinitionId((String) data.get("processDefinitionId"));
+                    Object exactId = data.get("engineProcessDefinitionId");
+                    if (!(exactId instanceof String id) || id.isBlank()) {
+                        throw new IllegalStateException("Engine did not return an exact process definition id");
+                    }
+                    result.setProcessDefinitionId(id);
                     result.setProcessDefinitionKey((String) data.get("processDefinitionKey"));
                     result.setVersion(data.get("version") != null ? ((Number) data.get("version")).intValue() : 1);
                     result.setSuccess(Boolean.TRUE.equals(data.get("success")));

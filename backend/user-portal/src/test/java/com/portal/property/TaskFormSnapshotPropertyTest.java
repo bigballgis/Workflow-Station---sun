@@ -54,10 +54,11 @@ public class TaskFormSnapshotPropertyTest {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);
             }
         };
+        com.portal.testsupport.PortalVersionTestSupport.task(component);
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         // Mock process instance with variables
-        ProcessInstance processInstance = ProcessInstance.builder()
+        ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("user-001")

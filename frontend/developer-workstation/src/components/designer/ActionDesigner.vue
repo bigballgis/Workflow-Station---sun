@@ -534,10 +534,6 @@ const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()
-const {
-  fieldOptions: postEmailFilterFieldOptions,
-  loadFieldOptions: loadPostEmailFilterFields,
-} = useActionPostEmailFilterFields(() => props.functionUnitId)
 
 // 核心共享状态
 const selectedAction = ref<ActionDefinition | null>(null)
@@ -564,6 +560,17 @@ const {
   store,
   loadActionBinding,
 })
+
+const {
+  fieldOptions: postEmailFilterFieldOptions,
+  loadFieldOptions: loadPostEmailFilterFields,
+} = useActionPostEmailFilterFields(
+  () => props.functionUnitId,
+  () => ({
+    actionType: selectedAction.value?.actionType,
+    formId: actionConfig.formId as number | null | undefined,
+  }),
+)
 
 // 列表与编辑器生命周期（loadActions 通过 wrapper 调用 binding 的解析）
 const {

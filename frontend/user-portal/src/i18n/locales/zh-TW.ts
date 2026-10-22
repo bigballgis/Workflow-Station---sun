@@ -593,6 +593,7 @@ export default {
     back: '返回',
     refresh: '重新整理',
     applicationDetail: '申請詳情',
+    functionUnitVersion: '功能單元版本',
     basicInfo: '基本資訊',
     requestId: 'Request ID',
     processTitle: '流程標題',

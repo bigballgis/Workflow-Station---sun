@@ -38,6 +38,9 @@ class VersionComponentImplTest {
     
     @Mock
     private VersionRepository versionRepository;
+
+    @Mock
+    private com.platform.common.functionunit.CatalogRuntimeRows runtimeRows;
     
     @Mock
     private FunctionUnitRepository functionUnitRepository;
@@ -92,6 +95,7 @@ class VersionComponentImplTest {
     
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(versionComponent, "runtimeRows", runtimeRows);
         // 清理 SecurityContext
         SecurityContextHolder.clearContext();
     }

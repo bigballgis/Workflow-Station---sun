@@ -50,7 +50,7 @@ class ComputedFieldWritePathWireTest {
     @DisplayName("approval merge recomputes on existing variables plus submission")
     void approvalMergeRecalculatesFullRecord() {
         ProcessInstanceRepository repository = mock(ProcessInstanceRepository.class);
-        when(repository.findById("pi-1")).thenReturn(Optional.of(ProcessInstance.builder()
+        when(repository.findById("pi-1")).thenReturn(Optional.of(ProcessInstance.builder().functionUnitCatalogId("release-v1")
                 .id("pi-1")
                 .functionUnitCode(FU_CODE)
                 .variables(new HashMap<>(Map.of("amount", "100")))

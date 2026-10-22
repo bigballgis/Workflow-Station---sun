@@ -42,6 +42,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class VersionComponentImpl implements VersionComponent {
     
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogRuntimeRows runtimeRows;
     private final VersionRepository versionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final ObjectMapper objectMapper;
@@ -271,6 +273,7 @@ public class VersionComponentImpl implements VersionComponent {
      * so DELETE runs before INSERT, avoiding Hibernate's default INSERT-before-DELETE ordering conflicts.
      */
     private void clearChildCollectionsAndFlush(FunctionUnit functionUnit) {
+        runtimeRows.preserveDesignerFunctionUnit(functionUnit.getId());
         subTableViewConfigRepository.deleteViewFieldsByFunctionUnitId(functionUnit.getId());
         subTableViewConfigRepository.deleteConfigsByFunctionUnitId(functionUnit.getId());
         linkFormComponentRepository.deleteByFunctionUnitId(functionUnit.getId());

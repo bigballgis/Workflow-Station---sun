@@ -5,6 +5,7 @@ import com.developer.component.impl.ActionDesignComponentImpl;
 import com.developer.enums.ActionType;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.platform.common.i18n.I18nService;
@@ -33,7 +34,8 @@ public class ActionDesignPropertyTest {
         when(i18nService.getMessage(any(String.class))).thenReturn("test message");
         TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
         ActionDesignComponent component = new ActionDesignComponentImpl(
-                repository, functionUnitRepository, formDefinitionRepository, tableDefinitionRepository, i18nService);
+                repository, functionUnitRepository, formDefinitionRepository, tableDefinitionRepository,
+                mock(FormTableBindingRepository.class), i18nService);
         
         assertThat(component).isNotNull();
         assertThat(actionType).isNotNull();

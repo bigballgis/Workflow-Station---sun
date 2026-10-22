@@ -53,6 +53,7 @@ public class SubTableDataSharingPropertyTest {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);
             }
         };
+        com.portal.testsupport.PortalVersionTestSupport.task(taskFormComponent);
         ReflectionTestUtils.setField(taskFormComponent, "developerWorkstationUrl", "http://mock-dw:8091");
 
         // Initial process variables with sub-table data
@@ -60,7 +61,7 @@ public class SubTableDataSharingPropertyTest {
         initialVariables.put("_subtable_" + config.subTableName, config.initialSubTableData);
         initialVariables.putAll(config.regularFields);
 
-        ProcessInstance processInstance = ProcessInstance.builder()
+        ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("user-001")
@@ -134,13 +135,14 @@ public class SubTableDataSharingPropertyTest {
         ProcessFormComponent processFormComponent = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
                 new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
+        com.portal.testsupport.PortalVersionTestSupport.process(processFormComponent);
         ReflectionTestUtils.setField(processFormComponent, "adminCenterUrl", "http://mock-admin:8090");
 
         // Process instance in RETURN_TO_REQUESTER state (so Process Form submit is allowed)
         Map<String, Object> initialVariables = new HashMap<>();
         initialVariables.put("_subtable_" + config.subTableName, config.initialSubTableData);
 
-        ProcessInstance processInstance = ProcessInstance.builder()
+        ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId(config.userId)

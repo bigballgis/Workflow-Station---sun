@@ -37,6 +37,8 @@ public class MiCollectionVariableBuilder {
 
     private final WorkflowEngineClient workflowEngineClient;
     private final JdbcTemplate jdbcTemplate;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
 
     /**
      * Approval completion body often lacks full {@code __subTables__}; todo detail {@link TaskInfo#getVariables()} is merged with local ProcessInstance,
@@ -308,7 +310,9 @@ public class MiCollectionVariableBuilder {
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
 
-        MiSubTablePkResult pkResult = resolveMiSubTablePkById(bpmnSubTableId);
+        Object catalog = variables.get("functionUnitId");
+        MiSubTablePkResult pkResult = catalog == null ? resolveMiSubTablePkById(bpmnSubTableId)
+                : resolvePublishedPk(String.valueOf(catalog), bpmnSubTableId);
         if (pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty()) {
             throw new IllegalStateException(
                     "[MI] Cannot resolve primary key for multi-instance collection '" + collectionVariableName
@@ -318,7 +322,9 @@ public class MiCollectionVariableBuilder {
         }
         List<String> pkCols = pkResult.pkCols();
 
-        List<Map<String, Object>> allRows = selectRowsForMiCollection(subTables, pkCols, assigneeField, roleField);
+        Map<String, Object> sources = catalog == null ? subTables
+                : publishedSources(String.valueOf(catalog), bpmnSubTableId, pkResult.resolvedTable(), subTables);
+        List<Map<String, Object>> allRows = selectRowsForMiCollection(sources, pkCols, assigneeField, roleField);
         if (allRows.isEmpty()) {
             log.warn(
                     "[MI] No eligible sub-table rows for '{}' (resolvedTable={}, pk={}, assigneeField='{}', roleField='{}'); setting empty collection",
@@ -428,6 +434,33 @@ public class MiCollectionVariableBuilder {
      * name-based match risks silently resolving to the wrong Function Unit's table. Physical-table PK resolution
      * failures and "no such subTableId" are both reported as errors, not swallowed.
      */
+    private com.platform.common.functionunit.CatalogSnapshotReader snapshots() {
+        return catalogSnapshots != null ? catalogSnapshots : new com.platform.common.functionunit.CatalogSnapshotReader(
+                jdbcTemplate, com.platform.common.util.JsonUtils.getObjectMapper());
+    }
+
+    private MiSubTablePkResult resolvePublishedPk(String catalog, String sourceId) {
+        var table = snapshots().table(catalog, sourceId);
+        var keys = com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields")).stream()
+                .filter(field -> Boolean.TRUE.equals(field.get("isPrimaryKey")))
+                .map(field -> String.valueOf(field.get("fieldName"))).toList();
+        if (keys.isEmpty()) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalog);
+        return new MiSubTablePkResult(String.valueOf(table.get("tableName")), keys);
+    }
+
+    private Map<String, Object> publishedSources(String catalog, String sourceId, String tableName,
+                                                  Map<String, Object> subTables) {
+        String canonical = com.platform.common.subtable.SubTableStoreKeys.dwKey(tableName);
+        if (subTables.containsKey(canonical)) return java.util.Collections.singletonMap(canonical, subTables.get(canonical));
+        var aliases = snapshots().tableAliases(catalog);
+        Map<String, Object> selected = new LinkedHashMap<>();
+        subTables.forEach((key, rows) -> {
+            var table = aliases.get(key);
+            if (table != null && sourceId.equals(String.valueOf(table.get("tableId")))) selected.put(key, rows);
+        });
+        return selected;
+    }
+
     private MiSubTablePkResult resolveMiSubTablePkById(String subTableId) {
         if (subTableId == null || subTableId.isBlank()) {
             return null;

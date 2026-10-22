@@ -1250,6 +1250,8 @@ export default {
         '与主表视图设计中的筛选相同。留空表示在本规则已启用且 Action 成功时始终发送。',
       editCondition: '编辑发送条件',
       editConditionTitle: '发送条件',
+      mainFieldGroup: '主表与系统字段',
+      actionFieldGroup: '动作表：{table}',
       conditionalSendConfigured: '已配置自定义条件',
       conditionalSend: '条件发送（{count}）',
       duplicateRule: '复制',

@@ -594,6 +594,7 @@ export default {
     back: 'Back',
     refresh: 'Refresh',
     applicationDetail: 'Application Detail',
+    functionUnitVersion: 'Function Unit Version',
     basicInfo: 'Basic Info',
     requestId: 'Request ID',
     processTitle: 'Process Title',

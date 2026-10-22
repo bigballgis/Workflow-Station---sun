@@ -182,6 +182,7 @@ class FunctionUnitEnabledProperties {
     // ==================== 辅助方法 ====================
 
     private void stubDeployedChainForUnit(FunctionUnit unit) {
+        when(functionUnitRepository.findByCodeAndVersion(unit.getCode(), unit.getVersion())).thenReturn(Optional.of(unit));
         when(functionUnitRepository.findByCodeAndStatus(eq(unit.getCode()), eq(FunctionUnitStatus.DEPLOYED)))
                 .thenReturn(Collections.singletonList(unit));
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(eq(unit.getCode())))

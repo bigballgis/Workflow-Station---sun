@@ -51,7 +51,7 @@ public class ProcessComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
     private final RestTemplate restTemplate;
-    /** Relation-table identity lookup for {@link #enrichRelationTableIdentity}. */
+    /** Shared database access for process metadata collaborators. */
     private final JdbcTemplate jdbcTemplate;
     private final I18nService i18nService;
     private final ProcessStartComponent processStartComponent;
@@ -175,7 +175,6 @@ public class ProcessComponent {
      * Starts process
      * @see ProcessStartComponent#startProcess(String, String, ProcessStartRequest)
      */
-    @Transactional
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         return processStartComponent.startProcess(userId, processKey, request);
     }
@@ -614,7 +613,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content: name={}", payload.get("name"));
-                Map<String, Object> enrichedPayload = enrichRelationTableIdentity(enrichMiAssignments(payload));
+                Map<String, Object> enrichedPayload = enrichMiAssignments(payload);
                 fuContentCache.put(functionUnitId, new CachedFuContent(enrichedPayload, System.currentTimeMillis()));
                 return enrichedPayload;
             }
@@ -634,94 +633,6 @@ public class ProcessComponent {
         }
     }
 
-    /**
-     * Stamps {@code relationTableId} / {@code relationTableName} onto every form's table binding that
-     * targets a RELATION table, so the portal can tell relation tables from designer sub-tables.
-     *
-     * <p>Without it both kinds arrive with only a {@code tableName}, the portal files them under the
-     * same {@code dw:<name>} canonical key, and MI row isolation then treats a relation table's rows
-     * as one participant's — rejecting every Save on that task. Relation tables carry no participant
-     * FK and legitimately have no primary key.
-     *
-     * <p>Best-effort: on any lookup failure the payload is returned unchanged (previous behaviour),
-     * never failing form load.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> enrichRelationTableIdentity(Map<String, Object> payload) {
-        if (payload == null || payload.isEmpty()) {
-            return payload;
-        }
-        try {
-            List<Map<String, Object>> allBindings = new ArrayList<>();
-            Object forms = payload.get("forms");
-            if (forms instanceof List<?> formList) {
-                for (Object f : formList) {
-                    if (!(f instanceof Map<?, ?> form)) {
-                        continue;
-                    }
-                    Object tb = ((Map<String, Object>) form).get("tableBindings");
-                    if (tb instanceof List<?> list) {
-                        for (Object o : list) {
-                            if (o instanceof Map) {
-                                allBindings.add((Map<String, Object>) o);
-                            }
-                        }
-                    }
-                }
-            }
-            if (allBindings.isEmpty()) {
-                return payload;
-            }
-            List<Long> ids = allBindings.stream()
-                    .map(b -> b.get("bindingId"))
-                    .filter(Number.class::isInstance)
-                    .map(v -> ((Number) v).longValue())
-                    .distinct()
-                    .toList();
-            if (ids.isEmpty()) {
-                return payload;
-            }
-            String placeholders = String.join(",", Collections.nCopies(ids.size(), "?"));
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT b.id AS binding_id, b.relation_table_id, rt.table_name AS relation_table_name"
-                            + " FROM dw_form_table_bindings b"
-                            + " LEFT JOIN rt_table_definitions rt ON rt.id = b.relation_table_id"
-                            + " WHERE b.relation_table_id IS NOT NULL AND b.id IN (" + placeholders + ")",
-                    ids.toArray());
-            if (rows.isEmpty()) {
-                return payload;
-            }
-            Map<Long, Map<String, Object>> byId = new HashMap<>();
-            for (Map<String, Object> row : rows) {
-                Object id = row.get("binding_id");
-                if (id instanceof Number n) {
-                    byId.put(n.longValue(), row);
-                }
-            }
-            for (Map<String, Object> b : allBindings) {
-                Object raw = b.get("bindingId");
-                if (!(raw instanceof Number n)) {
-                    continue;
-                }
-                Map<String, Object> row = byId.get(n.longValue());
-                if (row == null) {
-                    continue;
-                }
-                Object rtId = row.get("relation_table_id");
-                if (rtId instanceof Number rn) {
-                    b.put("relationTableId", rn.longValue());
-                }
-                Object rtName = row.get("relation_table_name");
-                if (rtName != null) {
-                    b.put("relationTableName", String.valueOf(rtName));
-                }
-            }
-        } catch (RuntimeException e) {
-            log.debug("enrichRelationTableIdentity skipped: {}", e.getMessage());
-        }
-        return payload;
-    }
-
     /** Start pages need an authoritative read, not the five-minute task-content cache or engine fallback. */
     public Map<String, Object> getFunctionUnitStartContent(String functionUnitIdOrCode) {
         String catalogId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
@@ -734,73 +645,23 @@ public class ProcessComponent {
         if (!Boolean.TRUE.equals(payload.get("startContentAuthoritative"))) {
             throw new IllegalStateException("Authoritative published start content is unavailable; Admin Center must support the start-content contract");
         }
-        Map<String, Object> enriched = enrichRelationTableIdentity(enrichMiAssignments(payload));
+        Map<String, Object> enriched = enrichMiAssignments(payload);
         attachRequestIdConfig(enriched);
         return enriched;
     }
 
-    /** Internal task content: existing five-minute cache and BPMN fallback remain unchanged. */
+    /** Existing requests load the explicitly authorized release, including disabled old versions. */
     public Map<String, Object> getFunctionUnitContent(String functionUnitIdOrCode) {
-        log.info("Getting function unit content for: {}", functionUnitIdOrCode);
-
-        try {
-            // Resolve function unit ID (code or ID)
-            String functionUnitId = functionUnitIdOrCode;
-            try {
-                functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
-                log.info("Resolved function unit ID: {}", functionUnitId);
-            } catch (Exception e) {
-                log.warn("Could not resolve functionUnitId for {}, using as-is: {}", functionUnitIdOrCode, e.getMessage());
-            }
-
-            // Check cache before making HTTP call
-            CachedFuContent cached = fuContentCache.get(functionUnitId);
-            if (cached != null && !cached.isExpired()) {
-                return cached.payload();
-            }
-
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/content";
-            log.info("Fetching function unit content from: {}", url);
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-
-            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
-            if (!payload.isEmpty()) {
-                log.info("Got function unit content from admin-center: name={}", payload.get("name"));
-                Map<String, Object> enrichedPayload = enrichRelationTableIdentity(enrichMiAssignments(payload));
-                attachRequestIdConfig(enrichedPayload);
-                // Cache successful result
-                fuContentCache.put(functionUnitId, new CachedFuContent(enrichedPayload, System.currentTimeMillis()));
-                return enrichedPayload;
-            }
-
-            log.warn("Admin-center returned empty content for functionUnitId={}; attempting fallback to workflow-engine BPMN", functionUnitId);
-
-            // Fallback: fetch BPMN from workflow-engine by functionUnitCode, wrap in same shape
-            Map<String, Object> fallbackResult = loadBpmnFallbackFromEngine(functionUnitIdOrCode);
-            if (fallbackResult != null && !fallbackResult.isEmpty() && !fallbackResult.containsKey("error")) {
-                fallbackResult = enrichMiAssignments(fallbackResult);
-                fuContentCache.put(functionUnitId, new CachedFuContent(fallbackResult, System.currentTimeMillis()));
-            }
-            return fallbackResult;
-
-        } catch (BpmnMiXmlSupport.MiAssignmentConfigurationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to get function unit content for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
-            // Attempt fallback before giving up
-            try {
-                Map<String, Object> fallback = loadBpmnFallbackFromEngine(functionUnitIdOrCode);
-                if (fallback != null && !fallback.isEmpty()) {
-                    log.info("Function unit content loaded via workflow-engine fallback for {}", functionUnitIdOrCode);
-                    return fallback;
-                }
-            } catch (Exception ignored) { /* fall through to error result */ }
-            Map<String, Object> errorResult = new HashMap<>();
-            errorResult.put("error", e.getMessage());
-            return errorResult;
-        }
+        String catalogId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
+        CachedFuContent cached = fuContentCache.get(catalogId);
+        if (cached != null && !cached.isExpired()) return cached.payload();
+        String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(catalogId) + "/content";
+        Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(restTemplate.getForObject(url, Map.class));
+        if (payload.isEmpty()) throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_SNAPSHOT_INCOMPLETE", catalogId);
+        Map<String, Object> enriched = enrichMiAssignments(payload);
+        attachRequestIdConfig(enriched);
+        fuContentCache.put(catalogId, new CachedFuContent(enriched, System.currentTimeMillis()));
+        return enriched;
     }
 
     private Map<String, Object> enrichMiAssignments(Map<String, Object> payload) {
@@ -841,60 +702,14 @@ public class ProcessComponent {
         if (payload == null || requestIdEnricher == null) {
             return;
         }
-        Object code = payload.get("code");
-        if (!(code instanceof String functionUnitCode) || functionUnitCode.isBlank()) {
-            return;
+        Object catalogId = payload.get("id");
+        if (!(catalogId instanceof String id) || id.isBlank()) {
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(null);
         }
-        try {
-            RequestIdEnricher.RequestIdConfigView cfg = requestIdEnricher.resolveConfigView(functionUnitCode);
-            if (cfg != null) {
-                Map<String, Object> map = new HashMap<>();
-                map.put("fieldNames", cfg.fieldNames());
-                map.put("separator", cfg.separator());
-                payload.put("requestIdConfig", map);
-            }
-        } catch (Exception e) {
-            log.debug("Could not attach requestIdConfig for code {}: {}", functionUnitCode, e.getMessage());
-        }
+        RequestIdEnricher.RequestIdConfigView cfg = requestIdEnricher.resolveCatalogConfigView(id);
+        if (cfg != null) payload.put("requestIdConfig", Map.of("fieldNames", cfg.fieldNames(), "separator", cfg.separator()));
     }
 
-    /**
-     * Fallback: load BPMN from workflow-engine using functionUnitCode (or functionUnitId if it's a code).
-     * Returns a payload compatible with getFunctionUnitContent shape: { name, processes: [{ data: bpmnXml }] }
-     */
-    private Map<String, Object> loadBpmnFallbackFromEngine(String functionUnitIdOrCode) {
-        if (!workflowEngineClient.isAvailable()) {
-            log.warn("Workflow engine not available for BPMN fallback");
-            return Collections.emptyMap();
-        }
-        try {
-            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(functionUnitIdOrCode);
-            if (bpmnOpt.isPresent() && bpmnOpt.get() != null && !bpmnOpt.get().isBlank()) {
-                log.info("BPMN loaded from workflow-engine for key: {}", functionUnitIdOrCode);
-                Map<String, Object> result = new HashMap<>();
-                result.put("name", functionUnitIdOrCode);
-                result.put("code", functionUnitIdOrCode);
-                List<Map<String, Object>> processes = new ArrayList<>();
-                Map<String, Object> processEntry = new HashMap<>();
-                processEntry.put("data", bpmnOpt.get());
-                processes.add(processEntry);
-                result.put("processes", processes);
-                return result;
-            } else {
-                log.warn("Workflow engine returned no BPMN for key: {}", functionUnitIdOrCode);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to load BPMN from workflow-engine for {}: {}", functionUnitIdOrCode, e.getMessage());
-        }
-        return Collections.emptyMap();
-    }
-
-    /**
-     * Returns function unit content of a given type (form dialogs, etc.)
-     *
-     * Uses /function-units/{id}/content then filters client-side
-     * Spring ResourceHttpRequestHandler intercepts some specific path patterns
-     */
     public List<Map<String, Object>> getFunctionUnitContents(String functionUnitIdOrCode, String contentType) {
         log.info("Getting function unit contents for: {}, contentType: {}", functionUnitIdOrCode, contentType);
 
@@ -1026,7 +841,7 @@ public class ProcessComponent {
      * Get action definitions by IDs.
      * Delegates to {@link ActionDefinitionLookupComponent}.
      */
-    public List<ActionDefinition> getActionsByIds(List<String> ids) {
-        return actionDefinitionLookupComponent.resolveByIdsInOrder(ids);
+    public List<ActionDefinition> getActionsByIds(List<String> ids, String catalogId) {
+        return actionDefinitionLookupComponent.resolvePinned(catalogId, ids);
     }
 }

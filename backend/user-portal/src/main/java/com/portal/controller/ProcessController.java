@@ -6,6 +6,7 @@ import com.portal.component.CalledFunctionUnitComponent;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.FunctionUnitAuditScopeComponent;
 import com.portal.component.ProcessComponent;
+import com.portal.component.ProcessStartFormPopupOutcome;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.platform.security.util.SecurityContextUtils;
@@ -52,6 +53,8 @@ public class ProcessController {
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.ProcessInstanceHydrationComponent versionHydration;
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
     private com.portal.component.PortalBatchPrimaryKeyAllocationComponent portalBatchPrimaryKeyAllocationComponent;
@@ -118,7 +121,13 @@ public class ProcessController {
         if (request.getBatchControlId() != null) {
             return ApiResponse.success(portalBatchPrimaryKeyAllocationComponent.allocate(taskId, userId, request));
         }
-        return ApiResponse.success(portalPrimaryKeyAllocationComponent.allocate(functionUnitId, request));
+        String catalogId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitId);
+        if (StringUtils.hasText(taskId)) {
+            var task = taskQueryComponent.getTaskById(taskId)
+                    .orElseThrow(() -> new PortalException("404", "Task not found"));
+            catalogId = versionHydration.requireProcessInstance(task.getProcessInstanceId()).getFunctionUnitCatalogId();
+        }
+        return ApiResponse.success(portalPrimaryKeyAllocationComponent.allocateCatalog(catalogId, request));
     }
     
     /**
@@ -365,8 +374,10 @@ public class ProcessController {
     @GetMapping("/actions")
     @Operation(summary = "根据ID列表获取动作定义")
     public ApiResponse<List<ActionDefinition>> getActionsByIds(
-            @RequestParam List<String> ids) {
-        List<ActionDefinition> actions = processComponent.getActionsByIds(ids);
+            @RequestParam List<String> ids, @RequestParam String catalogId,
+            @CurrentUserId String userId) {
+        requireFunctionUnitContentAccess(userId, catalogId, null);
+        List<ActionDefinition> actions = processComponent.getActionsByIds(ids, catalogId);
         return ApiResponse.success(actions);
     }
 
@@ -398,7 +409,7 @@ public class ProcessController {
             @PathVariable String processKey,
             @PathVariable String actionId,
             @RequestBody @Valid ProcessStartFormPopupSubmitRequest request) {
-        ProcessInstanceInfo instance = actionPostEmailComponent.runWithPostEmail(
+        ProcessStartFormPopupOutcome outcome = actionPostEmailComponent.runWithPostEmail(
                 ActionPostEmailContext.builder()
                         .actionId(actionId)
                         .operation(ActionPostEmailContext.OP_FORM_POPUP)
@@ -407,7 +418,7 @@ public class ProcessController {
                         .operatorId(userId)
                         .build(),
                 () -> processStartFormPopupComponent.submit(userId, processKey, actionId, request));
-        return ApiResponse.success(instance);
+        return ApiResponse.success(outcome.instance());
     }
 
     @GetMapping("/my-applications")

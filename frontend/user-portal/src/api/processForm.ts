@@ -1,4 +1,5 @@
 import { request } from './request'
+import { withoutRuntimeVersionContext } from '@/utils/runtimeVersionSubmission'
 import type { RequestIdConfig } from '../utils/formFieldMeta'
 import type { SensitiveMaskConfig } from '@/utils/sensitiveMask'
 import type { FkFillSourceConfig } from '@/utils/tableFkRuntime'
@@ -126,7 +127,7 @@ export function getProcessFormData(processInstanceId: string) {
 export function submitProcessFormUpdate(processInstanceId: string, data: Record<string, unknown>) {
   // emptiedSubTableKeys / subTableBindingScopes may sit beside form fields.
   // The server strips them before putAll into process variables.
-  return request.put<{ data: void }>(`/processes/${processInstanceId}/form`, data)
+  return request.put<{ data: void }>(`/processes/${processInstanceId}/form`, withoutRuntimeVersionContext(data))
 }
 
 export function getTaskFormData(taskId: string) {
@@ -134,7 +135,9 @@ export function getTaskFormData(taskId: string) {
 }
 
 export function submitTaskForm(taskId: string, data: TaskFormSubmitRequest) {
-  return request.post<{ data: void }>(`/tasks/${taskId}/submit`, data)
+  return request.post<{ data: void }>(`/tasks/${taskId}/submit`, {
+    ...data, formData: withoutRuntimeVersionContext(data.formData),
+  })
 }
 
 export function getCompletedTaskFormData(taskId: string) {
@@ -142,7 +145,9 @@ export function getCompletedTaskFormData(taskId: string) {
 }
 
 export function submitActionFormPopup(taskId: string, actionId: string, formData: Record<string, unknown>) {
-  return request.post<{ data: void }>(`/tasks/${taskId}/actions/${actionId}/form-popup-submit`, { formData })
+  return request.post<{ data: void }>(`/tasks/${taskId}/actions/${actionId}/form-popup-submit`, {
+    formData: withoutRuntimeVersionContext(formData),
+  })
 }
 
 export function submitProcessStartFormPopup(

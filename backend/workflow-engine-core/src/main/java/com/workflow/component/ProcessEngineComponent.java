@@ -125,10 +125,24 @@ public class ProcessEngineComponent {
             validateStartProcessRequest(request);
 
             // Verify process definition exists
-            ProcessDefinition processDefinition = getProcessDefinition(request.getProcessDefinitionKey());
-            if (request.getExpectedProcessDefinitionId() != null
-                    && !processDefinition.getId().equals(request.getExpectedProcessDefinitionId())) {
-                throw new IllegalStateException("Process deployment changed; reload and retry");
+            ProcessDefinition processDefinition;
+            if (request.getExpectedProcessDefinitionId() == null) {
+                processDefinition = getProcessDefinition(request.getProcessDefinitionKey());
+            } else {
+                processDefinition = repositoryService.createProcessDefinitionQuery()
+                        .processDefinitionId(request.getExpectedProcessDefinitionId()).singleResult();
+                if (processDefinition == null) {
+                    // FALLBACK(migration): pre-isolation catalogs stored key:version:uuid display ids.
+                    // Resolve that exact version/id, never latest. Remove after those catalogs are backfilled.
+                    String exact = processDeploymentManager.flowableDefinitionId(request.getExpectedProcessDefinitionId());
+                    if (exact != null) processDefinition = repositoryService.createProcessDefinitionQuery()
+                            .processDefinitionId(exact).singleResult();
+                }
+                if (processDefinition == null || processDefinition.isSuspended()
+                        || !request.getProcessDefinitionKey().equals(processDefinition.getKey())) {
+                    throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                            "VERSION_DEFINITION_MISMATCH", request.getExpectedProcessDefinitionId());
+                }
             }
 
             // Start process instance with start user

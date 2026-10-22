@@ -60,6 +60,8 @@ public class RequestIdEnricher {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ProcessInstanceRepository processInstanceRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
     private final Map<String, CachedSpec> specCache = Collections.synchronizedMap(
             new LinkedHashMap<>(32, 0.75f, true) {
                 @Override
@@ -103,6 +105,10 @@ public class RequestIdEnricher {
         if (functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
             return null;
         }
+        if (variables.get("functionUnitId") != null) {
+            Object stored = variables.get(REQUEST_ID_FIELD);
+            return stored == null ? null : String.valueOf(stored);
+        }
         return applySpec(resolveSpec(functionUnitCode), variables);
     }
 
@@ -120,12 +126,36 @@ public class RequestIdEnricher {
         if (variables == null) {
             return;
         }
-        String requestId = buildRequestId(functionUnitCode, variables);
+        Object catalogId = variables.get("functionUnitId");
+        String requestId = catalogId == null ? buildRequestId(functionUnitCode, variables)
+                : buildCatalogRequestId(String.valueOf(catalogId), variables);
         if (requestId != null) {
             variables.put(REQUEST_ID_FIELD, requestId);
         } else {
             variables.remove(REQUEST_ID_FIELD);
         }
+    }
+
+    public String buildCatalogRequestId(String catalogId, Map<String, Object> variables) {
+        RequestIdConfigView config = resolveCatalogConfigView(catalogId);
+        return config == null ? null : applySpec(new RequestIdSpec(config.fieldNames(), config.separator()), variables);
+    }
+
+    public RequestIdConfigView resolveCatalogConfigView(String catalogId) {
+        var reader = catalogSnapshots;
+        if (reader == null) reader = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
+        var tables = reader.contents(catalogId, "DATA_TABLE").stream()
+                .filter(t -> "MAIN".equals(t.get("tableType"))).toList();
+        if (tables.size() > 1) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+        if (tables.isEmpty() || tables.get(0).get("requestIdConfig") == null) return null;
+        Map<String, Object> config = objectMapper.convertValue(tables.get(0).get("requestIdConfig"),
+                new TypeReference<Map<String, Object>>() { });
+        if (!(config.get("fieldNames") instanceof List<?> names)) {
+            throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
+        }
+        return new RequestIdConfigView(names.stream().map(String::valueOf).toList(),
+                config.get("separator") == null ? "" : String.valueOf(config.get("separator")));
+
     }
 
     /**
@@ -168,9 +198,8 @@ public class RequestIdEnricher {
                     .filter(code -> code != null && !code.isBlank())
                     .forEach(functionUnitCodes::add);
         }
-        SpecCache specs = resolveSpecs(functionUnitCodes);
         Map<String, String> names = loadFunctionUnitNames(functionUnitCodes);
-        applyRequestIdAndFunctionUnit(tasks, instancesById, requestOf, specs, names);
+        applyRequestIdAndFunctionUnit(tasks, instancesById, requestOf, names);
     }
 
     /** How many levels of Function Unit calls are walked up to find the request a task belongs to. */
@@ -231,7 +260,6 @@ public class RequestIdEnricher {
             List<TaskInfo> tasks,
             Map<String, ProcessInstance> instancesById,
             Map<String, ProcessInstance> requestOf,
-            SpecCache specs,
             Map<String, String> names) {
         for (TaskInfo task : tasks) {
             ProcessInstance pi = instancesById.get(task.getProcessInstanceId());
@@ -246,7 +274,8 @@ public class RequestIdEnricher {
                 task.setFunctionUnitName(name != null && !name.isBlank() ? name : null);
             }
             ProcessInstance request = requestOf.getOrDefault(pi.getId(), pi);
-            task.setRequestId(buildRequestId(specs, request.getFunctionUnitCode(), request.getVariables()));
+            Object stored = request.getVariables() == null ? null : request.getVariables().get(REQUEST_ID_FIELD);
+            task.setRequestId(stored == null ? null : String.valueOf(stored));
         }
     }
 
@@ -305,6 +334,10 @@ public class RequestIdEnricher {
     public String buildRequestId(SpecCache cache, String functionUnitCode, Map<String, Object> variables) {
         if (cache == null || functionUnitCode == null || variables == null) {
             return null;
+        }
+        if (variables.get("functionUnitId") != null) {
+            Object stored = variables.get(REQUEST_ID_FIELD);
+            return stored == null ? null : String.valueOf(stored);
         }
         RequestIdSpec spec = cache.byCode.getOrDefault(functionUnitCode, RequestIdSpec.EMPTY);
         return applySpec(spec, variables);

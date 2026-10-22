@@ -55,6 +55,16 @@ public class ProcessDeploymentComponent {
             return noProcessResult(functionUnitId);
         }
 
+        if (Boolean.TRUE.equals(functionUnit.getProcessDeployed())) {
+            Map<String, String> existing = new HashMap<>();
+            for (var process : processContents) {
+                if (process.getFlowableProcessDefinitionId() == null) {
+                    throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(functionUnitId);
+                }
+                existing.put(process.getContentName(), process.getFlowableProcessDefinitionId());
+            }
+            return successResult(functionUnitId, existing);
+        }
         if (!workflowEngineClient.isAvailable()) {
             log.error("Workflow engine is not available");
             return engineUnavailableResult(functionUnitId);
@@ -102,6 +112,8 @@ public class ProcessDeploymentComponent {
         }
 
         if (!deployedProcesses.isEmpty()) {
+            // Persist first-time definition associations before the release's immutable flag.
+            contentRepository.flush();
             functionUnit.setProcessDeployed(true);
             functionUnit.setProcessDeploymentCount(deployedProcesses.size());
             functionUnitRepository.save(functionUnit);
@@ -288,6 +300,11 @@ public class ProcessDeploymentComponent {
 
     @Transactional
     public boolean undeployFunctionUnitProcess(String functionUnitId, boolean cascade) {
+        var unit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new AdminBusinessException("FUNCTION_UNIT_NOT_FOUND", "Function unit not found"));
+        if (Boolean.TRUE.equals(unit.getProcessDeployed())) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_CONTENT_IMMUTABLE", functionUnitId);
+        }
         log.info("Undeploying process for function unit: {}", functionUnitId);
 
         List<FunctionUnitContent> processContents = contentRepository

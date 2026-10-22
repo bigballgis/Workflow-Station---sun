@@ -47,10 +47,11 @@ public class FormDataRoundTripPropertyTest {
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
                 new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
+        com.portal.testsupport.PortalVersionTestSupport.process(component);
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Create process instance in RETURN_TO_REQUESTER state (so submit is allowed)
-        ProcessInstance processInstance = ProcessInstance.builder()
+        ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId(config.userId)
@@ -105,9 +106,10 @@ public class FormDataRoundTripPropertyTest {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);
             }
         };
+        com.portal.testsupport.PortalVersionTestSupport.task(component);
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
-        ProcessInstance processInstance = ProcessInstance.builder()
+        ProcessInstance processInstance = ProcessInstance.builder().functionUnitCatalogId("release-v1").functionUnitCode("test-process")
                 .id(config.processInstanceId)
                 .processDefinitionKey("test-process")
                 .startUserId("user-001")

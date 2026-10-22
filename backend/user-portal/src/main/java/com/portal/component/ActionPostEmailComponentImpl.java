@@ -42,12 +42,34 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
 
     @Override
     public <T> T runWithPostEmail(ActionPostEmailContext context, Supplier<T> action) {
-        ResolvedAction resolved = resolveIfNeeded(context);
+        boolean starting = shouldResolveAfterAction(context);
+        ResolvedAction resolved = starting ? null : resolveIfNeeded(context);
         T result = action.get();
+        if (starting) {
+            context = ActionPostEmailContext.builder().actionId(context.getActionId())
+                    .operation(context.getOperation()).functionUnitCode(context.getFunctionUnitCode())
+                    .processInstanceId(resolveProcessInstanceId(context, result))
+                    .taskId(context.getTaskId())
+                    .operatorId(context.getOperatorId()).comment(context.getComment()).build();
+            resolved = resolveIfNeeded(context);
+        }
         if (resolved != null) {
             publishMatchingRules(context, resolved, result);
         }
         return result;
+    }
+
+    /** START always creates the instance; New Request FORM_POPUP does the same when no id is supplied. */
+    private static boolean shouldResolveAfterAction(ActionPostEmailContext context) {
+        if (context == null) {
+            return false;
+        }
+        if (ActionPostEmailContext.OP_START.equals(context.getOperation())) {
+            return true;
+        }
+        return ActionPostEmailContext.OP_FORM_POPUP.equals(context.getOperation())
+                && !StringUtils.hasText(context.getProcessInstanceId())
+                && !StringUtils.hasText(context.getTaskId());
     }
 
     @Override
@@ -95,16 +117,15 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 return onTask;
             }
         }
-        String functionUnitKey = resolveFunctionUnitKey(context);
-        if (!StringUtils.hasText(functionUnitKey)) {
-            return null;
-        }
-        return actionDefinitionRepository
-                .findCatalogActionForFunctionUnit(context.getActionId(), functionUnitKey)
-                .or(() -> actionDefinitionRepository.findDwActionForFunctionUnit(
-                        context.getActionId(), functionUnitKey))
-                .map(this::toInfo)
-                .orElse(null);
+        if (!StringUtils.hasText(context.getProcessInstanceId())) return null;
+        var instance = processInstanceRepository.findById(context.getProcessInstanceId())
+                .orElseThrow(() -> new com.platform.common.functionunit.FunctionUnitVersionException(
+                        "VERSION_RECOVERY_REQUIRED", context.getProcessInstanceId()));
+        String catalogId = ProcessVersionContext.of(instance).catalogId();
+        var matches = actionDefinitionRepository.findPinnedActions(catalogId, List.of(context.getActionId()));
+        if (matches.size() != 1) throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                "VERSION_SNAPSHOT_INCOMPLETE", catalogId);
+        return toInfo(matches.get(0));
     }
 
     private boolean taskBelongsToAnotherProcess(ActionPostEmailContext context) {
@@ -116,21 +137,9 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 .orElse(false);
     }
 
-    private String resolveFunctionUnitKey(ActionPostEmailContext context) {
-        if (StringUtils.hasText(context.getFunctionUnitCode())) {
-            return context.getFunctionUnitCode();
-        }
-        if (!StringUtils.hasText(context.getProcessInstanceId())) {
-            return null;
-        }
-        return processInstanceRepository.findById(context.getProcessInstanceId())
-                .map(ProcessInstance::getFunctionUnitCode)
-                .orElse(null);
-    }
-
     private TaskActionInfo toInfo(ActionDefinition action) {
         return TaskActionInfo.builder()
-                .actionId(action.getId())
+                .actionId(action.getSourceId() == null ? action.getId() : action.getSourceId())
                 .actionName(action.getActionName())
                 .actionType(action.getActionType())
                 .configJson(action.getConfigJson())
@@ -214,7 +223,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 conditions.add(Map.of());
             }
         }
-        boolean[] matches = ruleConditionEvaluator.evaluate(processInstanceId, conditions);
+        boolean[] matches = ruleConditionEvaluator.evaluate(processInstanceId, conditions, actionRowOf(result));
         for (int i = 0; i < rules.size(); i++) {
             if (!matches[i]) {
                 log.info("[ACTION-EMAIL] skip rule not matched actionId={} ruleId={} process={}",
@@ -281,13 +290,26 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
         if (StringUtils.hasText(context.getProcessInstanceId())) {
             return context.getProcessInstanceId();
         }
-        if (result instanceof com.portal.dto.ProcessInstanceInfo info && StringUtils.hasText(info.getId())) {
-            return info.getId();
+        com.portal.dto.ProcessInstanceInfo instance = result instanceof ProcessStartFormPopupOutcome outcome
+                ? outcome.instance()
+                : result instanceof com.portal.dto.ProcessInstanceInfo info ? info : null;
+        if (instance != null && StringUtils.hasText(instance.getId())) {
+            return instance.getId();
         }
         if (StringUtils.hasText(context.getTaskId())) {
             return taskQueryComponent.getTaskById(context.getTaskId())
                     .map(TaskInfo::getProcessInstanceId)
                     .orElse(null);
+        }
+        return null;
+    }
+
+    private static ActionTableRowRef actionRowOf(Object result) {
+        if (result instanceof ActionTableRowRef row) {
+            return row;
+        }
+        if (result instanceof ProcessStartFormPopupOutcome outcome) {
+            return outcome.actionRow();
         }
         return null;
     }

@@ -89,6 +89,8 @@ class FunctionUnitVersionManagementProperties {
         List<FunctionUnit> units = createMultipleVersions(code, versions, true);
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(units);
+        units.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
             // 更新内存中的状态
@@ -127,6 +129,8 @@ class FunctionUnitVersionManagementProperties {
         List<FunctionUnit> allVersions = Arrays.asList(newUnit);
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(allVersions);
+        allVersions.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> invocation.getArgument(0));
         
         // When: 禁用其他版本（模拟部署流程）
@@ -157,6 +161,8 @@ class FunctionUnitVersionManagementProperties {
         allVersions.add(newUnit);
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(allVersions);
+        allVersions.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
             allVersions.stream()
@@ -335,6 +341,8 @@ class FunctionUnitVersionManagementProperties {
         units.sort((a, b) -> b.getVersion().compareTo(a.getVersion()));
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(units);
+        units.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         
         // When: 获取版本历史
         List<VersionHistoryEntry> history = component.getVersionHistoryWithStatus(code);
@@ -364,6 +372,8 @@ class FunctionUnitVersionManagementProperties {
         units.sort((a, b) -> b.getVersion().compareTo(a.getVersion()));
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(units);
+        units.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         
         // When: 获取版本历史
         List<VersionHistoryEntry> history = component.getVersionHistoryWithStatus(code);
@@ -406,6 +416,8 @@ class FunctionUnitVersionManagementProperties {
         allVersions.add(newUnit);
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(allVersions);
+        allVersions.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
             allVersions.stream()
@@ -540,6 +552,8 @@ class FunctionUnitVersionManagementProperties {
                 .collect(Collectors.toMap(FunctionUnit::getVersion, FunctionUnit::getEnabled));
         
         when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code)).thenReturn(units);
+        units.forEach(unit -> doReturn(Optional.of(unit)).when(functionUnitRepository)
+                .findByCodeAndVersion(code, unit.getVersion()));
         
         // When: autoEnable=false 时不调用 disableOtherVersions
         // （这个属性测试验证的是如果不调用，状态应该保持不变）

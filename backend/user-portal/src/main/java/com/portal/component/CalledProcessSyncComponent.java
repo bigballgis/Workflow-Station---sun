@@ -144,7 +144,7 @@ public class CalledProcessSyncComponent {
             return;
         }
         ProcessInstance caller = callerOpt.get();
-        CallOutputs outputs = readCallOutputs(caller.getProcessDefinitionKey(), calledOpt.get().getCallActivityId());
+        CallOutputs outputs = readCallOutputs(caller.getProcessDefinitionKey(), calledOpt.get().getCallActivityId(), callerId);
         if (outputs.onceTargets().stream().anyMatch(com.portal.util.SubTableBatchMetadata::isLocalField)
                 || outputs.rowMappings().stream().anyMatch(mapping ->
                         com.portal.util.SubTableBatchMetadata.isLocalField(mapping.get("from")))) {
@@ -263,11 +263,11 @@ public class CalledProcessSyncComponent {
         static final CallOutputs NONE = new CallOutputs(List.of(), null, List.of());
     }
 
-    private CallOutputs readCallOutputs(String processDefinitionKey, String callActivityId) {
+    private CallOutputs readCallOutputs(String processDefinitionKey, String callActivityId, String callerId) {
         if (processDefinitionKey == null) {
             return CallOutputs.NONE;
         }
-        Optional<String> bpmn = workflowEngineClient.getBpmnXml(processDefinitionKey);
+        Optional<String> bpmn = workflowEngineClient.getBpmnXml(processDefinitionKey, callerId);
         if (bpmn.isEmpty() || !(bpmn.get().contains(":out") || bpmn.get().contains("callOutputMapping"))) {
             return CallOutputs.NONE;
         }

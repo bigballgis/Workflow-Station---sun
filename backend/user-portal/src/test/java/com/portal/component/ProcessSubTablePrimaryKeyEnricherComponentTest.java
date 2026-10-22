@@ -165,7 +165,7 @@ class ProcessSubTablePrimaryKeyEnricherComponentTest {
     private void stubSequentialAllocation() {
         Map<Long, AtomicInteger> counters = new HashMap<>();
         when(primaryKeyAllocationService.allocate(
-                anyLong(), anyString(), any(PkGenerationConfig.class), anyInt(), anyString()))
+                anyLong(), anyString(), any(PkGenerationConfig.class), anyInt(), anyString(), eq("dw_pk_sequences")))
                 .thenAnswer(inv -> {
                     long tableId = inv.getArgument(0);
                     int n = counters.computeIfAbsent(tableId, k -> new AtomicInteger()).incrementAndGet();
