@@ -5151,3 +5151,28 @@
   detail: |
     start.vue handleAction default 分支用 process.unknownActionType；三语 locale 中该 key 位于 task.unknownActionType（行 481），
     运行时 toast 显示字面量 "process.unknownActionType"（2026-10-20 截图同 #1690）。
+
+- id: "1692"
+  status: fixed
+  fixed_at: "2026-10-21"
+  severity: major
+  category: bug
+  summary: "Portal Select 多选配置在三个规则转换入口丢失，且数组默认值被单值匹配压成标量"
+  file: "frontend/user-portal/src/utils/applySelectPropsFromRule.ts"
+  detail: |
+    流程发起、待办、我的申请统一读取 rule.props.multiple；多选默认值逐元素归一化并保持数组。
+    修前专项用例失败及已部署前端截图复现；修后 Portal 全量2406项通过，build及容器重建完成。
+    Playwright 隔离响应样本验证多选/删除/清空/空初值/单选/刷新默认值；未向业务数据库写入。
+    实际业务保存回显与新建/导入FU双样本未验证；类型检查382项存量错误，前后输出一致。
+    证据：docs/verification/2026-10-21-select-multiple.md。
+
+- id: "1693"
+  status: open
+  severity: major
+  category: bug
+  summary: "创建含中文名称的FU时，自动生成code保留中文，MinimalBpmnTemplate拒绝XML流程ID导致创建失败"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/MinimalBpmnTemplate.java"
+  detail: |
+    2026-10-21 创建测试FU名称 Select 多选测试 20261021，Public工作区下API返回SYS_REQUEST_PROCESSING_ERROR。
+    DW容器日志证实 processElementId must match BPMN/XML id rules，自动code中仍含中文。
+    本轮仅创建测试数据，未修改此范围外实现；改用英文名称后成功创建并部署FU50097。

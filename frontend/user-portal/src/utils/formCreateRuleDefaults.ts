@@ -31,6 +31,13 @@ export function coerceDefaultValueForRuleType(
 ): unknown {
   if (raw === undefined || raw === null || raw === '') return raw
 
+  const props = rule.props as Record<string, unknown> | undefined
+  if (ruleType === 'select' && props?.multiple === true) {
+    const singleRule = { ...rule, props: { ...props, multiple: false } }
+    const values = Array.isArray(raw) ? raw : [raw]
+    return values.map(value => coerceDefaultValueForRuleType(ruleType, value, singleRule))
+  }
+
   const options = ruleOptions(rule)
   if ((ruleType === 'select' || ruleType === 'radio') && options?.length) {
     const s = String(raw).trim()
@@ -250,13 +257,13 @@ export function applyRuleDefaultToFormField(
     if (dv !== undefined && dv !== null && String(dv).trim() !== '') {
       const coerced = coerceDefaultValueForRuleType(String(rule.type ?? ''), dv, rule)
       if (hasMeaningfulFormValue(coerced)) {
-        field.defaultValue = coerced as string | number | boolean | null
+        field.defaultValue = coerced
         return
       }
     }
   }
   const resolved = resolveRuleDefaultValue(rule)
   if (resolved !== undefined) {
-    field.defaultValue = resolved as string | number | boolean | null
+    field.defaultValue = resolved
   }
 }

@@ -35,7 +35,7 @@ export interface FormField {
   userOptions?: Array<{ id: string; name: string }>
   buOptions?: Array<{ id: string; name: string; code?: string }>
   rules?: Array<Record<string, unknown>>
-  defaultValue?: string | number | boolean | null
+  defaultValue?: string | number | boolean | Array<string | number | boolean> | null
   /** Owner control `props.ownerConfig` JSON (`CREATOR` / `CASE_HANDLER`). */
   _ownerConfig?: string
   /** Start-form Creator prefill display name paired with `defaultValue`. */
