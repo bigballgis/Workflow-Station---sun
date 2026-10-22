@@ -97,6 +97,78 @@ class SubTableWriteDesign {
         return out;
     }
 
+    /** What the MI row merger needs to know about one table of a release. */
+    record TableFacts(boolean relation, boolean participantRow, List<String> foreignKeyTargetTypes,
+                      List<String> foreignKeyFields) { }
+
+    /**
+     * Every table of the pinned release, keyed by canonical store key: whether it is a relation table,
+     * whether any of its forms declares it an MI participant row, the table types its foreign keys point at
+     * (the bindings' declared filter FKs when there are any, otherwise every FK field), and its FK columns.
+     * Null only when there is no pinned release.
+     */
+    Map<String, TableFacts> tableFacts(String catalogId) {
+        if (!StringUtils.hasText(catalogId)) return null;
+        return tableFactsCache.computeIfAbsent(catalogId, this::loadTableFacts);
+    }
+
+    /** A published release never changes, so its table facts are computed once per release. */
+    private final Map<String, Map<String, TableFacts>> tableFactsCache = java.util.Collections.synchronizedMap(
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Override protected boolean removeEldestEntry(Map.Entry<String, Map<String, TableFacts>> eldest) {
+                    return size() > 128;
+                }
+            });
+
+    private Map<String, TableFacts> loadTableFacts(String catalogId) {
+        Map<String, Map<String, Object>> tables = new LinkedHashMap<>();
+        for (Map<String, Object> table : contents(catalogId, "DATA_TABLE")) {
+            String name = normalizedName(table.get("tableName"));
+            if (name == null || tables.put(name, table) != null) {
+                throw invalid("Pinned table identity is missing or duplicated");
+            }
+        }
+        List<Map<String, Object>> bindings = contents(catalogId, "FORM").stream()
+                .flatMap(form -> objects(form.get("tableBindings")).stream()).toList();
+        Map<String, TableFacts> out = new LinkedHashMap<>();
+        tables.forEach((name, table) -> {
+            List<Map<String, Object>> own = bindings.stream()
+                    .filter(binding -> name.equals(normalizedName(binding.get("tableName")))).toList();
+            List<String> declared = own.stream()
+                    .map(binding -> filterFkTargetType(tables, table, binding))
+                    .filter(java.util.Objects::nonNull).distinct().toList();
+            List<String> targets = !declared.isEmpty() ? declared : objects(table.get("fields")).stream()
+                    .filter(field -> Boolean.TRUE.equals(field.get("isForeignKey")))
+                    .map(field -> tableType(tables, normalizedName(field.get("refTableName"))))
+                    .filter(java.util.Objects::nonNull).toList();
+            out.put("dw:" + name, new TableFacts("RELATION".equals(text(table.get("tableType"))),
+                    own.stream().anyMatch(binding -> "miParticipantRow".equals(text(binding.get("bindingLinkMode")))),
+                    targets, foreignKeyFields(table)));
+        });
+        return java.util.Collections.unmodifiableMap(out);
+    }
+
+    private static String filterFkTargetType(Map<String, Map<String, Object>> tables, Map<String, Object> table,
+                                             Map<String, Object> binding) {
+        String field = text(binding.get("filterFkFieldName"));
+        if (field == null) return null;
+        String refName = normalizedName(binding.get("filterFkRefTableName"));
+        if (refName == null) {
+            refName = objects(table.get("fields")).stream()
+                    .filter(f -> field.equalsIgnoreCase(text(f.get("fieldName"))))
+                    .map(f -> normalizedName(f.get("refTableName"))).filter(java.util.Objects::nonNull)
+                    .findFirst().orElse(null);
+        }
+        return tableType(tables, refName);
+    }
+
+    /** A relation table never counts as an FK target here, matching the design-time FK model (dw tables only). */
+    private static String tableType(Map<String, Map<String, Object>> tables, String name) {
+        Map<String, Object> table = name == null ? null : tables.get(name);
+        String type = table == null ? null : text(table.get("tableType"));
+        return "RELATION".equals(type) ? null : type;
+    }
+
     private List<Map<String, Object>> contents(String catalogId, String type) {
         return jdbc.queryForList("SELECT content_data FROM sys_function_unit_contents "
                 + "WHERE function_unit_id = ? AND content_type = ?", String.class, catalogId, type)

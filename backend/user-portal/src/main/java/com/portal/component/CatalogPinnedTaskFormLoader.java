@@ -136,6 +136,11 @@ final class CatalogPinnedTaskFormLoader {
         }
     }
 
+    /** The designer config of a published form: the full wrapper's {@code configJson}, or the legacy bare config. */
+    static Map<String, Object> publishedFormConfig(ObjectMapper objectMapper, Map<String, Object> form) {
+        return isFullFormWrapper(form) ? nestedConfigJson(objectMapper, form.get("configJson")) : form;
+    }
+
     private static boolean isFullFormWrapper(Map<String, Object> parsed) {
         if (parsed == null || !parsed.containsKey("configJson")) {
             return false;

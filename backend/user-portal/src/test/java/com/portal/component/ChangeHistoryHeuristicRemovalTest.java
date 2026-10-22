@@ -1,16 +1,12 @@
 package com.portal.component;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -80,23 +76,13 @@ class ChangeHistorySubTableSliceMergerTest {
 
 class ChangeHistoryDesignerPrimaryKeyAmbiguityTest {
 
+    /** Same-named tables of other units or releases cannot mix in: the lookup reads one release. */
     @Test
-    void unscopedTableNameWithTwoFunctionUnitsReturnsEmpty() {
-        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(contains("function_unit_id"), anyString()))
-                .thenReturn(List.of(
-                        Map.of("field_name", "alpha_id", "function_unit_id", 1L),
-                        Map.of("field_name", "beta_id", "function_unit_id", 2L)));
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "shared_table"))
-                .isEmpty();
-    }
-
-    @Test
-    void functionUnitCodeScopesThePrimaryKeyQuery() {
-        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(contains("fu.code"), eq(String.class), eq("item_table"), eq("fu-a")))
-                .thenReturn(List.of("item_id"));
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "dw:item_table", "fu-a"))
-                .containsExactly("item_id");
+    void lookupReadsOnlyTheRequestsRelease() {
+        var snapshots = mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+        when(snapshots.contents("release-a", "DATA_TABLE")).thenReturn(List.of(Map.of(
+                "tableName", "shared_table", "fields", List.of(Map.of("fieldName", "alpha_id", "isPrimaryKey", true)))));
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, "release-a", "dw:shared_table"))
+                .containsExactly("alpha_id");
     }
 }

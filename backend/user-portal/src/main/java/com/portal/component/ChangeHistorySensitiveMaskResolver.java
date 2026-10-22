@@ -1,13 +1,15 @@
 package com.portal.component;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +17,7 @@ import java.util.Map;
 
 /**
  * Builds fieldName → sensitiveMask config for Change History display.
- * Uses the same access path as change-history (process instance → FU forms),
+ * Uses the same access path as change-history (process instance → its release's forms),
  * so masks work even when the caller cannot load full process detail.
  *
  * <p><b>Product rule (intentional):</b> Change History uses PROCESS-first,
@@ -24,67 +26,68 @@ import java.util.Map;
  * If TASK/ACTION later need stage-scoped CH masks, resolve by form/stage — do
  * not silently change this ORDER BY without a product decision.
  */
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ChangeHistorySensitiveMaskResolver {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final CatalogSnapshotReader snapshots;
 
     public Map<String, Map<String, Object>> resolveByProcessInstanceId(String processInstanceId) {
         Map<String, Map<String, Object>> out = new LinkedHashMap<>();
         if (processInstanceId == null || processInstanceId.isBlank()) {
             return out;
         }
-        List<String> configs = loadFormConfigJsons(processInstanceId);
-        for (String raw : configs) {
-            collectFromConfigJson(out, raw);
+        for (Map<String, Object> config : loadFormConfigs(processInstanceId)) {
+            collectFromConfig(out, config);
         }
         return out;
     }
 
-    private List<String> loadFormConfigJsons(String processInstanceId) {
-        try {
-            return jdbcTemplate.query(
-                    """
-                            SELECT fd.config_json::text
-                            FROM up_process_instance pi
-                            INNER JOIN dw_function_units fu ON fu.code = pi.function_unit_code
-                            INNER JOIN dw_form_definitions fd ON fd.function_unit_id = fu.id
-                            WHERE pi.process_instance_id = ?
-                            ORDER BY CASE fd.form_type
-                                WHEN 'PROCESS' THEN 0
-                                WHEN 'TASK' THEN 1
-                                ELSE 2
-                            END,
-                            fd.id
-                            """,
-                    (rs, rowNum) -> rs.getString(1),
-                    processInstanceId);
-        } catch (Exception ex) {
-            log.warn("sensitive-mask lookup failed for process {}: {}", processInstanceId, ex.getMessage());
+    /**
+     * Form configs of the release the request was started on, PROCESS first, then TASK, then the rest.
+     * A mask removed from the live designer after release must not unmask that release's history.
+     */
+    private List<Map<String, Object>> loadFormConfigs(String processInstanceId) {
+        List<String> pins = jdbcTemplate.queryForList(
+                "SELECT function_unit_catalog_id FROM up_process_instance WHERE id = ?",
+                String.class, processInstanceId);
+        if (pins.isEmpty()) {
             return List.of();
         }
+        String catalogId = pins.get(0);
+        if (catalogId == null || catalogId.isBlank()) {
+            throw new FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", processInstanceId);
+        }
+        List<Map<String, Object>> forms = new ArrayList<>(snapshots.contents(catalogId, "FORM"));
+        forms.sort(Comparator.comparingInt(ChangeHistorySensitiveMaskResolver::formTypeRank)
+                .thenComparing(form -> formId(form), Comparator.nullsLast(Comparator.naturalOrder())));
+        List<Map<String, Object>> configs = new ArrayList<>();
+        for (Map<String, Object> form : forms) {
+            configs.add(CatalogPinnedTaskFormLoader.publishedFormConfig(objectMapper, form));
+        }
+        return configs;
     }
 
-    private void collectFromConfigJson(Map<String, Map<String, Object>> out, String raw) {
-        if (raw == null || raw.isBlank()) {
-            return;
-        }
-        try {
-            Map<String, Object> root = objectMapper.readValue(raw, new TypeReference<>() {});
-            collectFromRules(out, root.get("rule"));
-            Object subForms = root.get("subForms");
-            if (subForms instanceof Map<?, ?> map) {
-                for (Object sub : map.values()) {
-                    if (sub instanceof Map<?, ?> subMap) {
-                        collectFromRules(out, subMap.get("rule"));
-                    }
+    private static int formTypeRank(Map<String, Object> form) {
+        Object type = form.get("formType");
+        return "PROCESS".equals(type) ? 0 : "TASK".equals(type) ? 1 : 2;
+    }
+
+    private static Long formId(Map<String, Object> form) {
+        return form.get("formId") instanceof Number number ? number.longValue() : null;
+    }
+
+    private void collectFromConfig(Map<String, Map<String, Object>> out, Map<String, Object> root) {
+        collectFromRules(out, root.get("rule"));
+        Object subForms = root.get("subForms");
+        if (subForms instanceof Map<?, ?> map) {
+            for (Object sub : map.values()) {
+                if (sub instanceof Map<?, ?> subMap) {
+                    collectFromRules(out, subMap.get("rule"));
                 }
             }
-        } catch (Exception ex) {
-            log.debug("skip malformed form configJson for mask lookup: {}", ex.getMessage());
         }
     }
 

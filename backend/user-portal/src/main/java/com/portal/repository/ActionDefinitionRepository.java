@@ -24,6 +24,11 @@ public interface ActionDefinitionRepository extends JpaRepository<ActionDefiniti
             + "and (a.id in :ids or a.sourceId in :ids)")
     List<ActionDefinition> findPinnedActions(@Param("catalogId") String catalogId, @Param("ids") List<String> ids);
 
+    /** The release's own published BPMN: its tasks name their actions by designer id. */
+    @Query(value = "SELECT content_data FROM sys_function_unit_contents "
+            + "WHERE function_unit_id = :catalogId AND content_type = 'PROCESS'", nativeQuery = true)
+    List<String> findPublishedProcessXml(@Param("catalogId") String catalogId);
+
     /**
      * 根据流程定义Key查找已启用功能单元的动作定义
      * 通过 sys_function_unit_contents.flowable_process_definition_id 关联

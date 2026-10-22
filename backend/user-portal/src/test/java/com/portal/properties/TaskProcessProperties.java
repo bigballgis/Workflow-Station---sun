@@ -490,7 +490,8 @@ class TaskProcessProperties {
                 ))
         ));
         mockFlowableTaskResponse(taskId, taskMap);
-        when(workflowEngineClient.getBpmnXml(processDefinitionKey)).thenReturn(Optional.of("""
+        // The BPMN this instance was deployed with, not the latest of its key.
+        when(workflowEngineClient.getBpmnXml(processDefinitionKey, "PI_" + taskId)).thenReturn(Optional.of("""
                 <?xml version="1.0" encoding="UTF-8"?>
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                     xmlns:flowable="http://flowable.org/bpmn"
@@ -516,12 +517,17 @@ class TaskProcessProperties {
                   </bpmn:process>
                 </bpmn:definitions>
                 """));
-        when(jdbcTemplate.query(eq("SELECT table_name FROM dw_table_definitions WHERE id = ?"),
-                Mockito.<org.springframework.jdbc.core.RowMapper<String>>any(), eq(501L)))
-                .thenReturn(List.of("subtable"));
-        when(jdbcTemplate.query(Mockito.contains("FROM dw_field_definitions"),
-                Mockito.<org.springframework.jdbc.core.RowMapper<String>>any(), eq(501L)))
-                .thenReturn(List.of("id"));
+        // The MI sub-table's key comes from the request's release (release-v1), not the live designer.
+        when(jdbcTemplate.queryForList(Mockito.contains("FROM up_process_instance"), eq(String.class), eq("PI_" + taskId)))
+                .thenReturn(List.of("release-v1"));
+        when(jdbcTemplate.queryForList(Mockito.contains("sys_function_unit_contents"), eq(String.class),
+                eq("release-v1"), eq("DATA_TABLE")))
+                .thenReturn(List.of("{\"tableId\":501,\"tableName\":\"subtable\",\"tableType\":\"SUB\","
+                        + "\"fields\":[{\"fieldName\":\"id\",\"isPrimaryKey\":true}]}"));
+        when(jdbcTemplate.queryForList(Mockito.contains("sys_function_unit_contents"), eq(String.class),
+                eq("release-v1"), eq("FORM")))
+                .thenReturn(List.of("{\"formId\":1,\"formType\":\"TASK\",\"tableBindings\":"
+                        + "[{\"bindingId\":66,\"bindingType\":\"SUB\",\"tableName\":\"subtable\"}]}"));
 
         TaskCompleteRequest request = TaskCompleteRequest.builder()
                 .taskId(taskId)
@@ -536,8 +542,8 @@ class TaskProcessProperties {
 
         taskProcessComponent.completeTask(request, userId);
 
-        verify(workflowEngineClient).getBpmnXml(processDefinitionKey);
-        verify(workflowEngineClient, Mockito.never()).getBpmnXml(anyString(), anyString());
+        verify(workflowEngineClient).getBpmnXml(processDefinitionKey, "PI_" + taskId);
+        verify(workflowEngineClient, Mockito.never()).getBpmnXml(anyString());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> variablesCaptor = ArgumentCaptor.forClass(Map.class);

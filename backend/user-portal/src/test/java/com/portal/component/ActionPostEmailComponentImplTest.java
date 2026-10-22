@@ -53,7 +53,7 @@ class ActionPostEmailComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new ActionPostEmailComponentImpl(
-                taskActionService, taskQueryComponent, actionDefinitionRepository,
+                taskActionService, taskQueryComponent, new ActionDefinitionLookupComponent(actionDefinitionRepository),
                 processInstanceRepository, eventPublisher, new ObjectMapper(), ruleConditionEvaluator);
         org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any(), any()))
                 .thenAnswer(inv -> {

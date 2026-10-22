@@ -613,17 +613,18 @@ public class TaskApprovalCompletionComponent {
             return;
         }
         try {
-            String functionUnitCode = functionUnitCodeOf(context.getProcessInstanceId());
+            String catalogId = pinnedCatalogOf(context.getProcessInstanceId());
+            var primaryKeys = changeHistoryComponent.pinnedPrimaryKeyResolver(catalogId);
             Map<String, List<Map<String, Object>>> oldRowsByTable =
                     ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(oldSubTablesObj,
-                            changeHistoryComponent.primaryKeyResolver(functionUnitCode));
+                            primaryKeys);
 
             // Build newRows from ALL keys (including numeric binding IDs that normalizeSubTableRowsByHistoryName skips).
             Map<String, List<Map<String, Object>>> newRowsByTable = new HashMap<>();
             // First pass: use the normal normalization (text-key aliases)
             Map<String, List<Map<String, Object>>> normalizedNew =
                     ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(newSubTablesObj,
-                            changeHistoryComponent.primaryKeyResolver(functionUnitCode));
+                            primaryKeys);
             newRowsByTable.putAll(normalizedNew);
 
             // Collect rows from numeric (binding ID) keys
@@ -659,8 +660,7 @@ public class TaskApprovalCompletionComponent {
                             if (!(entry.getValue() instanceof List<?> rows)) continue;
                             // Identity per slice, from the key that slice's table declares.
                             List<String> oldPk =
-                                    changeHistoryComponent.designerPrimaryKeyFieldsForSliceKey(
-                                            functionUnitCode, key);
+                                    primaryKeys.apply(key);
                             for (Object row : rows) {
                                 if (!(row instanceof Map<?, ?> rowMap)) continue;
                                 Object rowId = ChangeHistoryComponent.resolveRowIdentifier(
@@ -674,8 +674,7 @@ public class TaskApprovalCompletionComponent {
 
                     // Collect new numeric rows (dedup by rowId)
                     for (Map.Entry<String, List<Map<String, Object>>> entry : numericNewRows.entrySet()) {
-                        List<String> newPk = changeHistoryComponent
-                                .designerPrimaryKeyFieldsForSliceKey(functionUnitCode, entry.getKey());
+                        List<String> newPk = primaryKeys.apply(entry.getKey());
                         for (Map<String, Object> row : entry.getValue()) {
                             Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row, newPk);
                             if (rowId != null && seenNew.add(rowId)) {
@@ -691,17 +690,14 @@ public class TaskApprovalCompletionComponent {
                 } else {
                     // Match numeric-key rows to old table groups by row ID
                     for (Map.Entry<String, List<Map<String, Object>>> entry : numericNewRows.entrySet()) {
-                        List<String> newPk = changeHistoryComponent
-                                .designerPrimaryKeyFieldsForSliceKey(functionUnitCode, entry.getKey());
+                        List<String> newPk = primaryKeys.apply(entry.getKey());
                         for (Map<String, Object> row : entry.getValue()) {
                             Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row, newPk);
                             if (rowId == null) continue;
                             for (Map.Entry<String, List<Map<String, Object>>> oldEntry : oldRowsByTable.entrySet()) {
                                 // The old side is keyed by ITS own table's primary key, which need
                                 // not be the same column as the new slice's.
-                                List<String> oldPk = changeHistoryComponent
-                                        .designerPrimaryKeyFieldsForSliceKey(
-                                                functionUnitCode, oldEntry.getKey());
+                                List<String> oldPk = primaryKeys.apply(oldEntry.getKey());
                                 for (Map<String, Object> oldRow : oldEntry.getValue()) {
                                     if (java.util.Objects.equals(rowId,
                                             ChangeHistoryComponent.resolveRowIdentifier(oldRow, oldPk))) {
@@ -726,8 +722,7 @@ public class TaskApprovalCompletionComponent {
                 List<Map<String, Object>> oldRows = oldRowsByTable.getOrDefault(subTableKey, List.of());
                 // Pair rows by the identity this table actually declares, resolved per slice.
                 List<SubTableChange> changes = computeSubTableRowChanges(oldRows, newRows,
-                        changeHistoryComponent.designerPrimaryKeyFieldsForSliceKey(
-                                functionUnitCode, subTableKey));
+                        primaryKeys.apply(subTableKey));
                 log.debug("  table={}: oldRows={}, newRows={}, changes={}",
                         subTableKey, oldRows.size(), newRows.size(), changes.size());
                 totalChanges += changes.size();
@@ -806,12 +801,12 @@ public class TaskApprovalCompletionComponent {
         enricher.stampRequestId(functionUnitCode, variables);
     }
 
-    private String functionUnitCodeOf(String processInstanceId) {
+    private String pinnedCatalogOf(String processInstanceId) {
         if (processInstanceId == null || processInstanceId.isBlank()) {
             return null;
         }
         return processInstanceRepository.findById(processInstanceId)
-                .map(ProcessInstance::getFunctionUnitCode)
+                .map(ProcessInstance::getFunctionUnitCatalogId)
                 .orElse(null);
     }
 }

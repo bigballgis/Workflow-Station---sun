@@ -111,7 +111,8 @@ class SubTableWriteIsolation {
             submitted = merger.mergeCurrentRowOnly(
                     submitted, baseline, rowKey,
                     normalizeEmptiedKeys(request.emptiedSubTableKeys()), bindingScopes,
-                    request.functionUnitCode(), frozen);
+                    request.functionUnitCode(), frozen,
+                    writeDesign == null ? null : writeDesign.tableFacts(request.catalogId()));
             inbound.put("__subTables__", submitted);
         }
         if (bindingScopes.isEmpty()) {

@@ -30,52 +30,23 @@ class ChangeHistorySubmissionFilterTest {
             new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
 
     /**
-     * Answer the binding-contract query with one EDITABLE sub-table binding whose designer primary
-     * key is {@code id} — mirroring {@code dw_field_definitions.is_primary_key}.
-     *
-     * <p>Row identity is read from that configured key. It is deliberately not inferred from the
-     * column's name: {@code id} is an identity here because this table declares it as its primary
-     * key, not because the platform assumes columns called {@code id} identify rows.
+     * The bindings every {@link #formDefinition} carries, as a published form does: EDITABLE
+     * sub-tables that declare {@code id} and {@code row_id} as their primary key. Row identity is
+     * read from that configured key, not inferred from the column's name.
      */
-    @org.junit.jupiter.api.BeforeEach
-    void stubBindingContract() {
-        // Any form id these fixtures use resolves to the same contract: the bindings they exercise
-        // are EDITABLE, and each declares `id` as its designer primary key.
-        when(jdbcTemplate.queryForList(anyString(), org.mockito.ArgumentMatchers.any(Long.class)))
-                .thenReturn(List.of(
-                        binding("participants", "participants", "Participants"),
-                        binding("50030", "people", "People"),
-                        binding("50069", "subtable", "Sub task")));
-    }
+    private static final List<Map<String, Object>> DEFAULT_BINDINGS = List.of(
+            binding("participants", "participants", "Participants"),
+            binding("50030", "people", "People"),
+            binding("50069", "subtable", "Sub task"));
 
     private static Map<String, Object> binding(String bindingId, String tableName, String displayName) {
         return Map.of(
-                "id", bindingId,
-                "binding_type", "SUB",
-                "binding_mode", "EDITABLE",
-                "table_name", tableName,
-                "table_display_name", displayName,
-                // Both names are this table's configured primary key in these fixtures; rows are
-                // keyed by one or the other. Identity comes from that configuration, not from an
-                // assumption that columns named `id` / `row_id` identify rows.
-                "primary_key_fields", pkArray("id", "row_id"));
-    }
-
-    /** A {@code text[]} column as JDBC hands it back. */
-    private static java.sql.Array pkArray(String... fields) {
-        return new java.sql.Array() {
-            @Override public Object getArray() { return fields; }
-            @Override public String getBaseTypeName() { return "text"; }
-            @Override public int getBaseType() { return java.sql.Types.VARCHAR; }
-            @Override public Object getArray(Map<String, Class<?>> map) { return fields; }
-            @Override public Object getArray(long index, int count) { return fields; }
-            @Override public Object getArray(long index, int count, Map<String, Class<?>> map) { return fields; }
-            @Override public java.sql.ResultSet getResultSet() { return null; }
-            @Override public java.sql.ResultSet getResultSet(Map<String, Class<?>> map) { return null; }
-            @Override public java.sql.ResultSet getResultSet(long index, int count) { return null; }
-            @Override public java.sql.ResultSet getResultSet(long index, int count, Map<String, Class<?>> map) { return null; }
-            @Override public void free() { }
-        };
+                "bindingId", bindingId,
+                "bindingType", "SUB",
+                "bindingMode", "EDITABLE",
+                "tableName", tableName,
+                "tableDisplayName", displayName,
+                "primaryKeyFields", List.of("id", "row_id"));
     }
 
     @Test
@@ -329,15 +300,6 @@ class ChangeHistorySubmissionFilterTest {
         // The binding contract: `transactions` is EDITABLE and declares `row_id` as its primary
         // key, which is what preserves that column through the readonly filter. The binding id
         // matches the slice key the submission uses, so the alias resolves.
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(50193L)))
-                .thenReturn(List.of(Map.of(
-                        "id", "transactions",
-                        "binding_type", "SUB",
-                        "binding_mode", "EDITABLE",
-                        "table_name", "transactions",
-                        "table_display_name", "Transactions",
-                        "primary_key_fields", pkArray("row_id"))));
         Map<String, Object> submitted = Map.of("__subTables__", Map.of("transactions", List.of(Map.of(
                 "row_id", "ROW-1",
                 "assignee_id", "user-2",
@@ -357,46 +319,18 @@ class ChangeHistorySubmissionFilterTest {
         assertThat(rows).containsExactly(Map.of("row_id", "ROW-1", "assignee_id", "user-2"));
     }
 
-    @Test
-    void siblingBindingIdResolvesToSameUserEditableBaseline() {
-        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        ChangeHistorySubmissionFilter siblingFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
-                new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(60001L)))
-                .thenReturn(List.of(Map.of(
-                        "id", 50548L,
-                        "binding_type", "SUB",
-                        "binding_mode", "EDITABLE",
-                        "table_name", "ACQ_Transaction",
-                        "table_display_name", "Transaction",
-                        "sibling_id", 50539L)));
-        Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
-                "50548", Map.of("rule", List.of(rule("assignee_id", false))))));
-        form.put("formId", "60001");
-        Map<String, Object> oldNodePayload = Map.of("__subTables__", Map.of(
-                "50539", List.of(Map.of("row_id", "ROW-1", "assignee_id", "user-1"))));
-        Map<String, Object> actual = siblingFilter.retainUserEditableSubmission(
-                oldNodePayload, oldNodePayload, form);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> tables = (Map<String, Object>) actual.get("__subTables__");
-        assertThat(tables).containsKey("ACQ_Transaction");
-        assertThat(tables).doesNotContainKey("50539");
-    }
 
     @Test
     void bindingModesExcludeReadOnlyPrimaryAndSubTableValues() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter bindingModeFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
                 new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(50018L)))
-                .thenReturn(List.of(
-                        bindingRow(50068L, "PRIMARY", "READONLY", "main", "Main", 50068L),
-                        bindingRow(50030L, "SUB", "EDITABLE", "people", "People", 50030L),
-                        bindingRow(50069L, "SUB", "READONLY", "participants", "Participants", 50069L)));
         Map<String, Object> form = Map.of(
                 "formId", "50018",
+                "tableBindings", List.of(
+                        bindingRow(50068L, "PRIMARY", "READONLY", "main", "Main"),
+                        bindingRow(50030L, "SUB", "EDITABLE", "people", "People"),
+                        bindingRow(50069L, "SUB", "READONLY", "participants", "Participants")),
                 "configJson", Map.of(
                         "rule", List.of(rule("lookup", false)),
                         "subForms", Map.of(
@@ -421,15 +355,13 @@ class ChangeHistorySubmissionFilterTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter storeKeyFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
                 new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(320L)))
-                .thenReturn(List.of(bindingRow(
-                        1135L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", 1135L)));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "1135", Map.of("rule", List.of(
                         rule("card_number", false),
                         rule("assignee_id", false))))));
         form.put("formId", "320");
+        form.put("tableBindings", List.of(bindingRow(
+                        1135L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction")));
         Map<String, Object> submitted = Map.of("__subTables__", Map.of(
                 "dw:atm_transaction", List.of(Map.of(
                         "row_id", "ATM-DC-PW-TRANS-000039",
@@ -453,17 +385,15 @@ class ChangeHistorySubmissionFilterTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter nestedFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
                 new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(321L)))
-                .thenReturn(List.of(
-                        bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", 1144L, "row_id"),
-                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", 1149L, "row_id")));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "1144", Map.of("rule", List.of(rule("card_number", false))),
                 "1149", Map.of("rule", List.of(
                         rule("correspondence_channel", false),
                         rule("correspondence_type", false))))));
         form.put("formId", "321");
+        form.put("tableBindings", List.of(
+                        bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", "row_id"),
+                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", "row_id")));
         Map<String, Object> correspondenceRow = new java.util.LinkedHashMap<>();
         correspondenceRow.put("row_id", "eefe5939-de38-4355-8aee-ca3fdd764278");
         correspondenceRow.put("correspondence_channel", "Email");
@@ -496,17 +426,15 @@ class ChangeHistorySubmissionFilterTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter nestedFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
                 new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(321L)))
-                .thenReturn(List.of(
-                        bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", 1144L, "row_id"),
-                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", 1149L, "row_id")));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "1144", Map.of("rule", List.of(rule("card_number", false))),
                 "1149", Map.of("rule", List.of(
                         rule("correspondence_channel", false),
                         rule("correspondence_type", false))))));
         form.put("formId", "321");
+        form.put("tableBindings", List.of(
+                        bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", "row_id"),
+                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", "row_id")));
         Map<String, Object> nestedRow = new java.util.LinkedHashMap<>();
         nestedRow.put("row_id", "nested-live");
         nestedRow.put("correspondence_channel", "Letter");
@@ -540,17 +468,15 @@ class ChangeHistorySubmissionFilterTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter nestedFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
                 new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(321L)))
-                .thenReturn(List.of(
-                        bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", 1144L, "row_id"),
-                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", 1149L, "row_id")));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "1144", Map.of("rule", List.of(rule("card_number", false))),
                 "1149", Map.of("rule", List.of(
                         rule("correspondence_channel", false),
                         rule("correspondence_type", false))))));
         form.put("formId", "321");
+        form.put("tableBindings", List.of(
+                        bindingRow(1144L, "SUB", "EDITABLE", "ATM_Transaction", "Transaction", "row_id"),
+                        bindingRow(1149L, "SUB", "EDITABLE", "atm_correspondence", "ATM Correspondence", "row_id")));
         Map<String, Object> first = new java.util.LinkedHashMap<>();
         first.put("row_id", "corr-1");
         first.put("correspondence_channel", "Email");
@@ -625,13 +551,11 @@ class ChangeHistorySubmissionFilterTest {
     void textualSiblingAliasesUseOnePhysicalHistoryTableName() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter aliasFilter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(60002L)))
-                .thenReturn(List.of(bindingRow(
-                        50066L, "SUB", "EDITABLE", "subtable", "Participants", 50064L)));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "50066", Map.of("rule", List.of(rule("name", false))))));
         form.put("formId", "60002");
+        form.put("tableBindings", List.of(bindingRow(
+                        50066L, "SUB", "EDITABLE", "subtable", "Participants")));
         Map<String, Object> submitted = Map.of("__subTables__", Map.of(
                 "participants", List.of(Map.of("id_idw", "ROW-1", "name", "12"))));
         Map<String, Object> actual = aliasFilter.retainUserEditableSubmission(
@@ -664,13 +588,11 @@ class ChangeHistorySubmissionFilterTest {
     void businessRowIdentityWinsWhenRowsAlsoContainDatabasePrimaryKeys() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter aliasFilter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(60003L)))
-                .thenReturn(List.of(bindingRow(
-                        50066L, "SUB", "EDITABLE", "subtable", "Participants", 50064L)));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "50066", Map.of("rule", List.of(rule("name", false))))));
         form.put("formId", "60003");
+        form.put("tableBindings", List.of(bindingRow(
+                        50066L, "SUB", "EDITABLE", "subtable", "Participants")));
         Map<String, Object> aliases = new java.util.LinkedHashMap<>();
         aliases.put("subtable", List.of(Map.of(
                 "id", "PK-1", "row_id", "ROW-1", "name", "12")));
@@ -695,7 +617,8 @@ class ChangeHistorySubmissionFilterTest {
                         "rule", List.of(rule("name", false)),
                         "subForms", Map.of("participants", Map.of("rule", List.of(
                                 rule("name", false), rule("notes", false))))),
-                "fieldPermissions", Map.of("participants:name", "READONLY"));
+                "fieldPermissions", Map.of("participants:name", "READONLY"),
+                "tableBindings", DEFAULT_BINDINGS);
         Map<String, Object> submitted = Map.of(
                 "name", "Main Table Name",
                 "__subTables__", Map.of("participants", List.of(Map.of(
@@ -755,13 +678,11 @@ class ChangeHistorySubmissionFilterTest {
     void aliasSlicesWithDifferentRowIdsKeepOnlyTheHighestPrioritySlice() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ChangeHistorySubmissionFilter aliasFilter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(341L)))
-                .thenReturn(List.of(bindingRow(
-                        1301L, "SUB", "EDITABLE", "acq_correspondence", "ACQ Correspondence", 1293L)));
         Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
                 "1301", Map.of("rule", List.of(rule("channel", false))))));
         form.put("formId", "341");
+        form.put("tableBindings", List.of(bindingRow(
+                        1301L, "SUB", "EDITABLE", "acq_correspondence", "ACQ Correspondence")));
         Map<String, Object> aliases = new java.util.LinkedHashMap<>();
         aliases.put("1301", List.of(Map.of("row_id", "uuid-A", "channel", "Email")));
         aliases.put("ACQ Correspondence", List.of(Map.of("row_id", "uuid-B", "channel", "Email")));
@@ -777,34 +698,26 @@ class ChangeHistorySubmissionFilterTest {
     }
 
     @Test
-    void processStartAuditUsesTaskSceneFormNotReadonlyMyRequestForm() {
-        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        ChangeHistorySubmissionFilter processFilter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null
-                        && sql.contains("form_type = 'PROCESS'")
-                        && sql.contains("fd.scene = 'TASK'")),
-                eq("fu-20260422-23tfag")))
-                .thenReturn(List.of(Map.of(
-                        "form_id", "50193",
-                        "config_json", "{\"rule\":["
-                                + "{\"field\":\"I\"},"
-                                + "{\"field\":\"id\",\"readonly\":true},"
-                                + "{\"field\":\"lookup\"}],"
-                                + "\"subForms\":{"
-                                + "\"50627\":{\"rule\":[{\"field\":\"name\"},{\"field\":\"assignee\"}]},"
-                                + "\"50553\":{\"rule\":[{\"field\":\"file\"}]}}}",
-                        "field_permissions", "{}",
-                        "read_only", false)));
-        when(jdbcTemplate.queryForList(
-                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(50193L)))
-                .thenReturn(List.of(
-                        bindingRow(50549L, "PRIMARY", "EDITABLE", "main", "Meeting", 50549L),
-                        // The MI participants table declares `id_idw` as its primary key — that is
-                        // why the column survives filtering, not because of how it is spelled.
-                        bindingRow(50627L, "SUB", "EDITABLE", "subtable", "Participants", 50627L,
-                                "id_idw"),
-                        bindingRow(50553L, "SUB", "EDITABLE", "attachment", "Attachment", 50553L)));
+    void processStartAuditUsesTheStartFormOfTheRequestsRelease() {
+        ChangeHistorySubmissionFilter processFilter = new ChangeHistorySubmissionFilter(
+                mock(JdbcTemplate.class), new ObjectMapper());
+        var snapshots = mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(processFilter, "versionSnapshots", snapshots);
+        // The release's start form (task scene), with its published bindings: the MI participants
+        // table declares `id_idw` as its primary key, which is why that column survives filtering.
+        when(snapshots.processForm("release-1", false)).thenReturn(Map.of(
+                "formId", "50193",
+                "configJson", Map.of(
+                        "rule", List.of(Map.of("field", "I"), Map.of("field", "id", "readonly", true),
+                                Map.of("field", "lookup")),
+                        "subForms", Map.of(
+                                "50627", Map.of("rule", List.of(Map.of("field", "name"), Map.of("field", "assignee"))),
+                                "50553", Map.of("rule", List.of(Map.of("field", "file"))))),
+                "fieldPermissions", Map.of(),
+                "tableBindings", List.of(
+                        bindingRow(50549L, "PRIMARY", "EDITABLE", "main", "Meeting"),
+                        bindingRow(50627L, "SUB", "EDITABLE", "subtable", "Participants", "id_idw"),
+                        bindingRow(50553L, "SUB", "EDITABLE", "attachment", "Attachment"))));
         Map<String, Object> submitted = new java.util.LinkedHashMap<>();
         submitted.put("I", "1");
         submitted.put("id", "Meeting-000004");
@@ -818,8 +731,10 @@ class ChangeHistorySubmissionFilterTest {
                         "assignee", "liam",
                         "task_status", "IN_PROGRESS")),
                 "50553", List.of(Map.of("id", "file-1", "file", "/upload/a.jpg"))));
+        Map<String, Object> enriched = new java.util.LinkedHashMap<>(submitted);
+        enriched.put("functionUnitId", "release-1");
         Map<String, Object> actual = processFilter.filterProcessSubmission(
-                "fu-20260422-23tfag", submitted, submitted);
+                "fu-20260422-23tfag", submitted, enriched);
         assertThat(actual).containsEntry("I", "1").containsKey("lookup")
                 .doesNotContainKeys("id", "__request_id", "created_by");
         @SuppressWarnings("unchecked")
@@ -829,6 +744,16 @@ class ChangeHistorySubmissionFilterTest {
         assertThat(tables.get("subtable")).containsExactly(Map.of(
                 "id_idw", "Test-000004", "name", "1", "assignee", "liam"));
         assertThat(tables.get("attachment")).containsExactly(Map.of("id", "file-1", "file", "/upload/a.jpg"));
+    }
+
+    @Test
+    void processStartAuditWithoutAPinnedReleaseIsRefusedRatherThanReadFromTheDesigner() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        ChangeHistorySubmissionFilter processFilter = new ChangeHistorySubmissionFilter(jdbc, new ObjectMapper());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> processFilter.filterProcessSubmission(
+                        "fu-20260422-23tfag", Map.of("I", "1"), Map.of("I", "1")))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        org.mockito.Mockito.verifyNoInteractions(jdbc);
     }
 
     @Test
@@ -846,9 +771,8 @@ class ChangeHistorySubmissionFilterTest {
         return Map.of(
                 "configJson", Map.of("rule", rules, "subForms", subForms),
                 "fieldPermissions", Map.of(),
-                // Present in every production form definition; without it the binding contract —
-                // including each binding's designer primary key — is never resolved.
-                "formId", String.valueOf(FORM_ID));
+                "formId", String.valueOf(FORM_ID),
+                "tableBindings", DEFAULT_BINDINGS);
     }
 
     private static Map<String, Object> rule(String field, boolean readonly) {
@@ -856,25 +780,24 @@ class ChangeHistorySubmissionFilterTest {
     }
 
     private static Map<String, Object> bindingRow(long id, String type, String mode,
-            String tableName, String displayName, long siblingId) {
-        return bindingRow(id, type, mode, tableName, displayName, siblingId, "id", "row_id");
+            String tableName, String displayName) {
+        return bindingRow(id, type, mode, tableName, displayName, "id", "row_id");
     }
 
     /**
-     * @param primaryKeyFields every column marked {@code is_primary_key} on this
+     * @param primaryKeyFields every column marked {@code isPrimaryKey} on this
      *                         table. Composite keys require all of them filled;
      *                         a fixture that only stamps {@code row_id} must pass
      *                         {@code "row_id"} alone, not {@code "id","row_id"}.
      */
     private static Map<String, Object> bindingRow(long id, String type, String mode,
-            String tableName, String displayName, long siblingId, String... primaryKeyFields) {
+            String tableName, String displayName, String... primaryKeyFields) {
         return Map.of(
-                "id", id,
-                "binding_type", type,
-                "binding_mode", mode,
-                "table_name", tableName,
-                "table_display_name", displayName,
-                "sibling_id", siblingId,
-                "primary_key_fields", pkArray(primaryKeyFields));
+                "bindingId", String.valueOf(id),
+                "bindingType", type,
+                "bindingMode", mode,
+                "tableName", tableName,
+                "tableDisplayName", displayName,
+                "primaryKeyFields", List.of(primaryKeyFields));
     }
 }

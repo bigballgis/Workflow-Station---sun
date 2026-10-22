@@ -8,7 +8,6 @@ import com.portal.dto.TaskActionInfo;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessInstance;
-import com.portal.repository.ActionDefinitionRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.TaskActionService;
 import com.portal.util.ActionEmailRuleConditionEvaluator;
@@ -34,7 +33,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
 
     private final TaskActionService taskActionService;
     private final TaskQueryComponent taskQueryComponent;
-    private final ActionDefinitionRepository actionDefinitionRepository;
+    private final ActionDefinitionLookupComponent actionDefinitionLookupComponent;
     private final ProcessInstanceRepository processInstanceRepository;
     private final EventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
@@ -122,10 +121,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 .orElseThrow(() -> new com.platform.common.functionunit.FunctionUnitVersionException(
                         "VERSION_RECOVERY_REQUIRED", context.getProcessInstanceId()));
         String catalogId = ProcessVersionContext.of(instance).catalogId();
-        var matches = actionDefinitionRepository.findPinnedActions(catalogId, List.of(context.getActionId()));
-        if (matches.size() != 1) throw new com.platform.common.functionunit.FunctionUnitVersionException(
-                "VERSION_SNAPSHOT_INCOMPLETE", catalogId);
-        return toInfo(matches.get(0));
+        return toInfo(actionDefinitionLookupComponent.resolvePinned(catalogId, List.of(context.getActionId())).get(0));
     }
 
     private boolean taskBelongsToAnotherProcess(ActionPostEmailContext context) {

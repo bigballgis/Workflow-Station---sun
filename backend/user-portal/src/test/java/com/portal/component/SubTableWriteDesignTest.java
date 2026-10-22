@@ -192,6 +192,63 @@ class SubTableWriteDesignTest {
     }
 
     @Test
+    void tableFactsDescribeEveryTableOfTheReleaseForMiSliceClassification() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))
+                .thenReturn(List.of("""
+                        {"formId":1,"formType":"PROCESS","configJson":{},"tableBindings":[
+                          {"bindingId":101,"bindingType":"SUB","tableName":"Members","bindingLinkMode":"miParticipantRow"},
+                          {"bindingId":102,"bindingType":"SUB","tableName":"files",
+                           "filterFkFieldName":"case_ref","filterFkRefTableName":"cases"}]}
+                        """, """
+                        {"formId":2,"formType":"TASK","configJson":{},"tableBindings":[
+                          {"bindingId":201,"bindingType":"SUB","tableName":"notes"}]}
+                        """));
+        when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("DATA_TABLE")))
+                .thenReturn(List.of("""
+                        {"tableName":"cases","tableType":"MAIN","fields":[{"fieldName":"case_key","isPrimaryKey":true}]}
+                        """, """
+                        {"tableName":"members","tableType":"SUB","fields":[
+                          {"fieldName":"member_key","isPrimaryKey":true},
+                          {"fieldName":"case_ref","isForeignKey":true,"refTableName":"cases"}]}
+                        """, """
+                        {"tableName":"files","tableType":"SUB","fields":[
+                          {"fieldName":"case_ref","isForeignKey":true,"refTableName":"cases"},
+                          {"fieldName":"member_ref","isForeignKey":true,"refTableName":"members"}]}
+                        """, """
+                        {"tableName":"notes","tableType":"SUB","fields":[
+                          {"fieldName":"member_ref","isForeignKey":true,"refTableName":"members"},
+                          {"fieldName":"case_ref","isForeignKey":true,"refTableName":"cases"},
+                          {"fieldName":"room_ref","isForeignKey":true,"refTableName":"rooms"}]}
+                        """, """
+                        {"tableName":"rooms","tableType":"RELATION","fields":[]}
+                        """));
+
+        var design = new SubTableWriteDesign(jdbc, new ObjectMapper());
+        var facts = design.tableFacts("pin");
+
+        assertThat(facts).containsOnlyKeys("dw:cases", "dw:members", "dw:files", "dw:notes", "dw:rooms");
+        // An explicit MI Participant Row declaration on any of the release's forms.
+        assertThat(facts.get("dw:members").participantRow()).isTrue();
+        // A declared filter FK wins over the table's other FK columns.
+        assertThat(facts.get("dw:files").foreignKeyTargetTypes()).containsExactly("MAIN");
+        // Without one, every FK of the table counts — here they disagree. A relation-table target
+        // is not a table type of the design-time FK model, so it never counts.
+        assertThat(facts.get("dw:notes").foreignKeyTargetTypes()).containsExactly("SUB", "MAIN");
+        assertThat(facts.get("dw:notes").foreignKeyFields()).containsExactly("member_ref", "case_ref", "room_ref");
+        assertThat(facts.get("dw:rooms").relation()).isTrue();
+        verify(jdbc, never()).queryForList(contains("dw_"), eq(String.class), any(Object[].class));
+        // A published release never changes: its facts are computed once.
+        assertThat(design.tableFacts("pin")).isSameAs(facts);
+        verify(jdbc, times(1)).queryForList(anyString(), eq(String.class), eq("pin"), eq("DATA_TABLE"));
+    }
+
+    @Test
+    void noPinnedReleaseHasNoTableFacts() {
+        assertThat(new SubTableWriteDesign(mock(JdbcTemplate.class), new ObjectMapper()).tableFacts(" ")).isNull();
+    }
+
+    @Test
     void missingFrozenTableDoesNotFallBackToLiveDw() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString(), eq(String.class), eq("pin"), eq("FORM")))

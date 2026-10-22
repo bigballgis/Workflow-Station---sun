@@ -48,13 +48,82 @@ class ProcessInstanceHydrationComponentTest {
     @Test
     void returnsLocalRowWhenPresent() {
         ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("Process_MCY")
-                .functionUnitCatalogId("fu-1").functionUnitCode("MCY").functionUnitVersionLabel("1.0.0").build();
+                .functionUnitCatalogId("fu-1").functionUnitCode("MCY").functionUnitVersionLabel("1.0.0")
+                .variables(new java.util.HashMap<>(Map.of("functionUnitId", "fu-1", "functionUnitCode", "MCY",
+                        "functionUnitVersionLabel", "1.0.0", "amount", 5)))
+                .build();
         when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
 
         ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID);
 
         assertThat(result).isSameAs(local);
         verify(workflowEngineClient, never()).getProcessInstance(any());
+        verify(processInstanceRepository, never()).save(any());
+    }
+
+    @Test
+    void pinnedRequestWhoseVariablesLackTheReleaseRecordsItThere() {
+        // Pinned before its variables carried the release: pinned-or-live decisions read the variables.
+        ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("fu-call-demo-vendor")
+                .functionUnitCatalogId("fu-1").functionUnitCode("fu-call-demo-vendor").functionUnitVersionLabel("1.0.2")
+                .variables(new java.util.HashMap<>(Map.of("vendor_name", "Acme")))
+                .build();
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
+
+        ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID);
+
+        assertThat(result.getVariables()).containsEntry("functionUnitId", "fu-1")
+                .containsEntry("functionUnitCode", "fu-call-demo-vendor")
+                .containsEntry("functionUnitVersionLabel", "1.0.2")
+                .containsEntry("vendor_name", "Acme");
+        // A JSON merge that leaves lock_version alone: concurrent first reads (task page loads two
+        // forms in parallel) and an in-flight save cannot collide on optimistic locking.
+        org.mockito.ArgumentCaptor<Object> args = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.argThat((String sql) -> sql.startsWith(
+                "UPDATE up_process_instance SET variables = CAST(? AS jsonb) || ") && !sql.contains("lock_version")),
+                args.capture(), args.capture());
+        assertThat(args.getAllValues().get(0).toString()).contains("\"functionUnitId\":\"fu-1\"")
+                .contains("\"functionUnitVersionLabel\":\"1.0.2\"");
+        assertThat(args.getAllValues().get(1)).isEqualTo(PI_ID);
+        verify(processInstanceRepository, never()).save(any());
+        verifyNoInteractions(restTemplate, workflowEngineClient);
+    }
+
+    @Test
+    void healInsideAWriteTransactionFlushesTheCallersPendingChangesBeforeRefreshing() {
+        // claim/complete hydrate engine sub-table rows into the managed instance before reading actions:
+        // those unflushed writes must reach the row before the refresh reloads it.
+        jakarta.persistence.EntityManager entityManager = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(hydrationComponent, "entityManager", entityManager);
+        ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("fu-call-demo-vendor")
+                .functionUnitCatalogId("fu-1").functionUnitCode("fu-call-demo-vendor").functionUnitVersionLabel("1.0.2")
+                .variables(new java.util.HashMap<>(Map.of("vendor_name", "Acme")))
+                .build();
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
+        when(entityManager.contains(local)).thenReturn(true);
+
+        hydrationComponent.requireProcessInstance(PI_ID);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(entityManager, jdbcTemplate);
+        order.verify(entityManager).flush();
+        order.verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.startsWith("UPDATE up_process_instance SET variables"),
+                any(Object.class), eq(PI_ID));
+        order.verify(entityManager).refresh(local);
+        verify(processInstanceRepository, never()).save(any());
+    }
+
+    @Test
+    void variablesNamingAnotherReleaseAreRefusedAndNotOverwritten() {
+        ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("fu-a")
+                .functionUnitCatalogId("fu-1").functionUnitCode("fu-a").functionUnitVersionLabel("1.0.2")
+                .variables(new java.util.HashMap<>(Map.of("functionUnitId", "fu-other")))
+                .build();
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
+
+        assertThatThrownBy(() -> hydrationComponent.requireProcessInstance(PI_ID))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        verifyNoInteractions(jdbcTemplate);
+        verify(processInstanceRepository, never()).save(any());
     }
 
     @Test

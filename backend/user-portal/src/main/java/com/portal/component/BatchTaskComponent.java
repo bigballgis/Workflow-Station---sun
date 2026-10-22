@@ -65,7 +65,17 @@ public class BatchTaskComponent {
         List<BatchTaskGroup> groups = new ArrayList<>();
         for (List<TaskInfo> tasks : byGroup.values()) {
             TaskInfo first = tasks.get(0);
-            List<BatchTaskGroup.BatchTaskAction> actions = batchActions(tasks);
+            List<BatchTaskGroup.BatchTaskAction> actions;
+            try {
+                actions = batchActions(tasks);
+            } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+                // FALLBACK(ux): issue #1701 — only this group leaves the batch view (less function, no wrong
+                // data); opening one of its tasks still reports the version error. 钉住的版本解析不出动作(如运行时版本化之前部署的版本)：该组不进入批量，
+                // 不拖垮整个待办页；打开其中的任务时详情页同样会报这个版本错误，记日志不静默
+                log.warn("Skip batch group {} at node {}: {}", BatchTaskEligibility.groupKeyOf(first),
+                        first.getTaskDefinitionKey(), e.getDetails());
+                continue;
+            }
             if (actions.isEmpty()) {
                 continue;
             }

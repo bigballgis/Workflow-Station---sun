@@ -904,11 +904,11 @@ public class TaskFormComponent {
                 Object filteredOldSubTables = changeHistorySubmissionFilter()
                         .filterTaskSubTableBaseline(taskInfo.processInstanceId,
                                 taskInfo.taskDefinitionKey, oldSubTables);
-                String functionUnitCode = processInstanceRepository.findById(taskInfo.processInstanceId)
-                        .map(ProcessInstance::getFunctionUnitCode)
+                String catalogId = processInstanceRepository.findById(taskInfo.processInstanceId)
+                        .map(ProcessInstance::getFunctionUnitCatalogId)
                         .orElse(null);
                 subTableChangeRecorder().recordSubTableChangeHistory(
-                        context, filteredOldSubTables, newSubTables, functionUnitCode);
+                        context, filteredOldSubTables, newSubTables, catalogId);
             }
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());

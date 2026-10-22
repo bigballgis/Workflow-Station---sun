@@ -5176,3 +5176,111 @@
     2026-10-21 创建测试FU名称 Select 多选测试 20261021，Public工作区下API返回SYS_REQUEST_PROCESSING_ERROR。
     DW容器日志证实 processElementId must match BPMN/XML id rules，自动code中仍含中文。
     本轮仅创建测试数据，未修改此范围外实现；改用英文名称后成功创建并部署FU50097。
+
+- id: "1694"
+  status: open
+  severity: minor
+  category: architecture
+  summary: "SLA 时长按 FU code 读当前环境配置（ac_sla_policies），未随请求发起时的版本冻结"
+  file: "backend/user-portal/src/main/java/com/portal/component/SlaDueDateEnricher.java"
+  detail: |
+    2026-10-22 运行时版本化审计发现：请求编号、表单、动作等都按 up_process_instance.function_unit_catalog_id
+    钉住的发布版本加载，但 SLA 期限（SlaDueDateEnricher 读 ac_sla_policies，按 FU code）取的是当前环境配置，
+    修改 SLA 策略会影响已发起的旧请求。
+    用户决定：本轮先不做，SLA 功能整体要重新设计，届时一并考虑是否按版本冻结。
+- id: "1695"
+  status: open
+  severity: minor
+  category: bug
+  summary: "MI 集合注入失败时只 warn 并跳过，子流程以空集合启动（零子任务），而不是报错"
+  file: "backend/user-portal/src/main/java/com/portal/component/MiCollectionVariableBuilder.java"
+  detail: |
+    2026-10-22 运行时版本化修复（BPMN/子表定义改按请求钉住的版本取）时发现：非冻结路径
+    (instanceBound=false) 在取不到 BPMN、找不到节点、组集合抛错时 catch 后 log.warn 返回空，
+    MI 子流程随后以空集合启动、零子任务，属于静默产生错误数据。本轮按方案未改容错语义。
+- id: "1696"
+  status: open
+  severity: minor
+  category: quality
+  summary: "一批无调用方的死代码仍按 FU code 读 DW 当前设计或最新版本"
+  detail: |
+    2026-10-22 运行时版本化审计列出（存量死代码，本轮未删）：
+    ChangeHistoryBpmnFormResolver.resolve（join dw_process_definitions）及
+    ProcessStartComponent/ProcessInstanceHydrationComponent 写入 functionUnitVersionId 的
+    DwFunctionUnitIdLookup（唯一读取方即上面的 resolve）；MiSubTaskSubTableRowMerger.lookupForeignKeyFieldByStoreKey；
+    ActionDefinitionRepository.findByProcessDefinitionKey / findFromDwByIds / findFromDwById 与
+    ActionDefinitionLookupComponent.resolveByIdsInOrder；ProcessFormComponent.validateProcessFormExists
+    → fetchProcessFormFromLocalDw；PortalPrimaryKeyAllocationComponent.allocate；OwnerFieldComponent.viewHints；
+    engine DeveloperWorkstationEmailTemplateClient.getTemplate。
+- id: "1697"
+  status: open
+  severity: minor
+  category: architecture
+  summary: "若干组件在拿不到钉住版本时仍静默退回读 DW 当前设计（目前不可达，应改为报错）"
+  detail: |
+    2026-10-22 审计：MiSubTableScopeAwareMerge.loadFilters、SubTableBindingScopeGuard 的 live 分支、
+    ProcessSubTablePrimaryKeyEnricherComponent 的 live 路径、ComputedFieldRecalculator 的 live 路径、
+    OwnerFieldMetadataCatalog 的 live 路径（以变量里无 functionUnitId 为开关）。读取时补写钉住版本
+    （ProcessInstanceHydrationComponent）后已无已知可达路径，但退回 DW 违反「按发起版本加载」规则，
+    应改为抛 VERSION_RECOVERY_REQUIRED。
+- id: "1698"
+  status: open
+  severity: minor
+  category: bug
+  summary: "变更历史审计不再把同表其它表单的绑定 id（sibling）当别名，旧的数字 key 切片不进审计基线"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistorySubmissionFilter.java"
+  detail: |
+    2026-10-22 删除了读 DW 的绑定查询（含 sibling_id 别名）后，绑定契约只来自钉住版本表单自己的
+    tableBindings；10-21 运行时版本化后生产路径本就走这里。旧请求里以「其它表单的绑定 id」为 key 的
+    __subTables__ 切片不会映射到物理表（只影响变更历史的旧值基线）。如需支持，应从钉住版本的全部
+    表单汇总同表绑定 id。
+- id: "1699"
+  status: open
+  severity: minor
+  category: quality
+  summary: "MI 回归 fixture 假设发起后唯一任务即 MI 前置节点；MI Demo 当前设计多了 test 节点导致 start 脚本超时"
+  file: "frontend/scripts/start-mi-verification-fixture.mjs"
+  detail: |
+    2026-10-22 跑 regression:mi 时，start-mi-verification-fixture.mjs 完成首个任务后等待 2 个 MI 任务超时：
+    源 FU 50005 现在的流程是 test → assignment → MI，需要手工完成 assignment 后用
+    MI_FIXTURE_PROCESS_ID 续跑。脚本应按 BPMN 推进到 MI 前置节点，而不是假设一步到位。
+- id: "1700"
+  status: open
+  severity: minor
+  category: quality
+  summary: "ProcessStartBatchFirstOutcomeTest 6 个用例反射调用的私有方法签名已被 10-21 运行时版本化改动，全部报错"
+  file: "backend/user-portal/src/test/java/com/portal/component/ProcessStartBatchFirstOutcomeTest.java"
+  detail: |
+    ReflectionTestUtils.invokeMethod 调 autoCompleteFirstTask(String,String,HashMap,ActiveCatalogPin)，
+    HEAD 上方法已多出参数，Method not found。2026-10-22 在 HEAD 上同样失败，属于存量基线。
+- id: "1701"
+  status: open
+  severity: minor
+  category: bug
+  summary: "To Do 批量视图跳过钉住版本解析不出动作的分组（旧版本动作缺 source_id 且按名字无法唯一对应）"
+  file: "backend/user-portal/src/main/java/com/portal/component/BatchTaskComponent.java"
+  detail: |
+    2026-10-22 运行时版本化 Phase 1：旧版本（source_id 为空）的动作改为从该版本已发布 BPMN 的
+    actionIds/actionNames 按名字唯一匹配自愈；仍匹配不上时 listGroups 只让该分组退出批量视图
+    （FALLBACK(ux)，功能变少、不出错数据），打开其中任务仍报版本错误。根治需要为这类版本补齐
+    动作的 source_id 映射（发布侧数据恢复），之后可删除该降级。
+- id: "1702"
+  status: open
+  severity: minor
+  category: quality
+  summary: "ChangeHistorySubmissionFilter 注释仍称按 dw_form_stage_bindings 解析阶段表单，与实现不符"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistorySubmissionFilter.java"
+  detail: |
+    2026-10-22 复审发现（存量）：约 386-389 行注释描述的是旧的 DW 绑定表来源，实际阶段表单
+    来自钉住版本的已发布 BPMN/FORM 内容。仅注释漂移，不影响行为。
+- id: "1703"
+  status: open
+  severity: minor
+  category: quality
+  summary: "读取已发布 PROCESS BPMN 有三份实现，多行时取法不同（LIMIT 1 最新 vs 要求恰好一行）"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableWriteDesign.java"
+  detail: |
+    SubTableWriteDesign.resolve、CatalogPinnedTaskFormLoader.resolveCatalogFormId 取 created_at 最新一行，
+    ActionDefinitionRepository.findPublishedProcessXml（2026-10-22 新增）要求恰好一行。2026-10-22 dev 库
+    29 个版本均只有 1 行 PROCESS，无实际分歧；应收敛为 CatalogSnapshotReader 上的单一读取方法，
+    多行一律按快照不完整报错。

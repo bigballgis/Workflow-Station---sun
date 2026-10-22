@@ -426,10 +426,11 @@ public class SubTableChangeHistoryPropertyTest {
                                 .thenReturn(Optional.of(ProcessInstance.builder()
                                                 .id("process-1")
                                                 .processDefinitionKey("FU_ASSIGN")
+                                                .functionUnitCatalogId("release-assign")
                                                 .build()));
-                when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("FU_ASSIGN")))
-                                .thenReturn(List.of(
-                                                "{\"rule\":[{\"field\":\"assignee\",\"title\":\"Assign To\"}],\"subForms\":{\"64\":{\"rule\":[{\"field\":\"assignee\",\"title\":\"Assign To\"}]}}}"));
+                stubRelease("release-assign", List.of(publishedForm(
+                                "{\"rule\":[{\"field\":\"assignee\",\"title\":\"Assign To\"}],\"subForms\":{\"64\":{\"rule\":[{\"field\":\"assignee\",\"title\":\"Assign To\"}]}}}",
+                                "[]")), List.of());
                 List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
                 assertThat(records).isEmpty();
         }
@@ -456,9 +457,10 @@ public class SubTableChangeHistoryPropertyTest {
                                 .thenReturn(Optional.of(ProcessInstance.builder()
                                                 .id("process-1")
                                                 .processDefinitionKey("FU_CUSTOMER")
+                                                .functionUnitCatalogId("release-customer")
                                                 .build()));
-                when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("FU_CUSTOMER")))
-                                .thenReturn(List.of("{\"rule\":[{\"field\":\"customer\",\"title\":\"Customer\"}]}"));
+                stubRelease("release-customer", List.of(publishedForm(
+                                "{\"rule\":[{\"field\":\"customer\",\"title\":\"Customer\"}]}", "[]")), List.of());
                 List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
                 assertThat(records).isEmpty();
         }
@@ -479,30 +481,14 @@ public class SubTableChangeHistoryPropertyTest {
                 when(userRepository.findAllById(any(Iterable.class))).thenReturn(List.of());
                 when(workflowEngineClient.getTaskHistory("process-1")).thenReturn(Optional.empty());
                 when(processInstanceRepository.findById("process-1")).thenReturn(Optional.of(
-                                ProcessInstance.builder().id("process-1").processDefinitionKey("FU_SCOPE").build()));
-                when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("FU_SCOPE")))
-                                .thenAnswer(invocation -> {
-                                        String sql = invocation.getArgument(0);
-                                        RowMapper<Object> mapper = invocation.getArgument(1);
-                                        ResultSet rs = mock(ResultSet.class);
-                                        String config = "{\"rule\":[],\"subForms\":{\"alpha\":{\"rule\":[{\"field\":\"participant_id\"}]}}}";
-                                        if (sql.contains("SELECT binding.id")) {
-                                                when(rs.getString("id")).thenReturn("50001");
-                                                when(rs.getString("table_name")).thenReturn("alpha");
-                                                when(rs.getString("table_display_name")).thenReturn("Alpha");
-                                        } else if (sql.contains("SELECT fd.id,")) {
-                                                when(rs.getLong("id")).thenReturn(60001L);
-                                                when(rs.getString("config_json")).thenReturn(config);
-                                        } else if (sql.contains("SELECT td.table_name")) {
-                                                when(rs.getString("table_name")).thenReturn("beta");
-                                                when(rs.getString("field_name")).thenReturn("participant_id");
-                                                when(rs.getString("display_name")).thenReturn("Participant");
-                                                when(rs.getInt("sort_order")).thenReturn(1);
-                                        } else {
-                                                when(rs.getString("config_json")).thenReturn(config);
-                                        }
-                                        return List.of(mapper.mapRow(rs, 0));
-                                });
+                                ProcessInstance.builder().id("process-1").processDefinitionKey("FU_SCOPE")
+                                                .functionUnitCatalogId("release-scope").build()));
+                // `participant_id` is editable on sub-table alpha only; the history row is for beta.
+                stubRelease("release-scope", List.of(publishedForm(
+                                "{\"rule\":[],\"subForms\":{\"alpha\":{\"rule\":[{\"field\":\"participant_id\"}]}}}",
+                                "[{\"bindingId\":50001,\"bindingType\":\"SUB\",\"tableName\":\"alpha\",\"tableDisplayName\":\"Alpha\"}]")),
+                                List.of("{\"tableName\":\"beta\",\"tableType\":\"SUB\",\"fields\":[{\"fieldName\":\"participant_id\","
+                                                + "\"displayName\":\"Participant\",\"sortOrder\":1}]}"));
                 assertThat(changeHistoryComponent.getChangeHistory("process-1")).isEmpty();
         }
 
@@ -512,11 +498,9 @@ public class SubTableChangeHistoryPropertyTest {
                 ChangeHistoryComponent mockedHistory = mock(ChangeHistoryComponent.class);
                 // These rows are keyed by `row_id`, so that is the primary key their table declares.
                 // Identity comes from this configuration lookup, not from the column's name.
-                when(mockedHistory.primaryKeyResolver(any()))
+                when(mockedHistory.pinnedPrimaryKeyResolver(any()))
                                 .thenReturn(slice -> List.of("row_id"));
-                when(mockedHistory.designerPrimaryKeyFieldsForSliceKey(any(), anyString()))
-                                .thenReturn(List.of("row_id"));
-                when(mockedHistory.designerPrimaryKeyFieldsForSliceKey(anyString()))
+                when(mockedHistory.pinnedPrimaryKeyFieldsForSliceKey(any(), anyString()))
                                 .thenReturn(List.of("row_id"));
                 TaskFormSubTableChangeRecorder recorder = new TaskFormSubTableChangeRecorder(mockedHistory);
                 ChangeHistoryContext context = ChangeHistoryContext.builder()
@@ -615,4 +599,18 @@ public class SubTableChangeHistoryPropertyTest {
                                         return set;
                                 });
         }
+
+        /** The request's release: its published FORM and DATA_TABLE contents. */
+        private void stubRelease(String catalogId, List<String> forms, List<String> tables) {
+                when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.contains("sys_function_unit_contents"),
+                                eq(String.class), eq(catalogId), eq("FORM"))).thenReturn(forms);
+                when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.contains("sys_function_unit_contents"),
+                                eq(String.class), eq(catalogId), eq("DATA_TABLE"))).thenReturn(tables);
+        }
+
+        private static String publishedForm(String configJson, String tableBindingsJson) {
+                return "{\"formId\":60001,\"formName\":\"Form\",\"formType\":\"PROCESS\",\"configJson\":" + configJson
+                                + ",\"tableBindings\":" + tableBindingsJson + "}";
+        }
+
 }

@@ -366,7 +366,7 @@ public class ProcessFormComponent {
             recordSubTableChangeHistory(context,
                     filteredOldSubTables,
                     userChanges.get("__subTables__"),
-                    gate.getFunctionUnitCode());
+                    gate.getFunctionUnitCatalogId());
         } catch (RuntimeException ex) {
             log.warn("process form change-history skipped for {}: {}", processInstanceId, ex.getMessage());
         }
@@ -426,26 +426,26 @@ public class ProcessFormComponent {
     private void recordSubTableChangeHistory(ChangeHistoryContext context,
                                               Object oldSubTablesObj,
                                               Object newSubTablesObj,
-                                              String functionUnitCode) {
+                                              String catalogId) {
         if (newSubTablesObj == null) {
             return;
         }
         try {
             Map<String, List<Map<String, Object>>> oldRowsByTable =
                     ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(oldSubTablesObj,
-                            changeHistoryComponent.primaryKeyResolver(functionUnitCode));
+                            changeHistoryComponent.pinnedPrimaryKeyResolver(catalogId));
             Map<String, List<Map<String, Object>>> newRowsByTable =
                     ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(newSubTablesObj,
-                            changeHistoryComponent.primaryKeyResolver(functionUnitCode));
+                            changeHistoryComponent.pinnedPrimaryKeyResolver(catalogId));
             for (Map.Entry<String, List<Map<String, Object>>> subTableEntry : newRowsByTable.entrySet()) {
                 String subTableKey = subTableEntry.getKey();
                 List<Map<String, Object>> newRows = subTableEntry.getValue();
                 List<Map<String, Object>> oldRows = oldRowsByTable.getOrDefault(subTableKey, Collections.emptyList());
-                // Pair rows by the identity this table declares, resolved per slice from Table
-                // Design — never by assuming a column name means "identity".
+                // Pair rows by the identity this table declares, resolved per slice from the
+                // request's release — never by assuming a column name means "identity".
                 List<SubTableChange> changes = SubTableChangeHistoryDiff.compute(oldRows, newRows,
-                        changeHistoryComponent.designerPrimaryKeyFieldsForSliceKey(
-                                functionUnitCode, subTableKey));
+                        changeHistoryComponent.pinnedPrimaryKeyFieldsForSliceKey(
+                                catalogId, subTableKey));
                 if (!changes.isEmpty()) {
                     changeHistoryComponent.recordSubTableChanges(
                             context, subTableKey, changes);

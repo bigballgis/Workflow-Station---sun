@@ -127,16 +127,16 @@ class MiSubTableScopeAwareMergeTest {
 
     @Test
     void mergeCurrentRowOnly_withoutScopesStillRejectsMixedTableFilters() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.queryForList(contains("filter_fk_field_id"), eq(String.class), eq("attachment")))
-                .thenReturn(List.of("MAIN", "SUB"));
-        MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(jdbc);
+        MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class));
+        // The pinned release declares this table's filter FKs as pointing at both MAIN and SUB.
+        var release = Map.of("dw:attachment",
+                new SubTableWriteDesign.TableFacts(false, false, List.of("MAIN", "SUB"), List.of()));
 
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:attachment", new ArrayList<>(List.of(file("att-1", "Meeting-1", null, "notes.pdf"))));
 
-        assertThatThrownBy(() ->
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idw", "Test-000003")))
+        assertThatThrownBy(() -> merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idw", "Test-000003"),
+                java.util.Set.of(), List.of(), FU, null, release))
                 .hasMessageContaining("own row");
     }
 
