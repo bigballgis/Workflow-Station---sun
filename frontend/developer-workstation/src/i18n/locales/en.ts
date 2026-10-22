@@ -1204,6 +1204,8 @@ export default {
         'Same filter as Main Table View design. Leave empty to always send when this rule is enabled and the Action succeeds.',
       editCondition: 'Edit send condition',
       editConditionTitle: 'Send condition',
+      mainFieldGroup: 'Main table & system fields',
+      actionFieldGroup: 'Action table: {table}',
       conditionalSendConfigured: 'Custom condition configured',
       conditionalSend: 'Conditional ({count})',
       duplicateRule: 'Duplicate',

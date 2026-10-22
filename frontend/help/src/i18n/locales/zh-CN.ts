@@ -442,6 +442,8 @@ export default {
     cAlwaysSend: '该规则未设置条件时显示。',
     cEditCondition: '打开筛选对话框（字段、运算符、值、嵌套组）。',
     cOperators: '与视图设计筛选相同的运算符（等于、包含、为空等）。',
+    cActionTableFields:
+      '仅限表单弹窗（Form Popup）动作：字段列表多出「动作表」分组，列出弹窗表单所绑定 ACTION 表的字段。这类条件判断的是本次弹窗提交刚写入的那一行，不看以前的行。其他动作类型只能选主表和系统字段。',
     typesTitle: '哪些动作类型能发',
     typesBody:
       'Portal 必须真正执行该动作。API调用、自定义脚本、组合动作会显示提示条，并保持开关关闭。对这些类型打开邮件后保存会被拦住。',

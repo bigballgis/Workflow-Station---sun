@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Close, Plus, ArrowDown } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import {
   FILTER_OPERATOR_KEYS,
+  applyFilterFieldOption,
+  createDefaultFilterCondition,
   createEmptyFilterGroup,
-  nextFilterNodeId,
+  filterFieldKey,
   operatorNeedsValue,
+  type FilterConditionEditorRow,
   type FilterFieldOption,
   type FilterGroupEditorNode,
 } from '@/utils/mainTableViewFilter'
@@ -28,20 +32,22 @@ function formatOperatorLabel(op: string): string {
   return translated !== key ? translated : op
 }
 
-function onFieldChange(row: { fieldName: string; systemField?: boolean }) {
-  const opt = props.fieldOptions.find(o => o.fieldName === row.fieldName)
-  row.systemField = opt?.systemField
+const optionGroups = computed(() => {
+  if (!props.fieldOptions.some(o => o.group)) return null
+  const groups = new Map<string, FilterFieldOption[]>()
+  for (const opt of props.fieldOptions) {
+    const label = opt.group ?? ''
+    groups.set(label, [...(groups.get(label) ?? []), opt])
+  }
+  return [...groups].map(([label, options]) => ({ label, options }))
+})
+
+function onFieldChange(row: FilterConditionEditorRow, key: string) {
+  applyFilterFieldOption(row, props.fieldOptions.find(o => filterFieldKey(o) === key))
 }
 
 function addRow() {
-  const first = props.fieldOptions[0]
-  props.group.conditions.push({
-    id: nextFilterNodeId('fc'),
-    fieldName: first?.fieldName || 'process_status',
-    operator: 'eq',
-    value: '',
-    systemField: first?.systemField,
-  })
+  props.group.conditions.push(createDefaultFilterCondition(props.fieldOptions))
 }
 
 function addNestedGroup() {
@@ -92,17 +98,33 @@ function removeNestedGroup(index: number) {
       >
         <span class="filter-tree-line" />
         <el-select
-          v-model="row.fieldName"
+          :model-value="filterFieldKey(row)"
           size="small"
           class="filter-field-select"
-          @change="onFieldChange(row)"
+          @update:model-value="(key: string) => onFieldChange(row, key)"
         >
-          <el-option
-            v-for="opt in fieldOptions"
-            :key="opt.fieldName"
-            :label="opt.label"
-            :value="opt.fieldName"
-          />
+          <template v-if="optionGroups">
+            <el-option-group
+              v-for="g in optionGroups"
+              :key="g.label"
+              :label="g.label"
+            >
+              <el-option
+                v-for="opt in g.options"
+                :key="filterFieldKey(opt)"
+                :label="opt.label"
+                :value="filterFieldKey(opt)"
+              />
+            </el-option-group>
+          </template>
+          <template v-else>
+            <el-option
+              v-for="opt in fieldOptions"
+              :key="filterFieldKey(opt)"
+              :label="opt.label"
+              :value="filterFieldKey(opt)"
+            />
+          </template>
         </el-select>
         <el-select
           v-model="row.operator"

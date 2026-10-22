@@ -28,12 +28,14 @@ public class CatalogRuntimeRows {
     }
 
     @Transactional
-    public void insert(String catalogId, String sourceId, String processId, Map<String, Object> data,
+    public String insert(String catalogId, String sourceId, String processId, Map<String, Object> data,
                        String actor) {
         if (processId == null || processId.isBlank()) throw new FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", processId);
+        String rowId = UUID.randomUUID().toString();
         jdbc.update("INSERT INTO dw_table_data_rows(runtime_table_id,process_instance_id,row_id,data,created_by,updated_by) "
                         + "VALUES (?, ?, ?, ?::jsonb, ?, ?)",
-                tableId(catalogId, sourceId), processId, UUID.randomUUID().toString(), json(data), actor, actor);
+                tableId(catalogId, sourceId), processId, rowId, json(data), actor, actor);
+        return rowId;
     }
 
     @Transactional

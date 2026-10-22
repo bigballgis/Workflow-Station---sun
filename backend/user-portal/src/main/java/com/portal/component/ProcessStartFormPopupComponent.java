@@ -24,7 +24,7 @@ public class ProcessStartFormPopupComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
 
-    public ProcessInstanceInfo submit(
+    public ProcessStartFormPopupOutcome submit(
             String userId, String processKey, String actionId, ProcessStartFormPopupSubmitRequest request) {
         requireFormPopupActionForProcess(actionId, processKey);
         String processInstanceId = request.getProcessInstanceId();
@@ -50,9 +50,9 @@ public class ProcessStartFormPopupComponent {
                 throw new PortalException("500", "Process start did not return an instance id");
             }
         }
-        actionFormPopupSubmitComponent.submitForProcessInstance(
+        ActionTableRowRef actionRow = actionFormPopupSubmitComponent.submitForProcessInstance(
                 processInstanceId, actionId, request.getPopupFormData(), userId);
-        return instance;
+        return new ProcessStartFormPopupOutcome(instance, actionRow);
     }
 
     private ProcessInstanceInfo requireRunningInstanceForInitiator(String processInstanceId, String userId) {

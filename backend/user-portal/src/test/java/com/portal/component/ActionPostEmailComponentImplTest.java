@@ -55,7 +55,7 @@ class ActionPostEmailComponentImplTest {
         component = new ActionPostEmailComponentImpl(
                 taskActionService, taskQueryComponent, actionDefinitionRepository,
                 processInstanceRepository, eventPublisher, new ObjectMapper(), ruleConditionEvaluator);
-        org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any()))
+        org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any(), any()))
                 .thenAnswer(inv -> {
                     List<?> conditions = inv.getArgument(1);
                     int n = conditions == null ? 0 : conditions.size();
@@ -237,11 +237,51 @@ class ActionPostEmailComponentImplTest {
         when(taskQueryComponent.getTaskById("t1")).thenReturn(java.util.Optional.of(
                 com.portal.dto.TaskInfo.builder().processInstanceId("pi-1").build()));
         when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
-        when(ruleConditionEvaluator.evaluate(org.mockito.ArgumentMatchers.eq("pi-1"), any()))
+        when(ruleConditionEvaluator.evaluate(org.mockito.ArgumentMatchers.eq("pi-1"), any(), any()))
                 .thenReturn(new boolean[] { true, false });
 
         component.runWithPostEmail(ctx("7", ActionPostEmailContext.OP_SAVE), () -> "ok");
         verify(eventPublisher, times(1)).publish(any());
+    }
+
+    @Test
+    void formPopupTask_passesInsertedActionRowToEvaluator() {
+        when(taskActionService.getTaskActions("t1")).thenReturn(List.of(action("7", "FORM_POPUP", rulesJson())));
+        when(taskQueryComponent.getTaskById("t1")).thenReturn(java.util.Optional.of(
+                com.portal.dto.TaskInfo.builder().processInstanceId("pi-1").build()));
+        when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+        ActionTableRowRef row = new ActionTableRowRef("row-a");
+
+        component.runWithPostEmail(ctx("7", ActionPostEmailContext.OP_FORM_POPUP), () -> row);
+
+        verify(ruleConditionEvaluator).evaluate(
+                org.mockito.ArgumentMatchers.eq("pi-1"), any(), org.mockito.ArgumentMatchers.eq(row));
+    }
+
+    @Test
+    void formPopupStart_usesOutcomeInstanceAndActionRow() {
+        when(processInstanceRepository.findById("pi-9")).thenReturn(java.util.Optional.of(
+                ProcessInstance.builder().id("pi-9").functionUnitCatalogId("v1").functionUnitCode("fu-a").build()));
+        when(actionDefinitionRepository.findPinnedActions("v1", List.of("12")))
+                .thenReturn(List.of(ActionDefinition.builder()
+                        .id("12").actionName("Popup").actionType("FORM_POPUP").configJson(rulesJson()).build()));
+        when(eventPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+        ActionTableRowRef row = new ActionTableRowRef("row-b");
+        ProcessStartFormPopupOutcome outcome =
+                new ProcessStartFormPopupOutcome(ProcessInstanceInfo.builder().id("pi-9").build(), row);
+
+        component.runWithPostEmail(ActionPostEmailContext.builder()
+                .actionId("12")
+                .operation(ActionPostEmailContext.OP_FORM_POPUP)
+                .functionUnitCode("fu-a")
+                .operatorId("u1")
+                .build(), () -> outcome);
+
+        verify(ruleConditionEvaluator).evaluate(
+                org.mockito.ArgumentMatchers.eq("pi-9"), any(), org.mockito.ArgumentMatchers.eq(row));
+        ArgumentCaptor<ActionEmailRequestedEvent> captor = ArgumentCaptor.forClass(ActionEmailRequestedEvent.class);
+        verify(eventPublisher, times(2)).publish(captor.capture());
+        assertEquals("pi-9", captor.getValue().getProcessInstanceId());
     }
 
     private static String enabledJson() {

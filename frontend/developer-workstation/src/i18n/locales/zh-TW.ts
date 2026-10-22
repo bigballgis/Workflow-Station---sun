@@ -1251,6 +1251,8 @@ export default {
         '與主表檢視設計中的篩選相同。留空表示在本規則已啟用且 Action 成功時一律發送。',
       editCondition: '編輯發送條件',
       editConditionTitle: '發送條件',
+      mainFieldGroup: '主表與系統欄位',
+      actionFieldGroup: '動作表：{table}',
       conditionalSendConfigured: '已設定自訂條件',
       conditionalSend: '條件發送（{count}）',
       duplicateRule: '複製',

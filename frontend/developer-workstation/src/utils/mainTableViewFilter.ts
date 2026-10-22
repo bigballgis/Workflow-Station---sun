@@ -14,11 +14,16 @@ export type FilterOperator =
   | 'gt'
   | 'lt'
 
+/** Non-main field source; absent means MAIN table or system field. */
+export type FilterFieldSource = 'ACTION'
+
 export interface FilterCondition {
   fieldName: string
   operator: string
   value?: string | null
   systemField?: boolean
+  /** Action send-email only: field lives on the FORM_POPUP action's ACTION table. */
+  source?: FilterFieldSource
 }
 
 export interface FilterGroup {
@@ -50,6 +55,26 @@ export interface FilterFieldOption {
   fieldName: string
   label: string
   systemField?: boolean
+  source?: FilterFieldSource
+  /** Option group heading in the field select; options without one render ungrouped. */
+  group?: string
+}
+
+/** Select key that keeps a MAIN field and an ACTION field with the same name distinct. */
+export function filterFieldKey(item: { fieldName: string; source?: FilterFieldSource }): string {
+  return item.source ? `${item.source}:${item.fieldName}` : item.fieldName
+}
+
+/** Copies field identity (name, system flag, source) from an option onto a condition. */
+export function applyFilterFieldOption(row: FilterCondition, opt: FilterFieldOption | undefined): void {
+  if (!opt) return
+  row.fieldName = opt.fieldName
+  row.systemField = opt.systemField
+  if (opt.source) {
+    row.source = opt.source
+  } else {
+    delete row.source
+  }
 }
 
 let filterNodeSeq = 0
@@ -71,14 +96,14 @@ export function createEmptyFilterGroup(logic: FilterLogic = 'and'): FilterGroupE
 export function createDefaultFilterCondition(
   fieldOptions: FilterFieldOption[],
 ): FilterConditionEditorRow {
-  const first = fieldOptions[0]
-  return {
+  const row: FilterConditionEditorRow = {
     id: nextFilterNodeId('fc'),
-    fieldName: first?.fieldName || 'process_status',
+    fieldName: 'process_status',
     operator: 'eq',
     value: '',
-    systemField: first?.systemField,
   }
+  applyFilterFieldOption(row, fieldOptions[0])
+  return row
 }
 
 function cloneEditorGroup(raw: FilterGroup): FilterGroupEditorNode {

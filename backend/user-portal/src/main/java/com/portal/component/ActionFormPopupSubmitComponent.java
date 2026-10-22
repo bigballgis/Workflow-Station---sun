@@ -31,17 +31,17 @@ public class ActionFormPopupSubmitComponent {
     private final UserDisplayNameResolver displayNames;
 
     @Transactional
-    public void submit(TaskInfo task, String actionId, Map<String, Object> formData, String userId) {
-        submitForProcessInstance(task.getProcessInstanceId(), actionId, formData, userId, task);
+    public ActionTableRowRef submit(TaskInfo task, String actionId, Map<String, Object> formData, String userId) {
+        return submitForProcessInstance(task.getProcessInstanceId(), actionId, formData, userId, task);
     }
 
     @Transactional
-    public void submitForProcessInstance(
+    public ActionTableRowRef submitForProcessInstance(
             String processInstanceId, String actionId, Map<String, Object> formData, String userId) {
-        submitForProcessInstance(processInstanceId, actionId, formData, userId, null);
+        return submitForProcessInstance(processInstanceId, actionId, formData, userId, null);
     }
 
-    private void submitForProcessInstance(
+    private ActionTableRowRef submitForProcessInstance(
             String processInstanceId, String actionId, Map<String, Object> formData, String userId, TaskInfo task) {
         RuntimeVersionContext.rejectClientMetadata(formData);
         var instance = instances.findById(processInstanceId)
@@ -109,6 +109,6 @@ public class ActionFormPopupSubmitComponent {
         ComputedFieldRowEvaluation.applyFields(ComputedFieldRowEvaluation.orderByDependency(computed), data,
                 com.platform.common.computedfield.ComputedFieldContext.ofRow(data,
                         Map.of(String.valueOf(snapshots.mainTable(catalogId).get("tableName")), instance.getVariables())));
-        rows.insert(catalogId, sourceId, instance.getId(), data, actor);
+        return new ActionTableRowRef(rows.insert(catalogId, sourceId, instance.getId(), data, actor));
     }
 }

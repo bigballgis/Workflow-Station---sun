@@ -470,6 +470,8 @@ export default {
     cAlwaysSend: 'Shown when no condition is set for that rule.',
     cEditCondition: 'Opens the filter dialog (field, operator, value, nested groups).',
     cOperators: 'Same operators as View Design filters (Equals, Contains, is null, …).',
+    cActionTableFields:
+      'Form Popup Actions only: the field list also has an "Action table" group with the fields of the ACTION table bound to the popup form. These conditions check the row that this popup Submit just saved, not earlier rows. Other Action types only offer main table and system fields.',
     typesTitle: 'Which Action types can send',
     typesBody:
       'Portal must actually run the Action. API Call, Custom Script, and Composite Action show an info banner and keep the switch off. Saving with mail on for those types is blocked.',

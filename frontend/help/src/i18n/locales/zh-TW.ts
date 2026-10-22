@@ -442,6 +442,8 @@ export default {
     cAlwaysSend: '該規則未設定條件時顯示。',
     cEditCondition: '開啟篩選對話框（欄位、運算子、值、嵌套群組）。',
     cOperators: '與檢視設計篩選相同的運算子（等於、包含、為空等）。',
+    cActionTableFields:
+      '僅限表單彈窗（Form Popup）動作：欄位清單多出「動作表」分組，列出彈窗表單所綁定 ACTION 表的欄位。這類條件判斷的是本次彈窗提交剛寫入的那一列，不看以前的列。其他動作類型只能選主表和系統欄位。',
     typesTitle: '哪些動作類型能發',
     typesBody:
       'Portal 必須真正執行該動作。API呼叫、自訂腳本、組合動作會顯示提示條，並保持開關關閉。對這些類型打開郵件後儲存會被擋住。',

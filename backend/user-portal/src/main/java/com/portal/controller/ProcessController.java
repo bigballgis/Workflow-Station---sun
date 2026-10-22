@@ -6,6 +6,7 @@ import com.portal.component.CalledFunctionUnitComponent;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.FunctionUnitAuditScopeComponent;
 import com.portal.component.ProcessComponent;
+import com.portal.component.ProcessStartFormPopupOutcome;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.platform.security.util.SecurityContextUtils;
@@ -408,7 +409,7 @@ public class ProcessController {
             @PathVariable String processKey,
             @PathVariable String actionId,
             @RequestBody @Valid ProcessStartFormPopupSubmitRequest request) {
-        ProcessInstanceInfo instance = actionPostEmailComponent.runWithPostEmail(
+        ProcessStartFormPopupOutcome outcome = actionPostEmailComponent.runWithPostEmail(
                 ActionPostEmailContext.builder()
                         .actionId(actionId)
                         .operation(ActionPostEmailContext.OP_FORM_POPUP)
@@ -417,7 +418,7 @@ public class ProcessController {
                         .operatorId(userId)
                         .build(),
                 () -> processStartFormPopupComponent.submit(userId, processKey, actionId, request));
-        return ApiResponse.success(instance);
+        return ApiResponse.success(outcome.instance());
     }
 
     @GetMapping("/my-applications")

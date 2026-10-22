@@ -42,7 +42,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
 
     @Override
     public <T> T runWithPostEmail(ActionPostEmailContext context, Supplier<T> action) {
-        boolean starting = context != null && ActionPostEmailContext.OP_START.equals(context.getOperation());
+        boolean starting = shouldResolveAfterAction(context);
         ResolvedAction resolved = starting ? null : resolveIfNeeded(context);
         T result = action.get();
         if (starting) {
@@ -56,6 +56,18 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
             publishMatchingRules(context, resolved, result);
         }
         return result;
+    }
+
+    /** START always creates the instance; New Request FORM_POPUP does the same when no id is supplied. */
+    private static boolean shouldResolveAfterAction(ActionPostEmailContext context) {
+        if (context == null) {
+            return false;
+        }
+        if (ActionPostEmailContext.OP_START.equals(context.getOperation())) {
+            return true;
+        }
+        return ActionPostEmailContext.OP_FORM_POPUP.equals(context.getOperation())
+                && !StringUtils.hasText(context.getProcessInstanceId());
     }
 
     @Override
@@ -209,7 +221,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
                 conditions.add(Map.of());
             }
         }
-        boolean[] matches = ruleConditionEvaluator.evaluate(processInstanceId, conditions);
+        boolean[] matches = ruleConditionEvaluator.evaluate(processInstanceId, conditions, actionRowOf(result));
         for (int i = 0; i < rules.size(); i++) {
             if (!matches[i]) {
                 log.info("[ACTION-EMAIL] skip rule not matched actionId={} ruleId={} process={}",
@@ -276,13 +288,26 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
         if (StringUtils.hasText(context.getProcessInstanceId())) {
             return context.getProcessInstanceId();
         }
-        if (result instanceof com.portal.dto.ProcessInstanceInfo info && StringUtils.hasText(info.getId())) {
-            return info.getId();
+        com.portal.dto.ProcessInstanceInfo instance = result instanceof ProcessStartFormPopupOutcome outcome
+                ? outcome.instance()
+                : result instanceof com.portal.dto.ProcessInstanceInfo info ? info : null;
+        if (instance != null && StringUtils.hasText(instance.getId())) {
+            return instance.getId();
         }
         if (StringUtils.hasText(context.getTaskId())) {
             return taskQueryComponent.getTaskById(context.getTaskId())
                     .map(TaskInfo::getProcessInstanceId)
                     .orElse(null);
+        }
+        return null;
+    }
+
+    private static ActionTableRowRef actionRowOf(Object result) {
+        if (result instanceof ActionTableRowRef row) {
+            return row;
+        }
+        if (result instanceof ProcessStartFormPopupOutcome outcome) {
+            return outcome.actionRow();
         }
         return null;
     }
