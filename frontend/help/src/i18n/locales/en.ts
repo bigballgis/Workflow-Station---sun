@@ -692,7 +692,7 @@ export default {
     fMethod:
       'How to cut the value. Email attributes use Direct (whole value). Body uses LABEL, BETWEEN, REGEX, CONST, or HEADER.',
     fRule:
-      'Depends on Method: Direct needs no rule; LABEL uses a label such as Case No; BETWEEN uses before/after text; REGEX uses a pattern; CONST uses a fixed value; HEADER uses a header name such as From (legacy — prefer Email attributes). Blank with Direct: preview shows the whole attribute.',
+      'Depends on Method: Direct needs no rule; LABEL / CONST / HEADER stay in the cell. BETWEEN and REGEX show a one-line summary — click the box to edit before/after text or the pattern in a popover. Blank with Direct: preview shows the whole attribute.',
     fRequired:
       'On: missing value follows the manual-review checkbox. Off: the field may stay empty and the process can still start.',
     fPreview: 'Read-only. Shows what the rule extracts from the sample. Empty means the rule does not match yet.',

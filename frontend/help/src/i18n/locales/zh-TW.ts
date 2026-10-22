@@ -643,7 +643,7 @@ export default {
       '方式 — LABEL（同行標籤後文字）、BETWEEN（兩錨點之間）、REGEX（正則）、CONST（固定值）、HEADER（舊版標頭名）。用於內文或在主旨上解析。',
     fMethod: '如何取值。郵件屬性用直接對應；內文用 LABEL、BETWEEN、REGEX、CONST 或 HEADER。',
     fRule:
-      '隨方式變化：直接對應無需規則；LABEL 填標籤；BETWEEN 填前後文；REGEX 填模式；CONST 填固定值；HEADER 填標頭名（舊版，建議用郵件屬性）。直接對應時預覽顯示整段屬性值。',
+      '隨方式變化：直接對應無需規則；LABEL / CONST / HEADER 在格內填寫。BETWEEN 和 REGEX 只顯示一行摘要，點擊輸入框後在浮層裡填前後文或正則。直接對應時預覽顯示整段屬性值。',
     fRequired: '開啟：缺值時依「轉人工覆核」處理。關閉：該欄位可空，流程仍可啟動。',
     fPreview: '唯讀。顯示規則從樣例裡抽出的值。空表示規則還沒匹配上。',
     fSubTableTab: '第三個頁籤。把郵件裡的一張 HTML 表對應到表單子表（一列一筆紀錄）。',

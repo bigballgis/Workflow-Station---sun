@@ -2486,6 +2486,8 @@ export default {
       config: '规则',
       before: '前置文本',
       after: '后置文本',
+      pattern: '正则',
+      ruleEmpty: '点击设置',
       required: '必填',
       preview: '预览',
       subTableBinding: '子表绑定',

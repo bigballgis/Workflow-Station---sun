@@ -11,6 +11,7 @@
         </el-button>
       </span>
     </div>
+    <div class="mapping-table-scroll">
     <el-table :data="fields" size="small" border>
       <el-table-column :label="t('emailMonitor.wizard.targetField')" min-width="180">
         <template #default="{ row }">
@@ -91,18 +92,10 @@
       </el-table-column>
       <el-table-column :label="t('emailMonitor.wizard.config')" min-width="220">
         <template #default="{ row }">
-          <span v-if="row.type === 'DIRECT'" class="wizard-hint">—</span>
-          <el-input v-else-if="row.type === 'LABEL'" v-model="row.label" size="small" placeholder="Case No: " />
-          <template v-else-if="row.type === 'BETWEEN'">
-            <el-input v-model="row.before" size="small" :placeholder="t('emailMonitor.wizard.before')" />
-            <el-input v-model="row.after" size="small" :placeholder="t('emailMonitor.wizard.after')" />
-          </template>
-          <el-input v-else-if="row.type === 'REGEX'" v-model="row.pattern" size="small" placeholder="(\\d+)" />
-          <el-input v-else-if="row.type === 'CONST'" v-model="row.value" size="small" placeholder="EMAIL" />
-          <el-input v-else-if="row.type === 'HEADER'" v-model="row.header" size="small" placeholder="From" />
+          <EmailFieldMappingRuleCell :row="row" />
         </template>
       </el-table-column>
-      <el-table-column :label="t('emailMonitor.wizard.required')" width="70">
+      <el-table-column :label="t('emailMonitor.wizard.required')" min-width="100">
         <template #default="{ row }">
           <el-switch v-model="row.required" size="small" />
         </template>
@@ -120,12 +113,14 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { ExtractionFieldRule } from '@/api/emailMonitor'
+import EmailFieldMappingRuleCell from './EmailFieldMappingRuleCell.vue'
 import type { SubTableFieldOption } from '@/composables/email/useProcessFormSubBindings'
 import {
   ATTRIBUTE_SOURCES,
@@ -203,6 +198,14 @@ function previewFor(row: ExtractionFieldRule): string {
 
 <style scoped lang="scss">
 .email-field-mapping-table {
+  .mapping-table-scroll {
+    overflow-x: auto;
+  }
+
+  :deep(.el-table) {
+    min-width: 1100px;
+  }
+
   .wizard-hint {
     font-size: 12px;
     color: #909399;

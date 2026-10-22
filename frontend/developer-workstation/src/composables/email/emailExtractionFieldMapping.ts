@@ -117,3 +117,27 @@ export function previewRawEmlFilename(subject?: string): string {
   const cleaned = base.replace(/[\\/:*?"<>|\x00-\x1F]/g, '_').slice(0, 80).trim()
   return `${cleaned || 'message'}.eml`
 }
+
+/** BETWEEN / REGEX need more than one short value — edit in a popover, not the table cell. */
+export function usesRulePopover(type?: string): boolean {
+  return type === 'BETWEEN' || type === 'REGEX'
+}
+
+export function summarizeMappingRule(
+  row: Pick<ExtractionFieldRule, 'type' | 'before' | 'after' | 'pattern'>,
+  emptyLabel: string,
+): string {
+  if (row.type === 'BETWEEN') {
+    const before = row.before?.trim() ?? ''
+    const after = row.after?.trim() ?? ''
+    if (!before && !after) {
+      return emptyLabel
+    }
+    return `${before || '…'} … ${after || '…'}`
+  }
+  if (row.type === 'REGEX') {
+    const pattern = row.pattern?.trim() ?? ''
+    return pattern || emptyLabel
+  }
+  return emptyLabel
+}

@@ -643,7 +643,7 @@ export default {
       '方式 — LABEL（同行标签后文本）、BETWEEN（两锚点之间）、REGEX（正则）、CONST（固定值）、HEADER（旧版头名）。用于正文或在主题上解析。',
     fMethod: '如何取值。邮件属性用直接映射；正文用 LABEL、BETWEEN、REGEX、CONST 或 HEADER。',
     fRule:
-      '随方式变化：直接映射无需规则；LABEL 填标签；BETWEEN 填前后文；REGEX 填模式；CONST 填固定值；HEADER 填头名（旧版，建议用邮件属性）。直接映射时预览显示整段属性值。',
+      '随方式变化：直接映射无需规则；LABEL / CONST / HEADER 在格内填写。BETWEEN 和 REGEX 只显示一行摘要，点击输入框后在浮层里填前后文或正则。直接映射时预览显示整段属性值。',
     fRequired: '打开：缺值时按「转人工复核」处理。关闭：该字段可空，流程仍可启动。',
     fPreview: '只读。显示规则从样例里抽出的值。空表示规则还没匹配上。',
     fSubTableTab: '第三个页签。把邮件里的一张 HTML 表映射到表单子表（一行一条记录）。',

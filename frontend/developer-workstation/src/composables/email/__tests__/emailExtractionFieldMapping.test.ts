@@ -8,8 +8,10 @@ import {
   onSourceChange,
   previewAttachmentNames,
   previewRawEmlFilename,
+  summarizeMappingRule,
   targetOptionsForRow,
   typesForSource,
+  usesRulePopover,
 } from '../emailExtractionFieldMapping'
 import type { SubTableFieldOption } from '../useProcessFormSubBindings'
 
@@ -78,5 +80,21 @@ describe('emailExtractionFieldMapping', () => {
   it('previews original email filename from subject', () => {
     expect(previewRawEmlFilename('Quote / A:B')).toBe('Quote _ A_B.eml')
     expect(previewRawEmlFilename('')).toBe('message.eml')
+  })
+
+  it('opens a popover only for BETWEEN and REGEX', () => {
+    expect(usesRulePopover('BETWEEN')).toBe(true)
+    expect(usesRulePopover('REGEX')).toBe(true)
+    expect(usesRulePopover('LABEL')).toBe(false)
+    expect(usesRulePopover('DIRECT')).toBe(false)
+  })
+
+  it('summarizes BETWEEN and REGEX for the rule cell', () => {
+    expect(summarizeMappingRule({ type: 'BETWEEN' }, 'Click to set')).toBe('Click to set')
+    expect(summarizeMappingRule({ type: 'BETWEEN', before: 'Start', after: 'End' }, 'Click to set'))
+      .toBe('Start … End')
+    expect(summarizeMappingRule({ type: 'BETWEEN', before: 'Start' }, 'Click to set')).toBe('Start … …')
+    expect(summarizeMappingRule({ type: 'REGEX', pattern: '(\\d+)' }, 'Click to set')).toBe('(\\d+)')
+    expect(summarizeMappingRule({ type: 'REGEX' }, 'Click to set')).toBe('Click to set')
   })
 })
