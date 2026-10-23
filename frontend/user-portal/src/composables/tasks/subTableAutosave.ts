@@ -1,4 +1,4 @@
-import type { Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { getTaskFormData, submitTaskForm, type TaskFormSubmitRequest } from '@/api/processForm'
 import { unwrapPortalApiPayload } from '@/utils/httpErrorMessage'
 import { applyServerRowVersionsToLiveRows } from './subTableRowVersionSync'
@@ -18,8 +18,8 @@ interface StoredTaskForm {
 }
 
 /**
- * Sub-table autosave, plus a submit-time version sync so Complete does not
- * need a browser reload after autosave bumped `_wsRowVersion`.
+ * Serializes sub-table saves, refreshes their versions and refuses Complete
+ * while a save has failed. Read versions are never refreshed merely to submit.
  */
 export function createSubTableAutosave(deps: {
   formReadOnly: Ref<boolean>
@@ -40,6 +40,7 @@ export function createSubTableAutosave(deps: {
   let timer: ReturnType<typeof setTimeout> | null = null
   let inflight: Promise<void> | null = null
   let paused = false
+  const saveError = ref<unknown>(null)
   const delayMs = deps.delayMs ?? AUTOSAVE_DELAY_MS
 
   function clearAutosaveTimer(): void {
@@ -71,18 +72,18 @@ export function createSubTableAutosave(deps: {
     paused = false
   }
 
+  function retrySubTableAutosave(): void {
+    resumeSubTableAutosave()
+    scheduleSubTableAutosave()
+  }
+
   async function syncSubTableRowVersionsBeforeSubmit(): Promise<void> {
     if (deps.formReadOnly.value || !deps.effectiveTaskId.value) return
     if (!deps.subTableBindings.value.length) return
     await pauseSubTableAutosave()
-    const stored = await readStoredSubTables()
-    if (!stored) return
-    applyServerRowVersionsToLiveRows({
-      bindings: deps.subTableBindings.value,
-      formSubTables: deps.formData.value.__subTables__ as Record<string, unknown> | undefined,
-      baseline: deps.loadedSubTableBaseline.value,
-      serverSubTables: stored,
-    })
+    if (saveError.value) throw saveError.value
+    // Successful saves already refresh their versions. A fresh GET here would
+    // give stale business values a newer version and hide concurrent edits.
   }
 
   async function pauseSubTableAutosave(): Promise<void> {
@@ -102,17 +103,20 @@ export function createSubTableAutosave(deps: {
         baselineValues: {},
       })
       persisted = true
+      saveError.value = null
       deps.onSaved?.()
-      if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
+      if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions(payload)
     } catch (error) {
+      saveError.value = error
       if (!persisted) restore?.()
       deps.onError?.()
       console.error('[SubTable] autosave failed:', error)
     }
   }
 
-  async function refreshSavedSubTableVersions(): Promise<void> {
+  async function refreshSavedSubTableVersions(saved?: SubTableSubmitPayload): Promise<void> {
     const { dto, stored } = await readSnapshot()
+    if (saved) assertSavedVersions(saved, stored)
     // Baseline follows the server snapshot (deletion claims need its versions).
     // Binding rows stay as the page holds them — replacing them with the unsliced
     // store makes every filter binding claim sibling rows on the next save.
@@ -128,11 +132,6 @@ export function createSubTableAutosave(deps: {
     })
   }
 
-  async function readStoredSubTables(): Promise<Record<string, unknown> | null> {
-    const dto = unwrapPortalApiPayload(await getTaskFormData(deps.effectiveTaskId.value)) as StoredTaskForm | null
-    return storedSubTables(dto)
-  }
-
   async function readSnapshot(): Promise<{ dto: StoredTaskForm; stored: Record<string, unknown> }> {
     const dto = unwrapPortalApiPayload(await getTaskFormData(deps.effectiveTaskId.value)) as StoredTaskForm | null
     const stored = storedSubTables(dto)
@@ -141,12 +140,32 @@ export function createSubTableAutosave(deps: {
   }
 
   return {
+    saveError,
+    retrySubTableAutosave,
     scheduleSubTableAutosave,
     clearAutosaveTimer,
     refreshSavedSubTableVersions,
     syncSubTableRowVersionsBeforeSubmit,
     resumeSubTableAutosave,
     pauseSubTableAutosave,
+  }
+}
+
+/** The scope guard increments each claimed row once. Never adopt a later writer's version. */
+function assertSavedVersions(saved: SubTableSubmitPayload, stored: Record<string, unknown>): void {
+  for (const scope of saved.subTableBindingScopes) {
+    const sent = saved.formData.__subTables__?.[scope.storeKey]
+    const server = stored[scope.storeKey]
+    if (!Array.isArray(sent) || !Array.isArray(server)) throw new Error('Saved sub-table snapshot is missing')
+    const find = (rows: unknown[], key: Record<string, unknown>) => rows.find(raw => raw && typeof raw === 'object'
+      && Object.entries(key).every(([field, value]) => String((raw as Record<string, unknown>)[field]) === String(value))) as Record<string, unknown> | undefined
+    for (const key of scope.rowKeys) {
+      const before = find(sent, key)
+      const after = find(server, key)
+      if (!before || !after || Number(after._wsRowVersion) !== Number(before._wsRowVersion ?? 0) + 1) {
+        throw new Error('Sub-table changed after this save; reload before making further changes')
+      }
+    }
   }
 }
 

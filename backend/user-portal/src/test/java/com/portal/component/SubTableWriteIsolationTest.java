@@ -47,6 +47,24 @@ class SubTableWriteIsolationTest {
     private static final String STORE = "dw:attachment";
 
     @Test
+    void versionedSingleBindingCannotDowngradeToAnUnscopedWrite() {
+        var isolation = new SubTableWriteIsolation(mock(MiSubTaskSubTableRowMerger.class), mock(SubTableBindingScopeGuard.class));
+        var before = Map.of("id", "A", "amount", 7, "_wsRowVersion", 2);
+        var baseline = Map.<String, Object>of("__subTables__", Map.of(STORE, List.of(before)));
+        var unchanged = new HashMap<String, Object>(baseline);
+        isolation.apply(new SubTableWriteIsolation.Request(Map.of(), unchanged, baseline, List.of(), List.of(), FU));
+        var omitted = new HashMap<String, Object>(Map.of("__subTables__", Map.of()));
+        isolation.apply(new SubTableWriteIsolation.Request(Map.of(), omitted, baseline, List.of(), List.of(), FU));
+        assertThat(omitted).isEqualTo(baseline);
+        for (var rows : List.of(List.of(Map.of("id", "A", "amount", 8, "_wsRowVersion", 2)), List.of())) {
+            var inbound = new HashMap<String, Object>(Map.of("__subTables__", Map.of(STORE, rows)));
+            assertThatThrownBy(() -> isolation.apply(new SubTableWriteIsolation.Request(
+                    Map.of(), inbound, baseline, List.of(), List.of(), FU)))
+                    .isInstanceOf(com.portal.exception.PortalException.class).hasMessageContaining("Versioned sub-table writes require binding scopes");
+        }
+    }
+
+    @Test
     void frozenMultiBindingCannotOptOutByOmittingScopes() {
         SubTableWriteDesign design = mock(SubTableWriteDesign.class);
         when(design.resolve("pin", "review")).thenReturn(Map.of(
@@ -56,6 +74,10 @@ class SubTableWriteIsolationTest {
                         List.of("id"), List.of("id"), "structuralFk")));
         var isolation = new SubTableWriteIsolation(mock(MiSubTaskSubTableRowMerger.class),
                 mock(SubTableBindingScopeGuard.class), design);
+        var saved = Map.<String, Object>of("__subTables__", Map.of(STORE, List.of(Map.of("id", "A", "_wsRowVersion", 2))));
+        var omitted = new HashMap<String, Object>(Map.of("__subTables__", Map.of()));
+        isolation.apply(new SubTableWriteIsolation.Request(Map.of(), omitted, saved, List.of(), List.of(), FU, "pin", "review"));
+        assertThat(omitted).isEqualTo(saved);
         assertThatThrownBy(() -> isolation.apply(new SubTableWriteIsolation.Request(
                 Map.of(), new HashMap<>(Map.of("__subTables__", Map.of(STORE, List.of()))),
                 Map.of(), List.of(), List.of(), FU, "pin", "review")))

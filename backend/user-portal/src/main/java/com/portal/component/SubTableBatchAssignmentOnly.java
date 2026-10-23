@@ -8,13 +8,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Restricts metadata validation only for a declared, existing, assignment-only row. */
+/** Validates declared assignment targets and identifies existing assignment-only rows. */
 final class SubTableBatchAssignmentOnly {
     private SubTableBatchAssignmentOnly() { }
 
     static boolean validate(Map<?, ?> control, List<?> fields, Map<?, ?> original, Map<?, ?> row,
                             List<SubTableBatchChange> changes) {
-        if (original == null || changes == null || changes.isEmpty()) return false;
+        if (changes == null || changes.isEmpty()) return false;
         Map<?, ?> design = requiredMap(control.get("rowDesign"));
         Map<?, ?> binding = requiredMap(design.get("binding"));
         if (!(binding.get("primaryKeyFields") instanceof List<?> keys) || keys.isEmpty()) throw invalid();
@@ -29,7 +29,7 @@ final class SubTableBatchAssignmentOnly {
         for (String property : List.of("assigneeField", "roleField", "buField")) {
             if (config.get(property) instanceof String name && !name.isBlank()) assignmentFields.add(name);
         }
-        Set<Object> changed = differences(original, row);
+        Set<Object> changed = original == null ? new HashSet<>() : differences(original, row);
         Set<Object> known = new HashSet<>();
         for (Object raw : fields) known.add(requiredMap(raw).get("fieldName"));
         // The person picker hydrates this platform display label after selection. An explicitly
@@ -38,14 +38,13 @@ final class SubTableBatchAssignmentOnly {
         if (!known.containsAll(changed)) throw new PortalException("403", "Batch assignment changes an unknown field: "
                 + changed.stream().filter(name -> !known.contains(name)).toList());
         if (!known.containsAll(assignmentFields)) throw invalid();
-        if (changed.isEmpty() || !assignmentFields.containsAll(changed)) return false;
         SubTableBatchChangeGuard.validateAssignmentRow(config, row, intents.get(0).getAssignment());
         // Validate all target fields as well as mode-clearing values: an unchanged malformed
         // assignee must not masquerade as empty when switching to a role target.
         List<?> targetFields = fields.stream().filter(raw -> assignmentFields.contains(requiredMap(raw).get("fieldName"))).toList();
         if (targetFields.stream().anyMatch(raw -> protectedField(requiredMap(raw)))) throw invalid();
         SubTableBatchEditedRowGuard.validateMetadata(targetFields, row);
-        return true;
+        return original != null && !changed.isEmpty() && assignmentFields.containsAll(changed);
     }
 
     private static boolean matches(SubTableBatchChange.RowPatch patch, Map<?, ?> row, List<?> keys) {

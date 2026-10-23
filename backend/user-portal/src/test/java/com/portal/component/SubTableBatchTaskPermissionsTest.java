@@ -95,7 +95,7 @@ class SubTableBatchTaskPermissionsTest {
     }
 
     @Test
-    void enhancedUnmarkedEditsUseMetadataNotTheBatchFormFieldSurface() {
+    void ordinaryEditsDoNotInheritFrozenBatchTypeRules() {
         Map<String, Object> original = Map.of("entry_key", "A", "amount", 1, "ordinary_note", "old");
         Map<String, Object> control = Map.of("batchControlId", "grid", "bindingId", "101", "rowDesign", Map.of(
                 "binding", Map.of("tableName", "lines", "primaryKeyFields", List.of("entry_key")),
@@ -106,7 +106,7 @@ class SubTableBatchTaskPermissionsTest {
                 "__subTables__", Map.of("dw:lines", List.of(original)));
         Map<String, Object> form = Map.of("sourceId", "form", "fieldPermissions", Map.of(),
                 "tableBindings", List.of(Map.of("tableName", "lines", "bindingMode", "EDITABLE")));
-        assertThrows(com.platform.common.exception.BusinessException.class, () -> ordinaryPolicy(
+        assertDoesNotThrow(() -> ordinaryPolicy(
                 variables, form, Map.of("__subTables__", Map.of("dw:lines", List.of(
                         Map.of("entry_key", "A", "amount", "invalid", "ordinary_note", "new"))))));
         assertDoesNotThrow(() -> ordinaryPolicy(variables, form,

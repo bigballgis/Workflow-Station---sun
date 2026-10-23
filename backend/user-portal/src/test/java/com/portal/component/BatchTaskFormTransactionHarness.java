@@ -83,7 +83,8 @@ final class BatchTaskFormTransactionHarness {
         ReflectionTestUtils.setField(component, "formDefinitionLoader", loader);
         ReflectionTestUtils.setField(component, "requestIdEnricher", mock(RequestIdEnricher.class));
         SubTableWriteDesign design = mock(SubTableWriteDesign.class);
-        when(design.resolve(any(), any())).thenReturn(Map.of());
+        when(design.resolve(any(), any())).thenReturn(Map.of("101", new SubTableWriteDesign.Binding(
+                "101", "dw:lines", null, null, null, List.of(pk), List.of(), "structuralFk")));
         ReflectionTestUtils.setField(component, "subTableWriteIsolation", new SubTableWriteIsolation(
                 new MiSubTaskSubTableRowMerger(metadata), new SubTableBindingScopeGuard(metadata), design));
     }
@@ -138,7 +139,12 @@ final class BatchTaskFormTransactionHarness {
         List<Map<String, Object>> rows = mapper.convertValue(tables.get("dw:lines"), new TypeReference<List<Map<String, Object>>>() { });
         rows.get(0).put("caption", value);
         tables.put("dw:lines", rows);
-        component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables));
+        var scope = new SubTableBindingScope();
+        scope.setBindingId("101");
+        scope.setStoreKey("dw:lines");
+        scope.setRowKeys(rows.stream().map(row -> Map.of(pk, row.get(pk))).toList());
+        component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables),
+                null, List.of(), List.of(scope));
     }
 
     @SuppressWarnings("unchecked")

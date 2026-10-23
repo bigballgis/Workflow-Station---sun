@@ -93,7 +93,7 @@ class SubTableWriteIsolation {
             return;
         }
         Map<String, Object> inbound = request.inbound();
-        Map<String, Object> submitted = (Map<String, Object>) inbound.get("__subTables__");
+        Map<String, Object> submitted = new LinkedHashMap<>((Map<String, Object>) inbound.get("__subTables__"));
         Map<String, Object> baselineVars = request.baselineVariables();
         Map<String, Object> baseline = baselineVars != null
                 && baselineVars.get("__subTables__") instanceof Map<?, ?>
@@ -105,6 +105,11 @@ class SubTableWriteIsolation {
                 : writeDesign.resolve(request.catalogId(), request.stageId());
         frozen = SubTableBatchScopeDesign.overlay(frozen, baselineVars, request.batchChanges());
         requireScopesForFrozenMultiBindings(frozen, submitted, bindingScopes);
+        // Check client claims before restoring omitted stores: restoration is not a write claim.
+        for (Map.Entry<String, Object> entry : baseline.entrySet()) {
+            if (versioned(entry.getValue())) submitted.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+        inbound.put("__subTables__", submitted);
         if (merger.isMiSubTaskSubmission(request.formData())) {
             Map<String, Object> rowKey = merger.resolveCurrentItemRowKey(request.formData());
             merger.requireResolvedRowKey(rowKey);
@@ -114,6 +119,7 @@ class SubTableWriteIsolation {
                     request.functionUnitCode(), frozen);
             inbound.put("__subTables__", submitted);
         }
+        requireScopesForVersionedChanges(submitted, baseline, bindingScopes);
         if (bindingScopes.isEmpty()) {
             return;
         }
@@ -132,6 +138,23 @@ class SubTableWriteIsolation {
             guard.assertAndApply(bindingScopes, request.functionUnitCode(), context, guarded, baseline, frozen);
         }
         inbound.put("__subTables__", guarded);
+    }
+
+    /** Once a store participates in row versioning, clients cannot opt back into V1 writes. */
+    private static void requireScopesForVersionedChanges(Map<String, Object> submitted,
+            Map<String, Object> baseline, List<SubTableBindingScope> scopes) {
+        for (Map.Entry<String, Object> entry : submitted.entrySet()) {
+            Object before = baseline.get(entry.getKey());
+            if (!versioned(before) || java.util.Objects.equals(before, entry.getValue())) continue;
+            if (scopes.stream().noneMatch(scope -> entry.getKey().equals(scope.getStoreKey()))) {
+                throw new com.portal.exception.PortalException("409", "Versioned sub-table writes require binding scopes; reload and retry");
+            }
+        }
+    }
+
+    private static boolean versioned(Object value) {
+        return value instanceof List<?> rows && rows.stream().anyMatch(raw -> raw instanceof Map<?, ?> row
+                && row.containsKey(SubTableBindingScopeGuard.ROW_VERSION_FIELD));
     }
 
     private static void requireScopesForFrozenMultiBindings(Map<String, SubTableWriteDesign.Binding> frozen,

@@ -10,13 +10,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class SubTableBatchRealTransactionTest {
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
-    void omittingBatchIntentCannotBypassFrozenMetadataTypes(String pk) throws Exception {
+    void ordinaryEditsRetainHistoricJsonTypesWithoutBatchRules(String pk) throws Exception {
         var harness = new BatchTaskFormTransactionHarness(pk, false);
-        assertThrows(com.platform.common.exception.BusinessException.class, () -> harness.editUnmarkedCaption(12));
-        assertEquals(0, harness.writes.get());
-        assertEquals(harness.baseline, harness.read());
+        harness.editUnmarkedCaption(12);
+        assertEquals(1, harness.writes.get());
+        var rows = (List<?>) ((Map<?,?>) harness.read().get("__subTables__")).get("dw:lines");
+        assertEquals(12, ((Map<?,?>) rows.get(0)).get("caption"));
         harness.editUnmarkedCaption("normal-single-form-value");
-        assertEquals(1, harness.writes.get(), "Ordinary edit remains legal outside a batch form");
+        assertEquals(2, harness.writes.get(), "Ordinary edit remains legal outside a batch form");
     }
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})

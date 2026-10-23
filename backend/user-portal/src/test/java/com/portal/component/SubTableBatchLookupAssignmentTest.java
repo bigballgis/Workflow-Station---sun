@@ -105,6 +105,14 @@ class SubTableBatchLookupAssignmentTest {
         }
         design.put("fields", fields);
         h.persistence.update("UPDATE batch_tx_instance SET variables=? WHERE id=?", h.mapper.writeValueAsString(vars), "synthetic-process");
+        var loader = (TaskFormDefinitionLoader) ReflectionTestUtils.getField(h.component, "formDefinitionLoader");
+        var published = new java.util.HashMap<>(loader.fetchTaskFormByStageId("review", "synthetic-process", null));
+        var permissions = new java.util.HashMap<String,Object>(Map.of("101:caption", "EDITABLE"));
+        for (int i = 0; i < 5; i++) permissions.put("101:lookup_" + i, "READONLY");
+        published.put("publishedFieldPermissions", permissions);
+        published.put("fieldPermissions", permissions);
+        org.mockito.Mockito.when(loader.fetchTaskFormByStageId(org.mockito.ArgumentMatchers.eq("review"),
+                org.mockito.ArgumentMatchers.eq("synthetic-process"), org.mockito.ArgumentMatchers.any())).thenReturn(published);
         var jdbc = new org.springframework.jdbc.core.JdbcTemplate(h.persistence.getDataSource());
         jdbc.execute("CREATE TABLE sys_users(id VARCHAR(100) PRIMARY KEY, status VARCHAR(20), deleted BOOLEAN)");
         jdbc.update("INSERT INTO sys_users VALUES(?, ?, ?)", "synthetic-target", "ACTIVE", false);

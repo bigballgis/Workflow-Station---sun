@@ -90,10 +90,8 @@ final class TaskSubTableSubmission {
                             && !(old == null && SubTableBatchPublishedPermissions.declaredDefault(field, value)))
                         throw denied(String.valueOf(binding.get("bindingId")), name);
                     if (differs && !identity && rowEditable) changed = true;
-                    if (differs && !identity && rowEditable
-                            && !structuredControl(form, rowBinding, name)) {
-                        SubTableBatchEditedRowGuard.validateMetadata(List.of(field), Collections.singletonMap(name, value));
-                    }
+                    // Ordinary row values retain the existing form-control JSON contract.
+                    // Frozen batch type/form rules belong to explicitly declared batch rows only.
                     next.put(name, value);
                 }
                 for (var extra : row.entrySet()) {
@@ -208,16 +206,6 @@ final class TaskSubTableSubmission {
             return;
         }
         rule.values().forEach(item -> { if (item instanceof List<?> || item instanceof Map<?, ?>) collectNestedBindings(item, ids); });
-    }
-    private static boolean structuredControl(Map<?, ?> form, Map<?, ?> binding, String name) {
-        Object rules = map(map(map(form.get("configJson")).get("subForms")).get(String.valueOf(binding.get("bindingId")))).get("rule");
-        return structuredRule(rules, name);
-    }
-    private static boolean structuredRule(Object value, String name) {
-        if (value instanceof List<?> list) return list.stream().anyMatch(item -> structuredRule(item, name));
-        if (!(value instanceof Map<?, ?> rule)) return false;
-        if (name.equals(rule.get("field")) && Set.of("lookup", "upload", "user", "department", "cascader", "checkbox", "transfer", "tree").contains(String.valueOf(rule.get("type")))) return true;
-        return rule.values().stream().anyMatch(item -> (item instanceof Map<?, ?> || item instanceof List<?>) && structuredRule(item, name));
     }
     private static Map<?, ?> oldOrEmpty(Map<?, ?> row) { return row == null ? Map.of() : row; }
     private static Map<?, ?> map(Object value) { return value instanceof Map<?, ?> map ? map : Map.of(); }

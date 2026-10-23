@@ -326,3 +326,37 @@ Finding：新增批处理权限校验误拒绝普通 CRUD 的平台审计字段�
 核验类型检查原始日志后，存量错误实际为 **383** 条（此前364为计数笔误）；本轮复跑与修改前基线383条逐项归一比较，无新增/消失的错误签名。类型检查仍为失败，不是构建通过的替代证据。
 
 另发现初轮 `missingIntentKeepsOrdinarySaveValidation` 没有普通写入的 pinned binding，仅有 batch scope overlay，因此缺声明时因绑定缺失而拒绝，未证明“普通编辑必须有batch声明”。补齐真实绑定后旧失败断言变红：Expected RuntimeException but nothing was thrown。已改为普通分派无batch声明保存成功，并断言5个Lookup对象和另一行不变；脚本将缺少整个batch声明的负例改为“明确声明ASSIGN但缺assignment意图”。前文2026-10-22 missing-intent运行输出是历史证据，方案二下不再作为合法普通编辑拒绝的依据。修正后的新脚本负例本轮只做语法/静态审查，未重新执行完整fixture脚本；测试与最新审查结果见 `2026-10-23-staged-code-review.md`。
+
+## 金额编辑间歇保存失败诊断（2026-10-23 15:25起）
+
+本节为日志与页面复现诊断，**尚未修改产品代码或声称已修复**。用户任务607e5b3d-ceb2-11f1-ac67-1ab7605b2169，实例605eec01-ceb2-11f1-ac67-1ab7605b2169，原FU发布1.0.132。
+
+首次取证窗口为15:15–15:25（Asia/Hong_Kong，UTC+08:00）。Portal容器15:19左右重建，现存日志只覆盖本次容器启动后；同时检查了engine、Kong和Portal前端日志。该任务提交在15:22:13、15:23:01返回HTTP400，业务码4003：`Batch field has invalid text type: billing_amount`。相邻15:21:56、15:22:03、15:22:20、15:22:38、15:22:43、15:22:51、15:22:55、15:23:06、15:23:15多次保存200。相应失败没有Process variables updated记录，未发现该任务对应的原read-only 403或网关5xx；其他FU解析404与启动CONFIGURATION_AUDIT ERROR不是这两次失败原因。
+
+已读发布schema：HMDC_Transaction.billing_amount和dispute_amount均VARCHAR。页面Edit Record两列实际为数字输入框。TaskSubTableSubmission.java:93–95仅对differs字段调用标量metadata校验；SubTableBatchAddedRowGuard.java:86要求VARCHAR值必须为String。故更改金额的Number被拒绝，而保留原金额、修改其他字段或不改动保存可以通过。该字段在既有process variables中已存JSON number，尚未做类型归一；本次没有改变FU字段类型或业务值。
+
+页面复现：15:26:44将第一行Billing Amount由1点增至2后Save，控制台及后台同样400。重新打开Edit仍显示2，数据库仍1，说明本地乐观编辑没有清晰回退到持久状态。Cancel并刷新后Edit显示1；15:28:26不改金额Save返回200，库中第一行金额仍1、三条交易均在。测试期间另有用户成功保存，因此不以lock_version全局不变作为失败请求的证据。
+
+截图：`2026-10-23-billing-amount-unsaved-local.png`为失败后仍显示2的编辑弹窗，`2026-10-23-billing-amount-after-reload.png`为刷新后显示1。`2026-10-23-billing-amount-save-failed.png`抓取时提示已消退，错误文本以console/后台日志为证。原始日志保留本地忽略文件`.codex-recent-portal.log`、`.codex-recent-engine.log`、`.codex-recent-kong.log`、`.codex-recent-front.log`及`.codex-billing-repro-portal.log`，不提交原始用户payload。
+
+结论：已确认两条问题——服务端对配置为数字控件的文本列执行了不兼容的类型校验，以及自动保存失败后UI仍展示未保存值且弹窗关闭。不是本次已证实的数据库成功保存后又删除；对用户提到的其他删除/新增间歇现象，本轮没有逐项复现，不能外推全部原因相同。缓存有基于输入fingerprint的5秒enrichment复用，但当前已复现路径不需要缓存即可触发，尚无证据将其归因于缓存竞态。
+
+修复方向：先统一按发布schema和已配置控件定义的值编码/验证契约，普通Save与batch共用，覆盖VARCHAR+数字控件、DECIMAL+数字控件、空值、零、金额精度等正反例；不能对billing_amount写白名单，也不能直接关闭业务校验。自动保存失败时应明确保留待重试草稿或恢复服务端基线，弹窗/成功反馈须等待实际保存结果。具体实现及红转绿验证待下一步执行。
+
+### 再次核对Git历史后的责任边界
+
+用户指出batch加入前该FU没有此类报错。对照实际Git历史后确认这是校验范围扩大的回归，不能归因成FU原有配置问题：
+
+- `a40a85f96`（2026-10-18）新增严格标量类型校验，并在SubTableBatchTaskPermissions的metadataChanged路径将其应用于batch-enabled实例的普通写入；更早`27700287b^`的普通提交没有这一整行metadata类型复检。
+- `6762b6ee5`（2026-10-23，本轮已提交修复）虽将batch专属guard改为显式声明才执行，却在TaskSubTableSubmission:93–95给普通变化字段直接复用了同一batch标量校验。TaskFormComponent:691 / :759和Complete:132均调用共用准备，无需存在batch标记，故静态影响面还包括没有启用batch的子表保存。
+- 当前严格检查把VARCHAR+Number拒绝；原来的控件值经过权限/行归属过滤后可作为原生JSON值保存。没有证据表明需要用户修改FU类型才能恢复原有功能。
+- 既有TaskSubTableSubmissionTest.form把amount定义为INTEGER，验证“INTEGER+数字”和无效字符串，却没有覆盖现场的“VARCHAR字段+数字输入控件+历史JSON number”组合。因此相关回归绿不能证明此组合兼容，前次review也漏掉了这一点。
+- 前端useSubTableDialogForm通过emit(save)将行交给useSubTableRowDialog，后者先更新rows并emit modelValue；task autosave随后异步提交，失败路径记录错误而不会把成功等待传回最初的弹窗保存动作。页面复现中失败后仍显示2、库中1，与此链路一致。
+
+后续修复应把普通保存的兼容契约与batch附加约束重新划清，保持权限、PK/FK、MI隔离和并发保护；不能只替换Batch错误文本或要求更改该FU配置。本次复核未改产品代码、测试、FU或提交历史。
+
+## 2026-10-23 后续修复与隔离审计
+
+上述“仅诊断”是修复前记录。后续已实施普通值契约恢复、声明范围收窄、保存失败状态及版本化写入隔离修正，并重建本地服务。真实页面完成 MCY 的新增、分派后编辑、删除合成行和双页 409 冲突验证；另一套字段名的 Demo FU 也完成保存与刷新验证。原三条用户记录保留，测试金额恢复。
+
+逐项改动、红→绿证据、独立审查 finding 及处置、仍保留的历史 V1 行为和初始化无效 autosave 疑点，见 [后续分离审计报告](2026-10-23-batch-separation-followup.md)。本轮未从页面重跑 Investigation→Request approval 全生命周期，不能以 CRUD 回归替代。

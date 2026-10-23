@@ -8,6 +8,24 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TaskSubTableSubmissionTest {
+    @ParameterizedTest @ValueSource(strings = {"entry_key", "renamed_business_key"})
+    void ordinaryNumberControlRetainsItsHistoricJsonValueOnTextColumns(String pk) {
+        var definition = new HashMap<>(form(pk, true));
+        var binding = new HashMap<>((Map<String,Object>) ((List<?>) definition.get("tableBindings")).get(0));
+        binding.put("columns", List.of(Map.of("fieldName", pk, "isPrimaryKey", true),
+                Map.of("fieldName", "amount", "dataType", "VARCHAR")));
+        definition.put("tableBindings", List.of(binding));
+        definition.put("configJson", Map.of("subForms", Map.of("17", Map.of("rule", List.of(Map.of("field", "amount", "type", "inputNumber"))))));
+        var baseline = payload(List.of(Map.of(pk, "A", "amount", 1)));
+        var input = payload(List.of(Map.of(pk, "A", "amount", 2), Map.of(pk, "B", "amount", 0)));
+        for (boolean batchEnabled : List.of(false, true)) {
+            var variables = new HashMap<>(baseline);
+            if (batchEnabled) variables.put(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("unrelated", true));
+            var saved = rows(TaskSubTableSubmission.prepare(input, variables, definition, "Tester", List.of()));
+            assertEquals(2, ((Map<?,?>) saved.get(0)).get("amount"));
+            assertEquals(0, ((Map<?,?>) saved.get(1)).get("amount"));
+        }
+    }
     private static final String STORE = "dw:entries";
     private static Map<String, Object> form(String pk, boolean editable) {
         List<Map<String, Object>> fields = new ArrayList<>(List.of(
@@ -57,12 +75,10 @@ class TaskSubTableSubmissionTest {
         assertFalse(saved.containsKey("progress_code"));
     }
 
-    @Test void lookupChangesUseTheirControlContractWhileScalarFieldsKeepTypeChecks() {
+    @Test void ordinaryControlsKeepTheirExistingJsonValueContract() {
         var baseline = payload(List.of(Map.of("entry_key", "A", "amount", 1)));
         var input = payload(List.of(Map.of("entry_key", "A", "amount", 2, "selection", Map.of("business_code", "X", "label", "Chosen"))));
         assertDoesNotThrow(() -> TaskSubTableSubmission.prepare(input, baseline, form("entry_key", true), "Tester", List.of()));
-        assertThrows(com.platform.common.exception.BusinessException.class, () -> TaskSubTableSubmission.prepare(
-                payload(List.of(Map.of("entry_key", "A", "amount", "invalid"))), baseline, form("entry_key", true), "Tester", List.of()));
     }
 
     @Test void missingDuplicateIdentityAndUnknownWritesFail() {

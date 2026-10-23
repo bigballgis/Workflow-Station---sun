@@ -12,7 +12,42 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SubTableBatchAssignmentOnlyTest {
+    @Test void declaredBatchDoesNotTypeCheckAnOrdinaryEditOnAnotherRowOrControl() {
+        var fields = List.of(Map.of("fieldName", "key", "dataType", "VARCHAR"),
+                Map.of("fieldName", "person", "dataType", "VARCHAR"), Map.of("fieldName", "amount", "dataType", "VARCHAR"));
+        var control = Map.of("batchControlId", "grid", "bindingId", "101", "capabilities", Map.of("allowBatchAssign", true),
+                "originalCrud", Map.of("allowEdit", true), "assignmentConfig", Map.of("assigneeField", "person", "allowUser", true,
+                "allowRole", false, "taskDefinitionKey", "Target"), "rowDesign", Map.of("binding",
+                Map.of("tableName", "lines", "primaryKeyFields", List.of("key")), "fields", fields));
+        var before = List.of(Map.of("key", "one", "person", "old", "amount", 1), Map.of("key", "two", "person", "old", "amount", 1));
+        var variables = Map.<String,Object>of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1,
+                "forms", Map.of("form", Map.of("controls", List.of(control,
+                        Map.of("batchControlId", "unused", "bindingId", "102"))))), "__subTables__", Map.of("dw:lines", before));
+        var change = roleChange();
+        var intent = new SubTableBatchChange.AssignmentIntent(); intent.setMode("PERSON"); intent.setAssigneeId("new");
+        change.getRowPatches().get(0).setAssignment(intent); change.getRowPatches().get(0).setFields(List.of("person"));
+        var form = Map.<String,Object>of("sourceId", "form", "fieldPermissions", Map.of());
+        assertDoesNotThrow(() -> SubTableBatchTaskPermissions.validate(variables, form,
+                Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("key", "one", "person", "new", "amount", 1),
+                        Map.of("key", "two", "person", "old", "amount", 2)))), new ObjectMapper(), List.of(change)));
+        assertDoesNotThrow(() -> SubTableBatchTaskPermissions.validate(variables, form,
+                Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("key", "one", "person", "new", "amount", 2),
+                        Map.of("key", "two", "person", "old", "amount", 1)))), new ObjectMapper(), List.of(change)));
+    }
     private boolean declareDisplayColumn;
+    private boolean newRow;
+    @Test void newRowsStillValidateAssignmentTargetTypes() {
+        newRow = true;
+        var row = new LinkedHashMap<String,Object>(Map.of("key", "one", "person", "new-person", "pool", "", "unit", ""));
+        var change = roleChange();
+        var intent = new SubTableBatchChange.AssignmentIntent();
+        intent.setMode("PERSON"); intent.setAssigneeId("new-person");
+        change.getRowPatches().get(0).setAssignment(intent);
+        change.getRowPatches().get(0).setFields(List.of("person"));
+        assertDoesNotThrow(() -> validate(row, List.of(change), true));
+        row.put("unit", Map.of("forged", "unit"));
+        assertThrows(com.platform.common.exception.BusinessException.class, () -> validate(row, List.of(change), true));
+    }
     private final Map<String, Object> original = new LinkedHashMap<>(Map.of("key", "one", "person", "old-person",
             "pool", "", "unit", "", "choice", Map.of("key", "synthetic-choice")));
 
@@ -24,7 +59,7 @@ class SubTableBatchAssignmentOnlyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"readonly", "disabled", "wrong-control", "wrong-key", "partial-key", "duplicate", "nested", "null-removal", "mixed"})
+    @ValueSource(strings = {"readonly", "disabled", "wrong-control", "wrong-key", "partial-key", "duplicate", "nested", "null-removal"})
     void declarationCannotWidenTheRowPermissionOrValueContract(String mutation) {
         var row = roleRow();
         var changes = new ArrayList<>(List.of(roleChange()));
@@ -38,7 +73,6 @@ class SubTableBatchAssignmentOnlyTest {
             case "duplicate" -> changes.add(roleChange());
             case "nested" -> row.put("choice", Map.of("key", "forged"));
             case "null-removal" -> { original.put("extra", null); }
-            case "mixed" -> row.put("note", "business edit");
             default -> throw new AssertionError(mutation);
         }
         boolean capability = enabled;
@@ -78,7 +112,7 @@ class SubTableBatchAssignmentOnlyTest {
         assertThrows(com.portal.exception.PortalException.class, () -> validate(row, List.of(change), true));
         row.remove("_arbitrary");
         declareDisplayColumn = true;
-        assertThrows(com.platform.common.exception.BusinessException.class, () -> validate(row, List.of(change), true));
+        assertThrows(com.portal.exception.PortalException.class, () -> validate(row, List.of(change), true));
     }
 
     private Map<String, Object> roleRow() {
@@ -107,9 +141,13 @@ class SubTableBatchAssignmentOnlyTest {
                 "rowDesign", Map.of("binding", Map.of("tableName", "renamed_lines", "primaryKeyFields", List.of("key")), "fields", fields));
         var variables = Map.<String, Object>of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1,
                 "forms", Map.of("form", Map.of("controls", List.of(control)))),
-                "__subTables__", Map.of("dw:renamed_lines", List.of(original)));
-        var form = Map.<String, Object>of("sourceId", "form", "fieldPermissions", Map.of("101:choice", "READONLY"),
+                "__subTables__", Map.of("dw:renamed_lines", newRow ? List.of() : List.of(original)));
+        var form = Map.<String, Object>of("sourceId", "form", "fieldPermissions", declareDisplayColumn
+                        ? Map.of("101:choice", "READONLY", "101:assignee_display_name", "READONLY") : Map.of("101:choice", "READONLY"),
                 "tableBindings", List.of(Map.of("tableName", "renamed_lines", "bindingMode", "EDITABLE")));
+        SubTableBatchChangeGuard.validateSubmittedRows(changes,
+                List.of(new com.portal.dto.SubTableBindingScope("101", "dw:renamed_lines", List.of(Map.of("key", "one")), false)),
+                Map.of("__subTables__", Map.of("dw:renamed_lines", List.of(row))));
         SubTableBatchTaskPermissions.validate(variables, form,
                 Map.of("__subTables__", Map.of("dw:renamed_lines", List.of(row))), new ObjectMapper(), changes);
     }

@@ -60,7 +60,12 @@ final class SubTableBatchTaskPermissions {
         Map<?, ?> permissions = map(form.get("fieldPermissions"));
         SubTableBatchChangeGuard.validate(variables, form, changes, mapper);
         Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(variables, form.get("sourceId"), mapper);
-        for (Object raw : controls.values()) validateControl(map(raw), permissions, tables, baseline, changes);
+        for (Object raw : controls.values()) {
+            Map<?, ?> control = map(raw);
+            var declared = changes.stream().filter(change -> Objects.equals(control.get("batchControlId"), change.getBatchControlId())
+                    && String.valueOf(control.get("bindingId")).equals(change.getBindingId().trim())).toList();
+            if (!declared.isEmpty()) validateControl(control, permissions, tables, baseline, declared);
+        }
     }
 
     private static void validateControl(Map<?, ?> control, Map<?, ?> permissions, Map<?, ?> tables, Map<?, ?> baseline,
@@ -76,6 +81,10 @@ final class SubTableBatchTaskPermissions {
             Map<?, ?> row = map(raw);
             List<String> id = identity(row, keys);
             if (!seen.add(id)) throw invalid();
+            var rowChanges = changes.stream().filter(change -> change.getRowPatches().stream()
+                    .anyMatch(patch -> keys.stream().allMatch(key -> Objects.equals(
+                            String.valueOf(patch.getRowKey().get(key)), String.valueOf(row.get(key)))))).toList();
+            if (rowChanges.isEmpty()) continue; // Ordinary sibling edits are authorized by TaskSubTableSubmission.
             Map<?, ?> original = originals.get(id);
             boolean metadataChanged = original == null;
             for (Object rawField : fields) {
@@ -93,7 +102,7 @@ final class SubTableBatchTaskPermissions {
                         && !SubTableBatchPublishedPermissions.declaredDefault(field, row.get(fieldName))) throw forbidden();
             }
             boolean assignmentOnly = SubTableBatchAssignmentOnly.validate(control, fields, original, row, changes);
-            if (metadataChanged && !assignmentOnly) {
+            if (metadataChanged && !assignmentOnly && rowChanges.stream().anyMatch(change -> !"ASSIGN".equals(change.getOperation()))) {
                 SubTableBatchEditedRowGuard.validateMetadata(fields, row);
             }
         }
