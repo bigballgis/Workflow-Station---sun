@@ -74,7 +74,7 @@ final class ChangeHistoryBpmnFormResolver {
         }
         return null;
     }
-    private static String decodeBpmnXml(String stored) {
+    static String decodeBpmnXml(String stored) {
         if (stored == null) return null;
         String trimmed = stored.trim();
         if (trimmed.startsWith("<")) return trimmed;

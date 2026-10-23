@@ -39,8 +39,8 @@ class SubTableBatchRealTransactionTest {
                 List.of(Map.<String, Object>of(pk, "one"), Map.<String, Object>of(pk, "one")))) {
             Map<String, Object> changed = new java.util.HashMap<>(harness.baseline);
             changed.put("__subTables__", Map.of("dw:lines", rows));
-            assertThrows(com.portal.exception.PortalException.class, () -> harness.component.validateSubTableBatchPayload(
-                    "review", "synthetic-process", null, null, changed));
+            assertThrows(com.portal.exception.PortalException.class, () -> harness.component.prepareSubTableSubmission(
+                    "synthetic-process", "review", changed, "synthetic-user", List.of()));
             assertEquals(harness.baseline, harness.read());
         }
     }
@@ -59,8 +59,8 @@ class SubTableBatchRealTransactionTest {
         var harness = new BatchTaskFormTransactionHarness(pk, false, true);
         Map<String, Object> changed = new java.util.HashMap<>(harness.baseline);
         changed.put("__subTables__", Map.of("dw:lines", List.of(Map.of(pk, "one", "caption", "forged"))));
-        assertThrows(com.portal.exception.PortalException.class, () -> harness.component.validateSubTableBatchPayload(
-                "review", "synthetic-process", null, null, changed));
+        assertThrows(com.portal.exception.PortalException.class, () -> harness.component.prepareSubTableSubmission(
+                "synthetic-process", "review", changed, "synthetic-user", List.of()));
         assertEquals(harness.baseline, harness.read());
     }
     @ParameterizedTest

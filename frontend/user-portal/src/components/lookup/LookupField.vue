@@ -4,6 +4,7 @@
     class="lookup-field"
     :class="{ readonly }"
   >
+    <el-alert v-if="identityError" :title="t('task.loadFailed')" type="error" :closable="false" />
     <!-- Multi-select: multiple removable tags + an input row that opens the dropdown. -->
     <div
       v-if="multiple"
@@ -40,6 +41,7 @@
       v-else-if="selectedRow"
       class="lookup-selected-wrapper"
       :class="{ 'is-readonly': readonly }"
+      @click="!readonly && handleFocus()"
     >
       <span class="lookup-selected-tag">
         <span class="lookup-selected-text">{{ searchKeyword }}</span>
@@ -116,11 +118,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { debounce } from 'lodash-es'
 import { useZIndex } from 'element-plus'
 import { Close, Check } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
-import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
+import { fetchLookupRowByPrimaryKey, resolveLookupPrimaryKeyField } from './fetchLookupRowByPrimaryKey'
 import { useLookupFieldRows } from './useLookupFieldRows'
 import {
   buildVisibleColumns,
@@ -168,6 +171,7 @@ const emit = defineEmits<{
 }>()
 
 const wrapperRef = ref<HTMLElement>()
+const { t } = useI18n()
 const dropdownRef = ref<HTMLElement>()
 const dropdownVisible = ref(false)
 // Floating dropdown position (teleported to body, position: fixed) — recomputed from the
@@ -178,6 +182,25 @@ const selectedRow = ref<Record<string, any> | null>(null)
 // Multi-select: the picked rows (order preserved). modelValue is an array of their PKs.
 const selectedRows = ref<Record<string, any>[]>([])
 const loadedViewFields = ref<LookupViewField[]>([])
+const primaryKeyFields = ref<string[]>([])
+const identityError = ref(false)
+let identityTable: number | undefined
+let identityRequest: Promise<void> | undefined
+function loadIdentity(): Promise<void> {
+  if (identityTable === props.tableId && identityRequest) return identityRequest
+  const tableId = props.tableId
+  identityTable = tableId
+  primaryKeyFields.value = []
+  identityError.value = false
+  identityRequest = resolveLookupPrimaryKeyField(tableId).then(key => {
+    if (props.tableId !== tableId) return
+    primaryKeyFields.value = [key]
+  }).catch(error => {
+    if (identityTable === tableId) identityRequest = undefined
+    throw error
+  })
+  return identityRequest
+}
 const { allRows, loading, loadInitial, searchRemote, resetRows } = useLookupFieldRows({
   tableId: () => props.tableId,
   searchFields: () => props.searchFields || [],
@@ -289,8 +312,10 @@ function updateDropdownPosition() {
   }
 }
 
-function handleFocus() {
+async function handleFocus() {
   if (props.readonly) return
+  try { await loadIdentity() }
+  catch { identityError.value = true; return }
   // Compute the z-index against the current top overlay so the dropdown sits above it — critical
   // when the lookup is rendered inside an el-dialog (e.g. Add ATM Transaction), whose overlay
   // z-index would otherwise cover a fixed-z dropdown.
@@ -301,12 +326,13 @@ function handleFocus() {
 }
 
 function pkField(): string {
-  return String(props.searchFields?.[0] || 'id').trim() || 'id'
+  if (primaryKeyFields.value.length !== 1) throw new Error('Lookup primary key metadata is not ready')
+  return primaryKeyFields.value[0]
 }
 
 function rowPk(row: Record<string, any>): any {
   const pk = pkField()
-  return row?.[pk] ?? row?.id
+  return row?.[pk]
 }
 
 function isRowSelected(row: Record<string, any>): boolean {
@@ -504,7 +530,6 @@ async function hydrateMultiRowAt(index: number, scalar: any) {
       searchFields: props.searchFields || [],
       displayField: props.displayField || '',
       filterConditions: [],
-      primaryKeyField: pkField(),
     })
     if (!row || !Object.keys(row).length) return
     // Only replace if the slot still holds the same PK (guard against races/edits).
@@ -530,7 +555,6 @@ async function hydrateScalarFromRelationTable(scalar: string | number) {
       searchFields: props.searchFields || [],
       displayField: props.displayField || '',
       filterConditions: [],
-      primaryKeyField: pkField(),
     })
     if (!row || !Object.keys(row).length) return
     const cur = props.modelValue
@@ -560,7 +584,7 @@ function refreshSearchKeywordFromSelectedRow() {
 
 /** Minimal row shape for persisted scalar PK — do not copy PK into selectedDisplayField column. */
 function buildSyntheticLookupRow(raw: number | bigint | boolean | string): Record<string, any> {
-  const pk = String(props.searchFields?.[0] || 'id').trim() || 'id'
+  const pk = pkField()
   const row: Record<string, any> = { [pk]: raw }
   if (pk !== 'id') row.id = raw
   return row
@@ -574,8 +598,12 @@ function getDisplayValue(row: Record<string, any>) {
 // Lookup values change by wholesale replacement (select → new object, clear → null);
 // initFromModelValue re-derives from the value as a whole, so a shallow (reference) watch suffices.
 watch(
-  () => props.modelValue,
-  val => {
+  () => [props.modelValue, props.tableId] as const,
+  async ([val, tableId]) => {
+    if (!tableId) return
+    try { await loadIdentity() }
+    catch { identityError.value = true; return }
+    if (props.modelValue !== val || props.tableId !== tableId) return
     initFromModelValue(val)
   },
   { immediate: true },

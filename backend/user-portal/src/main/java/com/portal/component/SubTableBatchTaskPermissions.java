@@ -1,13 +1,14 @@
 package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.audit.SystemAuditFields;
 import com.portal.exception.PortalException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Current task authority applies to every write on a batch-enabled instance, not just declared batches. */
+/** Additional authority for explicitly declared batch operations; ordinary writes use TaskSubTableSubmission. */
 final class SubTableBatchTaskPermissions {
     private SubTableBatchTaskPermissions() { }
 
@@ -42,7 +43,13 @@ final class SubTableBatchTaskPermissions {
 
     static void validate(Map<String, Object> variables, Map<String, Object> form,
                          Map<String, Object> submitted, ObjectMapper mapper) {
+        validate(variables, form, submitted, mapper, null);
+    }
+
+    static void validate(Map<String, Object> variables, Map<String, Object> form,
+                         Map<String, Object> submitted, ObjectMapper mapper, List<com.portal.dto.SubTableBatchChange> changes) {
         SubTableBatchWorkspaceContext.validate(variables, submitted);
+        if (changes == null || changes.isEmpty()) return;
         if (!enhanced(variables) || !submitted.containsKey("__subTables__")) return;
         if (!(submitted.get("__subTables__") instanceof Map<?, ?> tables)) throw invalid();
         Map<?, ?> baseline = map(variables.get("__subTables__"));
@@ -50,25 +57,14 @@ final class SubTableBatchTaskPermissions {
             if (!tables.equals(baseline)) throw forbidden();
             return; // A task with no form may complete without changing any business table.
         }
-        requireCurrentBindingWrites(form, tables, baseline);
         Map<?, ?> permissions = map(form.get("fieldPermissions"));
+        SubTableBatchChangeGuard.validate(variables, form, changes, mapper);
         Map<String, Object> controls = SubTableBatchRuntimeSnapshot.projectForForm(variables, form.get("sourceId"), mapper);
-        for (Object raw : controls.values()) validateControl(map(raw), permissions, tables, baseline);
+        for (Object raw : controls.values()) validateControl(map(raw), permissions, tables, baseline, changes);
     }
 
-    private static void requireCurrentBindingWrites(Map<String, Object> form, Map<?, ?> tables, Map<?, ?> baseline) {
-        if (!(form.get("tableBindings") instanceof List<?> bindings)) throw invalid();
-        for (Map.Entry<?, ?> entry : tables.entrySet()) {
-            if (Objects.equals(entry.getValue(), baseline.get(entry.getKey()))) continue;
-            boolean allowed = bindings.stream().filter(raw -> raw instanceof Map<?, ?>)
-                    .map(raw -> (Map<?, ?>) raw).anyMatch(binding -> "EDITABLE".equals(binding.get("bindingMode"))
-                            && binding.get("tableName") instanceof String name
-                            && ("dw:" + name.toLowerCase(java.util.Locale.ROOT)).equals(entry.getKey()));
-            if (!allowed) throw forbidden();
-        }
-    }
-
-    private static void validateControl(Map<?, ?> control, Map<?, ?> permissions, Map<?, ?> tables, Map<?, ?> baseline) {
+    private static void validateControl(Map<?, ?> control, Map<?, ?> permissions, Map<?, ?> tables, Map<?, ?> baseline,
+                                        List<com.portal.dto.SubTableBatchChange> changes) {
         if (!(control.get("rowDesign") instanceof Map<?, ?> design)) throw invalid();
         Map<?, ?> binding = map(design.get("binding"));
         if (!(binding.get("tableName") instanceof String name) || !(binding.get("primaryKeyFields") instanceof List<?> keys)
@@ -86,6 +82,9 @@ final class SubTableBatchTaskPermissions {
                 Map<?, ?> field = map(rawField);
                 String fieldName = String.valueOf(field.get("fieldName"));
                 metadataChanged |= original != null && !Objects.equals(original.get(fieldName), row.get(fieldName));
+                // Ordinary row dialogs fill audit columns at Save; the existing task writer
+                // preserves them independently of designer-controlled business permissions.
+                if (SystemAuditFields.isAuditField(fieldName)) continue;
                 if (!"READONLY".equals(permissions.get(control.get("bindingId") + ":" + fieldName))) continue;
                 if (Boolean.TRUE.equals(field.get("isComputed")) || Boolean.TRUE.equals(field.get("isForeignKey"))
                         || Boolean.TRUE.equals(field.get("isPrimaryKey"))) continue; // Existing identity/scope/generated-value guards own these.
@@ -93,7 +92,10 @@ final class SubTableBatchTaskPermissions {
                 if (original == null && row.get(fieldName) != null && !"".equals(row.get(fieldName))
                         && !SubTableBatchPublishedPermissions.declaredDefault(field, row.get(fieldName))) throw forbidden();
             }
-            if (metadataChanged) SubTableBatchEditedRowGuard.validateMetadata(fields, row);
+            boolean assignmentOnly = SubTableBatchAssignmentOnly.validate(control, fields, original, row, changes);
+            if (metadataChanged && !assignmentOnly) {
+                SubTableBatchEditedRowGuard.validateMetadata(fields, row);
+            }
         }
     }
 

@@ -11,11 +11,11 @@ export function parseLookupConfig(raw: unknown): ParsedLookupConfig {
 }
 
 export function getLookupPrimaryKeyFieldFromProps(props?: {
+  primaryKeyField?: string
   searchFields?: string[]
   lookupConfig?: unknown
 } | null): string {
-  const cfg = parseLookupConfig(props?.lookupConfig)
-  return String(props?.searchFields?.[0] || cfg.searchFields?.[0] || 'id').trim() || 'id'
+  return props?.primaryKeyField?.trim() || ''
 }
 
 function pickFirstNonPrimaryDisplayField(

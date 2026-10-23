@@ -5176,3 +5176,64 @@
     2026-10-21 创建测试FU名称 Select 多选测试 20261021，Public工作区下API返回SYS_REQUEST_PROCESSING_ERROR。
     DW容器日志证实 processElementId must match BPMN/XML id rules，自动code中仍含中文。
     本轮仅创建测试数据，未修改此范围外实现；改用英文名称后成功创建并部署FU50097。
+
+- id: "1694"
+  status: fixed
+  fixed_at: "2026-10-23"
+  severity: major
+  category: bug
+  summary: "Batch Assign 对未修改的 Lookup 对象执行整行文本类型校验，阻断合法分派"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableBatchTaskPermissions.java"
+  detail: |
+    纯分派按冻结控件/绑定/主键、完整差异及合法意图逐行判定，保留权限、分派字段值、阶段、资格及并发校验。
+    保存前置、事务内、规范化行及Complete四处传入声明；无变化ASSIGN仍拒绝夹带未知字段。
+    新测试先失败，最终321项相关后端回归通过；打包、Portal容器重建及类哈希一致。
+    MCY Debit Card_20260525结构副本50102的v2实例验证保存、Complete实际子任务、六类负例及双账号MI行隔离。
+    续验已通过组件库直接配置原FU48并发布1.0.132，Portal两行批量分派/确认/重载及实际两个Investigation子任务通过。
+    另修选人显示元数据误判；最终Portal相关332项通过。原FU本地为Select，原UAT五个Lookup实例未验收。
+    2026-10-23续修普通Add/Edit审计字段误拒绝：复用SystemAuditFields，不改变业务只读权限；两新增测试先红后绿，Portal334项通过。
+    同一任务96b5fc9d-ce84-11f1-ac67-1ab7605b2169页面新增一行、逐条编辑原两行及重载/查库通过；已重建Portal且healthy。
+    方案二续修：Save/Complete共用固定版本的普通权限/提交准备，batch仅校验显式批量声明；Lookup身份按元数据主键解析。
+    原失败Investigation同任务Request Approval红转绿；原FU新请求Add/Edit/批量分派及后继Approval、第二FU不同字段保存均通过。
+    相关后端364项、前端专项60项、MI234项通过，Portal前后端重建；独立增量重审PASS，原UAT和全生命周期仍未验收。
+    证据：docs/verification/2026-10-22-batch-assign-lookup.md。
+
+- id: "1695"
+  status: open
+  severity: major
+  category: deploy
+  summary: "本地DW克隆生成无开发组的测试草稿，编辑、分组和清理均被403拒绝，需核对运行镜像与源码"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitCloner.java"
+  detail: |
+    2026-10-22 正常clone接口从有vg-dev-public分组的FU48生成测试草稿50098、50099，数据库确认副本无开发组。
+    developer编辑/分组请求返回403；另一个获授权测试账号清理副本仍403，未绕过应用权限。
+    当前工作区FunctionUnitCloner已调用inheritDevGroups，故不能据此直接认定当前源码缺少继承逻辑。
+    初轮未改DW；续验因关系表发布修复已重建DW，克隆继承与这两个旧草稿的清理尚未复验。
+
+
+- id: "1696"
+  status: fixed
+  fixed_at: "2026-10-22"
+  severity: major
+  category: bug
+  summary: "FU发布遗漏平台User虚拟关系表结构且RELATED表名为空，Admin拒绝VERSION_SNAPSHOT_INCOMPLETE"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitExporter.java"
+  detail: |
+    原FU48页面发布1.0.130复现；普通rt表读取器无法导出平台稳定虚拟id，RELATED序列化也从空DW表取名。
+    共享SystemUserRelationTable结构定义，DW ZIP/快照补结构及表名；DW/Admin导入复用平台身份，不创建业务rt表。
+    导出测试先expected1实际0，修后相关214项通过；四个后端打包重建，原FU页面发布1.0.131/132成功。
+    实际快照包含sys_users，三个RELATED表名完整，rt_table_definitions中未创建同名业务表。
+    证据：docs/verification/2026-10-22-batch-assign-lookup.md。
+
+- id: "1697"
+  status: fixed
+  fixed_at: "2026-10-22"
+  severity: major
+  category: bug
+  summary: "Portal发布快照主键分配将未配置生成策略改成manual，阻断旧FU页面发起与新增"
+  file: "backend/user-portal/src/main/java/com/portal/component/PortalPrimaryKeyAllocationComponent.java"
+  detail: |
+    原FU48页面Case Submit复现PK strategy does not support allocation: manual；源主键策略实际为null。
+    allocateCatalog复用现有toPkConfig，使null/空对象与旧入口一致默认UUID；显式manual/序列策略不变。
+    四个用例先2失败后全部通过；Portal重新打包重建，原FU页面发起成功且创建真实流程任务。
+    证据：docs/verification/2026-10-22-batch-assign-lookup.md。

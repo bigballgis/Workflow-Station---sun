@@ -4,16 +4,19 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import LookupField from '../LookupField.vue'
 import { relationTableApi } from '@/api/relationTable'
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 vi.mock('@/api/relationTable', () => ({
   relationTableApi: {
     searchForLookup: vi.fn().mockResolvedValue({ data: [] }),
     getViewFields: vi.fn().mockResolvedValue({ data: [] }),
+    getFieldDefinitions: vi.fn().mockResolvedValue({ data: [{ fieldName: 'id', isPrimaryKey: true }] }),
   },
 }))
 
 vi.mock('../fetchLookupRowByPrimaryKey', () => ({
   fetchLookupRowByPrimaryKey: vi.fn().mockResolvedValue(null),
+  resolveLookupPrimaryKeyField: vi.fn().mockResolvedValue('id'),
 }))
 
 const baseProps = {

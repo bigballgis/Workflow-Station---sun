@@ -803,6 +803,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Override
     @Transactional(readOnly = true)
     public List<RelationFieldDTO> getFieldDefinitions(Long tableId, String userId) {
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return com.platform.common.relationtable.SystemUserRelationTable.fields();
+        }
         if (resolvePermissionLevel(tableId, userId) == null) {
             throw new AccessDeniedException("No access to this table");
         }

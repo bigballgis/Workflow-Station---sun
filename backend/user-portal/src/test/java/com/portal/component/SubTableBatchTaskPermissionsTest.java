@@ -8,6 +8,74 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SubTableBatchTaskPermissionsTest {
+    private static void ordinaryPolicy(Map<String, Object> variables, Map<String, Object> form, Map<String, Object> input) {
+        Map<?, ?> forms = (Map<?, ?>) ((Map<?, ?>) variables.get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)).get("forms");
+        Map<?, ?> control = (Map<?, ?>) ((List<?>) ((Map<?, ?>) forms.get("form")).get("controls")).get(0);
+        Map<?, ?> design = (Map<?, ?>) control.get("rowDesign");
+        List<?> fields = (List<?>) design.get("fields");
+        List<Map<String, Object>> columns = new java.util.ArrayList<>();
+        columns.add(Map.of("fieldName", "entry_key", "isPrimaryKey", true));
+        for (Object field : fields) columns.add((Map<String, Object>) field);
+        // Some tests omit nullable field metadata entirely; they exercise permissions only.
+        Map<String, Object> enriched = new HashMap<>(form);
+        enriched.put("tableBindings", List.of(Map.of("bindingId", "101", "bindingType", "SUB", "bindingMode", "EDITABLE",
+                "tableName", "lines", "primaryKeyFields", List.of("entry_key"), "columns", columns)));
+        TaskSubTableSubmission.prepare(input, variables, enriched, "Tester", List.of());
+    }
+    @Test
+    void batchCapabilityElsewhereDoesNotApplyBatchPermissionsToInvestigation() {
+        Map<String, Object> baseline = Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 1)));
+        Map<String, Object> variables = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD,
+                Map.of("schemaVersion", 1, "forms", Map.of("assignment", Map.of("controls", List.of()))), "__subTables__", baseline);
+        Map<String, Object> form = Map.of("sourceId", "investigation", "tableBindings",
+                List.of(Map.of("tableName", "lines", "bindingMode", "READONLY")), "fieldPermissions", Map.of());
+        assertDoesNotThrow(() -> SubTableBatchTaskPermissions.validate(variables, form,
+                Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 1,
+                        "engine_state", "IN_PROGRESS")))), new ObjectMapper()));
+    }
+
+    @Test
+    void ordinaryAddAcceptsDialogGeneratedAuditValuesOnBatchEnabledTask() {
+        assertAuditSaveAllowed(List.of(), Map.of("entry_key", "B", "amount", 2,
+                "created_at", "2026-10-23 10:00:00", "created_by", "Tester",
+                "updated_at", "2026-10-23 10:00:00", "updated_by", "Tester"));
+    }
+
+    @Test
+    void ordinaryEditAfterAssignmentAcceptsRefreshedAuditValues() {
+        assertAuditSaveAllowed(List.of(Map.of("entry_key", "A", "amount", 1, "assigned_to", "person",
+                        "created_at", "2026-10-22 10:00:00", "created_by", "Creator",
+                        "updated_at", "2026-10-22 10:00:00", "updated_by", "Creator")),
+                Map.of("entry_key", "A", "amount", 2, "assigned_to", "person",
+                        "created_at", "2026-10-22 10:00:00", "created_by", "Creator",
+                        "updated_at", "2026-10-23 10:00:00", "updated_by", "Tester"));
+    }
+
+    private void assertAuditSaveAllowed(List<Map<String, Object>> originals, Map<String, Object> row) {
+        List<Map<String, Object>> fields = new java.util.ArrayList<>(List.of(
+                Map.of("fieldName", "amount", "dataType", "INTEGER"),
+                Map.of("fieldName", "assigned_to", "dataType", "VARCHAR")));
+        Map<String, String> permissions = new HashMap<>();
+        for (String name : com.platform.common.audit.SystemAuditFields.ALL) {
+            fields.add(Map.of("fieldName", name, "dataType", name.endsWith("_at") ? "TIMESTAMP" : "VARCHAR"));
+            permissions.put("101:" + name, "READONLY");
+        }
+        Map<String, Object> control = Map.of("batchControlId", "grid", "bindingId", "101",
+                "assignmentConfig", Map.of("assigneeField", "assigned_to"),
+                "capabilities", Map.of("allowBatchAssign", true), "rowDesign", Map.of(
+                        "binding", Map.of("tableName", "lines", "primaryKeyFields", List.of("entry_key")), "fields", fields));
+        Map<String, Object> variables = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1,
+                        "forms", Map.of("form", Map.of("controls", List.of(control)))),
+                "__subTables__", Map.of("dw:lines", originals));
+        Map<String, Object> form = Map.of("sourceId", "form", "fieldPermissions", permissions,
+                "tableBindings", List.of(Map.of("tableName", "lines", "bindingMode", "EDITABLE")));
+        Map<String, Object> submitted = Map.of("__subTables__", Map.of("dw:lines", List.of(row)));
+        assertDoesNotThrow(() -> ordinaryPolicy(variables, form, submitted));
+        permissions.put("101:amount", "READONLY");
+        assertThrows(com.portal.exception.PortalException.class,
+                () -> ordinaryPolicy(variables, form, submitted));
+    }
+
     @Test
     void scopeVersionBumpsDoNotTurnUntouchedHistoricValuesIntoBusinessEdits() {
         Map<String, Object> control = Map.of("batchControlId", "grid", "bindingId", "101", "rowDesign", Map.of(
@@ -20,10 +88,10 @@ class SubTableBatchTaskPermissionsTest {
                         Map.of("entry_key", "B", "amount", "historic-invalid", "_wsRowVersion", 1))));
         Map<String, Object> form = Map.of("sourceId", "form", "fieldPermissions", Map.of(),
                 "tableBindings", List.of(Map.of("tableName", "lines", "bindingMode", "EDITABLE")));
-        assertDoesNotThrow(() -> SubTableBatchTaskPermissions.validate(variables, form,
+        assertDoesNotThrow(() -> ordinaryPolicy(variables, form,
                 Map.of("__subTables__", Map.of("dw:lines", List.of(
                         Map.of("entry_key", "A", "amount", 0, "_wsRowVersion", 2),
-                        Map.of("entry_key", "B", "amount", "historic-invalid", "_wsRowVersion", 2)))), new ObjectMapper()));
+                        Map.of("entry_key", "B", "amount", "historic-invalid", "_wsRowVersion", 2))))));
     }
 
     @Test
@@ -38,12 +106,12 @@ class SubTableBatchTaskPermissionsTest {
                 "__subTables__", Map.of("dw:lines", List.of(original)));
         Map<String, Object> form = Map.of("sourceId", "form", "fieldPermissions", Map.of(),
                 "tableBindings", List.of(Map.of("tableName", "lines", "bindingMode", "EDITABLE")));
-        assertThrows(com.platform.common.exception.BusinessException.class, () -> SubTableBatchTaskPermissions.validate(
+        assertThrows(com.platform.common.exception.BusinessException.class, () -> ordinaryPolicy(
                 variables, form, Map.of("__subTables__", Map.of("dw:lines", List.of(
-                        Map.of("entry_key", "A", "amount", "invalid", "ordinary_note", "new")))), new ObjectMapper()));
-        assertDoesNotThrow(() -> SubTableBatchTaskPermissions.validate(variables, form,
+                        Map.of("entry_key", "A", "amount", "invalid", "ordinary_note", "new"))))));
+        assertDoesNotThrow(() -> ordinaryPolicy(variables, form,
                 Map.of("__subTables__", Map.of("dw:lines", List.of(
-                        Map.of("entry_key", "A", "amount", 0, "ordinary_note", "new")))), new ObjectMapper()));
+                        Map.of("entry_key", "A", "amount", 0, "ordinary_note", "new"))))));
     }
 
     @Test
@@ -87,12 +155,12 @@ class SubTableBatchTaskPermissionsTest {
                 "__subTables__", Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 1))));
         Map<String, Object> form = Map.of("sourceId", "form", "fieldPermissions", Map.of("101:amount", "READONLY"),
                 "tableBindings", List.of(Map.of("tableName", "lines", "bindingMode", "EDITABLE")));
-        SubTableBatchTaskPermissions.validate(variables, form,
-                Map.of("__subTables__", variables.get("__subTables__")), new ObjectMapper());
-        assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchTaskPermissions.validate(variables,
-                form, Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 2)))), new ObjectMapper()));
+        ordinaryPolicy(variables, form,
+                Map.of("__subTables__", variables.get("__subTables__")));
+        assertThrows(com.portal.exception.PortalException.class, () -> ordinaryPolicy(variables,
+                form, Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("entry_key", "A", "amount", 2))))));
         control.remove("rowDesign");
-        assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchTaskPermissions.validate(variables,
+        assertDoesNotThrow(() -> SubTableBatchTaskPermissions.validate(variables,
                 form, Map.of("__subTables__", variables.get("__subTables__")), new ObjectMapper()));
     }
 }
