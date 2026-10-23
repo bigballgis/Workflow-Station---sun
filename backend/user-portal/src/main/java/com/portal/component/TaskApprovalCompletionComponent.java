@@ -276,7 +276,7 @@ public class TaskApprovalCompletionComponent {
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
                 ProcessVersionContext.apply(syncInstance, mergedVars);
-                stampRequestId(syncInstance.getFunctionUnitCode(), mergedVars);
+                stampRequestId(mergedVars);
                 if (slaDueDateEnricher != null) {
                     slaDueDateEnricher.stamp(syncInstance.getFunctionUnitCode(), mergedVars,
                             syncInstance.getStartTime() == null ? null : syncInstance.getStartTime().toLocalDate());
@@ -793,12 +793,12 @@ public class TaskApprovalCompletionComponent {
      * Re-derive the readonly Request ID before the approval write-back is persisted, so an approval
      * that edits a contributing main-table field cannot leave the stored identifier stale.
      */
-    private void stampRequestId(String functionUnitCode, Map<String, Object> variables) {
+    private void stampRequestId(Map<String, Object> variables) {
         RequestIdEnricher enricher = requestIdEnricher;
-        if (enricher == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
+        if (enricher == null || variables == null) {
             return;
         }
-        enricher.stampRequestId(functionUnitCode, variables);
+        enricher.stampRequestId(variables);
     }
 
     private String pinnedCatalogOf(String processInstanceId) {

@@ -47,7 +47,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         }
         Map<String, Object> variables = new HashMap<>(execution.getVariables());
         try {
-            String resolvedTo = configuredEmailSender.send("activity=" + activityId, config, variables);
+            String resolvedTo = configuredEmailSender.send("activity=" + activityId, config, variables,
+                    execution.getProcessInstanceId());
             execution.setVariable("emailSendResult", Map.of(
                     "success", true,
                     "activityId", activityId,

@@ -1,5 +1,6 @@
 package com.portal.client;
 
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.common.util.SafeUrlInput;
@@ -288,6 +289,14 @@ public class WorkflowEngineProcessClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException.Conflict e) {
+            // The engine cannot key this request's MI rows in its release: surface that rather than show
+            // stale progress as if the sub-tasks were idle.
+            FunctionUnitVersionException versionError = RemoteVersionErrors.versionErrorOf(e);
+            if (versionError != null) {
+                throw versionError;
+            }
+            log.warn("Failed to get multi-instance status from workflow engine: {}", e.getMessage());
         } catch (Exception e) {
             log.warn("Failed to get multi-instance status from workflow engine: {}", e.getMessage());
         }

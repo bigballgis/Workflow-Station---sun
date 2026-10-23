@@ -30,7 +30,6 @@ class ProcessApplicationQueryComponentCompletionReconcileTest {
     @Mock private UserDisplayNameResolver userDisplayNameResolver;
     @Mock private MiOverlayComponent miOverlayComponent;
     @Mock private SubTableEnrichmentComponent subTableEnrichmentComponent;
-    @Mock private RequestIdEnricher requestIdEnricher;
     @Mock private MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     @Mock private MainTableViewAccessResolver mainTableViewAccessResolver;
     @Mock private JdbcTemplate jdbcTemplate;
@@ -46,7 +45,6 @@ class ProcessApplicationQueryComponentCompletionReconcileTest {
                 userDisplayNameResolver,
                 miOverlayComponent,
                 subTableEnrichmentComponent,
-                requestIdEnricher,
                 mainTableViewInvolvementChecker,
                 mainTableViewAccessResolver,
                 org.mockito.Mockito.mock(FunctionUnitAccessComponent.class),

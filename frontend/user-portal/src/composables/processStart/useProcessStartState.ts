@@ -98,9 +98,6 @@ export function createProcessStartState() {
     cachedRelationTableFieldIndex: new Map<number, RelationFieldDef[]>(),
   }
 
-  // Lookup config fallback map (from rt_lookup_configs)
-  const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
-
   // Relation view configs from configJson (designed in developer-workstation)
   const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
 
@@ -149,7 +146,6 @@ export function createProcessStartState() {
     subTableBindings,
     primaryTableBinding,
     caches,
-    lookupDbConfigs,
     relationViewConfigs,
     historyRecords,
     availableActions,

@@ -45,7 +45,7 @@ public class CalledProcessSyncComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessInstanceHydrationComponent hydrationComponent;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
-    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
 
     /** The row a per-row call ran for, as handed to the called instance on deploy-compiled BPMN. */
     static final String CALL_ROW_VARIABLE = "__callRow";
@@ -163,7 +163,7 @@ public class CalledProcessSyncComponent {
             }
         }
         if (outputs.rowsTable() != null && !outputs.rowMappings().isEmpty()) {
-            changed |= copyIntoCallRow(calledOpt.get(), outputs, vars);
+            changed |= copyIntoCallRow(calledOpt.get(), caller.getFunctionUnitCatalogId(), outputs, vars);
         }
 
         if (changed) {
@@ -175,7 +175,8 @@ public class CalledProcessSyncComponent {
 
     /** Writes one per-row call's mapped results into the row it ran for; returns whether it did. */
     @SuppressWarnings("unchecked")
-    private boolean copyIntoCallRow(ProcessInstance called, CallOutputs outputs, Map<String, Object> callerVars) {
+    private boolean copyIntoCallRow(ProcessInstance called, String callerCatalogId, CallOutputs outputs,
+                                    Map<String, Object> callerVars) {
         Map<String, Object> calledVars = new HashMap<>();
         Map<String, Object> calledEngineVars = engineVariables(called.getId());
         calledVars.putAll(calledEngineVars);
@@ -192,7 +193,7 @@ public class CalledProcessSyncComponent {
             return false;
         }
 
-        List<String> keyFields = rowKeyFields(outputs.rowsTable(), stringKeyed(callRow));
+        List<String> keyFields = rowKeyFields(callerCatalogId, outputs.rowsTable(), stringKeyed(callRow));
         List<Object> updatedRows = new ArrayList<>(rows);
         for (int i = 0; i < updatedRows.size(); i++) {
             if (!(updatedRows.get(i) instanceof Map<?, ?> row) || !sameRow(row, callRow, keyFields)) {
@@ -215,21 +216,15 @@ public class CalledProcessSyncComponent {
 
     /**
      * How a row is recognised: the platform row id when the row carries one, otherwise the rows
-     * table's primary key as designed. Never guessed from column names.
+     * table's primary key as the caller's release declares it. Never guessed from column names, and
+     * never read from the live designer, which may have changed the key since the request started.
      */
-    private List<String> rowKeyFields(String rowsTable, Map<String, Object> callRow) {
+    private List<String> rowKeyFields(String callerCatalogId, String rowsTable, Map<String, Object> callRow) {
         if (callRow.get(PLATFORM_ROW_ID) != null) {
             return List.of(PLATFORM_ROW_ID);
         }
-        return jdbcTemplate.queryForList(
-                """
-                        SELECT fd.field_name
-                        FROM dw_field_definitions fd
-                        JOIN dw_table_definitions td ON td.id = fd.table_id
-                        WHERE td.table_name = ? AND COALESCE(fd.is_primary_key, false) = true
-                        ORDER BY fd.sort_order, fd.id
-                        """,
-                String.class, rowsTable);
+        return ChangeHistoryDesignerPrimaryKeyLookup.resolve(catalogSnapshots, callerCatalogId,
+                com.platform.common.subtable.SubTableStoreKeys.dwKey(rowsTable));
     }
 
     private static boolean sameRow(Map<?, ?> row, Map<?, ?> callRow, List<String> keyFields) {

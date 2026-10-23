@@ -1024,7 +1024,8 @@ export default {
     forbidden: 'Access Denied',
     forbiddenDesc: 'Sorry, you do not have permission to access this page',
     goBack: 'Go Back',
-    backHome: 'Back to Home'
+    backHome: 'Back to Home',
+    functionUnitVersionUnavailable: 'This request cannot be processed with the Function Unit version it was started on.'
   },
   settings: {
     title: 'Settings',

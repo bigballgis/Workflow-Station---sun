@@ -231,7 +231,7 @@ public class ProcessFormComponent {
                             null),
                     fieldValues);
         }
-        String requestId = requestIdEnricher().buildRequestId(processInstance.getFunctionUnitCode(), variables);
+        String requestId = RequestIdEnricher.storedRequestId(variables);
         if (requestId != null) {
             fieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
         }
@@ -250,11 +250,6 @@ public class ProcessFormComponent {
     }
 
     /** Serialize the main-table Request ID config so the portal can recompute the field live. */
-    Map<String, Object> buildRequestIdConfigMap(String functionUnitCode) {
-        RequestIdEnricher.RequestIdConfigView cfg = requestIdEnricher().resolveConfigView(functionUnitCode);
-        return requestIdConfigMap(cfg);
-    }
-
     private Map<String, Object> requestIdConfigMap(RequestIdEnricher.RequestIdConfigView cfg) {
         if (cfg == null) return null;
         Map<String, Object> map = new HashMap<>();
@@ -336,7 +331,7 @@ public class ProcessFormComponent {
             recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
             // Request ID is platform-derived: recompute it here too, so a resubmit that edits a
             // contributing field cannot persist a stale or client-supplied identifier.
-            requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
+            requestIdEnricher().stampRequestId(updatedVariables);
             stampSlaDueDate(processInstance, updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);

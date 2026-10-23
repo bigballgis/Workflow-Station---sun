@@ -19,8 +19,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,15 +31,13 @@ class UserPortalAuditProcessInstanceMatcherTest {
     private JdbcTemplate jdbcTemplate;
     @Mock
     private ProcessInstanceRepository processInstanceRepository;
-    @Mock
-    private RequestIdEnricher requestIdEnricher;
 
     private UserPortalAuditProcessInstanceMatcher matcher;
 
     @BeforeEach
     void setUp() {
         matcher = new UserPortalAuditProcessInstanceMatcher(
-                jdbcTemplate, processInstanceRepository, requestIdEnricher, new ObjectMapper());
+                jdbcTemplate, processInstanceRepository, new ObjectMapper());
     }
 
     @Test
@@ -76,7 +72,7 @@ class UserPortalAuditProcessInstanceMatcherTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void resolveMatching_matchesComputedRequestId_notVariablesJsonSubstring() {
+    void resolveMatching_matchesStoredRequestId_notVariablesJsonSubstring() {
         when(jdbcTemplate.query(any(String.class), any(RowMapper.class), any(Object[].class)))
                 .thenAnswer(invocation -> {
                     String sql = invocation.getArgument(0);
@@ -95,19 +91,14 @@ class UserPortalAuditProcessInstanceMatcherTest {
         ProcessInstance pi = ProcessInstance.builder()
                 .id("pi-req-1")
                 .functionUnitCode("ATM")
-                .variables(Map.of("dept", "HR", "year", "2026", "seq", "001"))
+                .variables(Map.of("dept", "HR", "year", "2026", "seq", "001",
+                        RequestIdEnricher.REQUEST_ID_FIELD, "HR-2026-001"))
                 .build();
         when(processInstanceRepository.findAllById(List.of("pi-req-1"))).thenReturn(List.of(pi));
-
-        RequestIdEnricher.SpecCache specs = mock(RequestIdEnricher.SpecCache.class);
-        when(requestIdEnricher.resolveSpecs(any())).thenReturn(specs);
-        when(requestIdEnricher.buildRequestId(eq(specs), eq("ATM"), any()))
-                .thenReturn("HR-2026-001");
 
         List<String> ids = matcher.resolveMatchingProcessInstanceIds("HR-2026-001", start, end);
 
         assertThat(ids).containsExactly("pi-req-1");
-        verify(requestIdEnricher).buildRequestId(eq(specs), eq("ATM"), any());
     }
 
     @Test
@@ -128,14 +119,10 @@ class UserPortalAuditProcessInstanceMatcherTest {
         ProcessInstance pi = ProcessInstance.builder()
                 .id("pi-other")
                 .functionUnitCode("ATM")
-                .variables(Map.of("dept", "IT", "year", "2025", "seq", "9"))
+                .variables(Map.of("dept", "IT", "year", "2025", "seq", "9",
+                        RequestIdEnricher.REQUEST_ID_FIELD, "IT-2025-9"))
                 .build();
         when(processInstanceRepository.findAllById(List.of("pi-other"))).thenReturn(List.of(pi));
-
-        RequestIdEnricher.SpecCache specs = mock(RequestIdEnricher.SpecCache.class);
-        when(requestIdEnricher.resolveSpecs(any())).thenReturn(specs);
-        when(requestIdEnricher.buildRequestId(eq(specs), eq("ATM"), any()))
-                .thenReturn("IT-2025-9");
 
         Instant start = Instant.parse("2026-08-01T00:00:00Z");
         Instant end = Instant.parse("2026-08-04T23:59:59Z");

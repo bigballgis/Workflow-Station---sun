@@ -1,7 +1,6 @@
 package com.portal.component;
 
 import com.platform.common.list.ListColumnFilter;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.CompletedTaskQueryRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,15 +34,13 @@ class CompletedTaskQuerySqlTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
-    @Mock
-    private RequestIdEnricher requestIdEnricher;
 
     private CompletedTaskListQueryComponent component;
     private final List<String> preparedSql = new ArrayList<>();
 
     @BeforeEach
     void setUp() throws Exception {
-        component = new CompletedTaskListQueryComponent(jdbcTemplate, new ObjectMapper(), requestIdEnricher);
+        component = new CompletedTaskListQueryComponent(jdbcTemplate);
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
@@ -67,7 +64,7 @@ class CompletedTaskQuerySqlTest {
         assertThat(preparedSql.get(0)).contains("ht.ASSIGNEE_ = ?").contains("ht.END_TIME_ IS NOT NULL");
         assertThat(pageSql()).contains("LIMIT ?").contains("OFFSET ?");
         assertThat(pageSql()).contains("ht.ASSIGNEE_ = ?").contains("ht.END_TIME_ IS NOT NULL");
-        assertThat(pageSql()).contains("(pi.variables - '__subTables__')");
+        assertThat(pageSql()).contains("pi.variables->>'__request_id' AS request_id").doesNotContain("__subTables__");
     }
 
     @Test

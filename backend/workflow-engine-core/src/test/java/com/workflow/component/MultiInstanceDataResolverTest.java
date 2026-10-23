@@ -61,7 +61,13 @@ class MultiInstanceDataResolverTest {
 
     @Mock
     private I18nService i18nService;
-    
+
+    @Mock
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
+    @Mock
+    private PinnedReleaseLookup pinnedReleaseLookup;
+
     @InjectMocks
     private MultiInstanceDataResolver resolver;
 
@@ -306,7 +312,34 @@ class MultiInstanceDataResolverTest {
             assertThat(resolver.isSystemVariable("currentItem")).isFalse();
         }
     }
-    
+
+    @Nested
+    @DisplayName("tryResolveSubTableRowKey 测试")
+    class TryResolveSubTableRowKeyTests {
+
+        @Test
+        @DisplayName("无物理主键的子表按请求发布版本的主键取行键")
+        void subTableWithoutPhysicalKeyIsKeyedByTheRequestsRelease() {
+            when(jdbcTemplate.query(contains("PRIMARY KEY"), ArgumentMatchers.<RowMapper<String>>any(),
+                    eq("fu_release_rows"))).thenReturn(List.of());
+            when(pinnedReleaseLookup.catalogIdOf(null, PROCESS_INSTANCE_ID)).thenReturn("rel-1");
+            when(catalogSnapshots.primaryKeyFields("rel-1", "fu_release_rows")).thenReturn(List.of("row_code"));
+
+            assertThat(resolver.tryResolveSubTableRowKey("fu_release_rows",
+                    Map.of("subTableRowKey", Map.of("row_code", "R-7")), PROCESS_INSTANCE_ID))
+                    .isEqualTo(Map.of("row_code", "R-7"));
+        }
+
+        @Test
+        @DisplayName("物理主键优先，不读发布版本")
+        void physicalKeyIsUsedWithoutTheRelease() {
+            assertThat(resolver.tryResolveSubTableRowKey(SUB_TABLE_NAME,
+                    Map.of("subTableRowId", 101), PROCESS_INSTANCE_ID))
+                    .isEqualTo(Map.of("id", 101));
+            org.mockito.Mockito.verifyNoInteractions(pinnedReleaseLookup, catalogSnapshots);
+        }
+    }
+
     // ==================== 辅助方法 ====================
     
     private ExtendedTaskInfo createExtendedTaskInfo() {

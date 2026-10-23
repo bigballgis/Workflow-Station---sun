@@ -57,8 +57,16 @@ class ProcessControllerTaskContentAccessTest {
     @Mock
     private TaskProcessComponent taskProcessComponent;
 
+    @Mock
+    private com.portal.component.ProcessInstanceHydrationComponent versionHydration;
+
     @InjectMocks
     private ProcessController processController;
+
+    @org.junit.jupiter.api.BeforeEach
+    void wireVersionHydration() {
+        org.springframework.test.util.ReflectionTestUtils.setField(processController, "versionHydration", versionHydration);
+    }
 
     private TaskInfo taskOf(String processDefinitionKey) {
         return TaskInfo.builder()
@@ -72,7 +80,8 @@ class ProcessControllerTaskContentAccessTest {
         when(taskQueryComponent.getTaskById(TASK_ID)).thenReturn(Optional.of(taskOf(FU_KEY)));
         when(functionUnitAccessComponent.requireEnabledFunctionUnit(USER_ID, FU_KEY)).thenReturn("fu-id");
         when(taskProcessComponent.canViewTaskForm(any(TaskInfo.class), eq(USER_ID), isNull())).thenReturn(true);
-        when(processComponent.getFunctionUnitContent(FU_KEY)).thenReturn(Map.of("forms", java.util.List.of()));
+        when(versionHydration.pinnedContentRef(FU_KEY, TASK_ID, null)).thenReturn("release-of-the-task");
+        when(processComponent.getFunctionUnitContent("release-of-the-task")).thenReturn(Map.of("forms", java.util.List.of()));
 
         ApiResponse<Map<String, Object>> response =
                 processController.getFunctionUnitContent(USER_ID, FU_KEY, TASK_ID, null, false);
@@ -80,6 +89,8 @@ class ProcessControllerTaskContentAccessTest {
         assertThat(response.isSuccess()).isTrue();
         // Role gate must NOT run when the task grant succeeds — that's the whole point of the bypass.
         verify(functionUnitAccessComponent, never()).checkFunctionUnitAccess(anyString(), anyString());
+        // Named by process key, served as the release the task's request was started on.
+        verify(processComponent, never()).getFunctionUnitContent(FU_KEY);
     }
 
     @Test
@@ -136,6 +147,7 @@ class ProcessControllerTaskContentAccessTest {
     void unknownTaskFallsBackToRoleGate() {
         when(taskQueryComponent.getTaskById(TASK_ID)).thenReturn(Optional.empty());
         // Role gate passes (e.g. user actually has the start role) — content is returned.
+        when(versionHydration.pinnedContentRef(FU_KEY, TASK_ID, null)).thenReturn(FU_KEY);
         when(processComponent.getFunctionUnitContent(FU_KEY)).thenReturn(Map.of());
 
         ApiResponse<Map<String, Object>> response =
@@ -155,6 +167,7 @@ class ProcessControllerTaskContentAccessTest {
                 .build();
         when(taskQueryComponent.getTaskById(TASK_ID)).thenReturn(Optional.of(task));
         when(taskProcessComponent.canViewTaskForm(any(TaskInfo.class), eq(USER_ID), isNull())).thenReturn(true);
+        when(versionHydration.pinnedContentRef(pin, TASK_ID, null)).thenReturn(pin);
         when(processComponent.getFunctionUnitContent(pin)).thenReturn(Map.of("version", "1.0.1"));
 
         ApiResponse<Map<String, Object>> response =
@@ -192,6 +205,7 @@ class ProcessControllerTaskContentAccessTest {
                 .build();
         when(processComponent.getProcessDetail(processId)).thenReturn(detail);
         when(processComponent.canAuditProcessDetail(USER_ID, detail)).thenReturn(true);
+        when(versionHydration.pinnedContentRef(pin, null, processId)).thenReturn(pin);
         when(processComponent.getFunctionUnitContent(pin)).thenReturn(Map.of("version", "1.0.1"));
 
         ApiResponse<Map<String, Object>> response =

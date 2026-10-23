@@ -79,7 +79,7 @@ public class ProcessStartFormEnricherComponent {
                 new OwnerFieldComponent.OwnerWriteContext(userId, userId, null, null, null), variables);
         SystemAuditFieldFiller.fillOnInsert(variables, userDisplayNameResolver.resolve(userId));
         computedFieldRecalculator.recalculate(functionUnitCode, variables);
-        requestIdEnricher.stampRequestId(functionUnitCode, variables);
+        requestIdEnricher.stampRequestId(variables);
         if (slaDueDateEnricher != null) {
             // Not persisted yet: the case is submitted today.
             slaDueDateEnricher.stamp(functionUnitCode, variables, LocalDate.now());
@@ -132,7 +132,7 @@ public class ProcessStartFormEnricherComponent {
         ownerFieldComponent.applyOnSubmit(code, new OwnerFieldComponent.OwnerWriteContext(userId, userId, null, null, null), variables);
         SystemAuditFieldFiller.fillOnInsert(variables, userDisplayNameResolver.resolve(userId));
         computedFieldRecalculator.recalculate(code, variables);
-        requestIdEnricher.stampRequestId(code, variables);
+        requestIdEnricher.stampRequestId(variables);
         if (slaDueDateEnricher != null) slaDueDateEnricher.stamp(code, variables, LocalDate.now());
     }
 

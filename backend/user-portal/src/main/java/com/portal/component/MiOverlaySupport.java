@@ -45,7 +45,7 @@ final class MiOverlaySupport {
      * Last-resort numeric row id, used ONLY after the designer-PK match found nothing.
      *
      * <p>The primary path is {@code resolveBestMiProgressForVariableRow}, which keys on the real
-     * primary-key columns read from table metadata ({@code resolvePkColumnsCached}) — that is the
+     * primary-key columns of the request's release ({@code SubTablePhysicalMetadataCache.rowKeyColumns}) — that is the
      * config-driven match and it runs first. The literals below are not an assumption about what a
      * sub-table's PK is called: they are the handful of envelope keys a variables row can carry a
      * numeric id under, tried only when no PK match succeeded. Reaching here and matching nothing

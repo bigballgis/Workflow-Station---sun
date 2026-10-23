@@ -484,7 +484,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 // An import may edit a field that feeds the Request ID; re-derive it so the stored
                 // identifier keeps matching the row it names.
                 if (requestIdEnricher != null) {
-                    requestIdEnricher.stampRequestId(pi.getFunctionUnitCode(), vars);
+                    requestIdEnricher.stampRequestId(vars);
                 }
                 if (slaDueDateEnricher != null) {
                     slaDueDateEnricher.stamp(pi.getFunctionUnitCode(), vars,

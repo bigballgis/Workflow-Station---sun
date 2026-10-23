@@ -15,6 +15,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -112,6 +113,20 @@ class ActionDefinitionLookupComponentTest {
         assertThrows(FunctionUnitVersionException.class,
                 () -> lookupComponent.resolvePinned("v1", List.of("50400")));
         verify(actionDefinitionRepository, never()).findPublishedProcessXml("v1");
+    }
+
+    @Test
+    @DisplayName("findPinned resolves a legacy release's action the same way, and reports an unknown id as absent")
+    void findPinned_isTheNonThrowingSingleIdLookup() {
+        ActionDefinition approve = legacy("uuid-approve", "Approve Purchase");
+        when(actionDefinitionRepository.findPinnedActions(org.mockito.ArgumentMatchers.eq("v1"), org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(List.of());
+        when(actionDefinitionRepository.findByFunctionUnitId("v1")).thenReturn(List.of(approve));
+        when(actionDefinitionRepository.findPublishedProcessXml("v1")).thenReturn(List.of(bpmn(
+                task("Task_Approve", "[50400]", "[&#34;Approve Purchase&#34;]"))));
+
+        assertEquals("uuid-approve", lookupComponent.findPinned("v1", "50400").orElseThrow().getId());
+        assertTrue(lookupComponent.findPinned("v1", "99").isEmpty());
     }
 
     private static ActionDefinition legacy(String id, String name) {

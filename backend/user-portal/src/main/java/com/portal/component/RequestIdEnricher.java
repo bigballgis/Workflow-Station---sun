@@ -2,7 +2,6 @@ package com.portal.component;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.platform.common.functionunit.ProcessStartForm;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,13 +26,11 @@ import java.util.stream.Collectors;
  *
  * <p>Request ID 是主表(PRIMARY MAIN)的表级配置:开发者在 Table Design 上选取若干主表字段、
  * 定义顺序、用分隔符拼成(如 {@code dept}-{@code year}-{@code seq} → {@code HR-2026-001})。
- * 配置以 JSONB 存于 {@code dw_table_definitions.request_id_config}。
+ * 运行时配置取自请求钉住的发布版本(主表 DATA_TABLE 快照的 {@code requestIdConfig})。
  *
- * <p>运行时按配置的 {@code fieldNames} 顺序,从流程变量(扁平 {@code fieldName: value})取值,
- * 用 {@code separator} 拼接,空值字段跳过。主表未配置 → 返回 {@code null}(前端列表渲染 '-')。
- *
- * <p>批量场景:同一 {@code functionUnitCode} 的所有实例共享同一份 config,故按 code 缓存解析结果,
- * 避免逐行查库(无 N+1)。
+ * <p>每次写入 {@code variables} 时按配置的 {@code fieldNames} 顺序,从流程变量(扁平
+ * {@code fieldName: value})取值,用 {@code separator} 拼接(空值字段跳过),落到
+ * {@link #REQUEST_ID_FIELD}。列表、详情、审计都读这份落库值,不再逐页重算。
  */
 @Slf4j
 @Component
@@ -47,69 +43,22 @@ public class RequestIdEnricher {
      */
     public static final String REQUEST_ID_FIELD = "__request_id";
 
-    /**
-     * Kept short because the config is edited in another service (DW) with no way to evict
-     * this cache. At 5 minutes, a Request ID configured just after a list was viewed stayed
-     * "not configured" for the rest of the window: requests submitted then were stamped
-     * without one and every list showed '-'. 30s still collapses a page's lookups (and
-     * rapid paging/filtering) into one query per function unit.
-     */
-    private static final long SPEC_TTL_MS = 30 * 1000L;
-    private static final int MAX_CACHED_SPECS = 128;
-
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ProcessInstanceRepository processInstanceRepository;
     @org.springframework.beans.factory.annotation.Autowired
     private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
-    private final Map<String, CachedSpec> specCache = Collections.synchronizedMap(
-            new LinkedHashMap<>(32, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, CachedSpec> eldest) {
-                    return size() > MAX_CACHED_SPECS;
-                }
-            });
-
-    /** 解析后的 Request ID 配置;{@code EMPTY} 表示该功能单元主表未配置(可缓存的负结果)。 */
-    private record RequestIdSpec(List<String> fieldNames, String separator) {
-        static final RequestIdSpec EMPTY = new RequestIdSpec(Collections.emptyList(), "");
-
-        boolean isConfigured() {
-            return fieldNames != null && !fieldNames.isEmpty();
-        }
-    }
 
     /** Public Request ID config shipped to the portal frontend so it can recompute the field live. */
     public record RequestIdConfigView(List<String> fieldNames, String separator) {}
 
     /**
-     * 解析功能单元主表的 Request ID 配置并以可序列化形式返回(供前端实时拼接)。
-     * 未配置 → 返回 {@code null}(前端不显示该字段值来源)。
+     * The Request ID a request carries: the value stamped on its variables from its own release at its
+     * last write. {@code null} when its release configures none (lists render '-').
      */
-    public RequestIdConfigView resolveConfigView(String functionUnitCode) {
-        if (functionUnitCode == null || functionUnitCode.isBlank()) {
-            return null;
-        }
-        RequestIdSpec spec = resolveSpec(functionUnitCode);
-        if (!spec.isConfigured()) {
-            return null;
-        }
-        return new RequestIdConfigView(spec.fieldNames(), spec.separator());
-    }
-
-    /**
-     * 给一个功能单元主表的 config + 一行流程变量,拼出 Request ID。
-     * 主表未配置或所有字段都为空 → 返回 {@code null}。
-     */
-    public String buildRequestId(String functionUnitCode, Map<String, Object> variables) {
-        if (functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
-            return null;
-        }
-        if (variables.get("functionUnitId") != null) {
-            Object stored = variables.get(REQUEST_ID_FIELD);
-            return stored == null ? null : String.valueOf(stored);
-        }
-        return applySpec(resolveSpec(functionUnitCode), variables);
+    public static String storedRequestId(Map<String, Object> variables) {
+        Object stored = variables == null ? null : variables.get(REQUEST_ID_FIELD);
+        return stored == null ? null : String.valueOf(stored);
     }
 
     /**
@@ -121,14 +70,19 @@ public class RequestIdEnricher {
      *
      * <p>调用点约定:放在审计字段填充与计算字段重算之后、{@code setVariables} 之前,
      * 此时所有参与拼接的字段都已是终值。
+     *
+     * @throws com.platform.common.functionunit.FunctionUnitVersionException VERSION_RECOVERY_REQUIRED when
+     *         the variables do not name the request's release
      */
-    public void stampRequestId(String functionUnitCode, Map<String, Object> variables) {
+    public void stampRequestId(Map<String, Object> variables) {
         if (variables == null) {
             return;
         }
         Object catalogId = variables.get("functionUnitId");
-        String requestId = catalogId == null ? buildRequestId(functionUnitCode, variables)
-                : buildCatalogRequestId(String.valueOf(catalogId), variables);
+        if (catalogId == null) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", null);
+        }
+        String requestId = buildCatalogRequestId(String.valueOf(catalogId), variables);
         if (requestId != null) {
             variables.put(REQUEST_ID_FIELD, requestId);
         } else {
@@ -138,7 +92,7 @@ public class RequestIdEnricher {
 
     public String buildCatalogRequestId(String catalogId, Map<String, Object> variables) {
         RequestIdConfigView config = resolveCatalogConfigView(catalogId);
-        return config == null ? null : applySpec(new RequestIdSpec(config.fieldNames(), config.separator()), variables);
+        return config == null ? null : applySpec(config, variables);
     }
 
     public RequestIdConfigView resolveCatalogConfigView(String catalogId) {
@@ -159,28 +113,11 @@ public class RequestIdEnricher {
     }
 
     /**
-     * 批量构建:返回 {@code functionUnitCode → spec} 的解析缓存,供调用方在循环里复用,避免逐行查库。
-     * 调用方通常这样用:先收集本页所有 code,调 {@link #resolveSpecs}, 然后对每行调 {@link #buildRequestId(SpecCache, String, Map)}。
-     */
-    public SpecCache resolveSpecs(Iterable<String> functionUnitCodes) {
-        Map<String, RequestIdSpec> byCode = new LinkedHashMap<>();
-        if (functionUnitCodes != null) {
-            for (String code : functionUnitCodes) {
-                if (code == null || code.isBlank() || byCode.containsKey(code)) {
-                    continue;
-                }
-                byCode.put(code, resolveSpec(code));
-            }
-        }
-        return new SpecCache(byCode);
-    }
-
-    /**
      * 为一页任务(To-Do / 已完成)填充 {@link TaskInfo#getRequestId()} 与 Function Unit。
      *
-     * <p>引擎任务负载不含主表字段值,故按 {@code processInstanceId} 单次批量取关联流程实例的
-     * variables(已完成流程的 variables 冻结在 {@code up_process_instance}),再按主表表级配置
-     * (每个功能单元只解析一次)拼出 Request ID,并带上发起时钉死的 function unit code/name。无 N+1。
+     * <p>引擎任务负载不含主表字段值,故按 {@code processInstanceId} 单次批量取关联流程实例,读其
+     * variables 上落库的 Request ID(被调用单元的任务取调用方请求的),并带上发起时钉死的
+     * function unit code/name。无 N+1。
      */
     public void enrichTaskRequestIds(List<TaskInfo> tasks) {
         if (tasks == null || tasks.isEmpty()) {
@@ -274,8 +211,7 @@ public class RequestIdEnricher {
                 task.setFunctionUnitName(name != null && !name.isBlank() ? name : null);
             }
             ProcessInstance request = requestOf.getOrDefault(pi.getId(), pi);
-            Object stored = request.getVariables() == null ? null : request.getVariables().get(REQUEST_ID_FIELD);
-            task.setRequestId(stored == null ? null : String.valueOf(stored));
+            task.setRequestId(storedRequestId(request.getVariables()));
         }
     }
 
@@ -330,32 +266,10 @@ public class RequestIdEnricher {
         return map;
     }
 
-    /** 用预解析的缓存拼接(零查库)。 */
-    public String buildRequestId(SpecCache cache, String functionUnitCode, Map<String, Object> variables) {
-        if (cache == null || functionUnitCode == null || variables == null) {
-            return null;
-        }
-        if (variables.get("functionUnitId") != null) {
-            Object stored = variables.get(REQUEST_ID_FIELD);
-            return stored == null ? null : String.valueOf(stored);
-        }
-        RequestIdSpec spec = cache.byCode.getOrDefault(functionUnitCode, RequestIdSpec.EMPTY);
-        return applySpec(spec, variables);
-    }
-
-    /** 预解析缓存句柄(按 functionUnitCode 键)。 */
-    public static final class SpecCache {
-        private final Map<String, RequestIdSpec> byCode;
-
-        private SpecCache(Map<String, RequestIdSpec> byCode) {
-            this.byCode = byCode;
-        }
-    }
-
     // ── 内部 ────────────────────────────────────────────────────────────────
 
-    private String applySpec(RequestIdSpec spec, Map<String, Object> variables) {
-        if (spec == null || !spec.isConfigured()) {
+    private String applySpec(RequestIdConfigView spec, Map<String, Object> variables) {
+        if (spec.fieldNames().isEmpty()) {
             return null;
         }
         StringBuilder sb = new StringBuilder();
@@ -374,78 +288,5 @@ public class RequestIdEnricher {
         }
         String result = sb.toString();
         return result.isEmpty() ? null : result;
-    }
-
-    /**
-     * 通过 functionUnitCode 解析 PRIMARY MAIN 表的 request_id_config。
-     * 走 PROCESS 表单的 PRIMARY 绑定 → dw_table_definitions,以拿到该表单真正的主表。
-     * Config is per FU, not per row; a short TTL avoids repeating the join on every page/filter.
-     */
-    private RequestIdSpec resolveSpec(String functionUnitCode) {
-        String code = functionUnitCode.trim();
-        long now = System.currentTimeMillis();
-        CachedSpec cached = specCache.get(code);
-        if (cached != null && now - cached.cachedAt < SPEC_TTL_MS) {
-            return cached.spec;
-        }
-        try {
-            RequestIdSpec spec = loadSpec(code);
-            specCache.put(code, new CachedSpec(spec, now));
-            return spec;
-        } catch (Exception e) {
-            // 表不可达不应阻断列表;退化为未配置。不写入缓存,下次筛选/翻页会重试。
-            log.debug("Could not resolve Request ID config for functionUnitCode={}: {}", code, e.getMessage());
-            return RequestIdSpec.EMPTY;
-        }
-    }
-
-    private RequestIdSpec loadSpec(String functionUnitCode) {
-        List<String> rows = jdbcTemplate.query(
-                """
-                        SELECT td.request_id_config::text AS cfg
-                        FROM dw_function_units fu
-                        INNER JOIN dw_form_definitions fd
-                            ON fd.function_unit_id = fu.id AND %s
-                        INNER JOIN dw_form_table_bindings ftb
-                            ON ftb.form_id = fd.id AND ftb.binding_type = 'PRIMARY'
-                        INNER JOIN dw_table_definitions td
-                            ON td.id = ftb.table_id
-                        WHERE fu.code = ?
-                        ORDER BY ftb.sort_order NULLS LAST, ftb.id
-                        LIMIT 1
-                        """.formatted(ProcessStartForm.SQL_PREDICATE),
-                (rs, rowNum) -> rs.getString("cfg"),
-                functionUnitCode);
-        if (rows.isEmpty() || rows.get(0) == null || rows.get(0).isBlank()) {
-            return RequestIdSpec.EMPTY;
-        }
-        return parseSpec(rows.get(0));
-    }
-
-    private record CachedSpec(RequestIdSpec spec, long cachedAt) {
-    }
-
-    private RequestIdSpec parseSpec(String json) {
-        try {
-            Map<String, Object> cfg = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-            Object fieldNamesRaw = cfg.get("fieldNames");
-            if (!(fieldNamesRaw instanceof List<?> list) || list.isEmpty()) {
-                return RequestIdSpec.EMPTY;
-            }
-            List<String> fieldNames = list.stream()
-                    .filter(java.util.Objects::nonNull)
-                    .map(String::valueOf)
-                    .filter(s -> !s.isBlank())
-                    .toList();
-            if (fieldNames.isEmpty()) {
-                return RequestIdSpec.EMPTY;
-            }
-            Object sepRaw = cfg.get("separator");
-            String separator = sepRaw == null ? "" : String.valueOf(sepRaw);
-            return new RequestIdSpec(fieldNames, separator);
-        } catch (Exception e) {
-            log.debug("Malformed request_id_config json: {}", e.getMessage());
-            return RequestIdSpec.EMPTY;
-        }
     }
 }

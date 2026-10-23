@@ -51,7 +51,6 @@ public class MyApplicationListQueryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final ProcessApplicationQueryComponent processApplicationQueryComponent;
-    private final RequestIdEnricher requestIdEnricher;
     private final UserDisplayNameResolver userDisplayNameResolver;
 
     public PortalListPage<ProcessInstanceInfo> query(String userId, MyApplicationQueryRequest request) {
@@ -128,16 +127,11 @@ public class MyApplicationListQueryComponent {
         processApplicationQueryComponent.enrichRunningAssigneesFromEngine(ordered);
 
         Set<String> assigneeKeys = new LinkedHashSet<>();
-        Set<String> functionUnitCodes = new LinkedHashSet<>();
         for (ProcessInstance instance : ordered) {
             assigneeKeys.addAll(userDisplayNameResolver.collectAssigneeUserKeys(
                     instance.getCurrentAssignee(), instance.getCandidateUsers()));
-            if (instance.getFunctionUnitCode() != null) {
-                functionUnitCodes.add(instance.getFunctionUnitCode());
-            }
         }
         Map<String, String> userNameCache = userDisplayNameResolver.resolveBatch(assigneeKeys);
-        RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(functionUnitCodes);
         Map<String, Map<String, String>> miNameMaps =
                 processApplicationQueryComponent.buildMiNodeNameMaps(ordered);
 
@@ -145,8 +139,7 @@ public class MyApplicationListQueryComponent {
         for (ProcessInstance instance : ordered) {
             ProcessInstanceInfo info = processApplicationQueryComponent.toProcessInstanceInfoForList(
                     instance, userNameCache, miNameMaps);
-            info.setRequestId(requestIdEnricher.buildRequestId(
-                    requestIdSpecs, info.getFunctionUnitCode(), info.getVariables()));
+            info.setRequestId(RequestIdEnricher.storedRequestId(info.getVariables()));
             info.setVariables(null);
             rows.add(info);
         }

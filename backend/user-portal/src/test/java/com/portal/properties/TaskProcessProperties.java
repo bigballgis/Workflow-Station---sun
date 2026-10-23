@@ -127,6 +127,12 @@ class TaskProcessProperties {
         TaskDetailQueryComponent taskDetail = new TaskDetailQueryComponent(
                 processInstanceRepository, workflowEngineClient, engineSubTableHydrator, taskActionService,
                 new MiParticipantEnrichmentComponent(jdbcTemplate), requestIdEnricher);
+        // These properties are not about releases: every request is recorded on one synthetic release.
+        com.portal.component.ProcessInstanceHydrationComponent detailHydration =
+                Mockito.mock(com.portal.component.ProcessInstanceHydrationComponent.class);
+        Mockito.lenient().when(detailHydration.requireProcessInstance(anyString())).thenAnswer(inv -> com.portal.entity.ProcessInstance.builder()
+                .id(inv.getArgument(0)).functionUnitCatalogId("synthetic-release").functionUnitCode("synthetic-fu").build());
+        org.springframework.test.util.ReflectionTestUtils.setField(taskDetail, "hydration", detailHydration);
         taskQueryComponent = new TaskQueryComponent(
             workflowEngineClient,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
@@ -161,7 +167,7 @@ class TaskProcessProperties {
         );
         MiOverlayComponent miOverlayComponent = new MiOverlayComponent(
             workflowEngineClient,
-            new SubTablePhysicalMetadataCache(jdbcTemplate)
+            new SubTablePhysicalMetadataCache(jdbcTemplate, Mockito.mock(com.platform.common.functionunit.CatalogSnapshotReader.class))
         );
         taskProcessComponent = new TaskProcessComponent(
             taskQueryComponent,

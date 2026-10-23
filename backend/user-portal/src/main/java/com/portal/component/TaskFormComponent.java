@@ -193,7 +193,7 @@ public class TaskFormComponent {
     private SubTableBindingScopeGuard subTableBindingScopeGuard() {
         SubTableBindingScopeGuard g = subTableBindingScopeGuard;
         if (g == null) {
-            g = new SubTableBindingScopeGuard(jdbcTemplate);
+            g = new SubTableBindingScopeGuard();
             subTableBindingScopeGuard = g;
         }
         return g;
@@ -493,8 +493,7 @@ public class TaskFormComponent {
             log.info("No Task Form binding found for stage '{}', falling back to Process Form",
                     taskInfo.taskDefinitionKey);
             Map<String, Object> fallbackFieldValues = null;
-            String fallbackRequestId = requestIdEnricher()
-                    .buildRequestId(processInstance.getFunctionUnitCode(), hydratedVariables);
+            String fallbackRequestId = RequestIdEnricher.storedRequestId(hydratedVariables);
             if (fallbackRequestId != null) {
                 fallbackFieldValues = new HashMap<>();
                 fallbackFieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, fallbackRequestId);
@@ -612,8 +611,7 @@ public class TaskFormComponent {
     private void applyRequestIdFieldValue(Map<String, Object> fieldValues,
             ProcessInstance processInstance,
             Map<String, Object> variables) {
-        String requestId = requestIdEnricher()
-                .buildRequestId(processInstance.getFunctionUnitCode(), variables);
+        String requestId = RequestIdEnricher.storedRequestId(variables);
         if (requestId != null) {
             fieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
         }
@@ -846,7 +844,7 @@ public class TaskFormComponent {
             // Request ID is platform-derived: recompute it from the main-table config so a task
             // that edits a contributing field cannot leave the persisted identifier stale, and a
             // client-supplied value never survives.
-            requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), updatedVariables);
+            requestIdEnricher().stampRequestId(updatedVariables);
             stampSlaDueDate(processInstance, updatedVariables);
             // Prevent geometric __subTables__ bloat: drop deep nested copies before
             // persisting so each
@@ -1054,7 +1052,7 @@ public class TaskFormComponent {
 
         // Readonly Request ID synthetic field: same value as DW preview / portal lists
         // (frozen variables).
-        String requestId = requestIdEnricher().buildRequestId(processInstance.getFunctionUnitCode(), allVariables);
+        String requestId = RequestIdEnricher.storedRequestId(allVariables);
         if (requestId != null) {
             if (!(liveValues instanceof HashMap)) {
                 liveValues = new HashMap<>(liveValues);
@@ -1194,7 +1192,7 @@ public class TaskFormComponent {
         // The merge can pull a client-supplied Request ID in from completedVariables; re-derive it
         // so a snapshot capture never rewrites the stored identifier with an unstamped value.
         ProcessVersionContext.apply(processInstance, merged);
-        requestIdEnricher().stampRequestId(processInstance.getFunctionUnitCode(), merged);
+        requestIdEnricher().stampRequestId(merged);
         stampSlaDueDate(processInstance, merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);

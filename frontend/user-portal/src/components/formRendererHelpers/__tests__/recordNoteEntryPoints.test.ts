@@ -7,7 +7,7 @@ import { createFieldExtractor } from '@/composables/processStart/useProcessStart
 
 describe('Record Note identity across actual entry point extractors', () => {
   const context = () => ({
-    lookupDbConfigs: ref({}), relationViewConfigs: ref({}),
+    relationViewConfigs: ref({}),
     formFields: ref([]), formTabs: ref([]), formFieldsAfterTabs: ref([]), formFormOptions: ref({}),
     formReadOnly: ref(false), cachedContentForms: [],
   })

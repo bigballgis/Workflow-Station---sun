@@ -55,6 +55,8 @@ public class ConfiguredEmailSender {
     private final AdminCenterClient adminCenterClient;
     @org.springframework.beans.factory.annotation.Autowired
     private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.workflow.component.PinnedReleaseLookup pinnedReleaseLookup;
     private final DeveloperWorkstationEmailTemplateClient emailTemplateClient;
     private final EmailAttachmentResolver emailAttachmentResolver;
     private final EmailSenderService emailSenderService;
@@ -67,10 +69,13 @@ public class ConfiguredEmailSender {
      * @param logContext short label for logs, e.g. {@code activity=Activity_1}
      * @param config     property values keyed by {@link #CONFIG_KEYS} (absent = not configured)
      * @param variables  process variables used for expressions and template placeholders
+     * @param processInstanceId the request the email belongs to; its Portal record names the release
+     *                   when the engine variables do not
      * @return the resolved To address list
      * @throws EmailDeliveryException configuration or delivery failure
      */
-    public String send(String logContext, Map<String, String> config, Map<String, Object> variables) {
+    public String send(String logContext, Map<String, String> config, Map<String, Object> variables,
+                       String processInstanceId) {
         String connectionId = config.get(CONNECTION_ID);
         String emailTo = config.get(EMAIL_TO);
         if (!StringUtils.hasText(connectionId)) {
@@ -80,7 +85,7 @@ public class ConfiguredEmailSender {
             throw configInvalid("email.send_task.missing_recipient");
         }
         // Both credentials and templates resolve within the request's published catalog.
-        String functionUnitId = resolveFunctionUnitId(variables);
+        String functionUnitId = pinnedReleaseLookup.catalogIdOf(variables.get("functionUnitId"), processInstanceId);
         if (!StringUtils.hasText(functionUnitId)) {
             throw configInvalid("email.send_task.missing_function_unit_id");
         }
@@ -228,15 +233,6 @@ public class ConfiguredEmailSender {
     private EmailDeliveryException configInvalid(String messageKey, Object... args) {
         return EmailDeliveryException.permanent(EmailDeliveryException.CONFIG_INVALID,
                 i18nService.getMessage(messageKey, args));
-    }
-
-    private String resolveFunctionUnitId(Map<String, Object> variables) {
-        Object functionUnitId = variables.get("functionUnitId");
-        if (functionUnitId != null && StringUtils.hasText(functionUnitId.toString())) {
-            return functionUnitId.toString();
-        }
-        throw new com.platform.common.functionunit.FunctionUnitVersionException(
-                "VERSION_RECOVERY_REQUIRED", String.valueOf(variables.get("functionUnitCode")));
     }
 
     /**

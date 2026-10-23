@@ -193,19 +193,7 @@ class MiSubTaskSubTableRowMerger {
             Set<String> explicitlyEmptiedKeys,
             List<SubTableBindingScope> bindingScopes) {
         return mergeCurrentRowOnly(
-                submittedSubTables, baselineSubTables, rowKey, explicitlyEmptiedKeys, bindingScopes, null);
-    }
-
-    @SuppressWarnings("unchecked")
-    Map<String, Object> mergeCurrentRowOnly(
-            Map<String, Object> submittedSubTables,
-            Map<String, Object> baselineSubTables,
-            Map<String, Object> rowKey,
-            Set<String> explicitlyEmptiedKeys,
-            List<SubTableBindingScope> bindingScopes,
-            String functionUnitCode) {
-        return mergeCurrentRowOnly(submittedSubTables, baselineSubTables, rowKey,
-                explicitlyEmptiedKeys, bindingScopes, functionUnitCode, null, null);
+                submittedSubTables, baselineSubTables, rowKey, explicitlyEmptiedKeys, bindingScopes, null, null);
     }
 
     /**
@@ -216,7 +204,7 @@ class MiSubTaskSubTableRowMerger {
     Map<String, Object> mergeCurrentRowOnly(Map<String, Object> submittedSubTables,
             Map<String, Object> baselineSubTables, Map<String, Object> rowKey,
             Set<String> explicitlyEmptiedKeys, List<SubTableBindingScope> bindingScopes,
-            String functionUnitCode, Map<String, SubTableWriteDesign.Binding> frozen,
+            Map<String, SubTableWriteDesign.Binding> frozen,
             Map<String, SubTableWriteDesign.TableFacts> tableFacts) {
         Set<String> emptied = explicitlyEmptiedKeys != null ? explicitlyEmptiedKeys : Set.<String>of();
         List<String> pkCols = List.copyOf(rowKey.keySet());
@@ -244,8 +232,7 @@ class MiSubTaskSubTableRowMerger {
             List<SubTableBindingScope> keyScopes = scopesByKey.getOrDefault(key, List.of());
             if (!keyScopes.isEmpty()) {
                 merged.put(key, MiSubTableScopeAwareMerge.apply(
-                        jdbcTemplate, key, submittedRowsList, baselineRows, rowKey, keyScopes,
-                        emptied.contains(key), functionUnitCode,
+                        key, submittedRowsList, baselineRows, rowKey, keyScopes, emptied.contains(key),
                         (fk, explEmptied) -> mergeRowsKeepingBaselineExceptCurrent(
                                 baselineRows, submittedRowsList, pkCols, rowKey, fk, explEmptied), frozen));
                 continue;

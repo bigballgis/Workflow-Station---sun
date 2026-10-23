@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -27,25 +28,34 @@ public class ActionDefinitionLookupComponent {
 
     public List<ActionDefinition> resolvePinned(String catalogId, List<String> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
-        var definitions = actionDefinitionRepository.findPinnedActions(catalogId, ids);
-        Map<String, ActionDefinition> byId = new LinkedHashMap<>();
-        for (var action : definitions) {
-            byId.put(action.getId(), action);
-            if (action.getSourceId() != null) byId.put(action.getSourceId(), action);
-        }
+        Map<String, ActionDefinition> byId = pinnedById(catalogId, ids);
         List<ActionDefinition> result = new ArrayList<>();
-        Map<String, ActionDefinition> legacy = null;
         for (String id : ids) {
             var action = byId.get(id);
-            if (action == null) {
-                if (legacy == null) legacy = legacyActionsByDesignerId(catalogId);
-                action = legacy.get(id);
-            }
             if (action == null) throw new com.platform.common.functionunit.FunctionUnitVersionException(
                     "VERSION_SNAPSHOT_INCOMPLETE", catalogId);
             result.add(action);
         }
         return result;
+    }
+
+    /** One action of the release by catalog or designer id; empty when that release has no such action. */
+    public Optional<ActionDefinition> findPinned(String catalogId, String id) {
+        if (id == null || id.isBlank()) return Optional.empty();
+        return Optional.ofNullable(pinnedById(catalogId, List.of(id)).get(id));
+    }
+
+    /** The release's actions for these ids, keyed by catalog id and designer id. */
+    private Map<String, ActionDefinition> pinnedById(String catalogId, List<String> ids) {
+        Map<String, ActionDefinition> byId = new LinkedHashMap<>();
+        for (var action : actionDefinitionRepository.findPinnedActions(catalogId, ids)) {
+            byId.put(action.getId(), action);
+            if (action.getSourceId() != null) byId.put(action.getSourceId(), action);
+        }
+        if (!byId.keySet().containsAll(ids)) {
+            legacyActionsByDesignerId(catalogId).forEach(byId::putIfAbsent);
+        }
+        return byId;
     }
 
     /**

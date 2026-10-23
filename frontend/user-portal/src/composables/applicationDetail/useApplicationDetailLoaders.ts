@@ -84,6 +84,8 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
 
         const processKey = pinnedCatalogContentRef(data)
         if (processKey) functionUnitIdRef.value = String(processKey)
+        // The request is read in the release it was started on; without that pin its forms cannot load.
+        else ElMessage.error(t('error.functionUnitVersionUnavailable'))
         const historyPromise = ctx.loadProcessHistory()
         const fuFetchPromise = processKey
           ? processApi.getFunctionUnitContent(processKey, undefined, processId).then(r => r.data || r).catch(err => {
@@ -272,7 +274,6 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           if (columns.length === 0) continue
           const subFormDesign = ctx.resolveSubFormDesign(b, subFormsPayload)
           const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subFormsPayload, {
-            lookupDbConfigs: ctx.lookupDbConfigs.value,
             relationViewConfigs: ctx.relationViewConfigs.value,
           }, cannotDownloadFieldKeysFromForms(ctx.cachedContentForms))
           bindings.push({
@@ -374,8 +375,6 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           bpmnAllOrderedForms: [],
           bindingRelationTableMap,
           selectedForm,
-          lookupSourceId:
-            selectedForm.sourceId != null ? Number(selectedForm.sourceId) : null
         }
       } else {
         previousForms.value = []

@@ -84,7 +84,7 @@ final class BatchTaskFormTransactionHarness {
         SubTableWriteDesign design = mock(SubTableWriteDesign.class);
         when(design.resolve(any(), any())).thenReturn(Map.of());
         ReflectionTestUtils.setField(component, "subTableWriteIsolation", new SubTableWriteIsolation(
-                new MiSubTaskSubTableRowMerger(metadata), new SubTableBindingScopeGuard(metadata), design));
+                new MiSubTaskSubTableRowMerger(metadata), new SubTableBindingScopeGuard(), design));
     }
 
     private ProcessInstanceRepository repository(boolean failAfterWrite) {

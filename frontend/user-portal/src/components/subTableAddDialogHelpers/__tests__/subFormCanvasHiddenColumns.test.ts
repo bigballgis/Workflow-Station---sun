@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { flattenSubFormRuleLayoutContainers, mapSubFormRuleToDialogColumns } from '../subFormCanvasColumns'
 import type { SubFormColumnLookupContext } from '../subFormCanvasColumns'
 
-const ctx: SubFormColumnLookupContext = { lookupDbConfigs: {}, relationViewConfigs: {} }
+const ctx: SubFormColumnLookupContext = { relationViewConfigs: {} }
 
 /**
  * ATM Transaction regression: two designer-hidden date fields rendered in the sub-table

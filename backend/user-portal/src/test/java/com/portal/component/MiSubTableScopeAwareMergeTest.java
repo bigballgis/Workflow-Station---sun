@@ -3,7 +3,6 @@ package com.portal.component;
 import com.portal.dto.SubTableBindingScope;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,17 +11,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class MiSubTableScopeAwareMergeTest {
-
-    private static final String FU = "fu-test";
 
     @Test
     void classify_mixedWhenMainAndNestedFiltersShareATable() {
@@ -102,11 +94,23 @@ class MiSubTableScopeAwareMergeTest {
         assertThat(merged).containsExactly(ours);
     }
 
+    /** The attachment table's bindings as the request's release publishes them. */
+    private static Map<String, SubTableWriteDesign.Binding> pinned(SubTableWriteDesign.Binding... bindings) {
+        Map<String, SubTableWriteDesign.Binding> out = new HashMap<>();
+        for (SubTableWriteDesign.Binding binding : bindings) {
+            out.put(binding.id(), binding);
+        }
+        return out;
+    }
+
+    private static SubTableWriteDesign.Binding attachmentBinding(String id, String filterField, String refType) {
+        return new SubTableWriteDesign.Binding(id, "dw:attachment", filterField, refType, null,
+                List.of("idfa"), List.of(), "structuralFk");
+    }
+
     @Test
     void mergeCurrentRowOnly_usesScopesInsteadOfFailingOnMixedTableFilters() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        stubScopeFilters(jdbc, 101L, "main_idva", "MAIN", 202L, "sub_task_id", "SUB");
-        MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(jdbc);
+        MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class));
 
         Map<String, Object> ours = file("att-2", "Meeting-1", "Test-000002", "mine.pdf");
         Map<String, Object> sibling = file("att-3", "Meeting-1", "Test-000001", "theirs.pdf");
@@ -118,7 +122,8 @@ class MiSubTableScopeAwareMergeTest {
         Map<String, Object> merged = merger.mergeCurrentRowOnly(
                 submitted, baseline, Map.of("id_idw", "Test-000002"), java.util.Set.of(),
                 List.of(scope("101", List.of(), false), scope("202", List.of(Map.of("idfa", "att-2")), false)),
-                FU);
+                pinned(attachmentBinding("101", "main_idva", "MAIN"), attachmentBinding("202", "sub_task_id", "SUB")),
+                null);
 
         @SuppressWarnings("unchecked")
         List<Object> out = (List<Object>) merged.get("dw:attachment");
@@ -136,22 +141,13 @@ class MiSubTableScopeAwareMergeTest {
         submitted.put("dw:attachment", new ArrayList<>(List.of(file("att-1", "Meeting-1", null, "notes.pdf"))));
 
         assertThatThrownBy(() -> merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idw", "Test-000003"),
-                java.util.Set.of(), List.of(), FU, null, release))
+                java.util.Set.of(), List.of(), null, release))
                 .hasMessageContaining("own row");
     }
 
     @Test
     void mergeCurrentRowOnly_thisFormMainOnlyPassesThroughWithoutTableClassifier() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(contains("mi-scope-binding-filter"), any(RowMapper.class), eq(101L), eq(FU)))
-                .thenAnswer(invocation -> {
-                    try {
-                        RowMapper<Object> mapper = invocation.getArgument(1);
-                        return List.of(mapper.mapRow(filterRs("101", "main_idva", "MAIN"), 0));
-                    } catch (java.sql.SQLException ex) {
-                        throw new IllegalStateException(ex);
-                    }
-                });
         MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(jdbc);
 
         Map<String, Object> row = file("att-1", "Meeting-1", null, "notes.pdf");
@@ -160,16 +156,18 @@ class MiSubTableScopeAwareMergeTest {
 
         Map<String, Object> merged = merger.mergeCurrentRowOnly(
                 submitted, Map.of(), Map.of("id_idw", "Test-000003"), java.util.Set.of(),
-                List.of(scope("101", List.of(Map.of("idfa", "att-1")), false)), FU);
+                List.of(scope("101", List.of(Map.of("idfa", "att-1")), false)),
+                pinned(attachmentBinding("101", "main_idva", "MAIN")), null);
 
         @SuppressWarnings("unchecked")
         List<Object> out = (List<Object>) merged.get("dw:attachment");
         assertThat(out).containsExactly(row);
-        verify(jdbc, never()).queryForList(contains("filter_fk_field_id"), eq(String.class), eq("attachment"));
+        verifyNoInteractions(jdbc);
     }
 
+    /** Scoped bindings without the request's release cannot be classified: a version error, not a designer read. */
     @Test
-    void mergeCurrentRowOnly_scopesWithoutFunctionUnitFailLoud() {
+    void mergeCurrentRowOnly_scopesWithoutAPinnedReleaseFailLoud() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(jdbc);
         Map<String, Object> submitted = new HashMap<>();
@@ -178,7 +176,8 @@ class MiSubTableScopeAwareMergeTest {
         assertThatThrownBy(() -> merger.mergeCurrentRowOnly(
                 submitted, Map.of(), Map.of("id_idw", "Test-000003"), java.util.Set.of(),
                 List.of(scope("101", List.of(), false))))
-                .hasMessageContaining("function unit");
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        verifyNoInteractions(jdbc);
     }
 
     private static SubTableBindingScope scope(
@@ -200,34 +199,5 @@ class MiSubTableScopeAwareMergeTest {
         }
         r.put("file", name);
         return r;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void stubScopeFilters(
-            JdbcTemplate jdbc,
-            long mainId, String mainField, String mainType,
-            long nestedId, String nestedField, String nestedType) {
-        when(jdbc.query(contains("mi-scope-binding-filter"), any(RowMapper.class), eq(mainId), eq(nestedId), eq(FU)))
-                .thenAnswer(invocation -> {
-                    try {
-                        RowMapper<Object> mapper = invocation.getArgument(1);
-                        return List.of(
-                                mapper.mapRow(filterRs(String.valueOf(mainId), mainField, mainType), 0),
-                                mapper.mapRow(filterRs(String.valueOf(nestedId), nestedField, nestedType), 1));
-                    } catch (java.sql.SQLException ex) {
-                        throw new IllegalStateException(ex);
-                    }
-                });
-    }
-
-    private java.sql.ResultSet filterRs(String bindingId, String field, String type)
-            throws java.sql.SQLException {
-        java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
-        when(rs.getString("binding_id")).thenReturn(bindingId);
-        when(rs.getString("filter_field")).thenReturn(field);
-        when(rs.getString("ref_table_type")).thenReturn(type);
-        when(rs.getString("link_mode")).thenReturn("structuralFk");
-        when(rs.getString("table_name")).thenReturn("attachment");
-        return rs;
     }
 }

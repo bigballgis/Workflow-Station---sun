@@ -112,6 +112,76 @@ class ProcessInstanceHydrationComponentTest {
         verify(processInstanceRepository, never()).save(any());
     }
 
+    private ProcessInstance pinnedMcy() {
+        ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("Process_MCY")
+                .functionUnitCatalogId("fu-1").functionUnitCode("MCY").functionUnitVersionLabel("1.0.0")
+                .variables(new java.util.HashMap<>(Map.of("functionUnitId", "fu-1", "functionUnitCode", "MCY",
+                        "functionUnitVersionLabel", "1.0.0")))
+                .build();
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.of(local));
+        return local;
+    }
+
+    /**
+     * A request's content is its own release whichever way the page names the unit — by that
+     * release, by code or by process key — never the unit's latest or currently active one.
+     */
+    @Test
+    void contentOfARequestIsTheReleaseItWasStartedOn() {
+        pinnedMcy();
+
+        assertThat(hydrationComponent.pinnedContentRef("fu-1", null, PI_ID)).isEqualTo("fu-1");
+        assertThat(hydrationComponent.pinnedContentRef("MCY", null, PI_ID)).isEqualTo("fu-1");
+        assertThat(hydrationComponent.pinnedContentRef("Process_MCY", null, PI_ID)).isEqualTo("fu-1");
+    }
+
+    @Test
+    void contentOfATaskIsTheReleaseOfItsRequest() {
+        pinnedMcy();
+        when(workflowEngineClient.getTaskById("task-1"))
+                .thenReturn(Optional.of(Map.of("taskId", "task-1", "processInstanceId", PI_ID)));
+
+        assertThat(hydrationComponent.pinnedContentRef("Process_MCY", "task-1", null)).isEqualTo("fu-1");
+    }
+
+    /** Naming a different release of the request's unit is a version error, not a silent swap. */
+    @Test
+    void anotherReleaseThanTheRequestsIsRefused() {
+        pinnedMcy();
+
+        assertThatThrownBy(() -> hydrationComponent.pinnedContentRef("fu-2", null, PI_ID))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class)
+                .satisfies(error -> assertThat(((com.platform.common.functionunit.FunctionUnitVersionException) error)
+                        .getDetails()).containsEntry("reason", "VERSION_CONTEXT_MISMATCH"));
+    }
+
+    @Test
+    void taskOfAnotherRequestThanTheOneNamedIsRefused() {
+        when(workflowEngineClient.getTaskById("task-1"))
+                .thenReturn(Optional.of(Map.of("taskId", "task-1", "processInstanceId", "other-request")));
+
+        assertThatThrownBy(() -> hydrationComponent.pinnedContentRef("fu-1", "task-1", PI_ID))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        verify(processInstanceRepository, never()).findById(any());
+    }
+
+    /** A task the engine does not know ties the content to no request: nothing is served. */
+    @Test
+    void contentForAnUnknownTaskIsNotServed() {
+        when(workflowEngineClient.getTaskById("gone")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> hydrationComponent.pinnedContentRef("MCY", "gone", null))
+                .isInstanceOf(PortalException.class);
+        verify(processInstanceRepository, never()).findById(any());
+    }
+
+    /** Without a task or request (starting a new one), the named unit is served as named. */
+    @Test
+    void contentWithoutARequestIsServedAsNamed() {
+        assertThat(hydrationComponent.pinnedContentRef("MCY", null, null)).isEqualTo("MCY");
+        verifyNoInteractions(processInstanceRepository, workflowEngineClient);
+    }
+
     @Test
     void variablesNamingAnotherReleaseAreRefusedAndNotOverwritten() {
         ProcessInstance local = ProcessInstance.builder().id(PI_ID).processDefinitionKey("fu-a")
@@ -236,14 +306,11 @@ class ProcessInstanceHydrationComponentTest {
                 .doesNotContainKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
     }
 
+    /** The record carries the release it runs; nothing is read from the designer, which runtime does not deploy. */
     @Test
-    void pinsLiveDesignerIdWhenFunctionUnitCodeIsKnown() {
+    void recordsTheReleaseWithoutReadingTheDesigner() {
         when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.empty());
         when(userDisplayNameResolver.resolve("system")).thenReturn("system");
-        when(jdbcTemplate.queryForList(
-                eq("SELECT id FROM dw_function_units WHERE code = ?"),
-                eq(Long.class),
-                eq("FU-MCY"))).thenReturn(List.of(48L));
         when(processInstanceRepository.save(any(ProcessInstance.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Map<String, Object> snapshot = Map.of(
@@ -256,7 +323,10 @@ class ProcessInstanceHydrationComponentTest {
 
         ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID, snapshot);
 
-        assertThat(result.getFunctionUnitVersionId()).isEqualTo(48L);
+        assertThat(result.getFunctionUnitCatalogId()).isEqualTo("cat-uuid");
         assertThat(result.getFunctionUnitCode()).isEqualTo("FU-MCY");
+        assertThat(result.getFunctionUnitVersionId()).isNull();
+        verify(jdbcTemplate, never()).queryForList(org.mockito.ArgumentMatchers.contains("dw_"),
+                org.mockito.ArgumentMatchers.<Class<Object>>any(), any(Object[].class));
     }
 }

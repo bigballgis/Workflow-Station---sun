@@ -153,8 +153,8 @@ function statusLabel(status: string) {
   return map[status] || status
 }
 
-/** Shared field extraction (the New Request page's), with no lookup/relation-view overrides. */
-const extractFields = createFieldExtractor({ lookupDbConfigs: ref({}), relationViewConfigs: ref({}) })
+/** Shared field extraction (the New Request page's), with no relation-view overrides. */
+const extractFields = createFieldExtractor({ relationViewConfigs: ref({}) })
   .extractFieldsRecursive
 
 interface ChildFormView {

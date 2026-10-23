@@ -47,7 +47,7 @@ export interface ApplicationDetailFormSchemaFns {
 }
 
 export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx): ApplicationDetailFormSchemaFns {
-  const { lookupDbConfigs, relationViewConfigs, formFields, formTabs, formFieldsAfterTabs, formFormOptions } = appCtx
+  const { relationViewConfigs, formFields, formTabs, formFieldsAfterTabs, formFormOptions } = appCtx
 
   // Parse form configuration
   const parseFormConfig = (configStr: string) => {
@@ -218,15 +218,11 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
           const raw = item.props?.lookupConfig
           lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
         } catch { lookupCfg = {} }
-        const dbCfg = lookupDbConfigs.value[item.field]
-        // Resolve view fields: prefer configJson.relationViews (designed in developer-workstation),
-        // then fall back to rt_view_fields (from getLookupConfigs)
+        // Resolve view fields only from the published form's configJson.relationViews
+        // (the release-pinned design); never from the live DW lookup config.
         let resolvedViewFields: any[] = []
         if (lookupCfg.bindingId && relationViewConfigs.value[lookupCfg.bindingId]) {
           resolvedViewFields = relationViewConfigs.value[lookupCfg.bindingId].viewFields || []
-        }
-        if (!resolvedViewFields.length) {
-          resolvedViewFields = dbCfg?.viewFields || []
         }
         const field: any = {
           key: item.field,
@@ -234,9 +230,9 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
           type: 'lookup',
           placeholder: item.props?.placeholder || 'Click to search',
           span: item.col?.span || 24,
-          _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
-          _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
-          _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
+          _lookupTableId: lookupCfg.tableId || 0,
+          _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || [],
+          _lookupDisplayField: (lookupCfg.displayFields?.[0]) || '',
           _lookupDisplayFields: lookupCfg.displayFields || [],
           _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
           _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],

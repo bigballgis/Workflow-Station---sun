@@ -36,7 +36,6 @@ class ProcessApplicationQueryComponentDetailAccessTest {
     @Mock private UserDisplayNameResolver userDisplayNameResolver;
     @Mock private MiOverlayComponent miOverlayComponent;
     @Mock private SubTableEnrichmentComponent subTableEnrichmentComponent;
-    @Mock private RequestIdEnricher requestIdEnricher;
     @Mock private MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     @Mock private MainTableViewAccessResolver mainTableViewAccessResolver;
     @Mock private JdbcTemplate jdbcTemplate;
@@ -53,7 +52,6 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 userDisplayNameResolver,
                 miOverlayComponent,
                 subTableEnrichmentComponent,
-                requestIdEnricher,
                 mainTableViewInvolvementChecker,
                 mainTableViewAccessResolver,
                 functionUnitAccessComponent,

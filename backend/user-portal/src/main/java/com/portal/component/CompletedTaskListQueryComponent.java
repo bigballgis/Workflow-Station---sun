@@ -2,8 +2,6 @@ package com.portal.component;
 
 import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListFilterSql;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.CompletedTaskQueryRequest;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.TaskInfo;
@@ -20,9 +18,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -41,8 +37,6 @@ public class CompletedTaskListQueryComponent {
             + " WHERE ht.ASSIGNEE_ = ? AND ht.END_TIME_ IS NOT NULL";
 
     private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
-    private final RequestIdEnricher requestIdEnricher;
 
     public PortalListPage<TaskInfo> query(String userId, CompletedTaskQueryRequest request) {
         if (userId == null || userId.isBlank()) {
@@ -81,19 +75,14 @@ public class CompletedTaskListQueryComponent {
                 + " ht.PROC_DEF_ID_ AS process_definition_id, ht.TASK_DEF_KEY_ AS task_definition_key,"
                 + " ht.ASSIGNEE_ AS assignee, ht.START_TIME_ AS start_time, ht.END_TIME_ AS end_time,"
                 + " ht.DURATION_ AS duration,"
-                + " pi.process_definition_key, pi.process_definition_name, pi.function_unit_code,"
-                + " (pi.variables - '__subTables__')::text AS variables"
+                + " pi.process_definition_key, pi.process_definition_name,"
+                + " pi.variables->>'" + RequestIdEnricher.REQUEST_ID_FIELD + "' AS request_id"
                 + where + orderBy + " LIMIT ? OFFSET ?";
         List<TaskInfo> tasks = ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<TaskInfo> page = new ArrayList<>();
-            List<String> fuCodes = new ArrayList<>();
-            List<Map<String, Object>> variables = new ArrayList<>();
             while (rs.next()) {
                 page.add(mapRow(rs));
-                fuCodes.add(rs.getString("function_unit_code"));
-                variables.add(readVariables(rs.getString("variables")));
             }
-            fillRequestIds(page, fuCodes, variables);
             return page;
         });
         return tasks;
@@ -122,16 +111,9 @@ public class CompletedTaskListQueryComponent {
                 .createTime(toLocalDateTime(rs.getTimestamp("start_time")))
                 .completedTime(toLocalDateTime(rs.getTimestamp("end_time")))
                 .durationInMillis(longOrNull(rs, "duration"))
+                .requestId(rs.getString("request_id"))
                 .build();
         return task;
-    }
-
-    private void fillRequestIds(List<TaskInfo> tasks, List<String> fuCodes,
-                                List<Map<String, Object>> variables) {
-        RequestIdEnricher.SpecCache specs = requestIdEnricher.resolveSpecs(new LinkedHashSet<>(fuCodes));
-        for (int i = 0; i < tasks.size(); i++) {
-            tasks.get(i).setRequestId(requestIdEnricher.buildRequestId(specs, fuCodes.get(i), variables.get(i)));
-        }
     }
 
     private void tagMultiInstanceTasks(List<TaskInfo> tasks) {
@@ -170,18 +152,6 @@ public class CompletedTaskListQueryComponent {
         }
         return List.copyOf(filters);
     }
-
-    private Map<String, Object> readVariables(String rawJson) {
-        if (rawJson == null || rawJson.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(rawJson, new TypeReference<>() {});
-        } catch (Exception e) {
-            throw new IllegalStateException("Process variables are not readable JSON", e);
-        }
-    }
-
 
     private static String processKeyFromDefinitionId(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isBlank()) {

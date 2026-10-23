@@ -2,11 +2,8 @@ package com.portal.component;
 
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.platform.common.jdbc.SubTableRowKeySupport;
-import com.platform.common.subtable.SubTableStoreKeys;
 import com.portal.dto.SubTableBindingScope;
 import com.portal.exception.PortalException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -54,35 +51,27 @@ final class MiSubTableScopeAwareMerge {
         return byKey;
     }
 
-    static List<Object> apply(
-            JdbcTemplate jdbc,
-            String storeKey,
-            List<Object> submittedRows,
-            List<Object> baselineRows,
-            Map<String, Object> currentItemKey,
-            List<SubTableBindingScope> keyScopes,
-            boolean storeKeyEmptied,
-            String functionUnitCode,
-            ParticipantRowMerge participantMerge) {
-        return apply(jdbc, storeKey, submittedRows, baselineRows, currentItemKey, keyScopes,
-                storeKeyEmptied, functionUnitCode, participantMerge, null);
-    }
-
-    static List<Object> apply(JdbcTemplate jdbc, String storeKey, List<Object> submittedRows,
+    /**
+     * @param frozen the bindings of the form as published in the request's release; the scopes are
+     *               classified from these only, never from the live designer
+     */
+    static List<Object> apply(String storeKey, List<Object> submittedRows,
             List<Object> baselineRows, Map<String, Object> currentItemKey,
-            List<SubTableBindingScope> keyScopes, boolean storeKeyEmptied, String functionUnitCode,
+            List<SubTableBindingScope> keyScopes, boolean storeKeyEmptied,
             ParticipantRowMerge participantMerge, Map<String, SubTableWriteDesign.Binding> frozen) {
-        List<ScopeFilter> filters = frozen == null ? loadFilters(jdbc, keyScopes, storeKey, functionUnitCode)
-                : keyScopes.stream().map(scope -> {
-                    if (scope == null || !org.springframework.util.StringUtils.hasText(scope.getBindingId())) {
-                        throw new PortalException("400", "Binding scope is missing bindingId");
-                    }
-                    SubTableWriteDesign.Binding b = frozen.get(scope.getBindingId().trim());
-                    if (b == null || !storeKey.equals(b.storeKey())) {
-                        throw new PortalException("403", "Binding is not part of the pinned form");
-                    }
-                    return new ScopeFilter(b.id(), b.filterField(), b.refType(), b.linkMode());
-                }).toList();
+        if (frozen == null) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", storeKey);
+        }
+        List<ScopeFilter> filters = keyScopes.stream().map(scope -> {
+            if (scope == null || !StringUtils.hasText(scope.getBindingId())) {
+                throw new PortalException("400", "Binding scope is missing bindingId");
+            }
+            SubTableWriteDesign.Binding b = frozen.get(scope.getBindingId().trim());
+            if (b == null || !storeKey.equals(b.storeKey())) {
+                throw new PortalException("403", "Binding is not part of the pinned form");
+            }
+            return new ScopeFilter(b.id(), b.filterField(), b.refType(), b.linkMode());
+        }).toList();
         ScopeKind kind = classify(filters);
         if (kind == ScopeKind.SHARED) {
             return new ArrayList<>(submittedRows);
@@ -92,53 +81,6 @@ final class MiSubTableScopeAwareMerge {
             return participantMerge.merge(nestedFilterFields(filters), emptied);
         }
         return mergeMixed(submittedRows, baselineRows, currentItemKey, keyScopes, filters);
-    }
-
-    static List<ScopeFilter> loadFilters(
-            JdbcTemplate jdbc, List<SubTableBindingScope> keyScopes, String storeKey, String functionUnitCode) {
-        if (!StringUtils.hasText(functionUnitCode)) {
-            throw unresolved("Binding-scoped merge requires a function unit on the process");
-        }
-        List<Long> ids = bindingIds(keyScopes);
-        if (ids.isEmpty()) {
-            throw unresolved("Binding scopes are missing a binding identity");
-        }
-        String placeholders = String.join(",", ids.stream().map(id -> "?").toList());
-        String sql = """
-                SELECT CAST(b.id AS varchar) AS binding_id,
-                       f.field_name AS filter_field,
-                       ref.table_type AS ref_table_type,
-                       b.binding_link_mode AS link_mode,
-                       lower(t.table_name) AS table_name
-                FROM dw_form_table_bindings b
-                JOIN dw_form_definitions fd ON fd.id = b.form_id
-                JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                JOIN dw_table_definitions t ON t.id = b.table_id
-                LEFT JOIN dw_field_definitions f ON f.id = b.filter_fk_field_id
-                LEFT JOIN dw_table_definitions ref ON ref.id = f.ref_table_id
-                WHERE b.id IN (""" + placeholders + ") AND fu.code = ? /* mi-scope-binding-filter */";
-        RowMapper<ScopeFilter> mapper = (rs, i) -> {
-            String table = rs.getString("table_name");
-            if (StringUtils.hasText(storeKey) && StringUtils.hasText(table)
-                    && !storeKey.equalsIgnoreCase(SubTableStoreKeys.DW_PREFIX + table)) {
-                throw new PortalException("403", "Binding scope storeKey does not match the binding's table");
-            }
-            return new ScopeFilter(
-                    rs.getString("binding_id"),
-                    rs.getString("filter_field"),
-                    rs.getString("ref_table_type"),
-                    rs.getString("link_mode"));
-        };
-        Object[] args = new Object[ids.size() + 1];
-        for (int i = 0; i < ids.size(); i++) {
-            args[i] = ids.get(i);
-        }
-        args[ids.size()] = functionUnitCode.trim();
-        List<ScopeFilter> loaded = jdbc.query(sql, mapper, args);
-        if (loaded == null || loaded.size() != ids.size()) {
-            throw new PortalException("403", "Binding is not part of this function unit");
-        }
-        return loaded;
     }
 
     static ScopeKind classify(List<ScopeFilter> filters) {
@@ -462,21 +404,6 @@ final class MiSubTableScopeAwareMerge {
             }
         }
         return List.of();
-    }
-
-    private static List<Long> bindingIds(List<SubTableBindingScope> scopes) {
-        LinkedHashSet<Long> ids = new LinkedHashSet<>();
-        for (SubTableBindingScope scope : scopes) {
-            if (scope == null || !StringUtils.hasText(scope.getBindingId())) {
-                throw unresolved("Binding scope is missing bindingId");
-            }
-            try {
-                ids.add(Long.parseLong(scope.getBindingId().trim()));
-            } catch (NumberFormatException ex) {
-                throw unresolved("Binding scope id is not a binding identity");
-            }
-        }
-        return List.copyOf(ids);
     }
 
     private static String singleValue(Map<String, Object> rowKey) {

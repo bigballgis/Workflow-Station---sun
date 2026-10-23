@@ -13,7 +13,6 @@ import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 describe('extractFieldsRecursive — designer Hide stays in layout tree', () => {
   function extract(rules: unknown[]) {
     const { extractFieldsRecursive } = createTaskDetailFieldExtraction({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
       taskForm: {
         formFields: ref([]),

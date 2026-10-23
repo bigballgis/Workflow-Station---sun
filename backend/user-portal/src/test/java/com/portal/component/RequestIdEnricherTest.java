@@ -3,14 +3,12 @@ package com.portal.component;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.CatalogSnapshotReader;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
@@ -21,24 +19,31 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
-import org.springframework.jdbc.core.RowMapper;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * {@link RequestIdEnricher} core join logic: ordered fields + separator, empty-field skip,
- * and unconfigured → null. The PRIMARY-table config lookup is stubbed at the JdbcTemplate seam.
+ * and unconfigured → null, from the main table of the request's release.
  */
 class RequestIdEnricherTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @SuppressWarnings("unchecked")
-    private RequestIdEnricher enricherReturning(String cfgJson) {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        // resolveSpec queries one column (request_id_config text) keyed by functionUnitCode.
-        when(jdbc.query(any(String.class), any(RowMapper.class), eq("FU1")))
-                .thenReturn(cfgJson == null ? List.of() : List.of(cfgJson));
-        ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
-        return new RequestIdEnricher(jdbc, objectMapper, repo);
+    private RequestIdEnricher enricherReturning(Map<String, Object> cfg) {
+        CatalogSnapshotReader snapshots = mock(CatalogSnapshotReader.class);
+        Map<String, Object> main = new LinkedHashMap<>(Map.of("tableType", "MAIN"));
+        if (cfg != null) {
+            main.put("requestIdConfig", cfg);
+        }
+        when(snapshots.contents("rel-1", "DATA_TABLE")).thenReturn(List.of(main));
+        RequestIdEnricher enricher = new RequestIdEnricher(
+                mock(JdbcTemplate.class), objectMapper, mock(ProcessInstanceRepository.class));
+        ReflectionTestUtils.setField(enricher, "catalogSnapshots", snapshots);
+        return enricher;
+    }
+
+    private static Map<String, Object> cfg(String separator, String... fieldNames) {
+        return Map.of("fieldNames", List.of(fieldNames), "separator", separator);
     }
 
     private static Map<String, Object> vars(Object... kv) {
@@ -51,61 +56,43 @@ class RequestIdEnricherTest {
 
     @Test
     void joinsOrderedFieldsWithSeparator() {
-        RequestIdEnricher enricher = enricherReturning(
-                "{\"fieldNames\":[\"dept\",\"year\",\"seq\"],\"separator\":\"-\"}");
-        String id = enricher.buildRequestId("FU1", vars("dept", "HR", "year", 2026, "seq", "001"));
+        RequestIdEnricher enricher = enricherReturning(cfg("-", "dept", "year", "seq"));
+        String id = enricher.buildCatalogRequestId("rel-1", vars("dept", "HR", "year", 2026, "seq", "001"));
         assertThat(id).isEqualTo("HR-2026-001");
     }
 
     @Test
     void skipsEmptyFieldsToAvoidDoubleSeparator() {
-        RequestIdEnricher enricher = enricherReturning(
-                "{\"fieldNames\":[\"dept\",\"year\",\"seq\"],\"separator\":\"-\"}");
+        RequestIdEnricher enricher = enricherReturning(cfg("-", "dept", "year", "seq"));
         // year missing → must not produce HR--001
-        String id = enricher.buildRequestId("FU1", vars("dept", "HR", "seq", "001"));
+        String id = enricher.buildCatalogRequestId("rel-1", vars("dept", "HR", "seq", "001"));
         assertThat(id).isEqualTo("HR-001");
     }
 
     @Test
     void supportsEmptySeparator() {
-        RequestIdEnricher enricher = enricherReturning(
-                "{\"fieldNames\":[\"a\",\"b\"],\"separator\":\"\"}");
-        assertThat(enricher.buildRequestId("FU1", vars("a", "X", "b", "Y"))).isEqualTo("XY");
+        RequestIdEnricher enricher = enricherReturning(cfg("", "a", "b"));
+        assertThat(enricher.buildCatalogRequestId("rel-1", vars("a", "X", "b", "Y"))).isEqualTo("XY");
     }
 
     @Test
     void returnsNullWhenUnconfigured() {
         RequestIdEnricher enricher = enricherReturning(null);
-        assertThat(enricher.buildRequestId("FU1", vars("dept", "HR"))).isNull();
+        assertThat(enricher.buildCatalogRequestId("rel-1", vars("dept", "HR"))).isNull();
     }
 
     @Test
     void returnsNullWhenAllSelectedFieldsEmpty() {
-        RequestIdEnricher enricher = enricherReturning(
-                "{\"fieldNames\":[\"dept\",\"seq\"],\"separator\":\"-\"}");
-        assertThat(enricher.buildRequestId("FU1", vars("other", "x"))).isNull();
+        RequestIdEnricher enricher = enricherReturning(cfg("-", "dept", "seq"));
+        assertThat(enricher.buildCatalogRequestId("rel-1", vars("other", "x"))).isNull();
     }
 
+    /** Lists and details show the value stamped from the request's own release, never a live recompute. */
     @Test
-    void returnsNullForBlankInputs() {
-        RequestIdEnricher enricher = enricherReturning(
-                "{\"fieldNames\":[\"dept\"],\"separator\":\"-\"}");
-        assertThat(enricher.buildRequestId(null, vars("dept", "HR"))).isNull();
-        assertThat(enricher.buildRequestId("FU1", null)).isNull();
-    }
-
-    @Test
-    void cachesPrimaryTableConfigAcrossListPages() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(any(String.class), any(RowMapper.class), eq("FU1")))
-                .thenReturn(List.of("{\"fieldNames\":[\"dept\"],\"separator\":\"-\"}"));
-        RequestIdEnricher enricher = new RequestIdEnricher(
-                jdbc, objectMapper, mock(ProcessInstanceRepository.class));
-
-        assertThat(enricher.buildRequestId("FU1", vars("dept", "HR"))).isEqualTo("HR");
-        assertThat(enricher.buildRequestId("FU1", vars("dept", "IT"))).isEqualTo("IT");
-
-        verify(jdbc, times(1)).query(any(String.class), any(RowMapper.class), eq("FU1"));
+    void storedRequestIdIsTheValueOnTheRequest() {
+        assertThat(RequestIdEnricher.storedRequestId(vars("dept", "IT", "__request_id", "HR"))).isEqualTo("HR");
+        assertThat(RequestIdEnricher.storedRequestId(vars("dept", "HR"))).isNull();
+        assertThat(RequestIdEnricher.storedRequestId(null)).isNull();
     }
 
     @Test
@@ -121,8 +108,6 @@ class RequestIdEnricherTest {
         when(repo.findAllById(any())).thenReturn(List.of(instance));
 
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(any(String.class), any(RowMapper.class), eq("help_pr")))
-                .thenReturn(List.of("{\"fieldNames\":[\"dept\"],\"separator\":\"-\"}"));
         doAnswer(invocation -> {
             RowCallbackHandler handler = invocation.getArgument(1);
             ResultSet rs = mock(ResultSet.class);
@@ -164,13 +149,8 @@ class RequestIdEnricherTest {
             }
             return out;
         });
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(any(String.class), any(RowMapper.class), eq("fu-purchase")))
-                .thenReturn(List.of("{\"fieldNames\":[\"dept\"],\"separator\":\"-\"}"));
-        when(jdbc.query(any(String.class), any(RowMapper.class), eq("fu-vendor")))
-                .thenReturn(List.of());
 
-        RequestIdEnricher enricher = new RequestIdEnricher(jdbc, objectMapper, repo);
+        RequestIdEnricher enricher = new RequestIdEnricher(mock(JdbcTemplate.class), objectMapper, repo);
         TaskInfo task = TaskInfo.builder().taskId("t1").processInstanceId("vendor-check").build();
         enricher.enrichTaskRequestIds(List.of(task));
 

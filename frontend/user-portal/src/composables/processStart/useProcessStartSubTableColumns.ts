@@ -28,14 +28,12 @@ export function isAssigneeLikeLabel(label?: string): boolean {
  * lookup / relation view 配置通过参数传入。
  */
 export function createSubTableColumnDeriver(deps: {
-  lookupDbConfigs: Ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>
   relationViewConfigs: Ref<Record<string, { viewFields: any[]; allFields: any[] }>>
   cannotDownloadFieldKeys?: () => UploadSceneFlagsArg
 }) {
-  const { lookupDbConfigs, relationViewConfigs, cannotDownloadFieldKeys } = deps
+  const { relationViewConfigs, cannotDownloadFieldKeys } = deps
 
   const lookupCtx = () => ({
-    lookupDbConfigs: lookupDbConfigs.value,
     relationViewConfigs: relationViewConfigs.value,
   })
 
@@ -125,7 +123,6 @@ export function createSubTableColumnDeriver(deps: {
         if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig || baseColumn?.type === 'lookup') {
           const rawCfg = fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}'
           const mergedLookupCfg = parseLookupConfig(rawCfg)
-          const dbCfg = lookupDbConfigs.value[column.fieldName]
           const relationView = mergedLookupCfg.bindingId
             ? relationViewConfigs.value[mergedLookupCfg.bindingId]
             : undefined
@@ -137,7 +134,6 @@ export function createSubTableColumnDeriver(deps: {
             minWidth: column.minWidth || baseColumn?.minWidth || 260,
             placeholder: fieldRule?.props?.placeholder || baseColumn?.placeholder,
             props: buildLookupColumnProps(rawCfg, {
-              dbCfg,
               relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
             }),
           }

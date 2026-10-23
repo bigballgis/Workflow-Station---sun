@@ -59,7 +59,6 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
                 mock(UserDisplayNameResolver.class),
                 mock(MiOverlayComponent.class),
                 mock(SubTableEnrichmentComponent.class),
-                mock(RequestIdEnricher.class),
                 mock(MainTableViewInvolvementChecker.class),
                 mock(MainTableViewAccessResolver.class),
                 mock(FunctionUnitAccessComponent.class),

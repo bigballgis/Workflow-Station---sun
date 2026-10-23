@@ -313,7 +313,6 @@ import FormRenderer from '@/components/FormRenderer.vue'
 import FormPopupDialog from '@/components/tasks/FormPopupDialog.vue'
 import { useProcessStartFormPopup } from '@/composables/processStart/useProcessStartFormPopup'
 import { collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
-import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
 import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
@@ -416,7 +415,6 @@ const {
   subTableBindings,
   primaryTableBinding,
   caches,
-  lookupDbConfigs,
   relationViewConfigs,
   historyRecords,
   availableActions,
@@ -424,7 +422,6 @@ const {
 
 // 表单解析（form-create 规则 → 字段、子表列推导）
 const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBinding, extractFieldsRecursive } = createProcessStartFormParsing({
-  lookupDbConfigs,
   relationViewConfigs,
   cannotDownloadFieldKeys: () => uploadSceneFlagsFromForms(
     caches.cachedContentForms as Array<{ data?: unknown; configJson?: unknown }>,
@@ -563,19 +560,6 @@ const loadFunctionUnitContent = async () => {
       }
       
       currentFormName.value = selectedForm.name
-
-      // Load lookup configs from rt_lookup_configs before parsing form
-      lookupDbConfigs.value = {}
-      if (selectedForm.sourceId) {
-        try {
-          const lcRes = await relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
-          for (const lc of (lcRes.data || [])) {
-            let sf: string[] = []
-            try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
-            lookupDbConfigs.value[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
-          }
-        } catch (e) { console.warn('[start] Failed to load lookup configs:', e) }
-      }
 
       // Parse relationViews from configJson BEFORE parseFormConfig so lookup view fields are available
       try {

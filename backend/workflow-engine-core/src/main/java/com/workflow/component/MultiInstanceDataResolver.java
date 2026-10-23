@@ -42,7 +42,15 @@ public class MultiInstanceDataResolver {
 
     @Autowired
     private I18nService i18nService;
-    
+
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private PinnedReleaseLookup pinnedReleaseLookup;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -259,15 +267,18 @@ public class MultiInstanceDataResolver {
     }
 
     /**
-     * Best-effort row key for callers that only hold extended JSON (e.g. WebSocket fan-out).
+     * Best-effort row key for callers that only hold extended JSON (e.g. WebSocket fan-out). A sub-table
+     * without a physical key (JSON-row stored) is keyed by the primary key of the request's release.
      */
-    public Map<String, Object> tryResolveSubTableRowKey(String subTableName, Map<String, Object> extProps) {
+    public Map<String, Object> tryResolveSubTableRowKey(String subTableName, Map<String, Object> extProps,
+                                                        String processInstanceId) {
         if (subTableName == null || subTableName.isBlank() || extProps == null) {
             return null;
         }
         try {
             String safe = requireSafeIdentifier(subTableName);
-            List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safe);
+            List<String> pkCols = com.platform.common.jdbc.SubTablePrimaryKeys.resolve(jdbcTemplate, catalogSnapshots,
+                    () -> pinnedReleaseLookup.catalogIdOf(null, processInstanceId), safe);
             return SubTableRowKeySupport.rowKeyFromExtendedProps(extProps, pkCols);
         } catch (Exception e) {
             return null;

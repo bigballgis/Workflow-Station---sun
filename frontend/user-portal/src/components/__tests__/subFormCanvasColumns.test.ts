@@ -7,7 +7,7 @@ import {
 } from '../subTableAddDialogHelpers'
 
 describe('resolveSubFormDialogColumnsForBinding', () => {
-  const ctx = { lookupDbConfigs: {}, relationViewConfigs: {} }
+  const ctx = { relationViewConfigs: {} }
 
   it('returns canvas fields only — excludes list-view-only audit columns', () => {
     const binding = { bindingId: 42 }
@@ -183,7 +183,7 @@ describe('flattenSubFormRuleLayoutContainers', () => {
  * Add/Edit dialog ended up showing every column except the assignment ones.
  */
 describe('miAssignment container flattening', () => {
-  const ctx = { lookupDbConfigs: {}, relationViewConfigs: {} }
+  const ctx = { relationViewConfigs: {} }
 
   it('lifts assignment fields out of the container into dialog columns', () => {
     const binding = { bindingId: 99 }
@@ -260,7 +260,6 @@ describe('miAssignment container flattening', () => {
 
     it('keeps the designed per-binding relation view instead of falling back to all columns', () => {
       const col = assigneeColumn({
-        lookupDbConfigs: {},
         relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
       } as never)
       expect(col?.type).toBe('lookup')
@@ -268,13 +267,23 @@ describe('miAssignment container flattening', () => {
       expect(col?.props?.showBackfillView).toBe(true)
     })
 
-    it('keeps the db-config view fields when no per-binding relation view is configured', () => {
-      const dbView = [{ fieldName: 'user_id' }, { fieldName: 'email' }]
+    /**
+     * Pinned design only: a lookup column reads its table / search / display fields from the
+     * published rule's own lookupConfig and its view fields from that form's
+     * configJson.relationViews — nothing else. A binding without a designed relation view
+     * therefore gets no view fields; it never borrows one from another binding (or, formerly,
+     * from the live Developer Workstation lookup config, which leaked newer designs into
+     * requests started on an older release).
+     */
+    it('takes table / search / display / view only from the pinned lookupConfig + relationViews', () => {
+      const otherBindingView = [{ fieldName: 'user_id' }, { fieldName: 'email' }]
       const col = assigneeColumn({
-        lookupDbConfigs: { assignee: { tableId: 77, viewFields: dbView } },
-        relationViewConfigs: {},
+        relationViewConfigs: { [ATM_BINDING + 1]: { viewFields: otherBindingView } },
       } as never)
-      expect(col?.props?.viewFields).toEqual(dbView)
+      expect(col?.props?.tableId).toBe(77)
+      expect(col?.props?.searchFields).toEqual(['username'])
+      expect(col?.props?.displayField).toBe('username')
+      expect(col?.props?.viewFields).toEqual([])
     })
 
     it('still honours showBackfillView:false by emitting no view fields', () => {
@@ -292,7 +301,6 @@ describe('miAssignment container flattening', () => {
           },
         },
         {
-          lookupDbConfigs: {},
           relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
         } as never,
       )
@@ -301,12 +309,24 @@ describe('miAssignment container flattening', () => {
       expect(col?.props?.showBackfillView).toBe(false)
     })
 
-    it('does not lose the resolved lookup table id to the re-merge', () => {
-      const col = assigneeColumn({
-        lookupDbConfigs: { assignee: { tableId: 77, viewFields: [] } },
-        relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
-      } as never)
-      expect(col?.props?.tableId).toBe(77)
+    it('leaves what the pinned lookupConfig does not configure unresolved instead of filling it from elsewhere', () => {
+      const cols = resolveSubFormDialogColumnsForBinding(
+        binding,
+        {
+          [ATM_BINDING]: {
+            rule: [{ type: 'lookup', field: 'assignee', title: 'Assign To', props: { lookupConfig: '{}' } }],
+          },
+        },
+        {
+          relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
+        } as never,
+      )
+      const col = cols.find(c => c.field === 'assignee')
+      expect(col?.type).toBe('lookup')
+      expect(col?.props?.tableId).toBe(0)
+      expect(col?.props?.searchFields).toEqual([])
+      expect(col?.props?.displayField).toBe('')
+      expect(col?.props?.viewFields).toEqual([])
     })
   })
 

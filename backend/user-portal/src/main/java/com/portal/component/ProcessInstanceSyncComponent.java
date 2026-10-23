@@ -79,6 +79,8 @@ public class ProcessInstanceSyncComponent {
                 Map<String, Object> vars = instance.getVariables() == null
                         ? new HashMap<>()
                         : new HashMap<>(instance.getVariables());
+                // Owner fields resolve in the request's own release, also for rows not read through hydration.
+                ProcessVersionContext.apply(instance, vars);
                 if (taskCurrentItem != null && !taskCurrentItem.isEmpty()) {
                     vars.put(OwnerFieldComponent.CURRENT_ITEM_KEY, taskCurrentItem);
                 }
@@ -93,7 +95,7 @@ public class ProcessInstanceSyncComponent {
                 log.info("Updated process instance {} with currentAssignee={}, candidateUsers={}, currentNode={}",
                         processInstanceId, assigneeUserId, candidateUserIds, currentNode);
             }
-        } catch (PortalException e) {
+        } catch (PortalException | com.platform.common.functionunit.FunctionUnitVersionException e) {
             throw e;
         } catch (DataAccessException e) {
             log.warn("Failed to update process instance assignee (data access) for {}: {}",

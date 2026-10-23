@@ -51,7 +51,7 @@ class MiSubTaskSubTableRowMergerTest {
 
     private Map<String, Object> merge(Map<String, SubTableWriteDesign.TableFacts> release, Map<String, Object> submitted,
                                       Map<String, Object> baseline, Map<String, Object> rowKey, Set<String> emptied) {
-        return merger.mergeCurrentRowOnly(submitted, baseline, rowKey, emptied, List.of(), null, null, release);
+        return merger.mergeCurrentRowOnly(submitted, baseline, rowKey, emptied, List.of(), null, release);
     }
 
     private static Map<String, Object> row(String idIdw, String name) {

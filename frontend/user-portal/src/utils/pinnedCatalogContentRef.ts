@@ -1,15 +1,10 @@
 /**
- * Running instances must load the catalog package pinned at start, not the latest
- * enabled version of the same process key.
+ * Running instances must load the catalog package pinned at start, never the latest
+ * enabled version of the same process key: an instance without its pin has no content
+ * to load (null), which callers report as a version error.
  */
 export function pinnedCatalogContentRef(source: {
   functionUnitCatalogId?: string | null
-  processDefinitionKey?: string | null
 }): string | null {
-  const pin = source.functionUnitCatalogId?.trim()
-  if (pin) {
-    return pin
-  }
-  const key = source.processDefinitionKey?.trim()
-  return key || null
+  return source.functionUnitCatalogId?.trim() || null
 }

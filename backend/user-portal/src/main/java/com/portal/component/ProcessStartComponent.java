@@ -390,6 +390,11 @@ public class ProcessStartComponent {
         return persistedVariables;
     }
 
+    /** The release a new request of {@code processKey} starts on, after the same checks as the start itself. */
+    String activeCatalogIdForStart(String userId, String processKey) {
+        return resolveActiveCatalogPin(userId, processKey, false).catalogId();
+    }
+
     private ActiveCatalogPin resolveActiveCatalogPin(String userId, String processKey, boolean internal) {
         Optional<ActiveCatalogPin> activePinOpt = fetchActiveCatalogForStart(processKey);
         if (activePinOpt.isEmpty()) {
@@ -509,8 +514,6 @@ public class ProcessStartComponent {
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
-                // Live DW id for BPMN join only; catalog UUID above is the form/binding freeze.
-                .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
         processInstanceRepository.save(processInstance);
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);

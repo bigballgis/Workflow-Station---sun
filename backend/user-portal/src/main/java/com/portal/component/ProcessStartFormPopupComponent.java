@@ -6,7 +6,6 @@ import com.portal.dto.ProcessStartRequest;
 import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
-import com.portal.repository.ActionDefinitionRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -22,16 +21,23 @@ public class ProcessStartFormPopupComponent {
     private final ProcessComponent processComponent;
     private final ActionFormPopupSubmitComponent actionFormPopupSubmitComponent;
     private final ProcessInstanceRepository processInstanceRepository;
-    private final ActionDefinitionRepository actionDefinitionRepository;
+    private final ActionDefinitionLookupComponent actionDefinitionLookupComponent;
+    private final ProcessStartComponent processStartComponent;
 
     public ProcessStartFormPopupOutcome submit(
             String userId, String processKey, String actionId, ProcessStartFormPopupSubmitRequest request) {
-        requireFormPopupActionForProcess(actionId, processKey);
         String processInstanceId = request.getProcessInstanceId();
         ProcessInstanceInfo instance;
         if (StringUtils.hasText(processInstanceId)) {
-            instance = requireRunningInstanceForInitiator(processInstanceId, userId);
+            ProcessInstance row = requireRunningInstanceForInitiator(processInstanceId, userId);
+            // A started request's action is one of the release it was started on.
+            requireFormPopup(actionDefinitionLookupComponent.findPinned(
+                    ProcessVersionContext.of(row).catalogId(), actionId));
+            instance = infoOf(row);
         } else {
+            // A new request's action is one of the release it is about to start on.
+            requireFormPopup(actionDefinitionLookupComponent.findPinned(
+                    processStartComponent.activeCatalogIdForStart(userId, processKey), actionId));
             if (request.getFormData() == null) {
                 throw new PortalException("400", "formData is required when starting a new process");
             }
@@ -55,7 +61,7 @@ public class ProcessStartFormPopupComponent {
         return new ProcessStartFormPopupOutcome(instance, actionRow);
     }
 
-    private ProcessInstanceInfo requireRunningInstanceForInitiator(String processInstanceId, String userId) {
+    private ProcessInstance requireRunningInstanceForInitiator(String processInstanceId, String userId) {
         ProcessInstance row = processInstanceRepository.findById(processInstanceId)
                 .orElseThrow(() -> new PortalException("404", "Process instance not found"));
         if (!userId.equals(row.getStartUserId())) {
@@ -64,18 +70,19 @@ public class ProcessStartFormPopupComponent {
         if (!"RUNNING".equalsIgnoreCase(String.valueOf(row.getStatus()))) {
             throw new PortalException("400", "Process is not running");
         }
+        return row;
+    }
+
+    private static ProcessInstanceInfo infoOf(ProcessInstance row) {
         ProcessInstanceInfo info = new ProcessInstanceInfo();
-        info.setId(processInstanceId);
+        info.setId(row.getId());
         info.setProcessDefinitionKey(row.getFunctionUnitCode());
         info.setStatus(row.getStatus());
         return info;
     }
 
-    private void requireFormPopupActionForProcess(String actionId, String processKey) {
-        ActionDefinition action = actionDefinitionRepository
-                .findCatalogActionForFunctionUnit(actionId, processKey)
-                .or(() -> actionDefinitionRepository.findDwActionForFunctionUnit(actionId, processKey))
-                .orElseThrow(() -> new PortalException("404", "Action not found for this process"));
+    private static void requireFormPopup(java.util.Optional<ActionDefinition> found) {
+        ActionDefinition action = found.orElseThrow(() -> new PortalException("404", "Action not found for this process"));
         if (!"FORM_POPUP".equals(action.getActionType())) {
             throw new PortalException("400", "Action is not FORM_POPUP");
         }

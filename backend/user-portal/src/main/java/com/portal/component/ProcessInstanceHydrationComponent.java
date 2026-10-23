@@ -70,6 +70,38 @@ public class ProcessInstanceHydrationComponent {
         return hydrateFromEngine(processInstanceId);
     }
 
+    /**
+     * The release a page reads a unit's content from. With a task or request in hand it is the
+     * release that request was started on — never the unit's latest or currently active one — and
+     * the page may name the unit by that release, its code or its process key; naming another
+     * release of it is refused. Without either (a new request), the unit is served as named.
+     */
+    public String pinnedContentRef(String requested, String taskId, String processInstanceId) {
+        String instanceId = StringUtils.hasText(processInstanceId) ? processInstanceId.trim() : null;
+        if (StringUtils.hasText(taskId)) {
+            Map<String, Object> task = workflowEngineClient.getTaskById(taskId.trim())
+                    .map(com.portal.util.WorkflowEnginePayloadHelper::singleTaskFromPayload)
+                    .orElseThrow(() -> new PortalException("404", "Task not found"));
+            String taskInstanceId = stringValue(task.get("processInstanceId"));
+            if (taskInstanceId == null || (instanceId != null && !instanceId.equals(taskInstanceId))) {
+                throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                        "VERSION_CONTEXT_MISMATCH", processInstanceId);
+            }
+            instanceId = taskInstanceId;
+        }
+        if (instanceId == null) {
+            return requested;
+        }
+        ProcessInstance instance = requireProcessInstance(instanceId);
+        String pinned = instance.getFunctionUnitCatalogId();
+        String named = requested == null ? "" : requested.trim();
+        if (named.equalsIgnoreCase(pinned) || named.equals(instance.getFunctionUnitCode())
+                || named.equals(instance.getProcessDefinitionKey())) {
+            return pinned;
+        }
+        throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_CONTEXT_MISMATCH", named);
+    }
+
     @Transactional
     protected ProcessInstance hydrateFromEngine(String processInstanceId) {
         Optional<ProcessInstance> raced = processInstanceRepository.findById(processInstanceId);
@@ -129,8 +161,6 @@ public class ProcessInstanceHydrationComponent {
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
-                // Live DW id for BPMN join only; catalog UUID above is the form/binding freeze.
-                .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
 
         ProcessVersionContext.apply(entity, variables);

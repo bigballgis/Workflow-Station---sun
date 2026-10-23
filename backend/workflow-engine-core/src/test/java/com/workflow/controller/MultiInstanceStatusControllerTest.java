@@ -318,6 +318,50 @@ class MultiInstanceStatusControllerTest {
             assertThat(data.getStartedTime()).isEqualTo(task1.getCreatedTime()); // 最早的创建时间
             assertThat(data.getCompletedTime()).isEqualTo(task2.getCompletedTime()); // 最晚的完成时间
         }
+
+        /** JSON-stored sub-tables have no physical table: the row key is the request's release primary key. */
+        @Test
+        @DisplayName("无物理主键的子表 - 行键取自请求的发布版本")
+        void rowKeyOfSubTableWithoutPhysicalKeyComesFromTheRequestsRelease() throws Exception {
+            com.workflow.component.PinnedReleaseLookup pins = releaseKeyedSubTable("fu_release_keyed_rows");
+            when(pins.catalogIdOf(null, processInstanceId)).thenReturn("rel-1");
+
+            MultiInstanceStatusResponse.SubTaskDetail detail =
+                    controller.getStatus(processInstanceId).getBody().getData().getTasks().get(0);
+
+            assertThat(detail.getSubTableRowKey()).isEqualTo(Map.of("row_code", "R-7"));
+            assertThat(detail.getSubTableRowId()).isNull();
+        }
+
+        @Test
+        @DisplayName("请求未记录发布版本 - 报版本错误而不是丢行键")
+        void requestWithoutAReleaseFailsInsteadOfDroppingTheRowKey() throws Exception {
+            com.workflow.component.PinnedReleaseLookup pins = releaseKeyedSubTable("fu_release_unpinned_rows");
+            when(pins.catalogIdOf(null, processInstanceId)).thenThrow(
+                    new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", processInstanceId));
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.getStatus(processInstanceId))
+                    .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        }
+
+        private com.workflow.component.PinnedReleaseLookup releaseKeyedSubTable(String subTableName) throws Exception {
+            var snapshots = mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+            var pins = mock(com.workflow.component.PinnedReleaseLookup.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(controller, "catalogSnapshots", snapshots);
+            org.springframework.test.util.ReflectionTestUtils.setField(controller, "pinnedReleaseLookup", pins);
+            when(jdbcTemplate.query(argThat((String sql) -> sql != null && sql.contains("PRIMARY KEY")),
+                    any(RowMapper.class), eq(subTableName))).thenReturn(Collections.emptyList());
+            lenient().when(snapshots.primaryKeyFields("rel-1", subTableName)).thenReturn(List.of("row_code"));
+            when(runtimeService.createExecutionQuery()).thenReturn(executionQuery);
+            when(executionQuery.processInstanceId(processInstanceId)).thenReturn(executionQuery);
+            when(executionQuery.list()).thenReturn(Collections.emptyList());
+            when(extendedTaskInfoRepository.findByProcessInstanceIdAndIsDeletedFalse(processInstanceId))
+                    .thenReturn(List.of(createMultiInstanceTask("task-001", "user-001", "ASSIGNED", 101L)));
+            when(objectMapper.readValue(anyString(), any(com.fasterxml.jackson.core.type.TypeReference.class)))
+                    .thenAnswer(invocation -> new HashMap<>(Map.of("multiInstance", true, "subTableName", subTableName,
+                            "subTableRowKey", Map.of("row_code", "R-7"))));
+            return pins;
+        }
     }
 
     // ==================== 辅助方法 ====================

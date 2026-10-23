@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.subtable.SubTableStoreKeys;
 import com.platform.common.jdbc.SqlIdentifiers;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
@@ -156,8 +157,8 @@ public class SubTableEnrichmentComponent {
         if (!(subTablesObj instanceof Map<?, ?> subMap) || subMap.isEmpty()) {
             return;
         }
-        enrichSubTablesWithAssignmentData(info,
-                miOverlayComponent.resolveMiRowProgress(info.getId(), info.getStatus()));
+        enrichSubTablesWithAssignmentData(info, miOverlayComponent.resolveMiRowProgress(
+                info.getId(), info.getFunctionUnitCatalogId(), info.getStatus()));
     }
 
     /**
@@ -231,14 +232,22 @@ public class SubTableEnrichmentComponent {
                 String[] miCols = MiOverlaySupport.miColumnNamesFor(miProgress);
 
                 String safeTableName = SubTablePhysicalMetadataCache.requireSafeIdentifier(tableName);
-                List<String> pkCols;
+                java.util.Optional<List<String>> rowKeyColumns;
                 try {
                     ENRICH_SQL_STATS.get()[3]++;
-                    pkCols = subTablePhysicalMetadataCache.resolvePkColumnsCached(safeTableName);
+                    rowKeyColumns = subTablePhysicalMetadataCache.rowKeyColumns(
+                            info.getFunctionUnitCatalogId(), safeTableName);
+                } catch (FunctionUnitVersionException e) {
+                    throw e;
                 } catch (Exception e) {
                     log.debug("enrichSubTablesMapPayload: skip table {} (PK): {}", safeTableName, e.getMessage());
                     continue;
                 }
+                // Relation tables and the user directory have no rows of the release to merge or overlay.
+                if (rowKeyColumns.isEmpty()) {
+                    continue;
+                }
+                List<String> pkCols = rowKeyColumns.get();
 
                 // Designer metadata can imply a PK for a logical name (e.g. MI token "subtable") while no physical
                 // relation exists; SELECT against a missing relation aborts the whole PostgreSQL transaction and
@@ -334,6 +343,8 @@ public class SubTableEnrichmentComponent {
                     }
                 }
             }
+        } catch (FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.debug("enrichSubTablesMapPayload skipped: {}", e.getMessage());
         }
@@ -388,6 +399,8 @@ public class SubTableEnrichmentComponent {
                     }
                 }
             }
+        } catch (FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.debug("resolveSubTableBindingTableNames skipped: {}", e.getMessage());
         }

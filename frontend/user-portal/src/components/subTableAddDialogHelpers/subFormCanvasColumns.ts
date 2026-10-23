@@ -14,7 +14,6 @@ import { assignSensitiveMaskColumnProps } from '@/utils/applySensitiveMaskFromRu
 import { stampCannotDownloadProp } from '@/utils/applyUploadPropsFromRule'
 
 export type SubFormColumnLookupContext = {
-  lookupDbConfigs: Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: unknown[] }>
   relationViewConfigs: Record<string, { viewFields: unknown[]; allFields: unknown[] }>
 }
 
@@ -213,13 +212,11 @@ export function mapSubFormRuleToDialogColumns(
 
     const field = String(r.field ?? '')
     if (type === 'lookup') {
-      const dbCfg = ctx.lookupDbConfigs[field]
       const lookupCfg = parseLookupConfig(String(rProps.lookupConfig ?? '{}'))
       const relationView = lookupCfg.bindingId ? ctx.relationViewConfigs[lookupCfg.bindingId] : undefined
       Object.assign(
         passProps,
         buildLookupColumnProps(String(rProps.lookupConfig ?? '{}'), {
-          dbCfg,
           relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
         }),
       )

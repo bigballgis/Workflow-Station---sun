@@ -3,7 +3,7 @@ import { convertFormCreateRule } from '../useProcessStartRuleConverter'
 import { mapSubFormRuleToDialogColumns } from '@/components/subTableAddDialogHelpers/subFormCanvasColumns'
 import { mergeListViewFieldColumn } from '@/components/subTableAddDialogHelpers/fileColumns'
 
-const emptyLookup = { lookupDbConfigs: {}, relationViewConfigs: {} }
+const emptyLookup = { relationViewConfigs: {} }
 
 describe('process start cannotDownload (New Request)', () => {
   it('maps Advanced Upload Meeting Doc to an upload control, not text', () => {

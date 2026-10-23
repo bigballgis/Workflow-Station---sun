@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.MiOverlaySupport.MiRowProgress;
@@ -49,7 +51,8 @@ public class MiOverlayComponent {
     }
 
     @SuppressWarnings("unchecked")
-    Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(String processInstanceId, String processInstanceStatus) {
+    Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(
+            String processInstanceId, String functionUnitCatalogId, String processInstanceStatus) {
         if (processInstanceId == null || processInstanceId.isBlank()) {
             return Collections.emptyMap();
         }
@@ -95,7 +98,9 @@ public class MiOverlayComponent {
                 List<String> pkCols;
                 try {
                     __pkCalls[0]++;
-                    pkCols = subTablePhysicalMetadataCache.resolvePkColumnsCached(tn);
+                    pkCols = miTableRowKeyColumns(functionUnitCatalogId, tn);
+                } catch (FunctionUnitVersionException e) {
+                    throw e;
                 } catch (Exception e) {
                     continue;
                 }
@@ -114,7 +119,7 @@ public class MiOverlayComponent {
                         .computeIfAbsent(canon, k -> new ArrayList<>())
                         .add(t);
             }
-            log.info("[PERF] resolveMiRowProgress: {} MI tasks, {} resolvePrimaryKeyColumns(JDBC) calls, loop took {} ms",
+            log.info("[PERF] resolveMiRowProgress: {} MI tasks, {} row-key lookups, loop took {} ms",
                     tasks.size(), __pkCalls[0], (System.nanoTime() - __tpk) / 1_000_000L);
 
             Map<String, Map<String, MiRowProgress>> out = new HashMap<>();
@@ -162,10 +167,18 @@ public class MiOverlayComponent {
             }
 
             return out;
+        } catch (FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.debug("resolveMiRowProgress skipped: {}", e.getMessage());
             return Collections.emptyMap();
         }
+    }
+
+    /** The engine runs multi-instance over the release's own data tables, so the release must define this one. */
+    private List<String> miTableRowKeyColumns(String functionUnitCatalogId, String tableName) {
+        return subTablePhysicalMetadataCache.rowKeyColumns(functionUnitCatalogId, tableName)
+                .orElseThrow(() -> CatalogSnapshotReader.invalid(functionUnitCatalogId));
     }
 
     Map<String, MiRowProgress> lookupMiProgressForDesignerTable(
@@ -254,7 +267,9 @@ public class MiOverlayComponent {
             }
             try {
                 String safe = SubTablePhysicalMetadataCache.requireSafeIdentifier(tableName);
-                pkColsByTable.put(tableName, subTablePhysicalMetadataCache.resolvePkColumnsCached(safe));
+                pkColsByTable.put(tableName, miTableRowKeyColumns(info.getFunctionUnitCatalogId(), safe));
+            } catch (FunctionUnitVersionException e) {
+                throw e;
             } catch (Exception e) {
                 log.debug("propagateMiOverlay: skip PK for {}: {}", tableName, e.getMessage());
             }

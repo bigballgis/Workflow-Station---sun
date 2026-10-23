@@ -195,7 +195,7 @@ class ActionPostEmailComponentImplTest {
                 .build(), () -> null);
         verify(eventPublisher, never()).publish(any());
         verify(taskActionService, never()).getTaskActions(any());
-        verify(actionDefinitionRepository, never()).findCatalogActionForFunctionUnit(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(actionDefinitionRepository);
     }
 
     @Test

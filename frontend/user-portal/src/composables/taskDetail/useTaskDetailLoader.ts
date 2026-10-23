@@ -122,15 +122,17 @@ export function createTaskDetailLoader(
           ctx.refreshNodeFormMapFromFormData()
         })
         const contentRef = pinnedCatalogContentRef(data)
-        const fuFetchPromise = contentRef
-          ? processApi
-              .getFunctionUnitContent(contentRef, taskId)
-              .then(r => (r as { data?: unknown }).data ?? r)
-              .catch((err: unknown) => {
-                console.error('Failed to prefetch function unit content:', err)
-                return null
-              })
-          : Promise.resolve(null)
+        if (!contentRef) {
+          // The request is read in the release it was started on; without that pin there is nothing to load.
+          throw new Error(t('error.functionUnitVersionUnavailable'))
+        }
+        const fuFetchPromise = processApi
+          .getFunctionUnitContent(contentRef, taskId)
+          .then(r => (r as { data?: unknown }).data ?? r)
+          .catch((err: unknown) => {
+            console.error('Failed to prefetch function unit content:', err)
+            return null
+          })
         const formPrefetchPromise = ctx.prefetchProcessAndTaskFormData(data)
 
         const [prefetchedFu, prefetchedForms] = await Promise.all([
@@ -141,14 +143,12 @@ export function createTaskDetailLoader(
         const preFlattenedSubTables = processSubTablesSnapshot
           ? cloneAndFlattenSubTablesMap(processSubTablesSnapshot)
           : undefined
-        if (contentRef) {
-          functionUnitIdRef.value = contentRef
-          await ctx.loadFunctionUnitContent(
-            contentRef,
-            prefetchedFu ?? undefined,
-            preFlattenedSubTables,
-          )
-        }
+        functionUnitIdRef.value = contentRef
+        await ctx.loadFunctionUnitContent(
+          contentRef,
+          prefetchedFu ?? undefined,
+          preFlattenedSubTables,
+        )
 
         await ctx.loadProcessAndTaskFormData(data, prefetchedForms)
         ctx.rehydrateSharedProcessSubTableBindings(processSubTablesSnapshot ?? undefined, preFlattenedSubTables)
@@ -307,9 +307,10 @@ export function createTaskDetailLoader(
                 ctx.refreshNodeFormMapFromFormData()
               })
               const contentRef = pinnedCatalogContentRef(p)
+              // Task access was refused: the request itself grants the read (and pins its release).
               const fuFetchPromise = contentRef
                 ? processApi
-                    .getFunctionUnitContent(String(contentRef), taskId)
+                    .getFunctionUnitContent(String(contentRef), undefined, p.id)
                     .then(r => (r as { data?: unknown }).data ?? r)
                     .catch(() => null)
                 : Promise.resolve(null)

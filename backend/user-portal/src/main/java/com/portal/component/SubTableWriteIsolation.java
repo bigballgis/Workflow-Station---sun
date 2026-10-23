@@ -110,8 +110,7 @@ class SubTableWriteIsolation {
             merger.requireResolvedRowKey(rowKey);
             submitted = merger.mergeCurrentRowOnly(
                     submitted, baseline, rowKey,
-                    normalizeEmptiedKeys(request.emptiedSubTableKeys()), bindingScopes,
-                    request.functionUnitCode(), frozen,
+                    normalizeEmptiedKeys(request.emptiedSubTableKeys()), bindingScopes, frozen,
                     writeDesign == null ? null : writeDesign.tableFacts(request.catalogId()));
             inbound.put("__subTables__", submitted);
         }
@@ -121,17 +120,13 @@ class SubTableWriteIsolation {
         Map<String, Object> guarded = submitted instanceof LinkedHashMap
                 ? submitted
                 : new LinkedHashMap<>(submitted);
-        if (frozen == null) {
-            guard.assertAndApply(bindingScopes, request.functionUnitCode(), request.formData(), guarded, baseline);
-        } else {
-            Map<String, Object> context = request.formData() == null
-                    ? new LinkedHashMap<>() : new LinkedHashMap<>(request.formData());
-            // Persisted main identity wins over user input. MI context is task-scoped by the caller.
-            if (baselineVars != null) baselineVars.forEach((key, value) -> {
-                if (!"_currentItem".equals(key) && !"currentItem".equals(key)) context.put(key, value);
-            });
-            guard.assertAndApply(bindingScopes, request.functionUnitCode(), context, guarded, baseline, frozen);
-        }
+        Map<String, Object> context = request.formData() == null
+                ? new LinkedHashMap<>() : new LinkedHashMap<>(request.formData());
+        // Persisted main identity wins over user input. MI context is task-scoped by the caller.
+        if (baselineVars != null) baselineVars.forEach((key, value) -> {
+            if (!"_currentItem".equals(key) && !"currentItem".equals(key)) context.put(key, value);
+        });
+        guard.assertAndApply(bindingScopes, request.functionUnitCode(), context, guarded, baseline, frozen);
         inbound.put("__subTables__", guarded);
     }
 

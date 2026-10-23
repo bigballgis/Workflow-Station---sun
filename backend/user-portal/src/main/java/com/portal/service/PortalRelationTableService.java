@@ -41,11 +41,6 @@ public interface PortalRelationTableService {
                                                int limit, int offset, boolean includeInactive);
 
     /**
-     * 获取表单的 Lookup 配置列表
-     */
-    List<Map<String, Object>> getLookupConfigs(Long formId);
-
-    /**
      * 通过 tableId 获取 View 字段配置
      */
     List<Map<String, Object>> getViewFieldsByTableId(Long tableId);

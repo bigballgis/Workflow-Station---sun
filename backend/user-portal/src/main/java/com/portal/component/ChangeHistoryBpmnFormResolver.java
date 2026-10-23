@@ -5,8 +5,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.util.HtmlUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -17,43 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 /**
- * Resolves a Task Form id embedded in deployed BPMN.
- *
- * <p>Prefers {@code up_process_instance.function_unit_version_id} as a join onto
- * {@code dw_process_definitions}. That Long is the live Designer row, not the catalog freeze;
- * Task Form JSON for pinned instances is loaded from {@code sys_function_unit_contents}.
+ * Resolves a Task Form id (and action names) embedded in a release's deployed BPMN.
  */
-@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class ChangeHistoryBpmnFormResolver {
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    static Long resolve(JdbcTemplate jdbcTemplate, String processInstanceId, String stageId) {
-        if (processInstanceId == null || processInstanceId.isBlank()) return null;
-        try {
-            List<String> definitions = jdbcTemplate.queryForList(
-                    """
-                    SELECT pd.bpmn_xml
-                    FROM up_process_instance pi
-                    INNER JOIN dw_process_definitions pd
-                        ON pd.function_unit_version_id = pi.function_unit_version_id
-                        OR pd.function_unit_id IN (
-                            SELECT fu.id FROM dw_function_units fu
-                            WHERE fu.code = COALESCE(NULLIF(pi.function_unit_code, ''), pi.process_definition_key)
-                        )
-                    WHERE pi.id = ?
-                    ORDER BY (pd.function_unit_version_id = pi.function_unit_version_id) DESC NULLS LAST,
-                        pd.id DESC
-                    LIMIT 1
-                    """, String.class, processInstanceId.trim());
-            if (definitions.isEmpty()) return null;
-            return resolveTaskFormIdFromStored(definitions.get(0), stageId);
-        } catch (RuntimeException ex) {
-            log.debug("Could not resolve BPMN task form for process {}, stage {}: {}",
-                    processInstanceId, stageId, ex.getMessage());
-            return null;
-        }
-    }
     static Long resolveTaskFormIdFromStored(String storedXml, String stageId) {
         return resolveTaskFormId(decodeBpmnXml(storedXml), stageId);
     }

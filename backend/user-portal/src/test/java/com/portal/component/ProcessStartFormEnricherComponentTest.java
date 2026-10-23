@@ -97,7 +97,7 @@ class ProcessStartFormEnricherComponentTest {
         assertThat(variables.get(SystemAuditFieldFiller.CREATED_BY)).isEqualTo("System");
         verify(ownerFieldComponent).applyOnSubmit(eq("FU-MCY"), any(), eq(variables));
         verify(computedFieldRecalculator).recalculate("FU-MCY", variables);
-        verify(requestIdEnricher).stampRequestId("FU-MCY", variables);
+        verify(requestIdEnricher).stampRequestId(variables);
     }
 
     @Test

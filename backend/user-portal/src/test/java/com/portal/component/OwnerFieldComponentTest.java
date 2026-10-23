@@ -656,7 +656,17 @@ class OwnerFieldComponentTest {
             instance.setStartUserId(START);
             instance.setStatus("RUNNING");
             instance.setFunctionUnitCode(FU);
+            instance.setFunctionUnitCatalogId("rel-1");
+            instance.setFunctionUnitVersionLabel("1.0.0");
             instance.setVariables(new HashMap<>(Map.of("current_handler", "user:" + ASSIGNEE)));
+            // The owner rule as the request's release publishes it: withdraw resolves it there, not in the designer.
+            when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.contains("sys_function_unit_contents"),
+                    eq(String.class), eq("rel-1"), eq("FORM"))).thenReturn(List.of("""
+                    {"formId":1,"tableBindings":[],"configJson":{"rule":[
+                      {"type":"owner","field":"current_handler","props":{"ownerConfig":"{\\"source\\":\\"CURRENT_ASSIGNEE\\"}"}}]}}
+                    """));
+            when(jdbcTemplate.queryForList(org.mockito.ArgumentMatchers.contains("sys_function_unit_contents"),
+                    eq(String.class), eq("rel-1"), eq("DATA_TABLE"))).thenReturn(List.of());
 
             ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
             when(repo.findById("pi-1")).thenReturn(Optional.of(instance));

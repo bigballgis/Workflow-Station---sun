@@ -1,4 +1,3 @@
-import { relationTableApi } from '@/api/relationTable'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
   getPortalUserId,
@@ -14,7 +13,6 @@ import type { PreviousFormEntry, ApplicationDetailSecondaryCtx } from './useAppl
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailSecondaryFns {
-  loadApplicationDetailLookupConfigs: (selectedForm: any) => Promise<void>
   runApplicationDetailSecondary: (secondaryCtx: ApplicationDetailSecondaryCtx) => Promise<void>
   scheduleApplicationDetailSecondary: (historyPromise: Promise<void>) => void
 }
@@ -31,36 +29,7 @@ export function createApplicationDetailSecondary(ctx: ApplicationDetailCtx): App
     subTaskFormId,
     bpmnXml,
     diagramReady,
-    lookupDbConfigs,
   } = ctx
-
-  async function loadApplicationDetailLookupConfigs(selectedForm: any) {
-    lookupDbConfigs.value = {}
-    if (selectedForm?.sourceId == null) return
-    try {
-      const lcRes = await relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
-      if (!lcRes?.data) return
-      for (const lc of lcRes.data) {
-        let sf: string[] = []
-        try {
-          sf =
-            typeof lc.searchFields === 'string'
-              ? JSON.parse(lc.searchFields || '[]')
-              : lc.searchFields || []
-        } catch {
-          sf = []
-        }
-        lookupDbConfigs.value[lc.componentId] = {
-          tableId: lc.tableId,
-          searchFields: sf,
-          displayField: lc.displayField || '',
-          viewFields: lc.viewFields || []
-        }
-      }
-    } catch (e: unknown) {
-      console.warn('[app] Failed to load lookup configs:', e)
-    }
-  }
 
   async function runApplicationDetailSecondary(secondaryCtx: ApplicationDetailSecondaryCtx) {
     const { content, useInitiatorFormOnly, bindingRelationTableMap, selectedForm } = secondaryCtx
@@ -308,9 +277,6 @@ export function createApplicationDetailSecondary(ctx: ApplicationDetailCtx): App
       ctx.applicationDetailSecondaryScheduled = false
       try {
         await historyPromise
-        if (secondaryCtx.lookupSourceId != null) {
-          await loadApplicationDetailLookupConfigs(secondaryCtx.selectedForm)
-        }
         await runApplicationDetailSecondary(secondaryCtx)
       } catch (e) {
         console.error('[ApplicationDetail] secondary load failed:', e)
@@ -327,7 +293,6 @@ export function createApplicationDetailSecondary(ctx: ApplicationDetailCtx): App
   }
 
   return {
-    loadApplicationDetailLookupConfigs,
     runApplicationDetailSecondary,
     scheduleApplicationDetailSecondary,
   }

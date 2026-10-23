@@ -68,7 +68,7 @@ class ProcessOperationProperties {
         com.platform.common.i18n.I18nService i18nService =
                 Mockito.mock(com.platform.common.i18n.I18nService.class);
 
-        SubTablePhysicalMetadataCache subTablePhysicalMetadataCache = new SubTablePhysicalMetadataCache(jdbcTemplate);
+        SubTablePhysicalMetadataCache subTablePhysicalMetadataCache = new SubTablePhysicalMetadataCache(jdbcTemplate, Mockito.mock(com.platform.common.functionunit.CatalogSnapshotReader.class));
         MiOverlayComponent miOverlayComponent = new MiOverlayComponent(workflowEngineClient, subTablePhysicalMetadataCache);
         SubTableEnrichmentComponent subTableEnrichmentComponent = new SubTableEnrichmentComponent(
                 processInstanceRepository, jdbcTemplate, miOverlayComponent, subTablePhysicalMetadataCache);
@@ -76,7 +76,6 @@ class ProcessOperationProperties {
                 processInstanceRepository, workflowEngineClient,
                 new com.portal.component.EngineSubTableHydrator(workflowEngineClient), userDisplayNameResolver,
                 miOverlayComponent, subTableEnrichmentComponent,
-                Mockito.mock(com.portal.component.RequestIdEnricher.class),
                 Mockito.mock(com.portal.component.MainTableViewInvolvementChecker.class),
                 Mockito.mock(com.portal.component.MainTableViewAccessResolver.class),
                 functionUnitAccessComponent,

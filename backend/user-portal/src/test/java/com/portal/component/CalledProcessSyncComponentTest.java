@@ -30,7 +30,8 @@ class CalledProcessSyncComponentTest {
     private ProcessInstanceHydrationComponent hydration;
     private ProcessInstanceSyncComponent sync;
     private CalledProcessSyncComponent component;
-    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private com.platform.common.functionunit.CatalogSnapshotReader snapshots;
+    private static final String PURCHASE_RELEASE = "22222222-0000-0000-0000-000000000001";
 
     @BeforeEach
     void setUp() {
@@ -50,8 +51,8 @@ class CalledProcessSyncComponentTest {
                 id -> ProcessInstance.builder().id(id).processDefinitionKey("fu-vendor")
                         .functionUnitCode("").startUserId("system").status("RUNNING").build()));
         sync = mock(ProcessInstanceSyncComponent.class);
-        jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
-        component = new CalledProcessSyncComponent(repository, engine, hydration, sync, jdbc);
+        snapshots = mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+        component = new CalledProcessSyncComponent(repository, engine, hydration, sync, snapshots);
 
         rows.put("purchase", ProcessInstance.builder().id("purchase").processDefinitionKey("fu-purchase")
                 .functionUnitCode("fu-purchase").startUserId("user-dev").startUserName("Developer Tester")
@@ -276,5 +277,66 @@ class CalledProcessSyncComponentTest {
                 rows.get("purchase").getVariables().get("__subTables__")).get("dw:extra_vendors");
         assertThat(saved.get(1)).containsEntry("check_status", "QUALIFIED");
         assertThat(saved.get(0)).doesNotContainKey("check_status");
+    }
+
+    private void perRowCallOnRowsWithoutPlatformIds() {
+        rows.get("purchase").setVariables(new HashMap<>(Map.of("__subTables__", new HashMap<>(Map.of(
+                "dw:extra_vendors", List.of(
+                        new HashMap<>(Map.of("vendor_code", "V1", "vendor_name", "Globex")),
+                        new HashMap<>(Map.of("vendor_code", "V2", "vendor_name", "Initech"))))))));
+        rows.put("check-b", ProcessInstance.builder().id("check-b").processDefinitionKey("fu-vendor")
+                .parentProcessInstanceId("purchase").callActivityId("PR_Call_ExtraVendors")
+                .variables(new HashMap<>(Map.of("check_result", "QUALIFIED"))).build());
+        when(engine.getProcessInstance("check-b")).thenReturn(Optional.of(Map.of("variables", Map.of(
+                "__callRow", Map.of("vendor_code", "V2", "vendor_name", "Initech")))));
+        when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:custom="http://custom.bpmn.io/schema">
+                  <bpmn:process id="fu-purchase">
+                    <bpmn:callActivity id="PR_Call_ExtraVendors" calledElement="fu-vendor">
+                      <bpmn:extensionElements><custom:properties>
+                        <custom:property name="callRowsTable" value="extra_vendors"/>
+                        <custom:property name="callOutputMapping"
+                            value="[{&quot;from&quot;:&quot;check_result&quot;,&quot;to&quot;:&quot;row.check_status&quot;}]"/>
+                      </custom:properties></bpmn:extensionElements>
+                    </bpmn:callActivity>
+                  </bpmn:process>
+                </bpmn:definitions>"""));
+        when(engine.getProcessInstanceStatus("purchase")).thenReturn(Optional.of(status("completed", false)));
+    }
+
+    /**
+     * Rows without the platform's id are recognised by the rows table's key as the caller's release
+     * declares it — not as the designer declares it today, which may have changed the key since.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void rowsWithoutPlatformIdsAreMatchedByTheKeyOfTheCallersRelease() {
+        rows.get("purchase").setFunctionUnitCatalogId(PURCHASE_RELEASE);
+        perRowCallOnRowsWithoutPlatformIds();
+        when(snapshots.contents(PURCHASE_RELEASE, "DATA_TABLE")).thenReturn(List.of(Map.of(
+                "tableName", "extra_vendors", "fields", List.of(
+                        Map.of("fieldName", "vendor_name", "isPrimaryKey", false, "sortOrder", 2),
+                        Map.of("fieldName", "vendor_code", "isPrimaryKey", true, "sortOrder", 1)))));
+
+        component.refreshCallers(status(
+                "completed", true, "processInstanceId", "check-b", "superProcessInstanceId", "purchase"));
+
+        List<Map<String, Object>> saved = (List<Map<String, Object>>) ((Map<String, Object>)
+                rows.get("purchase").getVariables().get("__subTables__")).get("dw:extra_vendors");
+        assertThat(saved.get(1)).containsEntry("check_status", "QUALIFIED");
+        assertThat(saved.get(0)).doesNotContainKey("check_status");
+    }
+
+    /** A caller with no recorded release has no key to match rows by: nothing is written into its rows. */
+    @Test
+    void callerWithoutAPinnedReleaseGetsNoRowResult() {
+        perRowCallOnRowsWithoutPlatformIds();
+
+        component.refreshCallers(status(
+                "completed", true, "processInstanceId", "check-b", "superProcessInstanceId", "purchase"));
+
+        verify(repository, never()).save(any());
+        verify(snapshots, never()).contents(anyString(), anyString());
     }
 }

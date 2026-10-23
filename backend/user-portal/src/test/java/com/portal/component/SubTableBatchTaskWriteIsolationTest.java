@@ -60,7 +60,7 @@ class SubTableBatchTaskWriteIsolationTest {
                 "102", new SubTableWriteDesign.Binding("102", "dw:participants", "case_ref", "MAIN", "cases",
                         List.of("participant_key"), List.of("case_key"), "miParticipantRow")));
         var jdbc = mock(JdbcTemplate.class);
-        var isolation = new SubTableWriteIsolation(new MiSubTaskSubTableRowMerger(jdbc), new SubTableBindingScopeGuard(jdbc), design);
+        var isolation = new SubTableWriteIsolation(new MiSubTaskSubTableRowMerger(jdbc), new SubTableBindingScopeGuard(), design);
         var completion = new TaskApprovalCompletionComponent(engine, null, repository, null, null, null, null, null);
         ReflectionTestUtils.setField(completion, "subTableWriteIsolation", isolation);
         return completion;

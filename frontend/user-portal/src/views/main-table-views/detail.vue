@@ -74,7 +74,6 @@ const detailFormId = ref<number | null>(null)
 const formFields = ref<FormField[]>([])
 const subTableBindings = ref<SubTableBinding[]>([])
 const rowValues = ref<Record<string, any>>({})
-const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
 
 const functionUnitCode = computed(() => String(route.params.functionUnitCode || ''))
 const viewId = computed(() => Number(route.query.viewId) || null)
@@ -115,12 +114,11 @@ async function load() {
       return
     }
     detailFormId.value = Number(form.sourceId)
-    lookupDbConfigs.value = {}
     const forms = form.peerForms
     if (form?.data) {
       const config = typeof form.data === 'string' ? JSON.parse(form.data) : form.data
       const rules = Array.isArray(config?.rule) ? config.rule : []
-      formFields.value = toViewDetailFields(rules, lookupDbConfigs.value)
+      formFields.value = toViewDetailFields(rules)
       subTableBindings.value = buildViewDetailSubTableBindings(
         form.tableBindings,
         config && typeof config === 'object' ? config : {},
