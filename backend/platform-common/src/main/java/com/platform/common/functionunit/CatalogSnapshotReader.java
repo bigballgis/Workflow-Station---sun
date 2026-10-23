@@ -21,6 +21,13 @@ public class CatalogSnapshotReader {
                     return size() > 128;
                 }
             });
+    /** Row-key fields per (release, table name); releases are immutable, so the answer never changes. */
+    private final Map<Key, List<String>> primaryKeys = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<>(32, 0.75f, true) {
+                @Override protected boolean removeEldestEntry(Map.Entry<Key, List<String>> entry) {
+                    return size() > 512;
+                }
+            });
 
     public List<Map<String, Object>> contents(String catalogId, String type) {
         requireCatalog(catalogId);
@@ -86,8 +93,7 @@ public class CatalogSnapshotReader {
                 }
                 definitions.add(definition);
             }
-            var keys = fields.stream().filter(f -> Boolean.TRUE.equals(f.get("isPrimaryKey"))).map(f -> String.valueOf(f.get("fieldName"))).toList();
-            binding.put("primaryKeyFields", keys.isEmpty() ? List.of(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD) : keys);
+            binding.put("primaryKeyFields", rowKeyFields(fields));
             binding.put("fieldDefinitions", definitions);
             binding.put("columns", fields);
             binding.put("data", List.of());
@@ -143,6 +149,44 @@ public class CatalogSnapshotReader {
             }
         }
         return aliases;
+    }
+
+    /**
+     * The release's own data table of this name (case-insensitive); relation tables are not its data tables.
+     * Empty when the release has no such table.
+     */
+    public java.util.Optional<Map<String, Object>> dataTable(String catalogId, String tableName) {
+        requireCatalog(catalogId);
+        if (tableName == null) return java.util.Optional.empty();
+        var matches = contents(catalogId, "DATA_TABLE").stream()
+                .filter(t -> !"RELATION".equals(t.get("tableType")))
+                .filter(t -> tableName.equalsIgnoreCase(String.valueOf(t.get("tableName")))).toList();
+        if (matches.size() > 1) throw invalid(catalogId);
+        return matches.stream().findFirst();
+    }
+
+    /**
+     * The fields a sub-table's rows are keyed by in the release, in field order — the same key its
+     * bindings carry ({@link #formBindings}).
+     *
+     * @throws FunctionUnitVersionException VERSION_SNAPSHOT_INCOMPLETE when the release has no such data table
+     */
+    public List<String> primaryKeyFields(String catalogId, String tableName) {
+        requireCatalog(catalogId);
+        Key key = new Key(catalogId, tableName);
+        List<String> cached = primaryKeys.get(key);
+        if (cached != null) return cached;
+        List<String> keys = rowKeyFields(objects(dataTable(catalogId, tableName)
+                .orElseThrow(() -> invalid(catalogId)).get("fields")));
+        primaryKeys.put(key, keys);
+        return keys;
+    }
+
+    /** A table's primary-key fields in field order, else the platform row id. */
+    private static List<String> rowKeyFields(List<Map<String, Object>> fields) {
+        var keys = fields.stream().filter(f -> Boolean.TRUE.equals(f.get("isPrimaryKey")))
+                .map(f -> String.valueOf(f.get("fieldName"))).toList();
+        return keys.isEmpty() ? List.of(com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD) : keys;
     }
 
     public Map<String, Object> form(String catalogId, String sourceId) {
