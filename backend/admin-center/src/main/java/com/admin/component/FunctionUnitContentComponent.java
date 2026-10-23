@@ -219,7 +219,10 @@ public class FunctionUnitContentComponent {
                 com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         for (FormContentDTO form : forms) {
             var snapshot = catalogSnapshots.form(id, form.getSourceId());
-            form.setTableBindings(catalogSnapshots.formBindings(id, snapshot).stream()
+            // A new request starts on a complete release only; existing requests may read a legacy one.
+            var bindings = forStart ? catalogSnapshots.completeFormBindings(id, snapshot)
+                    : catalogSnapshots.formBindings(id, snapshot);
+            form.setTableBindings(bindings.stream()
                     .map(binding -> bindingMapper.convertValue(binding, TableBindingDTO.class)).toList());
         }
 

@@ -5402,3 +5402,41 @@
       方法签名已多出参数，Method not found。
     - 引擎 TaskManagerComponentMultiInstanceTest 1F/4E（taskClaimSupport 未注入，10-16 起）。
     修复方向：H2 测试 schema 补 up_process_instance（或这些属性测试注入 PinnedReleaseLookup 桩）；反射测试改按当前签名。
+- id: "1711"
+  status: fixed
+  fixed_at: "2026-10-23"
+  severity: major
+  category: bug
+  summary: "运行时版本化之前导入的发布版本快照缺关联表定义，钉在上面的请求全部 409 打不开"
+  file: "backend/platform-common/src/main/java/com/platform/common/functionunit/CatalogSnapshotReader.java"
+  detail: |
+    根因：上游 019d0c5f6（2026-10-21）起 FunctionUnitPackageParser 才把部署包 relation-tables/ 写进发布快照，并由
+    CatalogSnapshotReader 要求每个 RELATED 绑定都能在本版本快照里找到关联表；此前导入的版本包里有、快照没存（当时
+    运行时实时读 rt_），Admin 也未保留原始包。dev：fu-20260422-23tfag 1.0.125–1.0.127，12 条请求（11 条在途）。
+    修复（用户选定方案）：读已有请求时补齐——仅当某个绑定/外键在快照里找不到表、且该版本是旧格式（content_checksum
+    为空、快照里没有任何 RELATION 表）时，才从 Admin rt_table_versions 取「deployed_at ≤ 版本 created_at」的最新版本
+    （deployed_at 按 spring.jpa.properties.hibernate.jdbc.time_zone 解释，三服务均为 Asia/Shanghai），连同外键上级、
+    子表外键指向的关联表，转换成包内快照形状；旧格式标记与补齐结果按版本缓存；只读、不改数据、不读 DW，标
+    FALLBACK(migration)，当下列查询在所有环境都没有被请求钉住的版本时删除。
+    新请求只用完整快照：激活闸门 assertReadyForActivation 与发起内容（content?forStart=true）都用
+    completeFormBindings，只认快照本身——新版本缺表照样拒绝；旧格式版本即便当前仍是生效版本，也不能再发起新请求
+    （与 10-21 以来的现状一致），需重新部署完整版本。
+    标记说明：导入（FunctionUnitImportComponent:122）一律写 content_checksum；Admin createNewVersion 现在复制源版本的
+    content_checksum（之前不复制，复制出的版本会被误当成旧格式）；init-scripts 种子版本没有 content_checksum，属于旧格式。
+    补齐精度：rt_table_versions 快照不含 isComputed/computedField（旧版本上关联表计算列标记丢失）；lookupConfig 为对象
+    （前端兼容）；表名/显示名/描述取当前定义——发布后改名且按名字绑定的关联表仍 409（显式）；外键目标定义已被删除时该
+    外键的 refTableName 为空、绑定上不再带外键关系；发布之后才首次部署的关联表仍 409。
+    调用方若在被调方旧格式版本生效期间部署，会钉住该旧版本，其新请求派生的子请求仍读旧格式版本（属于已有调用方
+    请求，读取宽松，可接受）。
+    其他环境上线前排查受影响版本（含只经子表外键依赖关联表的版本；enabled=t 表示仍是生效版本，需重新部署完整版本
+    才能发起新请求；该查询在所有环境都没有被请求钉住的版本时即可删除补齐逻辑）：
+    WITH t AS (SELECT c.function_unit_id fid, c.content_data::jsonb j FROM sys_function_unit_contents c WHERE c.content_type='DATA_TABLE')
+    SELECT f.code, f.version, f.id, f.enabled FROM sys_function_units f
+    WHERE f.content_checksum IS NULL AND NOT EXISTS (SELECT 1 FROM t WHERE t.fid=f.id AND t.j->>'tableType'='RELATION')
+      AND (EXISTS (SELECT 1 FROM sys_function_unit_contents c, jsonb_array_elements(CASE WHEN jsonb_typeof(c.content_data::jsonb->'tableBindings')='array'
+             THEN c.content_data::jsonb->'tableBindings' ELSE '[]'::jsonb END) b
+           WHERE c.function_unit_id=f.id AND c.content_type='FORM' AND b->>'bindingType'='RELATED'
+             AND coalesce(b->>'relationTableId','')<>'-1000000001')
+        OR EXISTS (SELECT 1 FROM t, jsonb_array_elements(CASE WHEN jsonb_typeof(t.j->'fields')='array' THEN t.j->'fields' ELSE '[]'::jsonb END) fld
+           WHERE t.fid=f.id AND fld->>'refTableName' IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM t t2 WHERE t2.fid=f.id AND t2.j->>'tableName'=fld->>'refTableName')));
