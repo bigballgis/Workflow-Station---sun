@@ -61,7 +61,7 @@ public class FunctionUnitLifecycleComponent {
         if (definitions == null || definitions != 1) {
             throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
         }
-        for (var form : versionSnapshots.contents(catalogId, "FORM")) versionSnapshots.formBindings(catalogId, form);
+        for (var form : versionSnapshots.contents(catalogId, "FORM")) versionSnapshots.completeFormBindings(catalogId, form);
     }
 
     /**

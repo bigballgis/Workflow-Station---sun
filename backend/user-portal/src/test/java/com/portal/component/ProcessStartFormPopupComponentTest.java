@@ -5,7 +5,6 @@ import com.portal.dto.ProcessStartFormPopupSubmitRequest;
 import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
-import com.portal.repository.ActionDefinitionRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +33,9 @@ class ProcessStartFormPopupComponentTest {
     @Mock
     private ProcessInstanceRepository processInstanceRepository;
     @Mock
-    private ActionDefinitionRepository actionDefinitionRepository;
+    private ActionDefinitionLookupComponent actionDefinitionLookupComponent;
+    @Mock
+    private ProcessStartComponent processStartComponent;
 
     @InjectMocks
     private ProcessStartFormPopupComponent component;
@@ -45,16 +46,16 @@ class ProcessStartFormPopupComponentTest {
         return action;
     }
 
-    private void stubFormPopupActionOnFu(String actionId, String processKey) {
-        when(actionDefinitionRepository.findCatalogActionForFunctionUnit(actionId, processKey))
-                .thenReturn(Optional.empty());
-        when(actionDefinitionRepository.findDwActionForFunctionUnit(actionId, processKey))
+    /** A new request starts on the unit's active release, so its popup action must be one of that release. */
+    private void stubFormPopupActionOnActiveRelease(String actionId, String processKey) {
+        when(processStartComponent.activeCatalogIdForStart("user-1", processKey)).thenReturn("rel-active");
+        when(actionDefinitionLookupComponent.findPinned("rel-active", actionId))
                 .thenReturn(Optional.of(formPopupAction()));
     }
 
     @Test
     void submit_startsProcessWhenNoInstanceId() {
-        stubFormPopupActionOnFu("50384", "fu-x");
+        stubFormPopupActionOnActiveRelease("50384", "fu-x");
         ProcessInstanceInfo started = new ProcessInstanceInfo();
         started.setId("pi-1");
         when(processComponent.startProcess(eq("user-1"), eq("fu-x"), any())).thenReturn(started);
@@ -76,15 +77,20 @@ class ProcessStartFormPopupComponentTest {
                 "pi-1", "50384", req.getPopupFormData(), "user-1");
     }
 
+    /**
+     * A started request's popup action is checked against the release that request was started
+     * on (by the shared write path), never against the live design or the unit's latest release.
+     */
     @Test
     void submit_reusesRunningInstanceForInitiator() {
-        stubFormPopupActionOnFu("50384", "fu-x");
         ProcessInstance row = new ProcessInstance();
         row.setId("pi-2");
         row.setStartUserId("user-1");
         row.setStatus("RUNNING");
         row.setFunctionUnitCode("fu-x");
+        row.setFunctionUnitCatalogId("rel-1");
         when(processInstanceRepository.findById("pi-2")).thenReturn(Optional.of(row));
+        when(actionDefinitionLookupComponent.findPinned("rel-1", "50384")).thenReturn(Optional.of(formPopupAction()));
 
         ProcessStartFormPopupSubmitRequest req = ProcessStartFormPopupSubmitRequest.builder()
                 .processInstanceId("pi-2")
@@ -96,11 +102,11 @@ class ProcessStartFormPopupComponentTest {
         verify(processComponent, never()).startProcess(any(), any(), any());
         verify(actionFormPopupSubmitComponent).submitForProcessInstance(
                 "pi-2", "50384", req.getPopupFormData(), "user-1");
+        org.mockito.Mockito.verifyNoInteractions(processStartComponent);
     }
 
     @Test
     void submit_rejectsNonInitiator() {
-        stubFormPopupActionOnFu("50384", "fu-x");
         ProcessInstance row = new ProcessInstance();
         row.setStartUserId("other");
         row.setStatus("RUNNING");
@@ -117,10 +123,8 @@ class ProcessStartFormPopupComponentTest {
 
     @Test
     void submit_rejectsActionNotBoundToProcessKey() {
-        when(actionDefinitionRepository.findCatalogActionForFunctionUnit("99", "fu-x"))
-                .thenReturn(Optional.empty());
-        when(actionDefinitionRepository.findDwActionForFunctionUnit("99", "fu-x"))
-                .thenReturn(Optional.empty());
+        when(processStartComponent.activeCatalogIdForStart("user-1", "fu-x")).thenReturn("rel-active");
+        when(actionDefinitionLookupComponent.findPinned("rel-active", "99")).thenReturn(Optional.empty());
 
         ProcessStartFormPopupSubmitRequest req = ProcessStartFormPopupSubmitRequest.builder()
                 .popupFormData(Map.of())
@@ -131,6 +135,42 @@ class ProcessStartFormPopupComponentTest {
                 .isInstanceOf(PortalException.class)
                 .hasMessageContaining("Action not found for this process");
         verify(processComponent, never()).startProcess(any(), any(), any());
+        verify(actionFormPopupSubmitComponent, never()).submitForProcessInstance(any(), any(), any(), any());
+    }
+
+    private ProcessStartFormPopupSubmitRequest runningRequestOnRelease1() {
+        ProcessInstance row = new ProcessInstance();
+        row.setId("pi-2");
+        row.setStartUserId("user-1");
+        row.setStatus("RUNNING");
+        row.setFunctionUnitCode("fu-x");
+        row.setFunctionUnitCatalogId("rel-1");
+        when(processInstanceRepository.findById("pi-2")).thenReturn(Optional.of(row));
+        return ProcessStartFormPopupSubmitRequest.builder().processInstanceId("pi-2").popupFormData(Map.of()).build();
+    }
+
+    /** An action that is not part of the request's release is "not found", not a broken release. */
+    @Test
+    void submit_actionMissingFromTheRequestsReleaseIsNotFound() {
+        ProcessStartFormPopupSubmitRequest req = runningRequestOnRelease1();
+        when(actionDefinitionLookupComponent.findPinned("rel-1", "99")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> component.submit("user-1", "fu-x", "99", req))
+                .isInstanceOf(PortalException.class)
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((PortalException) e).getCode()).isEqualTo("404"));
+        verify(actionFormPopupSubmitComponent, never()).submitForProcessInstance(any(), any(), any(), any());
+    }
+
+    @Test
+    void submit_releaseActionThatIsNotAFormPopupIsRejected() {
+        ProcessStartFormPopupSubmitRequest req = runningRequestOnRelease1();
+        ActionDefinition approve = new ActionDefinition();
+        approve.setActionType("APPROVE");
+        when(actionDefinitionLookupComponent.findPinned("rel-1", "50380")).thenReturn(Optional.of(approve));
+
+        assertThatThrownBy(() -> component.submit("user-1", "fu-x", "50380", req))
+                .isInstanceOf(PortalException.class)
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((PortalException) e).getCode()).isEqualTo("400"));
         verify(actionFormPopupSubmitComponent, never()).submitForProcessInstance(any(), any(), any(), any());
     }
 }

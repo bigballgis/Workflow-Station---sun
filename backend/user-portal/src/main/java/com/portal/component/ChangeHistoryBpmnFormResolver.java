@@ -1,67 +1,33 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.util.HtmlUtils;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 /**
- * Resolves a Task Form id embedded in deployed BPMN.
- *
- * <p>Prefers {@code up_process_instance.function_unit_version_id} as a join onto
- * {@code dw_process_definitions}. That Long is the live Designer row, not the catalog freeze;
- * Task Form JSON for pinned instances is loaded from {@code sys_function_unit_contents}.
+ * Resolves a Task Form id (and action names) embedded in a release's deployed BPMN.
  */
-@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class ChangeHistoryBpmnFormResolver {
-    static Long resolve(JdbcTemplate jdbcTemplate, String processInstanceId, String stageId) {
-        if (processInstanceId == null || processInstanceId.isBlank()) return null;
-        try {
-            List<String> definitions = jdbcTemplate.queryForList(
-                    """
-                    SELECT pd.bpmn_xml
-                    FROM up_process_instance pi
-                    INNER JOIN dw_process_definitions pd
-                        ON pd.function_unit_version_id = pi.function_unit_version_id
-                        OR pd.function_unit_id IN (
-                            SELECT fu.id FROM dw_function_units fu
-                            WHERE fu.code = COALESCE(NULLIF(pi.function_unit_code, ''), pi.process_definition_key)
-                        )
-                    WHERE pi.id = ?
-                    ORDER BY (pd.function_unit_version_id = pi.function_unit_version_id) DESC NULLS LAST,
-                        pd.id DESC
-                    LIMIT 1
-                    """, String.class, processInstanceId.trim());
-            if (definitions.isEmpty()) return null;
-            return resolveTaskFormIdFromStored(definitions.get(0), stageId);
-        } catch (RuntimeException ex) {
-            log.debug("Could not resolve BPMN task form for process {}, stage {}: {}",
-                    processInstanceId, stageId, ex.getMessage());
-            return null;
-        }
-    }
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     static Long resolveTaskFormIdFromStored(String storedXml, String stageId) {
         return resolveTaskFormId(decodeBpmnXml(storedXml), stageId);
     }
 
     static Long resolveTaskFormId(String bpmnXml, String stageId) {
         if (bpmnXml == null || bpmnXml.isBlank() || stageId == null || stageId.isBlank()) return null;
-        int searchFrom = 0;
-        while (searchFrom < bpmnXml.length()) {
-            int start = bpmnXml.indexOf("<bpmn:userTask", searchFrom);
-            if (start < 0) start = bpmnXml.indexOf("<userTask", searchFrom);
-            if (start < 0) return null;
-            int end = bpmnXml.indexOf("</bpmn:userTask>", start);
-            int closingLength = "</bpmn:userTask>".length();
-            if (end < 0) {
-                end = bpmnXml.indexOf("</userTask>", start);
-                closingLength = "</userTask>".length();
-            }
-            if (end < 0) return null;
-            String taskElement = bpmnXml.substring(start, end + closingLength);
+        for (String taskElement : userTaskElements(bpmnXml)) {
             if (hasXmlAttribute(taskElement, "id", stageId)) {
                 String formId = customPropertyValue(taskElement, "formId");
                 try {
@@ -70,9 +36,63 @@ final class ChangeHistoryBpmnFormResolver {
                     return null;
                 }
             }
-            searchFrom = end + closingLength;
         }
         return null;
+    }
+
+    /**
+     * Designer action id to action name, from each user task's parallel {@code actionIds} /
+     * {@code actionNames}. A task whose arrays do not pair up is skipped, and an id two tasks name
+     * differently is dropped: neither pairing can be trusted.
+     */
+    static Map<String, String> actionNamesById(String storedXml) {
+        Map<String, String> names = new HashMap<>();
+        Set<String> conflicting = new HashSet<>();
+        String bpmnXml = decodeBpmnXml(storedXml);
+        if (bpmnXml == null) return names;
+        for (String taskElement : userTaskElements(bpmnXml)) {
+            List<String> ids = jsonStrings(customPropertyValue(taskElement, "actionIds"));
+            List<String> labels = jsonStrings(customPropertyValue(taskElement, "actionNames"));
+            if (ids.isEmpty() || ids.size() != labels.size()) continue;
+            for (int i = 0; i < ids.size(); i++) {
+                String previous = names.putIfAbsent(ids.get(i), labels.get(i));
+                if (previous != null && !previous.equals(labels.get(i))) conflicting.add(ids.get(i));
+            }
+        }
+        conflicting.forEach(names::remove);
+        return names;
+    }
+
+    /** Attribute values are HTML-escaped JSON arrays, e.g. {@code [&#34;Approve&#34;]}. */
+    private static List<String> jsonStrings(String escaped) {
+        if (escaped == null || escaped.isBlank()) return List.of();
+        try {
+            List<Object> values = JSON.readValue(HtmlUtils.htmlUnescape(escaped), new TypeReference<List<Object>>() { });
+            if (values.stream().anyMatch(java.util.Objects::isNull)) return List.of();
+            return values.stream().map(value -> String.valueOf(value).trim()).toList();
+        } catch (JsonProcessingException ignored) {
+            return List.of();
+        }
+    }
+
+    private static List<String> userTaskElements(String bpmnXml) {
+        List<String> elements = new ArrayList<>();
+        int searchFrom = 0;
+        while (searchFrom < bpmnXml.length()) {
+            int start = bpmnXml.indexOf("<bpmn:userTask", searchFrom);
+            if (start < 0) start = bpmnXml.indexOf("<userTask", searchFrom);
+            if (start < 0) break;
+            int end = bpmnXml.indexOf("</bpmn:userTask>", start);
+            int closingLength = "</bpmn:userTask>".length();
+            if (end < 0) {
+                end = bpmnXml.indexOf("</userTask>", start);
+                closingLength = "</userTask>".length();
+            }
+            if (end < 0) break;
+            elements.add(bpmnXml.substring(start, end + closingLength));
+            searchFrom = end + closingLength;
+        }
+        return elements;
     }
     static String decodeBpmnXml(String stored) {
         if (stored == null) return null;

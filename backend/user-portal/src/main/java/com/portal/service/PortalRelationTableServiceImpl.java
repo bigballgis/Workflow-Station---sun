@@ -433,65 +433,6 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
 
     @Override
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getLookupConfigs(Long formId) {
-        try {
-            String sql = "SELECT lc.component_id, lc.table_id, lc.search_fields, lc.display_field, lc.view_config_id "
-                    + "FROM rt_lookup_configs lc WHERE lc.form_id = ?";
-            List<Map<String, Object>> configs = jdbcTemplate.query(sql, (rs, rowNum) -> {
-                Map<String, Object> lc = new java.util.HashMap<>();
-                lc.put("componentId", rs.getString("component_id"));
-                lc.put("tableId", rs.getLong("table_id"));
-                lc.put("searchFields", rs.getString("search_fields"));
-                lc.put("displayField", rs.getString("display_field"));
-                lc.put("viewConfigId", rs.getObject("view_config_id"));
-                return lc;
-            }, formId);
-
-            // Load view fields for each config that has a viewConfigId
-            for (Map<String, Object> config : configs) {
-                Object vcId = config.get("viewConfigId");
-                // If no viewConfigId in lookup config, try to find view config by tableId
-                if (vcId == null) {
-                    Object tableId = config.get("tableId");
-                    if (tableId != null) {
-                        try {
-                            vcId = jdbcTemplate.queryForObject(
-                                "SELECT id FROM rt_view_configs WHERE table_id = ? ORDER BY id DESC LIMIT 1",
-                                Long.class, ((Number) tableId).longValue());
-                        } catch (Exception ignored) {}
-                    }
-                }
-                if (vcId != null) {
-                    try {
-                        String vfSql = "SELECT field_name, display_label, column_width, sort_order, visible "
-                                + "FROM rt_view_fields WHERE view_config_id = ? ORDER BY sort_order";
-                        List<Map<String, Object>> viewFields = jdbcTemplate.query(vfSql, (rs, rowNum) -> {
-                            Map<String, Object> vf = new java.util.HashMap<>();
-                            vf.put("fieldName", rs.getString("field_name"));
-                            vf.put("displayLabel", rs.getString("display_label"));
-                            vf.put("columnWidth", rs.getObject("column_width"));
-                            vf.put("sortOrder", rs.getInt("sort_order"));
-                            vf.put("visible", rs.getBoolean("visible"));
-                            return vf;
-                        }, ((Number) vcId).longValue());
-                        config.put("viewFields", viewFields);
-                    } catch (Exception e) {
-                        log.warn("Failed to load view fields for viewConfigId {}: {}", vcId, e.getMessage());
-                        config.put("viewFields", Collections.emptyList());
-                    }
-                } else {
-                    config.put("viewFields", Collections.emptyList());
-                }
-            }
-            return configs;
-        } catch (Exception e) {
-            log.warn("Failed to load lookup configs for formId {}: {}", formId, e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<Map<String, Object>> getViewFieldsByTableId(Long tableId) {
         try {
             if (SYSTEM_USER_TABLE_ID.equals(tableId)) {

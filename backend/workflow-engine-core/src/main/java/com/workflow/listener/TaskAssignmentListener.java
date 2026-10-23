@@ -101,6 +101,14 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Lazy
     private com.workflow.component.ExceptionHandlerComponent exceptionHandlerComponent;
 
+    @Autowired
+    @Lazy
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+
+    @Autowired
+    @Lazy
+    private com.workflow.component.PinnedReleaseLookup pinnedReleaseLookup;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 分派失败留痕的 task local 变量名：失败原因（human-readable）。 */
@@ -134,6 +142,14 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
     JdbcTemplate jdbcTemplate() {
         return jdbcTemplate;
+    }
+
+    com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots() {
+        return catalogSnapshots;
+    }
+
+    com.workflow.component.PinnedReleaseLookup pinnedReleaseLookup() {
+        return pinnedReleaseLookup;
     }
 
     ObjectMapper objectMapper() {
@@ -483,6 +499,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
             try {
                 miWriter().ensureMultiInstanceExtendedTaskForPreassignedTask(this, task, taskId, processInstanceId,
                         processDefinitionId, taskDefinitionKey, resolvedAssignee);
+            } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+                recordAssignmentFailure(taskId, processInstanceId, taskDefinitionKey, e.getMessage(), "ERROR", e);
             } catch (Exception e) {
                 log.warn("ensureMultiInstanceExtendedTaskForPreassignedTask after resolve failed for {}: {}",
                         taskId, e.getMessage());
@@ -549,6 +567,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
         try {
             miWriter().ensureMultiInstanceExtendedTaskForPreassignedTask(this, task, taskId, processInstanceId,
                     processDefinitionId, taskDefinitionKey, assignee);
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            recordAssignmentFailure(taskId, processInstanceId, taskDefinitionKey, e.getMessage(), "ERROR", e);
         } catch (Exception e) {
             log.warn("ensureMultiInstanceExtendedTaskForPreassignedTask after rollback fallback failed for {}: {}",
                     taskId, e.getMessage());

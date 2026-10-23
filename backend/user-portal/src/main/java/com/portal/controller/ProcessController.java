@@ -92,7 +92,8 @@ public class ProcessController {
         requireFunctionUnitContentAccess(userId, functionUnitId, taskId, processInstanceId);
         if (forStart && (taskId != null || processInstanceId != null)) throw new IllegalArgumentException("Start content cannot use task or instance access");
         Map<String, Object> content = forStart ? processComponent.getFunctionUnitStartContent(functionUnitId)
-                : processComponent.getFunctionUnitContent(functionUnitId);
+                : processComponent.getFunctionUnitContent(
+                        versionHydration.pinnedContentRef(functionUnitId, taskId, processInstanceId));
         return ApiResponse.success(content);
     }
 
@@ -105,7 +106,8 @@ public class ProcessController {
             @RequestParam(required = false) String taskId,
             @RequestParam(required = false) String processInstanceId) {
         requireFunctionUnitContentAccess(userId, functionUnitId, taskId, processInstanceId);
-        List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
+        List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(
+                versionHydration.pinnedContentRef(functionUnitId, taskId, processInstanceId), contentType);
         return ApiResponse.success(contents);
     }
 

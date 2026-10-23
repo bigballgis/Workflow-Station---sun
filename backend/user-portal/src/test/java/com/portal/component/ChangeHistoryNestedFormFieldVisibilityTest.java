@@ -24,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ class ChangeHistoryNestedFormFieldVisibilityTest {
 
     private static final String PROCESS_ID = "proc-nested-history";
     private static final String FU_CODE = "atm-nested-fu";
+    private static final String RELEASE = "release-atm-1";
 
     /**
      * PROCESS form: widget ids + a card that actually holds case_stage.
@@ -81,9 +83,19 @@ class ChangeHistoryNestedFormFieldVisibilityTest {
         when(workflowEngineClient.getTaskHistory(anyString())).thenReturn(Optional.empty());
         when(auditEnricher.resolveStageNamesFromDb(any())).thenReturn(Map.of());
         when(processInstanceRepository.findById(PROCESS_ID)).thenReturn(Optional.of(
-                ProcessInstance.builder().id(PROCESS_ID).processDefinitionKey(FU_CODE).build()));
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(FU_CODE)))
-                .thenReturn(List.of(PROCESS_FORM_JSON, DETAIL_FORM_JSON));
+                ProcessInstance.builder().id(PROCESS_ID).processDefinitionKey(FU_CODE)
+                        .functionUnitCatalogId(RELEASE).build()));
+        // The request's release: its PROCESS form (whose ATM_Transaction binding is the MI participant
+        // collection) and a DETAIL form. History is displayed against these, never the live designer.
+        when(jdbcTemplate.queryForList(contains("sys_function_unit_contents"), eq(String.class), eq(RELEASE), eq("FORM")))
+                .thenReturn(List.of(
+                        "{\"formId\":1,\"formName\":\"Case\",\"formType\":\"PROCESS\",\"configJson\":" + PROCESS_FORM_JSON
+                                + ",\"tableBindings\":[{\"bindingId\":1140,\"bindingType\":\"SUB\",\"tableName\":\"ATM_Transaction\","
+                                + "\"bindingLinkMode\":\"miParticipantRow\"},{\"bindingId\":1141,\"bindingType\":\"SUB\","
+                                + "\"tableName\":\"atm_correspondence\"}]}",
+                        "{\"formId\":2,\"formName\":\"Detail\",\"formType\":\"DETAIL\",\"configJson\":" + DETAIL_FORM_JSON + "}"));
+        when(jdbcTemplate.queryForList(contains("sys_function_unit_contents"), eq(String.class), eq(RELEASE), eq("DATA_TABLE")))
+                .thenReturn(List.of());
 
         component = new ChangeHistoryComponent(
                 changeHistoryRepository,
@@ -112,6 +124,8 @@ class ChangeHistoryNestedFormFieldVisibilityTest {
                 .containsExactly("case_stage", "case_status");
         assertThat(records.get(0).getFieldLabel()).isEqualTo("Case Stage");
         assertThat(records.get(1).getFieldLabel()).isEqualTo("Case Status");
+        org.mockito.Mockito.verify(jdbcTemplate, org.mockito.Mockito.never())
+                .query(contains("dw_"), any(RowMapper.class), any(Object[].class));
     }
 
     @Test
@@ -141,8 +155,6 @@ class ChangeHistoryNestedFormFieldVisibilityTest {
     @SuppressWarnings("unchecked")
     void miTaskRowFilterKeepsSharedSubTablesAndHidesOtherCollectionRows() {
         Instant now = Instant.parse("2026-09-04T10:36:00Z");
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(PROCESS_ID)))
-                .thenReturn(List.of("ATM_Transaction"));
         when(changeHistoryRepository.findByProcessInstanceIdOrderByTimestampAsc(PROCESS_ID))
                 .thenReturn(List.of(
                         history(1L, "case_stage", "Open", now),
@@ -160,6 +172,17 @@ class ChangeHistoryNestedFormFieldVisibilityTest {
                 .containsExactly("case_stage", "correspondence_id", "card_number");
         assertThat(records).extracting(ChangeHistoryRecord::getRowIdentifier)
                 .containsExactly(null, "Corr-000043", "ATM-DC-PW-TRANS-000039");
+    }
+
+    @Test
+    void corruptPublishedFormsFailTheRequestInsteadOfSilentlyDegradingVisibility() {
+        when(jdbcTemplate.queryForList(contains("sys_function_unit_contents"), eq(String.class), eq(RELEASE), eq("FORM")))
+                .thenReturn(List.of("{not json"));
+        when(changeHistoryRepository.findByProcessInstanceIdOrderByTimestampAsc(PROCESS_ID))
+                .thenReturn(List.of(history(1L, "case_stage", "Open", Instant.parse("2026-09-04T03:50:00Z"))));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> component.getChangeHistory(PROCESS_ID, "ROW-1"))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
     }
 
     private static ChangeHistory history(long id, String fieldName, String newValue, Instant timestamp) {

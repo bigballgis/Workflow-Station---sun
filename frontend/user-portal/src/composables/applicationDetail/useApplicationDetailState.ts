@@ -70,7 +70,6 @@ export type ApplicationDetailSecondaryCtx = {
   bpmnAllOrderedForms: Array<{ formId: string | null; formName: string | null; taskName: string | null }>
   bindingRelationTableMap: Map<number, number | null>
   selectedForm: any
-  lookupSourceId: number | null
 }
 
 export function createApplicationDetailState(options: {
@@ -155,9 +154,6 @@ export function createApplicationDetailState(options: {
 
   /** Cached designer config for the active main form (subListViews, subTablePortalViews, rule). */
   const mainFormConfig = ref<Record<string, any>>({})
-
-  /** Lookup config fallback map (from rt_lookup_configs) */
-  const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
 
   // Relation view configs from configJson (designed in developer-workstation)
   const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
@@ -257,7 +253,6 @@ export function createApplicationDetailState(options: {
     lastBindingRelationTableMap,
     mainFormNativeSubTableBindingIds,
     mainFormConfig,
-    lookupDbConfigs,
     relationViewConfigs,
     previousForms,
     selectedNodeId,

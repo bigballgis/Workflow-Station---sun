@@ -104,18 +104,6 @@ public class PortalRelationTableController {
         }
     }
 
-    @GetMapping("/lookup-configs/{formId}")
-    @Operation(summary = "获取表单的 Lookup 配置")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getLookupConfigs(
-            @PathVariable Long formId) {
-        try {
-            List<Map<String, Object>> result = service.getLookupConfigs(formId);
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (Exception e) {
-            return ResponseEntity.ok(ApiResponse.success(List.of()));
-        }
-    }
-
     @GetMapping("/{tableId}/view-fields")
     @Operation(summary = "获取 Relation Table 的 View 字段配置")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getViewFields(

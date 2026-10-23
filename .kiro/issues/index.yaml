@@ -5178,6 +5178,270 @@
     本轮仅创建测试数据，未修改此范围外实现；改用英文名称后成功创建并部署FU50097。
 
 - id: "1694"
+  status: open
+  severity: minor
+  category: architecture
+  summary: "SLA 时长按 FU code 读当前环境配置（ac_sla_policies），未随请求发起时的版本冻结"
+  file: "backend/user-portal/src/main/java/com/portal/component/SlaDueDateEnricher.java"
+  detail: |
+    2026-10-22 运行时版本化审计发现：请求编号、表单、动作等都按 up_process_instance.function_unit_catalog_id
+    钉住的发布版本加载，但 SLA 期限（SlaDueDateEnricher 读 ac_sla_policies，按 FU code）取的是当前环境配置，
+    修改 SLA 策略会影响已发起的旧请求。
+    用户决定：本轮先不做，SLA 功能整体要重新设计，届时一并考虑是否按版本冻结。
+    2026-10-22 DW 依赖审计补充（随 SLA 重做一并处理）：Admin SlaPolicyComponent.MAPPING_FROM / SlaPolicyColumnSpec
+    从 dw_* 列出 FU，生产不部署 DW 时 SLA 页面为空、无法保存策略，任何请求都拿不到到期时间；
+    Portal SlaRecalcJobService.restamp 未 ProcessVersionContext.apply，变量缺 functionUnitId 时经
+    SlaDueDateEnricher.resolveSpec/loadSpec 读 dw_*。应改读 sys_function_units + 发布 DATA_TABLE 的 slaConfig。
+- id: "1695"
+  status: open
+  severity: minor
+  category: bug
+  summary: "MI 集合注入失败时只 warn 并跳过，子流程以空集合启动（零子任务），而不是报错"
+  file: "backend/user-portal/src/main/java/com/portal/component/MiCollectionVariableBuilder.java"
+  detail: |
+    2026-10-22 运行时版本化修复（BPMN/子表定义改按请求钉住的版本取）时发现：非冻结路径
+    (instanceBound=false) 在取不到 BPMN、找不到节点、组集合抛错时 catch 后 log.warn 返回空，
+    MI 子流程随后以空集合启动、零子任务，属于静默产生错误数据。本轮按方案未改容错语义。
+- id: "1696"
+  status: open
+  severity: minor
+  category: quality
+  summary: "一批无调用方的死代码仍按 FU code 读 DW 当前设计或最新版本"
+  detail: |
+    2026-10-22 运行时版本化审计列出（存量死代码，本轮未删）：
+    ChangeHistoryBpmnFormResolver.resolve（join dw_process_definitions）及
+    ProcessStartComponent/ProcessInstanceHydrationComponent 写入 functionUnitVersionId 的
+    DwFunctionUnitIdLookup（唯一读取方即上面的 resolve）；MiSubTaskSubTableRowMerger.lookupForeignKeyFieldByStoreKey；
+    ActionDefinitionRepository.findByProcessDefinitionKey / findFromDwByIds / findFromDwById 与
+    ActionDefinitionLookupComponent.resolveByIdsInOrder；ProcessFormComponent.validateProcessFormExists
+    → fetchProcessFormFromLocalDw；PortalPrimaryKeyAllocationComponent.allocate；OwnerFieldComponent.viewHints；
+    engine DeveloperWorkstationEmailTemplateClient.getTemplate。
+    2026-10-22 DW 依赖审计补充（均无生产调用方）：引擎 ConfiguredEmailSender.resolveDwFunctionUnitRef；
+    Admin FormTableBindingLoader、CatalogFormBindingEnricher（注入未调用）；Portal ProcessFormComponent.buildRequestIdConfigMap
+    → RequestIdEnricher.resolveConfigView；TaskFormDefinitionLoader 未使用的 developer-workstation.url 参数。
+    2026-10-22 Phase 2（第 1 组）已删：ChangeHistoryBpmnFormResolver.resolve、DwFunctionUnitIdLookup（发起/补写不再写
+    function_unit_version_id）、ProcessFormComponent.buildRequestIdConfigMap 与 RequestIdEnricher.resolveConfigView
+    （连同 resolveSpecs/loadSpec 的 DW 现算），以及 ActionDefinitionRepository.findCatalogActionForFunctionUnit /
+    findDwActionForFunctionUnit（新建请求的 FORM_POPUP 预检改为按将要发起的生效发布版本 findPinned）。其余条目仍在。
+    另：ProcessComponent.getFunctionUnitContent(userId, ref)（catch-all 返回 error map 的旧重载）已无 main 调用方；
+    /function-units/{id}/contents、/fu-data、/function-unit-contents、/data-api/fu-contents 前端未使用（版本 409 现已透传）。
+- id: "1697"
+  status: open
+  severity: minor
+  category: architecture
+  summary: "剩余 4 处「变量无 functionUnitId 就读 DW 当前设计」分支：生产已不可达，应改为报错并删掉 DW 读取"
+  detail: |
+    2026-10-22 Phase 2 已处理：MiSubTableScopeAwareMerge.loadFilters 与 SubTableBindingScopeGuard 的 live 分支
+    已改为 VERSION_RECOVERY_REQUIRED 并删除 DW 查询；认领/退认领/转办/改派（ProcessInstanceSyncComponent）
+    与撤回（ProcessComponent.clearMainCaseHandlerOnWithdraw）这两条不经补写的路径已先 ProcessVersionContext.apply，
+    Owner 字段不再落到 live 分支。
+    仍剩（可达性审计结论：生产不可达）：ProcessSubTablePrimaryKeyEnricherComponent、ComputedFieldRecalculator、
+    OwnerFieldMetadataCatalog（loadIfPresent / primaryKeyFieldsForSlice / designerPrimaryKeyFieldsForSlice /
+    hasAnyOwnerField）、ProcessStartFormEnricherComponent.enrichOnInsert 的 live 分支。应改为报错并删除 DW 读取；
+    对应测试 ProcessSubTablePrimaryKeyEnricherComponentTest、ComputedFieldRecalculatorTest、OwnerFieldComponentTest、
+    ProcessStartFormEnricherComponentTest 基本全部基于 DW 桩，需整体迁移为发布快照夹具（参考
+    CatalogComputedVersionIsolationTest）。上线前在各环境执行
+    select count(*) from up_process_instance where not (variables::jsonb ? 'functionUnitId') 确认存量。
+    另：CalledProcessSyncComponent.refreshCallers 的既有 catch 会把调用方缺版本的版本错误吞成 warn（逐行结果不写回），
+    当前数据不可达，随本条一并改为透传。
+    2026-10-22 补充（Phase 2 第 3 轮 review）：RequestIdEnricher.stampRequestId 现在要求 variables.functionUnitId，
+    ProcessStartFormEnricherComponent.enrichOnInsert 的 live 分支因此会在读完 DW、分配完 dw_pk_sequences 主键之后才抛
+    VERSION_RECOVERY_REQUIRED（不可达，但改造时应把报错前移到分支入口）。另有 platform-common
+    SubTablePhysicalColumnResolver 按表名读 dw_field_definitions/dw_table_definitions，仅在旧物理子表路径使用
+    （TaskMultiInstanceService 物理回写、SubTableEnrichmentComponent.recoverFormFieldsFromHistory；dev 中没有任何
+    发布版本的数据表是物理表），一并改为读请求钉住版本或删除。
+- id: "1698"
+  status: open
+  severity: minor
+  category: bug
+  summary: "变更历史审计不再把同表其它表单的绑定 id（sibling）当别名，旧的数字 key 切片不进审计基线"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistorySubmissionFilter.java"
+  detail: |
+    2026-10-22 删除了读 DW 的绑定查询（含 sibling_id 别名）后，绑定契约只来自钉住版本表单自己的
+    tableBindings；10-21 运行时版本化后生产路径本就走这里。旧请求里以「其它表单的绑定 id」为 key 的
+    __subTables__ 切片不会映射到物理表（只影响变更历史的旧值基线）。如需支持，应从钉住版本的全部
+    表单汇总同表绑定 id。
+- id: "1699"
+  status: open
+  severity: minor
+  category: quality
+  summary: "MI 回归 fixture 假设发起后唯一任务即 MI 前置节点；MI Demo 当前设计多了 test 节点导致 start 脚本超时"
+  file: "frontend/scripts/start-mi-verification-fixture.mjs"
+  detail: |
+    2026-10-22 跑 regression:mi 时，start-mi-verification-fixture.mjs 完成首个任务后等待 2 个 MI 任务超时：
+    源 FU 50005 现在的流程是 test → assignment → MI，需要手工完成 assignment 后用
+    MI_FIXTURE_PROCESS_ID 续跑。脚本应按 BPMN 推进到 MI 前置节点，而不是假设一步到位。
+- id: "1700"
+  status: open
+  severity: minor
+  category: quality
+  summary: "ProcessStartBatchFirstOutcomeTest 6 个用例反射调用的私有方法签名已被 10-21 运行时版本化改动，全部报错"
+  file: "backend/user-portal/src/test/java/com/portal/component/ProcessStartBatchFirstOutcomeTest.java"
+  detail: |
+    ReflectionTestUtils.invokeMethod 调 autoCompleteFirstTask(String,String,HashMap,ActiveCatalogPin)，
+    HEAD 上方法已多出参数，Method not found。2026-10-22 在 HEAD 上同样失败，属于存量基线。
+- id: "1701"
+  status: open
+  severity: minor
+  category: bug
+  summary: "To Do 批量视图跳过钉住版本解析不出动作的分组（旧版本动作缺 source_id 且按名字无法唯一对应）"
+  file: "backend/user-portal/src/main/java/com/portal/component/BatchTaskComponent.java"
+  detail: |
+    2026-10-22 运行时版本化 Phase 1：旧版本（source_id 为空）的动作改为从该版本已发布 BPMN 的
+    actionIds/actionNames 按名字唯一匹配自愈；仍匹配不上时 listGroups 只让该分组退出批量视图
+    （FALLBACK(ux)，功能变少、不出错数据），打开其中任务仍报版本错误。根治需要为这类版本补齐
+    动作的 source_id 映射（发布侧数据恢复），之后可删除该降级。
+- id: "1702"
+  status: open
+  severity: minor
+  category: quality
+  summary: "ChangeHistorySubmissionFilter 注释仍称按 dw_form_stage_bindings 解析阶段表单，与实现不符"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistorySubmissionFilter.java"
+  detail: |
+    2026-10-22 复审发现（存量）：约 386-389 行注释描述的是旧的 DW 绑定表来源，实际阶段表单
+    来自钉住版本的已发布 BPMN/FORM 内容。仅注释漂移，不影响行为。
+- id: "1703"
+  status: open
+  severity: minor
+  category: quality
+  summary: "读取已发布 PROCESS BPMN 有三份实现，多行时取法不同（LIMIT 1 最新 vs 要求恰好一行）"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableWriteDesign.java"
+  detail: |
+    SubTableWriteDesign.resolve、CatalogPinnedTaskFormLoader.resolveCatalogFormId 取 created_at 最新一行，
+    ActionDefinitionRepository.findPublishedProcessXml（2026-10-22 新增）要求恰好一行。2026-10-22 dev 库
+    29 个版本均只有 1 行 PROCESS，无实际分歧；应收敛为 CatalogSnapshotReader 上的单一读取方法，
+    多行一律按快照不完整报错。
+- id: "1704"
+  status: open
+  severity: minor
+  category: architecture
+  summary: "Lookup 回填视图在钉住表单未配置列时取关联表当前字段列表（关联表结构不按发布版本）"
+  file: "frontend/user-portal/src/components/lookup/LookupField.vue"
+  detail: |
+    2026-10-22 发现：钉住版本表单的 lookupConfig / relationViews 未给回填列时，LookupField 调
+    /relation-tables/{tableId}/view-fields 取关联表当前字段定义。DW rt_lookup_configs 回退已删除；此处读的是
+    关联表（Admin 维护）当前结构而非 FU 设计。现有数据中仅 sys_users 虚拟表的 30 个 lookup 走到，结果固定。
+    若要求关联表结构也按发布版本冻结，应改读发布快照里的 RELATION 表定义。
+- id: "1705"
+  status: open
+  severity: major
+  category: architecture
+  summary: "非请求页面仍依赖 Developer Workstation 设计表（生产不部署 DW）：Audit 菜单、关联表删除守卫、审计日志子表显示名"
+  detail: |
+    2026-10-22 DW 依赖审计，用户决定「先不做，以后再做」：
+    - FunctionUnitAuditScopeComponent 从 dw_function_units 列可审计 FU → 生产 Audit 菜单为空被隐藏；应读 sys_function_units。
+    - Admin RelationTableStructureServiceImpl.hasBindings / existsInDwTables 按 ftb.table_id 关联，RELATED 绑定只有
+      relation_table_id（dev 48 条全为 NULL）→ 删除守卫在所有环境从未生效，被已部署 FU 引用的关联表可被删；
+      应查 sys_function_unit_contents DATA_TABLE（tableType=RELATION，表名忽略大小写）。
+    - UserPortalAuditEnricher.resolveSubTableDisplayNames 读 dw_table_definitions → Admin 全局审计日志显示原始子表 key；
+      应取实例所钉发布 DATA_TABLE 的 tableDisplayName。
+    Data > Views、按 View 授权访问请求详情、BI 数据视图分配同样读 dw_*，归 Phase 3（Views 改读生效发布的 MAIN_TABLE_VIEW）。
+- id: "1706"
+  status: open
+  severity: major
+  category: deployment
+  summary: "Portal 文件上传/下载默认路径 /api/v1/upload 在仓库的 uat/preprod Kong 配置里路由到 developer-workstation-service"
+  file: "deploy/k8s/config_map/uat/kong-declarative-config.yml"
+  detail: |
+    2026-10-22 DW 依赖审计记录（用户说明：User Portal 有自己的文件上传下载、与 DW 分开，本期不改）。仓库现状供生产配置核对：
+    前端 useFieldUpload.ts DEFAULT_UPLOAD_URL='/api/v1/upload'，预览/下载走 /api/v1/upload/files/{name}、
+    shared fileTransferApi 走 /api/v1/upload/file-transfers；user-portal 后端没有 upload 控制器；uat/preprod Kong 的
+    upload-route（/api/v1/upload、/api/v1/import）挂在 developer-workstation-service 下；引擎 FILE_SERVICE_BASE_URL
+    指向 developer-workstation-service，邮件附件（EmailAttachmentResolver）与 Email Monitor 附件经 DW 文件接口。
+    生产网关/配置需确认这些路径指向 Portal 自己的文件服务。
+    同源补充：引擎 ServiceTaskExecutor 把流程变量里所有 /api/... 相对地址改写成 DW 主机后再发给 Activepieces，
+    生产需随文件服务地址一并确认。
+- id: "1707"
+  status: open
+  severity: minor
+  category: bug
+  summary: "子表行编辑改派处理人（engine SubTableAssignmentHandler）只认物理表主键，JSON 行存储的子表一律失败"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/SubTableAssignmentHandler.java"
+  detail: |
+    2026-10-22 DW 依赖审计发现（存量问题，非本轮引入）：assign 路径（Portal TaskController → 引擎 TaskController）
+    用 PostgresPhysicalTablePrimaryKeys 取主键，随后 verifyRowBelongsToTask / updateSubTableAssignee 直接对物理表
+    SELECT/UPDATE。业务子表按 json-row-storage 规则没有物理表：生产（无 DW 设计表）一直报主键缺失；dev 以前靠 DW
+    设计表兜底拿到主键，但随后查物理表同样失败（400）。本轮删除 DW 兜底后两环境行为一致。修复需整体改为读写
+    JSON 行存储（主键按请求钉住的发布版本，见 SubTablePrimaryKeys），不在本期范围。
+- id: "1708"
+  status: open
+  severity: minor
+  category: bug
+  summary: "Done（已完成任务）列表上被调用单元任务的 Request ID 取自子请求自身，To Do/Dashboard 取调用方请求的"
+  file: "backend/user-portal/src/main/java/com/portal/component/CompletedTaskListQueryComponent.java"
+  detail: |
+    2026-10-22 Phase 2 第 3 轮 review 发现（存量行为，本轮只把显示改为直接读落库值）：To Do/Dashboard 经
+    RequestIdEnricher.enrichTaskRequestIds 沿 parent_process_instance_id 上溯（最多 5 层）取调用方请求的 __request_id；
+    Done 列表按 SQL 取任务所在实例自己的 pi.variables->>'__request_id'（显示、筛选、排序同一表达式），被调用子请求
+    通常没有自己的 Request ID，于是同一任务在 To Do 显示调用方 ID、完成后在 Done 显示 '-'。修复需在 SQL 里对
+    显示/筛选/排序统一改为根请求的值。
+- id: "1709"
+  status: open
+  severity: minor
+  category: bug
+  summary: "新建请求的 FORM_POPUP：预检与发起之间若生效版本被切换，会留下已发起但没有 ACTION 行的请求"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartFormPopupComponent.java"
+  detail: |
+    2026-10-22 Phase 2 第 4 轮 review 记录（存量竞态，本轮预检改为按将要发起的生效发布版本 findPinned）：预检通过后
+    startProcess 会重新解析生效版本；若此间 Admin 切换了生效版本且新版本没有该动作，请求已发起（首个任务保持打开），
+    随后 submitForProcessInstance 按请求钉住的版本 resolvePinned 返回 409，留下一条没有 ACTION 行的请求，且无人知晓。
+    修复方向：把预检得到的 catalogId 传给发起流程（同一次解析），或发起与写 ACTION 行同事务回滚。
+- id: "1710"
+  status: open
+  severity: minor
+  category: quality
+  summary: "后端已红测试（HEAD a41f0c5e5 干净导出同样红）：引擎 H2 属性测试缺 up_process_instance、portal 反射测试签名过期"
+  detail: |
+    2026-10-22 Phase 2 第 4 轮 review 要求入账（在 git archive HEAD a41f0c5e5 干净导出上复跑，计数与工作区一致，非本轮引入）：
+    - 引擎 HistoryDataArchivalIntegrityProperties 43E、MultiDimensionalTaskAssignmentProperties 86E、
+      ProcessInstanceDeletionProtectionProperties 2F/4E：H2 测试库没有 up_process_instance，Phase 1 的
+      RuntimeVersionWriteGuard / RecordNoteTaskContext 查询 function_unit_catalog_id 时 bad SQL grammar。
+    - 引擎 ProcessDefinitionVersionProperties 1E：ProcessDeploymentManager.deleteProcessDefinition 的
+      sys_function_unit_contents 联查在 H2 上 bad SQL grammar。
+    - portal ProcessStartBatchFirstOutcomeTest 6E：ReflectionTestUtils 按 4 个参数调用 autoCompleteFirstTask，
+      方法签名已多出参数，Method not found。
+    - 引擎 TaskManagerComponentMultiInstanceTest 1F/4E（taskClaimSupport 未注入，10-16 起）。
+    修复方向：H2 测试 schema 补 up_process_instance（或这些属性测试注入 PinnedReleaseLookup 桩）；反射测试改按当前签名。
+- id: "1711"
+  status: fixed
+  fixed_at: "2026-10-23"
+  severity: major
+  category: bug
+  summary: "运行时版本化之前导入的发布版本快照缺关联表定义，钉在上面的请求全部 409 打不开"
+  file: "backend/platform-common/src/main/java/com/platform/common/functionunit/CatalogSnapshotReader.java"
+  detail: |
+    根因：上游 019d0c5f6（2026-10-21）起 FunctionUnitPackageParser 才把部署包 relation-tables/ 写进发布快照，并由
+    CatalogSnapshotReader 要求每个 RELATED 绑定都能在本版本快照里找到关联表；此前导入的版本包里有、快照没存（当时
+    运行时实时读 rt_），Admin 也未保留原始包。dev：fu-20260422-23tfag 1.0.125–1.0.127，12 条请求（11 条在途）。
+    修复（用户选定方案）：读已有请求时补齐——仅当某个绑定/外键在快照里找不到表、且该版本是旧格式（content_checksum
+    为空、快照里没有任何 RELATION 表）时，才从 Admin rt_table_versions 取「deployed_at ≤ 版本 created_at」的最新版本
+    （deployed_at 按 spring.jpa.properties.hibernate.jdbc.time_zone 解释，三服务均为 Asia/Shanghai），连同外键上级、
+    子表外键指向的关联表，转换成包内快照形状；旧格式标记与补齐结果按版本缓存；只读、不改数据、不读 DW，标
+    FALLBACK(migration)，当下列查询在所有环境都没有被请求钉住的版本时删除。
+    新请求只用完整快照：激活闸门 assertReadyForActivation 与发起内容（content?forStart=true）都用
+    completeFormBindings，只认快照本身——新版本缺表照样拒绝；旧格式版本即便当前仍是生效版本，也不能再发起新请求
+    （与 10-21 以来的现状一致），需重新部署完整版本。
+    标记说明：导入（FunctionUnitImportComponent:122）一律写 content_checksum；Admin createNewVersion 现在复制源版本的
+    content_checksum（之前不复制，复制出的版本会被误当成旧格式）；init-scripts 种子版本没有 content_checksum，属于旧格式。
+    补齐精度：rt_table_versions 快照不含 isComputed/computedField（旧版本上关联表计算列标记丢失）；lookupConfig 为对象
+    （前端兼容）；表名/显示名/描述取当前定义——发布后改名且按名字绑定的关联表仍 409（显式）；外键目标定义已被删除时该
+    外键的 refTableName 为空、绑定上不再带外键关系；发布之后才首次部署的关联表仍 409。
+    调用方若在被调方旧格式版本生效期间部署，会钉住该旧版本，其新请求派生的子请求仍读旧格式版本（属于已有调用方
+    请求，读取宽松，可接受）。
+    其他环境上线前排查受影响版本（含只经子表外键依赖关联表的版本；enabled=t 表示仍是生效版本，需重新部署完整版本
+    才能发起新请求；该查询在所有环境都没有被请求钉住的版本时即可删除补齐逻辑）：
+    WITH t AS (SELECT c.function_unit_id fid, c.content_data::jsonb j FROM sys_function_unit_contents c WHERE c.content_type='DATA_TABLE')
+    SELECT f.code, f.version, f.id, f.enabled FROM sys_function_units f
+    WHERE f.content_checksum IS NULL AND NOT EXISTS (SELECT 1 FROM t WHERE t.fid=f.id AND t.j->>'tableType'='RELATION')
+      AND (EXISTS (SELECT 1 FROM sys_function_unit_contents c, jsonb_array_elements(CASE WHEN jsonb_typeof(c.content_data::jsonb->'tableBindings')='array'
+             THEN c.content_data::jsonb->'tableBindings' ELSE '[]'::jsonb END) b
+           WHERE c.function_unit_id=f.id AND c.content_type='FORM' AND b->>'bindingType'='RELATED'
+             AND coalesce(b->>'relationTableId','')<>'-1000000001')
+        OR EXISTS (SELECT 1 FROM t, jsonb_array_elements(CASE WHEN jsonb_typeof(t.j->'fields')='array' THEN t.j->'fields' ELSE '[]'::jsonb END) fld
+           WHERE t.fid=f.id AND fld->>'refTableName' IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM t t2 WHERE t2.fid=f.id AND t2.j->>'tableName'=fld->>'refTableName')));
+
+- id: "1712"
   status: fixed
   fixed_at: "2026-10-23"
   severity: major
@@ -5198,7 +5462,7 @@
     相关后端364项、前端专项60项、MI234项通过，Portal前后端重建；独立增量重审PASS，原UAT和全生命周期仍未验收。
     证据：docs/verification/2026-10-22-batch-assign-lookup.md。
 
-- id: "1695"
+- id: "1713"
   status: open
   severity: major
   category: deploy
@@ -5211,7 +5475,7 @@
     初轮未改DW；续验因关系表发布修复已重建DW，克隆继承与这两个旧草稿的清理尚未复验。
 
 
-- id: "1696"
+- id: "1714"
   status: fixed
   fixed_at: "2026-10-22"
   severity: major
@@ -5225,7 +5489,7 @@
     实际快照包含sys_users，三个RELATED表名完整，rt_table_definitions中未创建同名业务表。
     证据：docs/verification/2026-10-22-batch-assign-lookup.md。
 
-- id: "1697"
+- id: "1715"
   status: fixed
   fixed_at: "2026-10-22"
   severity: major

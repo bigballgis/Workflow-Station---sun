@@ -33,7 +33,6 @@ const rules = (hidden: boolean) => [
 describe.each([
   ['applicationDetail (New Requests / My Requests)', () => {
     const { extractFieldsRecursive } = createApplicationDetailFormSchema({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
       formFields: ref([]),
       formTabs: ref([]),
@@ -44,7 +43,6 @@ describe.each([
   }],
   ['taskDetail (To Do / Completed Tasks)', () => {
     const { extractFieldsRecursive } = createTaskDetailFieldExtraction({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
       taskForm: {
         formFields: ref([]),
@@ -58,7 +56,6 @@ describe.each([
   }],
   ['processStart (New Request start-a-process)', () => {
     const { extractFieldsRecursive } = createFieldExtractor({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
     })
     return (items: unknown[]) => extractFieldsRecursive(items as never)

@@ -15,8 +15,7 @@ import type { UploadSceneFlagsArg } from '@/utils/applyUploadPropsFromRule'
  * 逻辑与原 start.vue 内联实现逐行一致；只把作用域内的响应式依赖通过参数传入。
  */
 export function createProcessStartFormParsing(deps: {
-  // 读：lookup / relation view 配置
-  lookupDbConfigs: Ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>
+  // 读：relation view 配置
   relationViewConfigs: Ref<Record<string, { viewFields: any[]; allFields: any[] }>>
   /** Same inheritance set task / My Request already use (REQUEST scene copies omit the switch). */
   cannotDownloadFieldKeys?: () => UploadSceneFlagsArg
@@ -29,7 +28,6 @@ export function createProcessStartFormParsing(deps: {
   formFieldsAfterTabs: Ref<FormField[]>
 }) {
   const {
-    lookupDbConfigs,
     relationViewConfigs,
     cannotDownloadFieldKeys,
     formConfigJson,
@@ -41,12 +39,10 @@ export function createProcessStartFormParsing(deps: {
   } = deps
 
   const { extractFieldsRecursive } = createFieldExtractor({
-    lookupDbConfigs,
     relationViewConfigs,
     cannotDownloadFieldKeys,
   })
   const { deriveColumnsFromBinding, deriveDialogColumnsFromBinding } = createSubTableColumnDeriver({
-    lookupDbConfigs,
     relationViewConfigs,
     cannotDownloadFieldKeys,
   })

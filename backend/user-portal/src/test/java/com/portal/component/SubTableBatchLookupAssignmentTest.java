@@ -43,7 +43,7 @@ class SubTableBatchLookupAssignmentTest {
                 .thenReturn(SubTableBatchScopeDesign.overlay(Map.of(), h.read(), List.of(assignment(h.pk))));
         ReflectionTestUtils.setField(h.component, "subTableWriteIsolation", new SubTableWriteIsolation(
                 new MiSubTaskSubTableRowMerger(new org.springframework.jdbc.core.JdbcTemplate()),
-                new SubTableBindingScopeGuard(new org.springframework.jdbc.core.JdbcTemplate()), publishedDesign));
+                new SubTableBindingScopeGuard(), publishedDesign));
         var before = h.read();
         save(h, payload(h), null);
         var after = rows(h.read());

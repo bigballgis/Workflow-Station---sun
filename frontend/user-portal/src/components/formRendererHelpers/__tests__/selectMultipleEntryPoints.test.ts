@@ -5,7 +5,7 @@ import { createApplicationDetailFormSchema } from '@/composables/applicationDeta
 import { createFieldExtractor } from '@/composables/processStart/useProcessStartFieldExtractor'
 
 const context = () => ({
-  lookupDbConfigs: ref({}), relationViewConfigs: ref({}),
+  relationViewConfigs: ref({}),
   formFields: ref([]), formTabs: ref([]), formFieldsAfterTabs: ref([]), formFormOptions: ref({}),
   formReadOnly: ref(false), cachedContentForms: [],
 })

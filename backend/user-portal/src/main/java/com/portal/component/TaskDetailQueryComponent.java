@@ -36,6 +36,11 @@ public class TaskDetailQueryComponent {
     @Autowired
     private ProcessComponent processComponent;
 
+    /** Records a request the Portal has not seen yet, pinned to the release it runs. */
+    @Lazy
+    @Autowired
+    private ProcessInstanceHydrationComponent hydration;
+
     public TaskDetailQueryComponent(
             ProcessInstanceRepository processInstanceRepository,
             WorkflowEngineClient workflowEngineClient,
@@ -69,6 +74,7 @@ public class TaskDetailQueryComponent {
                 return Optional.empty();
             }
             TaskInfo taskInfo = EngineTaskMapper.convertMapToTaskInfo(data);
+            recordUnrecordedRequest(taskInfo.getProcessInstanceId());
             mergePortalProcessVariables(taskInfo);
             attachActions(taskId, data, taskInfo);
             requestIdEnricher.enrichTaskRequestIds(List.of(taskInfo));
@@ -78,6 +84,16 @@ public class TaskDetailQueryComponent {
         } catch (Exception e) {
             log.warn("Failed to get task by id {} from Flowable: {}", taskId, e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * A request the Portal has not recorded yet (e.g. a called instance whose sync failed) is recorded
+     * first, pinned to the release it runs, so this page merges, labels and reads it like any other.
+     */
+    private void recordUnrecordedRequest(String processInstanceId) {
+        if (processInstanceId != null && !processInstanceRepository.existsById(processInstanceId)) {
+            hydration.requireProcessInstance(processInstanceId);
         }
     }
 

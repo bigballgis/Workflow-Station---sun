@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.CalledFunctionUnitInstance;
 import com.portal.entity.ProcessInstance;
@@ -39,7 +41,7 @@ public class CalledFunctionUnitComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final WorkflowEngineClient workflowEngineClient;
 
-    /** Loads the called unit's deployed forms. Lazy: ProcessComponent is a large, widely wired bean. */
+    /** Loads a called unit release's forms. Lazy: ProcessComponent is a large, widely wired bean. */
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private ProcessComponent processComponent;
@@ -77,20 +79,19 @@ public class CalledFunctionUnitComponent {
                 readCallActivities(parentProcessInstanceId);
 
         List<CalledFunctionUnitInstance> out = new ArrayList<>(children.size());
-        // Forms are loaded once per called unit for this page, not once per child: a per-row call
-        // can start many children of the same unit.
-        Map<String, List<Map<String, Object>>> formsByUnit = new HashMap<>();
+        // Forms are loaded once per release for this page, not once per child: a per-row call
+        // can start many children on the same release.
+        Map<String, List<Map<String, Object>>> formsByRelease = new HashMap<>();
         for (ProcessInstance child : children) {
             CallActivityDisplay display = child.getCallActivityId() != null
                     ? callActivities.get(child.getCallActivityId())
                     : null;
-            String unitCode = child.getFunctionUnitCode() != null
-                    ? child.getFunctionUnitCode()
-                    : child.getProcessDefinitionKey();
+            // The release the child was started on, never the called unit's latest one.
+            String releaseId = child.getFunctionUnitCatalogId();
             Map<String, Object> childForm = display != null && display.childFormName() != null
-                    ? findForm(formsByUnit, unitCode, display.childFormName())
+                    ? findForm(formsByRelease, releaseId, display.childFormName())
                     : null;
-            List<Map<String, Object>> childFields = childForm == null ? mainTableFields(formsByUnit, unitCode) : null;
+            List<Map<String, Object>> childFields = childForm == null ? mainTableFields(formsByRelease, releaseId) : null;
 
             out.add(CalledFunctionUnitInstance.builder()
                     .processInstanceId(child.getId())
@@ -169,13 +170,13 @@ public class CalledFunctionUnitComponent {
     }
 
     /**
-     * The called unit's main-table fields, taken from the PRIMARY binding of any of its deployed
-     * forms (they all bind the same main table); null when none can be found.
+     * The called unit's main-table fields, taken from the PRIMARY binding of any form of the
+     * child's release (they all bind the same main table); null when none can be found.
      */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> mainTableFields(
-            Map<String, List<Map<String, Object>>> formsByUnit, String unitCode) {
-        for (Map<String, Object> form : formsOf(formsByUnit, unitCode)) {
+            Map<String, List<Map<String, Object>>> formsByRelease, String releaseId) {
+        for (Map<String, Object> form : formsOf(formsByRelease, releaseId)) {
             if (!(form.get("tableBindings") instanceof List<?> bindings)) {
                 continue;
             }
@@ -198,29 +199,40 @@ public class CalledFunctionUnitComponent {
         return null;
     }
 
-    private List<Map<String, Object>> formsOf(Map<String, List<Map<String, Object>>> formsByUnit, String unitCode) {
-        if (unitCode == null || processComponent == null) {
+    /** The forms of one release of the called unit; a child without a release is a version error. */
+    private List<Map<String, Object>> formsOf(Map<String, List<Map<String, Object>>> formsByRelease, String releaseId) {
+        if (processComponent == null) {
             return List.of();
         }
-        return formsByUnit.computeIfAbsent(unitCode, code -> {
+        if (releaseId == null || releaseId.isBlank()) {
+            throw new FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", null);
+        }
+        return formsByRelease.computeIfAbsent(releaseId, id -> {
             try {
-                return processComponent.getFunctionUnitContents(code, "FORM");
-            } catch (RuntimeException e) {
-                log.warn("Could not load forms of called Function Unit {}: {}", code, e.getMessage());
+                Object forms = processComponent.getFunctionUnitContent(id).get("forms");
+                return forms instanceof List<?> list ? CatalogSnapshotReader.objects(list) : List.of();
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+                // The release the child was started on is no longer in the catalog.
+                throw new FunctionUnitVersionException("VERSION_SNAPSHOT_INCOMPLETE", id);
+            } catch (org.springframework.web.client.ResourceAccessException
+                     | org.springframework.web.client.HttpServerErrorException e) {
+                // FALLBACK(external): Admin Center unreachable, failing or its circuit open only drops the
+                // called unit's designed layout; the child instances and their data are still shown.
+                log.warn("Could not load forms of called Function Unit release {}: {}", id, e.getMessage());
                 return List.of();
             }
         });
     }
 
-    /** The called unit's deployed form with that name, or null when it has none by that name. */
+    /** The release's form with that name, or null when it has none by that name. */
     private Map<String, Object> findForm(
-            Map<String, List<Map<String, Object>>> formsByUnit, String unitCode, String formName) {
-        for (Map<String, Object> form : formsOf(formsByUnit, unitCode)) {
+            Map<String, List<Map<String, Object>>> formsByRelease, String releaseId, String formName) {
+        for (Map<String, Object> form : formsOf(formsByRelease, releaseId)) {
             if (formName.equals(form.get("name")) || formName.equals(form.get("formName"))) {
                 return form;
             }
         }
-        log.debug("Called Function Unit {} has no deployed form named '{}'", unitCode, formName);
+        log.debug("Called Function Unit release {} has no form named '{}'", releaseId, formName);
         return null;
     }
 

@@ -15,6 +15,8 @@ import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.common.audit.SystemAuditFields;
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.security.entity.User;
@@ -62,31 +64,6 @@ public class ChangeHistoryComponent {
             "mainRecordId", "activeBusinessUnitId", "activeRoleId",
             "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",
             "initiator", "participant_assigner_user_id", "id", "currentUserId");
-    /**
-     * Form {@code config_json} for one function unit, already parsed.
-     *
-     * <p>{@code resolveEditableFormFields} / {@code resolveFieldLabels} / {@code resolveFieldOrders}
-     * each ran the same query and the same Jackson parse, three times per change-history request
-     * (and again for the sibling sensitive-masks request). Design-time data, so a short TTL is safe:
-     * a form edit shows up within {@link #FORM_CONFIG_TTL_MS}.
-     */
-    private static final long FORM_CONFIG_TTL_MS = java.util.concurrent.TimeUnit.SECONDS.toMillis(60);
-    private static final int FORM_CONFIG_CACHE_MAX = 128;
-
-    private record CachedFormConfigs(List<Map<String, Object>> configs, long timestamp) {
-        boolean isExpired() {
-            return System.currentTimeMillis() - timestamp > FORM_CONFIG_TTL_MS;
-        }
-    }
-
-    private final Map<String, CachedFormConfigs> formConfigCache = java.util.Collections.synchronizedMap(
-            new LinkedHashMap<String, CachedFormConfigs>(32, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, CachedFormConfigs> eldest) {
-                    return size() > FORM_CONFIG_CACHE_MAX;
-                }
-            });
-
     private final ChangeHistoryRepository changeHistoryRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final UserRepository userRepository;
@@ -100,6 +77,10 @@ public class ChangeHistoryComponent {
      * (never outer txn).
      */
     private final TransactionTemplate requiresNewTx;
+    /** Reads the release a request was started on; history is displayed against that, not the live design. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CatalogSnapshotReader versionSnapshots;
+    private final CatalogSnapshotReader localSnapshots;
 
     public ChangeHistoryComponent(
             ChangeHistoryRepository changeHistoryRepository,
@@ -122,6 +103,11 @@ public class ChangeHistoryComponent {
         TransactionTemplate tt = new TransactionTemplate(transactionManager);
         tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.requiresNewTx = tt;
+        this.localSnapshots = new CatalogSnapshotReader(jdbcTemplate, objectMapper);
+    }
+
+    private CatalogSnapshotReader snapshots() {
+        return versionSnapshots != null ? versionSnapshots : localSnapshots;
     }
 
     /**
@@ -385,9 +371,10 @@ public class ChangeHistoryComponent {
         // Multi-instance To Do passes the current collection row id so *that table's*
         // other participants stay hidden. Shared sub-tables (Correspondence, etc.) keep
         // their own row ids and must still appear — binding_link_mode is the authority.
-        entities = ChangeHistoryMiRowFilter.retainForMiTask(
-                jdbcTemplate, entities, processInstanceId, rowIdentifier);
-        HistoryFieldMetadata fieldMetadata = resolveHistoryFieldMetadata(processInstanceId);
+        String catalogId = pinnedCatalogOf(processInstanceId);
+        entities = ChangeHistoryMiRowFilter.retainForMiTask(entities, rowIdentifier,
+                rowIdentifier == null || rowIdentifier.isBlank() ? Set.of() : miCollectionHistoryNames(catalogId));
+        HistoryFieldMetadata fieldMetadata = resolveHistoryFieldMetadata(catalogId);
         entities = entities.stream()
                 .filter(entity -> !isLegacySystemFieldAlias(entity.getFieldName())
                         || fieldMetadata.isExplicitlyConfigured(
@@ -787,65 +774,99 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * Builds the audit display contract from the form definition and the
-     * relation-table
-     * field definitions belonging to the process function unit. This deliberately
-     * uses
-     * configured metadata rather than inferring relationships from field-name
-     * conventions.
+     * Builds the audit display contract from the forms and tables of the release the request was
+     * started on. This deliberately uses configured metadata rather than inferring relationships
+     * from field-name conventions, and never the live designer, which may have changed since.
      */
-    private HistoryFieldMetadata resolveHistoryFieldMetadata(String processInstanceId) {
+    private HistoryFieldMetadata resolveHistoryFieldMetadata(String catalogId) {
         Map<String, FieldMetadata> topLevelFields = new HashMap<>();
-        Set<String> editableFormFields = resolveEditableFormFields(processInstanceId);
-        Map<String, String> labels = resolveFieldLabels(processInstanceId);
-        Map<String, Integer> orders = resolveFieldOrders(processInstanceId);
+        Map<String, Map<String, FieldMetadata>> subTableFields = new HashMap<>();
+        if (catalogId == null) {
+            return new HistoryFieldMetadata(topLevelFields, subTableFields, new HashSet<>());
+        }
+        List<Map<String, Object>> formConfigs = pinnedFormConfigs(catalogId);
+        Set<String> editableFormFields = resolveEditableFormFields(catalogId, formConfigs);
+        Map<String, String> labels = resolveFieldLabels(formConfigs);
+        Map<String, Integer> orders = resolveFieldOrders(formConfigs);
         Set<String> formFields = new HashSet<>();
         formFields.addAll(labels.keySet());
         formFields.addAll(orders.keySet());
         for (String fieldName : formFields) {
             topLevelFields.put(fieldName, new FieldMetadata(labels.get(fieldName), orders.get(fieldName)));
         }
-        Map<String, Map<String, FieldMetadata>> subTableFields = new HashMap<>();
         try {
-            ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId).orElse(null);
-            if (processInstance == null || processInstance.getProcessDefinitionKey() == null) {
-                return new HistoryFieldMetadata(topLevelFields, subTableFields, editableFormFields);
-            }
-            List<SubTableFieldMetadataRow> rows = jdbcTemplate.query(
-                    """
-                            SELECT td.table_name, fd.field_name,
-                                   COALESCE(NULLIF(BTRIM(fd.display_name), ''), fd.field_name) AS display_name,
-                                   fd.sort_order
-                            FROM dw_table_definitions td
-                            INNER JOIN dw_field_definitions fd ON fd.table_id = td.id
-                            INNER JOIN dw_function_units fu ON fu.id = td.function_unit_id
-                            WHERE fu.code = ? AND td.table_type = 'SUB'
-                            """,
-                    (rs, rowNum) -> new SubTableFieldMetadataRow(
-                            rs.getString("table_name"),
-                            rs.getString("field_name"),
-                            rs.getString("display_name"),
-                            rs.getInt("sort_order")),
-                    processInstance.getProcessDefinitionKey().trim());
-            for (SubTableFieldMetadataRow row : rows) {
-                String tableName = normalizeSubTableNameForHistory(row.tableName());
-                if (tableName == null || row.fieldName() == null || row.fieldName().isBlank()) {
+            for (Map<String, Object> table : snapshots().contents(catalogId, "DATA_TABLE")) {
+                String tableName = normalizeSubTableNameForHistory(stringOrNull(table.get("tableName")));
+                if (!"SUB".equals(table.get("tableType")) || tableName == null) {
                     continue;
                 }
-                subTableFields.computeIfAbsent(tableName, ignored -> new HashMap<>())
-                        .putIfAbsent(row.fieldName(), new FieldMetadata(row.displayName(), row.sortOrder()));
+                for (Map<String, Object> field : CatalogSnapshotReader.objects(table.get("fields"))) {
+                    String fieldName = stringOrNull(field.get("fieldName"));
+                    if (fieldName == null || fieldName.isBlank()) {
+                        continue;
+                    }
+                    String displayName = stringOrNull(field.get("displayName"));
+                    int sortOrder = field.get("sortOrder") instanceof Number number ? number.intValue() : 0;
+                    subTableFields.computeIfAbsent(tableName, ignored -> new HashMap<>())
+                            .putIfAbsent(fieldName, new FieldMetadata(
+                                    displayName == null || displayName.isBlank() ? fieldName : displayName.trim(),
+                                    sortOrder));
+                }
             }
+        } catch (FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
-            log.debug("Could not resolve configured sub-table fields for {}: {}", processInstanceId, e.getMessage());
+            log.debug("Could not resolve configured sub-table fields of release {}: {}", catalogId, e.getMessage());
         }
         return new HistoryFieldMetadata(topLevelFields, subTableFields, editableFormFields);
     }
 
-    private record FieldMetadata(String label, Integer order) {
+    /** The release this request was started on; null only when the request itself is unknown. */
+    private String pinnedCatalogOf(String processInstanceId) {
+        ProcessInstance pi = processInstanceRepository.findById(processInstanceId).orElse(null);
+        if (pi == null) {
+            return null;
+        }
+        if (pi.getFunctionUnitCatalogId() == null || pi.getFunctionUnitCatalogId().isBlank()) {
+            throw new FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", processInstanceId);
+        }
+        return pi.getFunctionUnitCatalogId();
     }
 
-    private record SubTableFieldMetadataRow(String tableName, String fieldName,
-            String displayName, int sortOrder) {
+    /** Each form's designer config in the release. */
+    private List<Map<String, Object>> pinnedFormConfigs(String catalogId) {
+        List<Map<String, Object>> configs = new ArrayList<>();
+        for (Map<String, Object> form : snapshots().contents(catalogId, "FORM")) {
+            configs.add(CatalogPinnedTaskFormLoader.publishedFormConfig(objectMapper, form));
+        }
+        return configs;
+    }
+
+    /** Raw table bindings of every form in the release; relation tables are not resolved, so none can be missing. */
+    private List<Map<String, Object>> pinnedTableBindings(String catalogId) {
+        List<Map<String, Object>> bindings = new ArrayList<>();
+        for (Map<String, Object> form : snapshots().contents(catalogId, "FORM")) {
+            bindings.addAll(CatalogSnapshotReader.objects(form.getOrDefault("tableBindings", List.of())));
+        }
+        return bindings;
+    }
+
+    /** History names of the tables the request's release declares as MI participant rows. */
+    private Set<String> miCollectionHistoryNames(String catalogId) {
+        Set<String> names = new HashSet<>();
+        if (catalogId == null) {
+            return names;
+        }
+        for (Map<String, Object> binding : pinnedTableBindings(catalogId)) {
+            String historyName = normalizeSubTableNameForHistory(stringOrNull(binding.get("tableName")));
+            if (historyName != null && "miParticipantRow".equals(binding.get("bindingLinkMode"))) {
+                names.add(historyName);
+            }
+        }
+        return names;
+    }
+
+    private record FieldMetadata(String label, Integer order) {
     }
 
     private record HistoryFieldMetadata(Map<String, FieldMetadata> topLevelFields,
@@ -890,63 +911,41 @@ public class ChangeHistoryComponent {
         }
     }
 
-    private Set<String> resolveEditableFormFields(String processInstanceId) {
+    private Set<String> resolveEditableFormFields(String catalogId, List<Map<String, Object>> formConfigs) {
         Set<String> fields = new HashSet<>();
         try {
-            ProcessInstance pi = processInstanceRepository.findById(processInstanceId).orElse(null);
-            if (pi == null || pi.getProcessDefinitionKey() == null)
-                return fields;
-            List<FormConfigRow> configs = jdbcTemplate.query(
-                    """
-                            SELECT fd.id, fd.config_json::text AS config_json
-                            FROM dw_form_definitions fd
-                            INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                            WHERE fu.code = ?
-                            """,
-                    (rs, rowNum) -> new FormConfigRow(
-                            rs.getLong("id"), rs.getString("config_json")),
-                    pi.getProcessDefinitionKey().trim());
-            Map<String, String> bindingHistoryNames = resolveBindingHistoryNames(
-                    pi.getProcessDefinitionKey().trim());
-            for (FormConfigRow form : configs) {
-                String raw = form.configJson();
-                if (raw == null || raw.isBlank())
-                    continue;
-                Map<String, Object> config = objectMapper.readValue(raw, new TypeReference<>() {
-                });
+            Map<String, String> bindingHistoryNames = resolveBindingHistoryNames(catalogId);
+            for (Map<String, Object> config : formConfigs) {
                 collectEditableHistoryFields(config, null, bindingHistoryNames, fields);
             }
+        } catch (FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
-            log.debug("Could not resolve editable history fields for {}: {}", processInstanceId, e.getMessage());
+            log.debug("Could not resolve editable history fields of release {}: {}", catalogId, e.getMessage());
         }
         return fields;
     }
 
-    private Map<String, String> resolveBindingHistoryNames(String functionUnitCode) {
+    private Map<String, String> resolveBindingHistoryNames(String catalogId) {
+        Map<String, Map<String, Object>> relationTables = new HashMap<>();
+        for (Map<String, Object> table : snapshots().contents(catalogId, "DATA_TABLE")) {
+            if ("RELATION".equals(table.get("tableType")) && table.get("relationTableId") != null) {
+                relationTables.put(String.valueOf(table.get("relationTableId")), table);
+            }
+        }
         Map<String, String> names = new HashMap<>();
-        List<BindingHistoryNameRow> rows = jdbcTemplate.query(
-                """
-                        SELECT binding.id,
-                            COALESCE(td.table_name, rt.table_name) AS table_name,
-                            COALESCE(td.table_display_name, rt.display_name) AS table_display_name
-                        FROM dw_form_table_bindings binding
-                        INNER JOIN dw_form_definitions form ON form.id = binding.form_id
-                        INNER JOIN dw_function_units fu ON fu.id = form.function_unit_id
-                        LEFT JOIN dw_table_definitions td ON td.id = binding.table_id
-                        LEFT JOIN rt_table_definitions rt ON rt.id = binding.relation_table_id
-                        WHERE fu.code = ?
-                        """,
-                (rs, rowNum) -> new BindingHistoryNameRow(
-                        rs.getString("id"), rs.getString("table_name"),
-                        rs.getString("table_display_name")),
-                functionUnitCode);
-        for (BindingHistoryNameRow row : rows) {
-            String historyName = normalizeSubTableNameForHistory(row.tableName());
+        for (Map<String, Object> binding : pinnedTableBindings(catalogId)) {
+            Map<String, Object> source = binding.get("tableName") == null && binding.get("relationTableId") != null
+                    ? relationTables.getOrDefault(String.valueOf(binding.get("relationTableId")), Map.of())
+                    : binding;
+            String tableName = stringOrNull(source.get("tableName"));
+            String historyName = normalizeSubTableNameForHistory(tableName);
             if (historyName == null)
                 continue;
-            registerHistoryName(names, row.bindingId(), historyName);
-            registerHistoryName(names, row.tableName(), historyName);
-            registerHistoryName(names, row.tableDisplayName(), historyName);
+            registerHistoryName(names, stringOrNull(binding.get("bindingId")), historyName);
+            registerHistoryName(names, tableName, historyName);
+            registerHistoryName(names, stringOrNull(source.get("tableDisplayName") != null
+                    ? source.get("tableDisplayName") : source.get("displayName")), historyName);
         }
         return names;
     }
@@ -1001,91 +1000,35 @@ public class ChangeHistoryComponent {
         return (tableName != null ? tableName : "") + "\u0000" + fieldName;
     }
 
-    private record FormConfigRow(Long formId, String configJson) {
-    }
-
-    private record BindingHistoryNameRow(String bindingId, String tableName, String tableDisplayName) {
-    }
-
     /**
-     * Parsed form configs for a function unit code, memoised for {@link #FORM_CONFIG_TTL_MS}.
-     * Returns the same content the callers previously parsed inline.
-     */
-    private List<Map<String, Object>> loadFormConfigs(String functionUnitCode) {
-        String key = functionUnitCode.trim();
-        CachedFormConfigs cached = formConfigCache.get(key);
-        if (cached != null && !cached.isExpired()) {
-            return cached.configs();
-        }
-        List<String> configJsonStrings = jdbcTemplate.query(
-                """
-                        SELECT fd.config_json::text AS config_json
-                        FROM dw_form_definitions fd
-                        INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                        WHERE fu.code = ?
-                        """,
-                (rs, rowNum) -> rs.getString("config_json"),
-                key);
-        List<Map<String, Object>> parsed = new ArrayList<>();
-        for (String raw : configJsonStrings) {
-            if (raw == null || raw.isBlank())
-                continue;
-            try {
-                parsed.add(objectMapper.readValue(raw, new TypeReference<>() {
-                }));
-            } catch (Exception e) {
-                log.debug("Could not parse configJson: {}", e.getMessage());
-            }
-        }
-        formConfigCache.put(key, new CachedFormConfigs(parsed, System.currentTimeMillis()));
-        return parsed;
-    }
-
-    /**
-     * Resolve field labels from every form configJson for the function unit.
+     * Resolve field labels from every form config of the release.
      * Walks the designer {@code rule} tree including nested layout {@code children}
      * (elCard / fcRow / col) and sub-form fields. A shallow top-level walk misses
      * the actual business fields and then {@link HistoryFieldMetadata#isUserVisible}
      * treats the incomplete map as an allow-list, hiding every remaining history row.
      */
-    private Map<String, String> resolveFieldLabels(String processInstanceId) {
+    private Map<String, String> resolveFieldLabels(List<Map<String, Object>> formConfigs) {
         Map<String, String> labels = new HashMap<>();
-        try {
-            ProcessInstance pi = processInstanceRepository.findById(processInstanceId).orElse(null);
-            if (pi == null || pi.getProcessDefinitionKey() == null) {
-                return labels;
+        for (Map<String, Object> config : formConfigs) {
+            try {
+                ChangeHistoryFormFieldLabelExtractor.walk(config, labels, null);
+            } catch (Exception e) {
+                log.debug("Could not read configJson for field labels: {}", e.getMessage());
             }
-            for (Map<String, Object> config : loadFormConfigs(pi.getProcessDefinitionKey())) {
-                try {
-                    ChangeHistoryFormFieldLabelExtractor.walk(config, labels, null);
-                } catch (Exception e) {
-                    log.debug("Could not read configJson for field labels: {}", e.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Could not resolve field labels for {}: {}", processInstanceId, e.getMessage());
         }
         return labels;
     }
 
-    private Map<String, Integer> resolveFieldOrders(String processInstanceId) {
+    private Map<String, Integer> resolveFieldOrders(List<Map<String, Object>> formConfigs) {
         Map<String, Integer> orders = new HashMap<>();
-        try {
-            ProcessInstance pi = processInstanceRepository.findById(processInstanceId).orElse(null);
-            if (pi == null || pi.getProcessDefinitionKey() == null) {
-                return orders;
+        int[] counter = { 0 };
+        for (Map<String, Object> config : formConfigs) {
+            try {
+                ChangeHistoryFormFieldLabelExtractor.walk(
+                        config, null, new FieldMetaCollector(orders, counter)::accept);
+            } catch (Exception e) {
+                log.debug("Could not read configJson for field orders: {}", e.getMessage());
             }
-            int[] counter = { 0 };
-            for (Map<String, Object> config : loadFormConfigs(pi.getProcessDefinitionKey())) {
-                try {
-                    ChangeHistoryFormFieldLabelExtractor.walk(
-                            config, null, new FieldMetaCollector(orders, counter)::accept);
-                } catch (Exception e) {
-                    log.debug("Could not read configJson for field orders: {}", e.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Could not resolve field orders for {}: {}", processInstanceId, e.getMessage());
         }
         return orders;
     }
@@ -1219,28 +1162,28 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * The designer primary key of the table a {@code __subTables__} slice belongs to.
+     * The primary key the table of a {@code __subTables__} slice declares in the request's release.
      *
      * <p>Accepts a canonical {@code dw:<name>} / {@code rt:<name>} key, a bare binding id, the
      * physical table name written into change history, or the history-normalized form of a
-     * canonical key ({@code dw:foo} → {@code dw_foo}). Returns empty when it cannot be resolved —
-     * callers then fall back to the platform-generated row key, never to a guessed column name.
+     * canonical key ({@code dw:foo} → {@code dw_foo}). Returns empty when the release has no such
+     * table — callers then fall back to the platform-generated row key, never to a guessed column
+     * name — and throws when the request has no pinned release.
      */
-    public List<String> designerPrimaryKeyFieldsForSliceKey(String sliceKey) {
-        return designerPrimaryKeyFieldsForSliceKey(null, sliceKey);
+    public List<String> pinnedPrimaryKeyFieldsForSliceKey(String catalogId, String sliceKey) {
+        return ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots(), catalogId, sliceKey);
     }
 
-    public List<String> designerPrimaryKeyFieldsForSliceKey(String functionUnitCode, String sliceKey) {
-        return ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, sliceKey, functionUnitCode);
-    }
-
-    public java.util.function.Function<String, List<String>> primaryKeyResolver(String functionUnitCode) {
-        return sliceKey -> designerPrimaryKeyFieldsForSliceKey(functionUnitCode, sliceKey);
+    /** Per-slice primary keys of the request's release, each slice resolved once. */
+    public java.util.function.Function<String, List<String>> pinnedPrimaryKeyResolver(String catalogId) {
+        Map<String, List<String>> resolved = new HashMap<>();
+        return sliceKey -> sliceKey == null ? List.of()
+                : resolved.computeIfAbsent(sliceKey, key -> pinnedPrimaryKeyFieldsForSliceKey(catalogId, key));
     }
 
     /**
-     * @param designerPrimaryKeyFields this table's configured primary key
-     *                                 ({@code dw_field_definitions.is_primary_key}). Supplying it
+     * @param designerPrimaryKeyFields this table's configured primary key in the request's
+     *                                 release ({@link #pinnedPrimaryKeyFieldsForSliceKey}). Supplying it
      *                                 is what lets a row keyed by {@code correspondence_id} — or
      *                                 any other name a designer chose — be matched at all; without
      *                                 it only the platform-generated key is recognised.

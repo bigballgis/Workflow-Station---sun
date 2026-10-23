@@ -411,22 +411,13 @@ public class DashboardComponent {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> assigneeNames = userDisplayNameResolver.resolveBatch(assigneeKeys);
 
-        // Request ID 与 My Requests 走同一条路：本页的功能单元编码先批量解析一次主表配置，
-        // 再逐行拼接。实例已整条加载，variables 就在内存里，这里不额外查库。
-        Set<String> functionUnitCodes = pageContent.stream()
-                .map(ProcessInstance::getFunctionUnitCode)
-                .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(functionUnitCodes);
-
         List<TeamRequestsResponse.TeamRequestItem> items = pageContent.stream()
                 .map(pi -> {
                     String displayAssignee = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
                             pi.getCurrentAssignee(), pi.getCandidateUsers(), assigneeNames);
                     return TeamRequestsResponse.TeamRequestItem.builder()
                         .id(pi.getId())
-                        .requestId(requestIdEnricher.buildRequestId(
-                                requestIdSpecs, pi.getFunctionUnitCode(), pi.getVariables()))
+                        .requestId(RequestIdEnricher.storedRequestId(pi.getVariables()))
                         .processDefinitionName(pi.getProcessDefinitionName())
                         .businessKey(pi.getBusinessKey())
                         .startUserName(pi.getStartUserName())

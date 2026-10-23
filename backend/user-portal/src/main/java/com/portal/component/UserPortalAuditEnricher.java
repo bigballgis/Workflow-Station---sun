@@ -43,7 +43,6 @@ public class UserPortalAuditEnricher {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
-    private final RequestIdEnricher requestIdEnricher;
 
     public record StageNameMaps(
             Map<String, String> taskInstanceIdToName,
@@ -124,7 +123,6 @@ public class UserPortalAuditEnricher {
                 .filter(c -> !c.isBlank())
                 .collect(Collectors.toSet());
         Map<String, String> fuNameByCode = resolveFunctionUnitNames(fuCodes);
-        RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(fuCodes);
 
         Set<String> subTableKeys = entities.stream()
                 .map(ChangeHistory::getSubTableName)
@@ -150,8 +148,7 @@ public class UserPortalAuditEnricher {
                                 new StageNameMaps(Map.of(), Map.of())),
                         fuNameByCode,
                         subTableDisplayByKey,
-                        originalFileNameByStored,
-                        requestIdSpecs))
+                        originalFileNameByStored))
                 .collect(Collectors.toList());
     }
 
@@ -162,8 +159,7 @@ public class UserPortalAuditEnricher {
             StageNameMaps stageNames,
             Map<String, String> fuNameByCode,
             Map<String, String> subTableDisplayByKey,
-            Map<String, String> originalFileNameByStored,
-            RequestIdEnricher.SpecCache requestIdSpecs) {
+            Map<String, String> originalFileNameByStored) {
         String stageName = null;
         if (entity.getTaskInstanceId() != null && !entity.getTaskInstanceId().isBlank()) {
             stageName = stageNames.taskInstanceIdToName().get(entity.getTaskInstanceId());
@@ -179,11 +175,7 @@ public class UserPortalAuditEnricher {
                 : subTable;
         boolean hasSubTable = subTable != null && !subTable.isBlank();
         String fuCode = pi != null ? pi.getFunctionUnitCode() : null;
-        String requestId = null;
-        if (pi != null && fuCode != null) {
-            Map<String, Object> variables = resolveProcessVariables(pi);
-            requestId = requestIdEnricher.buildRequestId(requestIdSpecs, fuCode, variables);
-        }
+        String requestId = pi != null ? RequestIdEnricher.storedRequestId(resolveProcessVariables(pi)) : null;
         return UserPortalAuditRecord.builder()
                 .id(entity.getId())
                 .processInstanceId(entity.getProcessInstanceId())

@@ -1,43 +1,49 @@
 package com.portal.component;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.portal.repository.ProcessInstanceRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * {@link RequestIdEnricher#stampRequestId(String, Map)} is the server-side authority for the
+ * {@link RequestIdEnricher#stampRequestId(Map)} is the server-side authority for the
  * derived Request ID: every path that persists process variables calls it so the browser can never
  * own the value. A client may send nothing, a value computed from a config that has since changed,
  * or one built before an auto-generated PK was allocated — none may reach the database.
  *
- * <p>The PRIMARY-table config lookup is stubbed at the JdbcTemplate seam, as in
- * {@link RequestIdEnricherTest}.
+ * <p>The config is the main table's in the request's own release ({@code functionUnitId}).
  */
 class RequestIdStampTest {
 
-    private static final String CFG = "{\"fieldNames\":[\"I\",\"idncfm\"],\"separator\":\"_\"}";
+    private static final Map<String, Object> CFG = Map.of("fieldNames", List.of("I", "idncfm"), "separator", "_");
 
-    @SuppressWarnings("unchecked")
-    private RequestIdEnricher enricherReturning(String cfgJson) {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(any(String.class), any(RowMapper.class), eq("FU1")))
-                .thenReturn(cfgJson == null ? List.of() : List.of(cfgJson));
-        return new RequestIdEnricher(jdbc, new ObjectMapper(), mock(ProcessInstanceRepository.class));
+    private RequestIdEnricher enricherReturning(Map<String, Object> cfg) {
+        CatalogSnapshotReader snapshots = mock(CatalogSnapshotReader.class);
+        Map<String, Object> main = new LinkedHashMap<>(Map.of("tableType", "MAIN"));
+        if (cfg != null) {
+            main.put("requestIdConfig", cfg);
+        }
+        when(snapshots.contents("rel-1", "DATA_TABLE")).thenReturn(List.of(main));
+        RequestIdEnricher enricher = new RequestIdEnricher(
+                mock(JdbcTemplate.class), new ObjectMapper(), mock(ProcessInstanceRepository.class));
+        ReflectionTestUtils.setField(enricher, "catalogSnapshots", snapshots);
+        return enricher;
     }
 
     private static Map<String, Object> vars(Object... kv) {
         Map<String, Object> m = new LinkedHashMap<>();
+        m.put("functionUnitId", "rel-1");
         for (int i = 0; i < kv.length; i += 2) {
             m.put((String) kv[i], kv[i + 1]);
         }
@@ -47,7 +53,7 @@ class RequestIdStampTest {
     @Test
     void buildsRequestIdWhenClientSentNone() {
         Map<String, Object> v = vars("I", "RID1", "idncfm", "Meeting-000003");
-        enricherReturning(CFG).stampRequestId("FU1", v);
+        enricherReturning(CFG).stampRequestId(v);
         assertThat(v.get(RequestIdEnricher.REQUEST_ID_FIELD)).isEqualTo("RID1_Meeting-000003");
     }
 
@@ -56,7 +62,7 @@ class RequestIdStampTest {
     void overwritesIncompleteClientSuppliedValue() {
         Map<String, Object> v = vars("I", "RID1", "idncfm", "Meeting-000003",
                 RequestIdEnricher.REQUEST_ID_FIELD, "RID1");
-        enricherReturning(CFG).stampRequestId("FU1", v);
+        enricherReturning(CFG).stampRequestId(v);
         assertThat(v.get(RequestIdEnricher.REQUEST_ID_FIELD)).isEqualTo("RID1_Meeting-000003");
     }
 
@@ -64,7 +70,7 @@ class RequestIdStampTest {
     void overwritesForgedClientSuppliedValue() {
         Map<String, Object> v = vars("I", "RID1", "idncfm", "Meeting-000003",
                 RequestIdEnricher.REQUEST_ID_FIELD, "TOTALLY-MADE-UP");
-        enricherReturning(CFG).stampRequestId("FU1", v);
+        enricherReturning(CFG).stampRequestId(v);
         assertThat(v.get(RequestIdEnricher.REQUEST_ID_FIELD)).isEqualTo("RID1_Meeting-000003");
     }
 
@@ -73,14 +79,14 @@ class RequestIdStampTest {
     void refreshesStaleValueAfterContributingFieldChanged() {
         Map<String, Object> v = vars("I", "RENAMED", "idncfm", "Meeting-000003",
                 RequestIdEnricher.REQUEST_ID_FIELD, "RID1_Meeting-000003");
-        enricherReturning(CFG).stampRequestId("FU1", v);
+        enricherReturning(CFG).stampRequestId(v);
         assertThat(v.get(RequestIdEnricher.REQUEST_ID_FIELD)).isEqualTo("RENAMED_Meeting-000003");
     }
 
     @Test
     void skipsEmptyContributingFields() {
         Map<String, Object> v = vars("I", "RID1", "idncfm", "");
-        enricherReturning(CFG).stampRequestId("FU1", v);
+        enricherReturning(CFG).stampRequestId(v);
         assertThat(v.get(RequestIdEnricher.REQUEST_ID_FIELD)).isEqualTo("RID1");
     }
 
@@ -88,19 +94,27 @@ class RequestIdStampTest {
     @Test
     void dropsClientValueWhenMainTableHasNoConfig() {
         Map<String, Object> v = vars("I", "RID1", RequestIdEnricher.REQUEST_ID_FIELD, "CLIENT-INVENTED");
-        enricherReturning(null).stampRequestId("FU1", v);
+        enricherReturning(null).stampRequestId(v);
         assertThat(v).doesNotContainKey(RequestIdEnricher.REQUEST_ID_FIELD);
     }
 
     @Test
     void dropsClientValueWhenEveryContributingFieldIsEmpty() {
         Map<String, Object> v = vars("I", "", "idncfm", "", RequestIdEnricher.REQUEST_ID_FIELD, "STALE");
-        enricherReturning(CFG).stampRequestId("FU1", v);
+        enricherReturning(CFG).stampRequestId(v);
         assertThat(v).doesNotContainKey(RequestIdEnricher.REQUEST_ID_FIELD);
     }
 
     @Test
     void toleratesNullVariables() {
-        enricherReturning(CFG).stampRequestId("FU1", null);
+        enricherReturning(CFG).stampRequestId(null);
+    }
+
+    /** Without its release the request has no config to derive from; nothing falls back to the designer. */
+    @Test
+    void variablesWithoutTheirReleaseNeedRecovery() {
+        Map<String, Object> v = new LinkedHashMap<>(Map.of("I", "RID1"));
+        assertThatThrownBy(() -> enricherReturning(CFG).stampRequestId(v))
+                .isInstanceOf(FunctionUnitVersionException.class);
     }
 }

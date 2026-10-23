@@ -38,15 +38,17 @@ class CallActivityVersionResolverTest {
 
     @Mock private FunctionUnitRepository functionUnitRepository;
     @Mock private FunctionUnitContentRepository contentRepository;
+    @Mock private FunctionUnitLifecycleComponent lifecycle;
 
     private CallActivityVersionResolver resolver;
 
     @BeforeEach
     void setUp() {
         resolver = new CallActivityVersionResolver(functionUnitRepository, contentRepository);
+        org.springframework.test.util.ReflectionTestUtils.setField(resolver, "lifecycle", lifecycle);
     }
 
-    private void givenDeployedVersion(String code, String version, String definitionId) {
+    private FunctionUnit givenDeployedVersion(String code, String version, String definitionId) {
         FunctionUnit unit = new FunctionUnit();
         unit.setId(CALLEE_ID);
         unit.setCode(code);
@@ -58,6 +60,24 @@ class CallActivityVersionResolverTest {
         content.setFlowableProcessDefinitionId(definitionId);
         lenient().when(contentRepository.findByFunctionUnitIdAndContentType(CALLEE_ID, ContentType.PROCESS))
                 .thenReturn(List.of(content));
+        return unit;
+    }
+
+    /** The release Portal would start a new request of {@code code} on: deployed, enabled, highest. */
+    private void givenActiveRelease(String code, String version, String definitionId) {
+        FunctionUnit unit = givenDeployedVersion(code, version, definitionId);
+        lenient().when(lifecycle.getActiveCatalogForPortalStart(code)).thenReturn(Optional.of(unit));
+    }
+
+    /** What the called instance is handed: target variable → the constant expression. */
+    private static java.util.Map<String, String> inParameters(Element call) {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        org.w3c.dom.NodeList ins = call.getElementsByTagNameNS("http://flowable.org/bpmn", "in");
+        for (int i = 0; i < ins.getLength(); i++) {
+            Element in = (Element) ins.item(i);
+            out.put(in.getAttribute("target"), in.getAttribute("sourceExpression"));
+        }
+        return out;
     }
 
     private static String pinnedCall(String code, String version) {
@@ -87,6 +107,158 @@ class CallActivityVersionResolverTest {
         assertThat(out).contains("flowable:calledElementType=\"id\"");
         // The key form must be gone, or Flowable would still resolve "latest".
         assertThat(out).doesNotContain("calledElement=\"fu-callee\"");
+    }
+
+    /**
+     * The called instance is handed the release it runs, so whatever it does before the Portal
+     * first records it (an email step right at its start) already resolves in that release.
+     */
+    @Test
+    void handsTheCalledInstanceTheReleaseItRuns() throws Exception {
+        givenDeployedVersion("fu-callee", "1.2.0", "fu-callee:3:abc-def");
+
+        Element call = parsedCallActivity(resolver.resolvePinnedCalls(pinnedCall("fu-callee", "1.2.0")));
+
+        assertThat(inParameters(call)).containsExactly(
+                java.util.Map.entry("functionUnitId", "${'" + CALLEE_ID + "'}"),
+                java.util.Map.entry("functionUnitCode", "${'fu-callee'}"),
+                java.util.Map.entry("functionUnitVersionLabel", "${'1.2.0'}"));
+        // Merged into the designer's own extension block: the engine reads the call's settings there.
+        assertThat(call.getElementsByTagNameNS("*", "extensionElements").getLength()).isEqualTo(1);
+        assertThat(call.getElementsByTagNameNS("*", "property").getLength()).isEqualTo(1);
+    }
+
+    /**
+     * A call without a chosen version runs the called unit's release that was active when the
+     * caller was deployed — never whatever is newest when a request reaches it, which may be a
+     * release published, disabled or rolled back since.
+     */
+    @Test
+    void pinsAnUnpinnedCallToTheReleaseActiveWhenTheCallerIsDeployed() throws Exception {
+        givenActiveRelease("fu-callee", "1.3.0", "fu-callee:5:aaa");
+        String bpmn = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="fu-caller">
+                    <bpmn:callActivity id="Call_1" calledElement="fu-callee" />
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        Element call = parsedCallActivity(resolver.resolvePinnedCalls(bpmn));
+
+        assertThat(call.getAttribute("calledElement")).isEqualTo("fu-callee:5:aaa");
+        assertThat(call.getAttributeNS("http://flowable.org/bpmn", "calledElementType")).isEqualTo("id");
+        assertThat(inParameters(call)).containsEntry("functionUnitVersionLabel", "${'1.3.0'}")
+                .containsEntry("functionUnitId", "${'" + CALLEE_ID + "'}");
+    }
+
+    private static java.util.List<Element> childElements(Element parent) {
+        java.util.List<Element> out = new java.util.ArrayList<>();
+        for (org.w3c.dom.Node n = parent.getFirstChild(); n != null; n = n.getNextSibling()) {
+            if (n instanceof Element e) out.add(e);
+        }
+        return out;
+    }
+
+    @Test
+    void fillsAnEmptySelfClosingExtensionBlock() throws Exception {
+        givenActiveRelease("fu-callee", "1.3.0", "fu-callee:5:aaa");
+        String bpmn = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="fu-caller">
+                    <bpmn:callActivity id="Call_1" calledElement="fu-callee"><bpmn:extensionElements/></bpmn:callActivity>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        Element call = parsedCallActivity(resolver.resolvePinnedCalls(bpmn));
+
+        assertThat(call.getElementsByTagNameNS("*", "extensionElements").getLength()).isEqualTo(1);
+        assertThat(inParameters(call)).hasSize(3);
+    }
+
+    /**
+     * The release goes into the call's own extension block — after its documentation, as the schema
+     * orders it — never into a nested element's block, which the engine would not read for the call.
+     */
+    @Test
+    void addsTheCallsOwnExtensionBlockAfterDocumentationNotInsideTheLoop() throws Exception {
+        givenActiveRelease("fu-callee", "1.3.0", "fu-callee:5:aaa");
+        String bpmn = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:custom="http://workflow.platform/schema/custom">
+                  <bpmn:process id="fu-caller">
+                    <bpmn:callActivity id="Call_1" calledElement="fu-callee">
+                      <bpmn:documentation>Checks the vendor</bpmn:documentation>
+                      <bpmn:multiInstanceLoopCharacteristics>
+                        <bpmn:extensionElements><custom:properties /></bpmn:extensionElements>
+                      </bpmn:multiInstanceLoopCharacteristics>
+                    </bpmn:callActivity>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        Element call = parsedCallActivity(resolver.resolvePinnedCalls(bpmn));
+
+        java.util.List<Element> children = childElements(call);
+        assertThat(children).extracting(Element::getLocalName)
+                .containsExactly("documentation", "extensionElements", "multiInstanceLoopCharacteristics");
+        assertThat(children.get(1).getElementsByTagNameNS("http://flowable.org/bpmn", "in").getLength()).isEqualTo(3);
+        assertThat(children.get(2).getElementsByTagNameNS("http://flowable.org/bpmn", "in").getLength()).isZero();
+    }
+
+    @Test
+    void pinsEveryCallInTheDiagram() throws Exception {
+        givenActiveRelease("fu-callee", "1.3.0", "fu-callee:5:aaa");
+        String bpmn = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="fu-caller">
+                    <bpmn:callActivity id="Call_1" calledElement="fu-callee" />
+                    <bpmn:callActivity id="Call_2" calledElement="fu-callee">
+                      <bpmn:extensionElements></bpmn:extensionElements>
+                    </bpmn:callActivity>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        String out = resolver.resolvePinnedCalls(bpmn);
+        org.w3c.dom.NodeList calls = DocumentBuilderFactory.newDefaultNSInstance().newDocumentBuilder()
+                .parse(new ByteArrayInputStream(out.getBytes(StandardCharsets.UTF_8)))
+                .getElementsByTagNameNS("http://www.omg.org/spec/BPMN/20100524/MODEL", "callActivity");
+
+        assertThat(calls.getLength()).isEqualTo(2);
+        for (int i = 0; i < calls.getLength(); i++) {
+            Element call = (Element) calls.item(i);
+            assertThat(call.getAttribute("calledElement")).isEqualTo("fu-callee:5:aaa");
+            assertThat(inParameters(call)).hasSize(3);
+        }
+    }
+
+    /** No active release of the called unit: there is nothing to run, so the caller does not deploy. */
+    @Test
+    void refusesWhenTheCalledUnitHasNoActiveRelease() {
+        lenient().when(lifecycle.getActiveCatalogForPortalStart("fu-callee")).thenReturn(Optional.empty());
+        String bpmn = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="fu-caller">
+                    <bpmn:callActivity id="Call_1" calledElement="fu-callee"></bpmn:callActivity>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        assertThatThrownBy(() -> resolver.resolvePinnedCalls(bpmn))
+                .isInstanceOf(CallActivityPinUnresolvableException.class)
+                .hasMessageContaining("fu-callee")
+                .hasMessageContaining("Call_1");
+    }
+
+    /** A release identity that cannot be written as a plain constant is refused, not escaped. */
+    @Test
+    void refusesAReleaseIdentityThatIsNotAPlainConstant() {
+        givenDeployedVersion("fu-callee", "1.2.0'}${x", "fu-callee:3:abc-def");
+
+        assertThatThrownBy(() -> resolver.resolvePinnedCalls(pinnedCall("fu-callee", "1.2.0'}${x")))
+                .isInstanceOf(CallActivityPinUnresolvableException.class);
     }
 
     /**
@@ -128,20 +300,6 @@ class CallActivityVersionResolverTest {
                 .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))
                 .getElementsByTagNameNS("http://www.omg.org/spec/BPMN/20100524/MODEL", "callActivity")
                 .item(0);
-    }
-
-    /** Without a pin the call follows whatever is deployed — the BPMN is untouched. */
-    @Test
-    void leavesUnpinnedCallsAlone() {
-        String bpmn = """
-                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
-                  <bpmn:process id="fu-caller">
-                    <bpmn:callActivity id="Call_1" calledElement="fu-callee" />
-                  </bpmn:process>
-                </bpmn:definitions>
-                """;
-
-        assertThat(resolver.resolvePinnedCalls(bpmn)).isEqualTo(bpmn);
     }
 
     @Test

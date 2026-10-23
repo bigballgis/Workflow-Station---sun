@@ -124,15 +124,17 @@ public class TaskMultiInstanceService {
                 Map<String, Object> extProps = parseExtendedProps(extendedTaskInfo);
                 String subTableName = extProps.get("subTableName") != null
                         ? String.valueOf(extProps.get("subTableName")) : null;
-                Map<String, Object> rowKey = multiInstanceDataResolver.tryResolveSubTableRowKey(subTableName, extProps);
+                Map<String, Object> rowKey = multiInstanceDataResolver.tryResolveSubTableRowKey(subTableName, extProps,
+                        extendedTaskInfo.getProcessInstanceId());
 
                 if (rowKey == null || subTableName == null) {
                     log.warn("Multi-instance sub-task missing subTableRowKey/subTableName, skipping write-back: taskId={}", taskId);
                     return;
                 }
 
-                if (!multiInstanceDataResolver.subTableExists(subTableName)
-                        && variables.containsKey("__subTables__")) {
+                // Only a physical table has a physical row to write back; JSON-row sub-tables are saved with
+                // the request's variables.
+                if (!multiInstanceDataResolver.subTableExists(subTableName)) {
                     log.info("Multi-instance sub-task uses variable-type sub-table, skipping physical table write-back: taskId={}, subTableName={}, rowKey={}",
                             taskId, subTableName, rowKey);
                     return;
@@ -275,7 +277,7 @@ public class TaskMultiInstanceService {
 
             Map<String, Object> rowKey = multiInstanceDataResolver.tryResolveSubTableRowKey(
                     props.get("subTableName") != null ? String.valueOf(props.get("subTableName")).trim() : null,
-                    props);
+                    props, extendedTaskInfo.getProcessInstanceId());
             Long rowId = toLong(props.get("subTableRowId"));
             if (rowKey == null && rowId == null) {
                 log.warn("Cannot parse sub-table row key from extendedProperties: taskId={}", taskId);

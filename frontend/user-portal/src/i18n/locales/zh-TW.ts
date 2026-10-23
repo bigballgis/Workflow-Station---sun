@@ -979,7 +979,8 @@ export default {
     forbidden: '無權限存取',
     forbiddenDesc: '抱歉，您沒有權限存取此頁面',
     goBack: '返回上一頁',
-    backHome: '返回首頁'
+    backHome: '返回首頁',
+    functionUnitVersionUnavailable: '此請求無法使用其關聯的功能單元版本處理。'
   },
   settings: {
     title: '個人設定',

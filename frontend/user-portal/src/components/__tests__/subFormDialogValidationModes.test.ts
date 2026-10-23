@@ -161,7 +161,7 @@ export const VALIDATION_PLUS_MODE_CASES: ModeCase[] = [
   },
 ]
 
-const lookupCtx = { lookupDbConfigs: {}, relationViewConfigs: {} }
+const lookupCtx = { relationViewConfigs: {} }
 
 function mapFieldRules(designer: DesignerValidate) {
   const cols = mapSubFormRuleToDialogColumns(

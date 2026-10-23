@@ -16,9 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Resolves process-instance IDs for Admin User Portal audit keyword search
@@ -58,7 +56,6 @@ public class UserPortalAuditProcessInstanceMatcher {
 
     private final JdbcTemplate jdbcTemplate;
     private final ProcessInstanceRepository processInstanceRepository;
-    private final RequestIdEnricher requestIdEnricher;
     private final ObjectMapper objectMapper;
 
     /**
@@ -118,15 +115,6 @@ public class UserPortalAuditProcessInstanceMatcher {
             return List.of();
         }
         List<ProcessInstance> instances = processInstanceRepository.findAllById(candidateIds);
-        Set<String> codes = instances.stream()
-                .map(ProcessInstance::getFunctionUnitCode)
-                .filter(Objects::nonNull)
-                .filter(c -> !c.isBlank())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (codes.isEmpty()) {
-            return List.of();
-        }
-        RequestIdEnricher.SpecCache specs = requestIdEnricher.resolveSpecs(codes);
         List<String> matched = new ArrayList<>();
         for (ProcessInstance pi : instances) {
             if (alreadyMatched.contains(pi.getId())) {
@@ -136,8 +124,7 @@ public class UserPortalAuditProcessInstanceMatcher {
             if (variables.isEmpty()) {
                 continue;
             }
-            String requestId = requestIdEnricher.buildRequestId(
-                    specs, pi.getFunctionUnitCode(), variables);
+            String requestId = RequestIdEnricher.storedRequestId(variables);
             if (requestId != null && requestId.toLowerCase(Locale.ROOT).contains(keywordLower)) {
                 matched.add(pi.getId());
                 if (alreadyMatched.size() + matched.size() >= MAX_MATCHING_IDS) {

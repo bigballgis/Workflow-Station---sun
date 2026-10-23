@@ -45,7 +45,6 @@ const cyclicForms = [makeForm(1, 9001), makeForm(2, 9002)]
 
 function makeCtx(): any {
   return {
-    lookupDbConfigs: ref({}),
     relationViewConfigs: ref({}),
     cachedContentForms: cyclicForms,
     cachedRelationTableFieldIndex: new Map(),

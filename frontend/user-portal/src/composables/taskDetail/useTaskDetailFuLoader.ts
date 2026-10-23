@@ -1,5 +1,4 @@
 import { processApi } from '@/api/process'
-import { relationTableApi } from '@/api/relationTable'
 import {
   collectSubTableFieldsFromLayout,
 } from '@/components/formRendererHelpers'
@@ -59,7 +58,6 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
   const {
     t,
     processError,
-    lookupDbConfigs,
     relationViewConfigs,
     fuFormSubTableFields,
     mainFormConfig,
@@ -159,23 +157,6 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
 
         currentFormName.value = selectedForm.name
 
-        // Load lookup configs from rt_lookup_configs before parsing form
-        lookupDbConfigs.value = {}
-        // Start lookup configs fetch in parallel (non-blocking) — will be awaited before binding column derivation
-        const lookupConfigsPromise = selectedForm.sourceId
-          ? relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
-              .then(lcRes => {
-                const configs: Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: string[] }> = {}
-                for (const lc of (lcRes.data || [])) {
-                  let sf: string[] = []
-                  try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
-                  configs[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
-                }
-                return configs
-              })
-              .catch(e => { console.warn('[task] Failed to load lookup configs:', e); return {} as Record<string, any> })
-          : Promise.resolve({} as Record<string, any>)
-
         // ACTION-table rows (e.g. FORM_POPUP "Meeting Remark" history) are per-request data that
         // must NOT come from the cached FU content payload above (shared across every task/request
         // of this FU) — fetched fresh per task in parallel, keyed by bindingId, and merged into the
@@ -254,9 +235,6 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
           primaryReadOnly.value = true
         }
 
-        // Await lookup configs before deriving columns (needs lookupDbConfigs for lookup-type fields)
-        const resolvedLookups = await lookupConfigsPromise
-        lookupDbConfigs.value = resolvedLookups
         const actionTableRowsByBindingId = new Map<number, Array<Record<string, unknown>>>()
         for (const entry of await actionTableRowsPromise) {
           if (entry?.bindingId != null) {
@@ -292,7 +270,6 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
           }
           const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
           const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subForms, {
-            lookupDbConfigs: lookupDbConfigs.value,
             relationViewConfigs: relationViewConfigs.value,
           }, cannotDownloadFieldKeysFromForms(ctx.cachedContentForms))
           bindings.push({

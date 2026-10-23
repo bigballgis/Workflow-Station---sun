@@ -184,9 +184,10 @@ public class MiCollectionVariableBuilder {
             }
             log.info("[MI] injectMiCollectionFromBpmn begin processDefinitionKey={} taskDefinitionKey={} processInstanceId={}",
                     processDefinitionKey, taskDefinitionKey, processInstanceId);
-            Optional<String> bpmnOpt = instanceBound
-                    ? workflowEngineClient.getBpmnXml(processDefinitionKey, processInstanceId)
-                    : workflowEngineClient.getBpmnXml(processDefinitionKey);
+            // Always the BPMN this instance was deployed with: the latest of its key may be a newer release.
+            Optional<String> bpmnOpt = processInstanceId == null || processInstanceId.isBlank()
+                    ? Optional.empty()
+                    : workflowEngineClient.getBpmnXml(processDefinitionKey, processInstanceId);
             if (bpmnOpt.isEmpty()) {
                 if (instanceBound) throw new IllegalStateException("Instance deployed BPMN is unavailable");
                 log.warn("[MI] Could not fetch BPMN XML for processDefinitionKey={}", processDefinitionKey);
@@ -209,8 +210,8 @@ public class MiCollectionVariableBuilder {
                     : SubTableBatchRuntimeSnapshot.projectForForm(instanceVariables, formId,
                             com.platform.common.util.JsonUtils.getObjectMapper());
             SubTableBatchMiCollection.validateTargets(document, controls);
-            if (!injectReachableCollection(document, taskElement, taskDefinitionKey, variables, controls, instanceVariables,
-                    preserveUnfrozenPreparedCollections, expected)) {
+            if (!injectReachableCollection(document, taskElement, taskDefinitionKey, processInstanceId, variables, controls,
+                    instanceVariables, preserveUnfrozenPreparedCollections, expected)) {
                 log.warn("[MI] No usable reachable multi-instance subProcess found from task {}", taskDefinitionKey);
             }
         } catch (Exception e) {
@@ -223,7 +224,8 @@ public class MiCollectionVariableBuilder {
         return List.copyOf(expected);
     }
 
-    private boolean injectReachableCollection(Document document, Element task, String taskKey, Map<String, Object> variables,
+    private boolean injectReachableCollection(Document document, Element task, String taskKey, String processInstanceId,
+                                              Map<String, Object> variables,
                                               Map<String, Object> controls, Map<String, Object> baseline, boolean preserveUnfrozenPreparedCollections,
                                               List<SubTableBatchInitialMiOutcome.Expected> expected) {
         Deque<String> frontier = new ArrayDeque<>();
@@ -249,7 +251,7 @@ public class MiCollectionVariableBuilder {
                 String collection = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));
                 // Only the first-task legacy preparation contract keeps a prebuilt non-Batch-Assign collection.
                 if (preserveUnfrozenPreparedCollections && collection != null && variables.containsKey(collection)) return true;
-                if (injectSubProcess(subProcess, variables)) return true;
+                if (injectSubProcess(subProcess, processInstanceId, variables)) return true;
                 continue;
             }
             // Preserve existing look-ahead through call activities: the called instance cannot supply this one's collection.
@@ -265,7 +267,7 @@ public class MiCollectionVariableBuilder {
         for (String flow : outgoing) enqueueSequenceFlowTargets(document, flow, frontier);
     }
 
-    private boolean injectSubProcess(Element subProcess, Map<String, Object> variables) {
+    private boolean injectSubProcess(Element subProcess, String processInstanceId, Map<String, Object> variables) {
         String collection = BpmnMiXmlSupport.extractFlowableCollection(BpmnMiXmlSupport.findMultiInstanceLoopInSubProcess(subProcess));
         if (collection == null || collection.isBlank()) {
             log.warn("[MI] SubProcess {} has no collection configuration", subProcess.getAttribute("id"));
@@ -281,7 +283,7 @@ public class MiCollectionVariableBuilder {
             log.warn("[MI] SubProcess {} has neither assigneeField nor roleField", subProcess.getAttribute("id"));
             return false;
         }
-        buildMiCollectionVariable(variables, collection, assigneeField,
+        buildMiCollectionVariable(variables, processInstanceId, collection, assigneeField,
                 BpmnMiXmlSupport.findFirstPropertyValue(subProcess, "subTableName"),
                 BpmnMiXmlSupport.extractSubTableIdFromSubProcess(subProcess), roleField, buField);
         return true;
@@ -289,15 +291,16 @@ public class MiCollectionVariableBuilder {
 
     /**
      * Builds multi-instance collection variable from __subTables__.
-     * PK columns are resolved solely from the BPMN-recorded {@code subTableId} ({@code dw_table_definitions.id});
-     * table names are not used for lookup since they are not guaranteed globally unique (clone / re-import).
+     * PK columns are resolved solely from the BPMN-recorded {@code subTableId}, looked up in the release the
+     * request was started on; table names are not used for lookup since they are not guaranteed globally unique.
      * <p>
      * __subTables__ often has multiple binding lists; naive flattening treats any row with target PK columns and assignee as an MI element
      * (e.g. multiple sub-tables with column {@code id}) creates far more child tasks than expected after the prerequisite task. Each map value list is scored separately,
      * Uses only the source list that best matches target PK + assignee (merge and dedupe on ties).
      */
     @SuppressWarnings("unchecked")
-    private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
+    private void buildMiCollectionVariable(Map<String, Object> variables, String processInstanceId,
+                                          String collectionVariableName,
                                           String assigneeField, String bpmnSubTableName, String bpmnSubTableId,
                                           String roleField, String buField) {
         // 逐行分派：一行只要 assigneeField 或 roleField 任一有值即可纳入 MI（场景 C 混用）。
@@ -310,9 +313,9 @@ public class MiCollectionVariableBuilder {
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
 
-        Object catalog = variables.get("functionUnitId");
-        MiSubTablePkResult pkResult = catalog == null ? resolveMiSubTablePkById(bpmnSubTableId)
-                : resolvePublishedPk(String.valueOf(catalog), bpmnSubTableId);
+        // The request's own pin, not variables: completion variables never carry the release id.
+        String catalog = pinnedCatalogOf(processInstanceId);
+        MiSubTablePkResult pkResult = resolvePublishedPk(catalog, bpmnSubTableId);
         if (pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty()) {
             throw new IllegalStateException(
                     "[MI] Cannot resolve primary key for multi-instance collection '" + collectionVariableName
@@ -322,8 +325,7 @@ public class MiCollectionVariableBuilder {
         }
         List<String> pkCols = pkResult.pkCols();
 
-        Map<String, Object> sources = catalog == null ? subTables
-                : publishedSources(String.valueOf(catalog), bpmnSubTableId, pkResult.resolvedTable(), subTables);
+        Map<String, Object> sources = publishedSources(catalog, bpmnSubTableId, pkResult.resolvedTable(), subTables);
         List<Map<String, Object>> allRows = selectRowsForMiCollection(sources, pkCols, assigneeField, roleField);
         if (allRows.isEmpty()) {
             log.warn(
@@ -427,13 +429,6 @@ public class MiCollectionVariableBuilder {
     private record MiSubTablePkResult(String resolvedTable, List<String> pkCols) {
     }
 
-    /**
-     * Resolves the MI sub-table's primary key columns from the BPMN-recorded {@code dw_table_definitions.id}
-     * (written by the designer as {@code subTableId} on the MI subProcess). This is the only supported lookup:
-     * table names are not globally unique (clone / re-import can produce duplicates or case variants), so any
-     * name-based match risks silently resolving to the wrong Function Unit's table. Physical-table PK resolution
-     * failures and "no such subTableId" are both reported as errors, not swallowed.
-     */
     private com.platform.common.functionunit.CatalogSnapshotReader snapshots() {
         return catalogSnapshots != null ? catalogSnapshots : new com.platform.common.functionunit.CatalogSnapshotReader(
                 jdbcTemplate, com.platform.common.util.JsonUtils.getObjectMapper());
@@ -461,41 +456,16 @@ public class MiCollectionVariableBuilder {
         return selected;
     }
 
-    private MiSubTablePkResult resolveMiSubTablePkById(String subTableId) {
-        if (subTableId == null || subTableId.isBlank()) {
-            return null;
+    /** The release this request was started on; MI row identity is read from it, never from the live designer. */
+    private String pinnedCatalogOf(String processInstanceId) {
+        List<String> pins = processInstanceId == null || processInstanceId.isBlank() ? List.of()
+                : jdbcTemplate.queryForList("SELECT function_unit_catalog_id FROM up_process_instance WHERE id = ?",
+                        String.class, processInstanceId);
+        if (pins.size() != 1 || pins.get(0) == null || pins.get(0).isBlank()) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_RECOVERY_REQUIRED", processInstanceId);
         }
-        long id;
-        try {
-            id = Long.parseLong(subTableId.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalStateException("[MI] BPMN subTableId is not a valid dw_table_definitions id: '" + subTableId + "'", e);
-        }
-
-        String tableName = jdbcTemplate.query(
-                        "SELECT table_name FROM dw_table_definitions WHERE id = ?",
-                        (rs, i) -> rs.getString(1),
-                        id)
-                .stream().findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "[MI] BPMN subTableId " + id + " does not match any dw_table_definitions row "
-                                + "(sub-table was renamed/deleted since the process was designed; re-save the process design)"));
-
-        List<String> pkCols = jdbcTemplate.query(
-                """
-                        SELECT fd.field_name
-                        FROM dw_field_definitions fd
-                        WHERE fd.table_id = ?
-                          AND COALESCE(fd.is_primary_key, false) = true
-                        ORDER BY fd.sort_order ASC, fd.id ASC
-                        """,
-                (rs, i) -> rs.getString(1),
-                id);
-        if (pkCols.isEmpty()) {
-            throw new IllegalStateException(
-                    "[MI] Sub-table '" + tableName + "' (id=" + id + ") has no primary-key field defined in dw_field_definitions");
-        }
-        return new MiSubTablePkResult(tableName, pkCols);
+        return pins.get(0);
     }
 
     /**

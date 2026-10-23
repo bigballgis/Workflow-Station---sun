@@ -174,9 +174,6 @@ export function createTaskDetailState(options: { taskId: string }) {
   const miFilled = ref(false)
   const miFillDialogReadOnly = ref(false)
 
-  // Lookup config fallback map (from rt_lookup_configs)
-  const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
-
   // Relation view configs from configJson (designed in developer-workstation)
   const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
 
@@ -315,7 +312,6 @@ export function createTaskDetailState(options: { taskId: string }) {
     miFillSubTableBindings,
     miFilled,
     miFillDialogReadOnly,
-    lookupDbConfigs,
     relationViewConfigs,
     historyRecords,
     approveDialogVisible,

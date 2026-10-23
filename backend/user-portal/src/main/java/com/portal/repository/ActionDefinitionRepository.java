@@ -24,6 +24,11 @@ public interface ActionDefinitionRepository extends JpaRepository<ActionDefiniti
             + "and (a.id in :ids or a.sourceId in :ids)")
     List<ActionDefinition> findPinnedActions(@Param("catalogId") String catalogId, @Param("ids") List<String> ids);
 
+    /** The release's own published BPMN: its tasks name their actions by designer id. */
+    @Query(value = "SELECT content_data FROM sys_function_unit_contents "
+            + "WHERE function_unit_id = :catalogId AND content_type = 'PROCESS'", nativeQuery = true)
+    List<String> findPublishedProcessXml(@Param("catalogId") String catalogId);
+
     /**
      * 根据流程定义Key查找已启用功能单元的动作定义
      * 通过 sys_function_unit_contents.flowable_process_definition_id 关联
@@ -34,32 +39,6 @@ public interface ActionDefinitionRepository extends JpaRepository<ActionDefiniti
             "WHERE c.flowable_process_definition_id LIKE CONCAT(:processKey, ':%') " +
             "AND fu.enabled = true", nativeQuery = true)
     List<ActionDefinition> findByProcessDefinitionKey(@Param("processKey") String processDefinitionKey);
-
-    /**
-     * One catalog action, only when it belongs to the function unit identified by code or id.
-     */
-    @Query(value = "SELECT a.* FROM sys_action_definitions a " +
-            "JOIN sys_function_units fu ON fu.id = a.function_unit_id " +
-            "WHERE a.id = :actionId AND fu.enabled = true " +
-            "AND (fu.code = :functionUnitKey OR fu.id = :functionUnitKey)", nativeQuery = true)
-    java.util.Optional<ActionDefinition> findCatalogActionForFunctionUnit(
-            @Param("actionId") String actionId, @Param("functionUnitKey") String functionUnitKey);
-
-    /**
-     * One designer action, only when its function unit code or id matches.
-     */
-    @Query(value = "SELECT CAST(d.id AS VARCHAR) AS id, CAST(d.id AS VARCHAR) AS source_id, " +
-            "CAST(d.function_unit_id AS VARCHAR) AS function_unit_id, " +
-            "d.action_name, d.action_type, d.display_name AS description, d.config_json, " +
-            "d.icon, d.button_color, d.is_default, " +
-            "d.created_at, d.updated_at, " +
-            "NULL AS created_by, NULL AS updated_by " +
-            "FROM dw_action_definitions d " +
-            "JOIN dw_function_units fu ON fu.id = d.function_unit_id " +
-            "WHERE CAST(d.id AS VARCHAR) = :actionId " +
-            "AND (fu.code = :functionUnitKey OR CAST(fu.id AS VARCHAR) = :functionUnitKey)", nativeQuery = true)
-    java.util.Optional<ActionDefinition> findDwActionForFunctionUnit(
-            @Param("actionId") String actionId, @Param("functionUnitKey") String functionUnitKey);
 
     /**
      * 从 dw_action_definitions 表按整数 ID 查找动作定义

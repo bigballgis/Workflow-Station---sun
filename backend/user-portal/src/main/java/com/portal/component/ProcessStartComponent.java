@@ -306,7 +306,7 @@ public class ProcessStartComponent {
                     outcome.initiatorTaskDefKeyForHistory,
                     userId,
                     userChanges,
-                    pin.code());
+                    pin.catalogId());
             updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
         });
         if (outcome.calledWorkStatus != null) {
@@ -388,6 +388,11 @@ public class ProcessStartComponent {
             SubTableBatchInitialRows.initialize(persistedVariables, snapshot, mapper);
         });
         return persistedVariables;
+    }
+
+    /** The release a new request of {@code processKey} starts on, after the same checks as the start itself. */
+    String activeCatalogIdForStart(String userId, String processKey) {
+        return resolveActiveCatalogPin(userId, processKey, false).catalogId();
     }
 
     private ActiveCatalogPin resolveActiveCatalogPin(String userId, String processKey, boolean internal) {
@@ -509,8 +514,6 @@ public class ProcessStartComponent {
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
-                // Live DW id for BPMN join only; catalog UUID above is the form/binding freeze.
-                .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
         processInstanceRepository.save(processInstance);
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);
@@ -954,7 +957,7 @@ public class ProcessStartComponent {
             String taskDefinitionKey,
             String userId,
             Map<String, Object> userChanges,
-            String functionUnitCode) {
+            String catalogId) {
         if (userChanges == null || userChanges.isEmpty()) {
             return;
         }
@@ -1006,7 +1009,7 @@ public class ProcessStartComponent {
                     // Text keys exist — record only those (normalization merges aliases, dedup
                     // handles duplicates)
                     for (String subTableKey : textKeys) {
-                        recordStartSubTableAdds(context, subTables, subTableKey, functionUnitCode);
+                        recordStartSubTableAdds(context, subTables, subTableKey, catalogId);
                     }
                 } else if (!numericKeys.isEmpty()) {
                     // Only numeric keys — merge all rows and record under one virtual name
@@ -1025,8 +1028,8 @@ public class ProcessStartComponent {
                             // slice — a table keyed by `correspondence_id` is matched by no list of
                             // likely column names.
                             String rowId = ChangeHistoryComponent.resolveRowIdentifier(rowMap,
-                                    changeHistoryComponent.designerPrimaryKeyFieldsForSliceKey(
-                                            functionUnitCode, subTableKey));
+                                    changeHistoryComponent.pinnedPrimaryKeyFieldsForSliceKey(
+                                            catalogId, subTableKey));
                             if (rowId != null && seen.add(rowId)) {
                                 allChanges.add(SubTableChange.builder()
                                         .changeType("ROW_ADD")
@@ -1050,7 +1053,7 @@ public class ProcessStartComponent {
     }
 
     private void recordStartSubTableAdds(ChangeHistoryContext context,
-            Map<String, Object> subTables, String subTableKey, String functionUnitCode) {
+            Map<String, Object> subTables, String subTableKey, String catalogId) {
         Object rowsObj = subTables.get(subTableKey);
         if (!(rowsObj instanceof List<?>))
             return;
@@ -1061,8 +1064,8 @@ public class ProcessStartComponent {
         List<SubTableChange> changes = new ArrayList<>();
         // Resolved once per slice: identity is the primary key this table declares, not a column
         // whose name happens to look like one.
-        List<String> pkFields = changeHistoryComponent.designerPrimaryKeyFieldsForSliceKey(
-                functionUnitCode, subTableKey);
+        List<String> pkFields = changeHistoryComponent.pinnedPrimaryKeyFieldsForSliceKey(
+                catalogId, subTableKey);
         for (Map<String, Object> row : rows) {
             String rowId = ChangeHistoryComponent.resolveRowIdentifier(row, pkFields);
             changes.add(SubTableChange.builder()

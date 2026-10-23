@@ -58,6 +58,11 @@ public class MultiInstanceStatusController {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final BpmnActionParser bpmnActionParser;
+    /** Sub-table row keys resolve in the release each request runs. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.workflow.component.PinnedReleaseLookup pinnedReleaseLookup;
 
     /**
      * Query multi-instance subprocess execution status.
@@ -136,6 +141,7 @@ public class MultiInstanceStatusController {
             
             // 6. Build sub-task detail list
             List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails = new ArrayList<>();
+            Map<String, List<String>> pkColsByTable = new HashMap<>();
             for (ExtendedTaskInfo taskInfo : multiInstanceTasks) {
                 Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
                 String subTableName = extProps.get("subTableName") != null ? String.valueOf(extProps.get("subTableName")).trim() : null;
@@ -143,7 +149,7 @@ public class MultiInstanceStatusController {
                     subTableName = bpmnActionParser.getMultiInstanceSubProcessSubTableName(
                             taskInfo.getProcessDefinitionId(), taskInfo.getTaskDefinitionKey());
                 }
-                List<String> pkCols = tryResolvePkColumns(subTableName);
+                List<String> pkCols = pkColumnsOnce(processInstanceId, subTableName, pkColsByTable);
                 Map<String, Object> subTableRowKey = null;
                 Long subTableRowId = null;
                 if (pkCols != null) {
@@ -188,7 +194,7 @@ public class MultiInstanceStatusController {
 
             // 6b. MI UserTasks still in-flight at runtime that lack wf_extended records (pre-claim candidates, path gaps, etc.)
             // wf_extended-only aggregation would misjudge the row as fully completed → portal Current Step shows "end".
-            appendMissingRuntimeMultiInstanceTasks(processInstanceId, taskDetails);
+            appendMissingRuntimeMultiInstanceTasks(processInstanceId, taskDetails, pkColsByTable);
             
             // 7. Count cancelled instances
             long cancelledCount = multiInstanceTasks.stream()
@@ -236,7 +242,9 @@ public class MultiInstanceStatusController {
                     processInstanceId, response.getTotalInstances(), response.getCompletedInstances(), response.getActiveInstances());
             
             return ResponseEntity.ok(ApiResponse.success(response));
-            
+
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to query multi-instance execution status, processInstanceId: {}", processInstanceId, e);
             return ResponseEntity.ok(ApiResponse.error(
@@ -266,7 +274,7 @@ public class MultiInstanceStatusController {
      * Current Step / status per sub-table row (matching what users actually see in the queue).
      */
     private void appendMissingRuntimeMultiInstanceTasks(String processInstanceId,
-            List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails) {
+            List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails, Map<String, List<String>> pkColsByTable) {
         if (taskService == null || processInstanceId == null || processInstanceId.isBlank()) {
             return;
         }
@@ -298,7 +306,7 @@ public class MultiInstanceStatusController {
                     miScopeTable);
             Long rowId = null;
             Map<String, Object> rowKey = null;
-            List<String> pkCols = tryResolvePkColumns(subTableName);
+            List<String> pkCols = pkColumnsOnce(processInstanceId, subTableName, pkColsByTable);
             if (pkCols != null) {
                 rowKey = parseRowKeyFromExecution(execId, pkCols);
                 if (rowKey != null && pkCols.size() == 1 && rowKey.get(pkCols.get(0)) instanceof Number) {
@@ -340,7 +348,16 @@ public class MultiInstanceStatusController {
         }
     }
 
-    private List<String> tryResolvePkColumns(String subTableName) {
+    /** Row-key columns per sub-table, resolved once per status query rather than once per MI task. */
+    private List<String> pkColumnsOnce(String processInstanceId, String subTableName,
+                                       Map<String, List<String>> pkColsByTable) {
+        if (!pkColsByTable.containsKey(subTableName)) {
+            pkColsByTable.put(subTableName, tryResolvePkColumns(processInstanceId, subTableName));
+        }
+        return pkColsByTable.get(subTableName);
+    }
+
+    private List<String> tryResolvePkColumns(String processInstanceId, String subTableName) {
         if (jdbcTemplate == null) {
             return null;
         }
@@ -348,7 +365,10 @@ public class MultiInstanceStatusController {
             return null;
         }
         try {
-            return PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, subTableName);
+            return com.platform.common.jdbc.SubTablePrimaryKeys.resolve(jdbcTemplate, catalogSnapshots,
+                    () -> pinnedReleaseLookup.catalogIdOf(null, processInstanceId), subTableName);
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.debug("MI status/sub-table: could not resolve PK columns for {}: {}", subTableName, e.getMessage());
             return null;

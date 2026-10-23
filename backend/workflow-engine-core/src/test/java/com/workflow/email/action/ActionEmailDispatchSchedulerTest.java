@@ -42,7 +42,7 @@ class ActionEmailDispatchSchedulerTest {
     void deliverOne_marksSent() throws Exception {
         ActionEmailRequestedEvent event = sampleEvent();
         when(variableLoader.load(any())).thenReturn(Map.of("functionUnitCode", "fu-1"));
-        when(configuredEmailSender.send(anyString(), any(), any())).thenReturn("a@b.com");
+        when(configuredEmailSender.send(anyString(), any(), any(), any())).thenReturn("a@b.com");
         scheduler.deliverOne(new ActionEmailDeliveryRepository.PendingDelivery(
                 "e1", objectMapper.writeValueAsString(event), 0));
         verify(deliveryRepository).markSent("e1");
@@ -53,7 +53,7 @@ class ActionEmailDispatchSchedulerTest {
         ActionEmailRequestedEvent event = sampleEvent();
         when(variableLoader.load(any())).thenReturn(Map.of());
         doThrow(EmailDeliveryException.sendFailed("smtp", true, "timeout", "timeout", null))
-                .when(configuredEmailSender).send(anyString(), any(), any());
+                .when(configuredEmailSender).send(anyString(), any(), any(), any());
         scheduler.deliverOne(new ActionEmailDeliveryRepository.PendingDelivery(
                 "e1", objectMapper.writeValueAsString(event), 0));
         verify(deliveryRepository).reschedule(eq("e1"), eq(30L), anyString());
@@ -64,7 +64,7 @@ class ActionEmailDispatchSchedulerTest {
         ActionEmailRequestedEvent event = sampleEvent();
         when(variableLoader.load(any())).thenReturn(Map.of());
         doThrow(EmailDeliveryException.permanent(EmailDeliveryException.CONFIG_INVALID, "missing"))
-                .when(configuredEmailSender).send(anyString(), any(), any());
+                .when(configuredEmailSender).send(anyString(), any(), any(), any());
         scheduler.deliverOne(new ActionEmailDeliveryRepository.PendingDelivery(
                 "e1", objectMapper.writeValueAsString(event), 0));
         verify(deliveryRepository).markFailed(eq("e1"), anyString());

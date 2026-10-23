@@ -87,22 +87,15 @@ export function buildLookupColumnProps(
   rawLookupConfig: unknown,
   options?: {
     relationViewFields?: Array<Record<string, unknown>>
-    dbCfg?: {
-      tableId?: number
-      searchFields?: string[]
-      displayField?: string
-      viewFields?: unknown[]
-    }
   },
 ): Record<string, unknown> {
   const lookupCfg = parseLookupConfig(rawLookupConfig)
-  const dbCfg = options?.dbCfg
   const selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
   return {
     lookupConfig: typeof rawLookupConfig === 'string' ? rawLookupConfig : JSON.stringify(lookupCfg || {}),
-    tableId: lookupCfg.tableId || dbCfg?.tableId || 0,
-    searchFields: lookupCfg.searchFields || dbCfg?.searchFields || [],
-    displayField: lookupCfg.displayFields?.[0] || dbCfg?.displayField || '',
+    tableId: lookupCfg.tableId || 0,
+    searchFields: lookupCfg.searchFields || [],
+    displayField: lookupCfg.displayFields?.[0] || '',
     displayFields: lookupCfg.displayFields || [],
     selectedDisplayField,
     _lookupSelectedDisplayField: selectedDisplayField,
@@ -112,7 +105,7 @@ export function buildLookupColumnProps(
     viewFields:
       lookupCfg.showBackfillView === false
         ? []
-        : (options?.relationViewFields || dbCfg?.viewFields || []),
+        : (options?.relationViewFields || []),
     showBackfillView: lookupCfg.showBackfillView !== false,
   }
 }
@@ -194,7 +187,7 @@ export function resolveLookupCellTagText(
 
 /**
  * Props that {@link buildLookupColumnProps} can only fill from the caller-resolved `options`
- * (per-binding relation view / lookup db config). Re-deriving them here from `lookupConfig` alone
+ * (e.g. the per-binding relation view). Re-deriving them here from `lookupConfig` alone
  * yields empty values, so an already-resolved value on the column must win over the rebuilt blank.
  */
 const CALLER_RESOLVED_LOOKUP_PROPS = ['viewFields', 'tableId', 'searchFields', 'displayField'] as const

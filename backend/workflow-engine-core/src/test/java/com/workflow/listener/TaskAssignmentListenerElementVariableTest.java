@@ -567,6 +567,42 @@ class TaskAssignmentListenerElementVariableTest {
         }
     }
     
+    @Nested
+    @DisplayName("请求钉住的发布版本")
+    class RequestReleaseTests {
+
+        /**
+         * A JSON-row MI table is keyed by the request's release. A request with no release must not leave
+         * the sub-task silently ownerless: the listener records the assignment failure.
+         */
+        @Test
+        @DisplayName("请求没有发布版本 - 子任务记为分派失败而不是静默无主")
+        void subTaskOfARequestWithoutAReleaseIsRecordedAsAnAssignmentFailure() throws Exception {
+            String table = "fu_release_rows";
+            TaskEntity task = createMockTask();
+            when(task.getAssignee()).thenReturn(null);
+            lenient().when(task.getExecutionId()).thenReturn(EXECUTION_ID);
+            when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID))
+                    .thenReturn(createBpmnModelWithElementVariable(SUB_TABLE_ID, table));
+            lenient().when(runtimeService.getVariable(EXECUTION_ID, "currentItem"))
+                    .thenReturn(new HashMap<>(Map.of("rowId", 101L, "assigneeId", "user-001")));
+            when(jdbcTemplate.query(contains("PRIMARY KEY"),
+                    org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<String>>any(), eq(table)))
+                    .thenReturn(List.of());
+            when(jdbcTemplate.queryForList(contains("FROM up_process_instance"), eq(String.class), eq(PROCESS_INSTANCE_ID)))
+                    .thenReturn(List.of());
+            injectField("pinnedReleaseLookup", new com.workflow.component.PinnedReleaseLookup(jdbcTemplate));
+            injectField("catalogSnapshots", mock(com.platform.common.functionunit.CatalogSnapshotReader.class));
+
+            listener.onEvent(createTaskCreatedEvent(task));
+
+            verify(taskService, never()).setAssignee(any(), any());
+            verify(extendedTaskInfoRepository, never()).save(any());
+            verify(taskService).setVariableLocal(TASK_ID, TaskAssignmentListener.VAR_ASSIGNMENT_FAILURE,
+                    "VERSION_RECOVERY_REQUIRED");
+        }
+    }
+
     // ==================== Helper Methods ====================
     
     private TaskEntity createMockTask() {

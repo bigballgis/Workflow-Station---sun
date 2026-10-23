@@ -2,6 +2,7 @@ package com.workflow.listener;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.component.BpmnActionParser;
@@ -50,6 +51,17 @@ class MultiInstanceTaskWriter {
     private static final Pattern SAFE_SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     /**
+     * The key the MI row of this task is identified by: a legacy physical table's PRIMARY KEY, else the
+     * key the sub-table declares in the release the request runs.
+     */
+    private static List<String> rowKeyColumns(TaskAssignmentListener owner, TaskEntity task,
+                                              String processInstanceId, String subTableName) {
+        return com.platform.common.jdbc.SubTablePrimaryKeys.resolve(owner.jdbcTemplate(), owner.catalogSnapshots(),
+                () -> owner.pinnedReleaseLookup().catalogIdOf(task.getVariable("functionUnitId"), processInstanceId),
+                requireSafeIdentifier(subTableName));
+    }
+
+    /**
      * Flowable often creates MI inner userTasks with assignee already set (BPMN expression).
      * The early return in {@code TaskAssignmentListener.handleTaskCreated} previously skipped ExtendedTaskInfo
      * creation, so multi-instance status / initiator sub-table progress only saw completed predecessor tasks.
@@ -60,7 +72,6 @@ class MultiInstanceTaskWriter {
         RuntimeService runtimeService = owner.runtimeService();
         RepositoryService repositoryService = owner.repositoryService();
         BpmnActionParser bpmnActionParser = owner.bpmnActionParser();
-        JdbcTemplate jdbcTemplate = owner.jdbcTemplate();
         ExtendedTaskInfoRepository extendedTaskInfoRepository = owner.extendedTaskInfoRepository();
         ObjectMapper objectMapper = owner.objectMapper();
 
@@ -107,9 +118,11 @@ class MultiInstanceTaskWriter {
         List<String> pkColsPre;
         Map<String, Object> rowKeyPre;
         try {
-            pkColsPre = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate,
-                    requireSafeIdentifier(subTableName));
+            pkColsPre = rowKeyColumns(owner, task, processInstanceId, subTableName);
             rowKeyPre = SubTableRowKeySupport.rowKeyFromCurrentItem(currentItem, pkColsPre);
+        } catch (FunctionUnitVersionException e) {
+            // The request's release cannot key this row: the listener records it as an assignment failure.
+            throw e;
         } catch (Exception e) {
             log.debug("ensureMI preassigned: skip task {}, could not resolve row key: {}", taskId, e.getMessage());
             return;
@@ -206,7 +219,6 @@ class MultiInstanceTaskWriter {
         RuntimeService runtimeService = owner.runtimeService();
         RepositoryService repositoryService = owner.repositoryService();
         BpmnActionParser bpmnActionParser = owner.bpmnActionParser();
-        JdbcTemplate jdbcTemplate = owner.jdbcTemplate();
         ExtendedTaskInfoRepository extendedTaskInfoRepository = owner.extendedTaskInfoRepository();
         TaskService taskService = owner.taskService();
         ObjectMapper objectMapper = owner.objectMapper();
@@ -299,9 +311,10 @@ class MultiInstanceTaskWriter {
             List<String> pkColsEv;
             Map<String, Object> rowKeyEv;
             try {
-                pkColsEv = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate,
-                        requireSafeIdentifier(subTableName));
+                pkColsEv = rowKeyColumns(owner, task, processInstanceId, subTableName);
                 rowKeyEv = SubTableRowKeySupport.rowKeyFromCurrentItem(currentItem, pkColsEv);
+            } catch (FunctionUnitVersionException e) {
+                throw e;
             } catch (Exception e) {
                 log.warn("Could not resolve row key for task {}: {}", taskId, e.getMessage());
                 return;
@@ -411,6 +424,8 @@ class MultiInstanceTaskWriter {
                 log.error("Failed to save ExtendedTaskInfo for task {}: {}", taskId, e.getMessage(), e);
             }
 
+        } catch (FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error handling ELEMENT_VARIABLE assignment for task {}: {}", taskId, e.getMessage(), e);
         }

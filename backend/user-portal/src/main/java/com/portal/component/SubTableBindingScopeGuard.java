@@ -6,7 +6,6 @@ import com.portal.dto.SubTableBindingScope;
 import com.portal.exception.PortalException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -32,14 +31,10 @@ class SubTableBindingScopeGuard {
 
     static final String ROW_VERSION_FIELD = "_wsRowVersion";
 
-    private final JdbcTemplate jdbcTemplate;
-
-    void assertAndApply(List<SubTableBindingScope> scopes, String functionUnitCode,
-                        Map<String, Object> formData, Map<String, Object> submitted,
-                        Map<String, Object> baseline) {
-        assertAndApply(scopes, functionUnitCode, formData, submitted, baseline, null);
-    }
-
+    /**
+     * @param frozen the bindings of the form as published in the request's release; scopes are
+     *               authorized against these only, never against the live designer
+     */
     void assertAndApply(List<SubTableBindingScope> scopes, String functionUnitCode,
             Map<String, Object> formData, Map<String, Object> submitted, Map<String, Object> baseline,
             Map<String, SubTableWriteDesign.Binding> frozen) {
@@ -49,10 +44,14 @@ class SubTableBindingScopeGuard {
         if (!StringUtils.hasText(functionUnitCode)) {
             throw new PortalException("403", "Binding-scoped submit requires a function unit on the process");
         }
+        if (frozen == null) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_RECOVERY_REQUIRED", functionUnitCode);
+        }
         Map<String, Object> base = baseline != null ? baseline : Map.of();
         Map<String, List<String>> pkByStoreKey = new HashMap<>();
         for (SubTableBindingScope scope : scopes) {
-            applyOneScope(scope, functionUnitCode.trim(), formData, submitted, base, pkByStoreKey, frozen);
+            applyOneScope(scope, formData, submitted, base, pkByStoreKey, frozen);
         }
         rejectUnclaimedChanges(scopes, submitted, base, pkByStoreKey);
         // All bindings validate the original client version before any row is mutated.
@@ -68,11 +67,11 @@ class SubTableBindingScopeGuard {
         }
     }
 
-    private void applyOneScope(SubTableBindingScope scope, String functionUnitCode,
+    private void applyOneScope(SubTableBindingScope scope,
                                Map<String, Object> formData, Map<String, Object> submitted,
                                Map<String, Object> baseline, Map<String, List<String>> pkByStoreKey,
                                Map<String, SubTableWriteDesign.Binding> frozen) {
-        BindingMeta meta = loadBinding(scope, functionUnitCode, frozen);
+        BindingMeta meta = loadBinding(scope, frozen);
         pkByStoreKey.put(meta.storeKey(), meta.pkColumns());
         List<Map<String, Object>> claimed = scope.getRowKeys() != null ? scope.getRowKeys() : List.of();
         Object expected = expectedFilterValue(meta, formData, submitted, baseline);
@@ -171,8 +170,7 @@ class SubTableBindingScopeGuard {
         }
     }
 
-    private BindingMeta loadBinding(SubTableBindingScope scope, String functionUnitCode,
-                                    Map<String, SubTableWriteDesign.Binding> frozen) {
+    private BindingMeta loadBinding(SubTableBindingScope scope, Map<String, SubTableWriteDesign.Binding> frozen) {
         if (scope == null || !StringUtils.hasText(scope.getBindingId())) {
             throw new PortalException("400", "Binding scope is missing bindingId");
         }
@@ -182,99 +180,12 @@ class SubTableBindingScopeGuard {
         } catch (NumberFormatException e) {
             throw new PortalException("400", "Binding scope bindingId is not a number");
         }
-        String requestedBindingId = scope.getBindingId().trim();
-        if (frozen != null) {
-            SubTableWriteDesign.Binding b = frozen.get(requestedBindingId);
-            if (b == null || !b.storeKey().equals(scope.getStoreKey())) {
-                throw new PortalException("403", "Binding is not part of the pinned form");
-            }
-            return new BindingMeta(bindingId, b.storeKey(), b.filterField(), b.refType(),
-                    b.refTableName(), null, b.pk(), b.refPk(), b.foreignKeyFields(),
-                    b.explicitFillFields());
+        SubTableWriteDesign.Binding b = frozen.get(scope.getBindingId().trim());
+        if (b == null || !b.storeKey().equals(scope.getStoreKey())) {
+            throw new PortalException("403", "Binding is not part of the pinned form");
         }
-        List<BindingMeta> rows = jdbcTemplate.query(
-                """
-                        SELECT b.id, lower(t.table_name) AS table_name, ffk.field_name AS filter_field,
-                               ref.table_type AS filter_ref_type,
-                               lower(ref.table_name) AS filter_ref_table_name,
-                               ref.id AS filter_ref_table_id
-                        FROM dw_form_table_bindings b
-                        JOIN dw_form_definitions fd ON fd.id = b.form_id
-                        JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                        JOIN dw_table_definitions t ON t.id = b.table_id
-                        LEFT JOIN dw_field_definitions ffk ON ffk.id = b.filter_fk_field_id
-                        LEFT JOIN dw_table_definitions ref ON ref.id = ffk.ref_table_id
-                        WHERE b.id = ? AND fu.code = ?
-                        """,
-                (rs, n) -> {
-                    long refRaw = rs.getLong("filter_ref_table_id");
-                    Long refTableId = rs.wasNull() ? null : refRaw;
-                    return new BindingMeta(
-                            rs.getLong("id"),
-                            "dw:" + rs.getString("table_name"),
-                            rs.getString("filter_field"),
-                            rs.getString("filter_ref_type"),
-                            rs.getString("filter_ref_table_name"),
-                            refTableId,
-                            List.of(), null, List.of(), List.of());
-                },
-                bindingId, functionUnitCode);
-        if (rows.isEmpty()) {
-            throw new PortalException("403", "Binding is not part of this function unit");
-        }
-        BindingMeta raw = rows.get(0);
-        BindingMeta meta = new BindingMeta(raw.id(), raw.storeKey(), raw.filterField(),
-                raw.filterRefType(), raw.filterRefTableName(), raw.filterRefTableId(),
-                pkColumns(bindingId), null, foreignKeyColumns(bindingId),
-                explicitFillColumns(bindingId));
-        if (!StringUtils.hasText(scope.getStoreKey())
-                || !meta.storeKey().equalsIgnoreCase(scope.getStoreKey().trim())) {
-            throw new PortalException("403", "Binding scope storeKey does not match the binding's table");
-        }
-        return meta;
-    }
-
-    private List<String> pkColumns(long bindingId) {
-        return jdbcTemplate.queryForList(
-                """
-                        SELECT f.field_name
-                        FROM dw_field_definitions f
-                        JOIN dw_form_table_bindings b ON b.table_id = f.table_id
-                        WHERE b.id = ? AND COALESCE(f.is_primary_key, false) = true
-                        ORDER BY f.sort_order NULLS LAST, f.id
-                        """,
-                String.class, bindingId);
-    }
-
-    private List<String> foreignKeyColumns(long bindingId) {
-        return jdbcTemplate.queryForList(
-                """
-                        SELECT f.field_name
-                        FROM dw_field_definitions f
-                        JOIN dw_form_table_bindings b ON b.table_id = f.table_id
-                        WHERE b.id = ? AND COALESCE(f.is_foreign_key, false) = true
-                        ORDER BY f.sort_order NULLS LAST, f.id
-                        """,
-                String.class, bindingId);
-    }
-
-    private List<String> explicitFillColumns(long bindingId) {
-        return jdbcTemplate.queryForList(
-                """
-                        SELECT DISTINCT COALESCE(NULLIF(BTRIM(source.value ->> 'fieldName'), ''), f.field_name)
-                        FROM dw_form_table_bindings b
-                        CROSS JOIN LATERAL jsonb_array_elements(
-                            COALESCE(b.fk_fill_sources, '[]'::jsonb)
-                        ) AS source(value)
-                        LEFT JOIN dw_field_definitions f ON f.id = CASE
-                            WHEN source.value ->> 'fieldId' ~ '^[0-9]+$'
-                            THEN (source.value ->> 'fieldId')::bigint
-                            ELSE NULL
-                        END
-                        WHERE b.id = ?
-                          AND COALESCE(NULLIF(BTRIM(source.value ->> 'fieldName'), ''), f.field_name) IS NOT NULL
-                        """,
-                String.class, bindingId);
+        return new BindingMeta(bindingId, b.storeKey(), b.filterField(), b.refType(),
+                b.refTableName(), b.pk(), b.refPk(), b.foreignKeyFields(), b.explicitFillFields());
     }
 
     private Object expectedFilterValue(BindingMeta meta, Map<String, Object> formData,
@@ -297,10 +208,10 @@ class SubTableBindingScopeGuard {
     }
 
     private Object mainRecordFilterKeys(BindingMeta meta, Map<String, Object> formData) {
-        if (formData == null || (meta.filterRefTableId() == null && meta.refPkColumns() == null)) {
+        if (formData == null || meta.refPkColumns() == null) {
             return null;
         }
-        List<String> pk = meta.refPkColumns() != null ? meta.refPkColumns() : pkColumnsOfTable(meta.filterRefTableId());
+        List<String> pk = meta.refPkColumns();
         if (pk.isEmpty()) {
             return null;
         }
@@ -327,13 +238,12 @@ class SubTableBindingScopeGuard {
     }
 
     private List<Object> parentKeys(BindingMeta meta, Map<String, Object> tables) {
-        if (!StringUtils.hasText(meta.filterRefTableName())
-                || (meta.filterRefTableId() == null && meta.refPkColumns() == null)) {
+        if (!StringUtils.hasText(meta.filterRefTableName()) || meta.refPkColumns() == null) {
             return List.of();
         }
         String parentKey = "dw:" + meta.filterRefTableName();
         List<Object> parentRows = rowsOf(tables, parentKey);
-        List<String> pk = meta.refPkColumns() != null ? meta.refPkColumns() : pkColumnsOfTable(meta.filterRefTableId());
+        List<String> pk = meta.refPkColumns();
         List<Object> keys = new ArrayList<>();
         for (Object raw : parentRows) {
             if (!(raw instanceof Map<?, ?>)) {
@@ -352,17 +262,6 @@ class SubTableBindingScopeGuard {
             }
         }
         return keys;
-    }
-
-    private List<String> pkColumnsOfTable(long tableId) {
-        return jdbcTemplate.queryForList(
-                """
-                        SELECT f.field_name
-                        FROM dw_field_definitions f
-                        WHERE f.table_id = ? AND COALESCE(f.is_primary_key, false) = true
-                        ORDER BY f.sort_order NULLS LAST, f.id
-                        """,
-                String.class, tableId);
     }
 
     private void assertRowMatchesFilter(BindingMeta meta, Object expected, Map<String, Object> row) {
@@ -535,7 +434,7 @@ class SubTableBindingScopeGuard {
     }
 
     private record BindingMeta(long id, String storeKey, String filterField, String filterRefType,
-                               String filterRefTableName, Long filterRefTableId,
+                               String filterRefTableName,
                                List<String> pkColumns, List<String> refPkColumns,
                                List<String> foreignKeyFields, List<String> explicitFillFields) {}
 

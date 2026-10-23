@@ -64,7 +64,8 @@ public class ActionEmailDispatchScheduler {
         String logContext = "action=" + event.getActionId() + " event=" + eventId
                 + " process=" + event.getProcessInstanceId();
         try {
-            configuredEmailSender.send(logContext, toConfig(event.getPostEmail()), variableLoader.load(event));
+            configuredEmailSender.send(logContext, toConfig(event.getPostEmail()), variableLoader.load(event),
+                    event.getProcessInstanceId());
             deliveryRepository.markSent(eventId);
             log.info("[ACTION-EMAIL] sent {} attempt={}", logContext, attempt);
         } catch (EmailDeliveryException e) {

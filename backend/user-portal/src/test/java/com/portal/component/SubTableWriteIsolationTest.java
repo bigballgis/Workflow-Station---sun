@@ -9,7 +9,6 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
@@ -22,11 +21,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class SubTableWriteIsolationTest {
@@ -45,6 +44,17 @@ class SubTableWriteIsolationTest {
 
     private static final String FU = "fu-test";
     private static final String STORE = "dw:attachment";
+
+    /** The attachment store's bindings as the request's release publishes them. */
+    private static SubTableWriteDesign pinnedAttachmentDesign() {
+        SubTableWriteDesign design = mock(SubTableWriteDesign.class);
+        when(design.resolve("pin", "review")).thenReturn(Map.of(
+                "101", new SubTableWriteDesign.Binding("101", STORE, "main_idva", "MAIN", null,
+                        List.of("idfa"), List.of(), "structuralFk"),
+                "202", new SubTableWriteDesign.Binding("202", STORE, "sub_task_id", "SUB", null,
+                        List.of("idfa"), List.of(), "structuralFk")));
+        return design;
+    }
 
     @Test
     void versionedSingleBindingCannotDowngradeToAnUnscopedWrite() {
@@ -87,11 +97,9 @@ class SubTableWriteIsolationTest {
     @Test
     @SuppressWarnings("unchecked")
     void apply_miThinCompletePayloadKeepsSiblingAtBaseline() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        stubScopeFilters(jdbc, 101L, "main_idva", "MAIN", 202L, "sub_task_id", "SUB");
         SubTableBindingScopeGuard guard = mock(SubTableBindingScopeGuard.class);
         SubTableWriteIsolation isolation = new SubTableWriteIsolation(
-                new MiSubTaskSubTableRowMerger(jdbc), guard);
+                new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class)), guard, pinnedAttachmentDesign());
 
         Map<String, Object> ours = file("att-2", "Meeting-1", "Test-000002", "mine.pdf");
         Map<String, Object> sibling = file("att-3", "Meeting-1", "Test-000001", "theirs.pdf");
@@ -104,11 +112,11 @@ class SubTableWriteIsolationTest {
                 scope("202", List.of(Map.of("idfa", "att-2")), false));
 
         isolation.apply(new SubTableWriteIsolation.Request(
-                miForm(), inbound, baselineVars, List.of(), scopes, FU));
+                miForm(), inbound, baselineVars, List.of(), scopes, FU, "pin", "review"));
 
         List<Object> out = (List<Object>) ((Map<String, Object>) inbound.get("__subTables__")).get(STORE);
         assertThat(out).containsExactlyInAnyOrder(ours, sibling);
-        verify(guard).assertAndApply(eq(scopes), eq(FU), any(), any(), any());
+        verify(guard).assertAndApply(eq(scopes), eq(FU), any(), any(), any(), any());
     }
 
     @Test
@@ -131,8 +139,8 @@ class SubTableWriteIsolationTest {
 
         List<Object> out = (List<Object>) ((Map<String, Object>) inbound.get("__subTables__")).get(STORE);
         assertThat(out).containsExactly(ours);
-        verify(guard, never()).assertAndApply(any(), any(), any(), any(), any());
-        verify(jdbc, never()).query(any(String.class), any(RowMapper.class), any(Object[].class));
+        verify(guard, never()).assertAndApply(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(jdbc);
     }
 
     @Test
@@ -153,15 +161,15 @@ class SubTableWriteIsolationTest {
     @Test
     @SuppressWarnings("unchecked")
     void isolateOutboundSubTables_usesProcessBaselineBeforeCompletePutAll() {
-        JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        stubScopeFilters(jdbc, 101L, "main_idva", "MAIN", 202L, "sub_task_id", "SUB");
         SubTableWriteIsolation isolation = new SubTableWriteIsolation(
-                new MiSubTaskSubTableRowMerger(jdbc), mock(SubTableBindingScopeGuard.class));
+                new MiSubTaskSubTableRowMerger(mock(JdbcTemplate.class)), mock(SubTableBindingScopeGuard.class),
+                pinnedAttachmentDesign());
 
         Map<String, Object> ours = file("att-2", "Meeting-1", "Test-000002", "mine.pdf");
         Map<String, Object> sibling = file("att-3", "Meeting-1", "Test-000001", "theirs.pdf");
         ProcessInstance process = new ProcessInstance();
         process.setFunctionUnitCode(FU);
+        process.setFunctionUnitCatalogId("pin");
         process.setVariables(Map.of("__subTables__", Map.of(STORE, new ArrayList<>(List.of(sibling)))));
         ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
         when(repo.findById("pi-1")).thenReturn(Optional.of(process));
@@ -172,6 +180,7 @@ class SubTableWriteIsolationTest {
 
         TaskInfo task = new TaskInfo();
         task.setProcessInstanceId("pi-1");
+        task.setTaskDefinitionKey("review");
         Map<String, Object> variables = new HashMap<>();
         variables.put("__subTables__", new LinkedHashMap<>(Map.of(STORE, new ArrayList<>(List.of(ours)))));
         TaskCompleteRequest request = TaskCompleteRequest.builder()
@@ -210,7 +219,7 @@ class SubTableWriteIsolationTest {
         start.isolateStartSubTables(variables, request, FU);
 
         assertThat(variables).doesNotContainKeys("emptiedSubTableKeys", "subTableBindingScopes");
-        verify(guard).assertAndApply(eq(scopes), eq(FU), eq(variables), any(), eq(Map.of()));
+        verify(guard).assertAndApply(eq(scopes), eq(FU), any(), any(), eq(Map.of()), any());
     }
 
     @Test
@@ -227,7 +236,7 @@ class SubTableWriteIsolationTest {
 
         start.isolateStartSubTables(variables, ProcessStartRequest.builder().build(), FU);
 
-        verify(guard, never()).assertAndApply(any(), any(), any(), any(), any());
+        verify(guard, never()).assertAndApply(any(), any(), any(), any(), any(), any());
         assertThat(variables.get("__subTables__")).isInstanceOf(Map.class);
     }
 
@@ -263,7 +272,7 @@ class SubTableWriteIsolationTest {
 
         form.isolateProcessFormSubTables(inbound, List.of(), scopes, baselineVars, FU);
 
-        verify(guard).assertAndApply(eq(scopes), eq(FU), eq(inbound), any(), any());
+        verify(guard).assertAndApply(eq(scopes), eq(FU), any(), any(), any(), any());
     }
 
     @Test
@@ -319,32 +328,4 @@ class SubTableWriteIsolationTest {
         return r;
     }
 
-    @SuppressWarnings("unchecked")
-    private void stubScopeFilters(
-            JdbcTemplate jdbc,
-            long mainId, String mainField, String mainType,
-            long nestedId, String nestedField, String nestedType) {
-        when(jdbc.query(contains("mi-scope-binding-filter"), any(RowMapper.class), eq(mainId), eq(nestedId), eq(FU)))
-                .thenAnswer(invocation -> {
-                    try {
-                        RowMapper<Object> mapper = invocation.getArgument(1);
-                        return List.of(
-                                mapper.mapRow(filterRs(String.valueOf(mainId), mainField, mainType), 0),
-                                mapper.mapRow(filterRs(String.valueOf(nestedId), nestedField, nestedType), 1));
-                    } catch (java.sql.SQLException ex) {
-                        throw new IllegalStateException(ex);
-                    }
-                });
-    }
-
-    private java.sql.ResultSet filterRs(String bindingId, String field, String type)
-            throws java.sql.SQLException {
-        java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
-        when(rs.getString("binding_id")).thenReturn(bindingId);
-        when(rs.getString("filter_field")).thenReturn(field);
-        when(rs.getString("ref_table_type")).thenReturn(type);
-        when(rs.getString("link_mode")).thenReturn("structuralFk");
-        when(rs.getString("table_name")).thenReturn("attachment");
-        return rs;
-    }
 }

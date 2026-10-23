@@ -10,7 +10,6 @@ import { createApplicationDetailFormSchema } from '../useApplicationDetailFormSc
  */
 function schema() {
   return createApplicationDetailFormSchema({
-    lookupDbConfigs: ref({}),
     relationViewConfigs: ref({}),
     formFields: ref([]),
     formTabs: ref([]),

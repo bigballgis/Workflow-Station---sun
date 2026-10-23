@@ -52,7 +52,6 @@ describe.each([
   }],
   ['applicationDetail (My Requests)', () => {
     const { extractFieldsRecursive } = createApplicationDetailFormSchema({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
       formFields: ref([]),
       formTabs: ref([]),
@@ -63,7 +62,6 @@ describe.each([
   }],
   ['taskDetail (To Do / Completed Tasks)', () => {
     const { extractFieldsRecursive } = createTaskDetailFieldExtraction({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
       taskForm: {
         formFields: ref([]),
@@ -77,7 +75,6 @@ describe.each([
   }],
   ['processStart (New Request)', () => {
     const { extractFieldsRecursive } = createFieldExtractor({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
     })
     return (items: unknown[]) => extractFieldsRecursive(items as never)
@@ -142,7 +139,6 @@ describe.each([
 describe('applicationDetail skipSubTable gate', () => {
   it('suppresses the widget alongside subTable when skipSubTable is set', () => {
     const { extractFieldsRecursive } = createApplicationDetailFormSchema({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
       formFields: ref([]),
       formTabs: ref([]),

@@ -13,7 +13,6 @@ describe('toViewDetailFields', () => {
         { type: 'input', field: 'merchant', title: 'Merchant' },
         { type: 'subTable', _bindingId: 200, title: 'Credit Card Correspondence' },
       ],
-      {},
     )
     expect(fields.map(f => f.key)).toEqual(['merchant', '__subTable_200'])
     expect(fields[1]._bindingId).toBe(200)
@@ -25,7 +24,6 @@ describe('toViewDetailFields', () => {
         { type: 'lookup', field: 'owner', title: 'Owner', props: { lookupConfig: '{not-json' } },
         { type: 'input', field: 'merchant', title: 'Merchant' },
       ],
-      {},
     )
     expect(fields.map(f => f.key)).toEqual(['owner', 'merchant'])
     expect(fields[0].type).toBe('lookup')

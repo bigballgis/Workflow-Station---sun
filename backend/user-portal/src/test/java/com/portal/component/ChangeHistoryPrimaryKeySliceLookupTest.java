@@ -1,50 +1,51 @@
 package com.portal.component;
 
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
  * Change-history slices are keyed by physical table name (filter output) or by the
- * history-normalized canonical key ({@code dw:foo} → {@code dw_foo}). Both must resolve
- * the designer primary key — otherwise a new row is audited without {@code rowIdentifier}
- * and later rows that share business defaults pair incorrectly.
+ * history-normalized canonical key ({@code dw:foo} -> {@code dw_foo}). Both must resolve
+ * the primary key the request's release declares, otherwise a new row is audited without
+ * {@code rowIdentifier} and later rows that share business defaults pair incorrectly.
  */
 class ChangeHistoryPrimaryKeySliceLookupTest {
 
-    private JdbcTemplate jdbcTemplate;
+    private static final String RELEASE = "release-1";
+    private CatalogSnapshotReader snapshots;
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(contains("function_unit_id"), anyString()))
-                .thenAnswer(invocation -> {
-                    String tableName = invocation.getArgument(1);
-                    return "item_table".equalsIgnoreCase(tableName)
-                            ? List.of(Map.of("field_name", "item_id", "function_unit_id", 1L))
-                            : List.of();
-                });
+        snapshots = mock(CatalogSnapshotReader.class);
+        when(snapshots.contents(RELEASE, "DATA_TABLE")).thenReturn(List.of(Map.of(
+                "tableName", "item_table", "tableType", "SUB", "fields", List.of(
+                        Map.of("fieldName", "line_no", "isPrimaryKey", true, "sortOrder", 2),
+                        Map.of("fieldName", "note", "isPrimaryKey", false, "sortOrder", 3),
+                        Map.of("fieldName", "item_id", "isPrimaryKey", true, "sortOrder", 1)))));
+        when(snapshots.contents(RELEASE, "FORM")).thenReturn(List.of(Map.of(
+                "formId", 7, "tableBindings", List.of(Map.of("bindingId", 501, "tableName", "item_table")))));
     }
 
     @Test
-    void canonicalStoreKeyResolvesConfiguredPrimaryKey() {
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "dw:item_table"))
-                .containsExactly("item_id");
+    void canonicalStoreKeyResolvesConfiguredPrimaryKeyInDeclaredOrder() {
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, RELEASE, "dw:item_table"))
+                .containsExactly("item_id", "line_no");
     }
 
     @Test
     void historyTableNameResolvesConfiguredPrimaryKey() {
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "item_table"))
-                .containsExactly("item_id");
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, RELEASE, "item_table"))
+                .containsExactly("item_id", "line_no");
     }
 
     @Test
@@ -55,13 +56,25 @@ class ChangeHistoryPrimaryKeySliceLookupTest {
                 "rt_item_table")).isEqualTo("item_table");
         assertThat(ChangeHistoryDesignerPrimaryKeyLookup.tableNameFromHistoryNormalizedCanonicalKey(
                 "item_table")).isNull();
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "dw_item_table"))
-                .containsExactly("item_id");
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, RELEASE, "dw_item_table"))
+                .containsExactly("item_id", "line_no");
+    }
+
+    @Test
+    void bindingIdSliceResolvesThroughTheReleasesFormBindings() {
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, RELEASE, "501"))
+                .containsExactly("item_id", "line_no");
     }
 
     @Test
     void unknownSliceReturnsEmptyRatherThanGuessingAColumn() {
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "no_such_table")).isEmpty();
-        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(jdbcTemplate, "")).isEmpty();
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, RELEASE, "no_such_table")).isEmpty();
+        assertThat(ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, RELEASE, "")).isEmpty();
+    }
+
+    @Test
+    void requestWithoutAPinnedReleaseIsRefusedRatherThanReadFromTheDesigner() {
+        assertThatThrownBy(() -> ChangeHistoryDesignerPrimaryKeyLookup.resolve(snapshots, null, "dw:item_table"))
+                .isInstanceOf(FunctionUnitVersionException.class);
     }
 }

@@ -47,7 +47,7 @@ export interface ApplicationDetailColumnsFns {
 }
 
 export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): ApplicationDetailColumnsFns {
-  const { lookupDbConfigs, relationViewConfigs } = ctx
+  const { relationViewConfigs } = ctx
 
   /** Align with tasks/detail.vue: relation view + lookup config for sub-table list columns. */
   function buildLookupColumnProps(rawLookupConfig: unknown): Record<string, any> {
@@ -158,25 +158,24 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
         // cascader: map props.props to cascaderProps if not already set
         if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
 
-        // lookup — same merge as tasks/detail.vue (rt_lookup_configs + relationViews)
+        // lookup — same merge as tasks/detail.vue (published lookupConfig + relationViews only)
         if (type === 'lookup') {
           let lookupCfg: any = {}
           try {
             const raw = rProps.lookupConfig
             lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
           } catch { lookupCfg = {} }
-          const dbCfg = lookupDbConfigs.value[r.field]
           const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
           passProps.lookupConfig = rProps.lookupConfig || '{}'
-          passProps.tableId = lookupCfg.tableId || dbCfg?.tableId || 0
-          passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
-          passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
+          passProps.tableId = lookupCfg.tableId || 0
+          passProps.searchFields = lookupCfg.searchFields || []
+          passProps.displayField = lookupCfg.displayFields?.[0] || ''
           passProps.displayFields = lookupCfg.displayFields || []
           passProps.selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
           passProps.filterConditions = Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : []
           passProps.viewFields = lookupCfg.showBackfillView === false
             ? []
-            : (relationView?.viewFields || dbCfg?.viewFields || [])
+            : (relationView?.viewFields || [])
           passProps.showBackfillView = lookupCfg.showBackfillView !== false
         }
 

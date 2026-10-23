@@ -53,7 +53,7 @@ class ActionPostEmailComponentImplTest {
     @BeforeEach
     void setUp() {
         component = new ActionPostEmailComponentImpl(
-                taskActionService, taskQueryComponent, actionDefinitionRepository,
+                taskActionService, taskQueryComponent, new ActionDefinitionLookupComponent(actionDefinitionRepository),
                 processInstanceRepository, eventPublisher, new ObjectMapper(), ruleConditionEvaluator);
         org.mockito.Mockito.lenient().when(ruleConditionEvaluator.evaluate(any(), any(), any()))
                 .thenAnswer(inv -> {
@@ -195,7 +195,7 @@ class ActionPostEmailComponentImplTest {
                 .build(), () -> null);
         verify(eventPublisher, never()).publish(any());
         verify(taskActionService, never()).getTaskActions(any());
-        verify(actionDefinitionRepository, never()).findCatalogActionForFunctionUnit(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(actionDefinitionRepository);
     }
 
     @Test

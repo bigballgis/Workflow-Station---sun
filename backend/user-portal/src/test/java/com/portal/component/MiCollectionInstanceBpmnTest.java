@@ -38,10 +38,10 @@ class MiCollectionInstanceBpmnTest {
     }
 
     @Test
-    void legacyCompletionRetainsItsOriginalKeyBasedSource() {
-        when(engine.getBpmnXml("process")).thenReturn(Optional.of(XML));
+    void legacyCompletionReadsTheInstancesDeployedBpmnNotTheLatestOfItsKey() {
+        when(engine.getBpmnXml("process", "instance")).thenReturn(Optional.of(XML));
         builder.injectMiCollectionFromBpmn("process", "host", "instance", new HashMap<>());
-        verify(engine).getBpmnXml("process");
-        verify(engine, never()).getBpmnXml(anyString(), anyString());
+        verify(engine).getBpmnXml("process", "instance");
+        verify(engine, never()).getBpmnXml(anyString());
     }
 }

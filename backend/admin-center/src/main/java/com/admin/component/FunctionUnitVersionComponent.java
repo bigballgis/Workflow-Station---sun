@@ -397,6 +397,7 @@ public class FunctionUnitVersionComponent {
                 .packagePath(source.getPackagePath())
                 .packageSize(source.getPackageSize())
                 .checksum(source.getChecksum())
+                .contentChecksum(source.getContentChecksum())
                 .digitalSignature(source.getDigitalSignature())
                 .status(FunctionUnitStatus.DRAFT)
                 .createdBy(creatorId)

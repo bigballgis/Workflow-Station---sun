@@ -15,13 +15,6 @@ import {
 export type { ViewDetailPeerForm }
 export { peerFormsFromFuContent } from './viewDetailSubTableLookup'
 
-export type ViewDetailLookupDbConfig = {
-  tableId: number
-  searchFields: string[]
-  displayField: string
-  viewFields: unknown[]
-}
-
 type ViewDetailColumn = { field: string; label: string; type?: string }
 
 function columnsFromListView(
@@ -110,11 +103,9 @@ function parseLookupConfig(raw: unknown): Record<string, unknown> {
 function toViewDetailLookupField(
   item: Record<string, unknown>,
   field: string,
-  lookupDbConfigs: Record<string, ViewDetailLookupDbConfig>,
 ): FormField {
   const props = (item.props || {}) as Record<string, unknown>
   const lookupCfg = parseLookupConfig(props.lookupConfig)
-  const dbCfg = lookupDbConfigs[field]
   const searchFields = lookupCfg.searchFields
   const displayFields = lookupCfg.displayFields
   return {
@@ -122,14 +113,14 @@ function toViewDetailLookupField(
     label: String(item.title ?? field),
     type: 'lookup',
     span: 12,
-    _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
-    _lookupSearchFields: (Array.isArray(searchFields) && searchFields.length ? searchFields : null) || dbCfg?.searchFields || [],
-    _lookupDisplayField: (Array.isArray(displayFields) ? displayFields[0] : undefined) || dbCfg?.displayField || '',
+    _lookupTableId: lookupCfg.tableId || 0,
+    _lookupSearchFields: (Array.isArray(searchFields) && searchFields.length ? searchFields : null) || [],
+    _lookupDisplayField: (Array.isArray(displayFields) ? displayFields[0] : undefined) || '',
     _lookupDisplayFields: displayFields || [],
     _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
     _lookupMultiple: lookupCfg.multiple === true,
     _lookupConfig: typeof props.lookupConfig === 'string' ? props.lookupConfig : JSON.stringify(lookupCfg || {}),
-    _lookupViewFields: lookupCfg.showBackfillView === false ? [] : (dbCfg?.viewFields || []),
+    _lookupViewFields: [],
     _lookupShowBackfillView: lookupCfg.showBackfillView !== false,
   } as unknown as FormField
 }
@@ -211,12 +202,11 @@ export function resolveLookupDisplayValues(
  */
 export function toViewDetailFields(
   items: Record<string, unknown>[],
-  lookupDbConfigs: Record<string, ViewDetailLookupDbConfig>,
 ): FormField[] {
   return extractFieldsRecursive(items, (item) => {
     const field = item.field as string | undefined
     if (!field) return null
-    if (item.type === 'lookup') return toViewDetailLookupField(item, field, lookupDbConfigs)
+    if (item.type === 'lookup') return toViewDetailLookupField(item, field)
     const props = (item.props || {}) as Record<string, unknown>
     return {
       key: field,
@@ -254,7 +244,7 @@ export function buildViewDetailSubTableBindings(
       relationTableName: typeof b.relationTableName === 'string' ? b.relationTableName : undefined,
     }
     const formFields = subFormRule.length > 0
-      ? toViewDetailFields(design.rule as Record<string, unknown>[], {})
+      ? toViewDetailFields(design.rule as Record<string, unknown>[])
       : []
     out.push({
       bindingId,

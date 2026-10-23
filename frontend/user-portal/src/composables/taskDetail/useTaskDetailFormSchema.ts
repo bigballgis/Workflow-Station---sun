@@ -39,7 +39,7 @@ export interface TaskDetailFormSchemaFns {
 }
 
 export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSchemaFns {
-  const { lookupDbConfigs, relationViewConfigs } = ctx
+  const { relationViewConfigs } = ctx
 
   function resolveSubFormDesign(binding: any, subForms?: Record<string, any>): { formFields: FormField[]; formOptions?: Record<string, any> } {
     const design =
@@ -170,18 +170,17 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
             const raw = rProps.lookupConfig
             lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
           } catch { lookupCfg = {} }
-          const dbCfg = lookupDbConfigs.value[r.field]
           const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
           passProps.lookupConfig = rProps.lookupConfig || '{}'
-          passProps.tableId = lookupCfg.tableId || dbCfg?.tableId || 0
-          passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
-          passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
+          passProps.tableId = lookupCfg.tableId || 0
+          passProps.searchFields = lookupCfg.searchFields || []
+          passProps.displayField = lookupCfg.displayFields?.[0] || ''
           passProps.displayFields = lookupCfg.displayFields || []
           passProps.selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
           passProps.filterConditions = Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : []
           passProps.viewFields = lookupCfg.showBackfillView === false
             ? []
-            : (relationView?.viewFields || dbCfg?.viewFields || [])
+            : (relationView?.viewFields || [])
           passProps.showBackfillView = lookupCfg.showBackfillView !== false
         }
 

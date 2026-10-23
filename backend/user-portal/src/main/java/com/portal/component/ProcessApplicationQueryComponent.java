@@ -47,7 +47,6 @@ public class ProcessApplicationQueryComponent {
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final MiOverlayComponent miOverlayComponent;
     private final SubTableEnrichmentComponent subTableEnrichmentComponent;
-    private final RequestIdEnricher requestIdEnricher;
     private final MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     private final MainTableViewAccessResolver mainTableViewAccessResolver;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
@@ -211,24 +210,16 @@ public class ProcessApplicationQueryComponent {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> userNameCache = userDisplayNameResolver.resolveBatch(assigneeKeys);
 
-        // Resolve Request ID config once per function unit (no per-row DB hit).
-        Set<String> functionUnitCodes = pageContent.stream()
-                .map(ProcessInstance::getFunctionUnitCode)
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(functionUnitCodes);
-
         // 「当前步骤」MI 感知：currentNode 存的是内层任务名（如 "sub form1"）；若该任务在多实例子流程内，
         // 列表应展示外层多实例 subProcess 的 name（如 "multi"）。MI 结构是流程定义静态的，按
         // processDefinitionKey 只解析一次 BPMN（列表同 FU 的行共享 key，通常 1~few 次，不是每行 HTTP）。
         Map<String, Map<String, String>> miNameMapByProcessDefKey = buildMiNodeNameMaps(pageContent);
 
         // List API omits variables: JSONB may contain Jackson-unfriendly nesting → HttpMessageNotWritableException → SYS_INTERNAL_ERROR
-        // Request ID is computed from the (still present) variables before they are nulled.
+        // Request ID is read from the (still present) variables before they are nulled.
         List<ProcessInstanceInfo> instances = pageContent.stream()
                 .map(inst -> toProcessInstanceInfoForList(inst, userNameCache, miNameMapByProcessDefKey))
-                .peek(info -> info.setRequestId(
-                        requestIdEnricher.buildRequestId(requestIdSpecs, info.getFunctionUnitCode(), info.getVariables())))
+                .peek(info -> info.setRequestId(RequestIdEnricher.storedRequestId(info.getVariables())))
                 .peek(info -> info.setVariables(null))
                 .toList();
 
@@ -567,7 +558,8 @@ public class ProcessApplicationQueryComponent {
                         && !subMap.isEmpty();
         Map<String, Map<String, MiRowProgress>> miProgress = Collections.emptyMap();
         if (hasSubTables || "RUNNING".equals(instance.getStatus())) {
-            miProgress = miOverlayComponent.resolveMiRowProgress(processId, instance.getStatus());
+            miProgress = miOverlayComponent.resolveMiRowProgress(
+                    processId, instance.getFunctionUnitCatalogId(), instance.getStatus());
         }
         if ("RUNNING".equals(instance.getStatus())) {
             miOverlayComponent.reconcileCurrentNodeWithMiOverlay(info, miProgress);
@@ -592,14 +584,9 @@ public class ProcessApplicationQueryComponent {
             subTableEnrichmentComponent.enrichSubTablesWithAssignmentData(info, miProgress);
         }
 
-        // Request ID for the detail Basic Info (same derivation as the list); computed from the
-        // process variables which are still present on the detail DTO.
-        if (info.getFunctionUnitCode() != null) {
-            RequestIdEnricher.SpecCache specs = requestIdEnricher.resolveSpecs(
-                    java.util.Set.of(info.getFunctionUnitCode()));
-            info.setRequestId(requestIdEnricher.buildRequestId(
-                    specs, info.getFunctionUnitCode(), info.getVariables()));
-        }
+        // Request ID for the detail Basic Info (same value as the list), from the process variables
+        // which are still present on the detail DTO.
+        info.setRequestId(RequestIdEnricher.storedRequestId(info.getVariables()));
 
         return info;
     }

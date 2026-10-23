@@ -59,8 +59,7 @@ class SubTableBatchScopeDesignTest {
         row.put("note", "after");
         Map<String, Object> submitted = new java.util.LinkedHashMap<>(Map.of("dw:lines", List.of(row)));
         SubTableBindingScope scope = new SubTableBindingScope("101", "dw:lines", List.of(Map.of("line_key", "L1")), false);
-        var jdbc = org.mockito.Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
-        var guard = new SubTableBindingScopeGuard(jdbc);
+        var guard = new SubTableBindingScopeGuard();
         guard.assertAndApply(List.of(scope), "synthetic-fu", Map.of("case_key", "C1"), submitted,
                 Map.of("dw:lines", List.of(original)), Map.of("101", resolved));
         assertThat(((List<?>) submitted.get("dw:lines")).get(0)).isEqualTo(Map.of(
@@ -68,7 +67,6 @@ class SubTableBatchScopeDesignTest {
         assertThatThrownBy(() -> guard.assertAndApply(List.of(scope), "synthetic-fu", Map.of("case_key", "C2"),
                 new java.util.LinkedHashMap<>(Map.of("dw:lines", List.of(row))), Map.of("dw:lines", List.of(original)), Map.of("101", resolved)))
                 .hasMessageContaining("not allowed to write");
-        org.mockito.Mockito.verifyNoInteractions(jdbc);
         Map<String, Object> ambiguous = Map.of("forms", Map.of("first", Map.of("controls", List.of(
                 Map.of("batchControlId", "grid", "bindingId", "101", "rowDesign", design))), "second", Map.of("controls", List.of(
                 Map.of("batchControlId", "grid", "bindingId", "101", "rowDesign", design)))));

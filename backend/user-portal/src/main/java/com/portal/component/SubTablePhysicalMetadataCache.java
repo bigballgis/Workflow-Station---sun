@@ -1,6 +1,7 @@
 package com.portal.component;
 
-import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.jdbc.SubTablePrimaryKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -24,18 +26,31 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SubTablePhysicalMetadataCache {
 
     private final JdbcTemplate jdbcTemplate;
+    private final CatalogSnapshotReader catalogSnapshots;
 
+    /** Row-key columns per (release, table); empty when the table has none in that release. */
     private final Map<String, List<String>> pkColumnsCache = new ConcurrentHashMap<>();
     private final Map<String, Boolean> tableExistsCache = new ConcurrentHashMap<>();
 
-    List<String> resolvePkColumnsCached(String safeTableName) {
-        List<String> cached = pkColumnsCache.get(safeTableName);
-        if (cached != null) {
-            return cached;
+    /**
+     * Row-key columns of a sub-table the request's release defines as one of its data tables: a legacy
+     * physical table's PRIMARY KEY, otherwise the release's key. Empty for everything else that travels in
+     * {@code __subTables__} — relation tables and the platform user directory ({@code sys_users}, which is
+     * also a physical table) — so their rows are never merged with physical rows.
+     *
+     * @throws com.platform.common.functionunit.FunctionUnitVersionException VERSION_RECOVERY_REQUIRED
+     *         when the request has no release
+     */
+    Optional<List<String>> rowKeyColumns(String catalogId, String safeTableName) {
+        String cacheKey = catalogId + "|" + safeTableName;
+        List<String> cached = pkColumnsCache.get(cacheKey);
+        if (cached == null) {
+            cached = catalogSnapshots.dataTable(catalogId, safeTableName).isEmpty()
+                    ? List.of()
+                    : SubTablePrimaryKeys.resolve(jdbcTemplate, catalogSnapshots, () -> catalogId, safeTableName);
+            pkColumnsCache.put(cacheKey, cached);
         }
-        List<String> resolved = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeTableName);
-        pkColumnsCache.put(safeTableName, resolved);
-        return resolved;
+        return cached.isEmpty() ? Optional.empty() : Optional.of(cached);
     }
 
     boolean subTableExists(String tableName) {

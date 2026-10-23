@@ -69,7 +69,7 @@ class MiSubTaskSubTableRowMerger {
      *
      * <p><b>{@code rowKey} is its own authority on which columns form the PK.</b> Both producers
      * build it from the designer's configured primary key for the MI collection table — see
-     * {@code MiCollectionVariableBuilder} (PK from {@code resolveMiSubTablePkById}, which throws
+     * {@code MiCollectionVariableBuilder} (PK from the request's pinned release, which throws
      * rather than guess) and {@code SubTableDataInjector} (PK from the physical table). So the
      * key set of that map IS the real PK column list, whatever the designer configured: a single
      * {@code id_idw}, a single string/UUID column under any other name, or a composite key. This
@@ -152,6 +152,9 @@ class MiSubTaskSubTableRowMerger {
      *                           {@link #requireResolvedRowKey}, before this method is ever reached)
      * @return a new map with the submitted keys plus any patched sibling numeric keys, each value
      *         replaced by the row-merged array
+     *
+     * <p>This and the shorter overloads below carry no release facts, so any unscoped {@code dw:} slice is
+     * refused ({@code VERSION_RECOVERY_REQUIRED}); production passes the release through the full overload.
      */
     @SuppressWarnings("unchecked")
     Map<String, Object> mergeCurrentRowOnly(
@@ -190,26 +193,19 @@ class MiSubTaskSubTableRowMerger {
             Set<String> explicitlyEmptiedKeys,
             List<SubTableBindingScope> bindingScopes) {
         return mergeCurrentRowOnly(
-                submittedSubTables, baselineSubTables, rowKey, explicitlyEmptiedKeys, bindingScopes, null);
+                submittedSubTables, baselineSubTables, rowKey, explicitlyEmptiedKeys, bindingScopes, null, null);
     }
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> mergeCurrentRowOnly(
-            Map<String, Object> submittedSubTables,
-            Map<String, Object> baselineSubTables,
-            Map<String, Object> rowKey,
-            Set<String> explicitlyEmptiedKeys,
-            List<SubTableBindingScope> bindingScopes,
-            String functionUnitCode) {
-        return mergeCurrentRowOnly(submittedSubTables, baselineSubTables, rowKey,
-                explicitlyEmptiedKeys, bindingScopes, functionUnitCode, null);
-    }
-
+    /**
+     * @param tableFacts the pinned release's tables ({@link SubTableWriteDesign#tableFacts}); a slice
+     *                   with no binding scope is classified from these, never from the live designer
+     */
     @SuppressWarnings("unchecked")
     Map<String, Object> mergeCurrentRowOnly(Map<String, Object> submittedSubTables,
             Map<String, Object> baselineSubTables, Map<String, Object> rowKey,
             Set<String> explicitlyEmptiedKeys, List<SubTableBindingScope> bindingScopes,
-            String functionUnitCode, Map<String, SubTableWriteDesign.Binding> frozen) {
+            Map<String, SubTableWriteDesign.Binding> frozen,
+            Map<String, SubTableWriteDesign.TableFacts> tableFacts) {
         Set<String> emptied = explicitlyEmptiedKeys != null ? explicitlyEmptiedKeys : Set.<String>of();
         List<String> pkCols = List.copyOf(rowKey.keySet());
         Map<String, Object> merged = new LinkedHashMap<>();
@@ -236,13 +232,12 @@ class MiSubTaskSubTableRowMerger {
             List<SubTableBindingScope> keyScopes = scopesByKey.getOrDefault(key, List.of());
             if (!keyScopes.isEmpty()) {
                 merged.put(key, MiSubTableScopeAwareMerge.apply(
-                        jdbcTemplate, key, submittedRowsList, baselineRows, rowKey, keyScopes,
-                        emptied.contains(key), functionUnitCode,
+                        key, submittedRowsList, baselineRows, rowKey, keyScopes, emptied.contains(key),
                         (fk, explEmptied) -> mergeRowsKeepingBaselineExceptCurrent(
                                 baselineRows, submittedRowsList, pkCols, rowKey, fk, explEmptied), frozen));
                 continue;
             }
-            if (!isParticipantScopedBinding(key)) {
+            if (!isParticipantScopedBinding(key, tableFacts)) {
                 // Not scoped to one MI participant's row (e.g. a shared attachment table keyed by
                 // main_id to the whole request) — row-scoping this by the current sub-task's
                 // participant PK would never find a match and silently discard every submitted row.
@@ -252,7 +247,7 @@ class MiSubTaskSubTableRowMerger {
             }
             merged.put(key, mergeRowsKeepingBaselineExceptCurrent(
                     baselineRows, submittedRowsList, pkCols, rowKey,
-                    lookupForeignKeyColumnsByStoreKey(key), emptied.contains(key)));
+                    foreignKeyColumns(key, tableFacts), emptied.contains(key)));
         }
         return merged;
     }
@@ -267,16 +262,11 @@ class MiSubTaskSubTableRowMerger {
      * {@link #requireResolvedRowKey}.
      */
     /**
-     * True unless {@code submittedSubTables} key resolves to a binding whose {@code foreign_key_field}
-     * marks it as scoped to the whole process/request rather than to one MI participant row (see
-     * {@link #foreignKeyTargetsMainTable}). Defaults to {@code true} (participant-scoped, i.e. row-merge
-     * as before) when the key cannot be resolved to a binding at all — the common case for this method
-     * is the MI collection table itself, so an unresolvable key is far more likely to be a legitimate
-     * participant table under an alias this lookup doesn't recognize than a new shared-table shape;
-     * defaulting to "not scoped" would instead silently stop row-isolating the exact table class this
-     * whole mechanism exists to protect.
+     * Whether this slice is one MI participant's row set (row-merge) rather than shared by the whole
+     * request (pass through). Decided from the pinned release's tables, never from the live designer.
      */
-    private boolean isParticipantScopedBinding(String submittedKey) {
+    private boolean isParticipantScopedBinding(String submittedKey,
+                                               Map<String, SubTableWriteDesign.TableFacts> tableFacts) {
         // A relation-table slice (`rt:<name>`) is never one MI participant's row set: relation tables
         // are not designer sub-tables, carry no participant FK, and legitimately have no primary key.
         // Row-scoping one by the current sub-task's participant PK finds no match and — since the
@@ -286,64 +276,32 @@ class MiSubTaskSubTableRowMerger {
         if (submittedKey != null && submittedKey.startsWith(SubTableStoreKeys.RT_PREFIX)) {
             return false;
         }
-        try {
-            // Belt-and-braces for LEGACY `dw:` keys naming a relation table.
-            //
-            // The `rt:` check above handles anything written since `relationTableId` was added to the
-            // binding payload. Before that the portal could not tell the two apart and filed relation
-            // tables under `dw:<name>` too — those keys are still sitting in persisted
-            // `__subTables__` and keep arriving on submit. Measured on FU fu-20260422: binding 50550
-            // is relation table `test` (dw_form_table_bindings.relation_table_id=1) yet arrived as
-            // `dw:test`, and every Save on that task returned 500 — while the MI sub-table's own PK
-            // (`id_idwnn`) was configured and submitted correctly.
-            if (!isDesignerSubTableStoreKey(submittedKey)) {
-                return false;
-            }
-            // 判据 1（最高优先）：设计器把这张表**显式声明**为 MI 参与者行集合
-            // （Manage Table Bindings 里 Link Mode = MI Participant Row）。
-            //
-            // 必须排在结构判据前面：collection 表自己通常也有一个指向主表的外键
-            // （demo FU 的 subtable.main_idaaz -> main），只看「FK 指向 MAIN」会把 collection
-            // 判成共享表 → 整片跳过行合并 → 当前参与者提交的 thin stub 直接盖掉兄弟参与者
-            // 已保存的字段（实测：Test-000003 的 name 被覆盖成空串）。这正是本类要防的事故。
-            if (bindingDeclaredAsMiParticipantRow(submittedKey)) {
-                return true;
-            }
-            // 判据 2：是不是「整个请求共享」的表，按**结构事实**判定：它的外键指向 MAIN 表，
-            // 而不是指向 MI 子任务表。曾经这里比对一张写死的列名表（main_id / process_id / …），
-            // 改名后（attachment 的外键成了 main_idva）一个都命中不了 —— 共享附件表会被当成
-            // 参与者子表逐行隔离，正是本方法注释自己警告的那种静默丢数据。
-            Boolean pointsAtMainTable = foreignKeyTargetsMainTable(submittedKey);
-            if (pointsAtMainTable == null) {
-                // 查不出外键指向：保持参与者守卫开着（与 isDesignerSubTableStoreKey 同样的保守方向）
-                return true;
-            }
-            return !pointsAtMainTable;
-        } catch (RuntimeException ex) {
+        if (submittedKey == null || !submittedKey.startsWith(SubTableStoreKeys.DW_PREFIX)
+                || submittedKey.length() == SubTableStoreKeys.DW_PREFIX.length()) {
+            return true;   // legacy non-canonical key: keep the participant guard on, as before
+        }
+        SubTableWriteDesign.TableFacts facts = releaseFacts(submittedKey, tableFacts);
+        // Not a designer table of this release — including LEGACY `dw:` keys naming a relation table.
+        // Before `relationTableId` reached the binding payload the portal filed relation tables under
+        // `dw:<name>` too; those keys still sit in persisted `__subTables__`. Measured on FU
+        // fu-20260422: relation table `test` arrived as `dw:test` and every Save on that task returned 500.
+        if (facts == null || facts.relation()) {
+            return false;
+        }
+        // 判据 1（最高优先）：设计器把这张表**显式声明**为 MI 参与者行集合
+        // （Manage Table Bindings 里 Link Mode = MI Participant Row）。
+        //
+        // 必须排在结构判据前面：collection 表自己通常也有一个指向主表的外键
+        // （demo FU 的 subtable.main_idaaz -> main），只看「FK 指向 MAIN」会把 collection
+        // 判成共享表 → 整片跳过行合并 → 当前参与者提交的 thin stub 直接盖掉兄弟参与者
+        // 已保存的字段（实测：Test-000003 的 name 被覆盖成空串）。这正是本类要防的事故。
+        if (facts.participantRow()) {
             return true;
         }
-    }
-
-    /**
-     * Whether this canonical key names a table that exists in {@code dw_table_definitions} — i.e. a
-     * real designer table rather than a relation table (or the platform's virtual {@code sys_users}).
-     *
-     * <p>Unknown / unresolvable names answer {@code true} so the participant guard stays on: this
-     * check exists to EXCLUDE things we can prove are not designer tables, never to weaken isolation
-     * for something we merely failed to look up.
-     */
-    private boolean isDesignerSubTableStoreKey(String storeKey) {
-        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
-            return true;
-        }
-        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
-        if (tableName.isBlank()) {
-            return true;
-        }
-        Integer n = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM dw_table_definitions WHERE lower(table_name) = lower(?)",
-                Integer.class, tableName);
-        return n == null || n > 0;
+        // 判据 2：是不是「整个请求共享」的表，按**结构事实**判定：它的外键指向 MAIN 表，
+        // 而不是指向 MI 子任务表。查不出或互相矛盾时保持参与者守卫开着。
+        Boolean pointsAtMainTable = pointsAtMainTable(facts.foreignKeyTargetTypes());
+        return pointsAtMainTable == null || !pointsAtMainTable;
     }
 
     /**
@@ -371,79 +329,18 @@ class MiSubTaskSubTableRowMerger {
     }
 
     /**
-     * Did the designer explicitly declare this table as the MI participant-row collection?
-     *
-     * <p>{@code dw_form_table_bindings.binding_link_mode = 'miParticipantRow'} is the Developer
-     * Workstation's "Link Mode = MI Participant Row" setting — an explicit statement, not an
-     * inference, which is why it outranks every structural check.
-     *
-     * <p>It has to outrank {@link #foreignKeyTargetsMainTable} specifically: a collection table
-     * normally carries its own foreign key to the main table too (demo FU:
-     * {@code subtable.main_idaaz -> main}), so judging by "FK points at MAIN" alone classifies the
-     * collection as a shared table, skips row merging for it entirely, and lets one participant's
-     * thin stubs overwrite the fields every sibling had already saved.
-     *
-     * <p>Mirrors the frontend's {@code bindingDeclaresMiParticipantRow}
-     * ({@code miBindingKindFromConfig.ts}), whose classifier checks this same declaration first.
+     * Whether the table's foreign keys point at the MAIN table — the structural definition of "shared
+     * by the whole request". {@code targetTypes} are the bindings' declared filter FKs when there are
+     * any, otherwise every FK of the table. When they disagree (some MAIN, some not) a table-keyed
+     * payload cannot say which binding the rows belong to, so this returns {@code null} and the caller
+     * keeps the participant guard on rather than guessing.
      */
-    private boolean bindingDeclaredAsMiParticipantRow(String storeKey) {
-        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
-            return false;
-        }
-        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
-        Integer n = jdbcTemplate.queryForObject("""
-                SELECT count(*)
-                FROM dw_form_table_bindings b
-                JOIN dw_table_definitions t ON t.id = b.table_id
-                WHERE lower(t.table_name) = lower(?) AND b.binding_link_mode = 'miParticipantRow'
-                """, Integer.class, tableName);
-        return n != null && n > 0;
-    }
-
-    /**
-     * Does this table's designer-declared filter foreign key point at the MAIN table?
-     *
-     * <p>That is the structural definition of "shared by the whole request": an attachment or an
-     * action table FK'd to the request itself, as opposed to a link-child FK'd to the MI collection.
-     * Prefers {@code dw_form_table_bindings.filter_fk_field_id} — the per-binding declaration —
-     * over scanning every FK of the physical table. Scanning is only unambiguous while a table
-     * declares exactly one key; two bindings of the same table each filtering by a different key
-     * would otherwise collapse to one answer.
-     *
-     * <p>When the declared keys on this table disagree (some MAIN, some not), this returns
-     * {@code null}: a table-keyed payload cannot say which binding the rows belong to, and picking
-     * either side is a guess. The caller keeps the participant guard on.
-     *
-     * @return {@code null} when the table or its FK target cannot be resolved (caller keeps the
-     *         participant guard on rather than guessing)
-     */
-    private Boolean foreignKeyTargetsMainTable(String storeKey) {
-        if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
+    private static Boolean pointsAtMainTable(List<String> targetTypes) {
+        if (targetTypes == null || targetTypes.isEmpty()) {
             return null;
         }
-        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
-        List<String> declaredRefTypes = jdbcTemplate.queryForList("""
-                SELECT DISTINCT ref.table_type
-                FROM dw_form_table_bindings b
-                JOIN dw_table_definitions t ON t.id = b.table_id
-                JOIN dw_field_definitions f ON f.id = b.filter_fk_field_id
-                JOIN dw_table_definitions ref ON ref.id = f.ref_table_id
-                WHERE lower(t.table_name) = lower(?)
-                """, String.class, tableName);
-        List<String> refTypes = declaredRefTypes.isEmpty()
-                ? jdbcTemplate.queryForList("""
-                        SELECT ref.table_type
-                        FROM dw_field_definitions f
-                        JOIN dw_table_definitions t ON t.id = f.table_id
-                        JOIN dw_table_definitions ref ON ref.id = f.ref_table_id
-                        WHERE lower(t.table_name) = lower(?) AND f.is_foreign_key = true
-                        """, String.class, tableName)
-                : declaredRefTypes;
-        if (refTypes.isEmpty()) {
-            return null;
-        }
-        boolean anyMain = refTypes.stream().anyMatch("MAIN"::equalsIgnoreCase);
-        boolean anyNonMain = refTypes.stream().anyMatch(t -> t != null && !"MAIN".equalsIgnoreCase(t));
+        boolean anyMain = targetTypes.stream().anyMatch("MAIN"::equalsIgnoreCase);
+        boolean anyNonMain = targetTypes.stream().anyMatch(t -> t != null && !"MAIN".equalsIgnoreCase(t));
         if (anyMain && anyNonMain) {
             return null;
         }
@@ -451,25 +348,26 @@ class MiSubTaskSubTableRowMerger {
     }
 
     /**
-     * Foreign-key column names the DESIGNER declared on the table a canonical store key names.
-     *
-     * <p>This is what decides "which column points at the participant", and it must come from the
-     * design, never from a list of likely names. Renaming the demo FU's keys (sub_task_id →
-     * sub_task_idqc) made every guessed name miss: the merger then could neither find this
-     * participant's own rows nor prove the submitted rows were someone else's, so it failed the
-     * save outright with MI_ROW_KEY_UNRESOLVED while the payload was in fact correct.
+     * Foreign-key column names the release declares on the table a canonical store key names. This is
+     * what decides "which column points at the participant", and it must come from the design, never
+     * from a list of likely names (renamed keys such as sub_task_id → sub_task_idqc missed every guess).
      */
-    private List<String> lookupForeignKeyColumnsByStoreKey(String storeKey) {
+    private List<String> foreignKeyColumns(String storeKey, Map<String, SubTableWriteDesign.TableFacts> tableFacts) {
         if (storeKey == null || !storeKey.startsWith(SubTableStoreKeys.DW_PREFIX)) {
             return List.of();
         }
-        String tableName = storeKey.substring(SubTableStoreKeys.DW_PREFIX.length());
-        return jdbcTemplate.queryForList("""
-                SELECT f.field_name
-                FROM dw_field_definitions f
-                JOIN dw_table_definitions t ON t.id = f.table_id
-                WHERE lower(t.table_name) = lower(?) AND f.is_foreign_key = true
-                """, String.class, tableName);
+        SubTableWriteDesign.TableFacts facts = releaseFacts(storeKey, tableFacts);
+        return facts == null ? List.of() : facts.foreignKeyFields();
+    }
+
+    /** The pinned release's facts for this table; {@code null} when the release has no such table. */
+    private static SubTableWriteDesign.TableFacts releaseFacts(String storeKey,
+                                                            Map<String, SubTableWriteDesign.TableFacts> tableFacts) {
+        if (tableFacts == null) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_RECOVERY_REQUIRED", storeKey);
+        }
+        return tableFacts.get(storeKey.toLowerCase(java.util.Locale.ROOT));
     }
 
     /**
@@ -480,7 +378,7 @@ class MiSubTaskSubTableRowMerger {
      * value in one of its designer-declared FK columns. Composite collection keys are not
      * expressible as a single FK value, so those fall through to PK matching unchanged.
      *
-     * <p>{@code fkColumns} comes from {@link #lookupForeignKeyColumnsByStoreKey} — the designer's
+     * <p>{@code fkColumns} comes from {@link #foreignKeyColumns} — the release's
      * own declaration. An empty list means "this caller could not resolve the table's FK columns",
      * and the answer is a plain {@code false}: refuse to guess rather than fall back to column-name
      * literals, which silently mis-answered once the keys were renamed.

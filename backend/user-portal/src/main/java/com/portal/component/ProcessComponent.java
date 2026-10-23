@@ -380,6 +380,8 @@ public class ProcessComponent {
         Map<String, Object> vars = instance.getVariables() == null
                 ? new HashMap<>()
                 : new HashMap<>(instance.getVariables());
+        // Owner fields resolve in the request's own release.
+        ProcessVersionContext.apply(instance, vars);
         ownerFieldComponent.clearMainCaseHandler(instance.getFunctionUnitCode(), vars);
         instance.setVariables(vars);
     }
@@ -641,7 +643,7 @@ public class ProcessComponent {
 
     Map<String, Object> getPublishedStartContent(String catalogId) {
         String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(catalogId) + "/content?forStart=true";
-        Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(restTemplate.getForObject(url, Map.class));
+        Map<String, Object> payload = publishedContent(url);
         if (!Boolean.TRUE.equals(payload.get("startContentAuthoritative"))) {
             throw new IllegalStateException("Authoritative published start content is unavailable; Admin Center must support the start-content contract");
         }
@@ -656,12 +658,22 @@ public class ProcessComponent {
         CachedFuContent cached = fuContentCache.get(catalogId);
         if (cached != null && !cached.isExpired()) return cached.payload();
         String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(catalogId) + "/content";
-        Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(restTemplate.getForObject(url, Map.class));
+        Map<String, Object> payload = publishedContent(url);
         if (payload.isEmpty()) throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_SNAPSHOT_INCOMPLETE", catalogId);
         Map<String, Object> enriched = enrichMiAssignments(payload);
         attachRequestIdConfig(enriched);
         fuContentCache.put(catalogId, new CachedFuContent(enriched, System.currentTimeMillis()));
         return enriched;
+    }
+
+    /** A release Admin Center cannot assemble reaches the page as the version error it is, not as a 500. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> publishedContent(String url) {
+        try {
+            return ApiResponseBodyUnwrap.unwrapDataMap(restTemplate.getForObject(url, Map.class));
+        } catch (org.springframework.web.client.HttpClientErrorException.Conflict e) {
+            throw com.portal.client.RemoteVersionErrors.versionErrorOr(e);
+        }
     }
 
     private Map<String, Object> enrichMiAssignments(Map<String, Object> payload) {
@@ -722,9 +734,7 @@ public class ProcessComponent {
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/content";
             log.info("Fetching function unit content from: {}", url);
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            Map<String, Object> payload = publishedContent(url);
 
             if (!payload.isEmpty()) {
                 // Extract array for requested content type
@@ -746,6 +756,8 @@ public class ProcessComponent {
 
             return Collections.emptyList();
 
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to get function unit contents for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
             return Collections.emptyList();

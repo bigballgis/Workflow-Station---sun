@@ -35,7 +35,6 @@ class MyApplicationQuerySqlTest {
 
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private ProcessApplicationQueryComponent processApplicationQueryComponent;
-    @Mock private RequestIdEnricher requestIdEnricher;
     @Mock private UserDisplayNameResolver userDisplayNameResolver;
 
     private MyApplicationListQueryComponent component;
@@ -45,7 +44,7 @@ class MyApplicationQuerySqlTest {
     void setUp() throws Exception {
         component = new MyApplicationListQueryComponent(
                 jdbcTemplate, new com.fasterxml.jackson.databind.ObjectMapper(),
-                processApplicationQueryComponent, requestIdEnricher, userDisplayNameResolver);
+                processApplicationQueryComponent, userDisplayNameResolver);
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {

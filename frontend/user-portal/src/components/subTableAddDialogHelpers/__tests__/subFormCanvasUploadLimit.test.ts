@@ -7,7 +7,7 @@ import {
 import type { SubFormColumnLookupContext } from '../subFormCanvasColumns'
 import { newUploadCountProps, resolveUploadMaxFiles } from '@platform-shared/upload/uploadFieldValue'
 
-const ctx: SubFormColumnLookupContext = { lookupDbConfigs: {}, relationViewConfigs: {} }
+const ctx: SubFormColumnLookupContext = { relationViewConfigs: {} }
 
 /**
  * Portal sub-table Add/Edit maps canvas rules onto dialog columns, then

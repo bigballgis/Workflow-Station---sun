@@ -1020,7 +1020,8 @@ export default {
     forbidden: '无权限访问',
     forbiddenDesc: '抱歉，您没有权限访问此页面',
     goBack: '返回上一页',
-    backHome: '返回首页'
+    backHome: '返回首页',
+    functionUnitVersionUnavailable: '此请求无法使用其关联的功能单元版本处理。'
   },
   settings: {
     title: '个人设置',

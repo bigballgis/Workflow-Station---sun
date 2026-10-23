@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -27,12 +28,7 @@ public class ActionDefinitionLookupComponent {
 
     public List<ActionDefinition> resolvePinned(String catalogId, List<String> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
-        var definitions = actionDefinitionRepository.findPinnedActions(catalogId, ids);
-        Map<String, ActionDefinition> byId = new LinkedHashMap<>();
-        for (var action : definitions) {
-            byId.put(action.getId(), action);
-            if (action.getSourceId() != null) byId.put(action.getSourceId(), action);
-        }
+        Map<String, ActionDefinition> byId = pinnedById(catalogId, ids);
         List<ActionDefinition> result = new ArrayList<>();
         for (String id : ids) {
             var action = byId.get(id);
@@ -40,6 +36,48 @@ public class ActionDefinitionLookupComponent {
                     "VERSION_SNAPSHOT_INCOMPLETE", catalogId);
             result.add(action);
         }
+        return result;
+    }
+
+    /** One action of the release by catalog or designer id; empty when that release has no such action. */
+    public Optional<ActionDefinition> findPinned(String catalogId, String id) {
+        if (id == null || id.isBlank()) return Optional.empty();
+        return Optional.ofNullable(pinnedById(catalogId, List.of(id)).get(id));
+    }
+
+    /** The release's actions for these ids, keyed by catalog id and designer id. */
+    private Map<String, ActionDefinition> pinnedById(String catalogId, List<String> ids) {
+        Map<String, ActionDefinition> byId = new LinkedHashMap<>();
+        for (var action : actionDefinitionRepository.findPinnedActions(catalogId, ids)) {
+            byId.put(action.getId(), action);
+            if (action.getSourceId() != null) byId.put(action.getSourceId(), action);
+        }
+        if (!byId.keySet().containsAll(ids)) {
+            legacyActionsByDesignerId(catalogId).forEach(byId::putIfAbsent);
+        }
+        return byId;
+    }
+
+    /**
+     * Releases deployed before runtime versioning stored their actions without the designer id
+     * ({@code source_id}) that their BPMN refers to. The release's own published BPMN pairs each
+     * task's designer ids with action names, and names are unique within a release, so the pairing
+     * identifies the release's action. Returned as a copy carrying that id; stored rows are not changed.
+     */
+    private Map<String, ActionDefinition> legacyActionsByDesignerId(String catalogId) {
+        var legacy = actionDefinitionRepository.findByFunctionUnitId(catalogId).stream()
+                .filter(action -> action.getSourceId() == null)
+                .toList();
+        if (legacy.isEmpty()) return Map.of();
+        var published = actionDefinitionRepository.findPublishedProcessXml(catalogId);
+        if (published.size() != 1) return Map.of();
+        Map<String, ActionDefinition> result = new LinkedHashMap<>();
+        ChangeHistoryBpmnFormResolver.actionNamesById(published.get(0)).forEach((designerId, name) -> {
+            var matches = legacy.stream().filter(action -> name.equals(action.getActionName())).toList();
+            if (matches.size() == 1) result.put(designerId, matches.get(0).toBuilder().sourceId(designerId).build());
+        });
+        log.info("Release {} predates action source ids; resolved {} action(s) from its published BPMN",
+                catalogId, result.size());
         return result;
     }
 

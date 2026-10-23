@@ -3,14 +3,12 @@ package com.portal.component;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.audit.SystemAuditFields;
-import com.platform.common.functionunit.ProcessStartForm;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.platform.common.subtable.SubTableStoreKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -88,10 +86,6 @@ public class ChangeHistorySubmissionFilter {
             Map<String, Object> enriched) {
         return retainUserEditableSubmission(submitted, enriched,
                 loadTaskFormDefinition(processInstanceId, stageId));
-    }
-
-    public Object filterProcessSubTableBaseline(String functionUnitCode, Object storedSubTables) {
-        return filterSubTableBaseline(storedSubTables, loadProcessFormDefinition(functionUnitCode));
     }
 
     public Object filterTaskSubTableBaseline(String stageId, Object storedSubTables) {
@@ -227,28 +221,6 @@ public class ChangeHistorySubmissionFilter {
         return copyPayload(result);
     }
 
-    /** Read a Postgres {@code text[]} column (the primary-key subquery) as a list. */
-    private static List<String> textArrayValue(Object raw) {
-        if (raw instanceof java.sql.Array sqlArray) {
-            try {
-                Object value = sqlArray.getArray();
-                if (value instanceof Object[] items) {
-                    List<String> out = new ArrayList<>();
-                    for (Object item : items) {
-                        String text = stringValue(item);
-                        if (text != null)
-                            out.add(text);
-                    }
-                    return out;
-                }
-            } catch (java.sql.SQLException ignored) {
-                // Treated as "no configured primary key" — the caller then relies on the platform
-                // key alone, which is the same conservative path as a table that declares none.
-            }
-        }
-        return List.of();
-    }
-
     private ChangeHistoryBindingAliases resolveBindingContract(Map<String, Object> formDefinition,
             Set<String> topLevelEditable,
             Map<String, Set<String>> editableByBinding) {
@@ -281,78 +253,6 @@ public class ChangeHistorySubmissionFilter {
             }
             return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
                     aliasPriorities, primaryKeyFieldsByBinding);
-        }
-        String formId = stringValue(formDefinition.get("formId"));
-        if (formId == null)
-            return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
-                    aliasPriorities, primaryKeyFieldsByBinding);
-        try {
-            List<Map<String, Object>> bindings = jdbcTemplate.queryForList(
-                    """
-                            SELECT binding.id, binding.binding_type, binding.binding_mode,
-                                COALESCE(td.table_name, rt.table_name) AS table_name,
-                                COALESCE(td.table_display_name, rt.display_name) AS table_display_name,
-                                sibling.id AS sibling_id,
-                                binding.relation_table_id,
-                                -- The columns this table declares as its primary key. Row identity
-                                -- is configuration: a table keyed by `correspondence_id` matches no
-                                -- list of likely column names.
-                                (SELECT array_agg(pk.field_name ORDER BY pk.sort_order NULLS LAST, pk.id)
-                                   FROM dw_field_definitions pk
-                                  WHERE pk.table_id = binding.table_id
-                                    AND COALESCE(pk.is_primary_key, false) = true) AS primary_key_fields
-                            FROM dw_form_definitions form
-                            INNER JOIN dw_form_table_bindings binding ON binding.form_id = form.id
-                            LEFT JOIN dw_table_definitions td ON td.id = binding.table_id
-                            LEFT JOIN rt_table_definitions rt ON rt.id = binding.relation_table_id
-                            LEFT JOIN dw_form_definitions sibling_form
-                                ON sibling_form.function_unit_id = form.function_unit_id
-                            LEFT JOIN dw_form_table_bindings sibling ON sibling.form_id = sibling_form.id
-                                AND ((binding.table_id IS NOT NULL AND sibling.table_id = binding.table_id)
-                                    OR (binding.relation_table_id > 0
-                                        AND sibling.relation_table_id = binding.relation_table_id))
-                            WHERE form.id = ?
-                            """, Long.valueOf(formId));
-            for (Map<String, Object> binding : bindings) {
-                String type = stringValue(binding.get("binding_type"));
-                String mode = stringValue(binding.get("binding_mode"));
-                if ("PRIMARY".equalsIgnoreCase(type) && !"EDITABLE".equalsIgnoreCase(mode)) {
-                    topLevelEditable.clear();
-                }
-                if (!"PRIMARY".equalsIgnoreCase(type) && !"EDITABLE".equalsIgnoreCase(mode)) {
-                    String bindingId = stringValue(binding.get("id"));
-                    if (bindingId != null)
-                        editableByBinding.remove(bindingId);
-                }
-            }
-            for (Map<String, Object> binding : bindings) {
-                String bindingId = stringValue(binding.get("id"));
-                if (bindingId == null || !editableByBinding.containsKey(bindingId))
-                    continue;
-                registerAlias(aliasToBinding, aliasPriorities, bindingId, binding.get("table_name"), 1);
-                registerAlias(aliasToBinding, aliasPriorities, bindingId, binding.get("table_display_name"), 2);
-                registerAlias(aliasToBinding, aliasPriorities, bindingId, binding.get("sibling_id"), 3);
-                String tableName = stringValue(binding.get("table_name"));
-                if (tableName != null)
-                    bindingToHistoryName.putIfAbsent(bindingId, tableName);
-                List<String> pkFields = textArrayValue(binding.get("primary_key_fields"));
-                if (!pkFields.isEmpty())
-                    primaryKeyFieldsByBinding.putIfAbsent(bindingId, pkFields);
-                // Portal persists __subTables__ under SubTableStoreKeys (dw:/rt:), not binding
-                // ids. Without this alias the audit payload drops every user-edited sub-table.
-                registerAlias(aliasToBinding, aliasPriorities, bindingId,
-                        SubTableStoreKeys.storeKey(tableName, tableName,
-                                isRelationTableBinding(binding.get("relation_table_id"))),
-                        1);
-            }
-        } catch (RuntimeException ex) {
-            // Form binding metadata is authoritative. If it cannot be read, fail closed
-            // rather
-            // than attributing potentially read-only values to the user.
-            log.warn("Could not resolve form binding modes for change history form {}: {}",
-                    formId, ex.getMessage());
-            topLevelEditable.clear();
-            editableByBinding.clear();
         }
         return new ChangeHistoryBindingAliases(aliasToBinding, bindingToHistoryName,
                 aliasPriorities, primaryKeyFieldsByBinding);
@@ -469,30 +369,18 @@ public class ChangeHistorySubmissionFilter {
         priorities.putIfAbsent(normalized, priority);
     }
 
+    /** The start form of the release the request was started on, never the live designer's. */
     public Map<String, Object> resolveProcessFormDefinition(String code, Map<String, Object> variables) {
-        if (variables != null && variables.get("functionUnitId") != null) {
-            return snapshots().processForm(String.valueOf(variables.get("functionUnitId")), false);
+        Object catalogId = variables == null ? null : variables.get("functionUnitId");
+        if (catalogId == null || String.valueOf(catalogId).isBlank()) {
+            throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                    "VERSION_RECOVERY_REQUIRED", code);
         }
-        return loadProcessFormDefinition(code);
+        return snapshots().processForm(String.valueOf(catalogId), false);
     }
 
     public Object filterProcessSubTableBaseline(String code, Object tables, Map<String, Object> variables) {
         return filterSubTableBaseline(tables, resolveProcessFormDefinition(code, variables));
-    }
-
-    /** The process start form ({@link ProcessStartForm}). */
-    private Map<String, Object> loadProcessFormDefinition(String functionUnitCode) {
-        if (functionUnitCode == null || functionUnitCode.isBlank())
-            return Map.of();
-        return queryFormDefinition(
-                """
-                        SELECT fd.id AS form_id, fd.config_json::text AS config_json,
-                            fd.field_permissions::text AS field_permissions
-                        FROM dw_form_definitions fd
-                        INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                        WHERE fu.code = ? AND %s
-                        ORDER BY fd.id DESC LIMIT 1
-                        """.formatted(ProcessStartForm.SQL_PREDICATE), functionUnitCode.trim());
     }
 
     /**
@@ -538,52 +426,6 @@ public class ChangeHistorySubmissionFilter {
         return ChangeHistoryBpmnFormResolver.resolveTaskFormId(bpmnXml, stageId);
     }
 
-    private Map<String, Object> queryFormDefinition(String sql, Object... parameters) {
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, parameters);
-            if (rows.isEmpty())
-                return Map.of();
-            Map<String, Object> row = rows.get(0);
-            Map<String, Object> definition = new LinkedHashMap<>();
-            definition.put("configJson", parseObject(row.get("config_json")));
-            definition.put("fieldPermissions", parseStringMap(row.get("field_permissions")));
-            definition.put("readOnly", truthy(row.get("read_only")));
-            String formId = stringValue(row.get("form_id"));
-            if (formId != null)
-                definition.put("formId", formId);
-            return definition;
-        } catch (RuntimeException ex) {
-            log.warn("Could not resolve form metadata for user change history: {}", ex.getMessage());
-            return Map.of();
-        }
-    }
-
-    private Map<String, Object> parseObject(Object raw) {
-        if (raw instanceof Map<?, ?> map)
-            return ChangeHistoryFilterMaps.castMap(map);
-        if (raw == null || String.valueOf(raw).isBlank())
-            return Map.of();
-        try {
-            return objectMapper.readValue(String.valueOf(raw), new TypeReference<Map<String, Object>>() {
-            });
-        } catch (Exception ex) {
-            return Map.of();
-        }
-    }
-
-    private Map<String, String> parseStringMap(Object raw) {
-        if (raw instanceof Map<?, ?> map)
-            return stringMapValue(map);
-        if (raw == null || String.valueOf(raw).isBlank())
-            return Map.of();
-        try {
-            return objectMapper.readValue(String.valueOf(raw), new TypeReference<Map<String, String>>() {
-            });
-        } catch (Exception ex) {
-            return Map.of();
-        }
-    }
-
     private static Map<String, Object> mapValue(Object value) {
         return value instanceof Map<?, ?> map ? ChangeHistoryFilterMaps.castMap(map) : Map.of();
     }
@@ -605,20 +447,6 @@ public class ChangeHistorySubmissionFilter {
 
     private static String stringValue(Object value) {
         return ChangeHistoryFilterMaps.stringValue(value);
-    }
-
-    private static boolean isRelationTableBinding(Object relationTableId) {
-        if (relationTableId instanceof Number number) {
-            return number.longValue() > 0;
-        }
-        if (relationTableId == null) {
-            return false;
-        }
-        try {
-            return Long.parseLong(String.valueOf(relationTableId).trim()) > 0;
-        } catch (NumberFormatException ignored) {
-            return false;
-        }
     }
 
     private static String normalizeAlias(String value) {

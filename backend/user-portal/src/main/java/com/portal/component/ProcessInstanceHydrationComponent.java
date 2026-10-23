@@ -23,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +42,8 @@ public class ProcessInstanceHydrationComponent {
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -65,6 +68,38 @@ public class ProcessInstanceHydrationComponent {
             return persistFromEngineRow(processInstanceId, engineSnapshot, false);
         }
         return hydrateFromEngine(processInstanceId);
+    }
+
+    /**
+     * The release a page reads a unit's content from. With a task or request in hand it is the
+     * release that request was started on — never the unit's latest or currently active one — and
+     * the page may name the unit by that release, its code or its process key; naming another
+     * release of it is refused. Without either (a new request), the unit is served as named.
+     */
+    public String pinnedContentRef(String requested, String taskId, String processInstanceId) {
+        String instanceId = StringUtils.hasText(processInstanceId) ? processInstanceId.trim() : null;
+        if (StringUtils.hasText(taskId)) {
+            Map<String, Object> task = workflowEngineClient.getTaskById(taskId.trim())
+                    .map(com.portal.util.WorkflowEnginePayloadHelper::singleTaskFromPayload)
+                    .orElseThrow(() -> new PortalException("404", "Task not found"));
+            String taskInstanceId = stringValue(task.get("processInstanceId"));
+            if (taskInstanceId == null || (instanceId != null && !instanceId.equals(taskInstanceId))) {
+                throw new com.platform.common.functionunit.FunctionUnitVersionException(
+                        "VERSION_CONTEXT_MISMATCH", processInstanceId);
+            }
+            instanceId = taskInstanceId;
+        }
+        if (instanceId == null) {
+            return requested;
+        }
+        ProcessInstance instance = requireProcessInstance(instanceId);
+        String pinned = instance.getFunctionUnitCatalogId();
+        String named = requested == null ? "" : requested.trim();
+        if (named.equalsIgnoreCase(pinned) || named.equals(instance.getFunctionUnitCode())
+                || named.equals(instance.getProcessDefinitionKey())) {
+            return pinned;
+        }
+        throw new com.platform.common.functionunit.FunctionUnitVersionException("VERSION_CONTEXT_MISMATCH", named);
     }
 
     @Transactional
@@ -126,8 +161,6 @@ public class ProcessInstanceHydrationComponent {
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
-                // Live DW id for BPMN join only; catalog UUID above is the form/binding freeze.
-                .functionUnitVersionId(DwFunctionUnitIdLookup.findIdByCode(jdbcTemplate, pin.code()))
                 .build();
 
         ProcessVersionContext.apply(entity, variables);
@@ -158,8 +191,12 @@ public class ProcessInstanceHydrationComponent {
         if (StringUtils.hasText(instance.getFunctionUnitCatalogId())
                 && StringUtils.hasText(instance.getFunctionUnitCode())
                 && StringUtils.hasText(instance.getFunctionUnitVersionLabel())) {
-            if (instance.getVariables() != null) ProcessVersionContext.of(instance)
-                    .applyTo(new HashMap<>(instance.getVariables()));
+            Map<String, Object> variables = instance.getVariables() == null
+                    ? new HashMap<>() : new HashMap<>(instance.getVariables());
+            ProcessVersionContext.apply(instance, variables);
+            if (!variables.equals(instance.getVariables())) {
+                recordPinInVariables(instance, variables);
+            }
             return instance;
         }
         Map<String, Object> variables = instance.getVariables() == null
@@ -175,6 +212,32 @@ public class ProcessInstanceHydrationComponent {
         ProcessVersionContext.apply(instance, restored);
         instance.setVariables(restored);
         return processInstanceRepository.save(instance);
+    }
+
+    /**
+     * Pinned before its variables carried the release (requests started before runtime versioning):
+     * every pinned-or-live decision reads the variables, so the pin is merged into them once. A JSON
+     * merge that leaves {@code lock_version} alone, so concurrent first reads and an in-flight save never
+     * collide; keys already present win, and a save that drops the pin is healed again on the next read.
+     */
+    private void recordPinInVariables(ProcessInstance instance, Map<String, Object> withPin) {
+        Map<String, Object> pin = new LinkedHashMap<>();
+        ProcessVersionContext.apply(instance, pin);
+        boolean managed = entityManager != null && entityManager.contains(instance);
+        if (managed) {
+            entityManager.flush();   // the caller's pending writes land first: the refresh below would drop them
+        }
+        try {
+            jdbcTemplate.update("UPDATE up_process_instance SET variables = CAST(? AS jsonb) || COALESCE(variables, '{}'::jsonb) "
+                    + "WHERE id = ?", com.platform.common.util.JsonUtils.getObjectMapper().writeValueAsString(pin), instance.getId());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Release pin of " + instance.getId() + " cannot be serialised", e);
+        }
+        if (managed) {
+            entityManager.refresh(instance);   // in sync with the row, so nothing is left to flush
+        } else {
+            instance.setVariables(withPin);
+        }
     }
 
     private void retainPersistedPin(Map<String, Object> variables, String key, String value) {

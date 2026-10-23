@@ -122,6 +122,23 @@ class BatchTaskComponentTest {
     }
 
     @Test
+    void aGroupWhosePinnedReleaseCannotResolveItsActionsIsLeftOutWithoutFailingTheOthers() {
+        // A release deployed before runtime versioning has no action source ids, so its actions do not resolve.
+        when(todoListQueryComponent.listMergedTodoTasks("u1")).thenReturn(List.of(
+                task("legacy", PD, "dept", "u1", true),
+                task("ok", PD, "finance", "u1", true)));
+        engineTask("legacy", "u1", true);
+        engineTask("ok", "u1", true);
+        when(taskActionService.getTaskActionsFromPayload(argThat(m -> "legacy".equals(m.get("taskId")))))
+                .thenThrow(new com.platform.common.functionunit.FunctionUnitVersionException(
+                        "VERSION_SNAPSHOT_INCOMPLETE", CATALOG_1023));
+
+        List<BatchTaskGroup> groups = component.listGroups("u1");
+
+        assertThat(groups).extracting(BatchTaskGroup::taskDefinitionKey).containsExactly("finance");
+    }
+
+    @Test
     void sharedCommentIsRequiredAndWrittenToEveryTask() {
         engineTask("t1", "u1", true);
 

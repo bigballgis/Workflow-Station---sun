@@ -9,7 +9,6 @@ vi.mock('@/api/auth', () => ({
 describe('process start Owner Creator prefill', () => {
   it('sets defaultValue on Creator and leaves Case Handler without a default', () => {
     const { extractFieldsRecursive } = createFieldExtractor({
-      lookupDbConfigs: ref({}),
       relationViewConfigs: ref({}),
     })
     const fields = extractFieldsRecursive([

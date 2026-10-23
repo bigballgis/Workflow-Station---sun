@@ -1,60 +1,51 @@
 package com.portal.component;
 
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.subtable.SubTableStoreKeys;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * Resolves {@code dw_field_definitions.is_primary_key} for a change-history slice key.
- *
- * <p>Uncached on purpose: {@link ChangeHistoryComponent} is a singleton, and caching here would
- * keep serving a primary key after the designer changed it.
- *
- * <p>Table-name lookup is scoped to {@code dw_function_units.code} when the caller has it.
- * Without that code, a name that maps to more than one function unit returns empty — never a
- * mixed list of primary-key columns.
+ * Resolves the primary-key columns a change-history slice's table declares, in the release the
+ * request was started on — never in the live designer, which may have changed the key since.
  */
-@Slf4j
 final class ChangeHistoryDesignerPrimaryKeyLookup {
 
     private ChangeHistoryDesignerPrimaryKeyLookup() {
     }
 
-    static List<String> resolve(JdbcTemplate jdbcTemplate, String sliceKey) {
-        return resolve(jdbcTemplate, sliceKey, null);
-    }
-
-    static List<String> resolve(JdbcTemplate jdbcTemplate, String sliceKey, String functionUnitCode) {
-        if (sliceKey == null || sliceKey.isBlank() || jdbcTemplate == null) {
+    static List<String> resolve(CatalogSnapshotReader snapshots, String catalogId, String sliceKey) {
+        if (sliceKey == null || sliceKey.isBlank()) {
             return List.of();
         }
-        try {
-            String tableName = SubTableStoreKeys.tableNameOf(sliceKey);
-            if (tableName != null && !tableName.isBlank()) {
-                return queryByTableName(jdbcTemplate, tableName, functionUnitCode);
-            }
-            if (sliceKey.chars().allMatch(Character::isDigit)) {
-                return queryByBindingId(jdbcTemplate, sliceKey);
-            }
-            List<String> byHistoryName = queryByTableName(jdbcTemplate, sliceKey, functionUnitCode);
-            if (!byHistoryName.isEmpty()) {
-                return byHistoryName;
-            }
-            String recovered = tableNameFromHistoryNormalizedCanonicalKey(sliceKey);
-            if (recovered != null) {
-                return queryByTableName(jdbcTemplate, recovered, functionUnitCode);
-            }
-        } catch (RuntimeException ex) {
-            log.warn("Could not resolve primary key for sub-table slice {}: {}",
-                    sliceKey, ex.getMessage());
+        if (catalogId == null || catalogId.isBlank()) {
+            throw new FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", sliceKey);
         }
-        return List.of();
+        Map<String, Map<String, Object>> tables = new LinkedHashMap<>();
+        for (Map<String, Object> table : snapshots.contents(catalogId, "DATA_TABLE")) {
+            Object name = table.get("tableName");
+            if (name != null) {
+                tables.putIfAbsent(String.valueOf(name).toLowerCase(Locale.ROOT), table);
+            }
+        }
+        String tableName = SubTableStoreKeys.tableNameOf(sliceKey);
+        if (tableName != null && !tableName.isBlank()) {
+            return primaryKeys(tables, tableName);
+        }
+        if (sliceKey.chars().allMatch(Character::isDigit)) {
+            return primaryKeys(tables, tableNameOfBinding(snapshots, catalogId, sliceKey));
+        }
+        List<String> byHistoryName = primaryKeys(tables, sliceKey);
+        if (!byHistoryName.isEmpty()) {
+            return byHistoryName;
+        }
+        String recovered = tableNameFromHistoryNormalizedCanonicalKey(sliceKey);
+        return recovered != null ? primaryKeys(tables, recovered) : List.of();
     }
 
     /**
@@ -83,50 +74,34 @@ final class ChangeHistoryDesignerPrimaryKeyLookup {
         return storePrefix.replace(':', '_');
     }
 
-    private static List<String> queryByTableName(
-            JdbcTemplate jdbcTemplate, String tableName, String functionUnitCode) {
-        if (functionUnitCode != null && !functionUnitCode.isBlank()) {
-            return jdbcTemplate.queryForList("""
-                    SELECT f.field_name
-                    FROM dw_field_definitions f
-                    JOIN dw_table_definitions t ON t.id = f.table_id
-                    JOIN dw_function_units fu ON fu.id = t.function_unit_id
-                    WHERE lower(t.table_name) = lower(?)
-                      AND fu.code = ?
-                      AND COALESCE(f.is_primary_key, false) = true
-                    ORDER BY f.sort_order NULLS LAST, f.id
-                    """, String.class, tableName, functionUnitCode);
-        }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                SELECT f.field_name, t.function_unit_id
-                FROM dw_field_definitions f
-                JOIN dw_table_definitions t ON t.id = f.table_id
-                WHERE lower(t.table_name) = lower(?)
-                  AND COALESCE(f.is_primary_key, false) = true
-                ORDER BY f.sort_order NULLS LAST, f.id
-                """, tableName);
-        Set<Object> functionUnits = new LinkedHashSet<>();
-        List<String> names = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            functionUnits.add(row.get("function_unit_id"));
-            Object fieldName = row.get("field_name");
-            if (fieldName != null) {
-                names.add(String.valueOf(fieldName));
-            }
-        }
-        if (functionUnits.size() > 1) {
+    /** The table's primary-key fields in its declared field order. */
+    private static List<String> primaryKeys(Map<String, Map<String, Object>> tables, String tableName) {
+        Map<String, Object> table = tableName == null ? null : tables.get(tableName.toLowerCase(Locale.ROOT));
+        if (table == null) {
             return List.of();
         }
-        return names;
+        return CatalogSnapshotReader.objects(table.get("fields")).stream()
+                .filter(field -> Boolean.TRUE.equals(field.get("isPrimaryKey")) && field.get("fieldName") != null)
+                .sorted(Comparator.comparing(ChangeHistoryDesignerPrimaryKeyLookup::sortOrder,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(field -> String.valueOf(field.get("fieldName")))
+                .toList();
     }
 
-    private static List<String> queryByBindingId(JdbcTemplate jdbcTemplate, String bindingId) {
-        return jdbcTemplate.queryForList("""
-                SELECT f.field_name
-                FROM dw_form_table_bindings b
-                JOIN dw_field_definitions f ON f.table_id = b.table_id
-                WHERE b.id = ? AND COALESCE(f.is_primary_key, false) = true
-                ORDER BY f.sort_order NULLS LAST, f.id
-                """, String.class, Long.valueOf(bindingId));
+    private static Integer sortOrder(Map<String, Object> field) {
+        return field.get("sortOrder") instanceof Number number ? number.intValue() : null;
+    }
+
+    /** A numeric slice key is a designer binding id: the release's forms say which table it binds. */
+    private static String tableNameOfBinding(CatalogSnapshotReader snapshots, String catalogId, String bindingId) {
+        for (Map<String, Object> form : snapshots.contents(catalogId, "FORM")) {
+            for (Map<String, Object> binding : CatalogSnapshotReader.objects(
+                    form.getOrDefault("tableBindings", List.of()))) {
+                if (bindingId.equals(String.valueOf(binding.get("bindingId"))) && binding.get("tableName") != null) {
+                    return String.valueOf(binding.get("tableName"));
+                }
+            }
+        }
+        return null;
     }
 }

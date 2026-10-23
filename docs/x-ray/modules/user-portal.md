@@ -46,7 +46,7 @@ All controllers return `com.platform.common.dto.ApiResponse<T>` unless noted. To
 
 **Tasks/approvals** — `TaskController /tasks`: `POST /query`, `GET /{id}`, `/{id}/history`, `POST /{id}/claim|unclaim|complete|delegate|transfer|urge`, `POST /batch/urge`, `GET /statistics`, `POST /completed/query`, `GET /users/search` (**direct admin-center call**), `POST /{id}/sub-table-rows/{rowId}/assign`, `/sub-table-rows/assign-by-identity`, `GET /{id}/sub-table-data/all`. `TaskFormController /tasks`: `GET /{id}/form-data`, `POST /{id}/submit`, `GET /{id}/completed-form`. `ApprovalController /approvals`: proxy to admin-center (pending/approve/reject/is-approver/history).
 
-**Views/relation tables** — `PortalMainTableViewController /main-table-views`: `GET /function-units`, `/{code}/views`, `/{viewId}/data`, `/{viewId}/export` (CSV), `POST /{viewId}/import`. `PortalRelationTableController /relation-tables`: list, `GET /{id}` (paged), `/export`, `/search`, `/lookup-configs/{formId}`, `/view-fields`, `/fields`, `POST /{id}/primary-keys/allocate`, row add/update/status, template, import.
+**Views/relation tables** — `PortalMainTableViewController /main-table-views`: `GET /function-units`, `/{code}/views`, `/{viewId}/data`, `/{viewId}/export` (CSV), `POST /{viewId}/import`. `PortalRelationTableController /relation-tables`: list, `GET /{id}` (paged), `/export`, `/search`, `/view-fields`, `/fields`, `POST /{id}/primary-keys/allocate`, row add/update/status, template, import.
 
 **Record notes** — `RecordNoteController /record-notes`: `GET` list, `GET /{id}`, `POST` (multipart comment+attachments), `POST /inline-images`, `POST /adopt`, `PUT/DELETE /{id}`, `GET /{id}/content` (bytes), `GET /archive/{processInstanceId}` (ZIP).
 

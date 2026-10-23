@@ -86,7 +86,7 @@ final class BatchTaskFormTransactionHarness {
         when(design.resolve(any(), any())).thenReturn(Map.of("101", new SubTableWriteDesign.Binding(
                 "101", "dw:lines", null, null, null, List.of(pk), List.of(), "structuralFk")));
         ReflectionTestUtils.setField(component, "subTableWriteIsolation", new SubTableWriteIsolation(
-                new MiSubTaskSubTableRowMerger(metadata), new SubTableBindingScopeGuard(metadata), design));
+                new MiSubTaskSubTableRowMerger(metadata), new SubTableBindingScopeGuard(), design));
     }
 
     private Object currentFields() throws Exception {

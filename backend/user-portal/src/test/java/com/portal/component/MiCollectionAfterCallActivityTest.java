@@ -1,9 +1,10 @@
 package com.portal.component;
 
+import com.platform.common.functionunit.CatalogSnapshotReader;
 import com.portal.client.WorkflowEngineClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -11,8 +12,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -60,29 +61,23 @@ class MiCollectionAfterCallActivityTest {
     @SuppressWarnings("unchecked")
     void injectsTheCollectionOfAnMiSubProcessReachedThroughACall() {
         WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
-        when(engine.getBpmnXml("fu-purchase")).thenReturn(Optional.of(BPMN));
+        when(engine.getBpmnXml("fu-purchase", "pi-1")).thenReturn(Optional.of(BPMN));
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.query(contains("SELECT table_name"), any(RowMapper.class), any(Object[].class)))
-                .thenReturn(List.of("budget_lines"));
-        when(jdbc.query(contains("SELECT table_name"), any(RowMapper.class), anyLong()))
-                .thenReturn(List.of("budget_lines"));
-        when(jdbc.query(contains("is_primary_key"), any(RowMapper.class), any(Object[].class)))
-                .thenReturn(List.of("id"));
-        when(jdbc.query(contains("is_primary_key"), any(RowMapper.class), anyLong()))
-                .thenReturn(List.of("id"));
+        when(jdbc.queryForList(contains("FROM up_process_instance"), eq(String.class), eq("pi-1")))
+                .thenReturn(List.of("release-1"));
+        CatalogSnapshotReader snapshots = mock(CatalogSnapshotReader.class);
+        when(snapshots.table("release-1", "7")).thenReturn(Map.of("tableId", 7, "tableName", "budget_lines",
+                "fields", List.of(Map.of("fieldName", "id", "isPrimaryKey", true))));
 
         Map<String, Object> variables = new HashMap<>();
         variables.put("__subTables__", Map.of("dw:budget_lines", List.of(
                 Map.of("id", "L1", "owner_user_id", "user-dev"))));
 
-        new MiCollectionVariableBuilder(engine, jdbc)
-                .injectMiCollectionFromBpmn("fu-purchase", "Raise", "pi-1", variables);
+        MiCollectionVariableBuilder builder = new MiCollectionVariableBuilder(engine, jdbc);
+        ReflectionTestUtils.setField(builder, "catalogSnapshots", snapshots);
+        builder.injectMiCollectionFromBpmn("fu-purchase", "Raise", "pi-1", variables);
 
         assertThat(variables).containsKey("multiInstance_budget_lines_collection");
         assertThat((List<Object>) variables.get("multiInstance_budget_lines_collection")).hasSize(1);
-    }
-
-    private static long anyLong() {
-        return org.mockito.ArgumentMatchers.anyLong();
     }
 }

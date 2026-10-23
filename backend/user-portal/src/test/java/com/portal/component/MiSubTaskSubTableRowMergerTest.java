@@ -11,11 +11,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * MI (multi-instance) sub-task row-level save isolation: two participants' sub-tasks saving in
@@ -26,6 +22,37 @@ class MiSubTaskSubTableRowMergerTest {
 
     private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
     private final MiSubTaskSubTableRowMerger merger = new MiSubTaskSubTableRowMerger(jdbcTemplate);
+
+    /** The pinned release's tables these cases use; MI slices are classified from it, never the live designer. */
+    private static final Map<String, SubTableWriteDesign.TableFacts> RELEASE = Map.of(
+            "dw:subtable", participantTable(),
+            "dw:people", participantTable("sub_task_id"),
+            "dw:attachment", new SubTableWriteDesign.TableFacts(false, false, List.of("MAIN"), List.of("main_idva")),
+            "dw:test", new SubTableWriteDesign.TableFacts(true, false, List.of(), List.of()));
+
+    private static SubTableWriteDesign.TableFacts participantTable(String... foreignKeyColumns) {
+        return new SubTableWriteDesign.TableFacts(false, false, List.of(), List.of(foreignKeyColumns));
+    }
+
+    private static Map<String, SubTableWriteDesign.TableFacts> releaseWith(String key, SubTableWriteDesign.TableFacts facts) {
+        Map<String, SubTableWriteDesign.TableFacts> release = new HashMap<>(RELEASE);
+        release.put(key, facts);
+        return release;
+    }
+
+    private Map<String, Object> merge(Map<String, Object> submitted, Map<String, Object> baseline, Map<String, Object> rowKey) {
+        return merge(submitted, baseline, rowKey, Set.of());
+    }
+
+    private Map<String, Object> merge(Map<String, Object> submitted, Map<String, Object> baseline,
+                                      Map<String, Object> rowKey, Set<String> emptied) {
+        return merge(RELEASE, submitted, baseline, rowKey, emptied);
+    }
+
+    private Map<String, Object> merge(Map<String, SubTableWriteDesign.TableFacts> release, Map<String, Object> submitted,
+                                      Map<String, Object> baseline, Map<String, Object> rowKey, Set<String> emptied) {
+        return merger.mergeCurrentRowOnly(submitted, baseline, rowKey, emptied, List.of(), null, release);
+    }
 
     private static Map<String, Object> row(String idIdw, String name) {
         Map<String, Object> r = new HashMap<>();
@@ -150,7 +177,7 @@ class MiSubTaskSubTableRowMergerTest {
                 new HashMap<>(Map.of("emp_no", "E-77", "name", "STALE-should-be-ignored")),
                 new HashMap<>(Map.of("emp_no", "E-88", "name", "B-new-value")))));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("emp_no", "E-88"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("emp_no", "E-88"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("50539");
@@ -174,7 +201,7 @@ class MiSubTaskSubTableRowMergerTest {
                 new HashMap<>(Map.of("bu_code", "OPS", "emp_no", "E-77", "name", "B-new-value")))));
 
         Map<String, Object> rowKey = new java.util.LinkedHashMap<>(Map.of("bu_code", "OPS", "emp_no", "E-77"));
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, rowKey);
+        Map<String, Object> merged = merge(submitted, baseline, rowKey);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("50539");
@@ -199,7 +226,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("50539", new java.util.ArrayList<>());
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-015"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-015"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("50539");
@@ -218,7 +245,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("50539", new java.util.ArrayList<>(List.of(new HashMap<>(Map.of("name", "typed-but-lost")))));
 
-        assertThatThrownBy(() -> merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-014")))
+        assertThatThrownBy(() -> merge(submitted, baseline, Map.of("id_idw", "Test-014")))
                 .isInstanceOf(PortalException.class)
                 .hasMessageContaining("refusing to save");
     }
@@ -241,7 +268,7 @@ class MiSubTaskSubTableRowMergerTest {
 
         Map<String, Object> rowKeyB = Map.of("id_idw", "Test-015");
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submittedByB, baseline, rowKeyB);
+        Map<String, Object> merged = merge(submittedByB, baseline, rowKeyB);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("50539");
@@ -260,7 +287,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("50539", new java.util.ArrayList<>(List.of(row("Test-999", "brand-new-participant"))));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-999"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-999"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("50539");
@@ -278,7 +305,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("50539", new java.util.ArrayList<>(List.of(row("Test-014", "new"), row("Test-015", "STALE"))));
         submitted.put("Participants", new java.util.ArrayList<>(List.of(row("Test-014", "new"), row("Test-015", "STALE"))));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-014"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-014"));
 
         for (String key : List.of("50539", "Participants")) {
             @SuppressWarnings("unchecked")
@@ -308,7 +335,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(
                 row("Test-014", "new"), row("Test-015", "STALE-should-be-ignored"))));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-014"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-014"));
 
         assertThat(merged).containsOnlyKeys("dw:subtable");
         @SuppressWarnings("unchecked")
@@ -330,7 +357,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("Participants", new java.util.ArrayList<>(List.of(row("Test-014", "new"))));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-014"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-014"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("Participants");
@@ -345,8 +372,6 @@ class MiSubTaskSubTableRowMergerTest {
         // matching row and would silently drop every submitted attachment row (the exact bug this
         // classification exists to prevent).
         // 共享与否按**结构**判定：附件表的外键指向 MAIN 表（列名叫什么无关）。
-        when(jdbcTemplate.queryForList(contains("ref.table_type"), eq(String.class), eq("attachment")))
-                .thenReturn(List.of("MAIN"));
 
         Map<String, Object> attachmentRow = new HashMap<>();
         attachmentRow.put("id", "att-1");
@@ -361,7 +386,7 @@ class MiSubTaskSubTableRowMergerTest {
         List<Object> submittedAttachments = new java.util.ArrayList<>(List.of(attachmentRow));
         submitted.put("dw:attachment", submittedAttachments);
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-014"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-014"));
 
         // MI participant table: still row-merged as usual.
         @SuppressWarnings("unchecked")
@@ -379,7 +404,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> nestedShape = Map.of("nested", "value");
         submitted.put("someRow", nestedShape);
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idw", "Test-014"));
+        Map<String, Object> merged = merge(submitted, baseline, Map.of("id_idw", "Test-014"));
 
         assertThat(merged.get("someRow")).isSameAs(nestedShape);
     }
@@ -416,7 +441,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("rt:test", new java.util.ArrayList<>(List.of(relationRow)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000001"));
+                merge(submitted, baseline, Map.of("id_idwnn", "Test-000001"));
 
         // Relation table: untouched, and it must NOT fail the save.
         @SuppressWarnings("unchecked")
@@ -433,14 +458,12 @@ class MiSubTaskSubTableRowMergerTest {
     /** The MI sub-task table itself keeps its guard: a slice without our own row still fails loud. */
     @Test
     void mergeCurrentRowOnly_miSubTaskTableStillRejectsSliceMissingOwnRow() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("subtable")))
-                .thenReturn(List.of("id_idwnn"));
 
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(row("Test-000002", "theirs"))));
 
         assertThatThrownBy(() ->
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000001")))
+                merge(submitted, Map.of(), Map.of("id_idwnn", "Test-000001")))
                 .hasMessageContaining("own row");
     }
 
@@ -454,9 +477,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_relationTableUnderDwKeyPassesThroughUnchanged() {
-        // Not present in dw_table_definitions → not a designer sub-table.
-        when(jdbcTemplate.queryForObject(any(String.class), eq(Integer.class), eq("test")))
-                .thenReturn(0);
+        // The release lists `test` as a relation table → not a designer sub-table.
 
         Map<String, Object> relationRow = new HashMap<>();
         relationRow.put("id_idwnn", "Test-000002");
@@ -471,7 +492,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:test", new java.util.ArrayList<>(List.of(relationRow)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000001"));
+                merge(submitted, Map.of(), Map.of("id_idwnn", "Test-000001"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rel = (List<Map<String, Object>>) merged.get("dw:test");
@@ -489,11 +510,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_linkChildRowMatchedByStructuralForeignKey() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("id", "d9f73b1a-fea2-45e0-af77-ca75edd984c0");
@@ -512,7 +529,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(mine)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+                merge(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -531,11 +548,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_structuralForeignKeyOfAnotherParticipantIsNotAdopted() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> foreign = new HashMap<>();
         foreign.put("id", "0000aaaa-0000-0000-0000-00000000ffff");
@@ -545,7 +558,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(foreign)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002"));
+                merge(submitted, Map.of(), Map.of("id_idwnn", "Test-000002"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -562,11 +575,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_participantOwningSeveralLinkChildRowsKeepsAllOfThem() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> first = new HashMap<>();
         first.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -595,7 +604,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(first, second)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+                merge(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -614,12 +623,8 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_linkChildMatchedAcrossDifferentStructuralFkColumns() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
         // 本用例的表在设计器里声明了两个外键列，两条行各用其中之一指向同一参与者
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id", "participant_id"));
 
         Map<String, Object> viaSubTask = new HashMap<>();
         viaSubTask.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -634,8 +639,8 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(viaSubTask, viaParticipant)));
 
-        Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002"));
+        Map<String, Object> merged = merge(releaseWith("dw:people", participantTable("sub_task_id", "participant_id")),
+                submitted, Map.of(), Map.of("id_idwnn", "Test-000002"), Set.of());
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -654,11 +659,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_emptyLinkChildSliceKeepsBaselineRatherThanDeleting() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mineOld = new HashMap<>();
         mineOld.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -677,7 +678,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>());
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+                merge(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -698,10 +699,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_declaredEmptyLinkChildSliceDeletesOnlyMyRows() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mineOnly = new HashMap<>();
         mineOnly.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -719,7 +716,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:people", new java.util.ArrayList<>());
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+        Map<String, Object> merged = merge(
                 submitted, baseline, Map.of("id_idwnn", "Test-000002"), Set.of("dw:people"));
 
         @SuppressWarnings("unchecked")
@@ -741,10 +738,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_declaredDeleteOfMyLastRowWhilePeerRowsRideAlong() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -765,7 +758,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(peerA, peerB)));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+        Map<String, Object> merged = merge(
                 submitted, baseline, Map.of("id_idwnn", "Test-000002"), Set.of("dw:people"));
 
         @SuppressWarnings("unchecked")
@@ -782,10 +775,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_peersOnlySliceWithoutDeclarationStillKeepsMyRow() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -802,7 +791,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(peerA)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+                merge(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -821,11 +810,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_declarationWithoutFkMetadataStillFailsLoud() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 没有任何字段级 FK —— 归属判不出来
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of());
 
         Map<String, Object> stranger = new HashMap<>();
         stranger.put("id", "eeeeeeee-0000-0000-0000-000000000009");
@@ -834,7 +819,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(stranger)));
 
-        assertThatThrownBy(() -> merger.mergeCurrentRowOnly(
+        assertThatThrownBy(() -> merge(releaseWith("dw:people", participantTable()),
                 submitted, Map.of(), Map.of("id_idwnn", "Test-000002"), Set.of("dw:people")))
                 .isInstanceOf(PortalException.class)
                 .hasMessageContaining("missing from the");
@@ -845,10 +830,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_declarationIsScopedToTheDeclaredKeyOnly() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("id", "aaaaaaaa-0000-0000-0000-000000000001");
@@ -861,7 +842,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>());
 
         // 声明的是另一张表 —— people 不受影响
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+        Map<String, Object> merged = merge(
                 submitted, baseline, Map.of("id_idwnn", "Test-000002"), Set.of("dw:somethingelse"));
 
         @SuppressWarnings("unchecked")
@@ -879,11 +860,7 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_sliceWithOnlyOtherParticipantsRowsLeavesBaselineAlone() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("id"));
         // 设计器声明的外键列：判「这行属于哪个参与者」用它，不猜列名
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_id"));
 
         Map<String, Object> foreign = new HashMap<>();
         foreign.put("id", "bad0d243-7e3c-4c67-9137-69ea487980fd");
@@ -897,7 +874,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(foreign)));
 
         Map<String, Object> merged =
-                merger.mergeCurrentRowOnly(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
+                merge(submitted, baseline, Map.of("id_idwnn", "Test-000002"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) merged.get("dw:people");
@@ -911,8 +888,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_rowsWithoutStructuralFkStillFailLoud() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("subtable")))
-                .thenReturn(List.of("id_idwnn"));
 
         Map<String, Object> mismatched = new HashMap<>();
         mismatched.put("id_idwnn", "Test-000009");
@@ -922,7 +897,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(mismatched)));
 
         assertThatThrownBy(() ->
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwnn", "Test-000002")))
+                merge(submitted, Map.of(), Map.of("id_idwnn", "Test-000002")))
                 .hasMessageContaining("own row");
     }
 
@@ -938,10 +913,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_renamedForeignKeyColumnStillMatchesParticipant() {
-        when(jdbcTemplate.queryForList(contains("b.foreign_key_field"), eq(String.class), eq("people")))
-                .thenReturn(List.of("idqc"));
-        when(jdbcTemplate.queryForList(contains("f.is_foreign_key"), eq(String.class), eq("people")))
-                .thenReturn(List.of("sub_task_idqc"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("idqc", "000c88a8-dcd0-4d7b-b35b-3fb684e2ab4d");
@@ -957,8 +928,8 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:people", new java.util.ArrayList<>(List.of(mine, mine2)));
 
         // 改名后的 collection 主键；改动前这里会抛 MI_ROW_KEY_UNRESOLVED
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
-                submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"));
+        Map<String, Object> merged = merge(releaseWith("dw:people", participantTable("sub_task_idqc")),
+                submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"), Set.of());
 
         @SuppressWarnings("unchecked")
         List<Object> people = (List<Object>) merged.get("dw:people");
@@ -974,8 +945,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_sharedTableWithRenamedForeignKeyStillPassesThrough() {
-        when(jdbcTemplate.queryForList(contains("ref.table_type"), eq(String.class), eq("attachment")))
-                .thenReturn(List.of("MAIN"));
 
         Map<String, Object> attachmentRow = new HashMap<>();
         attachmentRow.put("idfa", "att-1");
@@ -986,7 +955,7 @@ class MiSubTaskSubTableRowMergerTest {
         submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(attachmentRow)));
 
         // 改动前这里会抛 MI_ROW_KEY_UNRESOLVED（附件行里没有 id_idwxwc）
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+        Map<String, Object> merged = merge(
                 submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"));
 
         @SuppressWarnings("unchecked")
@@ -1009,10 +978,6 @@ class MiSubTaskSubTableRowMergerTest {
     @Test
     void mergeCurrentRowOnly_collectionTableWhoseFkAlsoPointsAtMainStillRowIsolates() {
         // collection 表：设计器显式声明 miParticipantRow，同时它的 FK 也指向 MAIN
-        when(jdbcTemplate.queryForObject(contains("binding_link_mode"), eq(Integer.class), eq("subtable")))
-                .thenReturn(1);
-        when(jdbcTemplate.queryForList(contains("ref.table_type"), eq(String.class), eq("subtable")))
-                .thenReturn(List.of("MAIN"));
 
         Map<String, Object> mine = new HashMap<>();
         mine.put("id_idwxwc", "Test-000004");
@@ -1033,8 +998,9 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> baseline = new HashMap<>();
         baseline.put("dw:subtable", new java.util.ArrayList<>(List.of(siblingSaved)));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
-                submitted, baseline, Map.of("id_idwxwc", "Test-000004"));
+        Map<String, Object> merged = merge(releaseWith("dw:subtable",
+                        new SubTableWriteDesign.TableFacts(false, true, List.of("MAIN"), List.of("main_idaaz"))),
+                submitted, baseline, Map.of("id_idwxwc", "Test-000004"), Set.of());
 
         @SuppressWarnings("unchecked")
         List<Object> out = (List<Object>) merged.get("dw:subtable");
@@ -1049,8 +1015,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_declaredFilterFkToMainStillPassesThrough() {
-        when(jdbcTemplate.queryForList(contains("filter_fk_field_id"), eq(String.class), eq("attachment")))
-                .thenReturn(List.of("MAIN"));
 
         Map<String, Object> attachmentRow = new HashMap<>();
         attachmentRow.put("idfa", "att-1");
@@ -1060,7 +1024,7 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(attachmentRow)));
 
-        Map<String, Object> merged = merger.mergeCurrentRowOnly(
+        Map<String, Object> merged = merge(
                 submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"));
 
         @SuppressWarnings("unchecked")
@@ -1076,8 +1040,6 @@ class MiSubTaskSubTableRowMergerTest {
      */
     @Test
     void mergeCurrentRowOnly_conflictingFilterFkDeclarationsDoNotTreatTableAsShared() {
-        when(jdbcTemplate.queryForList(contains("filter_fk_field_id"), eq(String.class), eq("attachment")))
-                .thenReturn(List.of("MAIN", "SUB"));
 
         Map<String, Object> attachmentRow = new HashMap<>();
         attachmentRow.put("idfa", "att-1");
@@ -1087,8 +1049,45 @@ class MiSubTaskSubTableRowMergerTest {
         Map<String, Object> submitted = new HashMap<>();
         submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(attachmentRow)));
 
-        assertThatThrownBy(() ->
-                merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idwxwc", "Test-000003")))
+        assertThatThrownBy(() -> merge(releaseWith("dw:attachment",
+                        new SubTableWriteDesign.TableFacts(false, false, List.of("MAIN", "SUB"), List.of())),
+                submitted, Map.of(), Map.of("id_idwxwc", "Test-000003"), Set.of()))
                 .hasMessageContaining("own row");
+    }
+
+    /** The live designer is never consulted: every classification above came from the pinned release. */
+    @Test
+    void mergeCurrentRowOnly_neverQueriesTheLiveDesigner() {
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(row("Test-014", "new"))));
+        submitted.put("dw:attachment", new java.util.ArrayList<>(List.of(Map.of("idfa", "att-1"))));
+        submitted.put("dw:people", new java.util.ArrayList<>());
+
+        merge(submitted, Map.of(), Map.of("id_idw", "Test-014"));
+
+        org.mockito.Mockito.verifyNoInteractions(jdbcTemplate);
+    }
+
+    /** A table the request's release does not have is not one of its participant tables: it passes through. */
+    @Test
+    void mergeCurrentRowOnly_tableAbsentFromThePinnedReleasePassesThrough() {
+        List<Object> rows = new java.util.ArrayList<>(List.of(Map.of("x", "1")));
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:added_after_release", rows);
+
+        Map<String, Object> merged = merge(submitted, Map.of(), Map.of("id_idw", "Test-014"));
+
+        assertThat(merged.get("dw:added_after_release")).isSameAs(rows);
+    }
+
+    /** No pinned release at all: refuse explicitly rather than fall back to the live designer. */
+    @Test
+    void mergeCurrentRowOnly_withoutAPinnedReleaseIsRefused() {
+        Map<String, Object> submitted = new HashMap<>();
+        submitted.put("dw:subtable", new java.util.ArrayList<>(List.of(row("Test-014", "new"))));
+
+        assertThatThrownBy(() -> merger.mergeCurrentRowOnly(submitted, Map.of(), Map.of("id_idw", "Test-014")))
+                .isInstanceOf(com.platform.common.functionunit.FunctionUnitVersionException.class);
+        org.mockito.Mockito.verifyNoInteractions(jdbcTemplate);
     }
 }
