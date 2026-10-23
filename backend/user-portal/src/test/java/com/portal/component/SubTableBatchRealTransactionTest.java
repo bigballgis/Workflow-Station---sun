@@ -10,13 +10,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class SubTableBatchRealTransactionTest {
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
-    void omittingBatchIntentCannotBypassFrozenMetadataTypes(String pk) throws Exception {
+    void ordinaryEditsRetainHistoricJsonTypesWithoutBatchRules(String pk) throws Exception {
         var harness = new BatchTaskFormTransactionHarness(pk, false);
-        assertThrows(com.platform.common.exception.BusinessException.class, () -> harness.editUnmarkedCaption(12));
-        assertEquals(0, harness.writes.get());
-        assertEquals(harness.baseline, harness.read());
+        harness.editUnmarkedCaption(12);
+        assertEquals(1, harness.writes.get());
+        var rows = (List<?>) ((Map<?,?>) harness.read().get("__subTables__")).get("dw:lines");
+        assertEquals(12, ((Map<?,?>) rows.get(0)).get("caption"));
         harness.editUnmarkedCaption("normal-single-form-value");
-        assertEquals(1, harness.writes.get(), "Ordinary edit remains legal outside a batch form");
+        assertEquals(2, harness.writes.get(), "Ordinary edit remains legal outside a batch form");
     }
     @ParameterizedTest
     @ValueSource(strings = {"entryKey", "renamedBusinessKey"})
@@ -39,8 +40,8 @@ class SubTableBatchRealTransactionTest {
                 List.of(Map.<String, Object>of(pk, "one"), Map.<String, Object>of(pk, "one")))) {
             Map<String, Object> changed = new java.util.HashMap<>(harness.baseline);
             changed.put("__subTables__", Map.of("dw:lines", rows));
-            assertThrows(com.portal.exception.PortalException.class, () -> harness.component.validateSubTableBatchPayload(
-                    "review", "synthetic-process", null, null, changed));
+            assertThrows(com.portal.exception.PortalException.class, () -> harness.component.prepareSubTableSubmission(
+                    "synthetic-process", "review", changed, "synthetic-user", List.of()));
             assertEquals(harness.baseline, harness.read());
         }
     }
@@ -59,8 +60,8 @@ class SubTableBatchRealTransactionTest {
         var harness = new BatchTaskFormTransactionHarness(pk, false, true);
         Map<String, Object> changed = new java.util.HashMap<>(harness.baseline);
         changed.put("__subTables__", Map.of("dw:lines", List.of(Map.of(pk, "one", "caption", "forged"))));
-        assertThrows(com.portal.exception.PortalException.class, () -> harness.component.validateSubTableBatchPayload(
-                "review", "synthetic-process", null, null, changed));
+        assertThrows(com.portal.exception.PortalException.class, () -> harness.component.prepareSubTableSubmission(
+                "synthetic-process", "review", changed, "synthetic-user", List.of()));
         assertEquals(harness.baseline, harness.read());
     }
     @ParameterizedTest

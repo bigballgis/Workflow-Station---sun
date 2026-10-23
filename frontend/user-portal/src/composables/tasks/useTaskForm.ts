@@ -298,9 +298,8 @@ export function useTaskForm(options: {
       // Shared store keys union-merge so a later binding cannot drop another binding's rows.
       stampBindingTableNameAliases(subTables, subTableData, binding, out, sharedKeys)
       const storeKey = subTableStoreKey(binding)
-      const batchClaimsBinding = pendingSubTableBatchChanges.value.some(change =>
-        change.bindingId === String(binding.bindingId))
-      if (storeKey && (sharedKeys.has(storeKey) || batchClaimsBinding)) {
+      // Row identity and optimistic concurrency belong to every writable binding.
+      if (storeKey && (sharedKeys.has(storeKey) || binding.bindingMode !== 'READONLY')) {
         const scoped = projectSavedRowsForBinding(
           out,
           binding,
@@ -480,6 +479,7 @@ export function useTaskForm(options: {
       restore = beginBatchSave(pendingSubTableBatchChanges, payload)
       await submitTaskForm(options.effectiveTaskId.value, { ...payload, actionId })
       persisted = true
+      subTableSaveError.value = null
       // #1446: align local slices with what was just persisted; otherwise post-save
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
@@ -489,9 +489,10 @@ export function useTaskForm(options: {
           : payload.formData.__subTables__
         formData.value = { ...formData.value, __subTables__: tables }
       }
-      if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions()
+      if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions(payload)
       ElMessage.success(t('task.operationSuccess'))
     } catch (error) {
+      subTableSaveError.value = error
       if (!persisted) restore?.()
       console.error('[TaskForm] save failed:', error)
       ElMessage.error(t('task.operationFailed'))
@@ -503,6 +504,8 @@ export function useTaskForm(options: {
   }
 
   const {
+    saveError: subTableSaveError,
+    retrySubTableAutosave,
     scheduleSubTableAutosave,
     clearAutosaveTimer,
     refreshSavedSubTableVersions,
@@ -540,6 +543,8 @@ export function useTaskForm(options: {
   }
 
   return {
+    subTableSaveError,
+    retrySubTableAutosave,
     resolveSubTableSubmitBindings,
     formFields,
     formTabs,

@@ -686,11 +686,13 @@ public class TaskFormComponent {
             SubTableBatchChangeGuard.validateFieldPermissions(subTableBatchChanges, fieldPermissions);
         }
 
+        formData = prepareSubTableSubmission(taskInfo.processInstanceId, taskInfo.taskDefinitionKey, formData,
+                userId, emptiedSubTableKeys, subTableBindingScopes, subTableBatchChanges);
         Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
         // Enhanced instances reject unauthorized original values before legacy filtering or PK
         // preparation can hide the attempted change. Legacy instances retain their existing path.
         processInstanceRepository.findById(taskInfo.processInstanceId).ifPresent(instance ->
-                SubTableBatchTaskPermissions.validate(instance.getVariables(), formDefinition, submittedSnapshot, objectMapper));
+                SubTableBatchTaskPermissions.validate(instance.getVariables(), formDefinition, submittedSnapshot, objectMapper, subTableBatchChanges));
         Map<String, Object> writeContext = SubTableBatchTaskWriteContext.resolve(new SubTableBatchTaskWriteContext.Request(
                 taskId, taskInfo.processInstanceId, taskInfo.taskDefinitionKey, formData,
                 requireProcessInstance(taskInfo.processInstanceId).getVariables()), workflowEngineClient);
@@ -714,17 +716,6 @@ public class TaskFormComponent {
         }
 
         if (editableData.containsKey("__subTables__")) {
-            processInstanceRepository.findById(taskInfo.processInstanceId).ifPresent(pi -> {
-                String fuCode = pi.getFunctionUnitCode();
-                if (fuCode != null && !fuCode.isBlank()) {
-                    ProcessSubTablePrimaryKeyEnricherComponent enricher = subTablePrimaryKeyEnricher();
-                    if (enricher != null) {
-                        Map<String, Object> pkContext = new HashMap<>(editableData);
-                        ProcessVersionContext.apply(pi, pkContext);
-                        enricher.allocateMissingPrimaryKeysInVariables(fuCode, pkContext);
-                    }
-                }
-            });
             filterSubTableFieldsInPlace(editableData, taskInfo.processInstanceId, taskInfo.taskDefinitionKey);
         }
 
@@ -749,7 +740,7 @@ public class TaskFormComponent {
             Map<String, Object> currentVariables = processInstance.getVariables() != null
                     ? new HashMap<>(processInstance.getVariables())
                     : new HashMap<>();
-            SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, submittedSnapshot, objectMapper);
+            SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, submittedSnapshot, objectMapper, subTableBatchChanges);
 
             Set<String> concurrentFields = detectConcurrentModifications(
                     baselineValues, currentVariables, editableData.keySet());
@@ -763,7 +754,8 @@ public class TaskFormComponent {
             concurrentFieldsRef.set(Set.copyOf(concurrentFields));
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
-            Map<String, Object> inbound = new HashMap<>(editableData);
+            Map<String, Object> inbound = TaskSubTableSubmission.prepare(editableData, currentVariables,
+                    formDefinition, resolveAuditUserDisplay(userId), emptiedKeys, bindingScopes);
             SubTableWriteIsolation.stripTransportMetadata(inbound);
             // Defense in depth: strip even if filterEditableFields missed a case variant.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
@@ -789,7 +781,7 @@ public class TaskFormComponent {
             // the batch transport metadata from becoming an unrelated client hint.
             SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(currentVariables,
                     formDefinition, subTableBatchChanges, bindingScopes, inbound, objectMapper));
-            SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, inbound, objectMapper);
+            SubTableBatchTaskPermissions.validate(currentVariables, formDefinition, inbound, objectMapper, subTableBatchChanges);
             SubTableBatchAssignmentStageGuard.validate(new SubTableBatchAssignmentStageGuard.Submission(
                     taskInfo.taskDefinitionKey, taskInfo.processInstanceId, currentVariables, formDefinition,
                     subTableBatchChanges, inbound), objectMapper, workflowEngineClient);
@@ -925,6 +917,32 @@ public class TaskFormComponent {
     }
 
     /** Complete must validate the canonical payload before passing it to the workflow engine. */
+    public Map<String, Object> prepareSubTableSubmission(String processId, String stageId, Map<String, Object> input,
+                                                        String userId, List<String> emptied) {
+        return prepareSubTableSubmission(processId, stageId, input, userId, emptied, List.of());
+    }
+    public Map<String, Object> prepareSubTableSubmission(String processId, String stageId, Map<String, Object> input,
+                                                        String userId, List<String> emptied, List<SubTableBindingScope> scopes) {
+        return prepareSubTableSubmission(processId, stageId, input, userId, emptied, scopes, null);
+    }
+    public Map<String, Object> prepareSubTableSubmission(String processId, String stageId, Map<String, Object> input,
+                                                        String userId, List<String> emptied, List<SubTableBindingScope> scopes,
+                                                        List<SubTableBatchChange> changes) {
+        if (input == null || !input.containsKey("__subTables__")) return input;
+        ProcessInstance instance = requireProcessInstance(processId);
+        Map<String, Object> form = fetchTaskFormByStageId(stageId, processId);
+        SubTableBatchTaskPermissions.validate(instance.getVariables(), form, input, objectMapper, changes);
+        Map<String, Object> prepared = objectMapper.convertValue(input, Map.class);
+        ProcessSubTablePrimaryKeyEnricherComponent enricher = subTablePrimaryKeyEnricher();
+        if (enricher != null && instance.getFunctionUnitCode() != null) {
+            Map<String, Object> pkContext = new HashMap<>(prepared);
+            ProcessVersionContext.apply(instance, pkContext);
+            enricher.allocateMissingPrimaryKeysInVariables(instance.getFunctionUnitCode(), pkContext);
+        }
+        return TaskSubTableSubmission.prepare(prepared, instance.getVariables(), form,
+                resolveAuditUserDisplay(userId), emptied, scopes);
+    }
+
     public void validateSubTableBatchPayload(String stageId, String processId,
                                             List<com.portal.dto.SubTableBatchChange> changes,
                                             List<SubTableBindingScope> scopes, Map<String, Object> submitted) {
@@ -935,7 +953,7 @@ public class TaskFormComponent {
         Map<String, Object> definition = fetchTaskFormByStageId(stageId, processId);
         SubTableBatchPayloadGuard.validate(new SubTableBatchAddedRowGuard.Request(instance.getVariables(),
                 definition, changes, scopes, submitted, objectMapper));
-        SubTableBatchTaskPermissions.validate(instance.getVariables(), definition, submitted, objectMapper);
+        SubTableBatchTaskPermissions.validate(instance.getVariables(), definition, submitted, objectMapper, changes);
         SubTableBatchAssignmentStageGuard.validate(new SubTableBatchAssignmentStageGuard.Submission(
                 stageId, processId, instance.getVariables(), definition, changes, submitted), objectMapper, workflowEngineClient);
     }

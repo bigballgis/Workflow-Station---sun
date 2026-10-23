@@ -473,6 +473,8 @@ export default {
     },
     batchAssignmentFailed: 'Task completed, but some initial assignments have missing or mismatched targets. Do not complete it again; ask an administrator to inspect the actual tasks.',
     batchAssignmentUnconfirmed: 'Task completed, but the batch assignment results are not fully verified. Do not complete it again; inspect the actual tasks.',
+    subTableSaveFailed: 'Changes to the sub-table have not been saved. Your draft is still on this page. Retry before leaving or submitting the task.',
+    retrySave: 'Retry save',
     operationFailed: 'Operation failed',
     delegateSuccess: 'Delegated successfully',
     transferSuccess: 'Transferred successfully',

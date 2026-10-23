@@ -37,12 +37,21 @@ class TaskFormComponentMiSubmitIntegrationTest {
     private static final String STAGE_ID = "stage-1";
 
     private TaskFormComponent component(JdbcTemplate jdbcTemplate, WorkflowEngineClient workflowEngineClient) {
+        return component(jdbcTemplate, workflowEngineClient, "id_idw");
+    }
+    private TaskFormComponent component(JdbcTemplate jdbcTemplate, WorkflowEngineClient workflowEngineClient, String pk) {
+        return component(jdbcTemplate, workflowEngineClient, pk, "50539");
+    }
+    private TaskFormComponent component(JdbcTemplate jdbcTemplate, WorkflowEngineClient workflowEngineClient, String pk, String bindingId) {
         var component = new TaskFormComponent(
                 mock(ProcessFormComponent.class), mock(ChangeHistoryComponent.class),
                 processInstanceRepository, workflowEngineClient,
                 mock(RestTemplate.class), new ObjectMapper(), jdbcTemplate,
                 com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
-        com.portal.testsupport.PortalVersionTestSupport.task(component);
+        com.portal.testsupport.PortalVersionTestSupport.task(component, Map.of("fieldPermissions", Map.of(), "configJson", Map.of(),
+                "tableBindings", List.of(Map.of("bindingId", bindingId, "bindingType", "SUB", "bindingMode", "EDITABLE",
+                        "tableName", "members", "primaryKeyFields", List.of(pk), "columns", List.of(
+                                Map.of("fieldName", pk, "isPrimaryKey", true), Map.of("fieldName", "name", "dataType", "TEXT"))))));
         return component;
     }
 
@@ -160,7 +169,7 @@ class TaskFormComponentMiSubmitIntegrationTest {
         // sub-table whose Table Design PK is any other column could never resolve its own row and
         // every Save was refused — even though _currentItem.rowKey carried the correct key.
         JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
-        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
+        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask(), "emp_no");
 
         Map<String, Object> baseline = new HashMap<>();
         baseline.put("__subTables__", new HashMap<>(Map.of(
@@ -256,7 +265,7 @@ class TaskFormComponentMiSubmitIntegrationTest {
     @Test
     void submitTaskForm_nonMiSubmissionKeepsExistingWholeArrayReplaceBehavior() {
         JdbcTemplate jdbcTemplate = jdbcTemplateReturningNoFormBinding();
-        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask());
+        TaskFormComponent taskFormComponent = component(jdbcTemplate, workflowEngineClientForTask(), "id_idw", "60001");
 
         Map<String, Object> baseline = new HashMap<>();
         baseline.put("plainField", "old-value");

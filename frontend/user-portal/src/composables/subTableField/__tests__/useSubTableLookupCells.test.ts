@@ -31,9 +31,9 @@ describe('useSubTableLookupCells', () => {
     fetchMock.mockResolvedValue(null)
   })
 
-  it('wraps a scalar under the relation table PK (searchFields[0]), not hardcoded id', () => {
+  it('does not invent an identity from a search column before metadata hydration', () => {
     const col = lookupColumn('vendor', { tableId: 7, searchFields: ['vendor_code'] })
-    expect(lookupSelectedRow(col, 'V-1')).toEqual({ vendor_code: 'V-1' })
+    expect(lookupSelectedRow(col, 'V-1')).toBeNull()
   })
 
   it('honors an explicit designer primaryKeyField over searchFields[0]', () => {
@@ -58,18 +58,18 @@ describe('useSubTableLookupCells', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe(7)
     expect(fetchMock.mock.calls[0][1]).toBe('V-1')
-    expect(fetchMock.mock.calls[0][2]).toMatchObject({ primaryKeyField: 'vendor_code' })
+    expect(fetchMock.mock.calls[0][2]).not.toHaveProperty('primaryKeyField')
     expect(effectiveLookupRowForCell(col, 'V-1')).toEqual({ vendor_code: 'V-1', vendor_name: 'Acme' })
   })
 
-  it('does not reuse a hydrated row across columns of the same table with different PKs', async () => {
+  it('does not reuse a hydrated row across different target tables', async () => {
     const byCode = lookupColumn('vendor', { tableId: 7, searchFields: ['vendor_code'] })
-    const byUuid = lookupColumn('vendorRef', { tableId: 7, primaryKeyField: 'uuid', searchFields: ['vendor_code'] })
+    const byUuid = lookupColumn('vendorRef', { tableId: 8, primaryKeyField: 'uuid', searchFields: ['vendor_code'] })
     const rows = ref<Array<Record<string, unknown>>>([{ vendor: 'V-1', vendorRef: 'V-1' }])
     const { effectiveLookupRowForCell } = useSubTableLookupCells(makeProps([byCode, byUuid]), rows)
 
-    fetchMock.mockImplementation((_tableId: number, _scalar: string, opts: { primaryKeyField: string }) =>
-      Promise.resolve(opts.primaryKeyField === 'vendor_code' ? { vendor_code: 'V-1', vendor_name: 'Acme' } : null),
+    fetchMock.mockImplementation((tableId: number) =>
+      Promise.resolve(tableId === 7 ? { vendor_code: 'V-1', vendor_name: 'Acme' } : null),
     )
     await flushHydration()
 

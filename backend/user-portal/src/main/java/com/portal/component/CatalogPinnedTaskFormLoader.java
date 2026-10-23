@@ -61,7 +61,13 @@ final class CatalogPinnedTaskFormLoader {
         Map<String, Object> form = fetch(jdbc, mapper, ids.get(0), stageId);
         if (!form.isEmpty()) {
             var snapshot = snapshots.form(ids.get(0), String.valueOf(form.get("sourceId")));
-            form.put("tableBindings", snapshot.get("tableBindings"));
+            form.put("tableBindings", snapshots.formBindings(ids.get(0), snapshot));
+            var processes = jdbc.queryForList("SELECT content_data FROM sys_function_unit_contents "
+                    + "WHERE function_unit_id = ? AND content_type = 'PROCESS' ORDER BY created_at DESC LIMIT 1",
+                    String.class, ids.get(0));
+            if (processes.size() != 1) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(ids.get(0));
+            form.put("runtimeFieldsByTable", BpmnMiXmlSupport.runtimeFieldsByTable(
+                    ChangeHistoryBpmnFormResolver.decodeBpmnXml(processes.get(0))));
             if (snapshot.get("stageBindings") instanceof List<?> bindings) {
                 for (Object value : bindings) {
                     if (value instanceof Map<?, ?> binding && stageId.equals(binding.get("stageId"))

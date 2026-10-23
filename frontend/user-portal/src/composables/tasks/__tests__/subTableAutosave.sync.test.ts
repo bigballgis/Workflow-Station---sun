@@ -12,6 +12,49 @@ vi.mock('@/api/processForm', () => ({
 import { createSubTableAutosave } from '../subTableAutosave'
 
 describe('syncSubTableRowVersionsBeforeSubmit', () => {
+  it('rejects another writer snapshot after Save instead of stamping its newer version onto old values', async () => {
+    const row = { key: 'A', amount: 7, _wsRowVersion: 1 }
+    const baseline = ref({ 'dw:entries': [{ ...row }] })
+    const autosave = createSubTableAutosave({ formReadOnly: ref(false), isCompletedTask: ref(false),
+      isMiSubTaskMode: ref(false), effectiveTaskId: ref('task-1'), subTableBindings: ref([
+        { bindingId: 1, tableName: 'entries', primaryKeyFields: ['key'], data: [row] }]),
+      formData: ref({ __subTables__: { 'dw:entries': [row] } }), taskFormDTO: ref(null),
+      loadedSubTableBaseline: baseline, buildSubTableSubmitPayload: () => ({ formData: {}, subTableBindingScopes: [] }) })
+    getTaskFormData.mockResolvedValue({ fieldValues: { __subTables__: {
+      'dw:entries': [{ key: 'A', amount: 8, _wsRowVersion: 3 }],
+    } } })
+    const saved = { formData: { __subTables__: { 'dw:entries': [{ ...row }] } }, subTableBindingScopes: [
+      { bindingId: '1', storeKey: 'dw:entries', rowKeys: [{ key: 'A' }], emptied: false },
+    ] }
+    await expect(autosave.refreshSavedSubTableVersions(saved)).rejects.toThrow('changed after this save')
+    expect(row).toEqual({ key: 'A', amount: 7, _wsRowVersion: 1 })
+    expect(baseline.value['dw:entries'][0]._wsRowVersion).toBe(1)
+    getTaskFormData.mockResolvedValue({ fieldValues: { __subTables__: {
+      'dw:entries': [{ key: 'A', amount: 7, _wsRowVersion: 2 }],
+    } } })
+    await autosave.refreshSavedSubTableVersions(saved)
+    expect(row._wsRowVersion).toBe(2)
+  })
+  it('retains an unsaved draft, blocks submission and clears the failure only after a successful retry', async () => {
+    const error = new Error('403 write rejected')
+    submitTaskForm.mockRejectedValueOnce(error).mockResolvedValue(undefined)
+    const formData = ref({ __subTables__: { 'dw:entries': [{ key: 'A', amount: 2 }] } })
+    const autosave = createSubTableAutosave({ formReadOnly: ref(false), isCompletedTask: ref(false),
+      isMiSubTaskMode: ref(false), effectiveTaskId: ref('task-1'), subTableBindings: ref([{}]),
+      formData, taskFormDTO: ref(null), loadedSubTableBaseline: ref({}),
+      buildSubTableSubmitPayload: () => ({ formData: formData.value, subTableBindingScopes: [] }), delayMs: 0 })
+    autosave.scheduleSubTableAutosave()
+    await vi.waitFor(() => expect(submitTaskForm).toHaveBeenCalledTimes(1))
+    await autosave.pauseSubTableAutosave()
+    expect(autosave.saveError.value).toBe(error)
+    await expect(autosave.syncSubTableRowVersionsBeforeSubmit()).rejects.toBe(error)
+    expect(getTaskFormData).not.toHaveBeenCalled()
+    expect(formData.value.__subTables__['dw:entries'][0].amount).toBe(2)
+    autosave.retrySubTableAutosave()
+    await vi.waitFor(() => expect(submitTaskForm).toHaveBeenCalledTimes(2))
+    await autosave.pauseSubTableAutosave()
+    expect(autosave.saveError.value).toBe(null)
+  })
   it('serializes a second save behind the first request and its version refresh', async () => {
     let finishFirst: () => void = () => {}
     submitTaskForm.mockImplementationOnce(() => new Promise<void>(resolve => { finishFirst = resolve }))
@@ -35,7 +78,7 @@ describe('syncSubTableRowVersionsBeforeSubmit', () => {
     getTaskFormData.mockReset()
   })
 
-  it('waits for a failing autosave, then copies the server version onto the open row', async () => {
+  it('waits for a failing autosave and refuses to submit the unsaved row', async () => {
     let rejectSave: (error: Error) => void = () => {}
     submitTaskForm.mockReturnValue(new Promise((_resolve, reject) => {
       rejectSave = reject
@@ -73,14 +116,16 @@ describe('syncSubTableRowVersionsBeforeSubmit', () => {
     autosave.scheduleSubTableAutosave()
     await vi.waitFor(() => expect(submitTaskForm).toHaveBeenCalledTimes(1))
     const syncing = autosave.syncSubTableRowVersionsBeforeSubmit()
+    const blocked = expect(syncing).rejects.toThrow('409')
     rejectSave(new Error('409'))
-    await syncing
+    await blocked
 
-    expect(row).toEqual({ id: 'F1', title: 'edited', _wsRowVersion: 4 })
+    expect(row).toEqual({ id: 'F1', title: 'edited', _wsRowVersion: 1 })
+    expect(getTaskFormData).not.toHaveBeenCalled()
     expect(submitTaskForm).toHaveBeenCalledTimes(1)
   })
 
-  it('drops a not-yet-fired autosave and still adopts the server version', async () => {
+  it('keeps the read version when a pending edit goes directly to Complete', async () => {
     getTaskFormData.mockResolvedValue({
       fieldValues: {
         __subTables__: {
@@ -115,7 +160,8 @@ describe('syncSubTableRowVersionsBeforeSubmit', () => {
     await autosave.syncSubTableRowVersionsBeforeSubmit()
 
     expect(submitTaskForm).not.toHaveBeenCalled()
-    expect(row._wsRowVersion).toBe(4)
+    expect(getTaskFormData).not.toHaveBeenCalled()
+    expect(row._wsRowVersion).toBe(1)
     expect(row.title).toBe('edited')
   })
 

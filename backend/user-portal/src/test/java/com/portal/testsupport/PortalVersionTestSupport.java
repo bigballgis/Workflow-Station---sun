@@ -64,6 +64,8 @@ public final class PortalVersionTestSupport {
         var snapshots = mock(CatalogSnapshotReader.class);
         lenient().when(snapshots.form("release-v1", source)).thenReturn(
                 Map.of("tableBindings", definition.getOrDefault("tableBindings", List.of())));
+        lenient().when(snapshots.formBindings(eq("release-v1"), anyMap())).thenReturn(
+                (List<Map<String, Object>>) definition.getOrDefault("tableBindings", List.of()));
         if (component instanceof TaskFormComponent task) {
             var loader = new TaskFormDefinitionLoader(mock(org.springframework.web.client.RestTemplate.class), mapper, jdbc);
             ReflectionTestUtils.setField(loader, "versionSnapshots", snapshots);

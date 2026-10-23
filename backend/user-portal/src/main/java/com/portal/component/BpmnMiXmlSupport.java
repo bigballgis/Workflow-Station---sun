@@ -23,6 +23,34 @@ import java.util.Objects;
  */
 final class BpmnMiXmlSupport {
 
+    static Map<String, List<String>> runtimeFieldsByTable(String xml) {
+        try {
+            Document document = parseBpmnSecurely(xml);
+            Map<String, java.util.Set<String>> collected = new LinkedHashMap<>();
+            NodeList loops = document.getElementsByTagNameNS("*", "subProcess");
+            for (int i = 0; i < loops.getLength(); i++) {
+                Element loop = (Element) loops.item(i);
+                if (findMultiInstanceLoopInSubProcess(loop) == null) continue;
+                List<String> fields = new ArrayList<>();
+                for (String property : List.of("miTaskStatusField", "miTaskCurrentNodeField")) {
+                    String value = findFirstPropertyValue(loop, property);
+                    if (value != null && !value.isBlank()) fields.add(value.trim());
+                }
+                NodeList tasks = loop.getElementsByTagNameNS("*", "userTask");
+                for (int j = 0; j < tasks.getLength(); j++) {
+                    String table = findFirstPropertyValue((Element) tasks.item(j), "subTableName");
+                    if (table != null && !table.isBlank()) collected.computeIfAbsent(
+                            "dw:" + table.trim().toLowerCase(java.util.Locale.ROOT), key -> new java.util.LinkedHashSet<>()).addAll(fields);
+                }
+            }
+            Map<String, List<String>> result = new LinkedHashMap<>();
+            collected.forEach((table, fields) -> result.put(table, List.copyOf(fields)));
+            return result;
+        } catch (Exception error) {
+            throw new MiAssignmentConfigurationException("Failed to parse BPMN managed row fields", error);
+        }
+    }
+
     private BpmnMiXmlSupport() {
     }
 

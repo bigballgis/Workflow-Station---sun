@@ -67,7 +67,6 @@ export function useMainTableViewLookupHydration(
           const row = await fetchLookupRowByPrimaryKey(req.tableId, req.pk, {
             searchFields: req.searchFields,
             displayField: req.displayField,
-            primaryKeyField: 'id',
           })
           resolvedRows.set(key, row)
         }),

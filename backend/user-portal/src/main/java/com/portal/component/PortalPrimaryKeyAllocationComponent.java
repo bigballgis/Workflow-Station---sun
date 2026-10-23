@@ -50,8 +50,9 @@ public class PortalPrimaryKeyAllocationComponent {
         if (fields.size() != 1) throw new PortalException("NOT_PK_FIELD", "Primary key field not found");
         Object json = fields.get(0).get("pkGenerationJson");
         if (json instanceof String text) json = snapshots.parse(text);
-        PkGenerationConfig config = json == null ? PkGenerationConfig.builder().strategy("manual").build()
-                : objectMapper.convertValue(json, PkGenerationConfig.class);
+        Map<String, Object> configJson = objectMapper.convertValue(json,
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        PkGenerationConfig config = toPkConfig(configJson);
         int count = request.getCount() == null ? 1 : request.getCount();
         if (count < 1 || count > 1000) throw new IllegalArgumentException("Invalid allocation count");
         return AllocatePrimaryKeyResponse.builder().values(primaryKeyAllocationService.allocate(

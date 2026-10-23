@@ -41,7 +41,7 @@ describe('non-MI Save clicked twice', () => {
       processFormRef: {
         fieldValues: {
           __subTables__: {
-            'dw:file_table': [{ id: 'F1', title: 'server', _wsRowVersion: 5 }],
+            'dw:file_table': [{ id: 'F1', title: 'page', _wsRowVersion: 2 }],
           },
         },
       },
@@ -103,7 +103,7 @@ describe('non-MI Save clicked twice', () => {
     await persist.saveCurrentTaskFormWithMiPersist()
     await persist.saveCurrentTaskFormWithMiPersist()
 
-    expect(sentVersions).toEqual([1, 5])
+    expect(sentVersions).toEqual([1, 2])
   })
 
   it('keeps Edit and Assign declarations separate for one batch control', () => {

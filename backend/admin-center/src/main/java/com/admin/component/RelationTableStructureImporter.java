@@ -1,5 +1,6 @@
 package com.admin.component;
 
+import com.platform.common.relationtable.SystemUserRelationTable;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
@@ -86,6 +87,13 @@ public class RelationTableStructureImporter {
 
         // Pass 1: upsert definitions + fields (ref_table_id resolved in pass 2).
         for (Map<String, Object> table : relationTables) {
+            if (SystemUserRelationTable.matches(table)) {
+                sourceIdToNewId.put(SystemUserRelationTable.ID,
+                        SystemUserRelationTable.ID);
+                nameToId.put(SystemUserRelationTable.NAME,
+                        SystemUserRelationTable.ID);
+                continue;
+            }
             String tableName = (String) table.get("tableName");
             if (tableName == null || tableName.isBlank()) {
                 continue;
@@ -101,6 +109,7 @@ public class RelationTableStructureImporter {
 
         // Pass 2: resolve each field's refTableName → ref_table_id now that all tables exist.
         for (Map<String, Object> table : relationTables) {
+            if (SystemUserRelationTable.matches(table)) continue;
             String tableName = (String) table.get("tableName");
             Long id = nameToId.get(tableName);
             if (id == null) {

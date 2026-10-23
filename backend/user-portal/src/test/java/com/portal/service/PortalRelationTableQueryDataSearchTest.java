@@ -24,6 +24,13 @@ import static org.mockito.Mockito.*;
 
 @DisplayName("PortalRelationTableServiceImpl queryTableData")
 class PortalRelationTableQueryDataSearchTest {
+    @Test void virtualUserFieldMetadataDeclaresIdAsPrimaryKeyWithoutABusinessRelationTable() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        var fields = serviceWith(jdbc, mock(RoleAccessComponent.class)).getFieldDefinitions(-1_000_000_001L, "authenticated-user");
+        assertThat(fields.stream().filter(field -> Boolean.TRUE.equals(field.getIsPrimaryKey())).map(RelationFieldDTO::getFieldName))
+                .containsExactly("id");
+        verifyNoInteractions(jdbc);
+    }
 
     private PortalRelationTableService serviceWith(
             JdbcTemplate jdbcTemplate, RoleAccessComponent roleAccess) {
