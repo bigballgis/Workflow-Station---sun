@@ -64,6 +64,7 @@ describe('EmailRichBodyEditor', () => {
     })
     await flushPromises()
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([PARSED_HTML])
+    expect(wrapper.emitted('initialized')).toEqual([[PARSED_HTML]])
     wrapper.unmount()
   })
 })

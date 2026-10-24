@@ -61,7 +61,7 @@ export function useTableTools(options: UseTableToolsOptions) {
     ElMessage.success(t('common.success'))
   }
 
-  async function handleSaveRelations() {
+  async function handleSaveRelations(): Promise<boolean> {
     // Validate relations
     const validRelations = relations.value.filter(r =>
       r.sourceTableId && r.sourceFieldName && r.relationType && r.targetTableId && r.targetFieldName
@@ -74,9 +74,11 @@ export function useTableTools(options: UseTableToolsOptions) {
       ElMessage.success(t('common.success'))
       showRelationDialog.value = false
       // Refresh tables so PK/FK badges reflect the applied field metadata
-      loadTables()
+      await loadTables()
+      return true
     } catch (e: any) {
       ElMessage.error(e.response?.data?.message || t('common.error'))
+      return false
     }
   }
 

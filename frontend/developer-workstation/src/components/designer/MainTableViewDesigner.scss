@@ -8,15 +8,30 @@
 
 
 .designer-toolbar {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
+  min-height: 32px;
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
+.toolbar-unsaved-notice {
+  grid-column: 2;
+}
 
+
+.toolbar-right {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 
 .designer-body {
   display: flex;

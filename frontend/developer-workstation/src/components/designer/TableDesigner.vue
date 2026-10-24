@@ -1,5 +1,5 @@
 <template>
-  <div class="table-designer">
+  <div class="table-designer" :inert="draftSaving">
     <div class="designer-toolbar">
       <el-button
         type="primary"
@@ -10,7 +10,7 @@
       <el-button
         data-read-only-allowed
         :loading="loading"
-        @click="loadTables"
+        @click="refreshTables"
       >
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
@@ -29,7 +29,7 @@
       </el-button>
       <el-button
         :loading="importing"
-        @click="handleImportClick"
+        @click="guardImport"
       >
         {{ t('table.importTemplate') }}
       </el-button>
@@ -38,6 +38,7 @@
         :ariaLabel="t('table.guideLinkAria')"
         test-id="table-design-guide-link"
       />
+      <DesignerUnsavedNotice v-if="isDirty" class="toolbar-unsaved-notice" />
       <input
         ref="fileInputRef"
         type="file"
@@ -627,6 +628,8 @@
     <!-- Create Table Dialog -->
     <el-dialog
       v-model="showCreateDialog"
+      :inert="draftSaving"
+      :before-close="closeCreateDialog"
       :title="t('table.title')"
       width="500px"
     >
@@ -681,7 +684,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">
+        <el-button @click="closeCreateDialog">
           {{ t('common.cancel') }}
         </el-button>
         <el-button
@@ -735,6 +738,8 @@
     <!-- Relation Config Dialog -->
     <el-dialog
       v-model="showRelationDialog"
+      :inert="draftSaving"
+      :before-close="closeRelationDialog"
       :title="t('table.relationConfig')"
       width="80%"
       top="6vh"
@@ -746,7 +751,7 @@
         :tables="store.tables"
       />
       <template #footer>
-        <el-button @click="showRelationDialog = false">
+        <el-button @click="closeRelationDialog">
           {{ t('common.cancel') }}
         </el-button>
         <el-button
@@ -761,6 +766,7 @@
 
     <!-- Request ID Config Dialog (MAIN tables only) -->
     <RequestIdConfigDialog
+      ref="requestIdDraftRef"
       v-if="selectedTable"
       v-model="showRequestIdDialog"
       :fields="selectedTable.fieldDefinitions"
@@ -770,6 +776,7 @@
 
     <!-- SLA Due Date Config Dialog (MAIN tables only) -->
     <SlaConfigDialog
+      ref="slaDraftRef"
       v-if="selectedTable"
       v-model="showSlaDialog"
       :fields="selectedTable.fieldDefinitions"
@@ -780,6 +787,7 @@
 </template>
 
 <script setup lang="ts">
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh, InfoFilled, WarningFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
@@ -798,6 +806,7 @@ import { useTableNaming } from '@/composables/tableDesigner/useTableNaming'
 import { useTableList } from '@/composables/tableDesigner/useTableList'
 import { useTableEditor } from '@/composables/tableDesigner/useTableEditor'
 import { useTableCreate } from '@/composables/tableDesigner/useTableCreate'
+import { useDesignerDraft, combineDesignerDrafts, delegateDesignerDraft, confirmDesignerLeave, type DirtyDesigner } from '@/composables/useDesignerDraft'
 import { useTableTemplate } from '@/composables/tableDesigner/useTableTemplate'
 import { useTableTools } from '@/composables/tableDesigner/useTableTools'
 import { isTableAuditField } from '@/utils/tableAuditFields'
@@ -893,8 +902,7 @@ const { validateName, existingTableNames, assertTableNameAvailable } = useTableN
   t,
 })
 
-// loadTables / normalizeFieldRow form a cycle between the list and editor
-// composables; break it with wrapper closures (see FormDesigner.vue).
+// All table reloads also establish the server baselines used by the leave guard.
 let loadTablesImpl: () => Promise<void> | void = () => {}
 const loadTables = () => loadTablesImpl()
 
@@ -906,7 +914,6 @@ const editor = useTableEditor({
   validateName,
   existingTableNames,
   assertTableNameAvailable,
-  loadTables,
   t,
 })
 const {
@@ -914,17 +921,17 @@ const {
   normalizeFieldRow,
   onTableDisplayNameInput,
   onTableNameManualInput,
-  handleSelectTable,
+  handleSelectTable: selectTable,
   onPrimaryKeyChange,
   onComputedFieldChange,
   onFieldDisplayNameInput,
   onFieldNameManualInput,
-  handleBackToList,
+  handleBackToList: backToList,
   handleAddField,
   handleRemoveField,
   moveFieldUp,
   moveFieldDown,
-  handleSaveTable,
+  handleSaveTable: persistTable,
 } = editor
 
 const list = useTableList({
@@ -942,9 +949,13 @@ const {
   tableTypeLabel,
   getTableFields,
   getTableRelations,
-  handleDeleteTable,
+  handleDeleteTable: deleteTable,
 } = list
-loadTablesImpl = list.loadTables
+loadTablesImpl = async () => {
+  await list.loadTables()
+  tableDraft.markSaved()
+  relationDraft.markSaved()
+}
 
 /**
  * Table list order: MAIN first, then SUB, RELATION, ACTION.
@@ -1006,10 +1017,10 @@ const listColumns = computed<DesignerListTableColumn<TableDefinition>[]>(() => [
 const {
   showCreateDialog,
   createForm,
-  openCreateDialog,
+  openCreateDialog: openCreate,
   onCreateTableDisplayNameInput,
   onCreateTableNameManualInput,
-  handleCreateTable,
+  handleCreateTable: persistCreate,
 } = useTableCreate({
   functionUnitId: props.functionUnitId,
   store,
@@ -1043,7 +1054,7 @@ const {
   handleGenerateDDL,
   handleValidate,
   handleCopyDDL,
-  handleSaveRelations,
+  handleSaveRelations: persistRelations,
 } = useTableTools({
   functionUnitId: props.functionUnitId,
   selectedTable,
@@ -1053,6 +1064,75 @@ const {
 })
 
 onMounted(loadTables)
+
+const tableDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify(selectedTable.value, (key, value) =>
+    ['__uid', 'autoFieldName', 'fieldNameTouched'].includes(key) ? undefined : value),
+  enabled: () => !designerReadOnly.value && selectedTable.value !== null,
+  save: async () => {
+    if (!await persistTable()) return false
+    tableDraft.markSaved()
+    return true
+  },
+  restore: (snapshot) => {
+    selectedTable.value = JSON.parse(snapshot)
+    if (selectedTable.value) selectedTable.value.fieldDefinitions = selectedTable.value.fieldDefinitions.map(normalizeFieldRow)
+  },
+})
+const relationDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify(relations.value),
+  enabled: () => !designerReadOnly.value,
+  save: async () => {
+    if (!(await confirmDesignerLeave(tableDraft, t))) return false
+    return persistRelations()
+  },
+  restore: (snapshot) => { relations.value = JSON.parse(snapshot) },
+})
+const createDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify(createForm),
+  enabled: () => !designerReadOnly.value && showCreateDialog.value,
+  save: persistCreate,
+  restore: (snapshot) => { Object.assign(createForm, JSON.parse(snapshot)); showCreateDialog.value = false },
+})
+watch(showCreateDialog, (open) => { if (open) createDraft.markSaved() }, { flush: 'sync' })
+const requestIdDraftRef = ref<DirtyDesigner | null>(null)
+const slaDraftRef = ref<DirtyDesigner | null>(null)
+const drafts = combineDesignerDrafts([
+  delegateDesignerDraft(() => requestIdDraftRef.value), delegateDesignerDraft(() => slaDraftRef.value),
+  tableDraft, relationDraft, createDraft,
+])
+const isDirty = computed(() => tableDraft.isDirty.value || relationDraft.isDirty.value || createDraft.isDirty.value)
+const draftSaving = computed(() => tableDraft.saving.value || relationDraft.saving.value || createDraft.saving.value)
+const handleSaveTable = () => tableDraft.saveChanges(true)
+const handleSaveRelations = () => relationDraft.saveChanges(true)
+const handleCreateTable = () => createDraft.saveChanges(true)
+async function openCreateDialog() {
+  if (await confirmDesignerLeave(drafts, t)) openCreate()
+}
+async function handleDeleteTable(row: TableDefinition) {
+  if (await confirmDesignerLeave(drafts, t)) await deleteTable(row)
+}
+async function handleSelectTable(row: TableDefinition) {
+  if (!(await confirmDesignerLeave(drafts, t))) return
+  selectTable(row)
+  tableDraft.markSaved()
+}
+async function handleBackToList() {
+  if (await confirmDesignerLeave(drafts, t)) backToList()
+}
+async function refreshTables() {
+  if (await confirmDesignerLeave(drafts, t)) await loadTables()
+}
+async function guardImport() {
+  if (await confirmDesignerLeave(drafts, t)) handleImportClick()
+}
+async function closeRelationDialog() {
+  if (!draftSaving.value && await confirmDesignerLeave(relationDraft, t)) showRelationDialog.value = false
+}
+async function closeCreateDialog() {
+  if (!draftSaving.value && await confirmDesignerLeave(createDraft, t)) showCreateDialog.value = false
+}
+defineExpose(drafts)
 </script>
 
 <style lang="scss" scoped>
@@ -1124,9 +1204,14 @@ onMounted(loadTables)
 
 .designer-toolbar {
   display: flex;
+  align-items: center;
   gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.toolbar-unsaved-notice {
+  margin-left: 12px;
 }
 
 .editor-header {

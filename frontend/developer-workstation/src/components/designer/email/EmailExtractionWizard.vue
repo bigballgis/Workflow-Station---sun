@@ -278,6 +278,21 @@ function seedFromModel(model?: ExtractionRules) {
   sample.attachmentNames = s?.attachmentNames ?? ''
 }
 seedFromModel(props.modelValue)
+const savedDraft = ref(draftSnapshot())
+function draftSnapshot(): string {
+  return JSON.stringify({ fields, subTables, sample })
+}
+function markSaved() {
+  savedDraft.value = draftSnapshot()
+}
+function hasUnsavedChanges(): boolean {
+  return draftSnapshot() !== savedDraft.value
+}
+function hasIncompleteRules(): boolean {
+  return fields.some(rule => !rule.target.trim())
+    || subTables.some(rule => !rule.bindingId.trim() || rule.columns.length === 0
+      || rule.columns.some(column => !column.field.trim()))
+}
 
 function addFieldRule() {
   fields.push({ target: '', source: 'TEXT_AND_HTML', type: 'LABEL', required: false })
@@ -400,6 +415,7 @@ watch(() => props.modelValue, (model) => {
   if (rulesEqual(model, buildRules())) return
   suppressEmit = true
   seedFromModel(model)
+  markSaved()
   nextTick(() => { suppressEmit = false })
 }, { deep: true })
 
@@ -407,7 +423,7 @@ function attachmentTargetErrors(): string[] {
   return invalidAttachmentTargets(fields, mainFieldOptions.value)
 }
 
-defineExpose({ buildRules, attachmentTargetErrors })
+defineExpose({ buildRules, attachmentTargetErrors, hasUnsavedChanges, hasIncompleteRules, markSaved })
 </script>
 
 <style scoped lang="scss">

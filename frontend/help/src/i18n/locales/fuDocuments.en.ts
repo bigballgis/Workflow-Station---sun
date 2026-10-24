@@ -1,5 +1,7 @@
 export default {
   fuDocumentsGuide: {
+    unsavedTitle: 'Unsaved design changes',
+    unsavedBody: 'Process, Form, Table, View, Action, Decision, Connections, Email Templates and Email Monitors check for unsaved edits when you leave their designer. Save writes the changes before leaving; if validation or saving fails, you stay in the editor. Discard restores the saved content and leaves. Close the warning to continue editing. The same check protects returning to a list, switching views and closing edit dialogs. Changes reverted to their original values do not need saving. Table definitions and table relations save separately, as do Action settings and node bindings: saving one does not save the other. Request ID, SLA and View Filter dialogs first apply their settings to the parent editor; save the parent design to persist them. Automation uses its own builder and is outside this shared confirmation. Browser refresh and closing a browser tab are not covered by this confirmation.',
     pageTitle: 'Requirements and Function Unit Design',
     crumb: 'Developer Workstation · Function Units · Function Unit Settings',
     intro:

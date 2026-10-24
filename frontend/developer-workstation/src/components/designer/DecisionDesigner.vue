@@ -1,5 +1,5 @@
 <template>
-  <div class="decision-designer">
+  <div class="decision-designer" :inert="saving || !modelerReady">
     <div class="designer-toolbar">
       <el-button-group>
         <el-button
@@ -22,6 +22,7 @@
           <el-icon><ZoomOut /></el-icon>
         </el-button>
       </el-button-group>
+      <DesignerUnsavedNotice v-if="isDirty" />
       <el-button-group>
         <el-button
           :disabled="!modelerReady"
@@ -93,6 +94,7 @@
 </template>
 
 <script setup lang="ts">
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
 import { ref, onMounted, onUnmounted, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ZoomIn, ZoomOut, Switch } from '@element-plus/icons-vue'
@@ -125,6 +127,9 @@ const canvasRef = ref<HTMLElement>()
 const modelerReady = ref(false)
 const dmnModeler = shallowRef<InstanceType<typeof DmnJS> | null>(null)
 const saving = ref(false)
+const isDirty = ref(false)
+let savedXml: string | null = null
+let dirtyCheckVersion = 0
 const validating = ref(false)
 const currentView = ref<'drd' | 'table'>('drd')
 const showValidation = ref(false)
@@ -165,15 +170,12 @@ async function initModeler() {
     decisionData.value = response.data
     const xml = response.data?.dmnXml || DEFAULT_DMN_XML
     await modeler.importXML(xml)
+    savedXml = await serializeXml()
     modelerReady.value = true
-  } catch (err) {
-    // If loading fails, use default XML
-    try {
-      await modeler.importXML(DEFAULT_DMN_XML)
-      modelerReady.value = true
-    } catch (importErr) {
-      ElMessage.error(t('decision.saveFailed'))
-    }
+    modeler.on('views.changed', trackActiveViewer)
+    trackActiveViewer()
+  } catch {
+    ElMessage.error(t('common.operationFailed'))
   }
 }
 
@@ -217,8 +219,8 @@ function handleZoomOut() {
   }
 }
 
-async function handleSave() {
-  if (!dmnModeler.value || !decisionData.value) return
+async function handleSave(): Promise<boolean> {
+  if (!dmnModeler.value || !decisionData.value || saving.value) return false
   saving.value = true
   try {
     const { xml } = await dmnModeler.value.saveXML({ format: true })
@@ -229,10 +231,14 @@ async function handleSave() {
       hitPolicy: decisionData.value.hitPolicy,
       description: decisionData.value.description
     })
+    savedXml = xml
+    await hasUnsavedChanges()
     ElMessage.success(t('decision.saveSuccess'))
     emit('saved')
+    return !isDirty.value
   } catch (err) {
     ElMessage.error(t('decision.saveFailed'))
+    return false
   } finally {
     saving.value = false
   }
@@ -280,6 +286,38 @@ onUnmounted(() => {
     dmnModeler.value = null
   }
 })
+
+async function serializeXml(): Promise<string> {
+  if (!dmnModeler.value) throw new Error('DMN modeler is unavailable')
+  const { xml } = await dmnModeler.value.saveXML({ format: true })
+  if (!xml) throw new Error('DMN modeler returned no XML')
+  return xml
+}
+async function hasUnsavedChanges(): Promise<boolean> {
+  if (savedXml === null) return false
+  const version = ++dirtyCheckVersion
+  const dirty = await serializeXml() !== savedXml
+  if (version === dirtyCheckVersion) isDirty.value = dirty
+  return dirty
+}
+const trackedViewers = new WeakSet<object>()
+function trackActiveViewer() {
+  const viewer = dmnModeler.value?.getActiveViewer()
+  if (!viewer || trackedViewers.has(viewer)) return
+  trackedViewers.add(viewer)
+  viewer.on('commandStack.changed', () => {
+    isDirty.value = true
+    void hasUnsavedChanges().catch(() => { ElMessage.error(t('common.operationFailed')) })
+  })
+}
+async function discardChanges() {
+  if (saving.value) return false
+  if (savedXml === null || !dmnModeler.value) return
+  await dmnModeler.value.importXML(savedXml)
+  isDirty.value = false
+  trackActiveViewer()
+}
+defineExpose({ hasUnsavedChanges: async () => saving.value || hasUnsavedChanges(), saveChanges: handleSave, discardChanges })
 </script>
 
 <style scoped lang="scss">
@@ -292,6 +330,9 @@ onUnmounted(() => {
 .designer-toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color);

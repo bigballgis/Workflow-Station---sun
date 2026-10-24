@@ -62,6 +62,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'initialized', value: string): void
 }>()
 
 const { t } = useI18n()
@@ -80,17 +81,19 @@ function groupLabel(label: string): string {
   return resolveEmailVariableGroupLabel(label, t)
 }
 
-function emitSerializedHtml(editor: { getHtml: () => string }): void {
+function emitSerializedHtml(editor: { getHtml: () => string }): string | null {
   const html = htmlFromVisualEditor(editor)
-  if (html == null) return
+  if (html == null) return null
   emit('update:modelValue', html)
+  return html
 }
 
 function onCreated(editor: { getHtml: () => string }): void {
   editorRef.value = editor
   void nextTick(() => {
     if (editorRef.value !== editor) return
-    emitSerializedHtml(editor)
+    const html = emitSerializedHtml(editor)
+    if (html !== null) emit('initialized', html)
   })
 }
 
