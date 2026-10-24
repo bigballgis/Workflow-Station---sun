@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { confirmDesignerLeave, delegateDesignerDraft, type DirtyDesigner } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
@@ -16,6 +17,17 @@ const { t } = useI18n()
 const loading = ref(false)
 const views = ref<MainTableViewDefinition[]>([])
 const tables = ref<TableDefinition[]>([])
+const viewMenuRef = ref<{ updateActiveIndex: (index: string) => void } | null>(null)
+const viewDesignerRef = ref<DirtyDesigner | null>(null)
+const confirmLeave = () => confirmDesignerLeave(viewDesignerRef.value, t)
+defineExpose(delegateDesignerDraft(() => viewDesignerRef.value))
+
+async function selectView(id: number) {
+  if (id === selectedViewId.value) return
+  if (await confirmLeave()) selectedViewId.value = id
+  else viewMenuRef.value?.updateActiveIndex(String(selectedViewId.value))
+}
+
 const selectedViewId = ref<number | null>(null)
 const hasMainTable = ref(false)
 const navCollapsed = ref(false)
@@ -97,6 +109,7 @@ watch(selectedViewId, loadSelectedView)
 // The table is already known from the group, so no table picker is needed; the developer renames
 // it in the properties panel and adds columns from the catalog.
 async function handleAddView(table: TableDefinition) {
+  if (!(await confirmLeave())) return
   const baseName = t('mainTableView.newViewName')
   const existing = new Set(
     views.value.filter(v => v.mainTableId === table.id).map(v => v.viewName),
@@ -123,6 +136,7 @@ const hasTablesWithoutViews = computed(() => {
 })
 
 async function handleSeedDefaults() {
+  if (!(await confirmLeave())) return
   seeding.value = true
   try {
     const res = await mainTableViewApi.seedDefaults(props.functionUnitId)
@@ -140,6 +154,7 @@ async function handleSeedDefaults() {
 }
 
 async function handleDeleteView(view: MainTableViewDefinition) {
+  if (!(await confirmLeave())) return
   try {
     await ElMessageBox.confirm(
       t('mainTableView.deleteConfirm', { name: view.viewName }),
@@ -165,11 +180,11 @@ function onViewSaved(updated: MainTableViewDefinition) {
 }
 
 // Designer-internal FK navigation: open the default view of the referenced table.
-function navigateToTableView(refTableId: number) {
+async function navigateToTableView(refTableId: number) {
   const defaultView = views.value.find(v => v.mainTableId === refTableId && v.isDefault)
     || views.value.find(v => v.mainTableId === refTableId)
   if (defaultView) {
-    selectedViewId.value = defaultView.id
+    await selectView(defaultView.id)
   } else {
     ElMessage.warning(t('mainTableView.noViewForRefTable'))
   }
@@ -235,8 +250,9 @@ onMounted(async () => {
               One el-menu = one source of truth for active-item + click routing.
             -->
             <el-menu
+              ref="viewMenuRef"
               :default-active="selectedViewId ? String(selectedViewId) : ''"
-              @select="(idx: string) => { selectedViewId = Number(idx) }"
+              @select="(idx: string) => selectView(Number(idx))"
             >
               <template
                 v-for="group in viewGroups"
@@ -292,6 +308,7 @@ onMounted(async () => {
 
         <div class="view-editor-panel">
           <MainTableViewDesigner
+            ref="viewDesignerRef"
             v-if="selectedView"
             :key="selectedView.id"
             :function-unit-id="functionUnitId"

@@ -15,6 +15,7 @@
           <span class="decision-editor-title">{{ editingDecisionTitle }}</span>
         </div>
         <DecisionDesigner
+          ref="decisionDesignerRef"
           :key="editingDecisionId"
           :function-unit-id="functionUnitId"
           :decision-id="editingDecisionId"
@@ -100,6 +101,8 @@
     <!-- Create Decision Dialog -->
     <el-dialog
       v-model="showCreateDialog"
+      :inert="createDraft.saving.value"
+      :before-close="closeCreateDialog"
       :title="t('decision.create')"
       width="560px"
     >
@@ -164,7 +167,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">
+        <el-button @click="closeCreateDialog">
           {{ t('common.cancel') }}
         </el-button>
         <el-button
@@ -180,6 +183,8 @@
     <!-- Bind to Node Dialog -->
     <el-dialog
       v-model="showBindNodeDialog"
+      :inert="bindingDraft.saving.value"
+      :before-close="closeBindDialog"
       :title="t('decision.bindToNode')"
       width="500px"
     >
@@ -202,7 +207,7 @@
         :description="t('decision.noServiceTasks')"
       />
       <template #footer>
-        <el-button @click="showBindNodeDialog = false">
+        <el-button @click="closeBindDialog">
           {{ t('common.cancel') }}
         </el-button>
         <el-button
@@ -218,7 +223,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useDesignerDraft, combineDesignerDrafts, delegateDesignerDraft, confirmDesignerLeave, type DirtyDesigner } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { Plus, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -246,8 +252,8 @@ const editingDecisionTitle = computed(() => {
   return d?.decisionName || d?.decisionKey || t('decision.edit')
 })
 
-function closeDesigner() {
-  editingDecisionId.value = null
+async function closeDesigner() {
+  if (await confirmDesignerLeave(decisionDesignerRef.value, t)) editingDecisionId.value = null
 }
 
 // Bind to Node state
@@ -278,8 +284,8 @@ async function loadDecisions() {
   }
 }
 
-async function handleCreate() {
-  if (!createForm.value.decisionKey) return
+async function persistCreate(): Promise<boolean> {
+  if (!createForm.value.decisionKey) return false
   creating.value = true
   try {
     await decisionApi.create(props.functionUnitId, createForm.value)
@@ -287,8 +293,10 @@ async function handleCreate() {
     showCreateDialog.value = false
     createForm.value = { decisionKey: '', decisionName: '', dmnXml: '', hitPolicy: 'FIRST', description: '' }
     await loadDecisions()
+    return true
   } catch (err) {
     ElMessage.error(t('common.error'))
+    return false
   } finally {
     creating.value = false
   }
@@ -390,8 +398,8 @@ function handleBindToNode(row: DecisionDefinition) {
   showBindNodeDialog.value = true
 }
 
-async function handleConfirmBind() {
-  if (!bindingDecisionId.value || !selectedNodeId.value || !store.process?.bpmnXml) return
+async function persistBind(): Promise<boolean> {
+  if (!bindingDecisionId.value || !selectedNodeId.value || !store.process?.bpmnXml) return false
 
   try {
     const newXml = bindDecisionToNode(store.process.bpmnXml, selectedNodeId.value, bindingDecisionId.value)
@@ -402,8 +410,10 @@ async function handleConfirmBind() {
     parseBindingsFromBpmn()
     showBindNodeDialog.value = false
     ElMessage.success(t('decision.bindSuccess'))
+    return true
   } catch {
     ElMessage.error(t('common.error'))
+    return false
   }
 }
 
@@ -411,6 +421,32 @@ onMounted(() => {
   loadDecisions()
   parseBindingsFromBpmn()
 })
+
+const decisionDesignerRef = ref<DirtyDesigner | null>(null)
+const createDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify(createForm.value), enabled: () => showCreateDialog.value,
+  save: persistCreate,
+  restore: (snapshot) => { createForm.value = JSON.parse(snapshot); showCreateDialog.value = false },
+})
+const bindingDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify(selectedNodeId.value), enabled: () => showBindNodeDialog.value,
+  save: persistBind,
+  restore: (snapshot) => { selectedNodeId.value = JSON.parse(snapshot); showBindNodeDialog.value = false },
+})
+watch(showCreateDialog, (open) => { if (open) createDraft.markSaved() }, { flush: 'sync' })
+watch(showBindNodeDialog, (open) => { if (open) bindingDraft.markSaved() }, { flush: 'sync' })
+const handleCreate = () => createDraft.saveChanges(true)
+const handleConfirmBind = () => bindingDraft.saveChanges(true)
+async function closeCreateDialog() {
+  if (!createDraft.saving.value && await confirmDesignerLeave(createDraft, t)) showCreateDialog.value = false
+}
+async function closeBindDialog() {
+  if (!bindingDraft.saving.value && await confirmDesignerLeave(bindingDraft, t)) showBindNodeDialog.value = false
+}
+const drafts = combineDesignerDrafts([
+  createDraft, bindingDraft, delegateDesignerDraft(() => decisionDesignerRef.value),
+])
+defineExpose(drafts)
 </script>
 
 <style scoped lang="scss">

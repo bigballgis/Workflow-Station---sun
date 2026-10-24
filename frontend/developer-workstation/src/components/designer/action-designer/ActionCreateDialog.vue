@@ -1,8 +1,10 @@
 <template>
   <el-dialog
     :model-value="modelValue"
+    :inert="saving"
     :title="$t('action.createActionTitle')"
     width="500px"
+    :before-close="beforeClose"
     destroy-on-close
     @update:model-value="$emit('update:modelValue', $event)"
   >
@@ -118,6 +120,8 @@
 import ActionColorField from './ActionColorField.vue'
 
 defineProps<{
+  saving?: boolean
+  beforeClose?: () => Promise<void>
   modelValue: boolean
   createForm: any
 }>()

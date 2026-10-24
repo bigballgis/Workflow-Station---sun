@@ -65,6 +65,8 @@
 
     <el-dialog
       v-model="showFormDialog"
+      :inert="saving"
+      :before-close="closeFormDialog"
       width="900px"
       destroy-on-close
       top="5vh"
@@ -77,9 +79,10 @@
             :ariaLabel="t('emailMonitor.guideLinkAria')"
             test-id="email-monitor-dialog-guide-link"
           />
+          <DesignerUnsavedNotice v-if="isDirty" class="dialog-unsaved-notice" />
         </div>
       </template>
-      <el-form :model="form" label-position="top" class="monitor-form">
+      <el-form :disabled="saving" :model="form" label-position="top" class="monitor-form">
         <div class="form-grid">
           <el-form-item :label="t('emailMonitor.name')" required>
             <el-input v-model="form.name" :placeholder="t('emailMonitor.namePlaceholder')" />
@@ -116,7 +119,7 @@
         />
       </el-form>
       <template #footer>
-        <el-button @click="showFormDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button @click="closeFormDialog">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleSave" :loading="saving">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
@@ -124,7 +127,9 @@
 </template>
 
 <script setup lang="ts">
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useDesignerDraft, confirmDesignerLeave, type DirtyDesigner } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -170,7 +175,7 @@ const defaultForm = (): EmailMonitorRuleRequest => ({
 })
 
 const form = reactive<EmailMonitorRuleRequest>(defaultForm())
-const wizardRef = ref<{ attachmentTargetErrors: () => string[] } | null>(null)
+const wizardRef = ref<InstanceType<typeof EmailExtractionWizard> | null>(null)
 
 function connectionName(uid: string): string {
   return connections.value.find(c => c.connectionUid === uid)?.name ?? uid
@@ -226,6 +231,7 @@ async function loadRules() {
 function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
+  draft.markSaved()
   showFormDialog.value = true
 }
 
@@ -247,27 +253,32 @@ async function openEditDialog(row: EmailMonitorRule) {
       actionType: r.actionType || 'START_PROCESS',
       pollIntervalSeconds: r.pollIntervalSeconds || 60,
       reviewOnMissing: r.reviewOnMissing ?? true,
-      extractionRules: r.extractionRules || {}
+      extractionRules: JSON.parse(JSON.stringify(r.extractionRules || {}))
     })
+    draft.markSaved()
     showFormDialog.value = true
   } catch {
     ElMessage.error(t('emailMonitor.loadFailed'))
   }
 }
 
-async function handleSave() {
+async function persistForm(): Promise<boolean> {
   if (!form.name.trim()) {
     ElMessage.warning(t('emailMonitor.nameRequired'))
-    return
+    return false
   }
   if (!form.connectionUid) {
     ElMessage.warning(t('emailMonitor.connectionRequired'))
-    return
+    return false
+  }
+  if (wizardRef.value?.hasIncompleteRules()) {
+    ElMessage.warning(t('emailMonitor.wizard.incompleteRules'))
+    return false
   }
   const attachmentErrors = wizardRef.value?.attachmentTargetErrors() ?? []
   if (attachmentErrors.length) {
     ElMessage.warning(t('emailMonitor.wizard.fileStoreTargetMustBeFile', { field: attachmentErrors[0] }))
-    return
+    return false
   }
   saving.value = true
   try {
@@ -282,10 +293,14 @@ async function handleSave() {
       await emailMonitorApi.create(props.functionUnitId, payload)
     }
     ElMessage.success(t('common.saveSuccess'))
+    draft.markSaved()
+    wizardRef.value?.markSaved()
     showFormDialog.value = false
     await loadRules()
+    return true
   } catch (e) {
     ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('common.saveFailed'))
+    return false
   } finally {
     saving.value = false
   }
@@ -308,6 +323,26 @@ async function handleDelete(row: EmailMonitorRule) {
 }
 
 onMounted(loadRules)
+
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify(form),
+  enabled: () => showFormDialog.value,
+  save: persistForm,
+  restore: (snapshot) => { Object.assign(form, JSON.parse(snapshot)); showFormDialog.value = false },
+})
+const isDirty = computed(() => draft.isDirty.value || wizardRef.value?.hasUnsavedChanges() === true)
+const monitorDraft: DirtyDesigner = {
+  hasUnsavedChanges: () => draft.hasUnsavedChanges() || wizardRef.value?.hasUnsavedChanges() === true,
+  saveChanges: () => draft.saveChanges(true),
+  discardChanges: draft.discardChanges,
+}
+const handleSave = () => draft.saveChanges(true)
+async function closeFormDialog() {
+  if (saving.value || draft.saving.value) return
+  if (await confirmDesignerLeave(monitorDraft, t)) showFormDialog.value = false
+}
+defineExpose(monitorDraft)
+
 </script>
 
 <style scoped lang="scss">

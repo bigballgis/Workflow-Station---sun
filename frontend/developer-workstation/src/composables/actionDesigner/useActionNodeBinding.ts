@@ -210,10 +210,10 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
   /**
    * 保存动作绑定到流程节点
    */
-  async function handleSaveBinding() {
+  async function handleSaveBinding(): Promise<boolean> {
     if (!selectedAction.value || !store.process?.bpmnXml) {
       ElMessage.warning(t('action.saveProcessFirst'))
-      return
+      return false
     }
 
     savingBinding.value = true
@@ -254,9 +254,11 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
       await store.fetchProcess(functionUnitId)
       parseActionBindingsFromBpmn()
       loadActionBinding(actionId)
+      return true
     } catch (e: any) {
       console.error('Save binding failed:', e)
       ElMessage.error(e.response?.data?.message || t('action.saveFailed'))
+      return false
     } finally {
       savingBinding.value = false
     }

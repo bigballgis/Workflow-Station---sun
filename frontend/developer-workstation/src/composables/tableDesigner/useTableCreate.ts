@@ -43,27 +43,29 @@ export function useTableCreate(options: UseTableCreateOptions) {
     createTableNameTouched.value = true
   }
 
-  async function handleCreateTable() {
+  async function handleCreateTable(): Promise<boolean> {
     if (!createForm.tableDisplayName?.trim()) {
       ElMessage.warning(t('table.displayNameRequired'))
-      return
+      return false
     }
     // Validate table name
     if (!validateName(createForm.tableName)) {
       ElMessage.warning(t('table.invalidTableName'))
-      return
+      return false
     }
     if (!await assertTableNameAvailable(createForm.tableName)) {
-      return
+      return false
     }
     try {
       await store.createTable(functionUnitId, createForm)
       ElMessage.success(t('functionUnit.createSuccess'))
       showCreateDialog.value = false
       resetCreateForm()
-      loadTables()
+      await loadTables()
+      return true
     } catch (e: any) {
       ElMessage.error(e.response?.data?.message || t('common.error'))
+      return false
     }
   }
 

@@ -26,6 +26,7 @@ const flowKeys = [
 const related: GuideRelated[] = [{ to: '/ai-studio', titleKey: 'guides.aiStudio.title' }]
 
 const jumpLinks: GuideJump[] = [
+  { anchor: 'unsaved', titleKey: 'fuDocumentsGuide.unsavedTitle' },
   { anchor: 'editor', titleKey: 'fuDocumentsGuide.editorTitle' },
   { anchor: 'import', titleKey: 'fuDocumentsGuide.importTitle' },
   { anchor: 'history', titleKey: 'fuDocumentsGuide.historyTitle' },
@@ -33,6 +34,7 @@ const jumpLinks: GuideJump[] = [
 ]
 
 const sections: GuideSection[] = [
+  { anchor: 'unsaved', titleKey: 'fuDocumentsGuide.unsavedTitle', bodyKey: 'fuDocumentsGuide.unsavedBody' },
   {
     titleKey: 'fuDocumentsGuide.whatTitle',
     bodyKey: 'fuDocumentsGuide.whatBody',

@@ -91,8 +91,8 @@ export function useTableList(options: UseTableListOptions) {
         const updatedTable = tables.find(tbl => tbl.id === selectedTable.value!.id)
         if (updatedTable) {
           selectedTable.value = {
-            ...updatedTable,
-            fieldDefinitions: [...(updatedTable.fieldDefinitions || []).map(f => normalizeFieldRow(f))]
+            ...(JSON.parse(JSON.stringify(updatedTable)) as TableDefinition),
+            fieldDefinitions: [...(updatedTable.fieldDefinitions || []).map(f => normalizeFieldRow(JSON.parse(JSON.stringify(f))))]
           }
           console.log('[TableDesigner] Updated selected table with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
         }

@@ -1,4 +1,5 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
+import { useDesignerDraft } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
@@ -112,10 +113,37 @@ const sortFieldOptions = computed(() =>
 
 
 
+const hydrating = ref(false)
+let hydrationPromise = Promise.resolve()
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify({
+    viewName: viewName.value, fields: viewFields.value, sortConfig: sortConfig.value,
+    filterConfig: filterConfig.value, enableExport: enableExport.value,
+    restrictToInvolvedUsers: restrictToInvolvedUsers.value, detailFormId: detailFormId.value,
+    businessUnitIds: [...selectedBusinessUnitIds.value].sort(), roleIds: [...selectedRoleIds.value].sort(),
+  }),
+  save: persistView,
+  restore: (snapshot) => {
+    const saved = JSON.parse(snapshot)
+    viewName.value = saved.viewName
+    viewFields.value = saved.fields
+    sortConfig.value = saved.sortConfig
+    filterConfig.value = saved.filterConfig
+    filterEditorRoot.value = parseFilterConfigToEditorRoot(saved.filterConfig)
+    enableExport.value = saved.enableExport
+    restrictToInvolvedUsers.value = saved.restrictToInvolvedUsers
+    detailFormId.value = saved.detailFormId
+    selectedBusinessUnitIds.value = saved.businessUnitIds
+    selectedRoleIds.value = saved.roleIds
+  },
+})
+const handleSave = () => draft.saveChanges(true)
+
 watch(
   () => props.view,
   (v) => {
     if (!v) return
+    hydrating.value = true
     viewName.value = v.viewName
     viewFields.value = (v.fields || []).map(f => ({ ...f }))
     sortConfig.value = v.sortConfig?.length
@@ -139,7 +167,10 @@ watch(
     selectedRoleIds.value = (v.accessRules || [])
       .filter(r => r.targetType === 'ROLE')
       .map(r => r.targetId)
-    void refreshRoleOptionsForSelectedBus()
+    hydrationPromise = refreshRoleOptionsForSelectedBus().then(() => {
+      draft.markSaved()
+      hydrating.value = false
+    })
   },
   { immediate: true, deep: true },
 )
@@ -681,8 +712,8 @@ function removeSort(index: number) {
 
 
 
-async function handleSave() {
-  if (!validateAccessControlSelection()) return
+async function persistView(): Promise<boolean> {
+  if (!validateAccessControlSelection()) return false
   saving.value = true
   try {
     const fields = viewFields.value.map((f, i) => ({ ...f, sortOrder: i }))
@@ -706,8 +737,12 @@ async function handleSave() {
     })
     ElMessage.success(t('mainTableView.saved'))
     emit('saved', res.data)
+    await nextTick()
+    await hydrationPromise
+    return true
   } catch (e: unknown) {
     ElMessage.error((e instanceof Error ? e.message : undefined) || t('common.saveFailed'))
+    return false
   } finally {
     saving.value = false
   }
@@ -810,5 +845,6 @@ const previewRowCount = 3
     allLookupCatalogSelected, someLookupCatalogSelected, toggleSelectAllLookupCatalog,
     selectedFkCatalogFields, toggleFkCatalogSelect, addSelectedFkFields,
     allFkCatalogSelected, someFkCatalogSelected, toggleSelectAllFkCatalog,
+    draft, hydrating,
   }
 }

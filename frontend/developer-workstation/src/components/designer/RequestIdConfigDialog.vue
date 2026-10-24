@@ -1,11 +1,12 @@
 <template>
   <el-dialog
     :model-value="modelValue"
+    :before-close="closeDialog"
     :title="t('table.requestId.dialogTitle')"
     width="640px"
     top="8vh"
     class="request-id-config-dialog"
-    @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    @update:model-value="(v: boolean) => { if (!v) closeDialog() }"
     @open="syncFromProps"
   >
     <p class="request-id-hint">
@@ -109,7 +110,7 @@
     </div>
 
     <template #footer>
-      <el-button @click="emit('update:modelValue', false)">
+      <el-button @click="closeDialog">
         {{ t('common.cancel') }}
       </el-button>
       <el-button
@@ -132,6 +133,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useDesignerDraft, confirmDesignerLeave } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { CaretTop, CaretBottom } from '@element-plus/icons-vue'
 import type { FieldDefinition, RequestIdConfig } from '@/api/functionUnit'
@@ -221,6 +223,7 @@ function syncFromProps() {
     selectedFieldNames.value = []
     separator.value = '-'
   }
+  draft.markSaved()
 }
 
 function handleConfirm() {
@@ -241,6 +244,22 @@ function handleClear() {
   emit('confirm', null)
   emit('update:modelValue', false)
 }
+
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify({ ordered: orderedSelected.value, separator: separator.value }), enabled: () => props.modelValue,
+  save: async () => { handleConfirm(); return true },
+  restore: (snapshot) => {
+    const saved = JSON.parse(snapshot)
+    orderedSelected.value = saved.ordered
+    selectedFieldNames.value = [...saved.ordered]
+    separator.value = saved.separator
+    emit('update:modelValue', false)
+  },
+})
+async function closeDialog() {
+  if (await confirmDesignerLeave(draft, t)) emit('update:modelValue', false)
+}
+defineExpose(draft)
 </script>
 
 <style scoped>

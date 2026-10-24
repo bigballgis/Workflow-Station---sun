@@ -62,8 +62,8 @@ export function useActionConfig(options: UseActionConfigOptions) {
 
   watch(selectedAction, (action) => {
     if (action?.configJson) {
-      Object.assign(actionConfig, action.configJson)
-      const normalized = normalizePostEmailRules(action.configJson as Record<string, unknown>)
+      Object.assign(actionConfig, JSON.parse(JSON.stringify(action.configJson)))
+      const normalized = normalizePostEmailRules(JSON.parse(JSON.stringify(action.configJson)) as Record<string, unknown>)
       actionConfig.postEmailRules = normalized
       stripLegacyPostEmail(actionConfig)
     } else {

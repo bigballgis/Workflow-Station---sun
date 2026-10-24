@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
+import { ref } from 'vue'
+import { combineDesignerDrafts, delegateDesignerDraft, type DirtyDesigner } from '@/composables/useDesignerDraft'
 import MainTableViewFilterEditor from './MainTableViewFilterEditor.vue'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { MainTableViewDefinition } from '@/api/mainTableView'
@@ -11,7 +14,7 @@ const emit = defineEmits<{
 }>()
 
 const {
-  t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
+  draft, hydrating, t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
   columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
   enableExport, restrictToInvolvedUsers, detailFormId, detailFormOptions, selectedBusinessUnitIds, selectedRoleIds,
   businessUnitOptions, roleOptions, accessOptionsLoading,
@@ -31,14 +34,18 @@ const {
   selectedFkCatalogFields, toggleFkCatalogSelect, addSelectedFkFields,
   allFkCatalogSelected, someFkCatalogSelected, toggleSelectAllFkCatalog,
 } = useMainTableViewDesigner(props, emit)
+const isDirty = draft.isDirty
+const filterDraftRef = ref<DirtyDesigner | null>(null)
+defineExpose(combineDesignerDrafts([delegateDesignerDraft(() => filterDraftRef.value), draft]))
 </script>
 
 
 
 <template>
-<div class="main-table-view-designer">
+<div class="main-table-view-designer" :inert="saving || hydrating">
     <div class="designer-toolbar">
       <div class="toolbar-right">
+        <DesignerUnsavedNotice v-if="isDirty" />
         <el-button
           type="primary"
           size="small"
@@ -951,6 +958,7 @@ const {
 
 
     <MainTableViewFilterEditor
+      ref="filterDraftRef"
       v-model="filterDialogVisible"
       :filter-config="filterConfig"
       :field-options="sortFieldOptions"
