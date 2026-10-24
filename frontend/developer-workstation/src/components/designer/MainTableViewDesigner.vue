@@ -44,8 +44,8 @@ defineExpose(combineDesignerDrafts([delegateDesignerDraft(() => filterDraftRef.v
 <template>
 <div class="main-table-view-designer" :inert="saving || hydrating">
     <div class="designer-toolbar">
+      <DesignerUnsavedNotice v-if="isDirty" class="toolbar-unsaved-notice" />
       <div class="toolbar-right">
-        <DesignerUnsavedNotice v-if="isDirty" />
         <el-button
           type="primary"
           size="small"

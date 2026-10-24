@@ -44,11 +44,13 @@ async function checkLayout(name, rootSelector, anchorSelector) {
         insideViewport: box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight,
         insideAnchor: box.left >= anchorBox.left - 1 && box.right <= anchorBox.right + 1,
         overlappingButtons,
+        centerOffset: Math.abs((box.left + box.right - anchorBox.left - anchorBox.right) / 2),
       }
     }, anchorSelector)
     const pass = metrics.insideActions && metrics.width <= 420 && metrics.height <= 50
       && metrics.fontSize >= 14 && metrics.border >= 1 && metrics.radius <= 6
       && metrics.iconWidth >= 18 && metrics.insideViewport && metrics.insideAnchor && metrics.overlappingButtons === 0
+      && (name !== 'view' || metrics.centerOffset <= 2)
     layouts.push({ name, viewport: width, pass, ...metrics })
     await page.screenshot({ path: `${out}2026-10-24_unsaved-layout-${layoutPhase}-${name}-${width}.png`, fullPage: true, animations: 'disabled' })
     console.log(`${pass ? 'PASS' : 'FAIL'} layout ${name} ${width}`, JSON.stringify(metrics))
