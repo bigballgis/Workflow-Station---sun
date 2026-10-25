@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { normalizeActionBpmnXml } from '@/utils/actionBpmnProperties'
 import type { Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -237,7 +238,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     const bpmnModeler = getModeler()
     if (!bpmnModeler || !importXml.value.trim()) return
     try {
-      await bpmnModeler.importXML(importXml.value)
+      await bpmnModeler.importXML(normalizeActionBpmnXml(importXml.value))
       showImportDialog.value = false
       importXml.value = ''
       ElMessage.success(t('process.importSuccess'))
@@ -400,7 +401,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     if (!bpmnModeler) return
     await store.fetchProcess?.(functionUnitId)
     const xml = store.process?.bpmnXml
-    if (xml) await bpmnModeler.importXML(xml)
+    if (xml) await bpmnModeler.importXML(normalizeActionBpmnXml(xml))
     await initializeSavedState()
   }
 

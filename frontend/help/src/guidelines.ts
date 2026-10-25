@@ -97,6 +97,7 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.actionEmail.summary',
     load: () => import('@/views/ActionEmailGuide.vue'),
   },
+  { id: 'node-action-order', path: '/node-action-order', titleKey: 'nodeActionOrderGuide.title', summaryKey: 'nodeActionOrderGuide.summary', load: () => import('@/views/NodeActionOrderGuide.vue') },
   {
     id: 'action-allowed-roles',
     path: '/action-allowed-roles',
@@ -313,7 +314,9 @@ export const NAV_TREE: NavNode[] = [
         children: [
           { kind: 'leaf', id: 'dw-ai-studio', titleKey: 'nav.aiStudio', to: '/ai-studio' },
           { kind: 'leaf', id: 'dw-fu-settings', titleKey: 'nav.functionUnitSettings', to: '/fu-documents' },
-          { kind: 'leaf', id: 'dw-process', titleKey: 'nav.processDesign' },
+          { kind: 'group', id: 'dw-process', titleKey: 'nav.processDesign', children: [
+            { kind: 'leaf', id: 'dw-node-action-order', titleKey: 'nodeActionOrderGuide.title', to: '/node-action-order' },
+          ] },
           {
             kind: 'group',
             id: 'dw-tables-group',

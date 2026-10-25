@@ -40,7 +40,7 @@ export function useActionConfig(options: UseActionConfigOptions) {
     return Array.from(fields)
   })
 
-  const actionConfig = reactive<Record<string, unknown>>({
+  const defaults = () => ({
     url: '',
     method: 'POST',
     headers: '',
@@ -56,37 +56,20 @@ export function useActionConfig(options: UseActionConfigOptions) {
     targetStep: '',
     visibilityCondition: null as ConditionExpression[] | null,
     allowedRoles: [] as string[],
-    sortOrder: 0,
     postEmailRules: [] as ActionPostEmailRule[],
+    subActions: [] as Array<string | number>,
+    executionOrder: 'sequential',
+    allowedFromStatus: [] as string[],
   })
 
+  const actionConfig = reactive<Record<string, unknown>>(defaults())
+
   watch(selectedAction, (action) => {
-    if (action?.configJson) {
-      Object.assign(actionConfig, action.configJson)
-      const normalized = normalizePostEmailRules(action.configJson as Record<string, unknown>)
-      actionConfig.postEmailRules = normalized
-      stripLegacyPostEmail(actionConfig)
-    } else {
-      Object.assign(actionConfig, {
-        url: '',
-        method: 'POST',
-        headers: '',
-        body: '',
-        formId: null,
-        dialogTitle: '',
-        dialogWidth: '600px',
-        requireComment: false,
-        confirmMessage: '',
-        script: '',
-        targetStatus: '',
-        requireAssignee: false,
-        targetStep: '',
-        visibilityCondition: null as ConditionExpression[] | null,
-        allowedRoles: [] as string[],
-        sortOrder: 0,
-        postEmailRules: [] as ActionPostEmailRule[],
-      })
-    }
+    const config = JSON.parse(JSON.stringify(action?.configJson ?? {})) as Record<string, unknown>
+    for (const key of Object.keys(actionConfig)) delete actionConfig[key]
+    Object.assign(actionConfig, defaults(), config)
+    actionConfig.postEmailRules = normalizePostEmailRules(config)
+    stripLegacyPostEmail(actionConfig)
 
     if (action) {
       loadActionBinding(action.id)

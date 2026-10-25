@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import jakarta.validation.ConstraintViolationException;
 
 import java.time.Instant;
@@ -30,6 +32,20 @@ import java.util.UUID;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ApiResponse<?>> handleNotFound(Exception ex, WebRequest request) {
+        String traceId = generateTraceId();
+        log.debug("Resource not found [{}]: {}", traceId, getPath(request));
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(ErrorCode.RESOURCE_NOT_FOUND.getCode())
+                .message(ErrorCode.RESOURCE_NOT_FOUND.getMessage())
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(errorResponse));
+    }
 
     // ==================== Auth & Authorization Exceptions ====================
     

@@ -19,19 +19,19 @@ import com.developer.entity.FieldDefinition;
 import com.developer.enums.BindingType;
 import com.developer.enums.TableType;
 import com.developer.util.DesignerFilterOperators;
+import com.developer.util.ActionBindingLifecycle;
+import com.developer.util.XmlEncodingUtil;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -90,6 +90,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                     i18nService.getMessage("action.use_other_name"));
         }
         
+        String previousName = actionDefinition.getActionName();
         actionDefinition.setActionName(request.getActionName());
         actionDefinition.setActionType(request.getActionType());
         actionDefinition.setConfigJson(request.getConfigJson());
@@ -100,7 +101,9 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         validateFormPopupType(actionDefinition);
         validatePostEmail(actionDefinition);
         
-        return actionDefinitionRepository.save(actionDefinition);
+        ActionDefinition saved = actionDefinitionRepository.save(actionDefinition);
+        if (!java.util.Objects.equals(previousName, saved.getActionName())) synchronizeBindingNames(saved);
+        return saved;
     }
     
     @Override
@@ -111,6 +114,16 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         actionDefinitionRepository.delete(actionDefinition);
     }
     
+    private void synchronizeBindingNames(ActionDefinition action) {
+        var unit = action.getFunctionUnit();
+        var process = unit.getProcessDefinition();
+        if (process == null) return;
+        Map<String, String> names = new HashMap<>();
+        actionDefinitionRepository.findByFunctionUnitId(unit.getId())
+                .forEach(a -> names.put(a.getId().toString(), a.getActionName()));
+        process.setBpmnXml(ActionBindingLifecycle.reconcile(process.getBpmnXml(), names, false));
+    }
+
     /**
      * 检查动作是否被流程步骤引用
      * 如果被引用，抛出 DeveloperBusinessException
@@ -142,7 +155,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
 
         // 1) 正则提取所有 actionIds / globalActionIds（按 ID 精确匹配，不依赖命名空间声明）
         String actionIdStr = action.getId().toString();
-        if (isActionIdInBpmnProperties(bpmnXml, actionIdStr)) {
+        if (ActionBindingLifecycle.references(bpmnXml, actionIdStr)) {
             throw new DeveloperBusinessException(
                 "ACTION_IN_USE",
                 i18nService.getMessage("action.in_use"),
@@ -152,7 +165,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
 
         // 2) 退化：当 BPMN XML 没有标准的 actionIds 属性时，
         //    仅在 custom:property 元素范围内按 action name 搜索，避免全量 XML 的 contains 假阳性
-        if (isActionNameInBpmnProperties(bpmnXml, action.getActionName())) {
+        if (isActionNameInBpmnProperties(XmlEncodingUtil.smartDecode(bpmnXml), action.getActionName())) {
             throw new DeveloperBusinessException(
                 "ACTION_IN_USE",
                 i18nService.getMessage("action.in_use"),
@@ -161,87 +174,6 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         }
 
         log.info("Action dependency check passed for action: {}", actionId);
-    }
-
-    /**
-     * 正则：匹配 name="actionIds" 或 name="globalActionIds" 的属性行，
-     * 提取 value="[...]" 中的 action ID 列表，检查是否包含 targetActionId。
-     *
-     * 正则设计参照 {@link com.workflow.component.BpmnActionParser} 中
-     * ACTION_IDS_IN_USER_TASK / GLOBAL_ACTION_IDS 的模式，不依赖命名空间前缀。
-     */
-    private boolean isActionIdInBpmnProperties(String bpmnXml, String targetActionId) {
-        // 匹配 name="actionIds" value="[...]" 或 name="globalActionIds" value="[...]"
-        // 支持双引号和单引号、任意属性顺序。
-        // 与 BpmnActionParser 保持一致的属性名：actionIds / globalActionIds（camelCase）
-        // 使用 CASE_INSENSITIVE 防御性处理大小写变体。
-        Pattern pattern = Pattern.compile(
-            "name\\s*=\\s*[\"'](?:global)?[aA]ction[Ii]ds[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|"
-            + "value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"'](?:global)?[aA]ction[Ii]ds[\"']",
-            Pattern.DOTALL
-        );
-
-        Matcher matcher = pattern.matcher(bpmnXml);
-        while (matcher.find()) {
-            String value = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
-            if (value != null && !value.isBlank()) {
-                List<String> ids = parseActionIdsValue(value.trim());
-                if (ids != null && ids.contains(targetActionId)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 解析 actionIds 的 JSON 数组值，例如 "[12,34]" 或 "[1,2,3]"。
-     * 同时兼容 legacy 的 "[id1,id2]" 格式。
-     */
-    private List<String> parseActionIdsValue(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-
-        // JSON 数组格式: [1,2,3] 或 ["a","b"]
-        if (value.startsWith("[") && value.endsWith("]")) {
-            try {
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode node = mapper.readTree(value);
-                if (node != null && node.isArray() && !node.isEmpty()) {
-                    List<String> ids = new ArrayList<>();
-                    for (JsonNode n : node) {
-                        if (n == null || n.isNull()) {
-                            continue;
-                        }
-                        String s = n.isTextual() ? n.asText() : n.asText();
-                        s = s != null ? s.trim() : "";
-                        if (!s.isEmpty()) {
-                            ids.add(s);
-                        }
-                    }
-                    if (!ids.isEmpty()) {
-                        return ids;
-                    }
-                }
-            } catch (Exception ignore) {
-                // 解析失败则尝试 legacy 格式
-            }
-        }
-
-        // Legacy 格式: "[id1,id2]"
-        String cleaned = value.replaceAll("[\\[\\]\\s\"]", "");
-        if (cleaned.isEmpty()) {
-            return null;
-        }
-        List<String> ids = new ArrayList<>();
-        for (String part : cleaned.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                ids.add(trimmed);
-            }
-        }
-        return ids.isEmpty() ? null : ids;
     }
 
     /**

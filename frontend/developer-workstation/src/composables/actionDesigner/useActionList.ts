@@ -127,7 +127,7 @@ export function useActionList(options: UseActionListOptions) {
         actionType: selectedAction.value.actionType,
         buttonColor: selectedAction.value.buttonColor || null,
         description: selectedAction.value.description,
-        configJson: actionConfig
+        configJson: JSON.parse(JSON.stringify(actionConfig))
       })
       ElMessage.success(t('action.saveSuccess'))
       loadActions()

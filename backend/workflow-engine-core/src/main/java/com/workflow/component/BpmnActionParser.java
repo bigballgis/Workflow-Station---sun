@@ -31,8 +31,9 @@ import java.util.regex.Pattern;
  * Extracts the action definition IDs bound to a userTask.
  * <p>
  * Node {@code actionIds} and process-level {@code globalActionIds} are independent sources:
- * they are merged (node first, then global, first-seen wins) rather than treated as fallbacks.
- * Each source still uses model → XML DOM/regex when that source is missing from the in-memory model.
+ * they are merged (node-only first, then global) rather than treated as fallbacks.
+ * Legacy IDs bound in both scopes appear once in the global group.
+ * Each source uses model → XML when absent; duplicate values use XML to retain document order.
  */
 @Slf4j
 @Component
@@ -40,16 +41,6 @@ public class BpmnActionParser {
 
     @Autowired
     private RepositoryService repositoryService;
-
-    private static final Pattern ACTION_IDS_IN_USER_TASK = Pattern.compile(
-        "name\\s*=\\s*[\"']actionIds[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"']actionIds[\"']",
-        Pattern.DOTALL
-    );
-
-    private static final Pattern GLOBAL_ACTION_IDS = Pattern.compile(
-        "name\\s*=\\s*[\"']globalActionIds[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"']globalActionIds[\"']",
-        Pattern.DOTALL
-    );
 
     /**
      * Deployed BPMN is immutable per {@code processDefinitionId} (id carries version + uuid, so a redeploy
@@ -234,36 +225,33 @@ public class BpmnActionParser {
      * Extract action IDs for a runtime task: node bindings plus process-level Global bindings.
      */
     public List<String> extractActionIds(Task task) {
+        org.flowable.bpmn.model.BpmnModel model;
         try {
-            org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(
-                task.getProcessDefinitionId()
-            );
-            org.flowable.bpmn.model.UserTask userTask = resolveUserTask(bpmnModel, task);
-            if (userTask == null) {
-                log.debug("UserTask not found in BPMN model for task: {}", task.getId());
-            }
-            String xmlTaskId = userTask != null ? userTask.getId() : task.getTaskDefinitionKey();
-
-            List<String> nodeIds = userTask == null
-                    ? null
-                    : extractActionIdsRecursive(userTask.getExtensionElements(), "actionIds");
-            List<String> globalIds = extractGlobalActionIdsFromModel(bpmnModel);
-            if (isEmpty(nodeIds) || isEmpty(globalIds)) {
-                XmlActionSources xml = readActionIdsFromBpmnXml(task, xmlTaskId);
-                if (xml != null) {
-                    if (isEmpty(nodeIds)) {
-                        nodeIds = xml.nodeIds();
-                    }
-                    if (isEmpty(globalIds)) {
-                        globalIds = xml.globalIds();
-                    }
-                }
-            }
-            return mergeActionIds(nodeIds, globalIds);
-        } catch (Exception e) {
-            log.warn("Failed to extract actionIds for task {}: {}", task.getId(), e.getMessage());
+            model = repositoryService.getBpmnModel(task.getProcessDefinitionId());
+        } catch (Exception ex) {
+            // FALLBACK(migration): deployed XML remains authoritative when Flowable cannot load its model.
+            log.debug("BPMN model unavailable for action bindings: {}", task.getProcessDefinitionId());
             return extractActionIdsFromBpmnXmlResource(task, task.getTaskDefinitionKey());
         }
+        var userTask = resolveUserTask(model, task);
+        var process = model != null ? model.getMainProcess() : null;
+        var node = BpmnActionPropertyReader.model(userTask != null ? userTask.getExtensionElements() : null, "actionIds");
+        var global = BpmnActionPropertyReader.model(process != null ? process.getExtensionElements() : null, "globalActionIds");
+        List<String> nodeIds = node.duplicated() ? null : parseActionIds(node.raw());
+        List<String> globalIds = global.duplicated() ? null : parseActionIds(global.raw());
+        if (nodeIds == null || globalIds == null || node.duplicated() || global.duplicated()) {
+            // Flowable groups extension elements by tag, losing cross-tag order for duplicate keys.
+            XmlActionSources xml = readActionIdsFromBpmnXml(task, userTask != null ? userTask.getId() : task.getTaskDefinitionKey());
+            if ((node.duplicated() && (xml == null || xml.nodeIds() == null))
+                    || (global.duplicated() && (xml == null || xml.globalIds() == null))) {
+                throw new IllegalStateException("Deployed BPMN is required to resolve duplicate action properties");
+            }
+            if (xml != null) {
+                if (nodeIds == null || node.duplicated()) nodeIds = xml.nodeIds();
+                if (globalIds == null || global.duplicated()) globalIds = xml.globalIds();
+            }
+        }
+        return mergeActionIds(nodeIds, globalIds);
     }
 
     private static org.flowable.bpmn.model.UserTask resolveUserTask(
@@ -275,24 +263,16 @@ public class BpmnActionParser {
         return el instanceof org.flowable.bpmn.model.UserTask userTask ? userTask : null;
     }
 
-    private List<String> extractGlobalActionIdsFromModel(org.flowable.bpmn.model.BpmnModel bpmnModel) {
-        if (bpmnModel == null) {
-            return null;
-        }
-        org.flowable.bpmn.model.Process mainProcess = bpmnModel.getMainProcess();
-        if (mainProcess == null) {
-            return null;
-        }
-        return extractActionIdsRecursive(mainProcess.getExtensionElements(), "globalActionIds");
-    }
-
     /**
-     * Node IDs first, then Global IDs; first occurrence of an ID wins.
+     * Node-only IDs first, then Global IDs in their existing order.
      */
     List<String> mergeActionIds(List<String> nodeIds, List<String> globalIds) {
         LinkedHashSet<String> merged = new LinkedHashSet<>();
         appendIds(merged, nodeIds);
-        appendIds(merged, globalIds);
+        LinkedHashSet<String> globals = new LinkedHashSet<>();
+        appendIds(globals, globalIds);
+        merged.removeAll(globals);
+        merged.addAll(globals);
         return merged.isEmpty() ? null : new ArrayList<>(merged);
     }
 
@@ -307,46 +287,7 @@ public class BpmnActionParser {
         }
     }
 
-    private static boolean isEmpty(List<String> ids) {
-        return ids == null || ids.isEmpty();
-    }
-
     private record XmlActionSources(List<String> nodeIds, List<String> globalIds) {}
-
-    /**
-     * Depth-first search for extension nodes whose name attribute matches the given
-     * property name (actionIds / globalActionIds).
-     */
-    List<String> extractActionIdsRecursive(
-            Map<String, List<ExtensionElement>> extensions,
-            String propertyName) {
-        if (extensions == null || extensions.isEmpty()) {
-            return null;
-        }
-        for (List<ExtensionElement> group : extensions.values()) {
-            if (group == null) {
-                continue;
-            }
-            for (ExtensionElement el : group) {
-                String n = el.getAttributeValue(null, "name");
-                if (propertyName.equals(n)) {
-                    String value = el.getAttributeValue(null, "value");
-                    if (value == null || value.isEmpty()) {
-                        value = el.getElementText();
-                    }
-                    List<String> parsed = parseActionIds(value);
-                    if (parsed != null && !parsed.isEmpty()) {
-                        return parsed;
-                    }
-                }
-                List<String> nested = extractActionIdsRecursive(el.getChildElements(), propertyName);
-                if (nested != null && !nested.isEmpty()) {
-                    return nested;
-                }
-            }
-        }
-        return null;
-    }
 
     private List<String> extractActionIdsFromBpmnXmlResource(Task task, String userTaskElementId) {
         XmlActionSources xml = readActionIdsFromBpmnXml(task, userTaskElementId);
@@ -367,31 +308,34 @@ public class BpmnActionParser {
                 return null;
             }
             String key = userTaskElementId != null ? userTaskElementId : task.getTaskDefinitionKey();
-            List<String> node = firstNonEmpty(
-                    parseActionIdsFromBpmnDom(xml, key, "actionIds"),
-                    parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds"));
-            List<String> global = firstNonEmpty(
-                    parseActionIdsFromProcessXmlBlock(xml, "globalActionIds"),
-                    parseActionIdsFromProcessXmlBlockDom(xml, "globalActionIds"));
-            return new XmlActionSources(node, global);
-        } catch (Exception e) {
-            log.debug("BPMN XML fallback for actionIds failed: {}", e.getMessage());
-            return null;
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            Document document = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            Element node = findUserTaskById(document.getDocumentElement(), key);
+            Element process = node;
+            while (process != null && !"process".equals(getLocalName(process))) {
+                process = process.getParentNode() instanceof Element parent ? parent : null;
+            }
+            if (process == null) {
+                var processes = document.getElementsByTagNameNS("*", "process");
+                process = processes.getLength() > 0 ? (Element) processes.item(0) : null;
+            }
+            return new XmlActionSources(
+                    parseActionIds(BpmnActionPropertyReader.xml(node, "actionIds").raw()),
+                    parseActionIds(BpmnActionPropertyReader.xml(process, "globalActionIds").raw()));
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to read deployed BPMN action bindings", ex);
         }
-    }
-
-    private static List<String> firstNonEmpty(List<String> primary, List<String> fallback) {
-        return isEmpty(primary) ? fallback : primary;
-    }
-
-    // ==================== Internal Methods ====================
-
-    private List<String> parseActionIdsFromBpmnDom(String xml, String taskDefinitionKey, String propertyName) {
-        if (xml == null || taskDefinitionKey == null || !"actionIds".equals(propertyName)) {
-            return null;
-        }
-        String value = findUserTaskPropertyValueDom(xml, taskDefinitionKey, propertyName);
-        return value != null ? parseActionIds(value) : null;
     }
 
     /**
@@ -532,119 +476,8 @@ public class BpmnActionParser {
         return local != null ? local : el.getTagName().replaceAll("^[^:]+:", "");
     }
 
-    private List<String> parseActionIdsFromProcessXmlBlockDom(String xml, String propertyName) {
-        if (xml == null || !"globalActionIds".equals(propertyName)) return null;
-        try {
-            DocumentBuilderFactory factory = createSecureDocumentBuilderFactory();
-            factory.setNamespaceAware(true);
-            Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
-            Element root = doc.getDocumentElement();
-            if (root == null) return null;
-            String value = findFirstAttributeInTree(root, "name", "globalActionIds", "value");
-            return value != null ? parseActionIds(value) : null;
-        } catch (Exception e) {
-            log.trace("DOM parse for globalActionIds failed: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    // ==================== Regex Parsing Methods ====================
-
-    private List<String> parseActionIdsFromUserTaskXmlBlock(String xml, String taskDefinitionKey, String propName) {
-        if (xml == null || taskDefinitionKey == null) {
-            return null;
-        }
-        int idPos = xml.indexOf("id=\"" + taskDefinitionKey + "\"");
-        if (idPos < 0) {
-            return null;
-        }
-        int ut = xml.lastIndexOf("<userTask", idPos);
-        if (ut < 0) {
-            ut = xml.lastIndexOf("userTask ", idPos);
-        }
-        if (ut < 0) {
-            ut = xml.lastIndexOf("<bpmn:userTask", idPos);
-        }
-        if (ut < 0) {
-            return null;
-        }
-        int end = xml.indexOf("</userTask>", idPos);
-        if (end < 0) {
-            end = xml.indexOf("</bpmn:userTask>", idPos);
-        }
-        if (end < 0) {
-            return null;
-        }
-        String block = xml.substring(ut, Math.min(xml.length(), end + 20));
-        if (!"actionIds".equals(propName)) {
-            return null;
-        }
-        Matcher m = ACTION_IDS_IN_USER_TASK.matcher(block);
-        if (m.find()) {
-            String v = m.group(1) != null && !m.group(1).isEmpty() ? m.group(1) : m.group(2);
-            return parseActionIds(v);
-        }
-        return null;
-    }
-
-    private List<String> parseActionIdsFromProcessXmlBlock(String xml, String propName) {
-        if (xml == null || !"globalActionIds".equals(propName)) {
-            return null;
-        }
-        Matcher m = GLOBAL_ACTION_IDS.matcher(xml);
-        if (m.find()) {
-            String v = m.group(1) != null && !m.group(1).isEmpty() ? m.group(1) : m.group(2);
-            return parseActionIds(v);
-        }
-        return null;
-    }
-
-    // ==================== Value Parsing ====================
-
-    /**
-     * Parse actionIds string: converts "[id1,id2]" or a JSON array to List&lt;String&gt;.
-     */
     List<String> parseActionIds(String value) {
-        try {
-            if (value == null || value.isEmpty()) {
-                return null;
-            }
-
-            String trimmed = value.trim();
-
-        // JSON array: ["a","b"] or [1,2,3] (designer stores numeric IDs)
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                try {
-                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(trimmed);
-                    if (node != null && node.isArray() && !node.isEmpty()) {
-                        List<String> ids = new ArrayList<>();
-                        for (com.fasterxml.jackson.databind.JsonNode n : node) {
-                            if (n == null || n.isNull()) continue;
-                            String s = n.isTextual() ? n.asText() : n.asText();
-                            s = s != null ? s.trim() : "";
-                            if (!s.isEmpty()) ids.add(s);
-                        }
-                        if (!ids.isEmpty()) return ids;
-                    }
-                } catch (Exception ignore) {
-                    // fall through
-                }
-            }
-
-            // Legacy: "[id1,id2]" -> "id1,id2"
-            String cleaned = trimmed.replaceAll("[\\[\\]\\s\"]", "");
-            if (cleaned.isEmpty()) return null;
-
-            return java.util.Arrays.stream(cleaned.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(java.util.stream.Collectors.toList());
-
-        } catch (Exception e) {
-            log.error("Error parsing actionIds: " + value, e);
-            return null;
-        }
+        return BpmnActionPropertyReader.ids(value);
     }
 
     /**

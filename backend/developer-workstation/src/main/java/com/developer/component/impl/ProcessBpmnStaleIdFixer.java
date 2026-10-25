@@ -1,15 +1,14 @@
 package com.developer.component.impl;
 
 import com.developer.enums.TableType;
+import com.developer.util.ActionBindingLifecycle;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,7 +17,7 @@ import java.util.regex.Pattern;
  * BPMN 陈旧 ID 修正协作类。
  *
  * <p>从 {@link ProcessDesignComponentImpl} 拆出，落库前按名称在当前 FU 中重查 formId/subTableId/actionIds
- * （含流程级 {@code globalActionIds}），防止自动保存把旧 ID 持久化。正则与 BPMN 属性结构逐字保留，行为零变化。</p>
+ * （含流程级 {@code globalActionIds}），防止自动保存把旧 ID 持久化。Action 按有效 ID 保留身份，只有失效的旧引用才按名称恢复。</p>
  */
 @Component
 @Slf4j
@@ -51,9 +50,9 @@ public class ProcessBpmnStaleIdFixer {
         tableDefinitionRepository.findByFunctionUnitId(functionUnitId)
             .forEach(t -> { if (t.getTableType() == TableType.SUB) subTableNameToId.put(t.getTableName(), String.valueOf(t.getId())); });
 
-        Map<String, String> actionNameToId = new HashMap<>();
+        Map<String, String> actionNamesById = new HashMap<>();
         actionDefinitionRepository.findByFunctionUnitId(functionUnitId)
-            .forEach(a -> actionNameToId.put(a.getActionName(), String.valueOf(a.getId())));
+            .forEach(a -> actionNamesById.put(String.valueOf(a.getId()), a.getActionName()));
 
         String result = bpmnXml;
 
@@ -88,88 +87,6 @@ public class ProcessBpmnStaleIdFixer {
         sm.appendTail(ssb);
         result = ssb.toString();
 
-        // Fix actionIds: parse actionNames by position and remap each actionId
-        // BPMN stores: actionNames="[&quot;Approve&quot;,&quot;reject&quot;]" and actionIds="[47,48]"
-        Pattern actionBlockPattern = Pattern.compile(
-            "(<bpmn:userTask[^>]*>.*?</bpmn:userTask>)", Pattern.DOTALL);
-        Matcher abm = actionBlockPattern.matcher(result);
-        StringBuffer asb = new StringBuffer();
-        while (abm.find()) {
-            String block = abm.group(1);
-            block = fixActionIdsInBlock(block, actionNameToId);
-            abm.appendReplacement(asb, Matcher.quoteReplacement(block));
-        }
-        abm.appendTail(asb);
-        result = asb.toString();
-
-        return remapNamedActionIdArray(result, actionNameToId, "globalActionIds", "globalActionNames");
-    }
-
-    private String fixActionIdsInBlock(String block, Map<String, String> actionNameToId) {
-        return remapNamedActionIdArray(block, actionNameToId, "actionIds", "actionNames");
-    }
-
-    /**
-     * Remap an id array by the parallel names array (userTask {@code actionIds}/{@code actionNames}
-     * or process {@code globalActionIds}/{@code globalActionNames}). Length mismatch → leave unchanged.
-     */
-    private String remapNamedActionIdArray(String block, Map<String, String> actionNameToId,
-                                           String idsProp, String namesProp) {
-        Pattern namesPattern = Pattern.compile("name=\"" + Pattern.quote(namesProp) + "\"\\s+value=\"([^\"]*)\"");
-        Pattern idsPattern = Pattern.compile("name=\"" + Pattern.quote(idsProp) + "\"\\s+value=\"([^\"]*)\"");
-        Matcher nm = namesPattern.matcher(block);
-        Matcher im = idsPattern.matcher(block);
-        if (!nm.find() || !im.find()) {
-            return block;
-        }
-
-        String actionNamesRaw = nm.group(1);
-        String actionIdsRaw = im.group(1);
-
-        List<String> names = parseBpmnJsonArray(actionNamesRaw);
-        List<String> ids = parseBpmnJsonArray(actionIdsRaw);
-        if (names.size() != ids.size()) {
-            return block;
-        }
-
-        List<String> newIds = new ArrayList<>();
-        boolean changed = false;
-        for (int i = 0; i < names.size(); i++) {
-            String name = names.get(i);
-            String idStr = ids.get(i);
-            String correctId = actionNameToId.get(name);
-            if (correctId != null && !correctId.equals(idStr)) {
-                newIds.add(correctId);
-                changed = true;
-            } else {
-                newIds.add(idStr);
-            }
-        }
-        if (!changed) {
-            return block;
-        }
-
-        String newActionIds = "[" + String.join(",", newIds) + "]";
-        return block.replace(
-                "name=\"" + idsProp + "\" value=\"" + actionIdsRaw + "\"",
-                "name=\"" + idsProp + "\" value=\"" + newActionIds + "\"");
-    }
-
-    private List<String> parseBpmnJsonArray(String raw) {
-        List<String> result = new ArrayList<>();
-        if (raw == null || raw.isEmpty()) return result;
-        // Strip brackets
-        String content = raw.trim();
-        if (content.startsWith("[") && content.endsWith("]")) {
-            content = content.substring(1, content.length() - 1);
-        }
-        for (String part : content.split(",")) {
-            String item = part.trim();
-            // Unescape XML entities
-            item = item.replace("&quot;", "").replace("&#34;", "")
-                       .replace("\"", "");
-            if (!item.isEmpty()) result.add(item);
-        }
-        return result;
+        return ActionBindingLifecycle.reconcile(result, actionNamesById, true);
     }
 }

@@ -111,3 +111,5 @@ See /help/llms-full.txt for a compact English extract of the articles.
 Keep this file in sync with frontend/help/src/guidelines.ts.
 
 - /help/form-ctl-record-note — Record Note (Whole table / Single record, immutable notes, panel properties, opt-in formal attachment notifications in Notifications → Attachment Updates with request name (ID), note location/count and verified upload source, target Sub-Tasks, Person / claimed BU Team / sole auto-assigned member, valid rounds, waiting and permissions).
+
+- /help/node-action-order — Process Design user task Actions: ordered node bindings; Drag action rows or Move up/down; remove; new selections append; global actions follow node actions; global actions are shown in a separate read-only group and cannot be reordered; legacy duplicates appear once in the global group.

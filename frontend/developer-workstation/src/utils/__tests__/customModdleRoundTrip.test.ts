@@ -8,6 +8,8 @@
  * bpmn-moddle 随 bpmn-js 一同安装，这里直接用它以避开 bpmn-js 在 jsdom 下无法渲染的问题。
  */
 import { describe, expect, it } from 'vitest'
+import { getExtensionProperties, removeExtensionProperty, setExtensionProperty } from '../bpmnExtensions'
+import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 // @ts-ignore - 无 TS 类型声明
 import { BpmnModdle } from 'bpmn-moddle'
 import {
@@ -145,5 +147,43 @@ describe('customModdle — BPMN 往返不丢扩展', () => {
     )
     expect(out).toContain('<flowable:elementVariable>currentItem</flowable:elementVariable>')
     expect(out).toContain('xmlns:flowable="http://flowable.org/bpmn"')
+  })
+})
+
+async function fixture(localName = 'property', namespace = 'http://workflow.platform/schema/custom') {
+  const moddle = createModdle()
+  const xml = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:c="${namespace}" targetNamespace="compatibility"><b:process id="p"><b:userTask id="a"><b:extensionElements><c:properties><c:property name="formId" value="11"/><c:property name="httpUrl" value="https://current.invalid"/></c:properties><c:${localName} name="formId" value="12"/><c:${localName} name="httpUrl" value="https://stale.invalid"/><c:${localName} name="actionIds" value='["legacy-save",22]'/><c:${localName} name="globalActionIds" value='["reject"]'/></b:extensionElements></b:userTask></b:process></b:definitions>`
+  const { rootElement, warnings } = await moddle.fromXML(xml)
+  expect(warnings).toEqual([])
+  const businessObject = rootElement.rootElements[0].flowElements[0]
+  const element = { businessObject } as BpmnElement
+  const modeler = { get: (key: string) => key === 'moddle' ? moddle : {
+    updateProperties: (_element: BpmnElement, attrs: object) => Object.assign(businessObject, attrs),
+  } } as BpmnModeler
+  return { element, modeler, async reload() {
+    const { xml } = await moddle.toXML(rootElement)
+    const { rootElement: saved } = await moddle.fromXML(xml)
+    return getExtensionProperties({ businessObject: saved.rootElements[0].flowElements[0] } as BpmnElement)
+  } }
+}
+
+describe('Action compatibility does not change other BPMN property semantics', () => {
+  it.each([
+    ['property', 'http://workflow.platform/schema/custom'],
+    ['values', 'http://workflow.platform/schema/custom'],
+    ['property', 'http://custom.bpmn.io/schema'],
+    ['values', 'http://custom.bpmn.io/schema'],
+  ])('reads direct %s Action properties in %s without overriding form bindings', async (localName, namespace) => {
+    const test = await fixture(localName, namespace)
+    expect(getExtensionProperties(test.element)).toMatchObject({
+      actionIds: ['legacy-save', 22], globalActionIds: ['reject'], formId: 11, httpUrl: 'https://current.invalid',
+    })
+    setExtensionProperty(test.modeler, test.element, 'formId', 13)
+    expect((await test.reload()).formId).toBe(13)
+  })
+  it('removes a standard service property without reviving an ignored direct property', async () => {
+    const test = await fixture()
+    removeExtensionProperty(test.modeler, test.element, 'httpUrl')
+    expect((await test.reload()).httpUrl).toBeUndefined()
   })
 })

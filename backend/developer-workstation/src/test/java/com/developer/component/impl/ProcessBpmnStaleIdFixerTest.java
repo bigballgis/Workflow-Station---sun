@@ -43,14 +43,15 @@ class ProcessBpmnStaleIdFixerTest {
                 ActionDefinition.builder().id(1200L).actionName("Save").build()));
 
         String xml = """
-                <bpmn:process id="p1">
-                  <custom:property name="globalActionNames" value="[&quot;Save&quot;]" />
-                  <custom:property name="globalActionIds" value="[50]" />
-                  <bpmn:userTask id="task1">
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:custom="http://workflow.platform/schema/custom">
+                  <bpmn:process id="p1"><bpmn:extensionElements>
+                    <custom:property name="globalActionNames" value="[&quot;Save&quot;]" />
+                    <custom:property name="globalActionIds" value="[50]" />
+                  </bpmn:extensionElements><bpmn:userTask id="task1"><bpmn:extensionElements>
                     <custom:property name="actionNames" value="[&quot;Approve&quot;]" />
                     <custom:property name="actionIds" value="[51]" />
-                  </bpmn:userTask>
-                </bpmn:process>
+                  </bpmn:extensionElements></bpmn:userTask></bpmn:process>
+                </bpmn:definitions>
                 """;
 
         String rewritten = fixer.fixStaleIds(1L, xml);
@@ -69,9 +70,11 @@ class ProcessBpmnStaleIdFixerTest {
                 ActionDefinition.builder().id(1201L).actionName("Approve").build()));
 
         String xml = """
-                <bpmn:userTask id="task1">
-                  <custom:property name="actionNames" value="[&quot;Approve&quot;]" />
-                  <custom:property name="actionIds" value="[51]" />
+                <bpmn:userTask xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:custom="http://workflow.platform/schema/custom" id="task1">
+                  <bpmn:extensionElements>
+                    <custom:property name="actionNames" value="[&quot;Approve&quot;]" />
+                    <custom:property name="actionIds" value="[51]" />
+                  </bpmn:extensionElements>
                 </bpmn:userTask>
                 """;
 

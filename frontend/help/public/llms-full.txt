@@ -282,6 +282,9 @@ Permissions: System Administrator all; sla:policy:edit view, edit, recalculate; 
 
 Related: /help/table-design#sla-due-date , /help/environment-variables
 
+## Node action order (/help/node-action-order)
+In Process Design, select a user task and expand Actions. Select Available Actions and drag rows by their name/handle or use Move up/down in Button display order. Each completed drag is one undo/redo operation; read-only units cannot be reordered. Top-to-bottom becomes left-to-right in Portal. New selections append; removals preserve survivors. Save the process and publish/deploy. Each node has an independent order. Process global actions follow node actions; globals appear in a separate read-only group without sorting or removal; legacy duplicates appear once in the global group. Action Design Bound Nodes shows only Process Global for a global action. Allowed Roles filtering preserves survivor order. Existing instances use their bound version.
+
 
 ## New Requests (/help/up-new)
 

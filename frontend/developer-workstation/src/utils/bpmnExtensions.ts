@@ -4,6 +4,7 @@
  */
 
 import { toRaw } from 'vue'
+import { readModdleActionProperties } from './actionBpmnProperties'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 
 const CUSTOM_PREFIX = 'custom'
@@ -162,7 +163,9 @@ export function getExtensionProperties(element: BpmnElement): Record<string, any
     }
   }
 
-  return { ...fromBpmnIo, ...fromPlatform }
+  const actions = Object.fromEntries(Object.entries(readModdleActionProperties(values))
+    .map(([name, value]) => [name, parsePropertyValue(value)]))
+  return { ...fromBpmnIo, ...fromPlatform, ...actions }
 }
 
 /**

@@ -9,6 +9,7 @@ import {
 import { customTranslateModule } from '@/utils/customTranslate'
 import { callActivityRendererModule } from '@/utils/callActivityRenderer'
 import { isEmptyBpmnDiagram } from '@/utils/bpmnDiagramContent'
+import { normalizeActionBpmnXml } from '@/utils/actionBpmnProperties'
 import { fitDiagramWithPadding } from './fitDiagramWithPadding'
 import { keepNodesFittedToText } from '@platform-shared/bpmnNodeTextFit'
 
@@ -142,7 +143,7 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
       // Load existing process or default
       await store.fetchProcess(functionUnitId)
       const fallbackProcessId = `Process_${functionUnitId}`
-      let xml = store.process?.bpmnXml || defaultBpmnXml(fallbackProcessId)
+      let xml = normalizeActionBpmnXml(store.process?.bpmnXml || defaultBpmnXml(fallbackProcessId))
       xml = await ensureBpmnHasVisualLayout(xml)
 
       console.log('Loading BPMN XML:', xml)

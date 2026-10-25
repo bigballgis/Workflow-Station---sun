@@ -4,6 +4,7 @@
  * manualTask, sendTask, receiveTask, businessRuleTask.
  * Shared by Form Designer and Process Debug.
  */
+import { readXmlActionProperties } from './actionBpmnProperties'
 
 /** BPMN 2.0 task element local names that can carry form bindings. */
 export const TASK_LOCAL_NAMES = [
@@ -51,7 +52,7 @@ function parseActionIds(value: string): Array<string | number> {
   } catch {
     // fallback to comma-separated format
   }
-  const cleaned = value.replace(/[\[\]\s]/g, '')
+  const cleaned = value.replace(/[[\]\s]/g, '')
   if (!cleaned) return []
   return cleaned.split(',').map(v => v.trim()).filter(Boolean)
 }
@@ -88,7 +89,6 @@ function readTaskFormProps(task: Element): {
     }
     if (name === 'formName' && value) formName = value
     if (name === 'formReadOnly' && value === 'true') readOnly = true
-    if (name === 'actionIds' && value) actionIds = parseActionIds(value)
     if (name === 'formScene' && value === 'REQUEST') scene = 'REQUEST'
     if (name === 'requestFormId' && value) {
       const parsed = parseInt(value, 10)
@@ -97,6 +97,8 @@ function readTaskFormProps(task: Element): {
     if (name === 'requestFormName' && value) requestFormName = value
   }
 
+  const actionValue = readXmlActionProperties(task).actionIds
+  actionIds = actionValue ? parseActionIds(actionValue) : []
   return { formId, formName, readOnly, actionIds, scene, requestFormId, requestFormName }
 }
 

@@ -129,12 +129,34 @@ class ActionDefinitionLookupComponentTest {
         assertTrue(lookupComponent.findPinned("v1", "99").isEmpty());
     }
 
+    @Test
+    void resolvePinnedIncludesLegacyProcessGlobalActions() {
+        for (String tag : List.of("property", "values")) {
+            ActionDefinition approve = legacy("uuid-approve", "Approve");
+            ActionDefinition reject = legacy("uuid-reject", "Reject");
+            when(actionDefinitionRepository.findPinnedActions("v1", List.of("12", "35"))).thenReturn(List.of());
+            when(actionDefinitionRepository.findByFunctionUnitId("v1")).thenReturn(List.of(approve, reject));
+            String xml = "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\""
+                    + " xmlns:c=\"http://workflow.platform/schema/custom\" xmlns:custom_1=\"http://custom.bpmn.io/schema\">"
+                    + "<bpmn:process id=\"p\"><bpmn:extensionElements><properties xmlns=\"http://workflow.platform/schema/custom\">"
+                    + "<" + tag + " name=\"globalActionIds\">[35]</" + tag + ">"
+                    + "<" + tag + " name=\"globalActionNames\">[\"Reject\"]</" + tag + ">"
+                    + "</properties></bpmn:extensionElements>"
+                    + task("task", "[12]", "[&quot;Approve&quot;]")
+                    + "</bpmn:process></bpmn:definitions>";
+            when(actionDefinitionRepository.findPublishedProcessXml("v1")).thenReturn(List.of(xml));
+            assertEquals(List.of("Approve", "Reject"), lookupComponent.resolvePinned("v1", List.of("12", "35"))
+                    .stream().map(ActionDefinition::getActionName).toList());
+            assertNull(reject.getSourceId());
+        }
+    }
+
     private static ActionDefinition legacy(String id, String name) {
         return ActionDefinition.builder().id(id).functionUnitId("v1").actionName(name).actionType("APPROVE").build();
     }
 
     private static String bpmn(String... tasks) {
-        return "<bpmn:definitions><bpmn:process id=\"p\">" + String.join("", tasks) + "</bpmn:process></bpmn:definitions>";
+        return "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:custom_1=\"http://custom.bpmn.io/schema\"><bpmn:process id=\"p\">" + String.join("", tasks) + "</bpmn:process></bpmn:definitions>";
     }
 
     private static String task(String id, String actionIds, String actionNames) {

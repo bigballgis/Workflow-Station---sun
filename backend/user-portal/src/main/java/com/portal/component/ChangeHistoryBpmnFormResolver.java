@@ -1,11 +1,8 @@
 package com.portal.component;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import org.springframework.web.util.HtmlUtils;
+import com.platform.common.bpmn.BpmnActionBindings;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -19,7 +16,6 @@ import java.util.Set;
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class ChangeHistoryBpmnFormResolver {
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     static Long resolveTaskFormIdFromStored(String storedXml, String stageId) {
         return resolveTaskFormId(decodeBpmnXml(storedXml), stageId);
@@ -41,37 +37,46 @@ final class ChangeHistoryBpmnFormResolver {
     }
 
     /**
-     * Designer action id to action name, from each user task's parallel {@code actionIds} /
+     * Designer action id to action name, from node and process-global parallel {@code actionIds} /
      * {@code actionNames}. A task whose arrays do not pair up is skipped, and an id two tasks name
      * differently is dropped: neither pairing can be trusted.
      */
     static Map<String, String> actionNamesById(String storedXml) {
         Map<String, String> names = new HashMap<>();
         Set<String> conflicting = new HashSet<>();
-        String bpmnXml = decodeBpmnXml(storedXml);
-        if (bpmnXml == null) return names;
-        for (String taskElement : userTaskElements(bpmnXml)) {
-            List<String> ids = jsonStrings(customPropertyValue(taskElement, "actionIds"));
-            List<String> labels = jsonStrings(customPropertyValue(taskElement, "actionNames"));
-            if (ids.isEmpty() || ids.size() != labels.size()) continue;
-            for (int i = 0; i < ids.size(); i++) {
-                String previous = names.putIfAbsent(ids.get(i), labels.get(i));
-                if (previous != null && !previous.equals(labels.get(i))) conflicting.add(ids.get(i));
+        if (storedXml == null || storedXml.isBlank()) return names;
+        try {
+            var document = BpmnActionBindings.parse(storedXml);
+            for (var scope : BpmnActionBindings.scopes(document)) {
+                var properties = BpmnActionBindings.properties(scope);
+                addActionNames(names, conflicting, properties, BpmnActionBindings.idsKey(scope));
             }
+        } catch (IllegalArgumentException ex) {
+            // FALLBACK(migration): untrusted legacy XML cannot recover IDs; the caller rejects the incomplete release.
+            return Map.of();
         }
         conflicting.forEach(names::remove);
         return names;
     }
 
-    /** Attribute values are HTML-escaped JSON arrays, e.g. {@code [&#34;Approve&#34;]}. */
-    private static List<String> jsonStrings(String escaped) {
-        if (escaped == null || escaped.isBlank()) return List.of();
+    private static void addActionNames(Map<String, String> names, Set<String> conflicting,
+                                      Map<String, BpmnActionBindings.Property> properties, String key) {
+        var idsProperty = properties.get(key);
+        var namesProperty = properties.get(key.equals("actionIds") ? "actionNames" : "globalActionNames");
+        if (idsProperty == null || namesProperty == null) return;
+        List<String> ids;
+        List<String> labels;
         try {
-            List<Object> values = JSON.readValue(HtmlUtils.htmlUnescape(escaped), new TypeReference<List<Object>>() { });
-            if (values.stream().anyMatch(java.util.Objects::isNull)) return List.of();
-            return values.stream().map(value -> String.valueOf(value).trim()).toList();
-        } catch (JsonProcessingException ignored) {
-            return List.of();
+            ids = BpmnActionBindings.ids(idsProperty.value());
+            labels = BpmnActionBindings.names(namesProperty.value());
+        } catch (IllegalArgumentException ex) {
+            // FALLBACK(migration): an invalid pair cannot recover IDs; other valid scopes remain usable.
+            return;
+        }
+        if (ids.size() != labels.size()) return;
+        for (int i = 0; i < ids.size(); i++) {
+            String previous = names.putIfAbsent(ids.get(i), labels.get(i));
+            if (previous != null && !previous.equals(labels.get(i))) conflicting.add(ids.get(i));
         }
     }
 

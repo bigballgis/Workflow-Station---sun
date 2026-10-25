@@ -71,7 +71,7 @@ class ActionDesignComponentImplTest {
                 .id(1L)
                 .functionUnit(functionUnit)
                 .bpmnXml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        "<definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"" +
+                        "<definitions xmlns:custom=\"http://workflow.platform/schema/custom\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"" +
                         " xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
                         "<process id=\"testProcess\" name=\"Test\">" +
                         "<userTask id=\"task1\" name=\"TestTask\">" +
@@ -121,7 +121,7 @@ class ActionDesignComponentImplTest {
                 .id(1L)
                 .functionUnit(functionUnit)
                 .bpmnXml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        "<definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
+                        "<definitions xmlns:custom=\"http://workflow.platform/schema/custom\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
                         "<process id=\"testProcess\" name=\"Test\">" +
                         "<userTask id=\"task1\" name=\"TestTask\">" +
                         "<extensionElements>" +
@@ -237,7 +237,7 @@ class ActionDesignComponentImplTest {
                 .id(1L)
                 .functionUnit(functionUnit)
                 .bpmnXml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        "<definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
+                        "<definitions xmlns:custom=\"http://workflow.platform/schema/custom\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
                         "<process id=\"testProcess\" name=\"Test\">" +
                         "<userTask id=\"task1\" name=\"TestTask\">" +
                         "<extensionElements>" +
@@ -289,7 +289,7 @@ class ActionDesignComponentImplTest {
                 .id(1L)
                 .functionUnit(functionUnit)
                 .bpmnXml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        "<definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"" +
+                        "<definitions xmlns:custom=\"http://workflow.platform/schema/custom\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"" +
                         " xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
                         "<bpmn:process id=\"Process_1\" isExecutable=\"true\">" +
                         "  <bpmn:startEvent id=\"StartEvent_1\" name=\"Start\">" +
@@ -352,7 +352,7 @@ class ActionDesignComponentImplTest {
                 .id(1L)
                 .functionUnit(functionUnit)
                 .bpmnXml("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        "<definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
+                        "<definitions xmlns:custom=\"http://workflow.platform/schema/custom\" xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\">" +
                         "<process id=\"testProcess\" name=\"Test\">" +
                         "<extensionElements>" +
                         "<custom:property name=\"globalActionIds\" value=\"[3,5,7]\"/>" +
