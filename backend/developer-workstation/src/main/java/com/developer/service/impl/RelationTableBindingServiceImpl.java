@@ -1,5 +1,6 @@
 package com.developer.service.impl;
 
+import com.platform.common.relationtable.SystemUserRelationTable;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.RelationViewConfig;
@@ -11,8 +12,8 @@ import com.developer.repository.RelationViewConfigRepository;
 import com.developer.service.RelationTableBindingService;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDTO;
-import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.enums.RelationDataType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RelationTableBindingServiceImpl implements RelationTableBindingService {
 
-    public static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
+    public static final Long SYSTEM_USER_TABLE_ID = SystemUserRelationTable.ID;
     private static final String SYSTEM_USER_TABLE_NAME = "sys_users";
     private static final String SYSTEM_USER_DISPLAY_NAME = "User";
 
@@ -186,29 +187,6 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
     }
 
     private List<RelationFieldDTO> systemUserFields() {
-        return List.of(
-                systemUserField(1, "id", RelationDataType.VARCHAR, true, "User ID"),
-                systemUserField(2, "username", RelationDataType.VARCHAR, false, "Username"),
-                systemUserField(3, "display_name", RelationDataType.VARCHAR, false, "Display Name"),
-                systemUserField(4, "full_name", RelationDataType.VARCHAR, false, "Full Name"),
-                systemUserField(5, "email", RelationDataType.VARCHAR, false, "Email"),
-                systemUserField(6, "employee_id", RelationDataType.VARCHAR, false, "Employee ID"),
-                systemUserField(7, "status", RelationDataType.VARCHAR, false, "Status"),
-                systemUserField(8, "language", RelationDataType.VARCHAR, false, "Language")
-        );
-    }
-
-    private RelationFieldDTO systemUserField(int sortOrder, String fieldName, RelationDataType dataType,
-            boolean primaryKey, String displayName) {
-        return RelationFieldDTO.builder()
-                .id((long) -sortOrder)
-                .fieldName(fieldName)
-                .dataType(dataType)
-                .length(255)
-                .nullable(!primaryKey)
-                .isPrimaryKey(primaryKey)
-                .displayName(displayName)
-                .sortOrder(sortOrder)
-                .build();
+        return SystemUserRelationTable.fields();
     }
 }

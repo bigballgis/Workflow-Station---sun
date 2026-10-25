@@ -47,6 +47,8 @@
 
     <el-dialog
       v-model="showFormDialog"
+      :inert="saving"
+      :before-close="closeFormDialog"
       width="1200px"
       class="email-template-form-dialog"
       destroy-on-close
@@ -60,9 +62,10 @@
             :ariaLabel="t('emailTemplate.guideLinkAria')"
             test-id="email-template-dialog-guide-link"
           />
+          <DesignerUnsavedNotice v-if="isDirty" class="dialog-unsaved-notice" />
         </div>
       </template>
-      <el-form :model="form" label-position="top" class="template-form">
+      <el-form :disabled="saving" :model="form" label-position="top" class="template-form">
         <el-form-item :label="t('emailTemplate.name')" required>
           <el-input v-model="form.name" :placeholder="t('emailTemplate.namePlaceholder')" />
         </el-form-item>
@@ -102,6 +105,7 @@
             :mode="bodyEditorMode"
             @update:model-value="form.bodyHtml = $event"
             @update:mode="bodyEditorMode = $event"
+            @initialized="onBodyInitialized"
           />
         </el-form-item>
         <el-form-item :label="t('emailTemplate.enabled')">
@@ -109,7 +113,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showFormDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button @click="closeFormDialog">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleSave" :loading="saving">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
@@ -117,8 +121,10 @@
 </template>
 
 <script setup lang="ts">
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
 import { ref, reactive, computed, defineAsyncComponent, onMounted } from 'vue'
 import type { ElInput } from 'element-plus'
+import { useDesignerDraft, confirmDesignerLeave } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -166,6 +172,21 @@ const defaultForm = (): EmailTemplateRequest => ({
 })
 
 const form = reactive<EmailTemplateRequest>(defaultForm())
+let initialForm: EmailTemplateRequest = defaultForm()
+let bodyBaselinePending = false
+
+function initializeDraft() {
+  initialForm = { ...form }
+  bodyBaselinePending = bodyEditorMode.value === 'visual'
+  draft.markSaved()
+}
+
+function onBodyInitialized(html: string) {
+  if (!bodyBaselinePending || !showFormDialog.value) return
+  bodyBaselinePending = false
+  // Only the initial body serialization changes the baseline; retain pre-load edits to other fields.
+  draft.markSaved(JSON.stringify({ ...initialForm, bodyHtml: html }))
+}
 
 const listColumns = computed<DesignerListTableColumn<EmailTemplate>[]>(() => [
   {
@@ -223,6 +244,7 @@ function openCreateDialog() {
   editingId.value = null
   bodyEditorMode.value = 'visual'
   Object.assign(form, defaultForm())
+  initializeDraft()
   showFormDialog.value = true
   void loadTemplateVariables().then(() => {
     variableGroups.value = groups.value
@@ -251,16 +273,17 @@ async function openEditDialog(row: EmailTemplate) {
       enabled: row.enabled
     })
   }
+  initializeDraft()
   showFormDialog.value = true
   void loadTemplateVariables().then(() => {
     variableGroups.value = groups.value
   })
 }
 
-async function handleSave() {
+async function persistForm(): Promise<boolean> {
   if (!form.name.trim()) {
     ElMessage.warning(t('emailTemplate.nameRequired'))
-    return
+    return false
   }
   saving.value = true
   try {
@@ -278,10 +301,13 @@ async function handleSave() {
       persistSavedBodyEditorMode(created.data?.id)
     }
     ElMessage.success(t('common.saveSuccess'))
+    draft.markSaved()
     showFormDialog.value = false
     await loadTemplates()
+    return true
   } catch (e) {
     ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('common.saveFailed'))
+    return false
   } finally {
     saving.value = false
   }
@@ -305,6 +331,21 @@ onMounted(() => {
     variableGroups.value = groups.value
   })
 })
+
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify(form),
+  enabled: () => showFormDialog.value,
+  save: persistForm,
+  restore: (snapshot) => { Object.assign(form, JSON.parse(snapshot)); showFormDialog.value = false },
+})
+const isDirty = draft.isDirty
+const handleSave = () => draft.saveChanges(true)
+async function closeFormDialog() {
+  if (saving.value || draft.saving.value) return
+  if (await confirmDesignerLeave(draft, t)) showFormDialog.value = false
+}
+defineExpose(draft)
+
 </script>
 
 <style scoped lang="scss">
@@ -348,6 +389,8 @@ onMounted(() => {
 
 <style lang="scss">
 .email-template-form-dialog.el-dialog {
+  max-width: calc(100vw - 32px);
+
   .el-dialog__body {
     max-height: calc(100vh - 140px);
     overflow-y: auto;

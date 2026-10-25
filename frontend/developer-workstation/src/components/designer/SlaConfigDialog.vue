@@ -1,10 +1,11 @@
 <template>
   <el-dialog
     :model-value="modelValue"
+    :before-close="closeDialog"
     :title="t('table.sla.dialogTitle')"
     width="560px"
     class="sla-config-dialog"
-    @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    @update:model-value="(v: boolean) => { if (!v) closeDialog() }"
     @open="syncFromProps"
   >
     <p class="sla-hint">
@@ -62,7 +63,7 @@
     </el-form>
 
     <template #footer>
-      <el-button @click="emit('update:modelValue', false)">
+      <el-button @click="closeDialog">
         {{ t('common.cancel') }}
       </el-button>
       <el-button
@@ -86,6 +87,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useDesignerDraft, confirmDesignerLeave } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import type { FieldDefinition, SlaConfig } from '@/api/functionUnit'
 import { isTableAuditField } from '@/utils/tableAuditFields'
@@ -128,6 +130,7 @@ function syncFromProps() {
   startDateSource.value = props.config?.startDateSource ?? 'FIELD'
   startDateField.value = exists(props.config?.startDateField)
   dueDateField.value = exists(props.config?.dueDateField)
+  draft.markSaved()
 }
 
 function handleConfirm() {
@@ -143,6 +146,22 @@ function handleClear() {
   emit('confirm', null)
   emit('update:modelValue', false)
 }
+
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify({ startDateSource: startDateSource.value, startDateField: startDateField.value, dueDateField: dueDateField.value }), enabled: () => props.modelValue,
+  save: async () => { if (!canConfirm.value) return false; handleConfirm(); return true },
+  restore: (snapshot) => {
+    const saved = JSON.parse(snapshot)
+    startDateSource.value = saved.startDateSource
+    startDateField.value = saved.startDateField
+    dueDateField.value = saved.dueDateField
+    emit('update:modelValue', false)
+  },
+})
+async function closeDialog() {
+  if (await confirmDesignerLeave(draft, t)) emit('update:modelValue', false)
+}
+defineExpose(draft)
 </script>
 
 <style scoped>

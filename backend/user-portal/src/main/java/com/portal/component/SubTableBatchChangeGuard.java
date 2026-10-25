@@ -131,28 +131,32 @@ final class SubTableBatchChangeGuard {
             if (change == null || !"ASSIGN".equals(change.getOperation())) continue;
             Map<String, Object> control = map(controls.get(change.getBatchControlId()));
             Map<String, Object> config = map(control.get("assignmentConfig"));
-            String assigneeField = text(config.get("assigneeField"));
-            String roleField = text(config.get("roleField"));
-            String buField = text(config.get("buField"));
-            if (assigneeField.isEmpty() && roleField.isEmpty()) throw forbidden("Batch assignment has no frozen field mapping");
             List<Map<String, Object>> rows = rows(tables.get(storeKeyFor(change, scopes)));
             for (SubTableBatchChange.RowPatch patch : change.getRowPatches()) {
                 Map<String, Object> row = findByKey(rows, patch.getRowKey());
                 if (row == null) throw forbidden("Batch assignment row does not match a submitted canonical row");
-                SubTableBatchChange.AssignmentIntent intent = patch.getAssignment();
-                if (intent == null) throw forbidden("Batch assignment row has no intent");
-                if ("PERSON".equals(intent.getMode())) {
-                    if (!same(row.get(assigneeField), intent.getAssigneeId()) || !empty(row.get(roleField)) || !empty(row.get(buField))) {
-                        throw forbidden("Batch assignment canonical fields do not match the person intent");
-                    }
-                } else if ("ROLE".equals(intent.getMode())) {
-                    if (!same(row.get(roleField), intent.getRoleCode()) || !empty(row.get(assigneeField))
-                            || (!buField.isEmpty() && !same(row.get(buField), intent.getBusinessUnitCode()))) {
-                        throw forbidden("Batch assignment canonical fields do not match the role intent");
-                    }
-                }
+                validateAssignmentRow(config, row, patch.getAssignment());
             }
         }
+    }
+
+    /** Shared by raw permission preflight and canonical assignment validation. */
+    static void validateAssignmentRow(Map<?, ?> config, Map<?, ?> row, SubTableBatchChange.AssignmentIntent intent) {
+        String assigneeField = text(config.get("assigneeField"));
+        String roleField = text(config.get("roleField"));
+        String buField = text(config.get("buField"));
+        if (assigneeField.isEmpty() && roleField.isEmpty()) throw forbidden("Batch assignment has no frozen field mapping");
+        if (intent == null) throw forbidden("Batch assignment row has no intent");
+        if ("PERSON".equals(intent.getMode())) {
+            if (!same(row.get(assigneeField), intent.getAssigneeId()) || !empty(row.get(roleField)) || !empty(row.get(buField))) {
+                throw forbidden("Batch assignment canonical fields do not match the person intent");
+            }
+        } else if ("ROLE".equals(intent.getMode())) {
+            if (!same(row.get(roleField), intent.getRoleCode()) || !empty(row.get(assigneeField))
+                    || (!buField.isEmpty() && !same(row.get(buField), intent.getBusinessUnitCode()))) {
+                throw forbidden("Batch assignment canonical fields do not match the role intent");
+            }
+        } else throw forbidden("Batch assignment mode is invalid");
     }
 
     @SuppressWarnings("unchecked")

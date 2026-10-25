@@ -172,19 +172,13 @@ public class FunctionUnitExporter {
                     .toList());
         }
 
+        List<Map<String, Object>> relationTableStructures = relationStructures(forms);
+        Map<Long, String> relationTableNames = relationNames(relationTableStructures);
         payload.put("forms", forms.stream()
                 .map(form -> serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of()),
-                        tableIdToName))
+                        tableIdToName, relationTableNames))
                 .toList());
 
-        List<Long> relationTableIds = forms.stream()
-                .filter(f -> f.getTableBindings() != null)
-                .flatMap(f -> f.getTableBindings().stream())
-                .map(FormTableBinding::getRelationTableId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
-        List<Map<String, Object>> relationTableStructures = relationTablePortability.exportByIds(relationTableIds);
         if (!relationTableStructures.isEmpty()) {
             payload.put("relationTables", relationTableStructures);
         }
@@ -326,13 +320,15 @@ public class FunctionUnitExporter {
                 addZipEntry(zos, relationsFile, relationsData);
             }
 
+            List<Map<String, Object>> relationTableStructures = relationStructures(forms);
+            Map<Long, String> relationTableNames = relationNames(relationTableStructures);
             // Export form definitions
             int formIndex = 0;
             for (FormDefinition form : forms) {
                 String fileName = "forms/form_" + formIndex + ".json";
                 byte[] data = objectMapper.writeValueAsBytes(
                         serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of()),
-                                tableIdToName));
+                                tableIdToName, relationTableNames));
                 fileContents.put(fileName, data);
                 addZipEntry(zos, fileName, data);
                 formFiles.add(fileName);
@@ -341,14 +337,6 @@ public class FunctionUnitExporter {
 
             // Export referenced relation-table (rt_) structures: collect relationTableId from RELATED bindings,
             // serialize their structure by table_name so it can be re-created/remapped on import.
-            List<Long> relationTableIds = forms.stream()
-                    .filter(f -> f.getTableBindings() != null)
-                    .flatMap(f -> f.getTableBindings().stream())
-                    .map(FormTableBinding::getRelationTableId)
-                    .filter(java.util.Objects::nonNull)
-                    .distinct()
-                    .toList();
-            List<Map<String, Object>> relationTableStructures = relationTablePortability.exportByIds(relationTableIds);
             if (!relationTableStructures.isEmpty()) {
                 String relTablesFile = "relation-tables/relation_tables.json";
                 byte[] relTablesData = objectMapper.writeValueAsBytes(relationTableStructures);
@@ -625,8 +613,22 @@ public class FunctionUnitExporter {
         return map;
     }
 
+    private List<Map<String, Object>> relationStructures(List<FormDefinition> forms) {
+        List<Long> ids = forms.stream().filter(form -> form.getTableBindings() != null)
+                .flatMap(form -> form.getTableBindings().stream())
+                .map(FormTableBinding::getRelationTableId).filter(java.util.Objects::nonNull).distinct().toList();
+        return relationTablePortability.exportByIds(ids);
+    }
+
+    private Map<Long, String> relationNames(List<Map<String, Object>> structures) {
+        return structures.stream().collect(Collectors.toMap(
+                table -> ((Number) table.get("relationTableId")).longValue(),
+                table -> (String) table.get("tableName")));
+    }
+
     private Map<String, Object> serializeForm(
-            FormDefinition form, List<FormStageBinding> stageBindings, Map<Long, String> tableIdToName) {
+            FormDefinition form, List<FormStageBinding> stageBindings, Map<Long, String> tableIdToName,
+            Map<Long, String> relationTableNames) {
         Map<String, Object> map = new HashMap<>();
         map.put("formId", form.getId());
         map.put("formName", form.getFormName());
@@ -639,7 +641,7 @@ public class FunctionUnitExporter {
         map.put("configJson", form.getConfigJson());
         List<FormTableBinding> bindings = form.getTableBindings() == null ? List.of() : form.getTableBindings();
         map.put("tableBindings", bindings.stream()
-                .map(binding -> serializeFormTableBinding(binding, bindings, tableIdToName))
+                .map(binding -> serializeFormTableBinding(binding, bindings, tableIdToName, relationTableNames))
                 .toList());
         if (stageBindings != null && !stageBindings.isEmpty()) {
             map.put("stageBindings", stageBindings.stream().map(this::serializeFormStageBinding).toList());
@@ -650,13 +652,15 @@ public class FunctionUnitExporter {
     private Map<String, Object> serializeFormTableBinding(
             FormTableBinding binding,
             List<FormTableBinding> formBindings,
-            Map<Long, String> tableIdToName) {
+            Map<Long, String> tableIdToName, Map<Long, String> relationTableNames) {
         Map<String, Object> map = new HashMap<>();
         map.put("bindingId", binding.getId());
         map.put("tableId", binding.getTable() == null ? null : binding.getTable().getId());
         map.put("bindingType", binding.getBindingType().name());
         map.put("bindingMode", binding.getBindingMode().name());
-        map.put("tableName", binding.getTableName());
+        map.put("tableName", binding.getRelationTableId() == null ? binding.getTableName()
+                : java.util.Objects.requireNonNull(relationTableNames.get(binding.getRelationTableId()),
+                        "Referenced relation table structure is missing"));
         map.put("relationTableId", binding.getRelationTableId());
         map.put("foreignKeyField", binding.getForeignKeyField());
         map.put("sortOrder", binding.getSortOrder());

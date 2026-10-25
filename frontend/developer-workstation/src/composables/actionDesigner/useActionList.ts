@@ -73,7 +73,7 @@ export function useActionList(options: UseActionListOptions) {
 
   function handleSelectAction(row: ActionDefinition) {
     selectedAction.value = {
-      ...row,
+      ...JSON.parse(JSON.stringify(row)),
       buttonColor: String(row.buttonColor || '').trim()
         ? row.buttonColor
         : defaultActionButtonColor(row.actionType),
@@ -95,7 +95,7 @@ export function useActionList(options: UseActionListOptions) {
     selectedAction.value = null
   }
 
-  async function handleCreateAction() {
+  async function handleCreateAction(): Promise<boolean> {
     try {
       await store.createAction(functionUnitId, {
         actionName: createForm.actionName,
@@ -112,14 +112,16 @@ export function useActionList(options: UseActionListOptions) {
         buttonColor: defaultActionButtonColor('APPROVE'),
         description: '',
       })
-      loadActions()
+      await loadActions()
+      return true
     } catch (e: any) {
       ElMessage.error(e.response?.data?.message || t('action.createFailed'))
+      return false
     }
   }
 
-  async function handleSaveAction() {
-    if (!selectedAction.value) return
+  async function handleSaveAction(): Promise<boolean> {
+    if (!selectedAction.value) return false
 
     try {
       await store.updateAction(functionUnitId, selectedAction.value.id, {
@@ -130,9 +132,11 @@ export function useActionList(options: UseActionListOptions) {
         configJson: JSON.parse(JSON.stringify(actionConfig))
       })
       ElMessage.success(t('action.saveSuccess'))
-      loadActions()
+      await loadActions()
+      return true
     } catch (e: any) {
       ElMessage.error(e.response?.data?.message || t('action.saveFailed'))
+      return false
     }
   }
 

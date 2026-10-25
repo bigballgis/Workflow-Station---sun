@@ -75,16 +75,25 @@ final class BatchTaskFormTransactionHarness {
                 jpa == null ? new DataSourceTransactionManager(source) : jpa.transactionManager());
         com.portal.testsupport.PortalVersionTestSupport.task(component);
         TaskFormDefinitionLoader loader = mock(TaskFormDefinitionLoader.class);
-        when(loader.fetchTaskFormByStageId(eq("review"), eq("synthetic-process"), any())).thenReturn(
+        when(loader.fetchTaskFormByStageId(eq("review"), eq("synthetic-process"), any())).thenAnswer(invocation ->
                 Map.of("sourceId", "form-one", "fieldPermissions", Map.of("101:caption", "EDITABLE"), "configJson", Map.of(),
                         "publishedFieldPermissions", Map.of("101:caption", readonlyCaption ? "READONLY" : "EDITABLE"),
-                        "tableBindings", List.of(Map.of("bindingId", "101", "tableName", "lines", "bindingMode", "EDITABLE"))));
+                        "tableBindings", List.of(Map.of("bindingId", "101", "tableName", "lines", "bindingMode", "EDITABLE",
+                                "bindingType", "SUB", "primaryKeyFields", List.of(pk), "columns", currentFields()))));
         ReflectionTestUtils.setField(component, "formDefinitionLoader", loader);
         ReflectionTestUtils.setField(component, "requestIdEnricher", mock(RequestIdEnricher.class));
         SubTableWriteDesign design = mock(SubTableWriteDesign.class);
-        when(design.resolve(any(), any())).thenReturn(Map.of());
+        when(design.resolve(any(), any())).thenReturn(Map.of("101", new SubTableWriteDesign.Binding(
+                "101", "dw:lines", null, null, null, List.of(pk), List.of(), "structuralFk")));
         ReflectionTestUtils.setField(component, "subTableWriteIsolation", new SubTableWriteIsolation(
                 new MiSubTaskSubTableRowMerger(metadata), new SubTableBindingScopeGuard(), design));
+    }
+
+    private Object currentFields() throws Exception {
+        Map<?, ?> runtime = (Map<?, ?>) read().get(SubTableWriteIsolation.BATCH_RUNTIME_FIELD);
+        Map<?, ?> form = (Map<?, ?>) ((Map<?, ?>) runtime.get("forms")).get("form-one");
+        Map<?, ?> control = (Map<?, ?>) ((List<?>) form.get("controls")).get(0);
+        return ((Map<?, ?>) control.get("rowDesign")).get("fields");
     }
 
     private ProcessInstanceRepository repository(boolean failAfterWrite) {
@@ -130,7 +139,12 @@ final class BatchTaskFormTransactionHarness {
         List<Map<String, Object>> rows = mapper.convertValue(tables.get("dw:lines"), new TypeReference<List<Map<String, Object>>>() { });
         rows.get(0).put("caption", value);
         tables.put("dw:lines", rows);
-        component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables));
+        var scope = new SubTableBindingScope();
+        scope.setBindingId("101");
+        scope.setStoreKey("dw:lines");
+        scope.setRowKeys(rows.stream().map(row -> Map.of(pk, row.get(pk))).toList());
+        component.submitTaskForm("synthetic-task", "synthetic-user", Map.of("caseKey", "parent-one", "__subTables__", tables),
+                null, List.of(), List.of(scope));
     }
 
     @SuppressWarnings("unchecked")

@@ -2,16 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import LookupField from '../LookupField.vue'
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 vi.mock('@/api/relationTable', () => ({
   relationTableApi: {
     searchForLookup: vi.fn().mockResolvedValue({ data: [] }),
     getViewFields: vi.fn().mockResolvedValue([]),
+    getFieldDefinitions: vi.fn().mockResolvedValue({ data: [{ fieldName: 'id', isPrimaryKey: true }] }),
   },
 }))
 
 vi.mock('../fetchLookupRowByPrimaryKey', () => ({
   fetchLookupRowByPrimaryKey: vi.fn().mockResolvedValue(null),
+  resolveLookupPrimaryKeyField: vi.fn().mockResolvedValue('id'),
 }))
 
 const baseProps = {
@@ -23,6 +26,31 @@ const baseProps = {
 }
 
 describe('LookupField modelValue sync', () => {
+  it('retries a failed identity request when the user focuses again', async () => {
+    const { resolveLookupPrimaryKeyField } = await import('../fetchLookupRowByPrimaryKey')
+    vi.mocked(resolveLookupPrimaryKeyField).mockRejectedValueOnce(new Error('temporary')).mockResolvedValue('id')
+    const wrapper = mount(LookupField, {
+      props: { ...baseProps, modelValue: null },
+      global: { stubs: { ElInput: { template: '<input @focus="$emit(\'focus\')" />' }, ElIcon: true, ElTable: true, ElTableColumn: true, Teleport: true } },
+    })
+    await flushPromises()
+    await wrapper.find('input').trigger('focus')
+    await flushPromises()
+    expect(resolveLookupPrimaryKeyField).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+  it('hydrates an id using the table primary key when search uses username', async () => {
+    const { fetchLookupRowByPrimaryKey } = await import('../fetchLookupRowByPrimaryKey')
+    vi.mocked(fetchLookupRowByPrimaryKey).mockResolvedValueOnce({ id: 'person-42', username: 'Alice' })
+    const wrapper = mount(LookupField, {
+      props: { ...baseProps, searchFields: ['username'], selectedDisplayField: 'username', modelValue: 'person-42' },
+      global: { stubs: { ElInput: true, ElIcon: true, ElTable: true, ElTableColumn: true, Teleport: true } },
+    })
+    await flushPromises()
+    expect(fetchLookupRowByPrimaryKey).toHaveBeenLastCalledWith(1, 'person-42', expect.not.objectContaining({ primaryKeyField: 'username' }))
+    expect(wrapper.text()).toContain('Alice')
+    wrapper.unmount()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
   })

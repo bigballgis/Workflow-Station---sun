@@ -36,7 +36,7 @@ export function columnMinWidth(col: Column): number {
 
 /**
  * 关联表主键列名（**目标表**，不是宿主子表）。设计器显式配置优先，其余与
- * {@link getLookupPrimaryKeyFieldFromProps} / LookupField.pkField() 同一优先级：searchFields[0] → id。
+ * No schema means no synthetic row; async hydration resolves the target table identity.
  */
 function lookupPrimaryKeyField(col: Column): string {
   const explicit = typeof col.props?.primaryKeyField === 'string' ? col.props.primaryKeyField.trim() : ''
@@ -52,7 +52,8 @@ function scalarCacheKey(tableId: number, pkField: string, rawValue: string | num
 export function lookupSelectedRow(col: Column, rawValue: unknown): Record<string, any> | null {
   if (rawValue == null || rawValue === '') return null
   if (typeof rawValue === 'object' && !Array.isArray(rawValue)) return rawValue as Record<string, any>
-  return { [lookupPrimaryKeyField(col)]: rawValue }
+  const key = lookupPrimaryKeyField(col)
+  return key ? { [key]: rawValue } : null
 }
 
 /** 回填视图列（与 LookupField/designer 的 viewFields 同构）。 */
@@ -159,7 +160,6 @@ export function useSubTableLookupCells(props: SubTableFieldProps, rows: Ref<any[
             searchFields: (col.props?.searchFields as string[]) || [],
             displayField: (col.props?.displayField as string) || '',
             filterConditions: (col.props?.filterConditions as import('@/utils/lookupFilterConditions').LookupFilterCondition[]) || [],
-            primaryKeyField: pk,
           }).then(loaded => {
             if (loaded) resolvedScalars[ck] = loaded
           }),

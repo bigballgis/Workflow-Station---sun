@@ -1,5 +1,7 @@
 export default {
   fuDocumentsGuide: {
+    unsavedTitle: '未保存的设计更改',
+    unsavedBody: '离开 Process、Form、Table、View、Action、Decision、Connections、Email Templates 和 Email Monitors 设计器时，会检查未保存的编辑。选择保存会先保存再离开；校验或保存失败时留在编辑器。选择放弃会恢复已保存内容并离开；关闭提示框则继续编辑。返回列表、切换视图、关闭编辑弹窗也会检查。将内容改回原值后无需保存。表定义与表关系分别保存，Action 配置与节点绑定也分别保存：保存一处不会保存另一处。Request ID、SLA、View Filter 弹窗先将配置应用到父编辑器，再保存父设计才能持久化。Automation 使用独立编辑器，不属于此统一确认范围。浏览器刷新和关闭标签页不在此确认范围内。',
     pageTitle: 'Requirements 与 Function Unit Design',
     crumb: '开发工作站 · 功能单元 · Function Unit Settings',
     intro:

@@ -1,5 +1,5 @@
 <template>
-  <div class="action-designer">
+  <div class="action-designer" :inert="draftSaving">
     <div class="designer-toolbar">
       <el-button
         type="primary"
@@ -9,10 +9,11 @@
       </el-button>
       <el-button
         :loading="loading"
-        @click="loadActions"
+        @click="refreshActions"
       >
         <el-icon><Refresh /></el-icon> {{ t('action.refresh') }}
       </el-button>
+      <DesignerUnsavedNotice v-if="isDirty" class="toolbar-unsaved-notice" />
     </div>
     
     <div
@@ -488,7 +489,10 @@
 
     <!-- Create Action Dialog -->
     <ActionCreateDialog
-      v-model="showCreateDialog"
+      :model-value="showCreateDialog"
+      :before-close="closeCreateDialog"
+      :saving="draftSaving"
+      @update:model-value="(open: boolean) => { if (!open) closeCreateDialog() }"
       :create-form="createForm"
       @action-type-change="handleCreateActionTypeChange"
       @confirm="handleCreateAction"
@@ -510,7 +514,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { useDesignerDraft, combineDesignerDrafts, confirmDesignerLeave } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import ActionColorField from './action-designer/ActionColorField.vue'
@@ -548,7 +554,7 @@ const {
   parseActionBindingsFromBpmn,
   getActionBindingSummary,
   loadActionBinding,
-  handleSaveBinding,
+  handleSaveBinding: persistBinding,
 } = useActionNodeBinding({ functionUnitId: props.functionUnitId, selectedAction, store, t })
 
 // 动作配置
@@ -580,12 +586,12 @@ const {
   createForm,
   actionTypeLabel,
   loadActions,
-  handleSelectAction,
+  handleSelectAction: selectAction,
   handleSelectedActionTypeChange,
   handleCreateActionTypeChange,
-  handleBackToList,
-  handleCreateAction,
-  handleSaveAction,
+  handleBackToList: backToList,
+  handleCreateAction: persistCreate,
+  handleSaveAction: persistAction,
   handleDeleteAction,
 } = useActionList({
   functionUnitId: props.functionUnitId,
@@ -652,6 +658,64 @@ onMounted(async () => {
     loadPostEmailFilterFields(),
   ])
 })
+
+const actionDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify({
+    actionName: selectedAction.value?.actionName, actionType: selectedAction.value?.actionType,
+    buttonColor: selectedAction.value?.buttonColor, description: selectedAction.value?.description,
+    config: actionConfig,
+  }),
+  enabled: () => selectedAction.value !== null,
+  save: persistAction,
+  restore: (snapshot) => {
+    const saved = JSON.parse(snapshot)
+    if (selectedAction.value) Object.assign(selectedAction.value, {
+      actionName: saved.actionName, actionType: saved.actionType,
+      buttonColor: saved.buttonColor, description: saved.description,
+    })
+    for (const key of Object.keys(actionConfig)) delete actionConfig[key]
+    Object.assign(actionConfig, saved.config)
+  },
+})
+const bindingDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify({ bindingType: bindingType.value, selectedNodeIds: [...selectedNodeIds.value].sort() }),
+  enabled: () => selectedAction.value !== null,
+  save: persistBinding,
+  restore: (snapshot) => {
+    const saved = JSON.parse(snapshot)
+    bindingType.value = saved.bindingType
+    selectedNodeIds.value = saved.selectedNodeIds
+  },
+})
+const createDraft = useDesignerDraft({
+  snapshot: () => JSON.stringify(createForm), enabled: () => showCreateDialog.value,
+  save: persistCreate,
+  restore: (snapshot) => { Object.assign(createForm, JSON.parse(snapshot)); showCreateDialog.value = false },
+})
+watch(showCreateDialog, (open) => { if (open) createDraft.markSaved() }, { flush: 'sync' })
+const drafts = combineDesignerDrafts([actionDraft, bindingDraft, createDraft])
+const isDirty = computed(() => actionDraft.isDirty.value || bindingDraft.isDirty.value || createDraft.isDirty.value)
+const draftSaving = computed(() => actionDraft.saving.value || bindingDraft.saving.value || createDraft.saving.value)
+const handleSaveAction = () => actionDraft.saveChanges(true)
+const handleSaveBinding = () => bindingDraft.saveChanges(true)
+const handleCreateAction = () => createDraft.saveChanges(true)
+async function handleSelectAction(row: ActionDefinition) {
+  if (!(await confirmDesignerLeave(drafts, t))) return
+  selectAction(row)
+  await nextTick()
+  actionDraft.markSaved()
+  bindingDraft.markSaved()
+}
+async function handleBackToList() {
+  if (await confirmDesignerLeave(drafts, t)) backToList()
+}
+async function refreshActions() {
+  if (await confirmDesignerLeave(drafts, t)) await loadActions()
+}
+async function closeCreateDialog() {
+  if (!draftSaving.value && await confirmDesignerLeave(createDraft, t)) showCreateDialog.value = false
+}
+defineExpose(drafts)
 </script>
 
 <style lang="scss" scoped>
@@ -660,7 +724,15 @@ onMounted(async () => {
 }
 
 .designer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 16px;
+}
+
+.toolbar-unsaved-notice {
+  margin-left: 12px;
 }
 
 .editor-header {

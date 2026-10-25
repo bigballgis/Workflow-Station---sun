@@ -28,7 +28,6 @@ interface UseTableEditorOptions {
   validateName: (name: string) => boolean
   existingTableNames: (excludeId?: number) => string[]
   assertTableNameAvailable: (tableName: string, excludeTableId?: number) => Promise<boolean>
-  loadTables: () => Promise<void> | void
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -39,7 +38,7 @@ interface UseTableEditorOptions {
 export function useTableEditor(options: UseTableEditorOptions) {
   const {
     functionUnitId, store, selectedTable, tableNameTouched,
-    validateName, existingTableNames, assertTableNameAvailable, loadTables, t,
+    validateName, existingTableNames, assertTableNameAvailable, t,
   } = options
 
   const hasDecimalFields = computed(() => {
@@ -88,9 +87,10 @@ export function useTableEditor(options: UseTableEditorOptions) {
 
   function handleSelectTable(row: TableDefinition) {
     tableNameTouched.value = !!row.id
+    const draft: TableDefinition = JSON.parse(JSON.stringify(row))
     selectedTable.value = {
-      ...row,
-      fieldDefinitions: [...(row.fieldDefinitions || []).map(f => normalizeFieldRow(f))],
+      ...draft,
+      fieldDefinitions: draft.fieldDefinitions.map(normalizeFieldRow),
     }
   }
 
@@ -201,8 +201,8 @@ export function useTableEditor(options: UseTableEditorOptions) {
     row.computedField = undefined
   }
 
-  async function handleSaveTable() {
-    if (!selectedTable.value) return
+  async function handleSaveTable(): Promise<boolean> {
+    if (!selectedTable.value) return false
     // MAIN tables must configure Request ID before saving — block with a popup.
     if (selectedTable.value.tableType === 'MAIN' && !hasRequestIdConfig(selectedTable.value.requestIdConfig)) {
       await ElMessageBox.alert(
@@ -210,21 +210,21 @@ export function useTableEditor(options: UseTableEditorOptions) {
         t('table.requestId.requiredTitle'),
         { type: 'warning', confirmButtonText: t('common.confirm') },
       ).catch(() => {})
-      return
+      return false
     }
     // Validate table name
     if (!validateName(selectedTable.value.tableName)) {
       ElMessage.warning(t('table.invalidTableName'))
-      return
+      return false
     }
     if (!await assertTableNameAvailable(selectedTable.value.tableName, selectedTable.value.id)) {
-      return
+      return false
     }
     // Validate field names
     const invalidField = selectedTable.value.fieldDefinitions.find(f => f.fieldName && !validateName(f.fieldName))
     if (invalidField) {
       ElMessage.warning(t('table.invalidFieldName', { name: invalidField.fieldName }))
-      return
+      return false
     }
     // Validate PK-Nullable constraint
     const pkFields = selectedTable.value.fieldDefinitions.filter(
@@ -234,20 +234,20 @@ export function useTableEditor(options: UseTableEditorOptions) {
       // 只有一个主键：该字段的Nullable必须为未勾选
       if (pkFields[0].nullable !== false) {
         ElMessage.warning(t('table.pkNotNullable'))
-        return
+        return false
       }
     } else if (pkFields.length >= 2) {
       // 联合主键：至少有一个主键字段的Nullable不能勾选
       const notNullableCount = pkFields.filter(f => f.nullable !== true).length
       if (notNullableCount === 0) {
         ElMessage.warning(t('table.compositePkNotNullable'))
-        return
+        return false
       }
     }
     const computedWarning = computedFieldSaveWarning(selectedTable.value.fieldDefinitions, t)
     if (computedWarning) {
       ElMessage.warning({ message: computedWarning, duration: 8000, showClose: true })
-      return
+      return false
     }
     try {
       // 转换数据格式：将 fieldDefinitions 转换为 fields
@@ -309,21 +309,15 @@ export function useTableEditor(options: UseTableEditorOptions) {
       // 更新当前选中的表，使用返回的数据
       // result 已经是 TableDefinition（store.updateTable 返回 res.data，而 res 是 ApiResponse）
       if (result) {
-        selectedTable.value = {
-          ...result,
-          fieldDefinitions: [...(result.fieldDefinitions || []).map(f => normalizeFieldRow(f))]
-        }
+        handleSelectTable(result)
         console.log('[TableDesigner] Updated selected table after save with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
       } else {
-        console.warn('[TableDesigner] Save result is null or undefined')
+        throw new Error('Table save returned no definition')
       }
 
       ElMessage.success(t('common.success'))
 
-      // Delay loading list to ensure transaction is committed
-      setTimeout(() => {
-      loadTables()
-      }, 500)
+      return true
     } catch (e: unknown) {
       console.error('[TableDesigner] Save failed:', e)
       ElMessage.error({
@@ -331,6 +325,7 @@ export function useTableEditor(options: UseTableEditorOptions) {
         duration: 8000,
         showClose: true,
       })
+      return false
     }
   }
 

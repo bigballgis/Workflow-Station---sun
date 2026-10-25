@@ -159,6 +159,11 @@
         </WorkflowDiagramCollapsibleSection>
       </div>
 
+      <el-alert v-if="subTableSaveError" type="error" :closable="false" show-icon>
+        <template #title>{{ t('task.subTableSaveFailed') }}</template>
+        <el-button size="small" @click="isMiSubTaskMode ? saveCurrentTaskFormWithMiPersist() : retrySubTableAutosave()">{{ t('task.retrySave') }}</el-button>
+      </el-alert>
+
       <el-tabs
         v-if="detailUiPhase >= 2"
         v-model="activeDetailTab"
@@ -508,7 +513,8 @@
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, computed, nextTick, ref, watch, defineAsyncComponent } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { ProcessNode } from '@/components/ProcessDiagram.vue'
@@ -707,6 +713,19 @@ const resolveMiRowOwnershipPredicate = (binding: unknown) => {
 }
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
+const { subTableSaveError, retrySubTableAutosave } = taskForm
+function warnUnsavedSubTables(event: BeforeUnloadEvent) {
+  if (!subTableSaveError.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+onBeforeRouteLeave(async () => {
+  if (!subTableSaveError.value) return true
+  try {
+    await ElMessageBox.confirm(t('task.confirmCancel'), t('common.confirm'), { type: 'warning' })
+    return true
+  } catch { return false }
+})
 const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, buildCurrentTaskFormSubmitPayload, recordSubTableBatchChange, clearAutosaveTimer: clearFormAutosaveTimer, syncSubTableRowVersionsBeforeSubmit, resumeSubTableAutosave } = taskForm
 
 /** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
@@ -947,11 +966,13 @@ function confirmReassignTask(targetUserId: string) {
 // custom action handlers moved to useCustomActions composable
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', warnUnsavedSubTables)
   await reconcilePortalWorkspaceSession()
   await loadTaskDetail()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnUnsavedSubTables)
   clearFormAutosaveTimer()
   clearBpmnParseCache()
   disconnectDiagramViewportObserver()

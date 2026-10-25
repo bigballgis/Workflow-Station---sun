@@ -589,7 +589,7 @@ export default {
       'Switch on the connection. Off: Email Monitor cannot poll this mailbox. Turn on before Deploy.',
     templateTitle: 'Create a monitor template',
     templateBody:
-      'Open Email Monitors. Set the rule name, inbound mailbox, folder, poll interval (seconds; minimum 30), and System Initiator. Tick “Send to manual review when required fields are missing” if incomplete mail should wait for a person. Do not set From or Subject filters here, and do not set Process Key on the template.',
+      'Open Email Monitors. Set the rule name, inbound mailbox, folder, poll interval (seconds; minimum 30), and System Initiator. Tick “Send to manual review when required fields are missing” if incomplete mail should wait for a person. Do not set From or Subject filters here, and do not set Process Key on the template. Every extraction rule needs a target field. Each sub-table block needs a binding and at least one mapped column; unfinished rows block Save. Closing the dialog checks unfinished edits too. Choose Discard only when you want to lose them.',
     templateCatalogLead:
       'Field catalog — New / Edit Monitor. Rows marked not on this form belong only on the Start Event.',
     templateSample: 'Typical folder / label in the screenshot.',

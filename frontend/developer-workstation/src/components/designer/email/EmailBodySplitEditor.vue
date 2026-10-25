@@ -18,6 +18,7 @@
           :model-value="modelValue"
           :function-unit-id="functionUnitId"
           @update:model-value="emit('update:modelValue', $event)"
+          @initialized="emit('initialized', $event)"
         />
         <div v-else class="ebs-html-pane">
           <div class="erb-toolbar-row">
@@ -99,6 +100,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'update:mode', value: EmailBodyEditorMode): void
+  (e: 'initialized', value: string): void
 }>()
 
 const { t } = useI18n()

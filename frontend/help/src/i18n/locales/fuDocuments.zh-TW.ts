@@ -1,5 +1,7 @@
 export default {
   fuDocumentsGuide: {
+    unsavedTitle: '未儲存的設計變更',
+    unsavedBody: '離開 Process、Form、Table、View、Action、Decision、Connections、Email Templates 和 Email Monitors 設計器時，會檢查未儲存的編輯。選擇儲存會先儲存再離開；驗證或儲存失敗時留在編輯器。選擇放棄會還原已儲存內容並離開；關閉提示框則繼續編輯。返回清單、切換檢視、關閉編輯對話框也會檢查。將內容改回原值後無需儲存。資料表定義與關係分別儲存，Action 設定與節點繫結也分別儲存：儲存一處不會儲存另一處。Request ID、SLA、View Filter 對話框先將設定套用到父編輯器，再儲存父設計才能持久化。Automation 使用獨立編輯器，不屬於此統一確認範圍。瀏覽器重新整理和關閉分頁不在此確認範圍內。',
     pageTitle: 'Requirements 與 Function Unit Design',
     crumb: '開發工作站 · 功能單元 · Function Unit Settings',
     intro:

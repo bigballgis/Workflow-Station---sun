@@ -3,6 +3,21 @@ import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 
 const resolved = new Map<string, Record<string, any> | null>()
 const inflight = new Map<string, Promise<Record<string, any> | null>>()
+const identities = new Map<number, Promise<string>>()
+
+/** Search/display columns are never row identities. Share schema reads across lookup cells. */
+export function resolveLookupPrimaryKeyField(tableId: number): Promise<string> {
+  const existing = identities.get(tableId)
+  if (existing) return existing
+  const pending = relationTableApi.getFieldDefinitions(tableId).then(res => {
+    const keys = res.data.filter(field => field.isPrimaryKey).map(field => field.fieldName)
+    if (keys.length !== 1) throw new Error('Lookup requires one declared primary key')
+    return keys[0]
+  }).catch(error => { identities.delete(tableId); throw error })
+  if (identities.size >= 128) identities.delete(identities.keys().next().value!)
+  identities.set(tableId, pending)
+  return pending
+}
 
 function makeCacheKey(tableId: number, pkField: string, value: string): string {
   return `${tableId}:${pkField}:${value}`
@@ -19,11 +34,9 @@ export async function fetchLookupRowByPrimaryKey(
     searchFields: string[]
     displayField: string
     filterConditions?: LookupFilterCondition[]
-    /** 默认 id；与 {@link PortalRelationTableServiceImpl} 中列名白名单一致 */
-    primaryKeyField?: string
   }
 ): Promise<Record<string, any> | null> {
-  const pk = (options.primaryKeyField || 'id').trim() || 'id'
+  const pk = await resolveLookupPrimaryKeyField(tableId)
   const sv = String(scalar).trim()
   if (!sv || !Number.isFinite(Number(tableId))) return null
 
@@ -57,7 +70,7 @@ export async function fetchLookupRowByPrimaryKey(
       // confidently showing an unrelated row (previously `?? list[0]` displayed the first option
       // for every value beyond the fetched window). See LookupField scalar/multi hydrate + list cells.
       const exact = list.find(
-        r => String((r as Record<string, unknown>)[pk] ?? (r as Record<string, unknown>).id ?? '').trim() === sv
+        r => String((r as Record<string, unknown>)[pk] ?? '').trim() === sv
       )
       if (!exact) {
         resolved.set(ck, null)

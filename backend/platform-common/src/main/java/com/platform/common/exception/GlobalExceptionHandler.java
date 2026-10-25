@@ -47,6 +47,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(errorResponse));
     }
 
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<?>> handleOptimisticLock(
+            org.springframework.dao.OptimisticLockingFailureException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        log.warn("Concurrent write rejected [{}]", traceId);
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("DATA_CONFLICT")
+                .message("Data was modified by another save; reload and retry")
+                .timestamp(Instant.now()).traceId(traceId).path(getPath(request)).build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(errorResponse));
+    }
+
     // ==================== Auth & Authorization Exceptions ====================
     
     @ExceptionHandler(AuthenticationException.class)

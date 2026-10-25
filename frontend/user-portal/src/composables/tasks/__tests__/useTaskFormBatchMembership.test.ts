@@ -7,6 +7,17 @@ vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), error: vi.fn() }
 vi.mock('@/api/processForm', () => ({ submitTaskForm: vi.fn(), getTaskFormData: vi.fn() }))
 
 describe('batch membership submit payload', () => {
+  it.each([true, false])('ordinary single-binding writes retain version claims with batch runtime %s', enabled => {
+    const saved = { entry_key: 'A', amount: 1, _wsRowVersion: 4 }
+    const form = useTaskForm({ subTableBindings: ref([{ bindingId: 2, tableId: 20, tableName: 'lines',
+      bindingMode: 'EDITABLE', primaryKeyFields: ['entry_key'], data: [{ ...saved, amount: 2 }] }]),
+      isMiSubTaskMode: ref(false), isCompletedTask: ref(false), effectiveTaskId: ref('task-1'),
+      taskFormDTO: ref({ subTableBatchRuntimeEnabled: enabled, fieldValues: { __subTables__: { 'dw:lines': [saved] } } }) })
+    form.formData.value = { __subTables__: { 'dw:lines': [{ ...saved, amount: 2 }] } }
+    expect(form.buildCurrentTaskFormSubmitPayload().subTableBindingScopes).toEqual([
+      { bindingId: '2', storeKey: 'dw:lines', rowKeys: [{ entry_key: 'A' }], emptied: false },
+    ])
+  })
   it('omits read-only display copies only for enhanced instances, without erasing page data', async () => {
     const parent = [{ parent_key: 'P1', assignee_display_name: 'Synthetic display', __subTables__: {} }]
     const child = [{ line_key: 'L1', description: 'edited', _wsRowVersion: 1 }]

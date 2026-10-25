@@ -2,7 +2,7 @@ type LeaveConfirmation = () => boolean | Promise<boolean>
 
 let activeLeaveConfirmation: LeaveConfirmation | null = null
 
-/** Lets shell-level navigation ask the mounted Process/Form designer before leaving. */
+/** Lets shell-level navigation ask the active designer before leaving. */
 export function registerUnsavedDesignerLeaveConfirmation(confirm: LeaveConfirmation): () => void {
   activeLeaveConfirmation = confirm
   return () => {

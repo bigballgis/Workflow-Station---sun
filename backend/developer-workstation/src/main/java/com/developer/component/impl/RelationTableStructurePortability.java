@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.platform.common.relationtable.SystemUserRelationTable;
 import com.developer.exception.DeveloperBusinessException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,6 +56,9 @@ public class RelationTableStructurePortability {
     }
 
     private Map<String, Object> exportOne(Long id) {
+        if (id == SystemUserRelationTable.ID) {
+            return SystemUserRelationTable.snapshot();
+        }
         List<Map<String, Object>> defs = jdbcTemplate.query(
                 "SELECT id, table_name, display_name, description FROM rt_table_definitions WHERE id = ?",
                 (rs, n) -> {
@@ -134,6 +138,11 @@ public class RelationTableStructurePortability {
         }
         // Pass 1: upsert table definitions + fields (ref_table_id resolved in pass 2 once all ids exist).
         for (Map<String, Object> table : relationTables) {
+            if (SystemUserRelationTable.matches(table)) {
+                nameToId.put(SystemUserRelationTable.NAME,
+                        SystemUserRelationTable.ID);
+                continue;
+            }
             String tableName = (String) table.get("tableName");
             if (tableName == null || tableName.isBlank()) {
                 continue;
@@ -144,6 +153,7 @@ public class RelationTableStructurePortability {
         }
         // Pass 2: resolve each field's refTableName → ref_table_id now that all tables exist.
         for (Map<String, Object> table : relationTables) {
+            if (SystemUserRelationTable.matches(table)) continue;
             String tableName = (String) table.get("tableName");
             Long id = nameToId.get(tableName);
             if (id != null) {

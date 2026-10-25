@@ -64,6 +64,8 @@
 
     <el-dialog
       v-model="showFormDialog"
+      :inert="saving"
+      :before-close="closeFormDialog"
       width="520px"
       top="8vh"
       :align-center="false"
@@ -79,10 +81,12 @@
             :ariaLabel="t('connection.guideLinkAria')"
             test-id="connection-dialog-guide-link"
           />
+          <DesignerUnsavedNotice v-if="isDirty" class="dialog-unsaved-notice" />
         </div>
       </template>
       <el-form
         ref="formRef"
+        :disabled="saving"
         :model="form"
         :rules="connectionFormRules"
         label-position="top"
@@ -185,7 +189,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showFormDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button @click="closeFormDialog">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleSave" :loading="saving">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
@@ -205,7 +209,9 @@
 </template>
 
 <script setup lang="ts">
+import DesignerUnsavedNotice from './DesignerUnsavedNotice.vue'
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { useDesignerDraft, confirmDesignerLeave } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -376,6 +382,7 @@ function scrollConnectionDialogToTop() {
 function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
+  draft.markSaved()
   showFormDialog.value = true
   clearConnectionFormValidation()
   void loadVaultOptions()
@@ -393,6 +400,7 @@ function openEditDialog(row: EmailConnection) {
     fromName: row.fromName || '',
     enabled: row.enabled,
   })
+  draft.markSaved()
   showFormDialog.value = true
   clearConnectionFormValidation()
   void loadVaultOptions()
@@ -404,19 +412,19 @@ function openTestDialog(row: EmailConnection) {
   showTestDialog.value = true
 }
 
-async function handleSave() {
+async function persistForm(): Promise<boolean> {
   const formEl = formRef.value
-  if (!formEl) return
+  if (!formEl) return false
 
   const valid = await formEl.validate().catch(() => false)
   if (!valid) {
     void formEl.scrollToField('senderEmail')
-    return
+    return false
   }
 
   if (form.username?.trim() && !form.passwordEnvKey?.trim()) {
     ElMessage.warning({ message: t('connection.passwordRequired'), zIndex: 10001 })
-    return
+    return false
   }
 
   saving.value = true
@@ -428,8 +436,10 @@ async function handleSave() {
       await connectionApi.create(props.functionUnitId, payload)
     }
     ElMessage.success({ message: t('common.saveSuccess'), zIndex: 10001 })
+    draft.markSaved()
     showFormDialog.value = false
     await loadConnections()
+    return true
   } catch (e) {
     const msg = resolveConnectionSaveError(e)
     if (msg === t('connection.emailAddressInvalid')) {
@@ -437,6 +447,7 @@ async function handleSave() {
       void formEl.scrollToField('senderEmail')
     }
     ElMessage.error({ message: msg, zIndex: 10001 })
+    return false
   } finally {
     saving.value = false
   }
@@ -476,6 +487,21 @@ async function handleTest() {
 }
 
 onMounted(loadConnections)
+
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify(form),
+  enabled: () => showFormDialog.value,
+  save: persistForm,
+  restore: (snapshot) => { Object.assign(form, JSON.parse(snapshot)); showFormDialog.value = false },
+})
+const isDirty = draft.isDirty
+const handleSave = () => draft.saveChanges(true)
+async function closeFormDialog() {
+  if (saving.value || draft.saving.value) return
+  if (await confirmDesignerLeave(draft, t)) showFormDialog.value = false
+}
+defineExpose(draft)
+
 </script>
 
 <style scoped lang="scss">

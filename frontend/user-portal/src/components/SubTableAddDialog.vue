@@ -167,6 +167,13 @@
                     />
                   </el-select>
 
+                  <SubTableAssigneeField
+                    v-else-if="col.field === configuredAssigneeField"
+                    v-model="formData[col.field]"
+                    :readonly="isColDisabled(col) || effectiveAssignmentConfig?.allowUser === false"
+                    @update:model-value="(value: unknown) => onDialogFieldChange(col.field, value)"
+                  />
+
                   <!-- text (sensitive mask is display-only; formData stays plaintext) -->
                   <el-input
                     v-else-if="(!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
@@ -742,6 +749,7 @@ import { resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 import RecordNoteField from './RecordNoteField.vue'
 import DOMPurify from 'dompurify'
 import LookupField from './lookup/LookupField.vue'
+import SubTableAssigneeField from './SubTableAssigneeField.vue'
 import OwnerField from './owner/OwnerField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import { useSubTableDialogLookup } from '@/composables/subTableAddDialog/useSubTableDialogLookup'
@@ -1187,6 +1195,7 @@ const effectiveAssignmentConfig = computed(() =>
   isAssignmentConfigured(props.assignmentConfig) ? props.assignmentConfig : undefined)
 const configuredBuField = computed(() => effectiveAssignmentConfig.value?.buField || '')
 const configuredRoleField = computed(() => effectiveAssignmentConfig.value?.roleField || '')
+const configuredAssigneeField = computed(() => effectiveAssignmentConfig.value?.assigneeField || '')
 
 const hasConfiguredBuRoleColumns = () =>
   !!configuredBuField.value

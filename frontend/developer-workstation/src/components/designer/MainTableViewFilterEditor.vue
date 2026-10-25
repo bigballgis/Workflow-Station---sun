@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useDesignerDraft, confirmDesignerLeave } from '@/composables/useDesignerDraft'
 import { useI18n } from 'vue-i18n'
 import MainTableViewFilterGroup from './MainTableViewFilterGroup.vue'
 import {
@@ -31,27 +32,39 @@ watch(
   (open) => {
     if (!open) return
     rootGroup.value = parseFilterConfigToEditorRoot(props.filterConfig)
+    draft.markSaved()
   },
 )
 
-function closeDialog() {
-  emit('update:modelValue', false)
+async function closeDialog() {
+  if (await confirmDesignerLeave(draft, t)) emit('update:modelValue', false)
 }
 
 function confirmDialog() {
   emit('save', serializeFilterEditorRoot(rootGroup.value))
-  closeDialog()
+  emit('update:modelValue', false)
 }
+
+const draft = useDesignerDraft({
+  snapshot: () => JSON.stringify(serializeFilterEditorRoot(rootGroup.value)), enabled: () => props.modelValue,
+  save: async () => { confirmDialog(); return true },
+  restore: (snapshot) => {
+    rootGroup.value = parseFilterConfigToEditorRoot(JSON.parse(snapshot))
+    emit('update:modelValue', false)
+  },
+})
+defineExpose(draft)
 </script>
 
 <template>
   <el-dialog
     :model-value="modelValue"
+    :before-close="closeDialog"
     :title="title ?? t('mainTableView.editFiltersTitle')"
     width="760px"
     destroy-on-close
     class="mtv-filter-dialog"
-    @update:model-value="emit('update:modelValue', $event)"
+    @update:model-value="(open: boolean) => { if (!open) closeDialog() }"
   >
     <div class="filter-editor-root">
       <MainTableViewFilterGroup

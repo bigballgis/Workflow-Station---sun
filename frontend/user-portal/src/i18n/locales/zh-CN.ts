@@ -473,6 +473,8 @@ export default {
     },
     batchAssignmentFailed: '任务已完成，但部分初次分派的目标缺失或与配置不符。请勿重复完成，请联系管理员核查实际任务。',
     batchAssignmentUnconfirmed: '任务已完成，但批量分派结果尚未全部核实。请勿重复完成，请核查实际任务。',
+    subTableSaveFailed: '子表修改尚未保存，草稿仍保留在当前页面。请重试保存后再离开页面或提交任务。',
+    retrySave: '重试保存',
     operationFailed: '操作失败',
     delegateSuccess: '委托成功',
     transferSuccess: '转办成功',

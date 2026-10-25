@@ -122,7 +122,7 @@
         >
           <ProcessDesigner
             v-if="activeTab === 'process'"
-            ref="processDesignerRef"
+            ref="activeDesignerRef"
             :key="processDesignerReloadKey"
             :function-unit-id="functionUnitId"
           />
@@ -132,6 +132,7 @@
           name="tables"
         >
           <TableDesigner
+            ref="activeDesignerRef"
             v-if="activeTab === 'tables'"
             :function-unit-id="functionUnitId"
           />
@@ -142,7 +143,7 @@
         >
           <FormDesigner
             v-if="activeTab === 'forms'"
-            ref="formDesignerRef"
+            ref="activeDesignerRef"
             :function-unit-id="functionUnitId"
           />
         </el-tab-pane>
@@ -151,6 +152,7 @@
           name="view-design"
         >
           <MainTableViewDesignTab
+            ref="activeDesignerRef"
             v-if="activeTab === 'view-design'"
             :function-unit-id="functionUnitId"
           />
@@ -160,6 +162,7 @@
           name="actions"
         >
           <ActionDesigner
+            ref="activeDesignerRef"
             v-if="activeTab === 'actions'"
             :function-unit-id="functionUnitId"
           />
@@ -178,6 +181,7 @@
           name="connections"
         >
           <ConnectionDesigner
+            ref="activeDesignerRef"
             v-if="activeTab === 'connections'"
             :function-unit-id="functionUnitId"
           />
@@ -187,6 +191,7 @@
           name="email-templates"
         >
           <EmailTemplateDesigner
+            ref="activeDesignerRef"
             v-if="activeTab === 'email-templates'"
             :function-unit-id="functionUnitId"
           />
@@ -196,6 +201,7 @@
           name="email-monitors"
         >
           <EmailMonitorDesigner
+            ref="activeDesignerRef"
             v-if="activeTab === 'email-monitors'"
             :function-unit-id="functionUnitId"
           />
@@ -205,6 +211,7 @@
           name="decisions"
         >
           <DecisionList
+            ref="activeDesignerRef"
             v-if="activeTab === 'decisions'"
             :function-unit-id="functionUnitId"
           />
@@ -567,6 +574,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { confirmDesignerLeave, type DirtyDesigner } from '@/composables/useDesignerDraft'
 import { registerUnsavedDesignerLeaveConfirmation } from '@/composables/useUnsavedDesignerNavigation'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
 import VersionedProcessViewer from '@/components/designer/VersionedProcessViewer.vue'
@@ -625,30 +633,8 @@ function onReadOnlyInteraction(event: Event): void {
 // Back always means "up to the Function Unit list", never "the previous page": jumping
 // between function units from the sidebar's Recent list would otherwise make Back walk
 // backwards through those function units instead of leaving the designer.
-type DirtyDesigner = { hasUnsavedChanges: () => boolean | Promise<boolean>; saveChanges: () => Promise<boolean>; discardChanges: () => Promise<void> }
-const processDesignerRef = ref<DirtyDesigner | null>(null)
-const formDesignerRef = ref<DirtyDesigner | null>(null)
-const activeDesigner = () => activeTab.value === 'process' ? processDesignerRef.value : activeTab.value === 'forms' ? formDesignerRef.value : null
-
-async function confirmLeave(): Promise<boolean> {
-  const designer = activeDesigner()
-  if (!designer || !(await designer.hasUnsavedChanges())) return true
-  try {
-    await ElMessageBox.confirm(t('process.unsavedChanges'), t('functionUnit.documents.unsavedTitle'), {
-      type: 'warning',
-      confirmButtonText: t('common.save'),
-      cancelButtonText: t('functionUnit.documents.discard'),
-      distinguishCancelAndClose: true,
-    })
-    return await designer.saveChanges()
-  } catch (reason) {
-    if (reason === 'cancel') {
-      await designer.discardChanges()
-      return true
-    }
-    return false
-  }
-}
+const activeDesignerRef = ref<DirtyDesigner | null>(null)
+const confirmLeave = () => confirmDesignerLeave(isReadOnly.value ? null : activeDesignerRef.value, t)
 
 const goBack = async () => {
   if (await confirmLeave()) await router.push('/function-units')
@@ -661,7 +647,7 @@ async function beforeTabLeave(): Promise<boolean> {
 
 onBeforeRouteLeave(async () => confirmLeave())
 onBeforeRouteUpdate(async (to, from) =>
-  to.params.id === from.params.id ? true : confirmLeave()
+  to.params.id === from.params.id && to.query.version === from.query.version ? true : confirmLeave()
 )
 
 const unregisterUnsavedDesignerLeaveConfirmation = registerUnsavedDesignerLeaveConfirmation(confirmLeave)

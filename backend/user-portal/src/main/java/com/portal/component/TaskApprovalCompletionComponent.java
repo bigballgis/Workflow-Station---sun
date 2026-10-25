@@ -129,6 +129,8 @@ public class TaskApprovalCompletionComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+        variables = new HashMap<>(taskFormComponent.prepareSubTableSubmission(task.getProcessInstanceId(),
+                task.getTaskDefinitionKey(), variables, userId, request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(), request.getSubTableBatchChanges()));
         Map<String, Object> permitted = taskFormComponent.filterVersionedSubmission(task.getProcessInstanceId(), task.getTaskDefinitionKey(), variables);
         variables.clear();
         variables.putAll(permitted);
