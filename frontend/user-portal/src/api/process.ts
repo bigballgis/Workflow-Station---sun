@@ -268,7 +268,7 @@ export const processApi = {
 
   // 切换收藏状态
   toggleFavorite(processKey: string) {
-    return request.post<boolean>(`/processes/${processKey}/favorite`)
+    return request.post<{ data: boolean }>(`/processes/${processKey}/favorite`)
   },
 
   // 保存草稿

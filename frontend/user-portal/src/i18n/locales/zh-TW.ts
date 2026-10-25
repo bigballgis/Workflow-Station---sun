@@ -520,6 +520,12 @@ export default {
     userOptionFormat: '{name}（{username}）',
   },
   process: {
+    addFavorite: '收藏{name}',
+    removeFavorite: '取消收藏{name}',
+    favoriteFailed: '未能更新收藏，請重新整理頁面確認儲存狀態。',
+    searchPlaceholder: '搜尋申請流程…',
+    noSearchResults: '找不到符合的流程，請嘗試其他關鍵字。',
+    guideLinkAria: '開啟新增申請指南',
     title: '新建申請',
     processName: '流程名稱',
     category: '流程分類',

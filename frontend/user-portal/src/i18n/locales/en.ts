@@ -520,6 +520,12 @@ export default {
     userOptionFormat: '{name} ({username})',
   },
   process: {
+    addFavorite: 'Add {name} to favorites',
+    removeFavorite: 'Remove {name} from favorites',
+    favoriteFailed: 'Could not update favorites. Refresh to check the saved state.',
+    searchPlaceholder: 'Search requests…',
+    noSearchResults: 'No matching requests. Try another search.',
+    guideLinkAria: 'Open New Requests guidelines',
     title: 'New Requests',
     processName: 'Process Name',
     category: 'Category',

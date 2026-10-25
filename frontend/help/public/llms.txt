@@ -7,6 +7,8 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 
 ## Index by job
 
+- /help/up-new — User Portal → Request → New Requests: search, workflow cards, add/remove Favorites with the star button, versions, and access empty states
+
 - /help/table-data — Admin Relation Tables → Table Data: Function Unit/table navigation, Common, search, selection links, permissions, column menus, export and import
 
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)

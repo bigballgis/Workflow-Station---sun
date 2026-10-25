@@ -37,6 +37,8 @@ export type NavNode = NavGroup | NavLeaf
 
 /** Add a guideline: append here, then add the view + i18n keys + a NAV_TREE leaf. */
 export const GUIDELINES: Guideline[] = [
+  { id: 'up-new', path: '/up-new', titleKey: 'newRequestsGuide.title',
+    summaryKey: 'newRequestsGuide.intro', load: () => import('@/views/NewRequestsGuide.vue') },
   { id: 'form-ctl-record-note', path: '/form-ctl-record-note', titleKey: 'recordNoteGuide.title',
     summaryKey: 'recordNoteGuide.intro', load: () => import('@/views/RecordNoteGuide.vue'), omitFromHome: true },
   {
@@ -467,7 +469,7 @@ export const NAV_TREE: NavNode[] = [
         id: 'up-request',
         titleKey: 'nav.upSectionRequest',
         children: [
-          { kind: 'leaf', id: 'up-new', titleKey: 'nav.upNewRequests' },
+          { kind: 'leaf', id: 'up-new', titleKey: 'nav.upNewRequests', to: '/up-new' },
           { kind: 'leaf', id: 'up-mine', titleKey: 'nav.upMyRequests' },
         ],
       },
