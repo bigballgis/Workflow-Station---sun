@@ -1,0 +1,17 @@
+{
+  "phase": "after",
+  "checks": [
+    {
+      "explicitWorkspace": false,
+      "status": 200,
+      "dashboardCount": 0
+    },
+    {
+      "explicitWorkspace": true,
+      "status": 200,
+      "dashboardCount": 0
+    }
+  ],
+  "failedRequests": [],
+  "browserErrors": []
+}

@@ -147,6 +147,8 @@ public class ChangeHistoryComponent {
                         .stageId(context.getStageId())
                         .userId(context.getUserId())
                         .timestamp(now)
+                        .batchId(context.getBatchId())
+                        .batchTime(context.getBatchTime())
                         .fieldName(fieldName)
                         .oldValue(toDisplayString(oldValue))
                         .newValue(toDisplayString(newValue))
@@ -269,6 +271,8 @@ public class ChangeHistoryComponent {
                         .stageId(context.getStageId())
                         .userId(context.getUserId())
                         .timestamp(now)
+                        .batchId(context.getBatchId())
+                        .batchTime(context.getBatchTime())
                         .fieldName(fieldName)
                         .oldValue(oldVal)
                         .newValue(newVal)
@@ -336,7 +340,10 @@ public class ChangeHistoryComponent {
                 || userId == null || userId.isBlank() || changeType == null) {
             return;
         }
+        ChangeHistoryContext context = ChangeHistoryContext.builder().build();
         ChangeHistory record = ChangeHistory.builder()
+                .batchId(context.getBatchId())
+                .batchTime(context.getBatchTime())
                 .processInstanceId(processInstanceId)
                 .userId(userId)
                 .timestamp(Instant.now())
@@ -438,15 +445,19 @@ public class ChangeHistoryComponent {
     /**
      * Record concurrent modification warning.
      */
-    public void recordConcurrentModificationWarning(String processInstanceId,
-            String fieldName,
-            String userId1,
-            String userId2) {
+    public void recordConcurrentModificationWarning(ChangeHistoryContext context,
+            String fieldName, String userId1) {
+        String processInstanceId = context.getProcessInstanceId();
+        String userId2 = context.getUserId();
         requiresNewTx.executeWithoutResult(status -> {
             try {
                 ChangeHistory record = ChangeHistory.builder()
                         .processInstanceId(processInstanceId)
                         .userId(userId2)
+                        .taskInstanceId(context.getTaskInstanceId())
+                        .stageId(context.getStageId())
+                        .batchId(context.getBatchId())
+                        .batchTime(context.getBatchTime())
                         .timestamp(Instant.now())
                         .fieldName(fieldName)
                         .changeType(ChangeType.FIELD_UPDATE)
@@ -559,6 +570,8 @@ public class ChangeHistoryComponent {
                 .userId(entity.getUserId())
                 .userName(userName)
                 .timestamp(entity.getTimestamp())
+                .batchId(entity.getBatchId())
+                .batchTime(entity.getBatchTime())
                 .fieldName(fieldName)
                 .fieldLabel(fieldLabel)
                 .fieldOrder(fieldOrder)

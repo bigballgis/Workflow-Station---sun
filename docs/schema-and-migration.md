@@ -46,3 +46,10 @@
 原 Assignment ID、Dashboard、表/View ID、启停状态和审计字段保留。旧身份已不存在时，Admin
 显示不可用绑定和原表 ID，可禁用、删除或明确重新选择已发布 View；不会按名称授予新 View 权限。
 FU 或 Dashboard 整体删除的现有外键规则不变。已经在升级前被级联删除的配置需从备份恢复。
+
+## 6. Change History 操作批次（99）
+
+升级已有库时，先执行 `00-schema/99-up-change-history-batches.sql`，再部署新版 User Portal。
+新库由 `00-init-all.sh` 自动执行。脚本可重复执行，只新增可空的 `batch_id`、`batch_time`，
+不回填旧记录、不改原明细时间。回退旧应用时可以保留这两列，旧应用仍能读写原明细。
+批次用于关联一次实际操作；页面还会按五分钟连续编辑规则合并展示，不改变原审计事务。

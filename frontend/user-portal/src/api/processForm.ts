@@ -107,6 +107,8 @@ export interface ChangeHistoryRecord {
   userId: string
   userName: string
   timestamp: string
+  batchId?: string | null
+  batchTime?: string | null
   fieldName: string
   fieldLabel: string | null
   fieldOrder?: number | null

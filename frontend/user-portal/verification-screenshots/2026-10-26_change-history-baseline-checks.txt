@@ -1,0 +1,9 @@
+Unmodified HEAD: two unrelated validation assertions fail.
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 8.985 s <<< FAILURE! -- in com.portal.component.SubTableBatchPostgresTransactionIT
+[ERROR]   SubTableBatchPostgresTransactionIT.unmarkedInvalidValueCannotBypassMetadataOrIncrementEntityVersion:187 Expected com.platform.common.exception.BusinessException to be thrown, but nothing was thrown.
+[ERROR]   SubTableBatchPostgresTransactionIT.unmarkedInvalidValueCannotBypassMetadataOrIncrementEntityVersion:187 Expected com.platform.common.exception.BusinessException to be thrown, but nothing was thrown.
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0
+
+Typecheck: unmodified HEAD fails with 386 errors; current tree fails with 382 errors.
+No errors reported in ChangeHistoryPanel.vue, changeHistoryPanel composables/tests or api/processForm.ts in the final run.
+Full MI gate: 234 unit tests passed; first two live browser scenarios passed; attachment discovery found no To Do or My Request with attachment rows, so remaining scenarios were not completed.

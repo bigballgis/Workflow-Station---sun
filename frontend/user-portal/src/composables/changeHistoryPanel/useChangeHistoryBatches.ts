@@ -1,79 +1,103 @@
-import { computed, type ComputedRef, type Ref } from 'vue'
+import { computed, type Ref } from 'vue'
 import type { ChangeHistoryRecord } from '@/api/processForm'
 import type { ChangeHistoryFormatting } from './useChangeHistoryFormatting'
 
 export interface ChangeBatch {
+  key: string
   timestamp: string
-  userId: string
-  userName: string
+  endTimestamp: string
   displayOperator: string
-  taskInstanceId: string | null
-  stageId: string | null
   displayStage: string
-  /** 与展示名不同或需补充技术 ID 时的 tooltip */
   stageTooltip: string | null
-  /** 关联任务展示：优先 BPMN/环节解析名，否则短 ID；完整 ID 见 tooltip */
-  taskDisplayLabel: string
+  eventType: string | null
   concurrent: boolean
   rows: ChangeHistoryRecord[]
 }
 
-export interface ChangeHistoryBatches {
-  groupedBatches: ComputedRef<ChangeBatch[]>
+interface SaveUnit {
+  key: string
+  time: string
+  lastTime: string
+  rows: ChangeHistoryRecord[]
 }
 
-/** 同一操作：同一用户、同一任务/环节，且时间戳间隔在阈值内（一次保存内多条字段记录） */
-const SAME_ACTION_MS = 80
+const EDIT_TYPES = new Set(['FIELD_UPDATE', 'SUB_TABLE_ROW_ADD', 'SUB_TABLE_ROW_UPDATE', 'SUB_TABLE_ROW_DELETE'])
+const CONTINUOUS_EDIT_MS = 5 * 60 * 1000
 
-/** 将历史记录按「同一保存动作」分组为批次；纯计算，依赖格式化解析批次表头。 */
+function sameScope(a: ChangeHistoryRecord, b: ChangeHistoryRecord): boolean {
+  return a.processInstanceId === b.processInstanceId && a.taskInstanceId === b.taskInstanceId
+    && a.stageId === b.stageId && a.userId === b.userId
+}
+
+function operationTime(row: ChangeHistoryRecord): string {
+  // FALLBACK(migration): pre-batch history has only detail timestamps; retain until legacy history is retired.
+  return row.batchTime ?? row.timestamp
+}
+
+/** Keep an actual save atomic even if its sub-table writes took longer than five minutes. */
+function saveUnits(records: ChangeHistoryRecord[], dayjs: typeof import('dayjs')): SaveUnit[] {
+  const ordered = [...records].sort((a, b) =>
+    dayjs(operationTime(a)).valueOf() - dayjs(operationTime(b)).valueOf() || a.id - b.id)
+  const units: SaveUnit[] = []
+  const saves = new Map<string, SaveUnit>()
+  for (const row of ordered) {
+    const key = JSON.stringify(row.batchId
+      ? [row.processInstanceId, row.batchId, row.taskInstanceId, row.stageId, row.userId, EDIT_TYPES.has(row.changeType) ? 'edit' : row.changeType]
+      : [row.processInstanceId, 'legacy', row.id])
+    const existing = row.batchId ? saves.get(key) : undefined
+    if (existing) {
+      existing.rows.push(row)
+    } else {
+      const unit = { key, time: operationTime(row), lastTime: operationTime(row), rows: [row] }
+      units.push(unit)
+      if (row.batchId) saves.set(key, unit)
+    }
+  }
+  return units
+}
+
+function canContinue(previous: SaveUnit, next: SaveUnit, dayjs: typeof import('dayjs')): boolean {
+  const a = previous.rows[0]!
+  const b = next.rows[0]!
+  if (!EDIT_TYPES.has(a.changeType) || !EDIT_TYPES.has(b.changeType) || !sameScope(a, b)) return false
+  if (!a.taskInstanceId || !b.taskInstanceId) {
+    // No task/round identity: keep actual saves atomic without inferring a shared return round.
+    // FALLBACK(migration): legacy taskless rows can share only their exact original write time.
+    return !a.batchId && !b.batchId && a.timestamp === b.timestamp
+  }
+  const gap = dayjs(next.time).diff(dayjs(previous.lastTime))
+  return Number.isFinite(gap) && gap >= 0 && gap <= CONTINUOUS_EDIT_MS
+}
+
+/** Group only already-visible records; independent events interrupt consecutive editing sessions. */
 export function useChangeHistoryBatches(
   records: Ref<ChangeHistoryRecord[]>,
   formatting: ChangeHistoryFormatting,
   dayjs: typeof import('dayjs'),
-): ChangeHistoryBatches {
-  function sameSaveAction(a: ChangeHistoryRecord, b: ChangeHistoryRecord): boolean {
-    if (a.userId !== b.userId) return false
-    if ((a.taskInstanceId ?? '') !== (b.taskInstanceId ?? '')) return false
-    if ((a.stageId ?? '') !== (b.stageId ?? '')) return false
-    const da = dayjs(a.timestamp)
-    const db = dayjs(b.timestamp)
-    if (!da.isValid() || !db.isValid()) return false
-    return Math.abs(da.diff(db)) <= SAME_ACTION_MS
-  }
-
+) {
   const groupedBatches = computed<ChangeBatch[]>(() => {
-    const sorted = [...records.value].sort((a, b) => {
-      const ta = dayjs(a.timestamp).valueOf()
-      const tb = dayjs(b.timestamp).valueOf()
-      if (ta !== tb) return ta - tb
-      return (Number(a.id) || 0) - (Number(b.id) || 0)
-    })
-
     const batches: ChangeBatch[] = []
-    for (const r of sorted) {
+    let previous: SaveUnit | undefined
+    for (const unit of saveUnits(records.value, dayjs)) {
+      const row = unit.rows[0]!
       const last = batches[batches.length - 1]
-      const header = formatting.batchHeaderFields(r)
-      if (last && last.rows.length > 0 && sameSaveAction(last.rows[last.rows.length - 1]!, r)) {
-        last.rows.push(r)
-        if (r.concurrent) last.concurrent = true
+      if (last && previous && canContinue(previous, unit, dayjs)) {
+        last.rows.push(...unit.rows)
+        last.endTimestamp = unit.lastTime
+        last.concurrent ||= unit.rows.some(item => item.concurrent)
       } else {
-        batches.push({
-          timestamp: r.timestamp,
-          userId: r.userId,
-          userName: r.userName,
-          displayOperator: header.displayOperator,
-          taskInstanceId: r.taskInstanceId,
-          stageId: r.stageId,
-          displayStage: header.displayStage,
-          stageTooltip: header.stageTooltip,
-          taskDisplayLabel: header.taskDisplayLabel,
-          concurrent: r.concurrent,
-          rows: [r],
-        })
+        const header = formatting.batchHeaderFields(row)
+        batches.push({ key: unit.key, timestamp: unit.time, endTimestamp: unit.lastTime,
+          displayOperator: header.displayOperator, displayStage: header.displayStage,
+          stageTooltip: header.stageTooltip, eventType: EDIT_TYPES.has(row.changeType) ? null : row.changeType,
+          concurrent: unit.rows.some(item => item.concurrent), rows: [...unit.rows] })
       }
+      previous = unit
     }
+    // Keep the existing field ordering and raw values within each displayed session.
+    const positions = new Map(records.value.map((row, index) => [row, index]))
+    for (const batch of batches) batch.rows.sort((a, b) => positions.get(a)! - positions.get(b)!)
     return batches
   })
-
   return { groupedBatches }
 }

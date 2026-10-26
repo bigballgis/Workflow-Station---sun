@@ -874,7 +874,7 @@ public class TaskFormComponent {
         try {
             for (String field : concurrentSnapshot) {
                 changeHistoryComponent.recordConcurrentModificationWarning(
-                        taskInfo.processInstanceId, field, "unknown", userId);
+                        context, field, "unknown");
             }
             // Record top-level field changes against the same lookup-display projection
             // used for the new payload — otherwise a stored lookup object compares as a

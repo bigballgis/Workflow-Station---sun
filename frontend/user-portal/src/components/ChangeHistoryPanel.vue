@@ -15,6 +15,38 @@
       </template>
 
       <div class="change-history-panel-inner">
+        <div class="ch-history-tools">
+          <el-input
+            v-model="keyword"
+            class="ch-history-search"
+            clearable
+            :prefix-icon="Search"
+            :placeholder="t('changeHistory.searchPlaceholder')"
+            :aria-label="t('changeHistory.searchLabel')"
+          />
+          <el-select
+            v-model="timeOrder"
+            class="ch-history-order"
+            :aria-label="t('changeHistory.timeOrder')"
+          >
+            <el-option
+              value="asc"
+              :label="t('changeHistory.oldestFirst')"
+            />
+            <el-option
+              value="desc"
+              :label="t('changeHistory.newestFirst')"
+            />
+          </el-select>
+          <span
+            class="ch-history-results"
+            role="status"
+            aria-live="polite"
+          >
+            {{ t('changeHistory.searchSummary', { count: matchedCount, total: totalCount }) }}
+          </span>
+          <PortalHelpLink v-bind="{ path: '/up-tasks-to-claim#change-history', ariaLabel: t('changeHistory.guideLinkAria') }" />
+        </div>
         <div
           v-if="loading"
           class="loading-state"
@@ -51,113 +83,57 @@
             :image-size="80"
           />
         </div>
+        <el-empty
+          v-else-if="displayBatches.length === 0"
+          :description="t('changeHistory.noMatches')"
+          :image-size="80"
+        />
         <div
           v-else
-
+          class="ch-batches"
         >
-          <el-table
-            :data="records"
-            border
-            stripe
-            size="small"
-            class="change-history-table"
-            :empty-text="t('changeHistory.noRecords')"
+          <section
+            v-for="batch in displayBatches"
+            :key="batch.key"
+            class="ch-batch"
           >
-            <el-table-column
-              :label="t('changeHistory.colStage')"
-              min-width="160"
-              show-overflow-tooltip
+            <button
+              type="button"
+              class="ch-batch-header"
+              :aria-expanded="isBatchTableOpen(batch.key)"
+              @click="toggleBatchTable(batch.key)"
             >
-              <template #default="{ row }">
-                {{ resolveStageDisplay(row) || '—' }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('changeHistory.colChangeDate')"
-              min-width="175"
-            >
-              <template #default="{ row }">
-                {{ formatTimestamp(row.timestamp) }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('changeHistory.colChangedBy')"
-              min-width="150"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                <el-tooltip
-                  v-if="row.userId && resolveOperator(row) !== row.userId"
-                  :content="row.userId"
-                  placement="top"
-                >
-                  <span>{{ resolveOperator(row) }}</span>
-                </el-tooltip>
-                <span v-else>{{ resolveOperator(row) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('changeHistory.colEvent')"
-              min-width="150"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                <el-tag
-                  :type="getChangeTypeTag(row.changeType)"
-                  size="small"
-                >
-                  {{ getChangeTypeLabel(row.changeType) }}
-                </el-tag>
-                <el-tooltip
-                  v-if="row.concurrent"
-                  :content="t('changeHistory.concurrentWarning')"
-                >
-                  <el-icon class="concurrent-icon"><Warning /></el-icon>
-                </el-tooltip>
-              </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('changeHistory.colChangedField')"
-              min-width="210"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                {{ fieldLocationLabel(row) }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('changeHistory.colOldValue')"
-              min-width="180"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                <span
-                  v-if="row.changeType === 'PROCESS_INITIATION'"
-                  class="cell-muted"
-                >—</span>
-                <span
-                  v-else
-                  class="cell-old"
-                >{{ formatDisplayValue(row.oldValue, 240, row.fieldName) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('changeHistory.colNewValue')"
-              min-width="180"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                <span
-                  v-if="row.changeType === 'PROCESS_INITIATION'"
-                  class="cell-muted"
-                >{{ t('changeHistory.processStarted') }}</span>
-                <span
-                  v-else
-                  class="cell-new"
-                >{{ formatDisplayValue(row.newValue, 240, row.fieldName) }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
+              <el-icon
+                class="ch-batch-chevron"
+                :class="{ 'is-open': isBatchTableOpen(batch.key) }"
+              >
+                <ArrowRight />
+              </el-icon>
+              <strong :title="batch.stageTooltip ?? undefined">{{ batch.displayStage || (batch.eventType?.startsWith('RECORD_NOTE_') ? t('changeHistory.recordNote') : batch.eventType ? getChangeTypeLabel(batch.eventType) : '—') }}</strong>
+              <span class="ch-batch-time">{{ batchTimeLabel(batch) }}</span>
+              <span>{{ batch.displayOperator }}</span>
+              <el-tag
+                v-if="batch.eventType"
+                size="small"
+                :type="getChangeTypeTag(batch.eventType)"
+              >
+                {{ getChangeTypeLabel(batch.eventType) }}
+              </el-tag>
+              <span class="ch-batch-count">{{ t('changeHistory.batchChangeCount', { count: batch.rows.length }) }}</span>
+              <el-icon
+                v-if="batch.concurrent"
+                class="concurrent-icon"
+                :title="t('changeHistory.concurrentWarning')"
+              >
+                <Warning />
+              </el-icon>
+            </button>
+            <ChangeHistoryDetails
+              v-if="isBatchTableOpen(batch.key)"
+              :rows="batch.rows"
+              :formatting="formatting"
+            />
+          </section>
         </div>
       </div>
     </el-collapse-item>
@@ -167,10 +143,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Document, Warning } from '@element-plus/icons-vue'
+import { ArrowRight, Document, Search, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import PortalHelpLink from './PortalHelpLink.vue'
+import ChangeHistoryDetails from './ChangeHistoryDetails.vue'
 import { RECORD_NOTE_CHANGED_EVENT } from './formRendererHelpers/recordNoteFields'
 import { useChangeHistoryFormatting } from '@/composables/changeHistoryPanel/useChangeHistoryFormatting'
+import { useChangeHistoryBatches, type ChangeBatch } from '@/composables/changeHistoryPanel/useChangeHistoryBatches'
+import { useChangeHistoryPresentation } from '@/composables/changeHistoryPanel/useChangeHistoryPresentation'
+import { useChangeHistoryExpansion } from '@/composables/changeHistoryPanel/useChangeHistoryExpansion'
 import { useChangeHistoryLoader } from '@/composables/changeHistoryPanel/useChangeHistoryLoader'
 import { getChangeHistorySensitiveMasks } from '@/api/processForm'
 import type { SensitiveMaskConfig } from '@/utils/sensitiveMask'
@@ -212,13 +193,9 @@ const resolvedMaskLookup = computed((): SensitiveMaskLookup => {
 // 展示格式化、字段标签与变更类型映射（纯函数）
 const formatting = useChangeHistoryFormatting(t, dayjs, () => resolvedMaskLookup.value)
 const {
-  fieldLocationLabel,
-  formatDisplayValue,
   formatTimestamp,
   getChangeTypeLabel,
   getChangeTypeTag,
-  resolveOperator,
-  resolveStageDisplay,
 } = formatting
 
 // 拉取历史并按快照时间/任务过滤
@@ -255,16 +232,45 @@ function onRecordNoteChanged() {
 onMounted(() => window.addEventListener(RECORD_NOTE_CHANGED_EVENT, onRecordNoteChanged))
 onBeforeUnmount(() => window.removeEventListener(RECORD_NOTE_CHANGED_EVENT, onRecordNoteChanged))
 
-const sectionExpandedNames = ref(['history'])
+const { groupedBatches } = useChangeHistoryBatches(records, formatting, dayjs)
+const { keyword, timeOrder, displayBatches, matchedCount, totalCount } = useChangeHistoryPresentation(groupedBatches, formatting, t)
+const { sectionExpandedNames, batchTableOpen, toggleBatchTable, isBatchTableOpen } = useChangeHistoryExpansion(groupedBatches)
+watch(() => props.processInstanceId, () => { batchTableOpen.value = {} })
+
+function batchTimeLabel(batch: ChangeBatch): string {
+  const start = formatTimestamp(batch.timestamp)
+  const end = formatTimestamp(batch.endTimestamp)
+  if (start === end) return start
+  const endLabel = dayjs(batch.timestamp).isSame(dayjs(batch.endTimestamp), 'day')
+    ? dayjs(batch.endTimestamp).format('HH:mm:ss') : end
+  return `${start} – ${endLabel}`
+}
 </script>
 
 <style scoped lang="scss">
+.ch-history-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.ch-history-search { flex: 1 1 280px; max-width: 420px; }
+.ch-history-order { width: 170px; }
+.ch-history-results { margin-left: auto; color: var(--text-secondary, #666); font-size: 13px; }
+@media (max-width: 640px) { .ch-history-search { max-width: none; flex-basis: 100%; } }
+.ch-batches { display: grid; gap: 14px; }
+.ch-batch { min-width: 0; border: 1px solid var(--border-color, #e4e7ed); border-radius: 6px; overflow: hidden; }
+.ch-batch-header {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px;
+  width: 100%; padding: 14px 16px; border: 0; text-align: left;
+  color: var(--text-primary, #333); background: #f7f8fa; cursor: pointer; font: inherit; font-size: 13px;
+  &:hover { background: #eef0f3; }
+  &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
+}
+.ch-batch-chevron { transition: transform 0.15s; &.is-open { transform: rotate(90deg); } }
+.ch-batch-time, .ch-batch-count { color: var(--text-secondary, #666); }
+.ch-batch-count { margin-left: auto; }
 /* 与任务/申请详情页 .section .section-header（流转记录等）视觉一致 */
 .ch-root-collapse {
   width: 100%;
   border: none;
 
-  :deep(.el-collapse-item__header) {
+  :deep(> .el-collapse-item > .el-collapse-item__header) {
     display: flex;
     align-items: center;
     font-size: 16px;
@@ -295,7 +301,9 @@ const sectionExpandedNames = ref(['history'])
 }
 
 .ch-root-collapse--headerless {
-  :deep(.el-collapse-item__header) {
+  // Embedded tabs already provide the content gutter; avoid a second empty inset.
+  :deep(.el-collapse-item__content) { padding: 0; }
+  :deep(> .el-collapse-item > .el-collapse-item__header) {
     display: none;
   }
 }
@@ -331,25 +339,4 @@ const sectionExpandedNames = ref(['history'])
   vertical-align: middle;
 }
 
-.change-history-table {
-  width: 100%;
-
-  :deep(.el-table__cell) {
-    font-size: 13px;
-  }
-}
-
-.cell-old {
-  color: var(--el-color-danger);
-  word-break: break-word;
-}
-
-.cell-new {
-  color: var(--el-color-success);
-  word-break: break-word;
-}
-
-.cell-muted {
-  color: var(--el-text-color-placeholder);
-}
 </style>

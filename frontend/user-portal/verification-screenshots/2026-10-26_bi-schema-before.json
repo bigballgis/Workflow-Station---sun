@@ -1,0 +1,22 @@
+{
+  "phase": "before",
+  "checks": [
+    {
+      "explicitWorkspace": false,
+      "status": 502,
+      "errorCode": "BI_UPSTREAM_UNAVAILABLE"
+    },
+    {
+      "explicitWorkspace": true,
+      "status": 502,
+      "errorCode": "BI_UPSTREAM_UNAVAILABLE"
+    }
+  ],
+  "failedRequests": [
+    {
+      "path": "/api/portal/bi/dashboards",
+      "status": 502
+    }
+  ],
+  "browserErrors": []
+}

@@ -1,0 +1,21 @@
+{
+  "live": {
+    "records": 90,
+    "displayedRows": 76,
+    "groups": 13,
+    "digest": "2f51260763cb89dd619a3e6e892183e625d6b809008c5a4e6346975e191ac92a",
+    "refreshRetainsCollapse": true
+  },
+  "fixture": {
+    "visibleRows": 8,
+    "groups": 7,
+    "snapshotCutoff": true,
+    "keyboardCollapse": true
+  },
+  "taskless": {
+    "visibleRows": 7,
+    "groups": 4,
+    "separateSaves": true,
+    "legacyExactTimestampOnly": true
+  }
+}
