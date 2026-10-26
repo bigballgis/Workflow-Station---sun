@@ -92,7 +92,12 @@ public class CatalogSnapshotReader {
                 continue;
             }
             var matches = tables.stream().filter(t -> boundTable(t, raw, related)).toList();
-            if (matches.isEmpty() && related && !legacyConsulted) {
+            // A RELATED binding with no relation table is a Lookup over one of the release's own tables:
+            // it binds that table by name, as the live binding loader joined dw_.
+            boolean ownTable = matches.isEmpty() && related && raw.get("relationTableId") == null;
+            if (ownTable) matches = tables.stream().filter(t -> boundTable(t, raw, false)).toList();
+            boolean relation = related && !ownTable;
+            if (matches.isEmpty() && relation && !legacyConsulted) {
                 legacyConsulted = true;
                 addLegacyRelationTables(catalogId, tables);
                 matches = tables.stream().filter(t -> boundTable(t, raw, related)).toList();
@@ -100,11 +105,11 @@ public class CatalogSnapshotReader {
             if (matches.size() != 1) throw invalid(catalogId);
             var table = matches.get(0);
             Map<String, Object> binding = new java.util.LinkedHashMap<>(raw);
-            Object tableId = related ? table.get("relationTableId") : table.get("tableId");
+            Object tableId = relation ? table.get("relationTableId") : table.get("tableId");
             binding.put("tableId", tableId);
             binding.put("tableType", table.get("tableType"));
             binding.put("tableDisplayName", table.get("tableDisplayName"));
-            if (related) {
+            if (relation) {
                 binding.put("relationTableId", tableId);
                 binding.put("relationTableName", table.get("tableName"));
                 // DW exports RELATED bindings without a name; give them the table's, as the live loader did.
@@ -184,10 +189,11 @@ public class CatalogSnapshotReader {
         }
         for (var form : contents(catalogId, "FORM")) {
             for (var raw : objects(form.get("tableBindings"))) {
-                if (!"RELATED".equals(raw.get("bindingType"))
+                // Developer Workstation always exports a relation table's id; a RELATED binding without one binds
+                // one of the release's own tables, which the relation-table history must not stand in for.
+                if (!"RELATED".equals(raw.get("bindingType")) || raw.get("relationTableId") == null
                         || sameId(raw.get("relationTableId"), SYSTEM_USERS_RELATION_TABLE_ID)) continue;
-                Object ref = raw.get("relationTableId") != null ? raw.get("relationTableId") : raw.get("tableName");
-                if (ref != null) pending.add(ref);
+                pending.add(raw.get("relationTableId"));
             }
         }
         Map<String, Map<String, Object>> byId = new java.util.LinkedHashMap<>();

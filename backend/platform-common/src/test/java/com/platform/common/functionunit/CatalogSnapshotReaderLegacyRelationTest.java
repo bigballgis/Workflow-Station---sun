@@ -154,6 +154,36 @@ class CatalogSnapshotReaderLegacyRelationTest {
         assertThat(fields.get(0)).containsEntry("refTableId", 2L);
     }
 
+    /**
+     * A Lookup over the release's own table never takes a same-named relation table from the history, whichever
+     * binding asks for the history first.
+     */
+    @Test
+    void relatedBindingToAnOwnTableIgnoresASameNamedRelationTableInTheHistory() {
+        legacy(true);
+        when(jdbc.queryForList(anyString(), eq(String.class), eq(LEGACY), eq("DATA_TABLE"))).thenReturn(List.of(
+                "{\"tableId\":10,\"tableName\":\"main\",\"tableType\":\"MAIN\",\"fields\":[]}",
+                "{\"tableId\":11,\"tableName\":\"bookings\",\"tableType\":\"SUB\",\"fields\":[]}"));
+        Map<String, Object> own = new HashMap<>();
+        own.put("bindingId", 8);
+        own.put("bindingType", "RELATED");
+        own.put("tableName", "bookings");
+        own.put("relationTableId", null);
+        Map<String, Object> mixed = Map.of("formId", 5, "tableBindings", List.of(
+                Map.of("bindingId", 7, "bindingType", "RELATED", "relationTableId", 2), own));
+        when(jdbc.queryForList(anyString(), eq(String.class), eq(LEGACY), eq("FORM"))).thenReturn(List.of(
+                "{\"formId\":5,\"tableBindings\":[{\"bindingId\":7,\"bindingType\":\"RELATED\",\"relationTableId\":2},"
+                        + "{\"bindingId\":8,\"bindingType\":\"RELATED\",\"tableName\":\"bookings\",\"relationTableId\":null}]}"));
+        lenient().when(jdbc.queryForList(contains("lower(d.table_name)"), eq("bookings"), anyString(), eq(LEGACY)))
+                .thenReturn(List.of(row(3L, "bookings", "Bookings", TEST_V14)));
+
+        Map<String, Object> binding = reader.formBindings(LEGACY, mixed).get(1);
+
+        assertThat(binding).containsEntry("tableId", 11).containsEntry("tableType", "SUB")
+                .doesNotContainKey("relationTableName");
+        verify(jdbc, never()).queryForList(contains("lower(d.table_name)"), eq("bookings"), anyString(), eq(LEGACY));
+    }
+
     @Test
     void historyIsReadInTheTimeZoneTheVersionsWereRecordedIn() {
         legacy(true);

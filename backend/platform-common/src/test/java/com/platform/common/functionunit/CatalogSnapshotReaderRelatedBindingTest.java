@@ -31,6 +31,10 @@ class CatalogSnapshotReaderRelatedBindingTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(anyString(), eq(String.class), eq(CATALOG), eq("DATA_TABLE"))).thenReturn(List.of(
                 "{\"tableId\":10,\"tableName\":\"main\",\"tableType\":\"MAIN\",\"fields\":[]}",
+                "{\"tableId\":11,\"tableName\":\"bookings\",\"tableType\":\"SUB\","
+                        + "\"fields\":[{\"fieldName\":\"booking_no\",\"dataType\":\"STRING\",\"isPrimaryKey\":true}]}",
+                "{\"tableId\":12,\"tableName\":\"showcase_doc\",\"tableType\":\"RELATION\","
+                        + "\"fields\":[{\"fieldName\":\"doc_no\",\"dataType\":\"STRING\",\"isPrimaryKey\":true}]}",
                 "{\"relationTableId\":2,\"tableName\":\"meeting_room\",\"tableType\":\"RELATION\","
                         + "\"fields\":[{\"fieldName\":\"room\",\"dataType\":\"STRING\",\"isPrimaryKey\":true}]}"));
         reader = new CatalogSnapshotReader(jdbc, new ObjectMapper());
@@ -65,6 +69,48 @@ class CatalogSnapshotReaderRelatedBindingTest {
         assertThat(binding).containsEntry("bindingId", 2).containsEntry("relationTableId", -1_000_000_001)
                 .containsEntry("tableId", null).containsEntry("tableType", "RELATION")
                 .containsEntry("fieldDefinitions", List.of());
+    }
+
+    /** A Lookup over one of the release's own tables has no relation table: it binds that table, as a SUB binding would. */
+    @Test
+    void relatedBindingToTheReleasesOwnTableResolvesThatTable() {
+        Map<String, Object> raw = related(4, null);
+        raw.put("tableName", "bookings");
+        raw.put("tableId", 999); // whatever the binding carries, the release's table decides
+        raw.put("tableType", "MAIN");
+        Map<String, Object> form = Map.of("tableBindings", List.of(raw));
+
+        Map<String, Object> binding = reader.formBindings(CATALOG, form).get(0);
+
+        assertThat(binding).containsEntry("tableId", 11).containsEntry("tableType", "SUB")
+                .containsEntry("tableName", "bookings").containsEntry("relationTableId", null)
+                .doesNotContainKey("relationTableName").containsEntry("primaryKeyFields", List.of("booking_no"));
+        // Activation and new requests read the same binding.
+        assertThat(reader.completeFormBindings(CATALOG, form)).containsExactly(binding);
+    }
+
+    @Test
+    void relatedBindingToAnOwnTableTheReleaseLacksIsIncomplete() {
+        Map<String, Object> raw = related(5, null);
+        raw.put("tableName", "missing");
+
+        assertThatThrownBy(() -> bindingsOf(raw))
+                .isInstanceOf(FunctionUnitVersionException.class)
+                .hasMessageContaining("VERSION_SNAPSHOT_INCOMPLETE");
+    }
+
+    /**
+     * A RELATED binding to a designer table typed RELATION keeps the relation shape it always had: Portal files its
+     * rows under the relation namespace by relationTableName (front end) and tableType (back end).
+     */
+    @Test
+    void relatedBindingToADesignerRelationTableKeepsTheRelationShape() {
+        Map<String, Object> raw = related(6, null);
+        raw.put("tableName", "showcase_doc");
+
+        Map<String, Object> binding = bindingsOf(raw).get(0);
+
+        assertThat(binding).containsEntry("tableType", "RELATION").containsEntry("relationTableName", "showcase_doc");
     }
 
     @Test
