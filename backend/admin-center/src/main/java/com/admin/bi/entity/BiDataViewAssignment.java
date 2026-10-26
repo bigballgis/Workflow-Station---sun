@@ -20,10 +20,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
-/** Dashboard binding for a User Portal Data -> Views table. */
+/** Dashboard binding for one concrete User Portal Table View. */
 @Entity
 @Table(name = "bi_data_view_assignment",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"dashboard_id", "table_id"}),
+        uniqueConstraints = @UniqueConstraint(columnNames = {"dashboard_id", "view_id"}),
         indexes = {
                 @Index(name = "idx_bi_data_view_assignment_fu", columnList = "function_unit_id"),
                 @Index(name = "idx_bi_data_view_assignment_table", columnList = "table_id"),
@@ -49,6 +49,13 @@ public class BiDataViewAssignment {
 
     @Column(name = "table_id", nullable = false)
     private Long tableId;
+
+    @Column(name = "enabled", nullable = false)
+    @Builder.Default
+    private Boolean enabled = true;
+
+    @Column(name = "view_id")
+    private Long viewId;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

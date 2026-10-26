@@ -134,6 +134,8 @@ export default {
     sectionSetup: '设置'
   },
   mainTableView: {
+    dashboardScopeHint: '此 Dashboard 分配给当前 View 展示。图表数据范围由 Superset 配置，不会自动继承 Records 的筛选条件。',
+    retryDashboard: '重试',
     openMyTask: '打开我的任务',
     myTasksOnRow: '该申请下你有 {count} 条任务',
     pickTaskToOpen: '打开哪条任务？',

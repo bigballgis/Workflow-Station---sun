@@ -66,10 +66,10 @@ public interface UserRepository extends JpaRepository<User, String> {
            "(:businessUnitId IS NULL OR u.id IN (SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId)) AND " +
            "(:status IS NULL OR u.status = :status) AND " +
            "(:keyword IS NULL OR :keyword = '' OR " +
-           "u.username LIKE CONCAT('%', :keyword, '%') OR " +
-           "u.fullName LIKE CONCAT('%', :keyword, '%') OR " +
-           "u.displayName LIKE CONCAT('%', :keyword, '%') OR " +
-           "u.email LIKE CONCAT('%', :keyword, '%'))")
+           "LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(u.displayName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<User> findByConditions(
             @Param("businessUnitId") String businessUnitId,
             @Param("status") UserStatus status,
@@ -107,6 +107,9 @@ public interface UserRepository extends JpaRepository<User, String> {
      * Note: platform-security {@code User} has no {@code userRoles} relationship.
      */
     Optional<User> findById(String userId);
+
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.id = :userId AND (u.deleted = false OR u.deleted IS NULL)")
+    boolean existsNonDeletedById(@Param("userId") String userId);
     
     /**
      * Whether the email is used by another non-deleted user (excluding {@code excludeUserId}).

@@ -40,6 +40,7 @@ export interface DashboardAssignmentResponse {
   layoutMode: LayoutMode
   displayOrder: number
   isDefault: boolean
+  enabled: boolean
   createdAt: string
   updatedAt: string
 }
@@ -52,9 +53,13 @@ export interface DataViewAssignmentResponse {
   functionUnitCode: string
   functionUnitName: string
   tableId: number
-  tableName: string
-  tableDisplayName: string
-  tableType: 'MAIN' | 'SUB'
+  tableName: string | null
+  tableDisplayName: string | null
+  tableType: 'MAIN' | 'SUB' | null
+  viewId: number | null
+  viewName: string | null
+  viewAvailable: boolean
+  enabled: boolean
   createdAt: string
   updatedAt: string
 }
@@ -72,6 +77,8 @@ export interface DataViewTableOption {
   tableDisplayName: string
   tableType: 'MAIN' | 'SUB'
 }
+
+export interface DataViewOption { id: number; viewName: string }
 
 export interface SyncResultResponse {
   created: number
@@ -131,18 +138,23 @@ export interface DashboardAssignmentCreateRequest {
   layoutMode?: LayoutMode
   displayOrder?: number
   isDefault?: boolean
+  enabled?: boolean
 }
 
 export interface DataViewAssignmentRequest {
   dashboardId: string
   functionUnitId: number
   tableId: number
+  viewId: number
+  enabled?: boolean
 }
 
 export interface DataViewAssignmentBatchRequest {
   dashboardIds: string[]
   functionUnitId: number
   tableId: number
+  viewId: number
+  enabled?: boolean
 }
 
 export interface RbacMappingUpdateRequest {
@@ -209,6 +221,16 @@ export interface AssignmentListQuery {
   size: number
   targetType?: string
   dashboardTitle?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+}
+
+export interface DataViewAssignmentListQuery {
+  page: number
+  size: number
+  dashboardTitle?: string
+  functionUnitId?: number
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
@@ -285,6 +307,9 @@ export const biManagementApi = {
     update: (id: string, data: DashboardAssignmentCreateRequest) =>
       put<DashboardAssignmentResponse>(`${ASSIGNMENT_BASE}/${id}`, data),
 
+    setEnabled: (id: string, enabled: boolean) =>
+      put<{ data: DashboardAssignmentResponse }>(`${ASSIGNMENT_BASE}/${id}/enabled`, { enabled }).then(r => r.data),
+
     /** Delete assignment record */
     delete: (id: string) =>
       del<void>(`${ASSIGNMENT_BASE}/${id}`),
@@ -294,8 +319,11 @@ export const biManagementApi = {
       get<UserDashboardResponse[]>(`${ASSIGNMENT_BASE}/user/${userId}`),
   },
 
-  /** Dashboard-to-table bindings used by User Portal Data -> Views. */
+  /** Dashboard bindings to concrete published Table Views. */
   dataViewAssignment: {
+    query: (data: DataViewAssignmentListQuery) =>
+      post<AdminListPage<DataViewAssignmentResponse>>(`${DATA_VIEW_ASSIGNMENT_BASE}/query`, data),
+
     create: (data: DataViewAssignmentRequest) =>
       post<DataViewAssignmentResponse>(DATA_VIEW_ASSIGNMENT_BASE, data),
 
@@ -307,6 +335,8 @@ export const biManagementApi = {
       size?: number
       dashboardTitle?: string
       functionUnitId?: number
+      enabled?: boolean
+      viewId?: number
     }) => get<PageResponse<DataViewAssignmentResponse>>(DATA_VIEW_ASSIGNMENT_BASE, { params }),
 
     update: (id: string, data: DataViewAssignmentRequest) =>
@@ -314,6 +344,12 @@ export const biManagementApi = {
 
     delete: (id: string) =>
       del<void>(`${DATA_VIEW_ASSIGNMENT_BASE}/${id}`),
+
+    setEnabled: (id: string, enabled: boolean) =>
+      put<{ data: DataViewAssignmentResponse }>(`${DATA_VIEW_ASSIGNMENT_BASE}/${id}/enabled`, { enabled }).then(r => r.data),
+
+    listViews: (functionUnitId: number, tableId: number) =>
+      get<{ data: DataViewOption[] }>(`${DATA_VIEW_ASSIGNMENT_BASE}/function-units/${functionUnitId}/tables/${tableId}/views`).then(r => r.data),
 
     listFunctionUnits: () =>
       get<DataViewFunctionUnitOption[]>(`${DATA_VIEW_ASSIGNMENT_BASE}/function-units`),

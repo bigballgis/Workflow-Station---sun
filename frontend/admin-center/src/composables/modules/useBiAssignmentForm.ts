@@ -5,7 +5,7 @@
  * Dialog 组件仅保留 template + formRef + 调用此 composable。
  */
 
-import { ref, reactive, computed, type Ref } from 'vue'
+import { ref, reactive, computed, toRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
 import {
@@ -16,7 +16,7 @@ import {
   type AssignmentTargetType,
   type LayoutMode
 } from '@/api/biManagement'
-import { userApi, type User } from '@/api/user'
+import { useBiTargetUsers } from './useBiTargetUsers'
 import { roleApi, type Role } from '@/api/role'
 import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 
@@ -39,7 +39,6 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
   const submitLoading = ref(false)
   const dashboardsLoading = ref(false)
   const targetsLoading = ref(false)
-  const userSearchLoading = ref(false)
   const dialogInitializing = ref(false)
 
   const editingId = ref('')
@@ -49,7 +48,6 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
 
   const targetSelectOptions = ref<{ id: string; label: string }[]>([])
   const targetsSeq = ref(0)
-  const userSearchSeq = ref(0)
 
   const form = reactive({
     dashboardId: '',
@@ -58,6 +56,7 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
     layoutMode: 'SINGLE' as LayoutMode,
     displayOrder: 0,
     isDefault: false,
+    enabled: true,
   })
 
   // ==================== Computed ====================
@@ -95,7 +94,8 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
     layoutMode: [{ required: true, message: t('bi.assignment.ruleSelectLayoutMode'), trigger: 'change' }],
   }))
 
-  const userOptionLabel = (u: User) => `${u.fullName} (${u.username})`
+  const users = useBiTargetUsers(targetSelectOptions, toRef(form, 'targetId'))
+  const userSearchLoading = users.loading
 
   // ==================== Form Reset ====================
 
@@ -106,6 +106,8 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
     form.layoutMode = 'SINGLE'
     form.displayOrder = 0
     form.isDefault = false
+    form.enabled = true
+    users.cancel()
     editingId.value = ''
     targetSelectOptions.value = []
   }
@@ -161,60 +163,21 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
     }
   }
 
-  const loadDefaultUsersForTarget = async () => {
-    const seq = ++userSearchSeq.value
-    userSearchLoading.value = true
-    try {
-      const res = await userApi.list({ page: 0, size: 3 })
-      if (seq !== userSearchSeq.value) return
-      targetSelectOptions.value = (res.content || []).map((u: User) => ({
-        id: u.id, label: userOptionLabel(u),
-      }))
-    } catch {
-      if (seq === userSearchSeq.value) {
-        targetSelectOptions.value = []
-        notifyError(t('bi.assignment.loadTargetsFailed'))
-      }
-    } finally {
-      if (seq === userSearchSeq.value) userSearchLoading.value = false
-    }
-  }
-
-  const searchUsers = async (query: string) => {
-    const seq = ++userSearchSeq.value
-    userSearchLoading.value = true
-    try {
-      const params = query.trim()
-        ? { keyword: query.trim(), page: 0, size: 20 }
-        : { page: 0, size: 3 }
-      const res = await userApi.list(params)
-      if (seq !== userSearchSeq.value) return
-      targetSelectOptions.value = (res.content || []).map((u: User) => ({
-        id: u.id, label: userOptionLabel(u),
-      }))
-    } catch {
-      if (seq === userSearchSeq.value) {
-        targetSelectOptions.value = []
-        notifyError(t('bi.assignment.loadTargetsFailed'))
-      }
-    } finally {
-      if (seq === userSearchSeq.value) userSearchLoading.value = false
-    }
-  }
-
   const onTargetTypeChange = (val: string | AssignmentTargetType | '') => {
-    userSearchSeq.value++
+    users.cancel()
     targetsSeq.value++
     form.targetId = ''
     targetSelectOptions.value = []
     if (!val) return
-    if (val === 'USER') void loadDefaultUsersForTarget()
+    if (val === 'USER') void users.searchUsers('')
     else void loadTargetsRoleBu(val as AssignmentTargetType)
   }
 
   // ==================== Dialog Init ====================
 
   const initDialog = async () => {
+    users.cancel()
+    targetsSeq.value++
     dialogInitializing.value = true
     try {
       if (isEdit.value && initialRow.value) {
@@ -227,6 +190,7 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
           layoutMode: row.layoutMode,
           displayOrder: row.displayOrder,
           isDefault: row.isDefault,
+          enabled: row.enabled,
         })
         if (row.targetType === 'USER') {
           targetSelectOptions.value = [{ id: row.targetId, label: row.targetName }]
@@ -256,6 +220,8 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
         layoutMode: form.layoutMode,
         displayOrder: form.displayOrder,
         isDefault: form.isDefault,
+        // Omitted on unchanged edits so another administrator's status change survives.
+        ...(!isEdit.value || form.enabled !== initialRow.value?.enabled ? { enabled: form.enabled } : {}),
       }
       if (isEdit.value) {
         await biManagementApi.assignment.update(editingId.value, data)
@@ -278,7 +244,8 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
     submitLoading, dashboardsLoading, targetsLoading, userSearchLoading, dialogInitializing,
     activeDashboards, targetSelectOptions,
     isEdit, dialogTitle, targetTypeOptions, layoutModeOptions,
-    onTargetTypeChange, searchUsers,
+    onTargetTypeChange, cancelUserSearch: users.cancel, searchUsers: users.searchUsers, scheduleUserSearch: users.scheduleSearch,
+    loadMoreUsers: users.loadMore, retryUsers: users.retry, moreUsers: users.hasMore, userSearchFailed: users.failed,
     handleSubmit, initDialog,
   }
 }

@@ -11,11 +11,11 @@ export default defineConfig({
     vue(),
     AutoImport({
       imports: ['vue', 'vue-router', 'pinia', 'vue-i18n'],
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver({ importStyle: process.env.VITEST ? false : 'css' })],
       dts: 'src/auto-imports.d.ts'
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver({ importStyle: process.env.VITEST ? false : 'css' })],
       dts: 'src/components.d.ts'
     })
   ],

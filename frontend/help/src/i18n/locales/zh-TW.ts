@@ -9,6 +9,39 @@ import aiStudioMessages from './aiStudio.zh-TW'
 import slaPoliciesMessages from './slaPolicies.zh-TW'
 
 export default {
+  biAudienceGuide: {
+    title: 'Audience Assignment',
+    intro: '設定誰可以從入口網站首頁開啟 Dashboard。Table View 內的報表請使用 [[/bi-data-view-assignment]]。',
+    step1: '開啟 BI Management → Audience Assignment → 新增指派。',
+    step2: '選擇有效的 Dashboard、目標類型和目標對象。',
+    step3: '設定版面、顯示順序、預設項與啟用狀態，然後確認。',
+    configureTitle: '設定欄位',
+    fields: 'Dashboard、目標類型、目標對象與版面為必填。User 可選擇任何未刪除的平台帳號，選項中顯示帳號狀態；Role 對符合角色的使用者生效；Business Unit 在目前工作區生效。',
+    options: 'Target User 支援姓名、使用者名稱和電子郵件搜尋，按「載入更多使用者」查看後續結果。Single 為單一報表，Multi 為頁籤，Widget 為卡片。顯示順序越小越靠前；預設項決定頁籤版面的初始報表。',
+    exampleTitle: '設定範例',
+    example: '同時將訂單報表指派給銷售角色和張三。停用張三的直接指派後，銷售角色的有效指派仍可授權，並提供對應版面設定。',
+    statusTitle: '啟用與停用',
+    status: '在 Actions（操作）欄中使用啟用或停用，與編輯、刪除並列；確認後，Enabled 欄顯示儲存的狀態。新增預設啟用。在清單或編輯視窗關閉啟用後，設定保留，但不再透過此指派授權。重新啟用時檢查 Dashboard 有效且目標仍存在。已開啟的嵌入可能持續到目前 Token 到期。',
+    troubleTitle: '報表沒有出現時',
+    trouble: '檢查指派啟用狀態、Dashboard 狀態、目標成員關係及 Superset 角色對應。停用、鎖定或待啟用帳號可以預先設定，實際使用仍需符合平台登入規則。',
+  },
+  biViewGuide: {
+    title: 'Data View Assignment',
+    intro: '讓 Dashboard 出現在指定的已發佈 Table View 中。此設定控制入口，圖表資料及篩選由 Superset 管理。首頁指派見 [[/bi-audience-assignment]]。',
+    step1: '開啟 BI Management → Data View Assignment → 新增指派。',
+    step2: '依序選擇 Function Unit → 資料表 → 資料表檢視，再選擇一個或多個 Dashboard。',
+    step3: '設定啟用狀態並確認。在 Portal 選擇該 View，從 Records 切換到 Dashboard。',
+    configureTitle: '設定欄位',
+    fields: 'Function Unit、資料表、資料表檢視和 Dashboard 為必填。僅可選擇目前資料表下已發佈的 View。多選 Dashboard 會產生獨立指派；修改 Function Unit 或資料表會清空下級選擇。',
+    options: '同一 Dashboard 可指派到多個 View；同一 Dashboard 與 View 組合不能重複，停用記錄也佔用該組合。請編輯原記錄重新啟用。Records 搜尋條件及 View 資料列限制不會自動傳入 Superset。 Target 顯示 Function Unit 名稱。使用各列表頭選單篩選、排序、移動或調整欄寬；Enabled 透過列表頭篩選，不設獨立搜尋框。',
+    exampleTitle: '設定範例',
+    example: '訂單表有「我的訂單」和「全部訂單」。僅給「我的訂單」指派銷售概覽後，它顯示 Records / Dashboard；「全部訂單」仍只有 Records。多份報表使用名稱頁籤切換，切換 View 時預設返回 Records。',
+    statusTitle: '啟用與停用',
+    status: '在 Actions（操作）欄中使用啟用或停用，與編輯、刪除並列；確認後，Enabled 欄顯示儲存的狀態。停用僅關閉目前綁定，不影響其他 View 和首頁授權。沒有可存取且啟用的報表時，僅顯示 Records。升級時舊整表指派展開到當時已發佈的 View，之後新增的 View 不自動繼承。',
+    troubleTitle: '報表沒有出現時',
+    trouble: '檢查啟用狀態、View 是否發佈、使用者 View 權限、Dashboard 狀態及 Superset 角色對應。「檢視無法使用」表示原 View 被刪除、重建或撤回發佈，請編輯並明確選擇已發佈 View。載入失敗可重試，也可返回 Records。',
+  },
+
   newRequestsGuide: {"title": "新增申請", "intro": "選擇流程卡片開啟申請表單。頁面只列出目前工作區中可存取的流程。", "crumb": "使用者入口 · 申請", "flowTitle": "發起申請", "flow1": "開啟申請 → 新增申請。", "flow2": "搜尋流程，或在常用流程中選擇卡片。", "flow3": "點選卡片、填寫表單，再使用表單中的提交操作。", "browseTitle": "尋找流程", "browseBody": "使用標題旁的搜尋框篩選卡片，清空搜尋框可恢復清單。每張卡片顯示圖示、名稱、已設定的描述和版本。名稱或描述被截斷時，可將滑鼠停留在文字上查看全文。", "favoritesTitle": "常用流程", "favoritesBody": "點選卡片右上角的空心星號即可收藏，點選實心星號即可取消收藏。點選星號不會開啟申請表單。伺服器確認後，兩個區域會同步更新；收藏按目前使用者儲存，重新整理後仍然保留。儲存期間，同一流程在兩個區域的星號都會停用。儲存失敗時，請依提示重新整理頁面確認儲存狀態。搜尋同樣會篩選常用流程區。取消最後一個收藏後，該區域隱藏，流程仍保留在主網格中。", "emptyTitle": "找不到所需流程", "emptyBody": "搜尋無結果時，清空搜尋框或更換關鍵字。沒有可用流程時，請檢查目前業務單元和角色，或聯絡管理員確認存取權限。點選卡片只開啟表單，不會提交申請。"},
   recordNoteGuide: {"title": "Record Note", "intro": "在 Request 或子表表單中放置 Record Note，讓使用者在部署後的表單中提交記錄與檔案。提交後不可編輯或刪除。", "crumb": "Developer Workstation · Form Design · Extend", "flowTitle": "設定順序", "flow1": "將 Record Note 放入目標表單，選擇 Scope，並決定是否允許附件。", "flow2": "需要附件通知時，開啟附件站內通知，選擇負責辦理的 Sub-Task 節點，然後儲存表單並部署 Function Unit。", "flow3": "在 User Portal 中提交帶正式附件的記錄，使用另一位辦理人的帳號檢查通知及開啟位置。", "scopeTitle": "選擇記錄共用範圍", "scopeBody": "Whole table 在目前 Request 內共用該表的一條記錄流。Single record 僅用於子表表單，每行獨立儲存記錄。共用記錄流不授予其他 Request 的存取權。", "fieldsTitle": "面板屬性", "scopeField": "Whole table：目前 Request 內按表共用；Single record：僅目前子表行。", "titleField": "選填的面板標題。", "attachmentField": "預設開啟。啟用附件通知前必須允許附件。", "sizeField": "每個檔案的大小上限，範圍為 1 至 10 MB。", "pageField": "每頁顯示的記錄數，範圍為 1 至 20。", "readonlyField": "在 To Do 表單中禁止新增記錄。Request 表單仍要求目前角色具有 Audit 權限。", "notifyTitle": "附件站內通知", "notifyBody": "預設關閉。只有包含正式附件且提交成功的記錄才觸發通知。純文字、富文字內嵌圖片和放棄編輯時預先上傳的圖片不觸發通知。同一次提交對同一使用者最多提醒一次，即使該使用者負責多個關聯行。上傳者本人不會收到提醒。", "enableField": "開啟後，為新的正式附件提交產生通知。關閉後停止產生新的通知意圖，已受理通知保留處理記錄。", "targetsField": "開啟時必選。選擇本流程中實際負責行資料辦理的任務節點。Person 與 BU Team 接收人沿用節點既有的分派設定。", "recipientsTitle": "接收人規則", "recipientsBody": "Case Notes 彙總設定的 Sub-Task 及關聯行的辦理人；Transaction Notes 僅限目前行。Person 讀取設定人員欄位；BU Team 使用 Claim 人，自動分派給唯一成員時該成員也可接收。任務完成後使用本輪最終接收人快照。退回或重辦後，尚未投遞的通知按目前有效輪次重新解析；已送達通知不會因換人再次傳送。", "openTitle": "開啟通知", "openBody": "在 User Portal 開啟「通知 → 附件更新」。通知顯示 Request 名稱（ID）、記錄位置和正式附件數量。新提交還會顯示上傳來源：實際 Task / Sub-Task、我的申請、審核或新增申請。在任務中上傳的附件既可能屬於 Case Notes，也可能屬於 Transaction Notes，來源不會改變共享範圍。歷史提交未記錄來源時不顯示該行。點擊後查看 Record Note 中的這次提交。系統會重新檢查存取權，收到通知不會額外授予 Request 或檔案存取權。既有通知偏好仍然生效。", "waitingTitle": "通知為何等待", "waitingBody": "階段尚未開始時等待啟用；BU Team 尚無辦理人時等待有效 Claim。歷史任務缺少可信輪次或最終接收人時保留待處理狀態，不廣播候選團隊，也不猜測舊辦理人。"},
 

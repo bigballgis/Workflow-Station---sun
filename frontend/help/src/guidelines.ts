@@ -37,6 +37,10 @@ export type NavNode = NavGroup | NavLeaf
 
 /** Add a guideline: append here, then add the view + i18n keys + a NAV_TREE leaf. */
 export const GUIDELINES: Guideline[] = [
+  { id: 'ac-bi-assign', path: '/bi-audience-assignment', titleKey: 'biAudienceGuide.title',
+    summaryKey: 'biAudienceGuide.intro', load: () => import('@/views/BiAssignmentGuide.vue') },
+  { id: 'ac-bi-data-view-assign', path: '/bi-data-view-assignment', titleKey: 'biViewGuide.title',
+    summaryKey: 'biViewGuide.intro', load: () => import('@/views/BiAssignmentGuide.vue') },
   { id: 'up-new', path: '/up-new', titleKey: 'newRequestsGuide.title',
     summaryKey: 'newRequestsGuide.intro', load: () => import('@/views/NewRequestsGuide.vue') },
   { id: 'form-ctl-record-note', path: '/form-ctl-record-note', titleKey: 'recordNoteGuide.title',
@@ -407,8 +411,8 @@ export const NAV_TREE: NavNode[] = [
         titleKey: 'nav.acBi',
         children: [
           { kind: 'leaf', id: 'ac-bi-reg', titleKey: 'nav.acBiRegistry' },
-          { kind: 'leaf', id: 'ac-bi-assign', titleKey: 'nav.acBiAssignment' },
-          { kind: 'leaf', id: 'ac-bi-data-view-assign', titleKey: 'nav.acBiDataViewAssignment' },
+          { kind: 'leaf', id: 'ac-bi-assign', titleKey: 'nav.acBiAssignment', to: '/bi-audience-assignment' },
+          { kind: 'leaf', id: 'ac-bi-data-view-assign', titleKey: 'nav.acBiDataViewAssignment', to: '/bi-data-view-assignment' },
           { kind: 'leaf', id: 'ac-bi-rbac', titleKey: 'nav.acBiRbac' },
         ],
       },

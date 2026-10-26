@@ -12,6 +12,8 @@ import com.admin.bi.entity.BiDataViewAssignment;
 import com.admin.bi.enums.DashboardStatus;
 import com.admin.bi.repository.BiDashboardRegistryRepository;
 import com.admin.bi.repository.BiDataViewAssignmentRepository;
+import com.admin.bi.repository.BiDataViewMetadataRepository;
+import com.admin.bi.dto.response.DataViewOptionResponse;
 import com.admin.bi.service.BiDataViewAssignmentService;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.DashboardInactiveException;
@@ -20,6 +22,7 @@ import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRoleRepository;
 import com.admin.service.UserBusinessUnitService;
 import com.platform.security.entity.Role;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -54,35 +57,55 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
     private final RoleRepository roleRepository;
     private final UserBusinessUnitService userBusinessUnitService;
     private final DashboardRoleGate dashboardRoleGate;
+    // Controller audit can preload this row; refresh it after acquiring the database lock.
+    private final EntityManager entityManager;
+
+    private final BiDataViewMetadataRepository metadata;
+
+    @Override
+    @Transactional
+    public DataViewAssignmentResponse updateEnabled(String id, boolean enabled) {
+        BiDataViewAssignment assignment = assignmentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new AdminBusinessException("ASSIGNMENT_NOT_FOUND", "Assignment not found"));
+        entityManager.refresh(assignment);
+        if (enabled) {
+            requireActiveDashboard(assignment.getDashboardId());
+            metadata.requirePublishedView(assignment.getFunctionUnitId(), assignment.getTableId(), assignment.getViewId());
+        }
+        assignment.setEnabled(enabled);
+        return toResponse(assignmentRepository.saveAndFlush(assignment));
+    }
 
     @Override
     @Transactional
     public DataViewAssignmentResponse create(DataViewAssignmentRequest request) {
-        BiDashboardRegistry dashboard = requireActiveDashboard(request.getDashboardId());
-        TableContext table = requireTable(request.getFunctionUnitId(), request.getTableId());
-        if (assignmentRepository.existsByDashboardIdAndTableId(request.getDashboardId(), request.getTableId())) {
+        requireActiveDashboard(request.getDashboardId());
+        metadata.requirePublishedView(request.getFunctionUnitId(), request.getTableId(), request.getViewId());
+        if (assignmentRepository.existsByDashboardIdAndViewId(request.getDashboardId(), request.getViewId())) {
             throw new AdminBusinessException(
                     "DUPLICATE_DATA_VIEW_ASSIGNMENT",
-                    "This dashboard is already assigned to the selected table");
+                    "This dashboard is already assigned to the selected View");
         }
 
-        BiDataViewAssignment saved = assignmentRepository.save(BiDataViewAssignment.builder()
+        BiDataViewAssignment saved = assignmentRepository.saveAndFlush(BiDataViewAssignment.builder()
                 .id(UUID.randomUUID().toString())
                 .dashboardId(request.getDashboardId())
                 .functionUnitId(request.getFunctionUnitId())
                 .tableId(request.getTableId())
+                .viewId(request.getViewId())
+                .enabled(request.getEnabled() == null || request.getEnabled())
                 .build());
-        return toResponse(saved, dashboard, table);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional
     public List<DataViewAssignmentResponse> createBatch(DataViewAssignmentBatchRequest request) {
-        TableContext table = requireTable(request.getFunctionUnitId(), request.getTableId());
+        metadata.requirePublishedView(request.getFunctionUnitId(), request.getTableId(), request.getViewId());
         List<String> dashboardIds = new LinkedHashSet<>(request.getDashboardIds()).stream().toList();
 
         Set<String> existingDashboardIds = assignmentRepository
-                .findByTableIdOrderByCreatedAtAsc(request.getTableId()).stream()
+                .findByViewId(request.getViewId()).stream()
                 .map(BiDataViewAssignment::getDashboardId)
                 .collect(Collectors.toSet());
         List<String> duplicates = dashboardIds.stream()
@@ -91,15 +114,16 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
         if (!duplicates.isEmpty()) {
             throw new AdminBusinessException(
                     "DUPLICATE_DATA_VIEW_ASSIGNMENT",
-                    "One or more selected dashboards are already assigned to the selected table");
+                    "One or more selected dashboards are already assigned to the selected View");
         }
 
-        Map<String, BiDashboardRegistry> dashboards = dashboardIds.stream()
-                .map(this::requireActiveDashboard)
-                .collect(Collectors.toMap(
-                        BiDashboardRegistry::getId,
-                        Function.identity(),
-                        (left, right) -> left));
+        Map<String, BiDashboardRegistry> dashboards = dashboardRepository.findAllById(dashboardIds).stream()
+                .collect(Collectors.toMap(BiDashboardRegistry::getId, Function.identity()));
+        for (String dashboardId : dashboardIds) {
+            BiDashboardRegistry dashboard = dashboards.get(dashboardId);
+            if (dashboard == null) throw new DashboardNotFoundException(dashboardId);
+            if (dashboard.getStatus() != DashboardStatus.ACTIVE) throw new DashboardInactiveException(dashboardId);
+        }
 
         List<BiDataViewAssignment> assignments = dashboardIds.stream()
                 .map(dashboardId -> BiDataViewAssignment.builder()
@@ -107,54 +131,60 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
                         .dashboardId(dashboardId)
                         .functionUnitId(request.getFunctionUnitId())
                         .tableId(request.getTableId())
+                        .viewId(request.getViewId())
+                        .enabled(request.getEnabled() == null || request.getEnabled())
                         .build())
                 .toList();
 
-        return assignmentRepository.saveAll(assignments).stream()
-                .map(assignment -> toResponse(
-                        assignment,
-                        dashboards.get(assignment.getDashboardId()),
-                        table))
-                .toList();
+        List<BiDataViewAssignment> saved = assignmentRepository.saveAllAndFlush(assignments);
+        return metadata.responses(saved.stream().map(BiDataViewAssignment::getId).toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<DataViewAssignmentResponse> list(
-            String dashboardTitle, Long functionUnitId, Pageable pageable) {
+            String dashboardTitle, Long functionUnitId, Boolean enabled, Long viewId, Pageable pageable) {
         String normalizedTitle = dashboardTitle == null || dashboardTitle.isBlank()
                 ? null : dashboardTitle.trim();
-        return assignmentRepository.findByFilters(normalizedTitle, functionUnitId, pageable)
-                .map(this::toResponse);
+        Page<BiDataViewAssignment> page = assignmentRepository.findByFilters(
+                normalizedTitle, functionUnitId, enabled, viewId, pageable);
+        Map<String, DataViewAssignmentResponse> responses = metadata.responses(
+                page.getContent().stream().map(BiDataViewAssignment::getId).toList()).stream()
+                .collect(Collectors.toMap(DataViewAssignmentResponse::getId, Function.identity()));
+        return page.map(a -> responses.get(a.getId()));
     }
 
     @Override
     @Transactional
     public DataViewAssignmentResponse update(String id, DataViewAssignmentRequest request) {
-        BiDataViewAssignment assignment = assignmentRepository.findById(id)
+        BiDataViewAssignment assignment = assignmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new AdminBusinessException(
                         "DATA_VIEW_ASSIGNMENT_NOT_FOUND", "Data View Assignment not found: " + id));
-        BiDashboardRegistry dashboard = requireActiveDashboard(request.getDashboardId());
-        TableContext table = requireTable(request.getFunctionUnitId(), request.getTableId());
-        if (assignmentRepository.existsByDashboardIdAndTableIdAndIdNot(
-                request.getDashboardId(), request.getTableId(), id)) {
+        entityManager.refresh(assignment);
+        requireActiveDashboard(request.getDashboardId());
+        metadata.requirePublishedView(request.getFunctionUnitId(), request.getTableId(), request.getViewId());
+        if (assignmentRepository.existsByDashboardIdAndViewIdAndIdNot(
+                request.getDashboardId(), request.getViewId(), id)) {
             throw new AdminBusinessException(
                     "DUPLICATE_DATA_VIEW_ASSIGNMENT",
-                    "This dashboard is already assigned to the selected table");
+                    "This dashboard is already assigned to the selected View");
         }
 
         assignment.setDashboardId(request.getDashboardId());
         assignment.setFunctionUnitId(request.getFunctionUnitId());
         assignment.setTableId(request.getTableId());
-        return toResponse(assignmentRepository.save(assignment), dashboard, table);
+        assignment.setViewId(request.getViewId());
+        if (request.getEnabled() != null) assignment.setEnabled(request.getEnabled());
+        return toResponse(assignmentRepository.saveAndFlush(assignment));
     }
 
     @Override
     @Transactional
     public void delete(String id) {
-        BiDataViewAssignment assignment = assignmentRepository.findById(id)
+        BiDataViewAssignment assignment = assignmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new AdminBusinessException(
                         "DATA_VIEW_ASSIGNMENT_NOT_FOUND", "Data View Assignment not found: " + id));
+        entityManager.refresh(assignment);
         assignmentRepository.delete(assignment);
     }
 
@@ -162,17 +192,17 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
     @Transactional(readOnly = true)
     public List<DataViewFunctionUnitOptionResponse> listFunctionUnits() {
         return jdbcTemplate.query("""
-                SELECT DISTINCT fu.id, fu.code, COALESCE(NULLIF(fu.display_name, ''), fu.name) AS display_name
+                SELECT DISTINCT fu.id, fu.code, fu.name
                 FROM dw_function_units fu
                 INNER JOIN dw_main_table_view_configs v ON v.function_unit_id = fu.id
                 INNER JOIN dw_table_definitions td
                         ON td.id = v.main_table_id AND td.function_unit_id = fu.id
                 WHERE v.status = 'PUBLISHED' AND td.table_type IN ('MAIN', 'SUB')
-                ORDER BY display_name, fu.code
+                ORDER BY fu.name, fu.code
                 """, (rs, rowNum) -> DataViewFunctionUnitOptionResponse.builder()
                 .id(rs.getLong("id"))
                 .code(rs.getString("code"))
-                .name(rs.getString("display_name"))
+                .name(rs.getString("name"))
                 .build());
     }
 
@@ -208,8 +238,11 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
         // Same RBAC-mapping role gate as the landing page: a dashboard that carries Superset roles is
         // listed only when the user's mapped Superset roles cover it (see DashboardRoleGate).
         DashboardRoleGate.Check roleGate = dashboardRoleGate.forUser(userId);
-        return assignmentRepository.findByTableIdOrderByCreatedAtAsc(view.tableId()).stream()
-                .map(a -> dashboardRepository.findById(a.getDashboardId()).orElse(null))
+        List<BiDataViewAssignment> bindings = assignmentRepository.findByViewIdAndEnabledTrueOrderByCreatedAtAscIdAsc(view.id());
+        Map<String, BiDashboardRegistry> dashboards = dashboardRepository.findAllById(
+                bindings.stream().map(BiDataViewAssignment::getDashboardId).toList()).stream()
+                .collect(Collectors.toMap(BiDashboardRegistry::getId, Function.identity()));
+        return bindings.stream().map(a -> dashboards.get(a.getDashboardId()))
                 .filter(Objects::nonNull)
                 .filter(d -> d.getStatus() == DashboardStatus.ACTIVE)
                 .filter(roleGate::allows)
@@ -226,7 +259,7 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
     @Transactional(readOnly = true)
     public boolean canAccessDashboardForView(String userId, String dashboardId, Long viewId) {
         ViewContext view = requireAccessibleView(userId, viewId);
-        if (!assignmentRepository.existsByDashboardIdAndTableId(dashboardId, view.tableId())) {
+        if (!assignmentRepository.existsByDashboardIdAndViewIdAndEnabledTrue(dashboardId, view.id())) {
             return false;
         }
         return dashboardRepository.findById(dashboardId)
@@ -241,44 +274,6 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
             throw new DashboardInactiveException(dashboardId);
         }
         return dashboard;
-    }
-
-    private TableContext requireTable(Long functionUnitId, Long tableId) {
-        try {
-            TableContext table = jdbcTemplate.query("""
-                    SELECT td.id, td.function_unit_id, td.table_name,
-                           COALESCE(NULLIF(td.table_display_name, ''), td.table_name) AS table_display_name,
-                           td.table_type, fu.code AS function_unit_code,
-                           COALESCE(NULLIF(fu.display_name, ''), fu.name) AS function_unit_name
-                    FROM dw_table_definitions td
-                    INNER JOIN dw_function_units fu ON fu.id = td.function_unit_id
-                    WHERE td.id = ? AND td.function_unit_id = ?
-                          AND td.table_type IN ('MAIN', 'SUB')
-                          AND EXISTS (
-                              SELECT 1
-                              FROM dw_main_table_view_configs v
-                              WHERE v.main_table_id = td.id
-                                AND v.function_unit_id = td.function_unit_id
-                                AND v.status = 'PUBLISHED'
-                          )
-                    """, rs -> rs.next() ? new TableContext(
-                    rs.getLong("id"),
-                    rs.getLong("function_unit_id"),
-                    rs.getString("table_name"),
-                    rs.getString("table_display_name"),
-                    rs.getString("table_type"),
-                    rs.getString("function_unit_code"),
-                    rs.getString("function_unit_name")) : null, tableId, functionUnitId);
-            if (table == null) {
-                throw new AdminBusinessException(
-                        "DATA_VIEW_TABLE_NOT_FOUND",
-                        "The selected request/sub table does not belong to the target function unit");
-            }
-            return table;
-        } catch (DataAccessException e) {
-            throw new AdminBusinessException(
-                    "DATA_VIEW_TABLE_LOOKUP_FAILED", "Unable to resolve the target table", e);
-        }
     }
 
     private ViewContext requireAccessibleView(String userId, Long viewId) {
@@ -369,37 +364,12 @@ public class BiDataViewAssignmentServiceImpl implements BiDataViewAssignmentServ
     }
 
     private DataViewAssignmentResponse toResponse(BiDataViewAssignment assignment) {
-        BiDashboardRegistry dashboard = dashboardRepository.findById(assignment.getDashboardId()).orElse(null);
-        TableContext table = requireTable(assignment.getFunctionUnitId(), assignment.getTableId());
-        return toResponse(assignment, dashboard, table);
+        return metadata.responses(List.of(assignment.getId())).get(0);
     }
 
-    private DataViewAssignmentResponse toResponse(
-            BiDataViewAssignment assignment, BiDashboardRegistry dashboard, TableContext table) {
-        return DataViewAssignmentResponse.builder()
-                .id(assignment.getId())
-                .dashboardId(assignment.getDashboardId())
-                .dashboardTitle(dashboard != null ? dashboard.getDashboardTitle() : null)
-                .functionUnitId(assignment.getFunctionUnitId())
-                .functionUnitCode(table.functionUnitCode())
-                .functionUnitName(table.functionUnitName())
-                .tableId(assignment.getTableId())
-                .tableName(table.tableName())
-                .tableDisplayName(table.tableDisplayName())
-                .tableType(table.tableType())
-                .createdAt(assignment.getCreatedAt())
-                .updatedAt(assignment.getUpdatedAt())
-                .build();
-    }
-
-    private record TableContext(
-            Long id,
-            Long functionUnitId,
-            String tableName,
-            String tableDisplayName,
-            String tableType,
-            String functionUnitCode,
-            String functionUnitName) {
+    @Override
+    public List<DataViewOptionResponse> listViews(Long functionUnitId, Long tableId) {
+        return metadata.listViews(functionUnitId, tableId);
     }
 
     private record ViewContext(Long id, Long tableId, String functionUnitCode) {

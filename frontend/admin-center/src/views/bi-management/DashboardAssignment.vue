@@ -2,6 +2,7 @@
   <div class="page-container">
     <PageHeader :title="t('bi.assignment.pageTitle')">
       <template #actions>
+        <DesignerHelpLink path="/bi-audience-assignment" :ariaLabel="t('bi.assignment.guidance')" />
         <el-button @click="exportGridCsv('bi-dashboard-assignments')">
           <el-icon><Download /></el-icon>{{ t('common.export') }}
         </el-button>
@@ -14,6 +15,7 @@
       </template>
     </PageHeader>
 
+    <el-alert :title="t('bi.assignment.guidance')" type="info" :closable="false" show-icon style="margin-bottom: 16px" />
     <el-card class="search-card">
       <el-form
         :inline="true"
@@ -119,6 +121,9 @@
                 >
                   {{ t(assignmentTargetTypeKey(row.targetType)) }}
                 </el-tag>
+                <el-tag v-else-if="col.field === 'enabled'" :type="row.enabled ? 'success' : 'info'" size="small">
+                  {{ t(row.enabled ? 'bi.assignment.enabled' : 'bi.assignment.disabled') }}
+                </el-tag>
                 <template v-else-if="col.field === 'layoutMode'">
                   {{ t(layoutModeKey(row.layoutMode)) }}
                 </template>
@@ -165,6 +170,7 @@
                   >
                     {{ t('common.edit') }}
                   </el-button>
+                  <AssignmentStatusAction :id="row.id" :dashboard-title="row.dashboardTitle" :enabled="row.enabled" scope="assignment" @changed="loadAssignments" />
                   <el-button
                     link
                     type="danger"
@@ -211,8 +217,10 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Plus, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
 import { useBiAssignment } from '@/composables/modules/useBiAssignment'
 import AssignmentFormDialog from './components/AssignmentFormDialog.vue'
+import AssignmentStatusAction from './components/AssignmentStatusAction.vue'
 import { assignmentTargetTagType, assignmentTargetTypeKey, layoutModeKey } from '@/utils/format'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'

@@ -134,6 +134,8 @@ export default {
     sectionSetup: 'Setup'
   },
   mainTableView: {
+    dashboardScopeHint: 'This Dashboard is assigned to the current View. Its data scope and filters are configured in Superset and do not automatically inherit Records filters.',
+    retryDashboard: 'Retry',
     openMyTask: 'Open my task',
     myTasksOnRow: 'You have {count} tasks on this request',
     pickTaskToOpen: 'Open which task?',

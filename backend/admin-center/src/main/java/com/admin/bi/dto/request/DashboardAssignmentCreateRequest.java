@@ -34,4 +34,5 @@ public class DashboardAssignmentCreateRequest {
 
     /** 是否为默认 Dashboard */
     private Boolean isDefault;
+    private Boolean enabled;
 }

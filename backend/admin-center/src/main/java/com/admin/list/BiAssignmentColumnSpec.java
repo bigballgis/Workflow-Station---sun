@@ -32,6 +32,7 @@ public final class BiAssignmentColumnSpec {
                 ListColumnMeta.of("targetName", "bi.assignment.colTargetName", Kind.TEXT),
                 ListColumnMeta.withOptions("layoutMode", "bi.assignment.colLayoutMode", Kind.ENUM, layoutModeOptions()),
                 ListColumnMeta.of("displayOrder", "bi.assignment.colDisplayOrder", Kind.NUMBER),
+                ListColumnMeta.of("enabled", "bi.assignment.enabled", Kind.BOOLEAN),
                 ListColumnMeta.of("isDefault", "bi.assignment.colDefault", Kind.BOOLEAN)
         );
     }
@@ -51,6 +52,7 @@ public final class BiAssignmentColumnSpec {
             case "targetName" -> TARGET_NAME_SQL;
             case "layoutMode" -> "a.layout_mode";
             case "displayOrder" -> "a.display_order::text";
+            case "enabled" -> "a.enabled::text";
             case "isDefault" -> "a.is_default::text";
             default -> throw new IllegalArgumentException("Unknown bi-assignment column: " + field);
         };
