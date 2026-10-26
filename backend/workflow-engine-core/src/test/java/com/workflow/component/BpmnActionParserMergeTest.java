@@ -35,6 +35,26 @@ class BpmnActionParserMergeTest {
     private BpmnActionParser parser;
 
     @Test
+    @DisplayName("legacy duplicate bindings appear once in the global group after all node actions")
+    void globalsKeepTheirGlobalPositionEvenWhenAlsoBoundToNode() {
+        assertThat(parser.mergeActionIds(List.of("12", "22", "35"), List.of("48", "12", "48")))
+                .containsExactly("22", "35", "48", "12");
+    }
+
+    @Test
+    void duplicateGlobalBindingIsLastWhenReadFromModel() {
+        when(repositoryService.getBpmnModel("pd:dup-model")).thenReturn(bpmnModelWithActions("[1225,1223]", "[1225]"));
+        assertThat(parser.extractActionIds(task("pd:dup-model", "ut1"))).containsExactly("1223", "1225");
+    }
+
+    @Test
+    void duplicateGlobalBindingIsLastWhenReadFromXml() {
+        when(repositoryService.getBpmnModel("pd:dup-xml")).thenReturn(null);
+        stubXml("pd:dup-xml", bpmnXml("[1225,1223]", "[1225]"));
+        assertThat(parser.extractActionIds(task("pd:dup-xml", "ut1"))).containsExactly("1223", "1225");
+    }
+
+    @Test
     @DisplayName("sibling userTasks only merge their own actionIds with process Global")
     void siblingUserTasksDoNotLeakNodeActions() {
         stubXml("pd:sib", TWO_USER_TASKS_XML);

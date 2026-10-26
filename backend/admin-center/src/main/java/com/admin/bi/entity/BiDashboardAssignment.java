@@ -60,6 +60,10 @@ public class BiDashboardAssignment {
     @Builder.Default
     private Boolean isDefault = false;
 
+    @Column(name = "enabled", nullable = false)
+    @Builder.Default
+    private Boolean enabled = true;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

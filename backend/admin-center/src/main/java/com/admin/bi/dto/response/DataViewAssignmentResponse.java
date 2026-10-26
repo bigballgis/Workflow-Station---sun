@@ -22,6 +22,10 @@ public class DataViewAssignmentResponse {
     private String tableName;
     private String tableDisplayName;
     private String tableType;
+    private Long viewId;
+    private String viewName;
+    private Boolean viewAvailable;
+    private Boolean enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

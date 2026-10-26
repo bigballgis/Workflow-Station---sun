@@ -35,11 +35,21 @@ public class BiDashboardAssignmentController {
     private final BiDashboardAssignmentService assignmentService;
     private final BiAssignmentListQueryComponent assignmentListQueryComponent;
     private final BiAdminAccessGuard adminAccessGuard;
+    private final com.admin.bi.component.BiAssignmentConfigurationComponent configuration;
+
+    @PutMapping("/{id}/enabled")
+    public ResponseEntity<com.platform.common.dto.ApiResponse<DashboardAssignmentResponse>> setEnabled(
+            @PathVariable String id,
+            @RequestBody @Valid com.admin.bi.dto.request.AssignmentEnabledRequest request) {
+        return ResponseEntity.ok(com.platform.common.dto.ApiResponse.success(
+                configuration.setAudienceEnabled(id, request.enabled())));
+    }
 
     @PostMapping
     @Operation(summary = "Create assignment record", description = "Assign a Dashboard to a User, Role, or Business Unit")
     public ResponseEntity<DashboardAssignmentResponse> createAssignment(
             @RequestBody @Valid DashboardAssignmentCreateRequest request) {
+        adminAccessGuard.requireAdminUserId();
         log.info("User {} creating assignment for dashboard {}", SecurityContextUtils.getCurrentUserId(), request.getDashboardId());
         DashboardAssignmentResponse response = assignmentService.createAssignment(request);
         return ResponseEntity.ok(response);
@@ -51,6 +61,7 @@ public class BiDashboardAssignmentController {
             @RequestParam(required = false) AssignmentTargetType targetType,
             @RequestParam(required = false) String dashboardTitle,
             Pageable pageable) {
+        adminAccessGuard.requireAdminUserId();
         Page<DashboardAssignmentResponse> page = assignmentService.listAssignments(targetType, dashboardTitle, pageable);
         return ResponseEntity.ok(page);
     }
@@ -59,6 +70,7 @@ public class BiDashboardAssignmentController {
     @Operation(summary = "Query assignments (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<DashboardAssignmentResponse>> queryAssignments(
             @RequestBody @Valid BiAssignmentListQueryRequest request) {
+        adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentListQueryComponent.query(request));
     }
 
@@ -67,6 +79,7 @@ public class BiDashboardAssignmentController {
     public ResponseEntity<DashboardAssignmentResponse> updateAssignment(
             @PathVariable String id,
             @RequestBody @Valid DashboardAssignmentCreateRequest request) {
+        adminAccessGuard.requireAdminUserId();
         log.info("User {} updating assignment {}", SecurityContextUtils.getCurrentUserId(), id);
         DashboardAssignmentResponse response = assignmentService.updateAssignment(id, request);
         return ResponseEntity.ok(response);
@@ -76,6 +89,7 @@ public class BiDashboardAssignmentController {
     @Operation(summary = "Delete assignment record", description = "Delete a specified assignment record")
     public ResponseEntity<Void> deleteAssignment(
             @PathVariable String id) {
+        adminAccessGuard.requireAdminUserId();
         log.info("User {} deleting assignment {}", SecurityContextUtils.getCurrentUserId(), id);
         assignmentService.deleteAssignment(id);
         return ResponseEntity.noContent().build();

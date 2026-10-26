@@ -7,6 +7,8 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 
 ## Index by job
 
+- /help/up-new — User Portal → Request → New Requests: search, workflow cards, add/remove Favorites with the star button, versions, and access empty states
+
 - /help/table-data — Admin Relation Tables → Table Data: Function Unit/table navigation, Common, search, selection links, permissions, column menus, export and import
 
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
@@ -110,4 +112,10 @@ Keep this file in sync with frontend/help/src/guidelines.ts.
 
 - /help/form-ctl-record-note — Record Note (Whole table / Single record, immutable notes, panel properties, opt-in formal attachment notifications in Notifications → Attachment Updates with request name (ID), note location/count and verified upload source, target Sub-Tasks, Person / claimed BU Team / sole auto-assigned member, valid rounds, waiting and permissions).
 
+- /help/node-action-order — Process Design user task Actions: ordered node bindings; Drag action rows or Move up/down; remove; new selections append; global actions follow node actions; global actions are shown in a separate read-only group and cannot be reordered; legacy duplicates appear once in the global group.
+
 Unsaved design changes: /help/fu-documents#unsaved — Save, discard, continue editing, and independent designer save boundaries. Automation and browser unload are outside this confirmation.
+
+## BI assignments
+- /help/bi-audience-assignment — Home-page audiences, paged user search, User/Role/current Business Unit, enabled grants and presentation.
+- /help/bi-data-view-assignment — Concrete published Table View bindings, Records/Dashboard mode, named Dashboard tabs, independent enablement, one-time legacy expansion. View filters are not Superset row filters.

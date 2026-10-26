@@ -161,6 +161,7 @@ public class BiAssignmentListQueryComponent {
                 .layoutMode(entity.getLayoutMode())
                 .displayOrder(entity.getDisplayOrder())
                 .isDefault(entity.getIsDefault())
+                .enabled(entity.getEnabled())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

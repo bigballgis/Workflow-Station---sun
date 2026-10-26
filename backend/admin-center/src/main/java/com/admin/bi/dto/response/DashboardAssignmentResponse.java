@@ -27,6 +27,7 @@ public class DashboardAssignmentResponse {
     private LayoutMode layoutMode;
     private Integer displayOrder;
     private Boolean isDefault;
+    private Boolean enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

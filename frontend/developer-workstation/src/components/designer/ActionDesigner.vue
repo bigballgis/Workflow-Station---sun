@@ -35,9 +35,9 @@
         </template>
         <template #cell-boundNodes="{ row }">
           <div class="bound-nodes">
-            <template v-if="getActionBoundNodes(row.id).length > 0">
+            <template v-if="getActionBindingSummary(row.id).length > 0">
               <el-tag
-                v-for="node in getActionBoundNodes(row.id)"
+                v-for="node in getActionBindingSummary(row.id)"
                 :key="node.id"
                 size="small"
                 type="info"
@@ -433,6 +433,12 @@
             </el-radio>
           </el-radio-group>
         </el-form-item>
+        <div
+          v-if="bindingType === 'global'"
+          class="binding-tip"
+        >
+          {{ t('action.globalBindingHint') }}
+        </div>
         <el-form-item
           v-if="bindingType === 'node'"
           :label="t('action.selectNodes')"
@@ -475,13 +481,8 @@
           />
         </el-form-item>
         <ActionAllowedRolesField v-model="actionConfig.allowedRoles" />
-        <el-form-item :label="t('action.sortOrder')">
-          <el-input-number
-            v-model="actionConfig.sortOrder"
-            :min="0"
-            :max="9999"
-            controls-position="right"
-          />
+        <el-form-item :label="t('action.buttonOrder')">
+          <span>{{ t('action.buttonOrderHint') }}</span>
         </el-form-item>
       </el-form>
     </div>
@@ -551,7 +552,7 @@ const {
   availableNodes,
   savingBinding,
   parseActionBindingsFromBpmn,
-  getActionBoundNodes,
+  getActionBindingSummary,
   loadActionBinding,
   handleSaveBinding: persistBinding,
 } = useActionNodeBinding({ functionUnitId: props.functionUnitId, selectedAction, store, t })
@@ -622,7 +623,7 @@ const listColumns = computed<DesignerListTableColumn<ActionDefinition>[]>(() => 
     defaultWidth: 200,
     showOverflowTooltip: true,
     getValue: (row) => {
-      const nodes = getActionBoundNodes(row.id)
+      const nodes = getActionBindingSummary(row.id)
       if (!nodes.length) return t('action.notBound')
       return nodes.map((n: { name?: string; id: string | number }) => n.name || String(n.id)).join(', ')
     },

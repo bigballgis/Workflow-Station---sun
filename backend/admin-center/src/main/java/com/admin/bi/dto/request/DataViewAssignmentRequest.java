@@ -20,4 +20,9 @@ public class DataViewAssignmentRequest {
     @NotNull(message = "Target table is required")
     @Positive(message = "Target table ID must be positive")
     private Long tableId;
+    @NotNull(message = "Table View is required")
+    @Positive
+    private Long viewId;
+
+    private Boolean enabled;
 }

@@ -161,9 +161,10 @@ public final class BpmnIdRewriter {
         boolean wasEncoded = !decoded.equals(bpmnXml);
 
         String rewritten = rewriteAll(decoded,
-                tableIdMapping, formIdMapping, actionIdMapping,
+                tableIdMapping, formIdMapping,
                 clonedTableNameToId, clonedFormNameToId, sourceToNewTableName,
                 connectionIdMapping, emailTemplateIdMapping, connectionUidMapping);
+        rewritten = BpmnActionIdRewriter.rewrite(rewritten, actionIdMapping);
 
         if (rewritten.equals(decoded)) {
             return bpmnXml;
@@ -182,7 +183,6 @@ public final class BpmnIdRewriter {
     private static String rewriteAll(String xml,
                                      Map<Long, Long> tableIdMapping,
                                      Map<Long, Long> formIdMapping,
-                                     Map<Long, Long> actionIdMapping,
                                      Map<String, Long> clonedTableNameToId,
                                      Map<String, Long> clonedFormNameToId,
                                      Map<String, String> sourceToNewTableName,
@@ -196,19 +196,19 @@ public final class BpmnIdRewriter {
             // Outside block region: ID fallback only
             sb.append(rewriteUnwrapped(
                     xml.substring(pos, m.start()),
-                    tableIdMapping, formIdMapping, actionIdMapping,
+                    tableIdMapping, formIdMapping,
                     connectionIdMapping, emailTemplateIdMapping, connectionUidMapping));
             // Inside block: name + ID combined judgment
             sb.append(rewriteBlock(
                     m.group(),
-                    tableIdMapping, formIdMapping, actionIdMapping,
+                    tableIdMapping, formIdMapping,
                     clonedTableNameToId, clonedFormNameToId, sourceToNewTableName,
                     connectionIdMapping, emailTemplateIdMapping, connectionUidMapping));
             pos = m.end();
         }
         sb.append(rewriteUnwrapped(
                 xml.substring(pos),
-                tableIdMapping, formIdMapping, actionIdMapping,
+                tableIdMapping, formIdMapping,
                 connectionIdMapping, emailTemplateIdMapping, connectionUidMapping));
         return sb.toString();
     }
@@ -220,7 +220,6 @@ public final class BpmnIdRewriter {
     private static String rewriteBlock(String block,
                                        Map<Long, Long> tableIdMapping,
                                        Map<Long, Long> formIdMapping,
-                                       Map<Long, Long> actionIdMapping,
                                        Map<String, Long> clonedTableNameToId,
                                        Map<String, Long> clonedFormNameToId,
                                        Map<String, String> sourceToNewTableName,
@@ -265,9 +264,6 @@ public final class BpmnIdRewriter {
         applyNamedIdRewrite("requestFormId", "requestFormName",
                 nameToValue, formIdMapping, clonedFormNameToId, rewrites);
 
-        applyArrayLongRewrite("actionIds", nameToValue, actionIdMapping, rewrites);
-        applyArrayLongRewrite("globalActionIds", nameToValue, actionIdMapping, rewrites);
-
         applyConnectionIdRewrite(nameToValue, connectionIdMapping, connectionUidMapping, rewrites);
         applySingularIdRewrite("emailTemplateId", nameToValue, emailTemplateIdMapping, rewrites);
 
@@ -279,10 +275,6 @@ public final class BpmnIdRewriter {
             applyTableNameRewrite("tableName", nameToValue, sourceToNewTableName, rewrites);
             // A per-row Function Unit call runs over one of the unit's own sub-tables.
             applyTableNameRewrite("callRowsTable", nameToValue, sourceToNewTableName, rewrites);
-        }
-
-        if (rewrites.isEmpty()) {
-            return block;
         }
 
         String newContent = content;
@@ -298,7 +290,6 @@ public final class BpmnIdRewriter {
     private static String rewriteUnwrapped(String segment,
                                            Map<Long, Long> tableIdMapping,
                                            Map<Long, Long> formIdMapping,
-                                           Map<Long, Long> actionIdMapping,
                                            Map<Long, Long> connectionIdMapping,
                                            Map<Long, Long> emailTemplateIdMapping,
                                            Map<String, String> connectionUidMapping) {
@@ -312,11 +303,6 @@ public final class BpmnIdRewriter {
             Function<String, String> formRemap = v -> remapSingularLong(v, formIdMapping);
             remappers.put("formId", formRemap);
             remappers.put("requestFormId", formRemap);
-        }
-        if (isNonEmpty(actionIdMapping)) {
-            Function<String, String> actionRemap = v -> remapArrayLongs(v, actionIdMapping);
-            remappers.put("actionIds", actionRemap);
-            remappers.put("globalActionIds", actionRemap);
         }
         if (isNonEmpty(connectionIdMapping) || isNonEmpty(connectionUidMapping)) {
             remappers.put("connectionId",
@@ -430,20 +416,6 @@ public final class BpmnIdRewriter {
         String newId = resolveSingularId(oldId, nameToValue.get(nameProperty), idMapping, nameToId);
         if (newId != null && !newId.equals(oldId)) {
             rewrites.put(idProperty, newId);
-        }
-    }
-
-    private static void applyArrayLongRewrite(String property,
-                                              Map<String, String> nameToValue,
-                                              Map<Long, Long> idMapping,
-                                              Map<String, String> rewrites) {
-        if (!isNonEmpty(idMapping) || !nameToValue.containsKey(property)) {
-            return;
-        }
-        String oldValue = nameToValue.get(property);
-        String newValue = remapArrayLongs(oldValue, idMapping);
-        if (!Objects.equals(oldValue, newValue)) {
-            rewrites.put(property, newValue);
         }
     }
 
@@ -572,46 +544,6 @@ public final class BpmnIdRewriter {
         } catch (NumberFormatException e) {
             return value;
         }
-    }
-
-    private static String remapArrayLongs(String value, Map<Long, Long> mapping) {
-        if (value == null || value.isBlank()) {
-            return value;
-        }
-        String trimmed = value.trim();
-        boolean wrapped = trimmed.startsWith("[") && trimmed.endsWith("]");
-        String inner = wrapped ? trimmed.substring(1, trimmed.length() - 1) : trimmed;
-        if (inner.isBlank()) {
-            return value;
-        }
-        String[] parts = inner.split(",");
-        StringBuilder sb = new StringBuilder();
-        if (wrapped) {
-            sb.append('[');
-        }
-        boolean changed = false;
-        for (int i = 0; i < parts.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            String part = parts[i].trim();
-            try {
-                Long old = Long.parseLong(part);
-                Long mapped = mapping.get(old);
-                if (mapped != null) {
-                    sb.append(mapped);
-                    changed = true;
-                } else {
-                    sb.append(part);
-                }
-            } catch (NumberFormatException e) {
-                sb.append(part);
-            }
-        }
-        if (wrapped) {
-            sb.append(']');
-        }
-        return changed ? sb.toString() : value;
     }
 
     private static boolean isNonEmpty(Map<?, ?> m) {

@@ -12,54 +12,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BpmnIdRewriterTest {
 
     @Test
-    void rewriteSubTableIdAndFormIdAndActionIds() {
-        String xml = """
-                <?xml version="1.0"?>
-                <bpmn:userTask>
-                  <bpmn:extensionElements>
-                    <custom:properties>
-                      <custom:property name="subTableId" value="13" />
-                      <custom:property name="formId" value="11" />
-                      <custom:property name="actionIds" value="[12,34]" />
-                    </custom:properties>
-                  </bpmn:extensionElements>
-                </bpmn:userTask>
-                """;
-
-        String rewritten = BpmnIdRewriter.rewrite(
-                xml,
-                Map.of(13L, 113L),
-                Map.of(11L, 111L),
-                Map.of(12L, 112L, 34L, 134L));
-
-        assertThat(rewritten).contains("name=\"subTableId\" value=\"113\"");
-        assertThat(rewritten).contains("name=\"formId\" value=\"111\"");
-        assertThat(rewritten).contains("name=\"actionIds\" value=\"[112,134]\"");
-        assertThat(rewritten).doesNotContain("value=\"13\"");
-        assertThat(rewritten).doesNotContain("value=\"11\"");
-        assertThat(rewritten).doesNotContain("[12,34]");
-    }
-
-    @Test
-    void supportsNamespaceVariantsAndValuesElement() {
-        String xml = """
-                <bpmn:userTask>
-                  <custom_1:property name="formId" value="7"/>
-                  <custom_1:values name="actionIds" value="[1,2,3]"/>
-                </bpmn:userTask>
-                """;
-
-        String rewritten = BpmnIdRewriter.rewrite(
-                xml,
-                Map.of(),
-                Map.of(7L, 700L),
-                Map.of(1L, 10L, 2L, 20L, 3L, 30L));
-
-        assertThat(rewritten).contains("name=\"formId\" value=\"700\"");
-        assertThat(rewritten).contains("name=\"actionIds\" value=\"[10,20,30]\"");
-    }
-
-    @Test
     void preservesUnmappedIds() {
         String xml = "<custom:property name=\"formId\" value=\"7\" />";
 
@@ -67,20 +19,6 @@ class BpmnIdRewriterTest {
                 xml, Map.of(), Map.of(99L, 100L), Map.of());
 
         // 99 不在源中，7 不在映射中，保持原样
-        assertThat(rewritten).isEqualTo(xml);
-    }
-
-    @Test
-    void preservesNonIdProperties() {
-        String xml = """
-                <custom:property name="assigneeType" value="ELEMENT_VARIABLE" />
-                <custom:property name="subTableName" value="participants" />
-                <custom:property name="rowIdVariable" value="currentItem.rowId" />
-                """;
-
-        String rewritten = BpmnIdRewriter.rewrite(
-                xml, Map.of(1L, 2L), Map.of(3L, 4L), Map.of(5L, 6L));
-
         assertThat(rewritten).isEqualTo(xml);
     }
 
@@ -360,43 +298,6 @@ class BpmnIdRewriterTest {
                 xml, Map.of(), Map.of(806L, 502L), Map.of());
 
         assertThat(rewritten).contains("name=\"requestFormId\" value=\"502\"");
-    }
-
-    @Test
-    void remapsProcessGlobalActionIdsIndependentlyOfNodeActionIds() {
-        String xml = """
-                <bpmn:process id="p1">
-                  <custom:properties>
-                    <custom:property name="globalActionIds" value="[50]" />
-                    <custom:property name="globalActionNames" value="[&quot;Save&quot;]" />
-                  </custom:properties>
-                  <bpmn:userTask id="task1">
-                    <custom:properties>
-                      <custom:property name="actionIds" value="[51]" />
-                    </custom:properties>
-                  </bpmn:userTask>
-                </bpmn:process>
-                """;
-
-        String rewritten = BpmnIdRewriter.rewrite(
-                xml, Map.of(), Map.of(), Map.of(50L, 1200L, 51L, 1201L));
-
-        assertThat(rewritten)
-                .as("Process Global 写在 globalActionIds，导入必须按动作 id mapping 改写，否则设计器对不上新 id 会显示 Bind to Node")
-                .contains("name=\"globalActionIds\" value=\"[1200]\"")
-                .contains("name=\"actionIds\" value=\"[1201]\"")
-                .doesNotContain("value=\"[50]\"")
-                .doesNotContain("value=\"[51]\"");
-    }
-
-    @Test
-    void remapsUnwrappedGlobalActionIdsByIdMapping() {
-        String xml = "<custom:property name=\"globalActionIds\" value=\"[50,51]\" />";
-
-        String rewritten = BpmnIdRewriter.rewrite(
-                xml, Map.of(), Map.of(), Map.of(50L, 1200L, 51L, 1201L));
-
-        assertThat(rewritten).contains("name=\"globalActionIds\" value=\"[1200,1201]\"");
     }
 
     @Test

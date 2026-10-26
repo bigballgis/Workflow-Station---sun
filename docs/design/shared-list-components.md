@@ -833,6 +833,7 @@ Action 列可继续 `fixed="right"`（§6.6），不代替共享表头。
 | `/function-unit` 各 Tab | `FunctionUnitListTab` / `ArchiveTab` / `DeploymentsTab` |
 | `/bi-management/dashboard-registry` | `DashboardRegistry.vue` |
 | `/bi-management/dashboard-assignment` | `DashboardAssignment.vue` |
+| `/bi-management/data-view-assignment` | `DataViewAssignment.vue` |
 | `/bi-management/rbac-mapping` | `RbacMapping.vue` |
 | `/audit/admin-center`、`/audit/user-portal` | 两页审计列表 |
 | `/relation-tables/structure` | `structure/index.vue` |

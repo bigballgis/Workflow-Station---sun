@@ -102,7 +102,7 @@ export interface UserTaskPropertyContext {
   requestFormName: Ref<string>
 
   // Action binding
-  actionIds: Ref<number[]>
+  actionIds: Ref<Array<ActionDefinition['id']>>
   actions: Ref<ActionDefinition[]>
 
   // Timeout config

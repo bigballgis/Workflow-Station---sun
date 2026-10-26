@@ -1,0 +1,28 @@
+// PortalLayout scrolls .portal-content, whose padding is 20px.
+// Keep the header in normal flow and cover that padding while pinned.
+@mixin pinned-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex-wrap: wrap;
+  margin: -12px -20px 8px;
+  padding: 12px 20px;
+  background: var(--background-light);
+  box-shadow: 0 -20px 0 var(--background-light), 0 1px 0 var(--border-color);
+
+  > .el-button,
+  .header-left > .el-button {
+    flex-shrink: 0;
+  }
+
+  .header-left {
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

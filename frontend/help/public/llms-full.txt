@@ -281,3 +281,20 @@ Rules: Lead Time Not set → no due date, existing values stay. Start date empty
 Permissions: System Administrator all; sla:policy:edit view, edit, recalculate; sla:policy:view read-only (Auditor). An Auditor never edits. Changes apply after signing in again.
 
 Related: /help/table-design#sla-due-date , /help/environment-variables
+
+## Node action order (/help/node-action-order)
+In Process Design, select a user task and expand Actions. Select Available Actions and drag rows by their name/handle or use Move up/down in Button display order. Each completed drag is one undo/redo operation; read-only units cannot be reordered. Top-to-bottom becomes left-to-right in Portal. New selections append; removals preserve survivors. Save the process and publish/deploy. Each node has an independent order. Process global actions follow node actions; globals appear in a separate read-only group without sorting or removal; legacy duplicates appear once in the global group. Action Design Bound Nodes shows only Process Global for a global action. Allowed Roles filtering preserves survivor order. Existing instances use their bound version.
+
+
+## New Requests (/help/up-new)
+
+Choose a request card to open its form. Only workflows available in your current workspace are listed. Open Request → New Requests. Search for the workflow or choose a card from Favorites. Select the card, complete the form and use its submit action. Use the search field beside the page title to narrow the cards. Clear it to restore the list. Each card shows the workflow icon, name, description when provided, and version. Hover over a shortened name or description to read it in full. Favorites appears above the main grid when the returned list includes favorite workflows. A star marks these cards. They also remain in the main grid; either card opens the same request form. No matching requests means the search found no results: clear the search or try another keyword. No processes available means the workspace returned no accessible workflows. Check the selected Business Unit and Role, or contact your administrator about access. Choosing a card opens a form; it does not submit a request.
+
+New Requests favorites: Select the outline star at the top right of a card to add it to Favorites. Select the filled star to remove it. The star does not open the request form. Both grids update after the server confirms the change, and favorites are saved for your account across refreshes. While saving, the same workflow star is disabled in both grids. If saving fails, a message asks you to refresh to check the saved state. Search also filters the Favorites section. Removing the final favorite hides the section; the workflow remains in the main grid.
+
+## BI assignments
+Enable/Disable actions sit beside Edit and Delete in the Actions column on both assignment lists. The Enabled column displays the saved status. Changes require confirmation; disabled assignments retain their settings.
+- /help/bi-audience-assignment — Home-page audiences, paged user search, User/Role/current Business Unit, enabled grants and presentation.
+- /help/bi-data-view-assignment — Concrete published Table View bindings, Records/Dashboard mode, named Dashboard tabs, independent enablement, one-time legacy expansion. View filters are not Superset row filters.
+
+Data View Assignment list: Target shows the Function Unit name. Use each column header menu to filter, sort, move or resize columns. Enabled is filtered from its header; the toolbar has Dashboard Title and Target only.

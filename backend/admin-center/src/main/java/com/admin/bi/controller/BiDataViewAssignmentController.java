@@ -35,11 +35,29 @@ public class BiDataViewAssignmentController {
 
     private final BiDataViewAssignmentService assignmentService;
     private final BiAdminAccessGuard adminAccessGuard;
+    private final com.admin.bi.component.BiAssignmentConfigurationComponent configuration;
+    private final com.admin.bi.component.BiDataViewAssignmentListQueryComponent listQuery;
+
+    @PostMapping("/query")
+    public ResponseEntity<com.admin.dto.list.AdminListPage<DataViewAssignmentResponse>> query(
+            @RequestBody @Valid com.admin.dto.request.BiDataViewAssignmentListQueryRequest request) {
+        adminAccessGuard.requireAdminUserId();
+        return ResponseEntity.ok(listQuery.query(request));
+    }
+
+    @PutMapping("/{id}/enabled")
+    public ResponseEntity<com.platform.common.dto.ApiResponse<DataViewAssignmentResponse>> setEnabled(
+            @PathVariable String id,
+            @RequestBody @Valid com.admin.bi.dto.request.AssignmentEnabledRequest request) {
+        return ResponseEntity.ok(com.platform.common.dto.ApiResponse.success(
+                configuration.setDataViewEnabled(id, request.enabled())));
+    }
 
     @PostMapping
     @Operation(summary = "Create a Data View Assignment")
     public ResponseEntity<DataViewAssignmentResponse> create(
             @RequestBody @Valid DataViewAssignmentRequest request) {
+        adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentService.create(request));
     }
 
@@ -47,6 +65,7 @@ public class BiDataViewAssignmentController {
     @Operation(summary = "Assign several dashboards to one Data View table")
     public ResponseEntity<List<DataViewAssignmentResponse>> createBatch(
             @RequestBody @Valid DataViewAssignmentBatchRequest request) {
+        adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentService.createBatch(request));
     }
 
@@ -55,8 +74,11 @@ public class BiDataViewAssignmentController {
     public ResponseEntity<Page<DataViewAssignmentResponse>> list(
             @RequestParam(required = false) String dashboardTitle,
             @RequestParam(required = false) Long functionUnitId,
+            @RequestParam(required = false) Boolean enabled,
+            @RequestParam(required = false) Long viewId,
             Pageable pageable) {
-        return ResponseEntity.ok(assignmentService.list(dashboardTitle, functionUnitId, pageable));
+        adminAccessGuard.requireAdminUserId();
+        return ResponseEntity.ok(assignmentService.list(dashboardTitle, functionUnitId, enabled, viewId, pageable));
     }
 
     @PutMapping("/{id}")
@@ -64,12 +86,14 @@ public class BiDataViewAssignmentController {
     public ResponseEntity<DataViewAssignmentResponse> update(
             @PathVariable String id,
             @RequestBody @Valid DataViewAssignmentRequest request) {
+        adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete a Data View Assignment")
     public ResponseEntity<Void> delete(@PathVariable String id) {
+        adminAccessGuard.requireAdminUserId();
         assignmentService.delete(id);
         return ResponseEntity.noContent().build();
     }
@@ -77,6 +101,7 @@ public class BiDataViewAssignmentController {
     @GetMapping("/function-units")
     @Operation(summary = "List function units that expose published Data Views")
     public ResponseEntity<List<DataViewFunctionUnitOptionResponse>> listFunctionUnits() {
+        adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentService.listFunctionUnits());
     }
 
@@ -84,7 +109,14 @@ public class BiDataViewAssignmentController {
     @Operation(summary = "List request/sub tables that expose published Data Views")
     public ResponseEntity<List<DataViewTableOptionResponse>> listTables(
             @PathVariable Long functionUnitId) {
+        adminAccessGuard.requireAdminUserId();
         return ResponseEntity.ok(assignmentService.listTables(functionUnitId));
+    }
+
+    @GetMapping("/function-units/{functionUnitId}/tables/{tableId}/views")
+    public ResponseEntity<com.platform.common.dto.ApiResponse<List<com.admin.bi.dto.response.DataViewOptionResponse>>> listViews(
+            @PathVariable Long functionUnitId, @PathVariable Long tableId) {
+        return ResponseEntity.ok(com.platform.common.dto.ApiResponse.success(configuration.listViews(functionUnitId, tableId)));
     }
 
     @GetMapping("/views/{viewId}/dashboards")

@@ -134,6 +134,8 @@ export default {
     sectionSetup: '设置'
   },
   mainTableView: {
+    dashboardScopeHint: '此 Dashboard 分配给当前 View 展示。图表数据范围由 Superset 配置，不会自动继承 Records 的筛选条件。',
+    retryDashboard: '重试',
     openMyTask: '打开我的任务',
     myTasksOnRow: '该申请下你有 {count} 条任务',
     pickTaskToOpen: '打开哪条任务？',
@@ -522,6 +524,12 @@ export default {
     userOptionFormat: '{name}（{username}）',
   },
   process: {
+    addFavorite: '收藏{name}',
+    removeFavorite: '取消收藏{name}',
+    favoriteFailed: '未能更新收藏，请刷新页面确认保存状态。',
+    searchPlaceholder: '搜索申请流程…',
+    noSearchResults: '未找到匹配的流程，请尝试其他关键词。',
+    guideLinkAria: '打开新建申请指南',
     title: '新建申请',
     processName: '流程名称',
     category: '流程分类',

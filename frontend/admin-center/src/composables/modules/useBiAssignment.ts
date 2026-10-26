@@ -20,7 +20,7 @@ import type {
 import { assignmentTargetTypeKey } from '@/utils/format'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
-const ACTIONS_COL_WIDTH = 140
+const ACTIONS_COL_WIDTH = 220
 
 export function useBiAssignment() {
   const { t } = useI18n()

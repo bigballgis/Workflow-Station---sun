@@ -150,13 +150,14 @@
                 :key="action.id"
                 :label="action.actionName"
                 :value="action.id"
+                :disabled="isGlobalAction(action.id)"
               >
                 <span>{{ action.actionName }}</span>
                 <el-tag
                   size="small"
                   style="margin-left: 8px;"
                 >
-                  {{ actionTypeLabel(action.actionType) }}
+                  {{ isGlobalAction(action.id) ? t('properties.globalActionInherited') : actionTypeLabel(action.actionType) }}
                 </el-tag>
               </el-option>
             </el-select>
@@ -167,11 +168,104 @@
             </div>
           </el-form-item>
           <div
-            v-if="actionIds.length > 0"
             class="selected-actions"
+            data-testid="node-action-order"
           >
+            <div class="action-order-title">
+              {{ t('properties.actionDisplayOrder') }}
+              <DesignerHelpLink
+                path="/node-action-order"
+                v-bind="{ ariaLabel: t('properties.actionOrderGuideAria') }"
+                test-id="node-action-order-guide-link"
+              />
+            </div>
             <div class="form-tip">
-              {{ actionIds.length }}
+              {{ t('properties.actionOrderHint') }}
+            </div>
+            <div class="action-group-title">
+              {{ t('properties.nodeActions') }}
+            </div>
+            <Draggable
+              v-if="selectedActions.length"
+              class="action-order-list"
+              :class="{ 'action-order-readonly': designerReadOnly }"
+              tag="ol"
+              :model-value="selectedActions"
+              item-key="id"
+              handle=".action-order-name"
+              ghost-class="action-order-ghost"
+              :animation="150"
+              :disabled="designerReadOnly"
+              @update:model-value="reorderActions"
+            >
+              <template #item="{ element: action, index }">
+                <li :data-action-id="action.id">
+                  <span
+                    class="action-order-name"
+                    :title="t('properties.dragAction', { name: action.name })"
+                  >
+                    <el-icon class="action-drag-grip"><Rank /></el-icon>
+                    {{ index + 1 }}. {{ action.name }}
+                  </span>
+                  <div class="action-order-controls">
+                    <el-button
+                      :icon="ArrowUp"
+                      :disabled="index === 0"
+                      :aria-label="t('properties.moveActionUp', { name: action.name })"
+                      @click="moveAction(index, -1)"
+                    />
+                    <el-button
+                      :icon="ArrowDown"
+                      :disabled="index === selectedActions.length - 1"
+                      :aria-label="t('properties.moveActionDown', { name: action.name })"
+                      @click="moveAction(index, 1)"
+                    />
+                    <el-button
+                      :icon="Close"
+                      :aria-label="t('properties.removeAction', { name: action.name })"
+                      @click="removeAction(action.id)"
+                    />
+                  </div>
+                </li>
+              </template>
+            </Draggable>
+            <div
+              v-else
+              class="form-tip"
+            >
+              {{ t('properties.actionOrderEmpty') }}
+            </div>
+            <div
+              class="global-actions"
+              data-testid="node-global-actions"
+            >
+              <div class="action-group-title">
+                {{ t('properties.globalActions') }}
+              </div>
+              <ul class="action-order-list">
+                <li
+                  v-for="action in globalActions"
+                  :key="action.id"
+                  :data-action-id="action.id"
+                >
+                  <span class="global-action-name">{{ action.name }}</span>
+                  <el-tag
+                    size="small"
+                    type="info"
+                  >
+                    {{ t('properties.globalActionInherited') }}
+                  </el-tag>
+                </li>
+              </ul>
+              <div
+                v-if="!globalActions.length"
+                class="form-tip"
+              >
+                {{ t('properties.globalActionsEmpty') }}
+              </div>
+              <div class="form-tip">
+                {{ t('properties.actionOrderGlobalHint') }}
+              </div>
             </div>
           </div>
           <!-- To Do「可批量操作」：所有 User Task（含多实例子流程内节点）都可开启 -->
@@ -317,8 +411,13 @@
  *
  * 本 SFC 为精简编排器：响应式状态与各职责逻辑已抽到
  * `@/composables/userTaskProperties/*`。此处仅做组装、加载编排与生命周期绑定，
- * 模板/样式与拆分前逐字节一致，emit/props/i18n key/行为均零变化。
+ * 节点 Actions 列表维护 Portal 按钮的显示顺序。
  */
+import Draggable from 'vuedraggable'
+import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { isFunctionUnitReadOnly } from '@/utils/permission'
+import { ArrowUp, ArrowDown, Close, Rank } from '@element-plus/icons-vue'
+import DesignerHelpLink from '../DesignerHelpLink.vue'
 import { ref, reactive, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
@@ -339,6 +438,9 @@ const props = defineProps<{
   element: BpmnElement
   functionUnitId: number
 }>()
+
+const store = useFunctionUnitStore()
+const designerReadOnly = computed(() => isFunctionUnitReadOnly(store.current))
 
 const activeGroups = ref(['basic', 'subTask', 'assignee', 'form', 'actions'])
 
@@ -422,6 +524,13 @@ const {
 // 动作 / 表单加载逻辑
 const actionsApi = useUserTaskActions(propsAccessor, ctx)
 const {
+  selectedActions,
+  globalActions,
+  isGlobalAction,
+  syncActionsFromModel,
+  moveAction,
+  reorderActions,
+  removeAction,
   handleActionsChange,
   handleFormChange,
   requestableForms,
@@ -511,7 +620,7 @@ async function loadPropertiesAsync() {
   // designs visible side by side instead of only the To Do half.
   requestFormId.value = (ext.requestFormId as number | undefined) ?? null
   requestFormName.value = (ext.requestFormName as string | undefined) ?? ''
-  actionIds.value = ext.actionIds || []
+  syncActionsFromModel()
   allowBatch.value = ext.allowBatch === true
   timeoutEnabled.value = ext.timeoutEnabled || false
   timeoutDuration.value = ext.timeoutDuration || ''
@@ -551,6 +660,7 @@ watch(() => props.element, loadProperties, { immediate: true })
 
 function bumpTopologyTick() {
   topologyTick.value++
+  syncActionsFromModel()
 }
 
 onMounted(() => {
@@ -614,7 +724,76 @@ onUnmounted(() => {
   }
   
   .selected-actions {
-    margin-top: -8px;
+    margin-bottom: 12px;
+  }
+
+  .action-order-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+
+  .action-group-title {
+    margin-top: 12px;
+    font-weight: 600;
+  }
+
+  .global-actions {
+    border-top: 1px solid var(--el-border-color-lighter);
+    margin-top: 12px;
+  }
+
+  .global-action-name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .action-order-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--el-border-color-lighter);
+    }
+  }
+
+  .action-order-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    cursor: grab;
+
+    &:active { cursor: grabbing; }
+  }
+
+  .action-drag-grip {
+    flex-shrink: 0;
+    color: var(--el-text-color-secondary);
+  }
+
+  .action-order-ghost { opacity: 0.4; }
+
+  .action-order-readonly .action-order-name { cursor: default; }
+
+  .action-order-controls {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+
+    .el-button {
+      margin-left: 0;
+      padding: 5px;
+    }
   }
 }
 </style>

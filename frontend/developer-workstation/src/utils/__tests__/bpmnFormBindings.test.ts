@@ -37,6 +37,12 @@ const SAMPLE_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
 </bpmn:definitions>`
 
 describe('bpmnFormBindings', () => {
+  it('uses the Action namespace precedence for debug bindings while preserving the form binding', () => {
+    const xml = SAMPLE_BPMN.replace('<custom:property name="formId" value="42" />', '<custom:property name="formId" value="42" /><custom:property name="actionIds" value="[35,12]"/><legacy:property xmlns:legacy="http://custom.bpmn.io/schema" name="actionIds" value="[22]"/>')
+    const binding = lookupNodeFormBinding(parseBpmnNodeFormBindings(xml), 'Task_1')
+    expect(binding?.formId).toBe(42)
+    expect(binding?.actionIds).toEqual([35, 12])
+  })
   it('parses formId from all task types including generic task', () => {
     const map = parseBpmnNodeFormBindings(SAMPLE_BPMN)
     expect(map.size).toBe(4)

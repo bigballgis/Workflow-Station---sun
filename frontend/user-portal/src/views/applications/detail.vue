@@ -677,8 +677,10 @@ onMounted(() => { loadProcessDetail() })
 
 <style lang="scss" scoped>
 @use '@/styles/detail-navigation' as detailNavigation;
+@use '@/styles/detail-page-header' as detailPageHeader;
 
 .application-detail-page {
+  display: flow-root;
   width: 100%;
   max-width: 100%;
   margin: 0;
@@ -688,7 +690,7 @@ onMounted(() => { loadProcessDetail() })
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 20px;
+    @include detailPageHeader.pinned-header;
 
     .header-left {
       display: flex;

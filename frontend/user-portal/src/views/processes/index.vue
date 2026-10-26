@@ -1,205 +1,149 @@
 <template>
   <div class="processes-page">
     <div class="page-header">
-      <h1>{{ t('process.title') }}</h1>
+      <div class="page-heading">
+        <h1>{{ t('process.title') }}</h1>
+        <PortalHelpLink
+          path="/up-new"
+          v-bind="{ ariaLabel: t('process.guideLinkAria') }"
+          test-id="new-request-guide-link"
+        />
+      </div>
+      <el-input
+        v-model="searchKeyword"
+        class="process-search"
+        :placeholder="t('process.searchPlaceholder')"
+        :aria-label="t('process.searchPlaceholder')"
+        clearable
+        @input="handleSearch"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
     </div>
 
-    <el-row :gutter="20">
-      <!-- 常用流程 -->
-      <el-col
-        v-if="favoriteProcesses.length > 0"
-        :span="24"
+    <section
+      v-if="favoriteProcesses.length > 0"
+      class="favorites-section"
+      aria-labelledby="favorites-heading"
+    >
+      <h2 id="favorites-heading">
+        {{ t('process.favorites') }}
+      </h2>
+      <div class="process-grid">
+        <ProcessCatalogCard
+          v-for="process in favoriteProcesses"
+          :key="process.key"
+          :process="process"
+          :favorite-pending="pendingFavoriteKeys.has(process.key)"
+          @toggle-favorite="toggleFavorite"
+        />
+      </div>
+    </section>
+
+    <section :aria-label="t('process.title')">
+      <div
+        v-if="loading && allProcesses.length === 0"
+        class="process-list-loading"
+        role="status"
       >
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('process.favorites') }}</span>
-          </div>
-          <div class="process-grid">
-            <div
-              v-for="process in favoriteProcesses"
-              :key="process.key"
-              class="process-card"
-              @click="startProcess(process)"
-            >
-              <el-icon
-                :size="32"
-                color="var(--hsbc-red)"
-              >
-                <Document />
-              </el-icon>
-              <span class="process-name">{{ process.name }}</span>
-            </div>
-          </div>
-        </div>
-      </el-col>
-
-      <!-- 全部流程 -->
-      <el-col :span="24">
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('process.all') }}</span>
-            <el-input
-              v-model="searchKeyword"
-              :placeholder="t('common.search')"
-              clearable
-              style="width: 200px;"
-              @input="handleSearch"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-          </div>
-
-          <!-- 与待办一致：先出卡片结构，首刷用轻量加载而非骨架块 -->
-          <div
-            v-if="loading && allProcesses.length === 0"
-            class="process-list-loading"
-          >
+        <el-icon
+          class="is-loading"
+          :size="28"
+        >
+          <Loading />
+        </el-icon>
+        <span>{{ t('common.loading') }}</span>
+      </div>
+      <div
+        v-else-if="allProcesses.length === 0"
+        class="empty-state"
+      >
+        <el-empty :description="searchKeyword ? t('process.noSearchResults') : t('process.noAccessibleProcesses')">
+          <template #image>
             <el-icon
-              class="is-loading"
-              :size="28"
+              :size="60"
+              color="var(--ws-text-muted)"
             >
-              <Loading />
+              <Lock />
             </el-icon>
-            <span>{{ t('common.loading') }}</span>
-          </div>
-          <div
-            v-else-if="allProcesses.length === 0"
-            class="empty-state"
+          </template>
+          <el-text
+            v-if="!searchKeyword"
+            type="info"
+            size="small"
           >
-            <el-empty :description="t('process.noAccessibleProcesses')">
-              <template #image>
-                <el-icon
-                  :size="60"
-                  color="#909399"
-                >
-                  <Lock />
-                </el-icon>
-              </template>
-              <el-text
-                type="info"
-                size="small"
-              >
-                {{ t('process.contactAdminForAccess') }}
-              </el-text>
-            </el-empty>
-          </div>
-          <div
-            v-else
-            class="process-grid"
-          >
-            <div
-              v-for="process in allProcesses"
-              :key="process.key"
-              class="process-card"
-              @click="startProcess(process)"
-            >
-              <div
-                v-if="process.icon"
-                class="process-icon-svg"
-                v-html="sanitizeIcon(process.icon)"
-              />
-              <el-icon
-                v-else
-                :size="32"
-                :color="getProcessColor(process.category)"
-              >
-                <component :is="getProcessIcon(process.category)" />
-              </el-icon>
-              <span class="process-name">{{ process.name }}</span>
-              <span
-                v-if="process.version"
-                class="process-version"
-              >v{{ process.version }}</span>
-              <span class="process-desc">{{ process.description }}</span>
-              <el-tag
-                v-if="process.isFavorite"
-                size="small"
-                type="warning"
-                class="favorite-tag"
-              >
-                <el-icon><Star /></el-icon>
-              </el-tag>
-            </div>
-          </div>
-        </div>
-      </el-col>
-    </el-row>
+            {{ t('process.contactAdminForAccess') }}
+          </el-text>
+        </el-empty>
+      </div>
+      <div
+        v-else
+        ref="mainProcessGrid"
+        class="process-grid"
+      >
+        <ProcessCatalogCard
+          v-for="process in allProcesses"
+          :key="process.key"
+          :process="process"
+          :favorite-pending="pendingFavoriteKeys.has(process.key)"
+          @toggle-favorite="toggleFavorite"
+        />
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets, Lock, Loading } from '@element-plus/icons-vue'
+import { Search, Lock, Loading } from '@element-plus/icons-vue'
 import { processApi, type ProcessDefinition } from '@/api/process'
-import DOMPurify from 'dompurify'
+import PortalHelpLink from '@/components/PortalHelpLink.vue'
+import ProcessCatalogCard from '@/components/ProcessCatalogCard.vue'
 
 const { t } = useI18n()
-const router = useRouter()
-
-const SVG_PURIFY_CONFIG = {
-  ALLOWED_TAGS: ['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'g', 'defs', 'use'],
-  ALLOWED_ATTR: ['viewBox', 'd', 'fill', 'stroke', 'stroke-width', 'cx', 'cy', 'r', 'x', 'y',
-    'width', 'height', 'points', 'transform', 'class', 'xmlns', 'xlink:href'],
-}
-
-function sanitizeIcon(icon: string): string {
-  return DOMPurify.sanitize(icon, SVG_PURIFY_CONFIG)
-}
-
 const searchKeyword = ref('')
 const loading = ref(true)
 const allProcesses = ref<ProcessDefinition[]>([])
+const favoriteProcesses = computed(() => allProcesses.value.filter(process => process.isFavorite))
 
-// 收藏的流程
-const favoriteProcesses = computed(() => {
-  return allProcesses.value.filter(p => p.isFavorite)
-})
+const pendingFavoriteKeys = ref(new Set<string>())
+const mainProcessGrid = ref<HTMLElement | null>(null)
+let favoriteRevision = 0
+const confirmedFavorites = new Map<string, { revision: number; value: boolean }>()
 
-// 根据分类获取图标
-const getProcessIcon = (category: string) => {
-  const iconMap: Record<string, any> = {
-    '人事': Calendar,
-    'HR': Calendar,
-    '财务': Money,
-    'Finance': Money,
-    '采购': ShoppingCart,
-    'Procurement': ShoppingCart,
-    '出差': Location,
-    'Travel': Location,
-    '加班': Clock,
-    'Overtime': Clock,
-    '合同': Files,
-    'Contract': Files,
-    '业务流程': Tickets,
-    'Business Process': Tickets,
+const toggleFavorite = async (key: string, event: MouseEvent) => {
+  if (pendingFavoriteKeys.value.has(key)) return
+  const trigger = event.currentTarget as HTMLButtonElement
+  const hadFocus = document.activeElement === trigger
+  pendingFavoriteKeys.value.add(key)
+  try {
+    const response = await processApi.toggleFavorite(key)
+    if (typeof response.data !== 'boolean') {
+      throw new Error('Invalid favorite response')
+    }
+    confirmedFavorites.set(key, { revision: ++favoriteRevision, value: response.data })
+    // Resolve the current list item: search can replace the list while this request is pending.
+    const process = allProcesses.value.find(item => item.key === key)
+    if (process) process.isFavorite = response.data
+  } catch {
+    ElMessage.error(t('process.favoriteFailed'))
+  } finally {
+    pendingFavoriteKeys.value.delete(key)
+    await nextTick()
+    // Restore focus only if the user has not moved to another control while saving.
+    if (hadFocus && (document.activeElement === document.body || document.activeElement === trigger)) {
+      if (trigger.isConnected) {
+        trigger.focus()
+      } else if (mainProcessGrid.value) {
+        const buttons = mainProcessGrid.value.querySelectorAll<HTMLButtonElement>('.favorite-button')
+        Array.from(buttons).find(button => button.dataset.processKey === key)?.focus()
+      }
+    }
   }
-  return iconMap[category] || Document
-}
-
-// 根据分类获取颜色
-const getProcessColor = (category: string) => {
-  const colorMap: Record<string, string> = {
-    '人事': 'var(--hsbc-red)',
-    'HR': 'var(--hsbc-red)',
-    '财务': 'var(--success-green)',
-    'Finance': 'var(--success-green)',
-    '采购': 'var(--warning-orange)',
-    'Procurement': 'var(--warning-orange)',
-    '出差': 'var(--info-blue)',
-    'Travel': 'var(--info-blue)',
-    '加班': '#722ed1',
-    'Overtime': '#722ed1',
-    '合同': '#13c2c2',
-    'Contract': '#13c2c2',
-    '业务流程': '#1890ff',
-    'Business Process': '#1890ff',
-  }
-  return colorMap[category] || 'var(--hsbc-red)'
 }
 
 // 语义化版本比较（用于防御性去重）
@@ -228,6 +172,7 @@ const deduplicateByKey = (definitions: ProcessDefinition[]): ProcessDefinition[]
 
 // 加载流程定义列表
 const loadProcessDefinitions = async () => {
+  const requestedFavoriteRevision = favoriteRevision
   loading.value = true
   try {
     const response = await processApi.getDefinitions({
@@ -236,8 +181,16 @@ const loadProcessDefinitions = async () => {
     // API 返回的是 { success: true, data: [...] } 格式
     const raw = response.data || response || []
     // 防御性去重：确保每个 key 只显示一条记录
-    allProcesses.value = deduplicateByKey(raw)
-  } catch (error: any) {
+    const definitions = deduplicateByKey(raw)
+    // An older list response must not overwrite a favorite saved after the request started.
+    for (const process of definitions) {
+      const confirmed = confirmedFavorites.get(process.key)
+      if (confirmed && confirmed.revision > requestedFavoriteRevision) {
+        process.isFavorite = confirmed.value
+      }
+    }
+    allProcesses.value = definitions
+  } catch (error) {
     console.error('Failed to load process definitions:', error)
     ElMessage.error(t('task.loadFailed'))
     allProcesses.value = []
@@ -257,10 +210,6 @@ const handleSearch = () => {
   }, 300)
 }
 
-const startProcess = (process: ProcessDefinition) => {
-  router.push(`/processes/start/${process.key}`)
-}
-
 onMounted(() => {
   loadProcessDefinitions()
 })
@@ -269,100 +218,61 @@ onMounted(() => {
 <style lang="scss" scoped>
 .processes-page {
   .page-header {
-    margin-bottom: 20px;
-    
-    h1 {
-      font-size: 24px;
-      font-weight: 500;
-      color: var(--text-primary);
-      margin: 0;
-    }
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
   }
-  
+
+  .page-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--ws-text);
+  }
+
+  h2 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ws-text);
+  }
+
+  .process-search { width: 300px; max-width: 100%; }
+  .favorites-section { margin-bottom: 28px; }
+
+  .process-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+    gap: 20px;
+  }
+
   .process-list-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    min-height: 200px;
-    color: var(--text-secondary);
+    min-height: 240px;
+    color: var(--ws-text-secondary);
     font-size: 14px;
   }
 
-  .process-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 16px;
-  }
-  
-  .process-card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    padding: 24px 16px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-    min-height: 160px;
-    
-    &:hover {
-      border-color: var(--hsbc-red);
-      box-shadow: 0 4px 12px rgba(219, 0, 17, 0.1);
-    }
-    
-    .process-icon-svg {
-      width: 32px;
-      height: 32px;
-      :deep(svg) {
-        width: 100%;
-        height: 100%;
-      }
-    }
-    
-    .process-name {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text-primary);
-      text-align: center;
-      word-break: break-word;
-      width: 100%;
-    }
-    
-    .process-version {
-      font-size: 11px;
-      color: var(--text-secondary);
-      background: var(--bg-secondary, #f5f5f5);
-      padding: 1px 6px;
-      border-radius: 4px;
-    }
-    
-    .process-desc {
-      font-size: 12px;
-      color: var(--text-secondary);
-      text-align: center;
-      width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      line-height: 1.5;
-      max-height: 3em;
-    }
-    
-    .favorite-tag {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-    }
-  }
-  
-  .empty-state {
-    padding: 40px 0;
+  .empty-state { padding: 40px 0; }
+
+  @media (max-width: 600px) {
+    .page-header { align-items: flex-start; flex-direction: column; }
+    .process-search { width: 100%; }
+    .process-grid { gap: 16px; }
   }
 }
 </style>

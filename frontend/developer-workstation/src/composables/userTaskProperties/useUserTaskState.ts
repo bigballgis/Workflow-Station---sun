@@ -92,7 +92,7 @@ export function useUserTaskState(
   const requestFormName = ref('')
 
   // Action binding
-  const actionIds = ref<number[]>([])
+  const actionIds = ref<Array<ActionDefinition['id']>>([])
   const actions = ref<ActionDefinition[]>([])
 
   // Timeout config

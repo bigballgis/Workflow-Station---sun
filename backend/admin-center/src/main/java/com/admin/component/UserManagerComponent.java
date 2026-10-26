@@ -390,7 +390,7 @@ public class UserManagerComponent {
         Pageable pageable = PageRequest.of(
                 request.getPage(), 
                 request.getSize(),
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id")));
         
         Page<User> users = userRepository.findByConditions(
                 request.getBusinessUnitId(),

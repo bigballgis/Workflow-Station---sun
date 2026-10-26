@@ -69,24 +69,36 @@ class BiDataViewAssignmentRoleGateTest {
         when(rs.getLong("main_table_id")).thenReturn(TABLE_ID);
         when(rs.getString("function_unit_code")).thenReturn("FU");
         when(jdbcTemplate.query(anyString(), any(ResultSetExtractor.class), any()))
-                .thenAnswer(inv -> inv.<ResultSetExtractor<Object>>getArgument(1).extractData(rs));
+                .thenAnswer(inv -> {
+                    when(rs.getLong("id")).thenReturn(inv.getArgument(2));
+                    return inv.<ResultSetExtractor<Object>>getArgument(1).extractData(rs);
+                });
         // ... and the user is SYS_ADMIN, so view visibility itself is granted without further SQL.
         when(userRoleRepository.findAllRoleIdsByUserId(USER)).thenReturn(SYS_ROLES);
         when(roleRepository.findAllById(SYS_ROLES)).thenReturn(List.of(
                 Role.builder().id("role-sys-admin").code("SYS_ADMIN").type("ADMIN").status("ACTIVE").build()));
 
+        when(dashboardRepository.findAllById(any())).thenAnswer(inv -> {
+            java.util.List<BiDashboardRegistry> result = new java.util.ArrayList<>();
+            for (String id : inv.<Iterable<String>>getArgument(0)) {
+                dashboardRepository.findById(id).ifPresent(result::add);
+            }
+            return result;
+        });
         restricted = dashboard("dash-alpha", "3");
         open = dashboard("dash-open", null);
         when(dashboardRepository.findById(restricted.getId())).thenReturn(Optional.of(restricted));
         when(dashboardRepository.findById(open.getId())).thenReturn(Optional.of(open));
-        when(assignmentRepository.findByTableIdOrderByCreatedAtAsc(TABLE_ID)).thenReturn(List.of(
+        when(assignmentRepository.findByViewIdAndEnabledTrueOrderByCreatedAtAscIdAsc(VIEW_ID)).thenReturn(List.of(
                 binding(restricted.getId()), binding(open.getId())));
-        when(assignmentRepository.existsByDashboardIdAndTableId(restricted.getId(), TABLE_ID)).thenReturn(true);
-        when(assignmentRepository.existsByDashboardIdAndTableId(open.getId(), TABLE_ID)).thenReturn(true);
+        when(assignmentRepository.existsByDashboardIdAndViewIdAndEnabledTrue(restricted.getId(), VIEW_ID)).thenReturn(true);
+        when(assignmentRepository.existsByDashboardIdAndViewIdAndEnabledTrue(open.getId(), VIEW_ID)).thenReturn(true);
 
         service = new BiDataViewAssignmentServiceImpl(assignmentRepository, dashboardRepository, jdbcTemplate,
                 userRoleRepository, roleRepository, userBusinessUnitService,
-                new DashboardRoleGate(rbacMappingService, new BiProperties(), userRoleRepository));
+                new DashboardRoleGate(rbacMappingService, new BiProperties(), userRoleRepository),
+                mock(jakarta.persistence.EntityManager.class),
+                mock(com.admin.bi.repository.BiDataViewMetadataRepository.class));
     }
 
     @Test
@@ -115,6 +127,23 @@ class BiDataViewAssignmentRoleGateTest {
         when(rbacMappingService.getEffectiveSupersetRoles(SYS_ROLES)).thenReturn(List.of(supersetRole(1, "Admin")));
 
         assertThat(service.canAccessDashboardForView(USER, restricted.getId(), VIEW_ID)).isTrue();
+    }
+
+    @Test
+    void disabledViewBindingCannotListOrAuthorizeTheDashboard() {
+        when(assignmentRepository.findByViewIdAndEnabledTrueOrderByCreatedAtAscIdAsc(VIEW_ID)).thenReturn(List.of());
+        when(assignmentRepository.existsByDashboardIdAndViewIdAndEnabledTrue(open.getId(), VIEW_ID)).thenReturn(false);
+        assertThat(service.getDashboardsForView(USER, VIEW_ID)).isEmpty();
+        assertThat(service.canAccessDashboardForView(USER, open.getId(), VIEW_ID)).isFalse();
+    }
+
+    @Test
+    void anotherViewOfTheSameTableDoesNotInheritTheBinding() {
+        when(assignmentRepository.findByTableIdOrderByCreatedAtAsc(TABLE_ID))
+                .thenReturn(List.of(binding(open.getId())));
+        when(assignmentRepository.existsByDashboardIdAndTableId(open.getId(), TABLE_ID)).thenReturn(true);
+        assertThat(service.getDashboardsForView(USER, VIEW_ID + 1)).isEmpty();
+        assertThat(service.canAccessDashboardForView(USER, open.getId(), VIEW_ID + 1)).isFalse();
     }
 
     private static BiDashboardRegistry dashboard(String id, String supersetRoleIds) {

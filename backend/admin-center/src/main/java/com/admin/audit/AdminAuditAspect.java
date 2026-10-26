@@ -188,6 +188,7 @@ public class AdminAuditAspect {
             + "&& (execution(* *.create(..)) "
             + "|| execution(* *.createBatch(..)) "
             + "|| execution(* *.update(..)) "
+            + "|| execution(* *.setEnabled(..)) "
             + "|| execution(* *.delete(..)))")
     public Object auditBiDataViewAssignment(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_DATA_VIEW_ASSIGNMENT");
@@ -439,7 +440,7 @@ public class AdminAuditAspect {
         String id = args.length > 0 && args[0] instanceof String s ? s : null;
         return switch (method) {
             case "createAssignment" -> new AuditMeta(AuditAction.CREATE, "BI_ASSIGNMENT", null);
-            case "updateAssignment" -> new AuditMeta(AuditAction.UPDATE, "BI_ASSIGNMENT", id);
+            case "updateAssignment", "setEnabled" -> new AuditMeta(AuditAction.UPDATE, "BI_ASSIGNMENT", id);
             case "deleteAssignment" -> new AuditMeta(AuditAction.DELETE, "BI_ASSIGNMENT", id);
             default                 -> AuditMeta.skip();
         };
@@ -449,7 +450,7 @@ public class AdminAuditAspect {
         String id = args.length > 0 && args[0] instanceof String s ? s : null;
         return switch (method) {
             case "create", "createBatch" -> new AuditMeta(AuditAction.CREATE, "BI_DATA_VIEW_ASSIGNMENT", null);
-            case "update" -> new AuditMeta(AuditAction.UPDATE, "BI_DATA_VIEW_ASSIGNMENT", id);
+            case "update", "setEnabled" -> new AuditMeta(AuditAction.UPDATE, "BI_DATA_VIEW_ASSIGNMENT", id);
             case "delete" -> new AuditMeta(AuditAction.DELETE, "BI_DATA_VIEW_ASSIGNMENT", id);
             default       -> AuditMeta.skip();
         };

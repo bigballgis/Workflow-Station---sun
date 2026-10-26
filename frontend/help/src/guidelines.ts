@@ -37,6 +37,12 @@ export type NavNode = NavGroup | NavLeaf
 
 /** Add a guideline: append here, then add the view + i18n keys + a NAV_TREE leaf. */
 export const GUIDELINES: Guideline[] = [
+  { id: 'ac-bi-assign', path: '/bi-audience-assignment', titleKey: 'biAudienceGuide.title',
+    summaryKey: 'biAudienceGuide.intro', load: () => import('@/views/BiAssignmentGuide.vue') },
+  { id: 'ac-bi-data-view-assign', path: '/bi-data-view-assignment', titleKey: 'biViewGuide.title',
+    summaryKey: 'biViewGuide.intro', load: () => import('@/views/BiAssignmentGuide.vue') },
+  { id: 'up-new', path: '/up-new', titleKey: 'newRequestsGuide.title',
+    summaryKey: 'newRequestsGuide.intro', load: () => import('@/views/NewRequestsGuide.vue') },
   { id: 'form-ctl-record-note', path: '/form-ctl-record-note', titleKey: 'recordNoteGuide.title',
     summaryKey: 'recordNoteGuide.intro', load: () => import('@/views/RecordNoteGuide.vue'), omitFromHome: true },
   {
@@ -95,6 +101,7 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.actionEmail.summary',
     load: () => import('@/views/ActionEmailGuide.vue'),
   },
+  { id: 'node-action-order', path: '/node-action-order', titleKey: 'nodeActionOrderGuide.title', summaryKey: 'nodeActionOrderGuide.summary', load: () => import('@/views/NodeActionOrderGuide.vue') },
   {
     id: 'action-allowed-roles',
     path: '/action-allowed-roles',
@@ -311,7 +318,9 @@ export const NAV_TREE: NavNode[] = [
         children: [
           { kind: 'leaf', id: 'dw-ai-studio', titleKey: 'nav.aiStudio', to: '/ai-studio' },
           { kind: 'leaf', id: 'dw-fu-settings', titleKey: 'nav.functionUnitSettings', to: '/fu-documents' },
-          { kind: 'leaf', id: 'dw-process', titleKey: 'nav.processDesign' },
+          { kind: 'group', id: 'dw-process', titleKey: 'nav.processDesign', children: [
+            { kind: 'leaf', id: 'dw-node-action-order', titleKey: 'nodeActionOrderGuide.title', to: '/node-action-order' },
+          ] },
           {
             kind: 'group',
             id: 'dw-tables-group',
@@ -402,8 +411,8 @@ export const NAV_TREE: NavNode[] = [
         titleKey: 'nav.acBi',
         children: [
           { kind: 'leaf', id: 'ac-bi-reg', titleKey: 'nav.acBiRegistry' },
-          { kind: 'leaf', id: 'ac-bi-assign', titleKey: 'nav.acBiAssignment' },
-          { kind: 'leaf', id: 'ac-bi-data-view-assign', titleKey: 'nav.acBiDataViewAssignment' },
+          { kind: 'leaf', id: 'ac-bi-assign', titleKey: 'nav.acBiAssignment', to: '/bi-audience-assignment' },
+          { kind: 'leaf', id: 'ac-bi-data-view-assign', titleKey: 'nav.acBiDataViewAssignment', to: '/bi-data-view-assignment' },
           { kind: 'leaf', id: 'ac-bi-rbac', titleKey: 'nav.acBiRbac' },
         ],
       },
@@ -467,7 +476,7 @@ export const NAV_TREE: NavNode[] = [
         id: 'up-request',
         titleKey: 'nav.upSectionRequest',
         children: [
-          { kind: 'leaf', id: 'up-new', titleKey: 'nav.upNewRequests' },
+          { kind: 'leaf', id: 'up-new', titleKey: 'nav.upNewRequests', to: '/up-new' },
           { kind: 'leaf', id: 'up-mine', titleKey: 'nav.upMyRequests' },
         ],
       },

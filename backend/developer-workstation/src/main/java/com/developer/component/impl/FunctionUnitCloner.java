@@ -705,7 +705,7 @@ class FunctionUnitCloner {
                 .functionUnit(target)
                 .actionName(source.getActionName())
                 .actionType(source.getActionType())
-                .configJson(new HashMap<>(source.getConfigJson()))
+                .configJson(deepCopyMap(source.getConfigJson()))
                 .icon(source.getIcon())
                 .buttonColor(source.getButtonColor())
                 .displayName(source.getDisplayName())

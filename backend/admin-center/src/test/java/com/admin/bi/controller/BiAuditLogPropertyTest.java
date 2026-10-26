@@ -87,7 +87,8 @@ class BiAuditLogPropertyTest {
                 assignmentRepository, registryRepository,
                 userRepository, roleRepository, businessUnitRepository,
                 userRoleRepository, userBusinessUnitRoleRepository, userBusinessUnitService,
-                new DashboardRoleGate(mock(BiRbacMappingService.class), new BiProperties(), userRoleRepository));
+                new DashboardRoleGate(mock(BiRbacMappingService.class), new BiProperties(), userRoleRepository),
+                mock(jakarta.persistence.EntityManager.class));
     }
 
     // ========== Arbitraries ==========
@@ -332,7 +333,7 @@ class BiAuditLogPropertyTest {
         String dashboardId = dashboard.getId();
 
         when(registryRepository.findById(dashboardId)).thenReturn(Optional.of(dashboard));
-        when(userRepository.existsById(targetId)).thenReturn(true);
+        when(userRepository.existsNonDeletedById(targetId)).thenReturn(true);
         when(assignmentRepository.existsByDashboardIdAndTargetTypeAndTargetId(
                 dashboardId, AssignmentTargetType.USER, targetId)).thenReturn(false);
         when(assignmentRepository.save(any(BiDashboardAssignment.class)))
@@ -390,7 +391,7 @@ class BiAuditLogPropertyTest {
                 .updatedBy("admin")
                 .build();
 
-        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findByIdForUpdate(assignmentId)).thenReturn(Optional.of(assignment));
 
         assignmentService.deleteAssignment(assignmentId);
 

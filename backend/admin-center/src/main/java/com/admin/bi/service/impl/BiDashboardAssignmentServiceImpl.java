@@ -1,6 +1,7 @@
 package com.admin.bi.service.impl;
 
 import com.admin.bi.component.DashboardRoleGate;
+import com.admin.exception.AdminBusinessException;
 import com.admin.bi.dto.request.DashboardAssignmentCreateRequest;
 import com.admin.bi.dto.response.DashboardAssignmentResponse;
 import com.admin.bi.dto.response.UserDashboardResponse;
@@ -23,6 +24,7 @@ import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRoleRepository;
 import com.admin.service.UserBusinessUnitService;
 import com.platform.security.entity.UserBusinessUnitRole;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -50,6 +52,26 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final UserBusinessUnitService userBusinessUnitService;
     private final DashboardRoleGate dashboardRoleGate;
+    // Controller audit can preload this row; refresh it after acquiring the database lock.
+    private final EntityManager entityManager;
+
+    @Override
+    @Transactional
+    public DashboardAssignmentResponse updateAssignmentEnabled(String id, boolean enabled) {
+        BiDashboardAssignment assignment = assignmentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new AdminBusinessException("ASSIGNMENT_NOT_FOUND", "Assignment not found"));
+        entityManager.refresh(assignment);
+        if (enabled) {
+            BiDashboardRegistry dashboard = registryRepository.findById(assignment.getDashboardId())
+                    .orElseThrow(() -> new DashboardNotFoundException(assignment.getDashboardId()));
+            if (dashboard.getStatus() != DashboardStatus.ACTIVE) throw new DashboardInactiveException(dashboard.getId());
+            validateTargetExists(assignment.getTargetType(), assignment.getTargetId());
+        }
+        assignment.setEnabled(enabled);
+        BiDashboardAssignment saved = assignmentRepository.save(assignment);
+        String title = registryRepository.findById(saved.getDashboardId()).orElseThrow().getDashboardTitle();
+        return toResponse(saved, title);
+    }
 
     @Override
     @Transactional
@@ -83,6 +105,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
                 .layoutMode(request.getLayoutMode() != null ? request.getLayoutMode() : LayoutMode.SINGLE)
                 .displayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0)
                 .isDefault(request.getIsDefault() != null ? request.getIsDefault() : false)
+                .enabled(request.getEnabled() == null || request.getEnabled())
                 .build();
 
         BiDashboardAssignment saved = assignmentRepository.save(assignment);
@@ -105,8 +128,9 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
     @Override
     @Transactional
     public DashboardAssignmentResponse updateAssignment(String id, DashboardAssignmentCreateRequest request) {
-        BiDashboardAssignment assignment = assignmentRepository.findById(id)
+        BiDashboardAssignment assignment = assignmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new DashboardNotFoundException(id));
+        entityManager.refresh(assignment);
 
         if (request.getLayoutMode() != null) {
             assignment.setLayoutMode(request.getLayoutMode());
@@ -118,6 +142,10 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
             assignment.setIsDefault(request.getIsDefault());
         }
 
+        if (Boolean.TRUE.equals(request.getEnabled()) && !Boolean.TRUE.equals(assignment.getEnabled())) {
+            updateAssignmentEnabled(id, true);
+        }
+        if (request.getEnabled() != null) assignment.setEnabled(request.getEnabled());
         BiDashboardAssignment saved = assignmentRepository.save(assignment);
         String title = registryRepository.findById(saved.getDashboardId())
                 .map(BiDashboardRegistry::getDashboardTitle)
@@ -128,8 +156,9 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
     @Override
     @Transactional
     public void deleteAssignment(String id) {
-        BiDashboardAssignment assignment = assignmentRepository.findById(id)
+        BiDashboardAssignment assignment = assignmentRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new DashboardNotFoundException(id));
+        entityManager.refresh(assignment);
         assignmentRepository.delete(assignment);
     }
 
@@ -161,14 +190,17 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
 
         // Add BU assignments first (lowest priority)
         for (BiDashboardAssignment a : buAssignments) {
+            if (!Boolean.TRUE.equals(a.getEnabled())) continue;
             mergedMap.put(a.getDashboardId(), a);
         }
         // Override with ROLE assignments (medium priority)
         for (BiDashboardAssignment a : roleAssignments) {
+            if (!Boolean.TRUE.equals(a.getEnabled())) continue;
             mergedMap.put(a.getDashboardId(), a);
         }
         // Override with USER assignments (highest priority)
         for (BiDashboardAssignment a : userAssignments) {
+            if (!Boolean.TRUE.equals(a.getEnabled())) continue;
             mergedMap.put(a.getDashboardId(), a);
         }
 
@@ -233,7 +265,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
      */
     private void validateTargetExists(AssignmentTargetType targetType, String targetId) {
         boolean exists = switch (targetType) {
-            case USER -> userRepository.existsById(targetId);
+            case USER -> userRepository.existsNonDeletedById(targetId);
             case ROLE -> roleRepository.existsById(targetId);
             case BUSINESS_UNIT -> businessUnitRepository.existsById(targetId);
         };
@@ -253,6 +285,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
                 .layoutMode(entity.getLayoutMode())
                 .displayOrder(entity.getDisplayOrder())
                 .isDefault(entity.getIsDefault())
+                .enabled(entity.getEnabled())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

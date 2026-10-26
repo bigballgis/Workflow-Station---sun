@@ -81,7 +81,8 @@ class BiDashboardAssignmentServicePropertyTest {
                 assignmentRepository, registryRepository,
                 userRepository, roleRepository, businessUnitRepository,
                 userRoleRepository, userBusinessUnitRoleRepository, userBusinessUnitService,
-                new DashboardRoleGate(rbacMappingService, biProperties, userRoleRepository));
+                new DashboardRoleGate(rbacMappingService, biProperties, userRoleRepository),
+                mock(jakarta.persistence.EntityManager.class));
     }
 
     // ========== Arbitraries ==========
@@ -535,7 +536,7 @@ class BiDashboardAssignmentServicePropertyTest {
 
     private void mockTargetExists(AssignmentTargetType targetType, String targetId, boolean exists) {
         switch (targetType) {
-            case USER -> when(userRepository.existsById(targetId)).thenReturn(exists);
+            case USER -> when(userRepository.existsNonDeletedById(targetId)).thenReturn(exists);
             case ROLE -> when(roleRepository.existsById(targetId)).thenReturn(exists);
             case BUSINESS_UNIT -> when(businessUnitRepository.existsById(targetId)).thenReturn(exists);
         }
@@ -602,6 +603,28 @@ class BiDashboardAssignmentServicePropertyTest {
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
 
         verifyNoInteractions(assignmentRepository);
+    }
+
+    @Example
+    void disabledUserGrantDoesNotOverrideAnEnabledRoleGrant() {
+        String userId = "audience-user";
+        BiDashboardAssignment direct = buildAssignment("dash", AssignmentTargetType.USER, userId, 1);
+        direct.setEnabled(false);
+        BiDashboardAssignment role = buildAssignment("dash", AssignmentTargetType.ROLE, "role", 9);
+        when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
+                .thenReturn(List.of(direct));
+        when(userRoleRepository.findGlobalRoleIdsByUserId(userId)).thenReturn(List.of("role"));
+        when(assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.ROLE, List.of("role")))
+                .thenReturn(List.of(role));
+        when(registryRepository.findById("dash")).thenReturn(Optional.of(BiDashboardRegistry.builder()
+                .id("dash").dashboardTitle("Dashboard").status(DashboardStatus.ACTIVE).build()));
+        assertThat(service.getUserDashboards(userId, null)).singleElement()
+                .extracting(UserDashboardResponse::getDisplayOrder).isEqualTo(9);
+        role.setEnabled(false);
+        assertThat(service.getUserDashboards(userId, null)).isEmpty();
+        direct.setEnabled(true);
+        assertThat(service.getUserDashboards(userId, null)).singleElement()
+                .extracting(UserDashboardResponse::getDisplayOrder).isEqualTo(1);
     }
 
     /**

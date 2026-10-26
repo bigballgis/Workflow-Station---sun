@@ -71,6 +71,8 @@ import {
   flowableModdleDescriptor,
 } from '@/utils/customModdle'
 
+import { normalizeActionBpmnXml } from '@/utils/actionBpmnProperties'
+
 const { t } = useI18n()
 
 const props = defineProps<{
@@ -130,7 +132,7 @@ async function render(xml: string) {
     })
     keepNodesFittedToText(viewer)
   }
-  await viewer.importXML(xml)
+  await viewer.importXML(normalizeActionBpmnXml(xml))
   viewer.get('canvas').zoom('fit-viewport', 'auto')
 }
 

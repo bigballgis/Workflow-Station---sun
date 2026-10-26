@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
 class BpmnActionParserMergePropertyTest {
 
     @Property(tries = 100)
-    @Label("mergeActionIds keeps node order then new Global ids, first-seen wins")
+    @Label("mergeActionIds keeps node-only order then Global ids without duplicates")
     void mergeIsNodeFirstUnique(
             @ForAll("actionIdLists") List<String> nodeIds,
             @ForAll("actionIdLists") List<String> globalIds) {
@@ -93,7 +93,7 @@ class BpmnActionParserMergePropertyTest {
 
     private static List<String> uniqueNonBlank(List<String> nodeIds, List<String> globalIds) {
         LinkedHashSet<String> merged = new LinkedHashSet<>();
-        appendNonBlank(merged, nodeIds);
+        appendNonBlank(merged, nodeIds.stream().filter(id -> !globalIds.contains(id)).toList());
         appendNonBlank(merged, globalIds);
         return new ArrayList<>(merged);
     }

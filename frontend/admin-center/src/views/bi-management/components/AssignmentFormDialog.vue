@@ -2,10 +2,11 @@
   <el-dialog
     :model-value="modelValue"
     :title="dialogTitle"
-    width="520px"
+    width="640px"
     destroy-on-close
     @update:model-value="onDialogVisible"
   >
+    <el-alert :title="t('bi.assignment.guidance')" type="info" :closable="false" show-icon class="assignment-guidance" />
     <el-form
       ref="formRef"
       v-loading="dialogInitializing"
@@ -63,7 +64,7 @@
           :placeholder="t('bi.assignment.placeholderSelectTarget')"
           filterable
           remote
-          :remote-method="searchUsers"
+          :remote-method="scheduleUserSearch"
           :disabled="isEdit"
           style="width: 100%"
           :loading="userSearchLoading"
@@ -74,7 +75,16 @@
             :label="o.label"
             :value="o.id"
           />
+          <template #footer>
+            <el-button v-if="userSearchFailed" text :loading="userSearchLoading" @click="retryUsers">{{ t('bi.assignment.retry') }}</el-button>
+            <el-button v-else-if="moreUsers" text :loading="userSearchLoading" @click="loadMoreUsers">{{ t('bi.assignment.loadMore') }}</el-button>
+            <span v-else>{{ t('bi.assignment.allLoaded') }}</span>
+          </template>
+          <template #empty>
+            <div class="el-select-dropdown__empty">{{ t(userSearchFailed ? 'bi.assignment.loadTargetsFailed' : 'common.noData') }}</div>
+          </template>
         </el-select>
+        <div v-if="form.targetType === 'USER'" class="field-help">{{ t('bi.assignment.userHint') }}</div>
         <el-select
           v-else
           v-model="form.targetId"
@@ -91,7 +101,12 @@
             :value="o.id"
           />
         </el-select>
+        <div v-if="form.targetType === 'USER' && userSearchFailed && targetSelectOptions.length === 0" class="field-help" role="alert">
+          {{ t('bi.assignment.loadTargetsFailed') }}
+          <el-button text :loading="userSearchLoading" @click="retryUsers">{{ t('bi.assignment.retry') }}</el-button>
+        </div>
       </el-form-item>
+      <div class="field-help">{{ t('bi.assignment.targetHint') }}</div>
       <el-form-item
         :label="t('bi.assignment.formLayoutMode')"
         prop="layoutMode"
@@ -122,6 +137,11 @@
       </el-form-item>
       <el-form-item :label="t('bi.assignment.formDefault')">
         <el-switch v-model="form.isDefault" />
+      </el-form-item>
+      <div class="field-help">{{ t('bi.assignment.layoutHint') }}</div>
+      <el-form-item :label="t('bi.assignment.enabled')">
+        <el-switch v-model="form.enabled" />
+        <div class="field-help">{{ t('bi.assignment.enabledHint') }}</div>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -165,7 +185,7 @@ const {
   submitLoading, dashboardsLoading, targetsLoading, userSearchLoading, dialogInitializing,
   activeDashboards, targetSelectOptions,
   isEdit, dialogTitle, targetTypeOptions, layoutModeOptions,
-  onTargetTypeChange, searchUsers,
+  onTargetTypeChange, cancelUserSearch, scheduleUserSearch, loadMoreUsers, retryUsers, moreUsers, userSearchFailed,
   handleSubmit: doSubmit, initDialog,
 } = useBiAssignmentForm({
   mode: toRef(props, 'mode'),
@@ -177,7 +197,7 @@ const onDialogVisible = (v: boolean) => emit('update:modelValue', v)
 
 // Dialog open → init
 watch(() => props.modelValue, async (open) => {
-  if (!open) return
+  if (!open) { cancelUserSearch(); return }
   await initDialog()
 })
 
@@ -187,3 +207,9 @@ const handleSubmit = async () => {
   await doSubmit()
 }
 </script>
+
+<style scoped>
+.assignment-guidance { margin-bottom: 20px; }
+.field-help { width: 100%; color: var(--el-text-color-secondary); font-size: 12px; margin: 4px 0 12px; line-height: 1.5; }
+:deep(.el-form-item__label) { white-space: nowrap; }
+</style>

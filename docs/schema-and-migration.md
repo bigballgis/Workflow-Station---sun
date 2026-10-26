@@ -35,3 +35,14 @@
 - `.cursor/rules/deployment-infra.mdc`（Schema 管理规则）
 - `.cursor/rules/init-scripts-append-only.mdc`（只增不改细则）
 - `docs/legacy-flyway-migrations/`（已归档的历史迁移）
+
+## 5. BI Assignment 表身份保留（98）
+
+升级已有库时，在 `97-bi-assignment-view-scope.sql` 之后执行
+`00-schema/98-bi-assignment-retain-unavailable-table.sql`，并重启 Admin Center。
+新库由 `00-init-all.sh` 按顺序自动执行；98 可以幂等重放。
+
+98 移除 Assignment 到设计表的级联外键，避免版本回滚或覆盖导入重建表身份时删除外部配置。
+原 Assignment ID、Dashboard、表/View ID、启停状态和审计字段保留。旧身份已不存在时，Admin
+显示不可用绑定和原表 ID，可禁用、删除或明确重新选择已发布 View；不会按名称授予新 View 权限。
+FU 或 Dashboard 整体删除的现有外键规则不变。已经在升级前被级联删除的配置需从备份恢复。

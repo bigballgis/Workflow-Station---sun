@@ -982,8 +982,10 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 @use '@/styles/detail-navigation' as detailNavigation;
+@use '@/styles/detail-page-header' as detailPageHeader;
 
 .task-detail-page {
+  display: flow-root;
   width: 100%;
   max-width: 100%;
   margin: 0;
@@ -993,7 +995,7 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 20px;
+    @include detailPageHeader.pinned-header;
     
     h1 {
       font-size: 24px;

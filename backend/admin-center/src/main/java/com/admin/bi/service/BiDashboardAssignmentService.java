@@ -44,4 +44,5 @@ public interface BiDashboardAssignmentService {
      * BU-scoped role 仅在该 BU 上下文生效。为空时不授予任何 BU 维度权限。
      */
     List<UserDashboardResponse> getUserDashboards(String userId, String activeBusinessUnitId);
+    DashboardAssignmentResponse updateAssignmentEnabled(String id, boolean enabled);
 }
