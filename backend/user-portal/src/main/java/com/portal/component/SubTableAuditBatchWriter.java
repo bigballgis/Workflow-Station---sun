@@ -11,13 +11,13 @@ import java.util.List;
 /** Multi-row statements avoid per-record PostgreSQL execution without changing the caller's audit transaction. */
 final class SubTableAuditBatchWriter {
     private static final int CHUNK_SIZE = 200;
-    private static final int COLUMN_COUNT = 12;
+    private static final int COLUMN_COUNT = 14;
     private static final String INSERT = """
             INSERT INTO up_change_history (process_instance_id, task_instance_id, stage_id, user_id,
-                timestamp, field_name, old_value, new_value, change_type, sub_table_name, row_identifier, is_concurrent)
+                timestamp, field_name, old_value, new_value, change_type, sub_table_name, row_identifier, is_concurrent, batch_id, batch_time)
             VALUES
             """;
-    private static final String VALUES = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    private static final String VALUES = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private SubTableAuditBatchWriter() { }
 
@@ -44,5 +44,7 @@ final class SubTableAuditBatchWriter {
         statement.setString(offset + 10, record.getSubTableName());
         statement.setString(offset + 11, record.getRowIdentifier());
         statement.setBoolean(offset + 12, record.getIsConcurrent());
+        statement.setString(offset + 13, record.getBatchId());
+        statement.setTimestamp(offset + 14, record.getBatchTime() == null ? null : Timestamp.from(record.getBatchTime()));
     }
 }

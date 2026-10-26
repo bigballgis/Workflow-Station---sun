@@ -43,7 +43,6 @@ export function useChangeHistoryLoader(
     }
 
     if (!props.snapshotTime && !props.taskInstanceId) return true
-    if (props.taskInstanceId && row.taskInstanceId === props.taskInstanceId) return true
     if (!props.snapshotTime) return true
 
     const item = dayjs(row.timestamp)

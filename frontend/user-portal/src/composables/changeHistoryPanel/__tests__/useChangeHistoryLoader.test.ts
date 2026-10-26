@@ -47,4 +47,20 @@ describe('useChangeHistoryLoader', () => {
     expect(getChangeHistory).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+  it('filters later records of the same task before grouping completed snapshots', async () => {
+    vi.mocked(getChangeHistory).mockResolvedValue({ data: [
+      { id: 1, taskInstanceId: 'task', timestamp: '2026-10-23T10:00:00Z', newValue: 'visible' },
+      { id: 2, taskInstanceId: 'task', timestamp: '2026-10-23T10:00:02Z', newValue: 'later' },
+    ] } as never)
+    let loader: ChangeHistoryLoader | undefined
+    const wrapper = mount(defineComponent({ setup() {
+      loader = useChangeHistoryLoader({ processInstanceId: 'process', taskInstanceId: 'task',
+        snapshotTime: '2026-10-23T10:00:01Z' }, t, dayjs)
+      return () => h('div')
+    } }))
+    await flushPromises()
+    expect(loader!.records.value.map(row => row.id)).toEqual([1])
+    wrapper.unmount()
+  })
+
 })

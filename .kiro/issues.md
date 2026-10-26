@@ -3,14 +3,18 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-23)
+## 统计 (截至 2026-10-26)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **32** | `index.yaml`（按当前条目重新计数） |
+| 🔓 Open | **49** | `index.yaml`（按当前条目重新计数） |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 
+
+2026-10-26：#1717 已修复 Change History 重复内边距，并新增关键字搜索和时间正倒序工具栏；38项测试、前端构建部署、任务及My Request截图通过。全量类型检查存量错误保留。证据见 `docs/verification/2026-10-26-change-history-toolbar.md`。
+
+2026-10-26：#1716 已修复本地 BI Schema 落后导致的 Portal 首页 502；备份并应用已有97/98升级、重启Admin/Portal，两个同BU请求及首页截图红→绿，未修改业务代码。Open/Wontfix数量不变。证据见 `docs/verification/2026-10-26-bi-schema-upgrade.md`。
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
 

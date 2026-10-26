@@ -41,6 +41,12 @@ public class ChangeHistory {
     @Column(name = "timestamp", nullable = false)
     private Instant timestamp;
 
+    @Column(name = "batch_id", length = 36)
+    private String batchId;
+
+    @Column(name = "batch_time")
+    private Instant batchTime;
+
     @Column(name = "field_name", nullable = false, length = 255)
     private String fieldName;
 

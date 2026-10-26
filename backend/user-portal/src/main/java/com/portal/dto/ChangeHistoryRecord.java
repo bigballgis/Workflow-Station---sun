@@ -20,6 +20,8 @@ public class ChangeHistoryRecord {
     private String userId;
     private String userName;
     private Instant timestamp;
+    private String batchId;
+    private Instant batchTime;
     private String fieldName;
     private String fieldLabel;
     private Integer fieldOrder;

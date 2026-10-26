@@ -39,7 +39,10 @@ public class TaskAssignmentHistoryRecorder {
                 || !AssignmentChangeTypes.isAssignmentAction(changeType)) {
             return;
         }
+        var context = com.portal.dto.ChangeHistoryContext.builder().build();
         ChangeHistory record = ChangeHistory.builder()
+                .batchId(context.getBatchId())
+                .batchTime(context.getBatchTime())
                 .processInstanceId(task.getProcessInstanceId())
                 .taskInstanceId(blankToNull(task.getTaskId()))
                 .stageId(blankToNull(task.getTaskDefinitionKey()))

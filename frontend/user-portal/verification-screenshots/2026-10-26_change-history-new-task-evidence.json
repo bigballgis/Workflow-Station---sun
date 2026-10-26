@@ -1,0 +1,44 @@
+{
+  "summary": "48 of 48 changes",
+  "groups": 7,
+  "times": [
+    "2026-10-26 15:26:31",
+    "2026-10-26 15:27:52",
+    "2026-10-26 15:28:36",
+    "2026-10-26 15:29:38",
+    "2026-10-26 15:29:52",
+    "2026-10-26 15:30:30",
+    "2026-10-26 15:30:43"
+  ],
+  "counts": [
+    "40 changes",
+    "1 change",
+    "3 changes",
+    "1 change",
+    "1 change",
+    "1 change",
+    "1 change"
+  ],
+  "searchSummary": "1 of 48 changes",
+  "sortVerified": true,
+  "searchVerified": true,
+  "collapseRetained": true,
+  "browserErrors": [],
+  "historyHttpErrors": [],
+  "database": {
+    "records": 48,
+    "batches": 7,
+    "missingBatchMetadata": 0,
+    "recordsAfterSnapshot": 0,
+    "types": {
+      "CLAIM": 5,
+      "FIELD_UPDATE": 1,
+      "SUB_TABLE_ROW_ADD": 39,
+      "SUB_TABLE_ROW_UPDATE": 3
+    }
+  },
+  "separateLogWarnings": [
+    "PROCESS_QUERY_ERROR on completed process-instance lookup",
+    "INSTANCE_BPMN_UNAVAILABLE on deployed BPMN verification"
+  ]
+}

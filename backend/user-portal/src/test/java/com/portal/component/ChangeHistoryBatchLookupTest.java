@@ -98,9 +98,9 @@ class ChangeHistoryBatchLookupTest {
         var setters = org.mockito.ArgumentCaptor.forClass(org.springframework.jdbc.core.PreparedStatementSetter.class);
         verify(jdbc, times((rows + 199) / 200)).update(sql.capture(), setters.capture());
         assertThat(sql.getAllValues().stream().mapToLong(value -> value.chars().filter(c -> c == '?').count()).sum())
-                .isEqualTo(rows * 12L);
+                .isEqualTo(rows * 14L);
         assertThat(sql.getAllValues()).allSatisfy(value ->
-                assertThat(value.chars().filter(c -> c == '?').count()).isBetween(12L, 2400L));
+                assertThat(value.chars().filter(c -> c == '?').count()).isBetween(14L, 2800L));
         var statement = mock(java.sql.PreparedStatement.class);
         try {
             for (var setter : setters.getAllValues()) setter.setValues(statement);

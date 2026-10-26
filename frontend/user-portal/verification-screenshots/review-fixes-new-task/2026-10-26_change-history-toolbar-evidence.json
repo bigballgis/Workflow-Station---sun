@@ -1,0 +1,18 @@
+{
+  "liveGroups": 7,
+  "liveSummary": "48 of 48 changes",
+  "metrics": {
+    "paddingTop": "0px",
+    "toolbarHeight": 32,
+    "toolbarToFirstGroup": 12
+  },
+  "ascendingDescending": true,
+  "search": true,
+  "clearRestoresCollapse": true,
+  "hiddenValuesNotSearchable": true,
+  "fixtureVisibleRows": 7,
+  "fixtureGroups": 4,
+  "searchKeepsEventBoundary": true,
+  "helpUpdated": true,
+  "browserErrors": []
+}

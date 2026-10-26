@@ -80,6 +80,7 @@ const sections: GuideSection[] = [
     titleKey: 'upTasksToClaimGuide.detailTitle',
     bodyKey: 'upTasksToClaimGuide.detailBody',
   },
+  { anchor: 'change-history', titleKey: 'upTasksToClaimGuide.historyTitle', bodyKey: 'upTasksToClaimGuide.historyBody' },
   {
     anchor: 'leader',
     titleKey: 'upTasksToClaimGuide.leaderTitle',

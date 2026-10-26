@@ -13,6 +13,8 @@ import { fileDisplayText } from '@/utils/mainTableViewCsvExport'
 
 type TranslateFn = ReturnType<typeof useI18n>['t']
 
+export const HISTORY_VALUE_MAX_LENGTH = 240
+
 const ASSIGNMENT_CHANGE_TYPES = new Set(['CLAIM', 'UNCLAIM', 'FORCE_UNCLAIM', 'REASSIGN'])
 
 function isAssignmentChangeType(changeType: string | undefined): boolean {
@@ -201,7 +203,7 @@ export function useChangeHistoryFormatting(
   
   function formatDisplayValue(
     raw: string | null | undefined,
-    maxLen = 240,
+    maxLen = HISTORY_VALUE_MAX_LENGTH,
     fieldName?: string | null,
   ): string {
     if (fieldName === 'claimed_by' && (raw === null || raw === undefined || String(raw).trim() === '')) {

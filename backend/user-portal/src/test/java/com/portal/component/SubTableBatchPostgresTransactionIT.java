@@ -120,12 +120,20 @@ class SubTableBatchPostgresTransactionIT {
                 jdbc, new com.fasterxml.jackson.databind.ObjectMapper(), mock(UserPortalAuditEnricher.class),
                 mock(UserPortalAuditProcessInstanceMatcher.class), transactions);
         var context = com.portal.dto.ChangeHistoryContext.builder().processInstanceId("audit-synthetic")
+                .batchTime(java.time.Instant.parse("2026-10-23T10:00:00Z"))
                 .taskInstanceId("task-synthetic").stageId("stage-synthetic").userId("user-synthetic").build();
         var changes = java.util.stream.IntStream.range(0, 401).mapToObj(index -> com.portal.dto.SubTableChange.builder()
                 .changeType("ROW_UPDATE").rowIdentifier("row-" + index).oldValues(Map.<String, Object>of("caption", "before"))
                 .newValues(Map.<String, Object>of("caption", "after")).build()).toList();
+        component.recordFieldChanges(context, Map.of("title", "before"), Map.of("title", "after"));
         component.recordSubTableChangesWithName(context, "synthetic-lines", changes);
-        var records = auditRepository.findAll();
+        component.recordSubTableChangesWithName(context, "second-lines", List.of(changes.get(0)));
+        var all = auditRepository.findAll();
+        assertEquals(403, all.size());
+        assertTrue(all.stream().allMatch(row -> context.getBatchId().equals(row.getBatchId())
+                && context.getBatchTime().truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+                .equals(row.getBatchTime().truncatedTo(java.time.temporal.ChronoUnit.MICROS))));
+        var records = all.stream().filter(row -> "synthetic-lines".equals(row.getSubTableName())).toList();
         assertEquals(401, records.size());
         assertTrue(records.stream().allMatch(row -> "before".equals(row.getOldValue()) && "after".equals(row.getNewValue())
                 && "task-synthetic".equals(row.getTaskInstanceId()) && "stage-synthetic".equals(row.getStageId())
@@ -133,13 +141,15 @@ class SubTableBatchPostgresTransactionIT {
                 && row.getTimestamp() != null && row.getId() != null && !row.getIsConcurrent()
                 && row.getChangeType() == com.portal.enums.ChangeType.SUB_TABLE_ROW_UPDATE));
         component.recordSubTableChangesWithName(context, "synthetic-lines", changes);
-        assertEquals(401, auditRepository.count(), "An identical repeated save must not append duplicates");
+        component.recordFieldChanges(com.portal.dto.ChangeHistoryContext.builder().processInstanceId("audit-synthetic")
+                .userId("user-synthetic").build(), Map.of("title", "after"), Map.of("title", "after"));
+        assertEquals(403, auditRepository.count(), "An identical repeated save must not append duplicates");
         var invalid = new java.util.ArrayList<>(changes);
         invalid.add(com.portal.dto.SubTableChange.builder().changeType("ROW_UPDATE").rowIdentifier("bad-row")
                 .oldValues(Map.of("x".repeat(256), "before")).newValues(Map.of("x".repeat(256), "after")).build());
         component.recordSubTableChangesWithName(com.portal.dto.ChangeHistoryContext.builder()
                 .processInstanceId("other-audit-synthetic").userId("user-synthetic").build(), "synthetic-lines", invalid);
-        assertEquals(401, auditRepository.count(), "The audit transaction rolls back even earlier JDBC chunks");
+        assertEquals(403, auditRepository.count(), "The audit transaction rolls back even earlier JDBC chunks");
     }
 
     @Test

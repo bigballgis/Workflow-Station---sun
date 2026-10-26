@@ -5501,3 +5501,30 @@
     allocateCatalog复用现有toPkConfig，使null/空对象与旧入口一致默认UUID；显式manual/序列策略不变。
     四个用例先2失败后全部通过；Portal重新打包重建，原FU页面发起成功且创建真实流程任务。
     证据：docs/verification/2026-10-22-batch-assign-lookup.md。
+- id: "1716"
+  status: fixed
+  fixed_at: "2026-10-26"
+  severity: major
+  category: bug
+  summary: "本地BI数据库未应用97/98升级，Portal首页看板请求返回502"
+  file: "deploy/init-scripts/00-schema/97-bi-assignment-view-scope.sql"
+  detail: |
+    Admin查询bi_dashboard_assignment.enabled缺列，Portal转为BI_UPSTREAM_UNAVAILABLE。
+    备份后应用已有97/98脚本并验证幂等，重启Admin/Portal；两表原均0行且升级后不变。
+    同BU的显式/默认BU请求由502转200且返回合法空列表；首页截图不再报错，浏览器无5xx或运行异常。
+    非空BI绑定迁移及Superset嵌入因本地无配置未验证；未修改业务代码。
+    证据：docs/verification/2026-10-26-bi-schema-upgrade.md。
+
+- id: "1717"
+  status: fixed
+  fixed_at: "2026-10-26"
+  severity: minor
+  category: bug
+  summary: "Change History无标题模式叠加Tab内边距，顶部帮助行留下过多空白"
+  file: "frontend/user-portal/src/components/ChangeHistoryPanel.vue"
+  detail: |
+    headerless内容仍有20px内边距，与Tab的20px叠加；仅帮助图标占一行。
+    移除该模式重复内边距，加入紧凑搜索/时间正倒序/结果计数工具栏；有标题模式保留原样式。
+    38项历史测试通过，禁用搜索时4项新增测试失败，恢复后通过；构建、部署及任务/My Request截图验证通过。
+    搜索不命中遮罩明文或Lookup隐藏载荷，不跨独立事件重新分组；保留收起状态。
+    全量类型检查存量错误仍存在，本轮历史文件无报错；见docs/verification/2026-10-26-change-history-toolbar.md。
