@@ -374,7 +374,7 @@ public class FunctionUnitImportController {
         }
     }
     
-    /** Deprecates the consumer-facing launcher entry until re-enabled. */
+    /** Deprecates the release, as {@code /function-units/{id}/deprecate} does; {@code enable} does not undo it. */
     @PostMapping("/{id}/disable")
     @Operation(summary = "Disable feature toggle / deprecate view")
     public ResponseEntity<Map<String, Object>> disableFunctionUnit(@PathVariable String id) {
@@ -383,9 +383,8 @@ public class FunctionUnitImportController {
         Map<String, Object> result = new HashMap<>();
         
         try {
-            FunctionUnit functionUnit = functionUnitManager.getFunctionUnitById(id);
-            functionUnit.markAsDeprecated();
-            
+            functionUnitManager.deprecateFunctionUnit(id);
+
             result.put("status", "SUCCESS");
             result.put("message", i18nService.getMessage("admin.deploy.fu_disable_success"));
             

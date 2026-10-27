@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Re-importing an existing relation table via the JDBC-based
- * {@link RelationTableStructurePortability#importAll(List, String)} update branch must be a no-op
+ * {@link RelationTableStructurePortability#importAll(List, String, String)} update branch must be a no-op
  * for status/version when the incoming structure is byte-identical to what's stored, and must flip
  * to UPDATED + bump the version when it actually differs. Mirrors
  * {@code RelationTableStructureImporterDiffGateTest} (admin-center's JPA-based equivalent). Covers
@@ -43,12 +43,14 @@ class RelationTableStructurePortabilityDiffGateTest {
         portability = new RelationTableStructurePortability(jdbcTemplate, new ObjectMapper());
     }
 
-    /** Stubs the "does a table with this name already exist" lookup to return the given id. */
+    /** Stubs the "does a table with this name already exist" lookup to return the given id; no other FU uses it. */
     @SuppressWarnings("unchecked")
     private void stubExistingTableId(String tableName, Long id) {
         when(jdbcTemplate.query(eq("SELECT id FROM rt_table_definitions WHERE table_name = ?"),
                 any(RowMapper.class), eq(tableName)))
                 .thenReturn(List.of(id));
+        when(jdbcTemplate.query(contains("FROM rt_table_function_units"), any(RowMapper.class), eq(id)))
+                .thenReturn(List.of());
     }
 
     private void stubCurrentDisplayNameAndDescription(Long id, String displayName, String description) {
@@ -121,7 +123,7 @@ class RelationTableStructurePortabilityDiffGateTest {
                 "description", "Order records",
                 "fields", List.of(payloadField("Amount")));
 
-        portability.importAll(List.of(table), "tester");
+        portability.importAll(List.of(table), "tester", "fu-test");
 
         verify(jdbcTemplate).update(
                 eq("UPDATE rt_table_definitions SET display_name = ?, description = ?, updated_at = ?, updated_by = ? WHERE id = ?"),
@@ -144,7 +146,7 @@ class RelationTableStructurePortabilityDiffGateTest {
                 "description", "Order records",
                 "fields", List.of(payloadField("Amount (USD)")));
 
-        portability.importAll(List.of(table), "tester");
+        portability.importAll(List.of(table), "tester", "fu-test");
 
         verify(jdbcTemplate).update(
                 contains("status = 'UPDATED', current_version = COALESCE(current_version, 0) + 1"),
@@ -165,7 +167,7 @@ class RelationTableStructurePortabilityDiffGateTest {
                 "description", "Order records",
                 "fields", List.of(payloadField("Amount")));
 
-        portability.importAll(List.of(table), "tester");
+        portability.importAll(List.of(table), "tester", "fu-test");
 
         verify(jdbcTemplate).update(
                 contains("status = 'UPDATED', current_version = COALESCE(current_version, 0) + 1"),

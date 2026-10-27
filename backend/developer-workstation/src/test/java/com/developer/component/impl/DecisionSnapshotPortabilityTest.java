@@ -28,6 +28,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class DecisionSnapshotPortabilityTest {
     @Mock DecisionDefinitionRepository decisions;
+    /** Restore re-links the Function Unit's actions after its decisions get new ids. */
+    @Mock ActionDefinitionRepository actions;
     @InjectMocks FunctionUnitImportWriter writer;
 
     @Test void exporterKeepsDraftMetadataAndLegacyXmlList() {

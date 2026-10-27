@@ -5528,3 +5528,28 @@
     38项历史测试通过，禁用搜索时4项新增测试失败，恢复后通过；构建、部署及任务/My Request截图验证通过。
     搜索不命中遮罩明文或Lookup隐藏载荷，不跨独立事件重新分组；保留收起状态。
     全量类型检查存量错误仍存在，本轮历史文件无报错；见docs/verification/2026-10-26-change-history-toolbar.md。
+
+- id: "1718"
+  status: open
+  severity: major
+  category: security
+  summary: "Admin 的 Function Unit 接口没有角色/权限校验，任何已登录用户都能部署、导入、停用 FU"
+  file: "backend/admin-center/src/main/java/com/admin/config/SecurityConfig.java"
+  detail: |
+    SecurityConfig 是 anyRequest().permitAll()，只靠 Kong+JWT 做认证；WebMvcConfig 的拦截器只覆盖
+    business-units/virtual-groups/approvers/exit/configs/sla-policies，不覆盖 /function-units* 与
+    /function-units-import*（deploy、import、deprecate、disable 等）。2026-10-26 独立 code review 发现，
+    import 的 disable 当天已修成真正落库，影响随之变大。用户决定先记录、单独立项：需先设计所需权限，
+    以及 DW→Admin 代用户调用和服务令牌如何带身份。
+- id: "1719"
+  status: open
+  severity: minor
+  category: bug
+  summary: "关联表 LOOKUP 列的 lookupConfig.refTableId 跨环境导入不按表名重映射"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/RelationTableStructurePortability.java"
+  detail: |
+    DW 导出 lookup_config 原样带源环境的 refTableId；DW importAll 与 Admin RelationTableStructureImporter
+    都不按表名改写，首次导入把源环境 id 写进目标环境，LOOKUP 指向错表或不存在的表。
+    RelationTableStructureDiff 比 lookupConfig 时也会把不同环境的同一表判为结构不同（旧的
+    FU_IMPORT_RT_BOUND_OTHER_FU 判断受影响；新的 referenceOnly 比对已在 10-26 忽略 refTableId）。
+    修法方向：导出补 refTableName，导入按名映射回本环境 id。

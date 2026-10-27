@@ -191,7 +191,8 @@ public class FunctionUnitImporter {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> relationTables =
                     (List<Map<String, Object>>) packageData.get("relationTables");
-            Map<String, Long> rtNameToId = relationTablePortability.importAll(relationTables, currentOperator());
+            Map<String, Long> rtNameToId = relationTablePortability.importAll(
+                    relationTables, currentOperator(), functionUnit.getCode());
             for (Map<String, Object> rt : relationTables) {
                 Object srcId = rt.get("relationTableId");
                 String rtName = (String) rt.get("tableName");

@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AuditorReadOnlyControllerContractTest {
@@ -33,10 +34,15 @@ class AuditorReadOnlyControllerContractTest {
                 Set.of(annotationOn(ExportImportController.class, "validate").value()));
     }
 
+    /**
+     * Upload backs Portal form Attachment fields for every signed-in user (49b02721b), so it carries no developer
+     * permission and checks authentication itself; deleting a stored file stays a designer's change.
+     */
     @Test
-    void fileUploadMutationsRequireUpdate() throws Exception {
-        assertEquals(Set.of("FUNCTION_UNIT_UPDATE"),
-                Set.of(annotationOn(FileUploadController.class, "upload").value()));
+    void fileDeletionRequiresUpdateWhileUploadIsForAnySignedInUser() throws Exception {
+        Method upload = Arrays.stream(FileUploadController.class.getDeclaredMethods())
+                .filter(m -> m.getName().equals("upload")).findFirst().orElseThrow();
+        assertNull(upload.getAnnotation(RequireDeveloperPermission.class));
         assertEquals(Set.of("FUNCTION_UNIT_UPDATE"),
                 Set.of(annotationOn(FileUploadController.class, "deleteFile").value()));
     }

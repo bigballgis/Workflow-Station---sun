@@ -66,7 +66,7 @@ description: >-
 | `tables/table_*.json` | 表结构 + FK 元数据 |
 | `relations/table_relations.json` | 表关系 |
 | `forms/form_*.json` | 表单 + binding + subTableViewConfig |
-| `relation-tables/relation_tables.json` | 引用的 rt_ 结构 |
+| `relation-tables/relation_tables.json` | 引用的 rt_ 结构：RELATED binding 的表 + 沿外键传递带上的父表（父表标 `referenceOnly: true`：DW/Admin 导入已存在则不改不 link，Admin 要求字段一致（忽略 LOOKUP 的环境 id）否则 `FU_IMPORT_RT_REFERENCE_MISMATCH`）。共享表规则见 rollback Skill「共享关联表」 |
 | **`views/main_table_views.json`** | **View Design：字段、排序/筛选、restrictToInvolvedUsers、accessRules** |
 | `actions/action_*.json` | 动作 |
 | `decisions/decision_*.dmn` | 决策 |

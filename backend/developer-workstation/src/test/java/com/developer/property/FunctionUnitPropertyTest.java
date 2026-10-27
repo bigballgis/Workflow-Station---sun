@@ -341,7 +341,8 @@ public class FunctionUnitPropertyTest {
 
         String sourceBpmn = """
                 <?xml version="1.0"?>
-                <bpmn:definitions>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:custom="http://custom.bpmn.io/schema">
                   <bpmn:userTask id="MI_UserTask_13">
                     <bpmn:extensionElements>
                       <custom:property name="subTableId" value="13" />

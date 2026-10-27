@@ -114,7 +114,7 @@ public class FunctionUnitSnapshotRestorer {
             importWriter.importTableRelations(functionUnit, tableRelations, importedTableNameToId);
         }
 
-        Map<Long, Long> relationTableIdMapping = importRelationTables(snapshot);
+        Map<Long, Long> relationTableIdMapping = importRelationTables(snapshot, functionUnit);
 
         Map<Long, Long> formIdMapping = new HashMap<>();
         Map<String, Long> importedFormNameToId = new HashMap<>();
@@ -225,14 +225,15 @@ public class FunctionUnitSnapshotRestorer {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<Long, Long> importRelationTables(Map<String, Object> snapshot) {
+    private Map<Long, Long> importRelationTables(Map<String, Object> snapshot, FunctionUnit functionUnit) {
         Map<Long, Long> relationTableIdMapping = new HashMap<>();
         if (!snapshot.containsKey("relationTables")) {
             return relationTableIdMapping;
         }
         List<Map<String, Object>> relationTables =
                 (List<Map<String, Object>>) snapshot.get("relationTables");
-        Map<String, Long> rtNameToId = relationTablePortability.importAll(relationTables, currentOperator());
+        Map<String, Long> rtNameToId = relationTablePortability.importAll(
+                relationTables, currentOperator(), functionUnit.getCode());
         for (Map<String, Object> rt : relationTables) {
             Object srcId = rt.get("relationTableId");
             String rtName = (String) rt.get("tableName");

@@ -11,7 +11,7 @@ description: >-
 
 # Function Unit 版本回滚 — 完整还原契约
 
-**产品目标：** 用户在 **Version Management** 对某一历史版本点 **Rollback** 后，当前 FU 的设计内容 MUST 与**该目标版本快照时刻**一致（表关系、Form 画布与 binding、View 与 BU/Role、Table/字段、控件属性、BPMN、Action、Decision、邮件等 **Function Unit 内全部设计器产物**）。
+**产品目标：** 用户在 **Version Management** 对某一历史版本点 **Rollback** 后，当前 FU 的设计内容 MUST 与**该目标版本快照时刻**一致（表关系、Form 画布与 binding、View 与 BU/Role、Table/字段、控件属性、BPMN、Action、Decision、邮件等 **Function Unit 内全部设计器产物**）。共享关联表与外键父表不属于 FU 自身，回滚不改其结构（见「共享关联表」）。
 
 与可移植性总纲配套：`.cursor/skills/function-unit-portability/SKILL.md`  
 View 访问规则语义：`.cursor/skills/view-access-control/SKILL.md`
@@ -100,11 +100,21 @@ Legacy 键（`tableDefinitions` / `formDefinitions` / `processXml` / …）仍�
 | **View Design** + **accessRules** | ✅ | ✅ | `MainTableViewPortability`；保存 access 见 #1471 |
 | **Actions / Decisions** | ✅ | ✅ | |
 | **Email connections / monitors** | ✅ | ✅ | `connections[]` / `emailMonitors[]` |
-| **Relation Table (rt_)** | ✅ | ✅ | `relationTables[]`（有 RELATED binding 时） |
+| **Relation Table (rt_)** | ✅ | ⚠️ 只还原本 FU 独占的表 | `relationTables[]`（RELATED binding 的表 + 外键父表）；见下方「共享关联表」 |
 | **dw_function_unit_access**（DW 门禁） | — | ❌ | 与 Admin `sys_function_unit_access` 分离 |
 | **Dev virtual groups** | — | ❌ | `dw_function_unit_dev_groups` |
 
 **旧版 snapshot（无 schema v2）：** 仍仅还原 legacy 子集（无 FK/bindings/email/view access 等）；须 **重新 Publish** 生成 v2 快照后 Rollback 才能全量还原。
+
+### 共享关联表：FU 只引用，回滚只回滚 FU 自身（2026-10-26 用户定）
+
+关联表（rt_）有自己的版本管理（Admin 关联表结构/部署），FU 只是引用它。`RelationTableStructurePortability.importAll`（回滚与 DW 导入共用）因此 **故意不还原** 以下表的结构——这不是丢数据 bug，勿「修」回去：
+
+| 表 | 回滚 / DW 导入时 |
+|----|-----------------|
+| **外键父表**（快照里带 `referenceOnly: true`） | 已存在则原样使用、不改；不存在才创建 |
+| **共享表**：`rt_table_function_units` 关联到**别的 FU code**，或别的 FU 的表经外键链指向它 | 不改表；当前结构须是快照版本的超集（快照里的列都在且类型相同，多列无妨），否则整体失败 `FU_IMPORT_RT_SHARED_INCOMPATIBLE` 并列出冲突列（事务回滚） |
+| 只关联本 FU，或无人关联（Common） | 照旧按快照还原 |
 
 ---
 

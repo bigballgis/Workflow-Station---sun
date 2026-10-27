@@ -118,6 +118,56 @@ class AiStudioProposalJobPersistenceTest {
                 events);
     }
 
+    /** A worker that finishes before submit returns (here: inline) must still announce the start first. */
+    @Test
+    void aJobThatEndsAtOnceIsStillAnnouncedStartedFirst() {
+        ExecutorService inline = new java.util.concurrent.AbstractExecutorService() {
+            @Override public void execute(Runnable task) { task.run(); }
+            @Override public void shutdown() { }
+            @Override public List<Runnable> shutdownNow() { return List.of(); }
+            @Override public boolean isShutdown() { return false; }
+            @Override public boolean isTerminated() { return false; }
+            @Override public boolean awaitTermination(long timeout, TimeUnit unit) { return true; }
+        };
+        AiStudioProposalJobServiceImpl immediate = new AiStudioProposalJobServiceImpl(inline, Duration.ofMinutes(30),
+                Duration.ofMinutes(30), 200, store, e -> events.add((AiStudioThreadEvent) e), Duration.ofHours(24));
+
+        AiStudioProposalJobResponse failed = immediate.submit(request(2L, "k2"),
+                () -> { throw new AiGenerationException("X", "no"); }, null);
+
+        assertEquals(List.of(
+                AiStudioThreadEvent.proposal(AiStudioThreadEvent.PROPOSAL_STARTED, 2L, "EMAIL_TEMPLATES", failed.getJobId(), "u1", "Alice"),
+                AiStudioThreadEvent.proposal(AiStudioThreadEvent.PROPOSAL_FINISHED, 2L, "EMAIL_TEMPLATES", failed.getJobId(), "u1", "Alice")),
+                events);
+    }
+
+    /** A job the workers turn away was announced as started, so teammates are also told it ended. */
+    @Test
+    void aRejectedJobIsAnnouncedEnded() {
+        ExecutorService full = new java.util.concurrent.AbstractExecutorService() {
+            @Override public void execute(Runnable task) { throw new java.util.concurrent.RejectedExecutionException("full"); }
+            @Override public void shutdown() { }
+            @Override public List<Runnable> shutdownNow() { return List.of(); }
+            @Override public boolean isShutdown() { return false; }
+            @Override public boolean isTerminated() { return false; }
+            @Override public boolean awaitTermination(long timeout, TimeUnit unit) { return true; }
+        };
+        AiStudioProposalJobServiceImpl busy = new AiStudioProposalJobServiceImpl(full, Duration.ofMinutes(30),
+                Duration.ofMinutes(30), 200, store, e -> events.add((AiStudioThreadEvent) e), Duration.ofHours(24));
+
+        AiGenerationException rejected = assertThrows(AiGenerationException.class,
+                () -> busy.submit(request(3L, "k3"), () -> new StudioChatResult("r", null, null), null));
+
+        assertEquals("AI_STUDIO_PROPOSAL_QUEUE_FULL", rejected.getErrorCode());
+        assertEquals(List.of(AiStudioThreadEvent.PROPOSAL_STARTED, AiStudioThreadEvent.PROPOSAL_FINISHED),
+                events.stream().map(AiStudioThreadEvent::type).toList());
+        assertEquals(1, events.stream().map(AiStudioThreadEvent::jobId).distinct().count());
+        // Another tab of the same user polls the announced job and learns it failed (not "not found").
+        AiStudioProposalJobResponse polled = busy.get(events.get(0).jobId(), "u1");
+        assertEquals(Status.FAILED, polled.getStatus());
+        assertEquals("AI_STUDIO_PROPOSAL_QUEUE_FULL", polled.getErrorCode());
+    }
+
     @Test
     void cancelAndSupersedeAlsoAnnounceTheEndOnce() throws Exception {
         CountDownLatch release = new CountDownLatch(1);

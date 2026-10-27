@@ -4,6 +4,7 @@ import com.developer.dto.MemberRequest;
 import com.developer.dto.MemberResponse;
 import com.developer.dto.MemberUpdateRequest;
 import com.developer.exception.BusinessLogicException;
+import com.developer.security.DeveloperPermissionChecker;
 import com.developer.service.MemberService;
 import com.developer.validation.SecurityInputValidator;
 import com.developer.dto.ValidationResult;
@@ -68,7 +69,10 @@ class MemberControllerTest {
     
     @MockBean
     private SecurityInputValidator securityValidator;
-    
+
+    @MockBean
+    private DeveloperPermissionChecker permissionChecker;
+
     private MemberRequest validMemberRequest;
     private MemberResponse memberResponse;
     private MemberUpdateRequest updateRequest;
@@ -130,6 +134,9 @@ class MemberControllerTest {
                 .build();
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, List.of()));
+        // The endpoints declare @RequireDeveloperPermission; the acting user holds what they ask for.
+        when(permissionChecker.getUserPermissions("testuser"))
+                .thenReturn(java.util.Set.of("function_unit:view", "function_unit:assign_dev_group"));
     }
 
     @AfterEach

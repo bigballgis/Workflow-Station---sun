@@ -30,32 +30,54 @@ import java.util.Map;
  * present ⇒ replace fields, and only if the incoming structure actually differs from what's
  * stored, set {@code UPDATED} with {@code current_version + 1} (a no-op re-import leaves status/
  * version untouched). Returns a {@code table_name → new rt id} map so the caller can remap
- * RELATED bindings' relationTableId.
+ * RELATED bindings' relationTableId. A {@link #REFERENCE_ONLY} table is only created when absent.
  */
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class RelationTableStructurePortability {
 
+    /**
+     * Marks a table a package carries only because a foreign key of one of its relation tables references
+     * it. The Function Unit does not own it: importers create it when absent but never change an existing one.
+     */
+    public static final String REFERENCE_ONLY = "referenceOnly";
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
-    /** Serialize the given relation table ids to a list of name-keyed structure maps. Unknown ids are skipped. */
+    /**
+     * Serialize the given relation table ids, followed by every relation table their foreign keys reach
+     * (marked {@link #REFERENCE_ONLY}), to a list of name-keyed structure maps: a release's snapshot must
+     * hold each foreign key's parent table, or Admin Center refuses to activate it. Unknown ids are skipped.
+     */
     public List<Map<String, Object>> exportByIds(List<Long> relationTableIds) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (relationTableIds == null || relationTableIds.isEmpty()) {
             return out;
         }
-        for (Long id : relationTableIds.stream().filter(java.util.Objects::nonNull).distinct().toList()) {
-            Map<String, Object> table = exportOne(id);
-            if (table != null) {
-                out.add(table);
+        List<Long> bound = relationTableIds.stream().filter(java.util.Objects::nonNull).toList();
+        java.util.Deque<Long> pending = new java.util.ArrayDeque<>(bound);
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        while (!pending.isEmpty()) {
+            Long id = pending.poll();
+            if (!seen.add(id)) {
+                continue;
             }
+            Map<String, Object> table = exportOne(id, pending);
+            if (table == null) {
+                continue;
+            }
+            if (!bound.contains(id) && id != SystemUserRelationTable.ID) {
+                table.put(REFERENCE_ONLY, true);
+            }
+            out.add(table);
         }
         return out;
     }
 
-    private Map<String, Object> exportOne(Long id) {
+    /** One table's structure; the ids its foreign keys reference are added to {@code references}. */
+    private Map<String, Object> exportOne(Long id, java.util.Collection<Long> references) {
         if (id == SystemUserRelationTable.ID) {
             return SystemUserRelationTable.snapshot();
         }
@@ -94,7 +116,11 @@ public class RelationTableStructurePortability {
                     f.put("displayName", rs.getString("display_name"));
                     f.put("isForeignKey", rs.getObject("is_foreign_key", Boolean.class));
                     // ref_table_id is exported by name so it survives id remap on import
-                    f.put("refTableName", refTableName(rs.getObject("ref_table_id", Long.class)));
+                    Long refTableId = rs.getObject("ref_table_id", Long.class);
+                    f.put("refTableName", refTableName(refTableId));
+                    if (refTableId != null) {
+                        references.add(refTableId);
+                    }
                     f.put("refPrimaryKeyFields", rs.getString("ref_primary_key_fields"));
                     f.put("pkGenerationJson", rs.getString("pk_generation_json"));
                     f.put("fkDisplayMode", rs.getString("fk_display_mode"));
@@ -125,18 +151,24 @@ public class RelationTableStructurePortability {
     }
 
     /**
-     * Upsert all relation-table structures from a package.
+     * Upsert all relation-table structures from a package; an existing {@link #REFERENCE_ONLY} table is left as is.
+     * An existing table another Function Unit also uses is left as is too: it has its own versions and this
+     * Function Unit only references it, so importing or rolling back the Function Unit restores the Function Unit
+     * alone — provided the table still has every column the package's version uses.
      *
-     * @param relationTables list of name-keyed structure maps (as produced by {@link #exportByIds})
-     * @param operator       audit user
-     * @return table_name → rt_table_definitions.id for every imported/updated table
+     * @param relationTables     list of name-keyed structure maps (as produced by {@link #exportByIds})
+     * @param operator           audit user
+     * @param functionUnitCode   code of the Function Unit being imported or rolled back
+     * @return table_name → rt_table_definitions.id for every table of the package
      */
-    public Map<String, Long> importAll(List<Map<String, Object>> relationTables, String operator) {
+    public Map<String, Long> importAll(List<Map<String, Object>> relationTables, String operator,
+                                       String functionUnitCode) {
         Map<String, Long> nameToId = new LinkedHashMap<>();
         if (relationTables == null || relationTables.isEmpty()) {
             return nameToId;
         }
         // Pass 1: upsert table definitions + fields (ref_table_id resolved in pass 2 once all ids exist).
+        java.util.Set<String> untouched = new java.util.HashSet<>();
         for (Map<String, Object> table : relationTables) {
             if (SystemUserRelationTable.matches(table)) {
                 nameToId.put(SystemUserRelationTable.NAME,
@@ -147,6 +179,22 @@ public class RelationTableStructurePortability {
             if (tableName == null || tableName.isBlank()) {
                 continue;
             }
+            List<Long> existing = jdbcTemplate.query(
+                    "SELECT id FROM rt_table_definitions WHERE table_name = ?",
+                    (rs, n) -> rs.getLong("id"), tableName);
+            if (!existing.isEmpty()) {
+                Long existingId = existing.get(0);
+                boolean referenceOnly = Boolean.TRUE.equals(table.get(REFERENCE_ONLY));
+                boolean shared = !referenceOnly && !usedOnlyBy(existingId, functionUnitCode);
+                if (shared) {
+                    requireColumnsKept(existingId, table);
+                }
+                if (referenceOnly || shared) {
+                    nameToId.put(tableName, existingId);
+                    untouched.add(tableName);
+                    continue;
+                }
+            }
             Long id = upsertDefinition(table, operator);
             replaceFields(id, table, operator);
             nameToId.put(tableName, id);
@@ -156,7 +204,7 @@ public class RelationTableStructurePortability {
             if (SystemUserRelationTable.matches(table)) continue;
             String tableName = (String) table.get("tableName");
             Long id = nameToId.get(tableName);
-            if (id != null) {
+            if (id != null && !untouched.contains(tableName)) {
                 resolveFieldRefs(id, table, nameToId);
             }
         }
@@ -203,6 +251,47 @@ public class RelationTableStructurePortability {
                     displayName, description, now, operator, id);
         }
         return id;
+    }
+
+    /**
+     * The package's version of a shared table must still fit the table as it now is: every column it has is
+     * there with the same type (added columns are fine). Otherwise the Function Unit would be restored onto
+     * columns that no longer exist.
+     */
+    private void requireColumnsKept(Long tableId, Map<String, Object> table) {
+        Map<Object, Object> currentTypes = new java.util.HashMap<>();
+        for (Map<String, Object> field : currentFieldMaps(tableId)) {
+            currentTypes.put(field.get("fieldName"), field.get("dataType"));
+        }
+        List<String> conflicts = new ArrayList<>();
+        for (Map<String, Object> field : incomingFieldMaps(table)) {
+            Object name = field.get("fieldName");
+            if (!currentTypes.containsKey(name)) {
+                conflicts.add(name + " (missing)");
+            } else if (!java.util.Objects.equals(currentTypes.get(name), field.get("dataType"))) {
+                conflicts.add(name + " (" + field.get("dataType") + " -> " + currentTypes.get(name) + ")");
+            }
+        }
+        if (!conflicts.isEmpty()) {
+            throw new DeveloperBusinessException("FU_IMPORT_RT_SHARED_INCOMPATIBLE",
+                    "Relation table '" + table.get("tableName") + "' is also used by another Function Unit and no"
+                            + " longer has the columns this version uses: " + String.join(", ", conflicts)
+                            + "; change the table in Admin Center or choose another version");
+        }
+    }
+
+    /**
+     * Whether no other Function Unit uses the table: every release linked in {@code rt_table_function_units} to it,
+     * or to a table whose foreign keys lead to it, belongs to this Function Unit (or none is).
+     */
+    private boolean usedOnlyBy(Long tableId, String functionUnitCode) {
+        List<String> linkedCodes = jdbcTemplate.query(
+                "WITH RECURSIVE dependents(table_id) AS (SELECT CAST(? AS BIGINT) UNION "
+                        + "SELECT f.table_id FROM rt_field_definitions f JOIN dependents d ON f.ref_table_id = d.table_id) "
+                        + "SELECT DISTINCT u.code FROM rt_table_function_units l JOIN sys_function_units u "
+                        + "ON u.id = l.function_unit_id WHERE l.relation_table_id IN (SELECT table_id FROM dependents)",
+                (rs, n) -> rs.getString(1), tableId);
+        return linkedCodes.stream().allMatch(code -> code.equals(functionUnitCode));
     }
 
     /** Normalizes the currently-stored fields into the shape {@link RelationTableStructureDiff} compares. */

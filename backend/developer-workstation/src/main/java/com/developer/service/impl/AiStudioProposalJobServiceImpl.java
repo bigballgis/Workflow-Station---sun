@@ -135,18 +135,20 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
 
         Job job = new Job(UUID.randomUUID().toString(), request);
         jobs.put(job.jobId, job);
+        // 先宣布"开始"再交给线程池：作业跑得快时，工作线程的"结束"不能抢在"开始"前面推给队友
+        publish(job, AiStudioThreadEvent.PROPOSAL_STARTED);
         // 首次落库与交给线程池在同一把落库锁内：工作线程的 RUNNING 快照只能排在这次插入之后
         synchronized (job.persistLock) {
             try {
                 job.future = executor.submit(() -> run(job, work, commit, onSucceeded));
             } catch (RejectedExecutionException e) {
-                jobs.remove(job.jobId);
+                // 已宣布开始，留作失败作业并宣布结束：同一用户别的标签页按 jobId 轮询时拿到的是失败而不是 404
+                fail(job, "AI_STUDIO_PROPOSAL_QUEUE_FULL", "Proposal workers are busy; retry later", e);
                 throw new AiGenerationException("AI_STUDIO_PROPOSAL_QUEUE_FULL",
                         "Proposal workers are busy; retry later");
             }
             persist(job);
         }
-        publish(job, AiStudioThreadEvent.PROPOSAL_STARTED);
         log.info("AI Studio proposal job submitted: jobId={}, functionUnitId={}, phase={}, userId={}",
                 job.jobId, functionUnitId, job.phase, userId);
         return job.snapshot();

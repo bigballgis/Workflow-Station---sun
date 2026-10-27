@@ -39,10 +39,17 @@ import java.util.UUID;
  * FU is appended in {@code rt_table_function_units} (shared reuse). A conflicting structure
  * still fails closed with {@code FU_IMPORT_RT_BOUND_OTHER_FU}. Returns {@code source rt id → new rt id}
  * so the caller can remap RELATED form-binding references.
+ *
+ * <p>A {@link #REFERENCE_ONLY} table (a foreign key's parent the package carries for its snapshot) is
+ * created when absent and never updated or linked to the importing Function Unit; an existing one must
+ * have the same columns, else {@code FU_IMPORT_RT_REFERENCE_MISMATCH}.
  */
 @Slf4j
 @Component
 public class RelationTableStructureImporter {
+
+    /** Package marker written by Developer Workstation's relation-table export. */
+    static final String REFERENCE_ONLY = "referenceOnly";
 
     private final RelationTableDefinitionRepository relationTableDefinitionRepository;
     private final RelationTableFieldMapper relationTableFieldMapper;
@@ -86,6 +93,7 @@ public class RelationTableStructureImporter {
         }
 
         // Pass 1: upsert definitions + fields (ref_table_id resolved in pass 2).
+        java.util.Set<String> untouched = new java.util.HashSet<>();
         for (Map<String, Object> table : relationTables) {
             if (SystemUserRelationTable.matches(table)) {
                 sourceIdToNewId.put(SystemUserRelationTable.ID,
@@ -98,13 +106,23 @@ public class RelationTableStructureImporter {
             if (tableName == null || tableName.isBlank()) {
                 continue;
             }
-            RelationTableDefinition saved = upsert(table, operator, functionUnitId);
+            // Carried only as a foreign key's parent: the Function Unit references it, it does not own it.
+            boolean referenceOnly = Boolean.TRUE.equals(table.get(REFERENCE_ONLY));
+            RelationTableDefinition existing = referenceOnly
+                    ? relationTableDefinitionRepository.findByTableName(tableName).orElse(null) : null;
+            if (existing != null) {
+                requireSameFields(existing, table);
+                untouched.add(tableName);
+            }
+            RelationTableDefinition saved = existing != null ? existing : upsert(table, operator, functionUnitId);
             nameToId.put(tableName, saved.getId());
             Object srcId = table.get("relationTableId");
             if (srcId instanceof Number num) {
                 sourceIdToNewId.put(num.longValue(), saved.getId());
             }
-            bindFunctionUnit(saved.getId(), functionUnitId);
+            if (!referenceOnly) {
+                bindFunctionUnit(saved.getId(), functionUnitId);
+            }
         }
 
         // Pass 2: resolve each field's refTableName → ref_table_id now that all tables exist.
@@ -112,12 +130,43 @@ public class RelationTableStructureImporter {
             if (SystemUserRelationTable.matches(table)) continue;
             String tableName = (String) table.get("tableName");
             Long id = nameToId.get(tableName);
-            if (id == null) {
+            if (id == null || untouched.contains(tableName)) {
                 continue;
             }
             resolveFieldRefs(id, table, nameToId);
         }
         return sourceIdToNewId;
+    }
+
+    /**
+     * A referenced table that already exists is used as it is, so the release's snapshot of it must match:
+     * otherwise the release would describe columns this environment's table does not have.
+     */
+    private void requireSameFields(RelationTableDefinition existing, Map<String, Object> table) {
+        // Only the columns matter here; names and descriptions are the owner's to change, and a LOOKUP column's
+        // refTableId is an id of the environment the table lives in, not part of its structure.
+        boolean same = RelationTableStructureDiff.unchanged(
+                existing.getDisplayName(), existing.getDescription(),
+                withoutLookupTableIds(relationTableFieldMapper.fromEntities(existing.getFieldDefinitions())),
+                existing.getDisplayName(), existing.getDescription(), withoutLookupTableIds(fieldMapsFromPayload(table)));
+        if (!same) {
+            throw new AdminBusinessException("FU_IMPORT_RT_REFERENCE_MISMATCH",
+                    "Relation table '" + existing.getTableName() + "' referenced by a foreign key differs from"
+                            + " the one in this environment; update it before importing this Function Unit");
+        }
+    }
+
+    private static List<Map<String, Object>> withoutLookupTableIds(List<Map<String, Object>> fields) {
+        return fields.stream().map(field -> {
+            if (!(field.get("lookupConfig") instanceof Map<?, ?> lookup)) {
+                return field;
+            }
+            Map<Object, Object> config = new LinkedHashMap<>(lookup);
+            config.remove("refTableId");
+            Map<String, Object> copy = new LinkedHashMap<>(field);
+            copy.put("lookupConfig", config);
+            return copy;
+        }).toList();
     }
 
     private RelationTableDefinition upsert(Map<String, Object> table, String operator, String functionUnitId) {

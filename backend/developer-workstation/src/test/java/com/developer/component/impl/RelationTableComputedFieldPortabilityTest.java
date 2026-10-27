@@ -58,7 +58,7 @@ class RelationTableComputedFieldPortabilityTest {
                         "dataType", "DECIMAL",
                         "isComputed", true,
                         "computedField", formula,
-                        "sortOrder", 0)))), "tester");
+                        "sortOrder", 0)))), "tester", "fu-test");
 
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
         verify(jdbcTemplate).update(contains("is_computed, computed_field_json"), args.capture());
@@ -83,7 +83,7 @@ class RelationTableComputedFieldPortabilityTest {
                         "fields", List.of(Map.of(
                                 "fieldName", "amount",
                                 "dataType", "DECIMAL",
-                                "isComputed", true)))), "tester"));
+                                "isComputed", true)))), "tester", "fu-test"));
         assertEquals("COMPUTED_FIELD_IMPORT_INVALID", ex.getErrorCode());
     }
 }

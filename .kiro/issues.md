@@ -7,7 +7,7 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **49** | `index.yaml`（按当前条目重新计数） |
+| 🔓 Open | **51** | `index.yaml`（按当前条目重新计数） |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 
@@ -140,3 +140,5 @@ grep -A2 "category: security" .kiro/issues/index.yaml | grep "status: open"
 ```bash
 grep -A20 'id: "1404"' .kiro/issues/index.yaml
 ```
+
+2026-10-26：新增 #1718（Admin FU 接口无角色/权限校验，用户决定先记录、单独立项）与 #1719（LOOKUP lookupConfig.refTableId 跨环境不按表名重映射），均为独立 code review 发现的存量问题；Open 49→51。

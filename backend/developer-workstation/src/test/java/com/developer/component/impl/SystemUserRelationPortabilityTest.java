@@ -28,7 +28,7 @@ class SystemUserRelationPortabilityTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         var portability = new RelationTableStructurePortability(jdbc, new ObjectMapper());
         assertEquals(Map.of("sys_users", -1_000_000_001L), portability.importAll(
-                List.of(com.platform.common.relationtable.SystemUserRelationTable.snapshot()), "tester"));
+                List.of(com.platform.common.relationtable.SystemUserRelationTable.snapshot()), "tester", "fu-test"));
         verifyNoInteractions(jdbc);
     }
 }
