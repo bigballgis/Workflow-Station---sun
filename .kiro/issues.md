@@ -3,7 +3,7 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-26)
+## 统计 (截至 2026-10-29)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
@@ -17,6 +17,8 @@
 2026-10-26：#1716 已修复本地 BI Schema 落后导致的 Portal 首页 502；备份并应用已有97/98升级、重启Admin/Portal，两个同BU请求及首页截图红→绿，未修改业务代码。Open/Wontfix数量不变。证据见 `docs/verification/2026-10-26-bi-schema-upgrade.md`。
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-10-29：#1720 已修复 wangEditor create-time onChange 覆盖已保存 HTML。17 项单测通过；Portal 截图 `frontend/user-portal/verification-screenshots/2026-10-29_editor-create-gate-main.png`。子表弹窗本表单无 editor 列。审查 Question 已拍板：保持 nextTick，不延时、不重挂画布。
 
 2026-10-23：#1712 方案二已分离普通权限与batch附加限制，修复Lookup身份解析；原失败Request Approval同任务红转绿，原FU新请求CRUD/批量分派/进入审批及第二FU不同映射保存通过。后端364、前端专项60、MI234项通过，前后端重建，独立增量重审PASS；UAT/完整生命周期仍未验收。
 
@@ -83,6 +85,7 @@
 | 1666 | major | quality | TaskActionService 引擎/lookup 异常 catch→emptyList，与「无 actionIds」无法区分（Allowed Roles 轮次 3-A 暂不修） |
 | 1688 | major | security | Send Email HTML 正文 `${subTableField}`/`${lookupField}` 未转义；标量值内 `${x}`/`${env:KEY}` 会被二次展开 |
 | 1689 | minor | quality | DW 重新部署后已打开页面懒加载旧 chunk 404，Email 模板 Body 等异步组件静默空白（无 preloadError 处理） |
+| 1693 | major | bug | 创建含中文名称的 FU 时自动 code 含中文，MinimalBpmnTemplate 拒绝 XML 流程 ID |
 ### Wontfix
 
 | ID | 分类 | 描述 |

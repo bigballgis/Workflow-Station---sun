@@ -5553,3 +5553,18 @@
     RelationTableStructureDiff 比 lookupConfig 时也会把不同环境的同一表判为结构不同（旧的
     FU_IMPORT_RT_BOUND_OTHER_FU 判断受影响；新的 referenceOnly 比对已在 10-26 忽略 refTableId）。
     修法方向：导出补 refTableName，导入按名映射回本环境 id。
+- id: "1720"
+  status: fixed
+  fixed_at: "2026-10-29"
+  severity: major
+  category: bug
+  summary: "wangEditor create-time onChange 用空 <p><br></p> 覆盖已保存 / Email Monitor HTML"
+  file: "frontend/user-portal/src/composables/editorCreateGate.ts"
+  detail: |
+    主表单 useFieldEditor 与子表弹窗 useSubTableDialogEditor 共用 armEditorChangeGate，
+    忽略 create 当拍 onChange，nextTick 且实例仍匹配后才写入。17 项单测通过。
+    Portal Process_MCY 开始表单截图见
+    frontend/user-portal/verification-screenshots/2026-10-29_editor-create-gate-main.png。
+    子表弹窗本表单无 editor 列，未截。
+    审查 Question 已拍板：保持 nextTick 门闩，不为晚到 onChange 加延时；
+    不为「画布空但 formData 有值」做 setHtml/重挂（解析失败另开）。
