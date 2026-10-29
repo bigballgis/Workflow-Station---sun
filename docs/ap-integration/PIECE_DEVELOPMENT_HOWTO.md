@@ -431,7 +431,7 @@ git add automation/hermes/pieces.json deploy/pieces/metadata/piece-<name>.json \
 cd automation
 docker build -t activepieces:0.88.0-ee-removed .
 # 集群版（基础镜像换 nexus3 mirror，再照常 push nexus3）：
-docker build --build-arg NODE_IMAGE=nexus3.<...>/workflow-station2/node:24.14.0-bullseye-slim \
+docker build --build-arg NODE_IMAGE=nexus3.<...>/workflow-station2/node:24.22.1-bookworm-slim \
   -t nexus3.<...>/workflow-station2/activepieces:0.88.0-ee-removed .
 ```
 

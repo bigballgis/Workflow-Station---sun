@@ -1,6 +1,6 @@
 # HERMES: overridable so a build machine that cannot reach Docker Hub can point at the
-# internal mirror, e.g. --build-arg NODE_IMAGE=nexus3.hk.hsbc:18080/.../node:24.14.0-bullseye-slim
-ARG NODE_IMAGE=node:24.14.0-bullseye-slim
+# internal mirror, e.g. --build-arg NODE_IMAGE=nexus3.hk.hsbc:18080/.../node:24.22.1-bookworm-slim
+ARG NODE_IMAGE=node:24.22.1-bookworm-slim
 FROM ${NODE_IMAGE} AS base
 
 # C.UTF-8 ships with Debian, so no locale generation is needed.
@@ -15,7 +15,7 @@ ENV LANG=C.UTF-8 \
 
 # Install all system dependencies in a single layer. No apt cache mounts: docker-clean in the
 # node base image wipes /var/cache/apt anyway, and a persisted /var/lib/apt/lists goes stale
-# against rotated bullseye-security packages, failing the build with hash/size fetch errors.
+# against rotated bookworm-security packages, failing the build with hash/size fetch errors.
 # libcap2 is isolate's runtime lib (the isolate binaries ship prebuilt in api assets).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
