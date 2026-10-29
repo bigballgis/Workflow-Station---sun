@@ -374,6 +374,23 @@ public class ProcessStartComponent {
         variables.put("functionUnitCode", catalogCode);
     }
 
+    /** Engine start payload {@code nextTaskName}; blank or absent → null (no invented step name). */
+    static String currentNodeFromStartData(Map<String, Object> data) {
+        if (data == null) {
+            return null;
+        }
+        Object raw = data.get("nextTaskName");
+        if (!(raw instanceof String name)) {
+            return null;
+        }
+        String trimmed = name.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    static boolean shouldWriteOutcomeCurrentNode(String currentNodeName) {
+        return currentNodeName != null && !currentNodeName.isBlank();
+    }
+
     /**
      * Copies engine variables into the local persistence representation and adds
      * the catalog-pinned batch contract only there. Keeping this boundary explicit
@@ -508,7 +525,7 @@ public class ProcessStartComponent {
                 .startUserId(userId)
                 .startUserName(startUserDisplayName)
                 .status("RUNNING")
-                .currentNode(null)
+                .currentNode(currentNodeFromStartData(data))
                 .currentAssignee(null)
                 .variables(variables)
                 .functionUnitCatalogId(pin.catalogId())
@@ -796,44 +813,7 @@ public class ProcessStartComponent {
 
     private void updateInstanceNodeAndRecordStartHistory(
             String flowableProcessInstanceId, FirstTaskOutcome outcome, String userId, String startUserDisplayName) {
-        // Update process instance (current node and assignee)
-        // Conditional UPDATE avoids overwriting COMPLETED set by
-        // ProcessCompletionListener (race)
-        // JPA L1 cache stale findById — use @Modifying native update to bypass cache
-        int updated = processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
-                flowableProcessInstanceId,
-                outcome.currentNodeName,
-                outcome.nextAssigneeSnapshot.getAssigneeUserId(),
-                outcome.nextAssigneeSnapshot.getCandidateUserIds());
-        if (updated > 0) {
-            log.info("Process instance updated in local database: {} with currentNode={}, assignee={}, candidates={}",
-                    flowableProcessInstanceId, outcome.currentNodeName,
-                    outcome.nextAssigneeSnapshot.getAssigneeUserId(),
-                    outcome.nextAssigneeSnapshot.getCandidateUserIds());
-            processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(instance -> {
-                Map<String, Object> vars = instance.getVariables() == null
-                        ? new HashMap<>()
-                        : new HashMap<>(instance.getVariables());
-                MiOuterStepResolver.OuterLookup miLookup = miOuterStepResolver == null
-                        ? MiOuterStepResolver.OuterLookup.unknown()
-                        : miOuterStepResolver.lookup(
-                                instance, outcome.currentNodeName);
-                ownerFieldComponent.applyAssigneeSnapshot(
-                        instance.getFunctionUnitCode(),
-                        vars,
-                        outcome.nextAssigneeSnapshot.getAssigneeUserId(),
-                        outcome.nextAssigneeSnapshot.getCandidateUserIds(),
-                        instance.getStatus(),
-                        miLookup);
-                instance.setVariables(vars);
-                processInstanceRepository.save(instance);
-            });
-        } else {
-            log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
-                    flowableProcessInstanceId);
-        }
-
-        // Record process start history
+        writeOutcomeCurrentNodeIfPresent(flowableProcessInstanceId, outcome);
         ProcessHistory startHistory = ProcessHistory.builder()
                 .processInstanceId(flowableProcessInstanceId)
                 .activityId("startEvent")
@@ -845,6 +825,48 @@ public class ProcessStartComponent {
                 .comment(i18nService.getMessage("portal.process.history.start_comment"))
                 .build();
         processHistoryRepository.save(startHistory);
+    }
+
+    /**
+     * Conditional UPDATE avoids overwriting COMPLETED set by ProcessCompletionListener.
+     * Native update bypasses a stale JPA L1 cache. A null outcome node must not overwrite
+     * the start-time current_node (email start cannot query tasks without a JWT).
+     */
+    private void writeOutcomeCurrentNodeIfPresent(String flowableProcessInstanceId, FirstTaskOutcome outcome) {
+        if (!shouldWriteOutcomeCurrentNode(outcome.currentNodeName)) {
+            return;
+        }
+        int updated = processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
+                flowableProcessInstanceId,
+                outcome.currentNodeName,
+                outcome.nextAssigneeSnapshot.getAssigneeUserId(),
+                outcome.nextAssigneeSnapshot.getCandidateUserIds());
+        if (updated <= 0) {
+            log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
+                    flowableProcessInstanceId);
+            return;
+        }
+        log.info("Process instance updated in local database: {} with currentNode={}, assignee={}, candidates={}",
+                flowableProcessInstanceId, outcome.currentNodeName,
+                outcome.nextAssigneeSnapshot.getAssigneeUserId(),
+                outcome.nextAssigneeSnapshot.getCandidateUserIds());
+        processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(instance -> {
+            Map<String, Object> vars = instance.getVariables() == null
+                    ? new HashMap<>()
+                    : new HashMap<>(instance.getVariables());
+            MiOuterStepResolver.OuterLookup miLookup = miOuterStepResolver == null
+                    ? MiOuterStepResolver.OuterLookup.unknown()
+                    : miOuterStepResolver.lookup(instance, outcome.currentNodeName);
+            ownerFieldComponent.applyAssigneeSnapshot(
+                    instance.getFunctionUnitCode(),
+                    vars,
+                    outcome.nextAssigneeSnapshot.getAssigneeUserId(),
+                    outcome.nextAssigneeSnapshot.getCandidateUserIds(),
+                    instance.getStatus(),
+                    miLookup);
+            instance.setVariables(vars);
+            processInstanceRepository.save(instance);
+        });
     }
 
     private ProcessInstanceInfo buildStartResult(

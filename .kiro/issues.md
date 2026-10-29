@@ -7,7 +7,7 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **51** | `index.yaml`（按当前条目重新计数） |
+| 🔓 Open | **52** | `index.yaml`（按当前条目重新计数） |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 
@@ -17,6 +17,8 @@
 2026-10-26：#1716 已修复本地 BI Schema 落后导致的 Portal 首页 502；备份并应用已有97/98升级、重启Admin/Portal，两个同BU请求及首页截图红→绿，未修改业务代码。Open/Wontfix数量不变。证据见 `docs/verification/2026-10-26-bi-schema-upgrade.md`。
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-10-29：#1721 已修复 Email Monitor 建案 MAIN View Current Step 为空。internal start 未打开详情：库与 View 50303 均为 Case Submission。顺带记录 #1722（本地 `up_change_history.batch_id` 缺失）。Open 51→52。
 
 2026-10-29：#1720 已修复 wangEditor create-time onChange 覆盖已保存 HTML。17 项单测通过；Portal 截图 `frontend/user-portal/verification-screenshots/2026-10-29_editor-create-gate-main.png`。子表弹窗本表单无 editor 列。审查 Question 已拍板：保持 nextTick，不延时、不重挂画布。
 
@@ -86,6 +88,7 @@
 | 1688 | major | security | Send Email HTML 正文 `${subTableField}`/`${lookupField}` 未转义；标量值内 `${x}`/`${env:KEY}` 会被二次展开 |
 | 1689 | minor | quality | DW 重新部署后已打开页面懒加载旧 chunk 404，Email 模板 Body 等异步组件静默空白（无 preloadError 处理） |
 | 1693 | major | bug | 创建含中文名称的 FU 时自动 code 含中文，MinimalBpmnTemplate 拒绝 XML 流程 ID |
+| 1722 | minor | deploy | 本地 `up_change_history` 缺 `batch_id`，Email start TX2 记变更历史失败 |
 ### Wontfix
 
 | ID | 分类 | 描述 |

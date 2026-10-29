@@ -173,6 +173,7 @@ public class ProcessEngineComponent {
                 .success(true)
                 .message("Process instance started successfully")
                 .build();
+            result.applyRuntimeStatus(processInstanceStatusReader.getProcessInstanceStatus(processInstance.getId()));
 
             if (StringUtils.hasText(request.getStartUserId())) {
                 String key = request.getProcessDefinitionKey();

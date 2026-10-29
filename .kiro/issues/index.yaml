@@ -5568,3 +5568,26 @@
     子表弹窗本表单无 editor 列，未截。
     审查 Question 已拍板：保持 nextTick 门闩，不为晚到 onChange 加延时；
     不为「画布空但 formData 有值」做 setHtml/重挂（解析失败另开）。
+- id: "1721"
+  status: fixed
+  fixed_at: "2026-10-29"
+  severity: major
+  category: bug
+  summary: "Email Monitor 建案后 MAIN View Current Step 为空，打开表单才有值"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartComponent.java"
+  detail: |
+    View 读 up_process_instance.current_node。Email/internal start 无 JWT，auto-complete
+    查任务 403 后 TX2 曾用 null 覆盖 TX1。引擎 start 现返回 nextTaskName，TX1 写入，
+    TX2 仅在 outcome 非空时更新。无 JWT 的 pinned start 改走 permitAll /instances（body 仍带 pin）。
+    验证：internal start Process_MCY pid dc278e71-d36a-11f1-bd58-7a2eb99a99d9，
+    未打开详情；库 current_node=Case Submission；View 50303 同值。
+- id: "1722"
+  status: open
+  severity: minor
+  category: deploy
+  summary: "本地 up_change_history 缺 batch_id，Email start TX2 记变更历史失败"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistoryComponent.java"
+  detail: |
+    2026-10-29 验证 #1721 时日志：column batch_id of relation up_change_history does not exist。
+    长生命周期本地卷未吃到后续 init-script。current_node 在 TX1 已提交，不受影响。
+    未在本轮补列。

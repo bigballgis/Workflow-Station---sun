@@ -97,7 +97,8 @@ public class WorkflowEngineProcessClient {
             throw new IllegalStateException("Workflow engine unavailable, cannot start process: " + processDefinitionKey);
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances" + (expectedProcessDefinitionId == null ? "" : "/pinned");
+            String url = engine.engineUrl() + "/api/v1/processes/instances"
+                    + (expectedProcessDefinitionId != null && engine.hasInboundAuthorization() ? "/pinned" : "");
 
             Map<String, Object> request = new HashMap<>();
             request.put("processDefinitionKey", processDefinitionKey);

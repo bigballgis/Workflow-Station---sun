@@ -135,6 +135,18 @@ public class WorkflowEngineClient {
         }
     }
 
+    /**
+     * True when the inbound Portal request carries a JWT the engine will accept.
+     * Email / internal start has only {@code X-Internal-Token}, so pinned starts must
+     * use the permitAll {@code /instances} route (pin still travels in the body).
+     */
+    boolean hasInboundAuthorization() {
+        HttpHeaders probe = new HttpHeaders();
+        forwardInboundAuthorization(probe);
+        String auth = probe.getFirst(PlatformConstants.HEADER_AUTHORIZATION);
+        return auth != null && !auth.isBlank();
+    }
+
     private String extractAccessTokenFromCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
