@@ -117,7 +117,7 @@ class TaskProcessProperties {
         WorkspaceTaskFilterComponent workspaceFilter = new WorkspaceTaskFilterComponent(
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository);
         TaskPermissionEvaluator taskPermissionEvaluator =
-            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
+            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter, org.mockito.Mockito.mock(com.portal.component.AssignmentClaimReadAnnotator.class));
         EngineVisibleTaskFetcher engineFetcher = new EngineVisibleTaskFetcher(
                 workflowEngineClient, processInstanceRepository, workspaceFilter);
         MineTaskListCache mineCache = new MineTaskListCache();
@@ -163,7 +163,8 @@ class TaskProcessProperties {
         );
         SubTableRowAssignmentComponent subTableRowAssignmentComponent = new SubTableRowAssignmentComponent(
             workflowEngineClient,
-            taskPermissionEvaluator
+            taskPermissionEvaluator,
+            Mockito.mock(com.portal.component.AssignmentSubTableAssignment.class)
         );
         MiOverlayComponent miOverlayComponent = new MiOverlayComponent(
             workflowEngineClient,

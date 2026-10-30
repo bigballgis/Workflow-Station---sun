@@ -25,7 +25,8 @@ class TaskCompletionObservationTest {
                     "synthetic_table", List.of(Map.of("synthetic_key", "one")), List.of(), List.of())));
 
     TaskCompletionObservationTest() {
-        ReflectionTestUtils.setField(controller, "batchAssignmentHistory", audit);
+        ReflectionTestUtils.setField(controller,"taskCompletionEndpoint",new TaskCompletionEndpoint(mock(AssignmentCompletionOrchestrator.class),
+                mock(AssignmentAcceptedObservation.class),processor,email,audit));
         lenient().when(audit.record(any(), any(), anyString(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         ReflectionTestUtils.setField(processor, "workflowEngineClient", engine);
         when(email.runWithPostEmail(any(), org.mockito.ArgumentMatchers.<Supplier<SubTableBatchInitialMiOutcome.Plan>>any()))
@@ -98,7 +99,8 @@ class TaskCompletionObservationTest {
                     new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
             var proxied = (TaskProcessComponent) factory.getProxy();
             var controller = new TaskController(null, proxied, null, null, null, email, null, null, null, null);
-            ReflectionTestUtils.setField(controller, "batchAssignmentHistory", audit);
+            ReflectionTestUtils.setField(controller,"taskCompletionEndpoint",new TaskCompletionEndpoint(mock(AssignmentCompletionOrchestrator.class),
+                    mock(AssignmentAcceptedObservation.class),proxied,email,audit));
             var response = controller.completeTask("synthetic-task", "synthetic-user", request());
             assertThat(observed).isTrue();
             assertThat(response.isSuccess()).isTrue();

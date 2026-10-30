@@ -49,6 +49,7 @@ public class RestTemplateConfig {
     }
 
     @Bean
+    @org.springframework.context.annotation.Primary
     public RestTemplate restTemplate(CircuitBreakerRegistry circuitBreakerRegistry) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeoutMs);
@@ -58,6 +59,14 @@ public class RestTemplateConfig {
         CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("portal-outbound-http");
         restTemplate.getInterceptors().add(circuitBreakerInterceptor(breaker));
         return restTemplate;
+    }
+
+    @Bean("assignmentSnapshotRestTemplate")
+    public RestTemplate assignmentSnapshotRestTemplate() {
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(3000);
+        return new RestTemplate(factory);
     }
 
     /** 把每次出站调用包进熔断器；打开时抛 CallNotPermittedException（由调用方现有 try/catch 处理）。 */

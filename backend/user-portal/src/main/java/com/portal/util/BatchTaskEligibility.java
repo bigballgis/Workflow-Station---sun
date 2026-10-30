@@ -38,6 +38,7 @@ public final class BatchTaskEligibility {
                 && task.isAllowBatch()
                 && task.getProcessDefinitionId() != null
                 && task.getTaskDefinitionKey() != null
+                && AssignmentBatchReadEligibility.allows(task)
                 && (userId.equals(task.getAssignee()) || task.isClaimable() || mayProcess.test(task));
     }
 
@@ -50,7 +51,7 @@ public final class BatchTaskEligibility {
         boolean unassigned = task.getAssignee() == null || task.getAssignee().isBlank();
         boolean hasCandidates = (task.getCandidateUserIds() != null && !task.getCandidateUserIds().isEmpty())
                 || (task.getCandidateGroupIds() != null && !task.getCandidateGroupIds().isEmpty());
-        return unassigned && hasCandidates && !BuRolePoolTasks.isClaimPoolTask(task);
+        return unassigned && hasCandidates && !task.isClaimPoolTask() && !BuRolePoolTasks.isClaimPoolTask(task);
     }
 
     /**

@@ -61,6 +61,7 @@ class TodoListBatchGroupKeyTest {
     private static TaskInfo.TaskInfoBuilder task(String taskId) {
         return TaskInfo.builder()
                 .taskId(taskId)
+                .assignmentClaimAccess(com.portal.testsupport.AssignmentReadTestSupport.legacy(taskId))
                 .processInstanceId("pi-" + taskId)
                 .processDefinitionId("purchase:3:abc")
                 .taskDefinitionKey("dept")

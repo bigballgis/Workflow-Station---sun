@@ -10,10 +10,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class EngineSubTableHydratorBatchOwnershipTest {
+    @Test void protectedAndUnknownContextsCannotRefillAnAuthoritativePortalSlice() {
+        for (Boolean tracked:java.util.Arrays.asList(true,null)) {
+            var client=mock(WorkflowEngineClient.class);
+            Map<String,Object> source=new java.util.LinkedHashMap<>(Map.of("variables",Map.of("__subTables__",Map.of("dw:lines",List.of(Map.of("key","old"))))));
+            if (tracked!=null) source.put("assignmentTracked",tracked);
+            when(client.getProcessInstance("protected")).thenReturn(Optional.of(source));
+            assertTrue(new EngineSubTableHydrator(client).mergeFromEngine("protected",Map.of("dw:lines",List.of())).isEmpty());
+        }
+    }
     @Test
     void enablingBatchOnAnInitiallyEmptyStoreMustNotSuppressServiceOutput() {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
-        when(client.getProcessInstance("synthetic-process")).thenReturn(Optional.of(Map.of("variables",
+        when(client.getProcessInstance("synthetic-process")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables",
                 Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("key", "new-service-row")))))));
         Map<String, Object> variables = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD,
                 Map.of("forms", Map.of("form", Map.of("controls", List.of(
@@ -27,7 +36,7 @@ class EngineSubTableHydratorBatchOwnershipTest {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
         Map<String, Object> engineTables = Map.of("dw:lines", List.of(Map.of("key", "old")),
                 "dw:service_output", List.of(Map.of("key", "generated")));
-        when(client.getProcessInstance("synthetic-process")).thenReturn(Optional.of(Map.of("variables", Map.of("__subTables__", engineTables))));
+        when(client.getProcessInstance("synthetic-process")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of("__subTables__", engineTables))));
         Map<String, Object> current = Map.of("dw:lines", List.of());
         Map<String, Object> result = new EngineSubTableHydrator(client)
                 .mergeFromEngine("synthetic-process", current, Map.of("dw:lines",
@@ -46,7 +55,7 @@ class EngineSubTableHydratorBatchOwnershipTest {
     @Test
     void deletedRowsAreFilteredButNewServiceRowsStillHydrateTheSameStore() {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
-        when(client.getProcessInstance("synthetic-process")).thenReturn(Optional.of(Map.of("variables",
+        when(client.getProcessInstance("synthetic-process")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables",
                 Map.of("__subTables__", Map.of("dw:lines", List.of(Map.of("renamedKey", "old"),
                         Map.of("renamedKey", "new-service-row")))))));
         Map<String, Object> result = new EngineSubTableHydrator(client).mergeFromEngine("synthetic-process",

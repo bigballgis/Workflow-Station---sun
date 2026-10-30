@@ -27,6 +27,10 @@ public class RecordNoteSubmissionComponent {
     public record Submission(String user,String name,NoteTarget target,String subject,String body,
                              List<MultipartFile> files,List<String> inlineIds) {}
 
+    public String fingerprint(Submission input) {
+        return fingerprint(input.target(),input.subject(),input.body(),input.files(),input.inlineIds(),true);
+    }
+
     @Transactional
     public NoteItem submit(Submission input) {
         String user=input.user(), name=input.name(), subject=input.subject(), body=input.body();

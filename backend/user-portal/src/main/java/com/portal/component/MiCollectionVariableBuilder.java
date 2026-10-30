@@ -360,7 +360,6 @@ public class MiCollectionVariableBuilder {
             if (pkCols.size() == 1) {
                 rowId = rowKey.get(pkCols.get(0));
             }
-            // 逐行：分别取该行的 assignee 值（带兜底键）与 role 值（直接读列），任一非空即合格。
             String assigneeText = "";
             if (hasAssigneeField) {
                 assigneeText = MiSubTableVariableSupport.normalizeMiAssigneeText(
@@ -388,7 +387,8 @@ public class MiCollectionVariableBuilder {
             } else if (rowId != null && pkCols.size() == 1) {
                 item.put("rowId", rowId);
             }
-            // 该行填了 role → 带 role/bu code（引擎逐行判定优先走 role 分支）；填了 assignee → 带 assignee。
+            String identityField = com.platform.common.jdbc.SubTableRowIdentity.CANONICAL_FIELD;
+            if (row.containsKey(identityField)) item.put(identityField,row.get(identityField));
             if (!roleText.isEmpty()) {
                 item.put(roleField, roleText);
                 if (buField != null && !buField.isBlank()) {

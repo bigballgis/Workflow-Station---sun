@@ -61,7 +61,7 @@ public class TodoListQueryComponent {
     }
 
     public List<TaskInfo> listClaimPoolTasks(String userId) {
-        return fetchAllClaimPoolTasksPaged(userId);
+        return listMergedTodoTasks(userId).stream().filter(TaskInfo::isClaimPoolTask).toList();
     }
 
     /**
@@ -150,6 +150,7 @@ public class TodoListQueryComponent {
                 .build();
         List<TaskInfo> mine = mineTaskScanner.scanMineTasks(userId, mineFetch, null, size);
         List<TaskInfo> merged = TodoListUnion.merge(mine, fetchAllClaimPoolTasksPaged(userId));
+        taskPermissionEvaluator.annotateClaimState(merged, userId, SecurityContextUtils.getCurrentUsername().orElse(null));
         if (request.batchGroup()) {
             List<TaskInfo> atNode = merged.stream()
                     .filter(t -> BatchTaskEligibility.isEligible(t, userId, BatchTaskEligibility::isOpenCandidateTask)

@@ -131,32 +131,7 @@ public class ChangeHistoryComponent {
     public void recordFieldChanges(ChangeHistoryContext context,
             Map<String, Object> oldValues,
             Map<String, Object> newValues) {
-        Instant now = Instant.now();
-        List<ChangeHistory> records = new ArrayList<>();
-        for (Map.Entry<String, Object> entry : newValues.entrySet()) {
-            String fieldName = entry.getKey();
-            if (isInternalField(fieldName)) {
-                continue;
-            }
-            Object newValue = entry.getValue();
-            Object oldValue = oldValues.get(fieldName);
-            if (!semanticallyEqual(fieldName, oldValue, newValue)) {
-                ChangeHistory record = ChangeHistory.builder()
-                        .processInstanceId(context.getProcessInstanceId())
-                        .taskInstanceId(context.getTaskInstanceId())
-                        .stageId(context.getStageId())
-                        .userId(context.getUserId())
-                        .timestamp(now)
-                        .batchId(context.getBatchId())
-                        .batchTime(context.getBatchTime())
-                        .fieldName(fieldName)
-                        .oldValue(toDisplayString(oldValue))
-                        .newValue(toDisplayString(newValue))
-                        .changeType(ChangeType.FIELD_UPDATE)
-                        .build();
-                records.add(record);
-            }
-        }
+        List<ChangeHistory> records = prepareFieldChanges(context, oldValues, newValues);
         if (records.isEmpty()) {
             return;
         }
@@ -172,7 +147,14 @@ public class ChangeHistoryComponent {
         });
     }
 
-    private static boolean isInternalField(String fieldName) {
+    public List<ChangeHistory> prepareFieldChanges(ChangeHistoryContext context,Map<String,Object> oldValues,Map<String,Object> newValues) {
+        return new ChangeHistoryPreparation(this,changeHistoryRepository).fields(context,oldValues,newValues);
+    }
+    public List<ChangeHistory> prepareSubTableChanges(ChangeHistoryContext context,String normalizedName,List<SubTableChange> changes) {
+        return new ChangeHistoryPreparation(this,changeHistoryRepository).rows(context,normalizedName,changes);
+    }
+
+    static boolean isInternalField(String fieldName) {
         if (fieldName == null)
             return true;
         // Platform audit columns: single decision via SystemAuditFields (case-insensitive).
@@ -234,54 +216,7 @@ public class ChangeHistoryComponent {
             String normalizedName,
             List<SubTableChange> changes) {
         if (changes.isEmpty()) return;
-        Map<ChangeHistoryRepository.AuditCell, ChangeHistoryRepository.AuditCellSnapshot> latest = SubTableAuditLatestLookup.load(
-                changeHistoryRepository, context.getProcessInstanceId(), normalizedName, changes);
-        Instant now = Instant.now();
-        List<ChangeHistory> records = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (SubTableChange change : changes) {
-            ChangeType changeType = mapSubTableChangeType(change.getChangeType());
-            for (String fieldName : changedSubTableFieldNames(change)) {
-                String dedupKey = context.getProcessInstanceId() + "|" + normalizedName + "|"
-                        + change.getChangeType() + "|" + change.getRowIdentifier() + "|" + fieldName;
-                if (!seen.add(dedupKey)) {
-                    log.debug("Skipping duplicate sub-table field change record (in-batch): {}", dedupKey);
-                    continue;
-                }
-                String oldVal = toDisplayString(valueForField(change.getOldValues(), fieldName));
-                String newVal = toDisplayString(valueForField(change.getNewValues(), fieldName));
-                if (semanticallyEqual(fieldName,
-                        valueForField(change.getOldValues(), fieldName),
-                        valueForField(change.getNewValues(), fieldName))) {
-                    continue;
-                }
-                ChangeHistoryRepository.AuditCellSnapshot lastRecord = latest.get(new ChangeHistoryRepository.AuditCell(change.getRowIdentifier(), fieldName, changeType));
-                if (lastRecord != null
-                        && Objects.equals(lastRecord.oldValue(), oldVal)
-                        && Objects.equals(lastRecord.newValue(), newVal)) {
-                    log.debug(
-                            "Skipping duplicate sub-table field change record (cross-save): process={}, table={}, row={}, field={}, type={}",
-                            context.getProcessInstanceId(), normalizedName, change.getRowIdentifier(), fieldName,
-                            changeType);
-                    continue;
-                }
-                records.add(ChangeHistory.builder()
-                        .processInstanceId(context.getProcessInstanceId())
-                        .taskInstanceId(context.getTaskInstanceId())
-                        .stageId(context.getStageId())
-                        .userId(context.getUserId())
-                        .timestamp(now)
-                        .batchId(context.getBatchId())
-                        .batchTime(context.getBatchTime())
-                        .fieldName(fieldName)
-                        .oldValue(oldVal)
-                        .newValue(newVal)
-                        .changeType(changeType)
-                        .subTableName(normalizedName)
-                        .rowIdentifier(change.getRowIdentifier())
-                        .build());
-            }
-        }
+        List<ChangeHistory> records = prepareSubTableChanges(context, normalizedName, changes);
         if (records.isEmpty()) {
             return;
         }
@@ -320,7 +255,7 @@ public class ChangeHistoryComponent {
         return fieldNames;
     }
 
-    private static Object valueForField(Map<String, Object> values, String fieldName) {
+    static Object valueForField(Map<String, Object> values, String fieldName) {
         return values == null ? null : values.get(fieldName);
     }
 
@@ -682,7 +617,7 @@ public class ChangeHistoryComponent {
         return username != null && !name.equals(username) ? name + " (" + username + ")" : name;
     }
 
-    private boolean semanticallyEqual(String fieldName, Object oldValue, Object newValue) {
+    boolean semanticallyEqual(String fieldName, Object oldValue, Object newValue) {
         if (!isAssigneeValueField(fieldName)) {
             return Objects.equals(oldValue, newValue);
         }
@@ -1057,7 +992,7 @@ public class ChangeHistoryComponent {
      * Converts a value to a user-friendly display string for change history.
      * Maps and Lists are serialized as JSON; scalars use {@code toString()}.
      */
-    private String toDisplayString(Object value) {
+    String toDisplayString(Object value) {
         if (value == null) {
             return null;
         }

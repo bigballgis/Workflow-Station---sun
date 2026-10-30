@@ -44,6 +44,35 @@ public class ActionEmailRuleConditionEvaluator {
         return evaluate(processInstanceId, conditions, null);
     }
 
+    /** Approval recovery evaluates the row frozen by the original sync, outside its business transaction. */
+    public boolean[] evaluateSnapshot(String frozenRow,List<Map<String,Object>> conditions) {
+        boolean[] result=new boolean[conditions.size()];
+        var selects=new ArrayList<String>(); var params=new ArrayList<Object>(); var indexes=new ArrayList<Integer>();
+        try {
+            var compiler=new MainTableViewDesignerFilterSql(queryableRef(conditions),"assignment-post-email");
+            for (int index=0;index<conditions.size();index++) {
+                var condition=conditions.get(index);
+                if (isAlwaysMatch(condition)) { result[index]=true; continue; }
+                var actionFields=new LinkedHashSet<String>();
+                collectFieldNames(condition,new LinkedHashSet<>(),actionFields);
+                if (!actionFields.isEmpty()) continue; // An approval completion did not create an ACTION-table row.
+                var clauseParams=new ArrayList<Object>();
+                String clause=compiler.whereClause(condition,clauseParams);
+                String expression=!StringUtils.hasText(clause)?"TRUE":clause.startsWith(" AND ")?clause.substring(5):clause;
+                selects.add("("+expression+") AS r"+index); params.addAll(clauseParams); indexes.add(index);
+            }
+            if (selects.isEmpty()) return result;
+            params.add(frozenRow);
+            var row=jdbcTemplate.queryForMap("SELECT "+String.join(",",selects)
+                    +" FROM jsonb_populate_record(NULL::up_process_instance,?::jsonb) pi",params.toArray());
+            for (int index:indexes) result[index]=Boolean.TRUE.equals(row.get("r"+index)) || "t".equalsIgnoreCase(String.valueOf(row.get("r"+index)));
+        } catch (RuntimeException unavailable) {
+            // FALLBACK(external): Existing optional-mail policy skips nontrivial conditions on evaluation failure.
+            log.error("[ACTION-EMAIL] frozen condition evaluation unavailable; rules={}",conditions.size());
+        }
+        return result;
+    }
+
     /**
      * @param processInstanceId Flowable / portal process instance id
      * @param conditions        one filter config per rule; {@code null} or empty means always match

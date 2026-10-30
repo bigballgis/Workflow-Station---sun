@@ -48,6 +48,7 @@ public class MineTaskScanner {
         List<TaskInfo> cached = mineTaskListCache.get(cacheKey);
         if (cached != null) {
             log.info("[PERF] query.fullScan cacheHit=true engineTasks={}", cached.size());
+            taskPermissionEvaluator.annotateClaimState(cached, userId, SecurityContextUtils.getCurrentUsername().orElse(null));
             return cached;
         }
         long tFetch0 = System.nanoTime();

@@ -352,18 +352,15 @@ public class TaskProcessComponent {
      * Assigns sub-table row processor (MI sub-process prerequisite) via {@link WorkflowEngineClient}.
      * Forwards to {@link SubTableRowAssignmentComponent}.
      */
-    @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId) {
         return subTableRowAssignmentComponent.assignSubTableRow(taskId, rowId, assigneeId, userId);
     }
 
-    @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId,
                                                  String portalUsername) {
         return subTableRowAssignmentComponent.assignSubTableRow(taskId, rowId, assigneeId, userId, portalUsername);
     }
 
-    @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, Map<String, Object> rowKey, String assigneeId,
                                                  String userId, String portalUsername) {
         return subTableRowAssignmentComponent.assignSubTableRow(taskId, rowId, rowKey, assigneeId, userId, portalUsername);

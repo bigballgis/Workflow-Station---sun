@@ -32,6 +32,7 @@ public class WorkflowEngineProcessClient {
 
     private final WorkflowEngineClient engine;
     private final I18nService i18nService;
+    @Autowired @Lazy private AssignmentStartCoordinationClient assignmentStarts;
 
     public WorkflowEngineProcessClient(@Lazy @Autowired WorkflowEngineClient engine,
                                        I18nService i18nService) {
@@ -96,6 +97,7 @@ public class WorkflowEngineProcessClient {
         if (!engine.isAvailable()) {
             throw new IllegalStateException("Workflow engine unavailable, cannot start process: " + processDefinitionKey);
         }
+        var startContext=assignmentStarts.prepare(processDefinitionKey,expectedProcessDefinitionId);
         try {
             String url = engine.engineUrl() + "/api/v1/processes/instances" + (expectedProcessDefinitionId == null ? "" : "/pinned");
 
@@ -104,10 +106,11 @@ public class WorkflowEngineProcessClient {
             request.put("businessKey", businessKey);
             request.put("startUserId", startUserId);
             request.put("variables", variables);
-            if (expectedProcessDefinitionId != null) request.put("expectedProcessDefinitionId", expectedProcessDefinitionId);
+            if (expectedProcessDefinitionId!=null || Boolean.TRUE.equals(startContext.tracked())) request.put("expectedProcessDefinitionId",startContext.definitionId());
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set(com.platform.common.assignment.AssignmentStartContext.HEADER,startContext.definitionId());
             engine.forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
 

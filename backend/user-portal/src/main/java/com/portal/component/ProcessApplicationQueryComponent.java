@@ -401,7 +401,7 @@ public class ProcessApplicationQueryComponent {
         }
         try {
             Map<String, Object> engineRow = workflowEngineClient.getProcessInstance(processId).orElse(null);
-            if (engineRow == null || !(engineRow.get("variables") instanceof Map<?, ?> engineVars)) {
+            if (!AssignmentEngineReadContext.isLegacy(engineRow) || !(engineRow.get("variables") instanceof Map<?, ?> engineVars)) {
                 return;
             }
             Map<String, Object> vars = info.getVariables() != null

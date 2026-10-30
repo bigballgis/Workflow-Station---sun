@@ -102,119 +102,25 @@ public class TaskApprovalCompletionComponent {
      * Handles approval completion
      * Via WorkflowEngineClient calling Flowable engine
      */
-    SubTableBatchInitialMiOutcome.Plan handleApproval(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
-        String taskId = task.getTaskId();
-        String action = request.getAction();
-        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(request.getVariables());
-        com.platform.common.functionunit.RuntimeVersionContext.rejectClientMetadata(request.getFormData());
+    TaskApprovalPreparation prepare(TaskInfo task,TaskCompleteRequest request,String actor,String username) {
+        return prepare(task,request,actor,username,false);
+    }
+    TaskApprovalPreparation prepare(TaskInfo task,TaskCompleteRequest request,String actor,String username,boolean protectedAssignment) {
+        return new TaskApprovalPreparer(this,protectedAssignment).prepare(task,request,actor,username);
+    }
+    TaskFormComponent taskForms() { return taskFormComponent; }
+    WorkflowEngineClient engine() { return workflowEngineClient; }
+    MiCollectionVariableBuilder miCollections() { return miCollectionVariableBuilder; }
+    ProcessInstanceRepository instances() { return processInstanceRepository; }
+    TaskPermissionEvaluator permissions() { return taskPermissionEvaluator; }
 
-        taskFormComponent.validateSubTableBatchChanges(task.getTaskDefinitionKey(),
-                task.getProcessInstanceId(), request.getSubTableBatchChanges());
-
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
-        }
-
-        log.info("Using Flowable engine to complete task: {} with action: {}", taskId, action);
-
-        // Start with variables from request if provided
-        Map<String, Object> variables = new HashMap<>();
-        if (request.getVariables() != null) {
-            variables.putAll(request.getVariables());
-        }
-
-        // Merge explicit form payload before locking outcome variables. Form schemas may reuse names like
-        // "decision" or "approvalStatus"; if we merge formData AFTER setting those keys, user/stale values win
-        // and Flowable completion fails with engine error → PortalException 500.
-        if (request.getFormData() != null) {
-            variables.putAll(request.getFormData());
-        }
-        variables = new HashMap<>(taskFormComponent.prepareSubTableSubmission(task.getProcessInstanceId(),
-                task.getTaskDefinitionKey(), variables, userId, request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(), request.getSubTableBatchChanges()));
-        Map<String, Object> permitted = taskFormComponent.filterVersionedSubmission(task.getProcessInstanceId(), task.getTaskDefinitionKey(), variables);
-        variables.clear();
-        variables.putAll(permitted);
-        SubTableWriteIsolation.stripTransportMetadata(variables);
-        Map<String, Object> submittedSnapshot = taskFormComponent.copyChangeHistorySubmission(request.getFormData());
-        if (submittedSnapshot == null) {
-            submittedSnapshot = request.getFormData() == null
-                ? new HashMap<>()
-                : new HashMap<>(request.getFormData());
-        }
-        SubTableWriteIsolation.stripTransportMetadata(submittedSnapshot);
-        // Only a sub-table explicitly submitted through formData and authorized by the current
-        // Task Form contract can represent user intent. variables may contain engine/MI state.
-        Map<String, Object> initialFilteredSubmission = taskFormComponent.filterTaskSubmissionForChangeHistory(
-            task.getProcessInstanceId(), task.getTaskDefinitionKey(), submittedSnapshot, variables);
-        boolean submittedSubTables = initialFilteredSubmission != null
-            && initialFilteredSubmission.containsKey("__subTables__");
-        Map<String, Object> explicitlySubmittedSubTables = submittedSubTables
-            && submittedSnapshot.get("__subTables__") instanceof Map<?, ?> submittedMap
-                ? copyStringKeyMap(submittedMap)
-                : Map.of();
-
-        variables.put("action", action);
-        if ("APPROVE".equals(action)) {
-            variables.put("decision", "yes");
-            variables.put("approvalStatus", "APPROVED");
-            log.info("Set decision=yes for APPROVE action");
-        } else if ("REJECT".equals(action)) {
-            variables.put("decision", "no");
-            variables.put("approvalStatus", "REJECTED");
-            log.info("Set decision=no for REJECT action");
-        }
-        if (request.getComment() != null && !request.getComment().isEmpty()) {
-            variables.put("approverComments", request.getComment());
-        }
-
-        // Approval submit is often incremental; __subTables__ may only exist on TaskInfo (merged ProcessInstance).
-        // Without merge here, injectMiCollectionFromBpmn sees no sub-table rows → empty MI collection → zero child tasks.
-        miCollectionVariableBuilder.mergeSubTablesFromTaskInfoForMi(task, variables);
-        Map<String, Object> taskWriteContext = isolateOutboundSubTables(task, request, variables);
-        taskFormComponent.validateSubTableBatchPayload(task.getTaskDefinitionKey(), task.getProcessInstanceId(),
-                request.getSubTableBatchChanges(), request.getSubTableBindingScopes(), variables);
-        Object subTablesAfterMerge = variables.get("__subTables__");
-        if (!(subTablesAfterMerge instanceof Map<?, ?> subMap) || subMap.isEmpty()) {
-            log.warn("[MI] After TaskInfo merge, variables have no __subTables__ (taskId={}, processInstanceId={}). "
-                    + "Multi-instance injection will not be able to build row collection.",
-                    task.getTaskId(), task.getProcessInstanceId());
-        }
-
-        // If MI sub-process prerequisite, read collection variable and assignee field from BPMN and build collection
-        List<SubTableBatchInitialMiOutcome.Expected> assignmentPlan = List.of();
-        String assignmentDefinitionId = null;
-        if (taskWriteContext != null) {
-            ProcessInstance assignmentInstance = processInstanceRepository.findById(task.getProcessInstanceId())
-                    .orElseThrow(() -> new IllegalStateException("Process instance is missing at completion"));
-            assignmentDefinitionId = assignmentInstance.getProcessDefinitionId();
-            assignmentPlan = miCollectionVariableBuilder.injectMiCollectionFromBpmn(
-                    task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables,
-                    assignmentInstance.getVariables());
-        } else {
-            miCollectionVariableBuilder.injectMiCollectionFromBpmn(
-                    task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
-        }
-
-        // Guard against wiping a service task's output: a bare/empty approval (e.g. an action button that
-        // never loaded or edited the grid) can carry an empty __subTables__ slice which, sent to Flowable,
-        // overwrites populated engine rows with []. Fill empty outbound slices from the live engine first.
-        preserveEngineSubTablesOnComplete(
-            task.getProcessInstanceId(), variables, explicitlySubmittedSubTables,
-            SubTableBatchDeletedRows.read(processInstanceRepository.findById(task.getProcessInstanceId())
-                    .orElseThrow(() -> new IllegalStateException("Process instance is missing at completion")).getVariables()));
-
-        Map<String, Object> variablesForEngine =
-                mergeApprovalVariables(task.getProcessInstanceId(), variables);
-        SubTableWriteIsolation.stripTransportMetadata(variablesForEngine);
-        if (taskWriteContext != null) OwnerFieldComponent.stripProcessWideCurrentItem(variablesForEngine);
-
-        log.info("Variables before calling workflowEngineClient: {}", variablesForEngine);
-
-        String onBehalfOfUserId = null;
-        if (taskPermissionEvaluator.isSingleTaskDelegatee(task, userId, portalUsername)
-                && task.getAssignee() != null && !task.getAssignee().isBlank()) {
-            onBehalfOfUserId = task.getAssignee();
-        }
+    SubTableBatchInitialMiOutcome.Plan handleApproval(TaskInfo task,TaskCompleteRequest request,String userId,String portalUsername) {
+        var prepared=prepare(task,request,userId,portalUsername);
+        String taskId=task.getTaskId(), action=request.getAction();
+        var variables=prepared.variables(); var variablesForEngine=prepared.engineVariables();
+        var submittedSnapshot=prepared.submitted(); boolean submittedSubTables=prepared.submittedSubTables();
+        var taskWriteContext=prepared.writeContext(); var assignmentPlan=prepared.expected();
+        String assignmentDefinitionId=prepared.definitionId(), onBehalfOfUserId=prepared.representedUser();
 
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(
                 taskId, userId, action, variablesForEngine, onBehalfOfUserId);
@@ -252,37 +158,7 @@ public class TaskApprovalCompletionComponent {
                 
                 preSyncVariablesRef.set(existingVars != null ? new HashMap<>(existingVars) : Map.of());
 
-                Map<String, Object> mergedVars = SubTableBatchInitialRows.mergeCompletion(
-                        existingVars != null ? existingVars : Map.of(), variablesForEngine, request.getSubTableBatchChanges(),
-                        com.platform.common.util.JsonUtils.getObjectMapper());
-
-                if (ownerFieldComponent != null) {
-                    if (taskWriteContext != null) {
-                        SubTableBatchTaskWriteContext.applyCurrentItem(taskWriteContext, mergedVars, true);
-                    } else if (OwnerFieldComponent.taskScopedCurrentItem(mergedVars) == null) {
-                        Map<String, Object> fromTask = OwnerFieldComponent.taskScopedCurrentItem(task.getVariables());
-                        if (fromTask != null) {
-                            mergedVars.put("_currentItem", fromTask);
-                        }
-                    }
-                    ownerFieldComponent.applyOnComplete(
-                            syncInstance.getFunctionUnitCode(), mergedVars, userId,
-                            completingMiLookup(task, syncInstance));
-                    OwnerFieldComponent.stripProcessWideCurrentItem(mergedVars);
-                }
-                taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
-                        taskId, userId, task.getTaskDefinitionKey(), syncProcessId, mergedVars);
-                if (taskWriteContext != null) OwnerFieldComponent.stripProcessWideCurrentItem(mergedVars);
-                // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
-                // one-level structure before persisting the approval write-back.
-                SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
-                recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
-                ProcessVersionContext.apply(syncInstance, mergedVars);
-                stampRequestId(mergedVars);
-                if (slaDueDateEnricher != null) {
-                    slaDueDateEnricher.stamp(syncInstance.getFunctionUnitCode(), mergedVars,
-                            syncInstance.getStartTime() == null ? null : syncInstance.getStartTime().toLocalDate());
-                }
+                Map<String,Object> mergedVars = mergePortalVariables(prepared,syncInstance);
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);
@@ -475,6 +351,51 @@ public class TaskApprovalCompletionComponent {
                 task.getProcessInstanceId(), assignmentDefinitionId, assignmentPlan);
     }
 
+    TaskApprovalPortalValues portalValues(TaskApprovalPreparation prepared) {
+        var instance=processInstanceRepository.findById(prepared.task().getProcessInstanceId())
+                .orElseThrow(()->new IllegalStateException("Process instance is missing at completion"));
+        var json=com.platform.common.util.JsonUtils.getObjectMapper();
+        com.fasterxml.jackson.databind.node.ObjectNode baseline=json.valueToTree(instance.getVariables()==null?Map.of():instance.getVariables());
+        var accepted=mergePortalVariables(prepared,instance);
+        return new TaskApprovalPortalValues(baseline,json.valueToTree(accepted),instance.getFunctionUnitCatalogId());
+    }
+
+    private Map<String,Object> mergePortalVariables(TaskApprovalPreparation prepared,ProcessInstance syncInstance) {
+        Map<String,Object> existingVars=syncInstance.getVariables();
+        Map<String, Object> mergedVars = SubTableBatchInitialRows.mergeCompletion(
+                existingVars != null ? existingVars : Map.of(), prepared.engineVariables(), prepared.request().getSubTableBatchChanges(),
+                com.platform.common.util.JsonUtils.getObjectMapper());
+
+        if (ownerFieldComponent != null) {
+            if (prepared.writeContext() != null) {
+                SubTableBatchTaskWriteContext.applyCurrentItem(prepared.writeContext(), mergedVars, true);
+            } else if (OwnerFieldComponent.taskScopedCurrentItem(mergedVars) == null) {
+                Map<String, Object> fromTask = OwnerFieldComponent.taskScopedCurrentItem(prepared.task().getVariables());
+                if (fromTask != null) {
+                    mergedVars.put("_currentItem", fromTask);
+                }
+            }
+            ownerFieldComponent.applyOnComplete(
+                    syncInstance.getFunctionUnitCode(), mergedVars, prepared.actor(),
+                    completingMiLookup(prepared.task(), syncInstance));
+            OwnerFieldComponent.stripProcessWideCurrentItem(mergedVars);
+        }
+        taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
+                prepared.task().getTaskId(), prepared.actor(), prepared.task().getTaskDefinitionKey(), prepared.task().getProcessInstanceId(), mergedVars);
+        if (prepared.writeContext() != null) OwnerFieldComponent.stripProcessWideCurrentItem(mergedVars);
+        // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
+        // one-level structure before persisting the approval write-back.
+        SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
+        recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
+        ProcessVersionContext.apply(syncInstance, mergedVars);
+        stampRequestId(mergedVars);
+        if (slaDueDateEnricher != null) {
+            slaDueDateEnricher.stamp(syncInstance.getFunctionUnitCode(), mergedVars,
+                    syncInstance.getStartTime() == null ? null : syncInstance.getStartTime().toLocalDate());
+        }
+        return mergedVars;
+    }
+
     private MiOuterStepResolver.OuterLookup completingMiLookup(TaskInfo task, ProcessInstance instance) {
         if (miOuterStepResolver == null || task == null) {
             return MiOuterStepResolver.OuterLookup.unknown();
@@ -520,6 +441,10 @@ public class TaskApprovalCompletionComponent {
      */
     Map<String, Object> isolateOutboundSubTables(TaskInfo task, TaskCompleteRequest request,
                                   Map<String, Object> variables) {
+        return isolateOutboundSubTables(task,request,variables,false);
+    }
+    Map<String,Object> isolateOutboundSubTables(TaskInfo task,TaskCompleteRequest request,
+                                  Map<String,Object> variables,boolean protectedAssignment) {
         SubTableWriteIsolation isolation = subTableWriteIsolation;
         if (isolation == null || task == null || request == null || variables == null) {
             return null;
@@ -535,13 +460,14 @@ public class TaskApprovalCompletionComponent {
         SubTableBatchTaskPermissions.preserveOmittedStores(baselineVars, variables);
         Map<String, Object> writeContext = SubTableBatchTaskWriteContext.resolve(new SubTableBatchTaskWriteContext.Request(
                 task.getTaskId(), processId, task.getTaskDefinitionKey(),
-                baselineVars.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD) ? variables : formData, baselineVars), workflowEngineClient);
+                protectedAssignment || baselineVars.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD) ? variables : formData,
+                baselineVars), workflowEngineClient,protectedAssignment);
         isolation.apply(new SubTableWriteIsolation.Request(
                 writeContext, variables, baselineVars,
                 request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),
                 functionUnitCode, process.map(ProcessInstance::getFunctionUnitCatalogId).orElse(null),
-                task.getTaskDefinitionKey(), request.getSubTableBatchChanges()));
-        if (baselineVars.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+                task.getTaskDefinitionKey(), request.getSubTableBatchChanges(),protectedAssignment));
+        if (protectedAssignment || baselineVars.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
             OwnerFieldComponent.stripProcessWideCurrentItem(variables);
             return writeContext;
         }
@@ -592,13 +518,6 @@ public class TaskApprovalCompletionComponent {
                     log.info("[MI] Preserved engine __subTables__ slices on completion for process {} "
                             + "(filled empty outbound slice(s) to avoid overwriting service-task output)", processInstanceId);
                 });
-    }
-    private static Map<String, Object> copyStringKeyMap(Map<?, ?> source) {
-        Map<String, Object> copy = new LinkedHashMap<>();
-        source.forEach((key, value) -> {
-            if (key != null) copy.put(String.valueOf(key), value);
-        });
-        return copy;
     }
     // ========== Sub-table change history helpers ==========
     /** Compare completion against the latest process state because incremental saves already emitted history. */
@@ -766,7 +685,7 @@ public class TaskApprovalCompletionComponent {
      * fields not present in this form as blank and overwrite correct stored values. Flowable also
      * needs authoritative computed values before gateway conditions run.
      */
-    private Map<String, Object> mergeApprovalVariables(String processInstanceId, Map<String, Object> submission) {
+    Map<String, Object> mergeApprovalVariables(String processInstanceId, Map<String, Object> submission) {
         Map<String, Object> merged = new HashMap<>();
         Optional<ProcessInstance> processInstance = processInstanceRepository.findById(processInstanceId);
         String functionUnitCode = processInstance.map(ProcessInstance::getFunctionUnitCode).orElse(null);

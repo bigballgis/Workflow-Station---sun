@@ -19,6 +19,16 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 class ChangeHistoryBatchTest {
+    @Test void preparingAcceptedAuditDoesNotPersistAndKeepsTheSameDisplaySemantics() {
+        var repository=mock(ChangeHistoryRepository.class); var component=component(repository); var context=context();
+        var fields=component.prepareFieldChanges(context,Map.of("caption","old"),Map.of("caption","accepted"));
+        var rows=component.prepareSubTableChanges(context,"odd-lines",List.of(SubTableChange.builder().changeType("ROW_UPDATE").rowIdentifier("row")
+                .oldValues(Map.of("amount",1)).newValues(Map.of("amount",2)).build()));
+        assertEquals(1,fields.size()); assertEquals("accepted",fields.get(0).getNewValue());
+        assertEquals(1,rows.size()); assertEquals("1",rows.get(0).getOldValue()); assertEquals("2",rows.get(0).getNewValue());
+        assertEquals(context.getBatchId(),rows.get(0).getBatchId());
+        verify(repository,never()).saveAll(anyList()); verify(repository,never()).save(any());
+    }
     @Test
     void mainAndMultipleSubTablesShareContextButAnotherSaveGetsAnotherBatch() {
         var repository = mock(ChangeHistoryRepository.class);

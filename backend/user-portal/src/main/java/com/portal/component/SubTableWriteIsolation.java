@@ -66,7 +66,13 @@ class SubTableWriteIsolation {
             Map<String, Object> baselineVariables,
             List<String> emptiedSubTableKeys,
             List<SubTableBindingScope> scopes,
-            String functionUnitCode, String catalogId, String stageId, List<com.portal.dto.SubTableBatchChange> batchChanges) {
+            String functionUnitCode, String catalogId, String stageId, List<com.portal.dto.SubTableBatchChange> batchChanges,
+            boolean protectedAssignment) {
+        Request(Map<String,Object> formData,Map<String,Object> inbound,Map<String,Object> baselineVariables,
+                List<String> emptiedSubTableKeys,List<SubTableBindingScope> scopes,String functionUnitCode,
+                String catalogId,String stageId,List<com.portal.dto.SubTableBatchChange> batchChanges) {
+            this(formData,inbound,baselineVariables,emptiedSubTableKeys,scopes,functionUnitCode,catalogId,stageId,batchChanges,false);
+        }
         Request(Map<String, Object> formData, Map<String, Object> inbound, Map<String, Object> baselineVariables,
                 List<String> emptiedSubTableKeys, List<SubTableBindingScope> scopes, String functionUnitCode,
                 String catalogId, String stageId) {
@@ -107,7 +113,7 @@ class SubTableWriteIsolation {
         requireScopesForFrozenMultiBindings(frozen, submitted, bindingScopes);
         // Check client claims before restoring omitted stores: restoration is not a write claim.
         for (Map.Entry<String, Object> entry : baseline.entrySet()) {
-            if (versioned(entry.getValue())) submitted.putIfAbsent(entry.getKey(), entry.getValue());
+            if (request.protectedAssignment() || versioned(entry.getValue())) submitted.putIfAbsent(entry.getKey(), entry.getValue());
         }
         inbound.put("__subTables__", submitted);
         if (merger.isMiSubTaskSubmission(request.formData())) {

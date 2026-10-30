@@ -29,10 +29,13 @@ public class ActionFormPopupSubmitComponent {
     private final CatalogRuntimeRows rows;
     private final PrimaryKeyAllocationService primaryKeys;
     private final UserDisplayNameResolver displayNames;
+    @org.springframework.beans.factory.annotation.Autowired
+    private AssignmentPortalWriteExecutor assignmentWrites;
 
-    @Transactional
+    @Transactional(propagation=org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public ActionTableRowRef submit(TaskInfo task, String actionId, Map<String, Object> formData, String userId) {
-        return submitForProcessInstance(task.getProcessInstanceId(), actionId, formData, userId, task);
+        var request=AssignmentPortalWriteGuard.Request.of(task.getTaskId(),userId,"ACTION_FORM",java.util.Arrays.asList(actionId,formData),task.getProcessInstanceId());
+        return assignmentWrites.execute(request,true,()->submitForProcessInstance(task.getProcessInstanceId(),actionId,formData,userId,task));
     }
 
     @Transactional

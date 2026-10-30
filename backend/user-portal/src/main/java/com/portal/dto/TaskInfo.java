@@ -205,6 +205,10 @@ public class TaskInfo {
     @Builder.Default
     private boolean claimable = false;
 
+    /** Informational claim restriction; does not grant form viewing or processing permission. */
+    private com.platform.common.assignment.AssignmentTaskReadSnapshot.Entry assignmentClaimAccess;
+    private AssignmentTaskWriteAccess assignmentWriteAccess;
+
     /**
      * Leader / BU Approver / SYS_ADMIN may force-unclaim a hold that is not theirs.
      * Filled by {@code ClaimForceUnclaimAnnotator} after claim flags.

@@ -8,6 +8,30 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SubTableBatchTaskWriteContextTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={true,false})
+    void protectedCompositeIdentityPreservesBooleanPrimaryKeyType(boolean flag) {
+        var key=Map.of("tenant","HK","flag",flag);
+        when(engine.requireTaskWriteContext("task-one")).thenReturn(Map.of("writeContext",Map.of(
+                "taskId","task-one","processInstanceId","process-one","processDefinitionId","definition:1:frozen",
+                "taskDefinitionKey","review","multiInstance",true,"currentItem",Map.of("rowKey",key))));
+        var result=SubTableBatchTaskWriteContext.resolve(request(Map.of("__subTables__",Map.of()),Map.of()),engine,true);
+        assertThat(result).containsEntry("_currentItem",Map.of("rowKey",key));
+    }
+
+    @Test void protectedAssignmentUsesServerScopeEvenWithoutBatchOrClientMiMarkers() {
+        when(engine.requireTaskWriteContext("task-one")).thenReturn(context(true));
+        Map<String,Object> input=Map.of("__subTables__",Map.of("dw:people",java.util.List.of()));
+        var result=SubTableBatchTaskWriteContext.resolve(request(input,Map.of()),engine,true);
+        assertThat(result).containsEntry("_currentItem",Map.of("rowKey",Map.of("renamedKey","actual-execution-row")));
+        assertThat(input).doesNotContainKey("_currentItem");
+    }
+    @Test void protectedAssignmentCannotChooseAnotherParticipantThroughClientContext() {
+        when(engine.requireTaskWriteContext("task-one")).thenReturn(context(true));
+        var result=SubTableBatchTaskWriteContext.resolve(request(Map.of("currentItem",Map.of("rowKey",Map.of("key","other"))),Map.of()),engine,true);
+        assertThat(result).doesNotContainKey("currentItem")
+                .containsEntry("_currentItem",Map.of("rowKey",Map.of("renamedKey","actual-execution-row")));
+    }
     private final WorkflowEngineClient engine = mock(WorkflowEngineClient.class);
     private final Map<String, Object> baseline = Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1));
 

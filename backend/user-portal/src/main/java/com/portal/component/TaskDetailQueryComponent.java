@@ -75,7 +75,7 @@ public class TaskDetailQueryComponent {
             }
             TaskInfo taskInfo = EngineTaskMapper.convertMapToTaskInfo(data);
             recordUnrecordedRequest(taskInfo.getProcessInstanceId());
-            mergePortalProcessVariables(taskInfo);
+            mergePortalProcessVariables(taskInfo,AssignmentEngineReadContext.isLegacy(data));
             attachActions(taskId, data, taskInfo);
             requestIdEnricher.enrichTaskRequestIds(List.of(taskInfo));
             return Optional.of(taskInfo);
@@ -97,7 +97,7 @@ public class TaskDetailQueryComponent {
         }
     }
 
-    private void mergePortalProcessVariables(TaskInfo taskInfo) {
+    private void mergePortalProcessVariables(TaskInfo taskInfo,boolean positivelyLegacy) {
         String processInstanceId = taskInfo.getProcessInstanceId();
         if (processInstanceId == null) {
             return;
@@ -127,7 +127,8 @@ public class TaskDetailQueryComponent {
             miParticipantEnricher.enrichParticipantAssignmentData(merged);
             log.info("[PERF] detail.enrichParticipantAssignmentData took {} ms",
                     (System.nanoTime() - tPart) / 1_000_000L);
-            hydrateEngineSubTablesIntoMerged(processInstanceId, pi, merged);
+            // A protected mirror owns its source values, including deliberately empty slices. Unknown context never grants a legacy cache write.
+            if (positivelyLegacy) hydrateEngineSubTablesIntoMerged(processInstanceId, pi, merged);
             taskInfo.setVariables(merged);
         });
     }

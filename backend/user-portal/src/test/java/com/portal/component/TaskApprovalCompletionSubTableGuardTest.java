@@ -46,7 +46,7 @@ class TaskApprovalCompletionSubTableGuardTest {
     private WorkflowEngineClient engineWithRows(Map<String, Object> subTables) {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
         when(client.getProcessInstance(anyString()))
-                .thenReturn(Optional.of(Map.of("variables", Map.of("__subTables__", subTables))));
+                .thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of("__subTables__", subTables))));
         return client;
     }
 

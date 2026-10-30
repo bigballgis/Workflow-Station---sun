@@ -45,13 +45,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Process start flow: active catalog pin resolution, BPMN deployment, engine
- * start,
- * first-task auto-completion and start bookkeeping. Extracted from
- * {@link ProcessComponent}
- * (the original 330-line {@code startProcess} body is decomposed into
- * sequential steps
- * with unchanged order and logic).
+ * Pinned process start, first-task submission, and start bookkeeping. Extracted from {@link ProcessComponent}.
  */
 @Slf4j
 @Component
@@ -121,6 +115,7 @@ public class ProcessStartComponent {
 
     @Autowired
     private SubTableBatchAssignmentHistory batchAssignmentHistory;
+    @Autowired @Lazy private AssignmentInitialTaskCompletion initialTaskCompletion;
 
     private TransactionTemplate tx() {
         TransactionTemplate t = txTemplate;
@@ -357,6 +352,7 @@ public class ProcessStartComponent {
         String initiatorTaskDefKeyForHistory;
         /** Non-null when auto-completion of the first task failed; surfaced to the caller. */
         String firstStepError;
+        AssignmentCompletionOrchestrator.Result initialCompletion;
         /** Engine status when the request went straight into a Function Unit call; else null. */
         Map<String, Object> calledWorkStatus;
         /** Server-only scope retained only after the first task actually completes. */
@@ -585,7 +581,7 @@ public class ProcessStartComponent {
             // error when completion has not succeeded; do not turn it into a green submit.
             // A retained batch plan proves engine completion succeeded. Its post-commit
             // observation will warn FAILED/UNCONFIRMED; never invite a duplicate submit.
-            if (outcome.assignmentPlan == null && outcome.firstStepError == null) {
+            if (outcome.initialCompletion == null && outcome.assignmentPlan == null && outcome.firstStepError == null) {
                 outcome.firstStepError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             }
         }
@@ -612,13 +608,15 @@ public class ProcessStartComponent {
         outcome.initiatorTaskDefKeyForHistory = taskDefKey != null ? taskDefKey.toString() : null;
         log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
 
-        // Claim task first (set assignee)
-        Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
-        if (claimResult.isPresent()) {
-            log.info("First task claimed successfully: {} by user: {}", taskId, userId);
-        } else {
-            log.warn("Failed to claim first task: {}, trying to complete anyway", taskId);
+        var accepted = initialTaskCompletion.complete(taskId, userId);
+        if (accepted.isPresent()) {
+            var result = accepted.get();
+            outcome.initialCompletion = result;
+            outcome.assignmentPlan = result.observation();
+            captureNextTaskAfterAutoComplete(outcome, flowableProcessInstanceId);
+            return;
         }
+        initialTaskCompletion.claimIfUnassigned(firstTask, userId);
 
         Object firstTaskDefKeyObj = firstTask.get("taskDefinitionKey");
         String firstTaskDefKey = firstTaskDefKeyObj != null ? firstTaskDefKeyObj.toString() : "";
@@ -800,7 +798,7 @@ public class ProcessStartComponent {
         // Conditional UPDATE avoids overwriting COMPLETED set by
         // ProcessCompletionListener (race)
         // JPA L1 cache stale findById — use @Modifying native update to bypass cache
-        int updated = processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
+        int updated = outcome.initialCompletion != null ? 0 : processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
                 flowableProcessInstanceId,
                 outcome.currentNodeName,
                 outcome.nextAssigneeSnapshot.getAssigneeUserId(),
@@ -829,7 +827,7 @@ public class ProcessStartComponent {
                 processInstanceRepository.save(instance);
             });
         } else {
-            log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
+            log.info("Process instance {} projection is owned by accepted completion or is already ended; skipped start update",
                     flowableProcessInstanceId);
         }
 
@@ -878,6 +876,8 @@ public class ProcessStartComponent {
                 // /api/ap/*). Handing it to every initiator would let them fire the automation
                 // directly. The full reason is in the WARN log above.
                 .firstStepError(outcome.firstStepError != null ? FIRST_STEP_NOT_COMPLETED : null)
+                .initialSubmissionOperationId(outcome.initialCompletion == null ? null : outcome.initialCompletion.operationId())
+                .initialSubmissionState(outcome.initialCompletion == null ? null : outcome.initialCompletion.state())
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())

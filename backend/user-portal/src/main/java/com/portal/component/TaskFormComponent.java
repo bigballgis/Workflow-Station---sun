@@ -55,6 +55,7 @@ public class TaskFormComponent {
     private final PlatformTransactionManager platformTransactionManager;
 
     private volatile TransactionTemplate taskFormWriteTxTemplate;
+    @Lazy @Autowired private AssignmentPortalWriteGuard assignmentGuard;
 
     /**
      * Single write txn for task-form persistence — avoids
@@ -693,9 +694,6 @@ public class TaskFormComponent {
         // preparation can hide the attempted change. Legacy instances retain their existing path.
         processInstanceRepository.findById(taskInfo.processInstanceId).ifPresent(instance ->
                 SubTableBatchTaskPermissions.validate(instance.getVariables(), formDefinition, submittedSnapshot, objectMapper, subTableBatchChanges));
-        Map<String, Object> writeContext = SubTableBatchTaskWriteContext.resolve(new SubTableBatchTaskWriteContext.Request(
-                taskId, taskInfo.processInstanceId, taskInfo.taskDefinitionKey, formData,
-                requireProcessInstance(taskInfo.processInstanceId).getVariables()), workflowEngineClient);
 
         // Filter: reject fields the form marks READONLY (an absent key means editable)
         Map<String, Object> editableData = formDefinition != null && Boolean.TRUE.equals(formDefinition.get("readOnly"))
@@ -724,17 +722,22 @@ public class TaskFormComponent {
         AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();
         AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
 
-        // Fail loud before the write txn when this is an MI submit whose row key cannot be
-        // resolved — same contract as SubTableWriteIsolation, so a broken loop variable
-        // never opens a write that could overwrite sibling rows.
+        final List<String> emptiedKeys = emptiedSubTableKeys;
+        final List<SubTableBindingScope> bindingScopes = subTableBindingScopes;
+        var assignmentRequest = AssignmentPortalWriteGuard.Request.of(taskId, userId, "SAVE",
+                java.util.Arrays.asList(editableData, baselineValues, emptiedKeys, bindingScopes, subTableBatchChanges),taskInfo.processInstanceId);
+        var assignmentDecision = assignmentGuard.prepare(assignmentRequest);
+        Map<String, Object> writeContext = SubTableBatchTaskWriteContext.resolve(new SubTableBatchTaskWriteContext.Request(
+                taskId, taskInfo.processInstanceId, taskInfo.taskDefinitionKey, formData,
+                requireProcessInstance(taskInfo.processInstanceId).getVariables()), workflowEngineClient,assignmentDecision.tracked());
+        // Resolve the authoritative MI identity before opening the write transaction.
         if (editableData.containsKey("__subTables__") && miSubTaskSubTableRowMerger().isMiSubTaskSubmission(writeContext)) {
             miSubTaskSubTableRowMerger().requireResolvedRowKey(
                     miSubTaskSubTableRowMerger().resolveCurrentItemRowKey(writeContext));
         }
-        final List<String> emptiedKeys = emptiedSubTableKeys;
-        final List<SubTableBindingScope> bindingScopes = subTableBindingScopes;
 
         taskFormWriteTx().executeWithoutResult(status -> {
+            assignmentGuard.enter(assignmentDecision, assignmentRequest);
             ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
 
             Map<String, Object> currentVariables = processInstance.getVariables() != null
@@ -774,7 +777,7 @@ public class TaskFormComponent {
             subTableWriteIsolation().apply(new SubTableWriteIsolation.Request(
                     writeContext, inbound, currentVariables, emptiedKeys, bindingScopes,
                     processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId(),
-                    taskInfo.taskDefinitionKey, subTableBatchChanges));
+                    taskInfo.taskDefinitionKey, subTableBatchChanges,assignmentDecision.tracked()));
 
             // Compare batch declarations with the canonical rows after the normal
             // binding/MI scope guard has produced the scoped write set.  This keeps
@@ -813,19 +816,8 @@ public class TaskFormComponent {
             // Overlay THIS task's MI loop variable only for the write, then drop it —
             // never persist execution-scoped _currentItem on the process-wide blob.
             if (ownerFieldComponent != null) {
-                SubTableBatchTaskWriteContext.applyCurrentItem(writeContext, updatedVariables,
-                        currentVariables.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD));
-                ownerFieldComponent.applyOnSubmit(
-                        processInstance.getFunctionUnitCode(),
-                        new OwnerFieldComponent.OwnerWriteContext(
-                                userId,
-                                processInstance.getStartUserId(),
-                                processInstance.getCurrentAssignee(),
-                                processInstance.getCandidateUsers(),
-                                currentVariables,
-                                ownerMiLookup(processInstance)),
-                        updatedVariables);
-                OwnerFieldComponent.stripProcessWideCurrentItem(updatedVariables);
+                TaskFormOwnerValues.apply(ownerFieldComponent, new TaskFormOwnerValues.Context(processInstance,
+                        userId, currentVariables, writeContext, ownerMiLookup(processInstance)), updatedVariables);
             }
 
             // System audit fields: refresh updated_at/updated_by at real update
@@ -845,6 +837,7 @@ public class TaskFormComponent {
             SubTableNestingSanitizer.stripDeepNestedSubTables(updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
+            assignmentGuard.written(assignmentDecision, true);
 
             log.info("Process variables updated for task: {}, fields: {}", taskId, editableData.keySet());
         });

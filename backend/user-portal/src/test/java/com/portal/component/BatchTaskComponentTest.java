@@ -49,10 +49,33 @@ class BatchTaskComponentTest {
     @Mock private TaskActionService taskActionService;
     @Mock private WorkflowEngineClient workflowEngineClient;
     @Mock private TaskProcessComponent taskProcessComponent;
-    @Mock private ActionPostEmailComponent actionPostEmailComponent;
+    @Mock private TaskCompletionEndpoint endpoint;
+    @Mock private com.portal.client.AssignmentOperationClient operations;
     @Mock private MineTaskListCache mineTaskListCache;
 
     private BatchTaskComponent component;
+
+    @Test void acceptedPendingAndUnknownRowsAreNotReportedAsFailuresOrSuccesses() {
+        var op=java.util.UUID.randomUUID();
+        var op2=java.util.UUID.randomUUID();
+        var receipt=new com.platform.common.assignment.AssignmentOperationReceipt(op,java.util.UUID.randomUUID(),"closed","u1",null,
+                "APPROVE","digest",1,0,Map.of(),"PENDING_SYNC");
+        when(operations.find(op)).thenReturn(Optional.of(receipt));
+        when(operations.find(op2)).thenThrow(new com.platform.common.assignment.AssignmentFailure(
+                com.platform.common.assignment.AssignmentFailure.Reason.ASSIGNMENT_DEPENDENCY_UNAVAILABLE));
+        when(endpoint.complete(any(),eq("u1"),eq("alice")))
+                .thenReturn(new com.portal.dto.TaskCompletionResult(null,op,"PENDING_SYNC"));
+        var result=component.complete("u1","alice",new BatchCompleteRequest(List.of("closed","unknown"),"a-approve",null,
+                Map.of("closed",op,"unknown",op2)));
+        assertThat(result.succeeded()).isEmpty();
+        assertThat(result.failed()).isEmpty();
+        assertThat(result.pending()).extracting(BatchCompleteResponse.Pending::state).containsExactly("PENDING_SYNC","DELIVERY_UNKNOWN");
+        verifyNoTaskReads();
+    }
+    private void verifyNoTaskReads() {
+        verify(workflowEngineClient,never()).getTaskById(any());
+        verify(taskProcessComponent,never()).claimTask(any(),any(),any());
+    }
 
     private final TaskActionInfo approve = TaskActionInfo.builder().actionId("a-approve").actionName("a-approve")
             .actionType("APPROVE").icon("check").buttonColor("#2E7D32").build();
@@ -61,12 +84,13 @@ class BatchTaskComponentTest {
 
     @BeforeEach
     void setUp() {
-        component = new BatchTaskComponent(todoListQueryComponent, requestIdEnricher, taskActionService,
-                workflowEngineClient, taskProcessComponent, actionPostEmailComponent, mineTaskListCache);
-        doAnswer(inv -> {
-            ((Runnable) inv.getArgument(1)).run();
+        doAnswer(call->{
+            TaskInfo task=call.getArgument(0);
+            task.setAssignmentClaimAccess(com.portal.testsupport.AssignmentReadTestSupport.legacy(task.getTaskId()));
             return null;
-        }).when(actionPostEmailComponent).runWithPostEmail(any(), any(Runnable.class));
+        }).when(taskProcessComponent).annotateClaimState(any(TaskInfo.class),eq("u1"),eq("alice"));
+        component = new BatchTaskComponent(todoListQueryComponent, requestIdEnricher, taskActionService,
+                workflowEngineClient, taskProcessComponent, new BatchCompletionRecovery(operations,endpoint), mineTaskListCache);
         when(taskActionService.getTaskActionsFromPayload(anyMap()))
                 .thenReturn(List.of(approve, processReject, transfer));
         when(requestIdEnricher.loadCatalogVersions(any())).thenReturn(Map.of(CATALOG_1023, "1.0.23"));
@@ -83,7 +107,7 @@ class BatchTaskComponentTest {
         assertThat(result.succeeded()).containsExactly("t1", "t2");
         assertThat(result.failed()).isEmpty();
         ArgumentCaptor<TaskCompleteRequest> captor = ArgumentCaptor.forClass(TaskCompleteRequest.class);
-        verify(taskProcessComponent, times(2)).completeTask(captor.capture(), eq("u1"), eq("alice"));
+        verify(endpoint, times(2)).complete(captor.capture(), eq("u1"), eq("alice"));
         TaskCompleteRequest sent = captor.getAllValues().get(0);
         assertThat(sent.getAction()).isEqualTo("APPROVE");
         assertThat(sent.getActionId()).isEqualTo("a-approve");
@@ -146,13 +170,13 @@ class BatchTaskComponentTest {
                 new BatchCompleteRequest(List.of("t1"), "a-reject", "  "));
         assertThat(missing.failed()).extracting(BatchCompleteResponse.Failure::reason)
                 .containsExactly("Comment is required");
-        verify(taskProcessComponent, never()).completeTask(any(), any(), any());
+        verify(endpoint, never()).complete(any(), any(), any());
 
         BatchCompleteResponse ok = component.complete("u1", "alice",
                 new BatchCompleteRequest(List.of("t1"), "a-reject", " looks wrong "));
         assertThat(ok.succeeded()).containsExactly("t1");
         ArgumentCaptor<TaskCompleteRequest> captor = ArgumentCaptor.forClass(TaskCompleteRequest.class);
-        verify(taskProcessComponent).completeTask(captor.capture(), eq("u1"), eq("alice"));
+        verify(endpoint).complete(captor.capture(), eq("u1"), eq("alice"));
         assertThat(captor.getValue().getAction()).isEqualTo("REJECT");
         assertThat(captor.getValue().getComment()).isEqualTo("looks wrong");
     }
@@ -170,7 +194,7 @@ class BatchTaskComponentTest {
         assertThat(result.succeeded()).containsExactly("ok");
         assertThat(result.failed()).extracting(BatchCompleteResponse.Failure::taskId)
                 .containsExactly("not-batch-node", "someone-else", "gone");
-        verify(taskProcessComponent, times(1)).completeTask(any(), any(), any());
+        verify(endpoint, times(1)).complete(any(), any(), any());
     }
 
     @Test
@@ -182,9 +206,9 @@ class BatchTaskComponentTest {
                 new BatchCompleteRequest(List.of("pool"), "a-approve", null));
 
         assertThat(result.succeeded()).containsExactly("pool");
-        InOrder order = inOrder(taskProcessComponent);
+        InOrder order = inOrder(taskProcessComponent,endpoint);
         order.verify(taskProcessComponent).claimTask("pool", "u1", "alice");
-        order.verify(taskProcessComponent).completeTask(any(), eq("u1"), eq("alice"));
+        order.verify(endpoint).complete(any(), eq("u1"), eq("alice"));
     }
 
     @Test
@@ -200,7 +224,7 @@ class BatchTaskComponentTest {
 
         assertThat(result.succeeded()).containsExactly("ok");
         assertThat(result.failed()).extracting(BatchCompleteResponse.Failure::taskId).containsExactly("taken");
-        verify(taskProcessComponent, times(1)).completeTask(any(), any(), any());
+        verify(endpoint, times(1)).complete(any(), any(), any());
     }
 
     @Test
@@ -214,7 +238,7 @@ class BatchTaskComponentTest {
 
         assertThat(result.succeeded()).containsExactly("candidate");
         verify(taskProcessComponent, never()).claimTask(any(), any(), any());
-        verify(taskProcessComponent).completeTask(any(), eq("u1"), eq("alice"));
+        verify(endpoint).complete(any(), eq("u1"), eq("alice"));
     }
 
     @Test
@@ -239,7 +263,7 @@ class BatchTaskComponentTest {
 
         assertThat(result.failed()).extracting(BatchCompleteResponse.Failure::reason)
                 .containsExactly("Task already completed");
-        verify(taskProcessComponent, never()).completeTask(any(), any(), any());
+        verify(endpoint, never()).complete(any(), any(), any());
     }
 
     @Test
@@ -253,7 +277,7 @@ class BatchTaskComponentTest {
 
         assertThat(notOnNode.failed()).hasSize(1);
         assertThat(notBatchable.failed()).hasSize(1);
-        verify(taskProcessComponent, never()).completeTask(any(), any(), any());
+        verify(endpoint, never()).complete(any(), any(), any());
     }
 
     @Test
@@ -349,6 +373,7 @@ class BatchTaskComponentTest {
     private void claimableForMe(String taskId) {
         doAnswer(inv -> {
             TaskInfo t = inv.getArgument(0);
+            t.setAssignmentClaimAccess(com.portal.testsupport.AssignmentReadTestSupport.legacy(t.getTaskId()));
             t.setClaimable(taskId.equals(t.getTaskId()));
             return null;
         }).when(taskProcessComponent).annotateClaimState(any(TaskInfo.class), eq("u1"), eq("alice"));
@@ -368,6 +393,7 @@ class BatchTaskComponentTest {
     private static TaskInfo task(String id, String pd, String node, String assignee, boolean allowBatch) {
         return TaskInfo.builder()
                 .taskId(id)
+                .assignmentClaimAccess(com.portal.testsupport.AssignmentReadTestSupport.legacy(id))
                 .functionUnitCatalogId(CATALOG_1023)
                 .processDefinitionId(pd)
                 .processDefinitionKey("purchase")

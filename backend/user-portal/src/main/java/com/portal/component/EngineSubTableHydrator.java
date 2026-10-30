@@ -57,7 +57,7 @@ public class EngineSubTableHydrator {
         }
         try {
             Map<String, Object> engineRow = workflowEngineClient.getProcessInstance(processInstanceId).orElse(null);
-            if (engineRow == null || !(engineRow.get("variables") instanceof Map<?, ?> engineVars)) {
+            if (!AssignmentEngineReadContext.isLegacy(engineRow) || !(engineRow.get("variables") instanceof Map<?, ?> engineVars)) {
                 return Optional.empty();
             }
             if (!(engineVars.get("__subTables__") instanceof Map<?, ?> engineSt) || engineSt.isEmpty()) {

@@ -31,6 +31,15 @@ import static org.mockito.Mockito.when;
  */
 @DisplayName("ProcessApplicationQueryComponent.getProcessDetail engine-scalar hydration")
 class ProcessApplicationQueryEngineScalarHydrationTest {
+    @Test void protectedSourceValuesAreNeverRefilledByAnApplicationDetailRead() {
+        var stored=new LinkedHashMap<String,Object>(); stored.put("reviewer",null);
+        var instance=storedInstance("COMPLETED",stored);
+        var repository=mock(ProcessInstanceRepository.class); when(repository.findById(PID)).thenReturn(Optional.of(instance));
+        var client=mock(WorkflowEngineClient.class); when(client.isAvailable()).thenReturn(true);
+        when(client.getProcessInstance(PID)).thenReturn(Optional.of(Map.of("assignmentTracked",true,"variables",Map.of("reviewer","old-user"))));
+        var info=newComponent(repository,client).getProcessDetail(PID);
+        assertNull(info.getVariables().get("reviewer")); verify(repository,never()).save(any());
+    }
 
     private static final String PID = "pi-1";
 
@@ -46,7 +55,7 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
         when(client.isAvailable()).thenReturn(true);
         when(client.getProcessInstance(anyString()))
-                .thenReturn(Optional.of(Map.of("variables", engineVars)));
+                .thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", engineVars)));
         return client;
     }
 

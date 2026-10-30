@@ -19,6 +19,7 @@ public final class PortalVersionTestSupport {
     private PortalVersionTestSupport() { }
     public static void task(TaskFormComponent component) { task(component, null); }
     public static void task(TaskFormComponent component, Map<String, Object> definition) {
+        legacyAssignment(component);
         var loader = mock(TaskFormDefinitionLoader.class);
         lenient().when(loader.fetchTaskFormByStageId(any(), any(), any())).thenAnswer(invocation -> definition == null ? null : new java.util.LinkedHashMap<>(definition));
         ReflectionTestUtils.setField(component, "formDefinitionLoader", loader);
@@ -67,6 +68,7 @@ public final class PortalVersionTestSupport {
         lenient().when(snapshots.formBindings(eq("release-v1"), anyMap())).thenReturn(
                 (List<Map<String, Object>>) definition.getOrDefault("tableBindings", List.of()));
         if (component instanceof TaskFormComponent task) {
+            legacyAssignment(task);
             var loader = new TaskFormDefinitionLoader(mock(org.springframework.web.client.RestTemplate.class), mapper, jdbc);
             ReflectionTestUtils.setField(loader, "versionSnapshots", snapshots);
             ReflectionTestUtils.setField(task, "formDefinitionLoader", loader);
@@ -76,6 +78,17 @@ public final class PortalVersionTestSupport {
         } else {
             ReflectionTestUtils.setField(component, "versionSnapshots", snapshots);
         }
+    }
+
+    private static void legacyAssignment(TaskFormComponent component) {
+        // These form fixtures are pre-contract tasks; fenced permission decisions have dedicated PostgreSQL coverage.
+        var guard = mock(com.portal.component.AssignmentPortalWriteGuard.class);
+        lenient().when(guard.prepare(any())).thenAnswer(call -> {
+            com.portal.component.AssignmentPortalWriteGuard.Request request = call.getArgument(0);
+            return com.platform.common.assignment.AssignmentWriteDecision.legacy(new com.platform.common.assignment.AssignmentWriteDecision.Request(
+                    request.taskId(), request.actor(), request.representedUser(), request.operation(), request.digest(),request.instanceId()));
+        });
+        ReflectionTestUtils.setField(component, "assignmentGuard", guard);
     }
 
 }

@@ -26,12 +26,13 @@ class MiCollectionPinnedVersionTest {
         when(jdbc.queryForList(contains("FROM up_process_instance"), eq(String.class), eq("instance-1")))
                 .thenReturn(List.of("release-v1"));
         var variables = new HashMap<String,Object>(Map.of("__subTables__", Map.of(
-                "dw:released_members", List.of(Map.of("entry_code", "OWN-1", "participant", "user-dev")),
+                "dw:released_members", List.of(Map.of("entry_code", "OWN-1", "participant", "user-dev", "platformRowUuid", "stable-row")),
                 "dw:unrelated", List.of(Map.of("entry_code", "OTHER-1", "participant", "other-user")))));
         ReflectionTestUtils.invokeMethod(builder, "buildMiCollectionVariable", variables, "instance-1", "members_collection",
                 "participant", "released_members", "401", null, null);
         assertThat((List<?>)variables.get("members_collection")).hasSize(1);
         assertThat(variables.get("members_collection").toString()).contains("OWN-1").doesNotContain("OTHER-1");
+        assertThat(((Map<?,?>)((List<?>)variables.get("members_collection")).get(0)).get("platformRowUuid")).isEqualTo("stable-row");
         verify(jdbc).queryForList(contains("FROM up_process_instance"), eq(String.class), eq("instance-1"));
         verifyNoMoreInteractions(jdbc);
     }
