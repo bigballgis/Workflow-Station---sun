@@ -9,5 +9,8 @@
   "Text": "文本",
   "Date (YYYY-MM-DD)": "日期（YYYY-MM-DD）",
   "Number": "数字",
-  "Hint": "提示"
+  "Hint": "提示",
+  "Chat": "对话",
+  "Message": "消息",
+  "Context": "上下文"
 }

@@ -1,0 +1,87 @@
+{
+  "hermesFlowExport": 1,
+  "flowKey": "hermes-master-chat",
+  "displayName": "Hermes Master - Chat",
+  "schemaVersion": "23",
+  "fromPublished": true,
+  "trigger": {
+    "name": "trigger",
+    "type": "PIECE_TRIGGER",
+    "valid": true,
+    "settings": {
+      "input": {
+        "authType": "none",
+        "authFields": {}
+      },
+      "pieceName": "@activepieces/piece-webhook",
+      "triggerName": "catch_webhook",
+      "pieceVersion": "0.1.40",
+      "propertySettings": {}
+    },
+    "nextAction": {
+      "name": "step_1",
+      "type": "PIECE",
+      "valid": true,
+      "settings": {
+        "input": {
+          "message": "{{trigger.output.body.message}}",
+          "context": "{{trigger.output.body.userInput}}",
+          "staffId": "{{trigger.output.body.staffId}}"
+        },
+        "pieceName": "@activepieces/piece-content-organizer",
+        "actionName": "chat",
+        "sampleData": {},
+        "pieceVersion": "1.0.3",
+        "propertySettings": {},
+        "errorHandlingOptions": {
+          "retryOnFailure": {
+            "value": false
+          },
+          "continueOnFailure": {
+            "value": true
+          }
+        }
+      },
+      "nextAction": {
+        "name": "step_2",
+        "type": "PIECE",
+        "valid": true,
+        "settings": {
+          "input": {
+            "fields": {
+              "body": {
+                "reply": "{{step_1.output.reply}}",
+                "error": "{{step_1.error}}"
+              },
+              "status": 200,
+              "headers": {}
+            },
+            "respond": "stop",
+            "responseType": "json"
+          },
+          "pieceName": "@activepieces/piece-webhook",
+          "actionName": "return_response",
+          "sampleData": {},
+          "pieceVersion": "0.1.40",
+          "propertySettings": {},
+          "errorHandlingOptions": {
+            "retryOnFailure": {
+              "value": false
+            },
+            "continueOnFailure": {
+              "value": false
+            }
+          }
+        },
+        "displayName": "Return Response",
+        "lastUpdatedDate": "2026-10-30T07:30:00.000Z"
+      },
+      "displayName": "Ask Content Organizer",
+      "lastUpdatedDate": "2026-10-30T07:30:00.000Z"
+    },
+    "displayName": "Catch Webhook",
+    "lastUpdatedDate": "2026-10-30T07:30:00.000Z"
+  },
+  "notes": [],
+  "connections": []
+}

@@ -63,7 +63,7 @@
         "pieceName" : "@activepieces/piece-content-organizer",
         "actionName" : "extract_fields",
         "sampleData" : { },
-        "pieceVersion" : "1.0.2",
+        "pieceVersion" : "1.0.3",
         "propertySettings" : { },
         "errorHandlingOptions" : {
           "retryOnFailure" : {

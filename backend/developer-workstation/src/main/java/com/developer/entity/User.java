@@ -29,7 +29,10 @@ public class User {
     
     @Column(name = "full_name")
     private String fullName;
-    
+
+    @Column(name = "employee_id", length = 50)
+    private String employeeId;
+
     @Column(name = "status")
     private String status;
     

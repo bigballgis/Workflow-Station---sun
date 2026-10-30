@@ -34,7 +34,7 @@ public class HermesMasterChatComponentImpl implements HermesMasterChatComponent 
         log.info("Hermes Master chat: functionUnitId={}, page={}, userId={}",
                 request.getFunctionUnitId(), request.getPage(), userId);
         return HermesMasterChatResponse.builder()
-                .reply(hermesMasterChatService.chat(request, amToken))
+                .reply(hermesMasterChatService.chat(request, userId, amToken))
                 .build();
     }
 }

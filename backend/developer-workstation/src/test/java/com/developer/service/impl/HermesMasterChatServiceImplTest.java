@@ -2,7 +2,9 @@ package com.developer.service.impl;
 
 import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.dto.HermesMasterChatRequest;
+import com.developer.entity.User;
 import com.developer.exception.AiGenerationException;
+import com.developer.repository.UserRepository;
 import com.developer.service.AiGenerationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -36,13 +39,23 @@ class HermesMasterChatServiceImplTest {
     @Mock
     private AiGenerationService aiGenerationService;
 
+    @Mock
+    private HermesMasterAutomationClient automationClient;
+
+    @Mock
+    private UserRepository userRepository;
+
     private HermesMasterChatServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        service = service(HermesMasterChatServiceImpl.Provider.GAIP);
+    }
+
+    private HermesMasterChatServiceImpl service(HermesMasterChatServiceImpl.Provider provider) {
         // 摘要器是纯函数，用真实实现
-        service = new HermesMasterChatServiceImpl(aiGatewayClient, aiResponseParser, aiGenerationService,
-                new AiStudioContextDigest());
+        return new HermesMasterChatServiceImpl(aiGatewayClient, aiResponseParser, aiGenerationService,
+                new AiStudioContextDigest(), automationClient, userRepository, provider);
     }
 
     private HermesMasterChatRequest request(String message, Long functionUnitId) {
@@ -76,7 +89,7 @@ class HermesMasterChatServiceImplTest {
         req.setPage("FunctionUnits");
         req.setHistory(List.of(historyMessage("USER", "hi"), historyMessage("ASSISTANT", "hello")));
 
-        assertEquals("Open Function Units first.", service.chat(req, "tok"));
+        assertEquals("Open Function Units first.", service.chat(req, "u1", "tok"));
         verifyNoInteractions(aiGenerationService);
 
         AiPromptBuilder.RenderedPrompt prompt = capturedPrompt("tok");
@@ -97,7 +110,7 @@ class HermesMasterChatServiceImplTest {
         when(aiGatewayClient.chat(any(), eq("tok"))).thenReturn(httpResult);
         when(aiResponseParser.parse(httpResult)).thenReturn(Map.of("reply", "ok"));
 
-        service.chat(request("Review my tables", 7L), "tok");
+        service.chat(request("Review my tables", 7L), "u1", "tok");
 
         AiPromptBuilder.RenderedPrompt prompt = capturedPrompt("tok");
         assertTrue(prompt.user().contains("Current function unit design"));
@@ -112,7 +125,7 @@ class HermesMasterChatServiceImplTest {
         when(aiGatewayClient.chat(any(), eq("tok"))).thenReturn(httpResult);
         when(aiResponseParser.parse(httpResult)).thenReturn(Map.of("reply", "ok"));
 
-        assertEquals("ok", service.chat(request("Review my tables", 7L), "tok"));
+        assertEquals("ok", service.chat(request("Review my tables", 7L), "u1", "tok"));
         assertFalse(capturedPrompt("tok").user().contains("Current function unit design"));
     }
 
@@ -129,7 +142,7 @@ class HermesMasterChatServiceImplTest {
                 historyMessage("USER", "z".repeat(4000)),
                 historyMessage("ASSISTANT", "NEWEST " + "w".repeat(3990))));
 
-        service.chat(req, "tok");
+        service.chat(req, "u1", "tok");
 
         String user = capturedPrompt("tok").user();
         assertFalse(user.contains("OLDEST"));
@@ -144,7 +157,36 @@ class HermesMasterChatServiceImplTest {
         when(aiResponseParser.parse(httpResult)).thenReturn(Map.of("reply", "   "));
 
         AiGenerationException e = assertThrows(AiGenerationException.class,
-                () -> service.chat(request("hello", null), "tok"));
+                () -> service.chat(request("hello", null), "u1", "tok"));
         assertEquals("AI_GATEWAY_EMPTY_RESPONSE", e.getErrorCode());
+    }
+
+    @Test
+    void automationSendsTheSameContextWithTheMessageAndTheUsersEmployeeId() {
+        HermesMasterChatServiceImpl automation = service(HermesMasterChatServiceImpl.Provider.AUTOMATION);
+        when(userRepository.findById("u1")).thenReturn(Optional.of(User.builder().id("u1").employeeId(" 45349679 ").build()));
+        when(automationClient.chat(eq("How do I create a function unit?"), any(), eq("45349679")))
+                .thenReturn(" Open **Function Units**. ");
+
+        HermesMasterChatRequest req = request("How do I create a function unit?", null);
+        req.setPage("FunctionUnits");
+
+        assertEquals("Open **Function Units**.", automation.chat(req, "u1", null));
+        ArgumentCaptor<String> userInput = ArgumentCaptor.forClass(String.class);
+        verify(automationClient).chat(eq("How do I create a function unit?"), userInput.capture(), eq("45349679"));
+        assertTrue(userInput.getValue().startsWith("## Where the user is\nDW page: FunctionUnits"));
+        assertTrue(userInput.getValue().endsWith("User: How do I create a function unit?"));
+        verifyNoInteractions(aiGatewayClient);
+    }
+
+    @Test
+    void automationFailsExplicitlyWhenTheUserHasNoEmployeeId() {
+        HermesMasterChatServiceImpl automation = service(HermesMasterChatServiceImpl.Provider.AUTOMATION);
+        when(userRepository.findById("u1")).thenReturn(Optional.of(User.builder().id("u1").employeeId(" ").build()));
+
+        AiGenerationException e = assertThrows(AiGenerationException.class,
+                () -> automation.chat(request("hello", null), "u1", null));
+        assertEquals("HERMES_MASTER_NO_EMPLOYEE_ID", e.getErrorCode());
+        verifyNoInteractions(automationClient, aiGatewayClient);
     }
 }
