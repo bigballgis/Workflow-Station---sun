@@ -104,6 +104,11 @@ export function createTaskDetailMiIsolation(ctx: TaskDetailCtx): TaskDetailMiIso
     }
 
     const cleanedFormData: Record<string, any> = {}
+    // Relation filters need the main identity even when its PK is not a canvas
+    // field. Dropping it makes every case-level projection empty (#1226).
+    for (const key of ctx.primaryTableBinding.value?.primaryKeyFields ?? []) {
+      cleanedFormData[key] = originalFormData[key]
+    }
     const systemKeys = Object.keys(originalFormData).filter(
       key =>
         key.startsWith('_') ||

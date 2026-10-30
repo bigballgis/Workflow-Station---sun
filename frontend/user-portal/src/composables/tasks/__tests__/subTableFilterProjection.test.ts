@@ -97,6 +97,12 @@ describe('sliceRowsByDeclaredFilter', () => {
 })
 
 describe('projectSavedRowsForBinding', () => {
+  it('honors an explicit child filter without the case-level sibling (#1226)', () => {
+    const child = partyFiles()
+    expect(projectSavedRowsForBinding(child.data, child, [child, parties()], {
+      formData: { _currentItem: { id: 'P-A' } },
+    })).toEqual([partyDoc])
+  })
   it('splits the canonical file store across case vs party widgets', () => {
     const siblings = [caseFiles(), partyFiles(), parties()]
     const form = {

@@ -5605,3 +5605,17 @@
     身份仍走内部请求顶层 functionUnitCode。守卫未关。
     验证：EmailMonitorProcessorTest 10/10；workflow-engine 已重建 healthy。
     端到端未重发邮件（重启后 sys_email_monitor_rules 0 条启用规则）。
+- id: "1724"
+  status: fixed
+  fixed_at: "2026-10-30"
+  severity: major
+  category: bug
+  summary: "同表多绑定将已有 Case 行补成交易子行，引起提交 403"
+  file: "frontend/user-portal/src/composables/taskDetail/useTaskDetailMiLinkChild.ts"
+  detail: |
+    用服务端快照和配置行身份保护已有归属；结构 FK 按 binding 的 filter FK 解析；
+    显式单绑定和嵌套读取过滤归属，MI 隔离保留画布外主表主键。
+    本地真实页面 403→200，Save/Complete、交易嵌套新增与查库通过；
+    8 项归属回归、主表键及共享关系回归、MI 单元 248 项通过，前端已构建并重建。
+    远程 Dev 两个实际按钮、完整 MI 截图门禁仍未验证，审查 CONDITIONAL。
+    证据：docs/verification/2026-10-30-multi-binding-403.md。

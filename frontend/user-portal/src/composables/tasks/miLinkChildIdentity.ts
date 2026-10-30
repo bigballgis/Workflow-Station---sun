@@ -32,6 +32,8 @@ export interface MiChildFkConfig {
     refTableId?: number | null
   }> | null
   bindingForeignKeyField?: string | null
+  filterFkFieldName?: string | null
+  filterFkRefTableId?: number | null
   bindingLinkMode?: string | null
   miCollectionTableId?: number | null
   /** Designer primary key of the child table (`binding.primaryKeyFields`). */
@@ -114,6 +116,14 @@ export function resolveMiChildStructuralFkColumns(config: MiChildFkConfig | null
   // reference to a parent — the same exclusion the write path applies in filterStructuralFkMetasForBinding.
   const isCollectionBinding = String(config?.bindingLinkMode ?? '').trim() === 'miParticipantRow'
   const bindingFk = String(config?.bindingForeignKeyField ?? '').trim()
+  // Same-table bindings can point at different parents. The binding declaration
+  // wins over table-wide FK order, including when no MI table context is passed.
+  const filterFk = String(config?.filterFkFieldName ?? '').trim()
+  if (!isCollectionBinding && filterFk) {
+    const ref = config?.filterFkRefTableId
+    if (collectionTid != null && ref != null && Number(ref) !== collectionTid) return []
+    return [filterFk]
+  }
   const out: string[] = []
   for (const f of config?.fieldDefinitions ?? []) {
     if (!f?.isForeignKey) continue
@@ -158,6 +168,8 @@ export function miChildFkConfigOfBinding(
   binding: {
     fieldDefinitions?: MiChildFkConfig['fieldDefinitions']
     foreignKeyField?: string | null
+    filterFkFieldName?: string | null
+    filterFkRefTableId?: number | null
     bindingLinkMode?: string | null
     primaryKeyFields?: string[] | null
   } | null | undefined,
@@ -167,6 +179,8 @@ export function miChildFkConfigOfBinding(
   return {
     fieldDefinitions: binding.fieldDefinitions ?? null,
     bindingForeignKeyField: binding.foreignKeyField ?? null,
+    filterFkFieldName: binding.filterFkFieldName ?? null,
+    filterFkRefTableId: binding.filterFkRefTableId ?? null,
     bindingLinkMode: binding.bindingLinkMode ?? null,
     miCollectionTableId: miCollectionTableId ?? null,
     primaryKeyFields: binding.primaryKeyFields ?? null,
