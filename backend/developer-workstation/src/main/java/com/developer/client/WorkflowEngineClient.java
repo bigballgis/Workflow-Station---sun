@@ -22,6 +22,8 @@ import java.util.Optional;
 public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
+    private final RestTemplate assignmentCapabilityHttp=com.platform.common.assignment.AssignmentPublicationCapability.newTransport();
+    @Value("${service.internal-token:}") private String assignmentServiceToken;
 
     @Value("${workflow-engine.url:http://localhost:8081}")
     private String workflowEngineUrl;
@@ -55,6 +57,8 @@ public class WorkflowEngineClient {
      * @return deployment result containing process definition ID and key
      */
     public Optional<Map<String, Object>> deployProcess(String processKey, String bpmnXml, String name) {
+        com.platform.common.assignment.AssignmentPublicationCapability.requireForPublication(
+                assignmentCapabilityHttp,workflowEngineUrl,assignmentServiceToken,bpmnXml,workflowEngineEnabled);
         if (!isAvailable()) {
             log.warn("Workflow engine is not available for deployment");
             return Optional.empty();

@@ -1,7 +1,6 @@
 <template>
   <div class="user-task-properties">
     <el-collapse v-model="activeGroups">
-      <!-- Basic info -->
       <el-collapse-item
         :title="t('properties.basic')"
         name="basic"
@@ -35,7 +34,6 @@
         </el-form>
       </el-collapse-item>
 
-      <!-- Multi-instance sub-task config -->
       <el-collapse-item
         v-if="isFirstMultiInstanceSubTask"
         :title="t('properties.subTaskConfig')"
@@ -44,7 +42,6 @@
         <UserTaskSubTaskConfigSection />
       </el-collapse-item>
       
-      <!-- Assignee config -->
       <el-collapse-item
         v-if="!isFirstMultiInstanceSubTask"
         :title="t('properties.assigneeConfig')"
@@ -52,8 +49,11 @@
       >
         <UserTaskAssigneeConfigSection />
       </el-collapse-item>
+
+      <el-collapse-item :title="t('assignmentExclusion.title')" name="assignmentExclusion">
+        <UserTaskAssignmentExclusion :modeler="modeler" :element="element" :disabled="designerReadOnly" />
+      </el-collapse-item>
       
-      <!-- Form binding -->
       <el-collapse-item
         v-if="!isFirstMultiInstanceSubTask"
         :title="t('properties.form')"
@@ -128,7 +128,6 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- Action binding -->
       <el-collapse-item
         :title="t('properties.actions')"
         name="actions"
@@ -429,6 +428,7 @@ import { useUserTaskMultiInstance } from '@/composables/userTaskProperties/useUs
 import { useUserTaskActions } from '@/composables/userTaskProperties/useUserTaskActions'
 import UserTaskSubTaskConfigSection from './UserTaskSubTaskConfigSection.vue'
 import UserTaskAssigneeConfigSection from './UserTaskAssigneeConfigSection.vue'
+import UserTaskAssignmentExclusion from './UserTaskAssignmentExclusion.vue'
 import { USER_TASK_PANEL_KEY } from './userTaskPropertiesInject'
 
 const { t } = useI18n()
@@ -442,7 +442,7 @@ const props = defineProps<{
 const store = useFunctionUnitStore()
 const designerReadOnly = computed(() => isFunctionUnitReadOnly(store.current))
 
-const activeGroups = ref(['basic', 'subTask', 'assignee', 'form', 'actions'])
+const activeGroups = ref(['basic', 'subTask', 'assignee', 'assignmentExclusion', 'form', 'actions'])
 
 // 以 reactive 适配器透传 props，使 composable 读取 props.element/modeler 时保持响应性
 const propsAccessor = reactive({

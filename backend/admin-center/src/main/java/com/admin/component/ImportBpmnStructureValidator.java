@@ -39,6 +39,7 @@ public class ImportBpmnStructureValidator {
                     "Process '" + contentName + "' must have exactly one none start event (found "
                             + noneStarts + ")");
         }
+        com.platform.common.assignment.AssignmentExclusionBpmnValidator.policies(bpmnXml);
     }
 
     private Document parse(String bpmnXml, String contentName) {

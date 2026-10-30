@@ -23,6 +23,10 @@ import java.util.Optional;
 public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
+    private final RestTemplate assignmentCapabilityHttp=com.platform.common.assignment.AssignmentPublicationCapability.newTransport();
+    @Value("${service.internal-token:}") private String assignmentServiceToken;
+    @org.springframework.beans.factory.annotation.Autowired @org.springframework.context.annotation.Lazy
+    private com.platform.common.assignment.AssignmentCoordinationVerifier coordination;
 
     /** Reads engine error bodies; independent of how the RestTemplate is configured. */
     private static final com.fasterxml.jackson.databind.ObjectMapper ERROR_BODY_READER =
@@ -61,6 +65,8 @@ public class WorkflowEngineClient {
      * @return 部署结果，包含 deploymentId 和 processDefinitionId
      */
     public Optional<ProcessDeploymentResult> deployProcess(String processKey, String bpmnXml, String name) {
+        if (com.platform.common.assignment.AssignmentPublicationCapability.requireForPublication(
+                assignmentCapabilityHttp,workflowEngineUrl,assignmentServiceToken,bpmnXml,workflowEngineEnabled)) coordination.requireSamePrimary();
         if (!isAvailable()) {
             log.warn("Workflow engine is not available, cannot deploy process: {}", processKey);
             return Optional.empty();
