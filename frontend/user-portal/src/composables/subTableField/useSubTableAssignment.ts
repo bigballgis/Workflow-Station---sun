@@ -9,6 +9,7 @@ import {
 } from '@/utils/httpErrorMessage'
 import { extractUserIdFromCellValue, unwrapUserLikeValueToDisplayString } from '@/components/subTableAddDialogHelpers'
 import type { SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
+import { useSubTableAssignmentSync, AssignmentReceiptConflict } from '../tasks/subTableAssignmentSync'
 
 export function formatAssigneeDisplayLabel(raw: unknown): string {
   if (raw == null || raw === '') return ''
@@ -34,6 +35,7 @@ export function useSubTableAssignment(
   deps: { resolveSubTableRowPk: (row: Record<string, unknown> | null | undefined) => string | number | null },
 ) {
   const { resolveSubTableRowPk } = deps
+  const syncAssignment = useSubTableAssignmentSync()
 
   // Assignment functionality.
   // Row assignment is driven solely by the row Edit dialog's assignee field — there is no
@@ -169,14 +171,15 @@ export function useSubTableAssignment(
 
     assigning.value = true
     try {
-      let response: unknown
-      if (rowKeyForAssign != null && Object.keys(rowKeyForAssign).length > 0) {
-        response = await assignSubTableRow(props.taskId, 0, assigneeId, rowKeyForAssign)
-      } else {
-        response = await assignSubTableRow(props.taskId, rowIdNum, assigneeId)
-      }
-
-      const result = unwrapPortalApiPayload<AssignSubTableRowResponse>(response)
+      const task = props.taskId
+      const result = await syncAssignment(task, row, async () => {
+        const response = rowKeyForAssign && Object.keys(rowKeyForAssign).length
+          ? await assignSubTableRow(task, 0, assigneeId, rowKeyForAssign) : await assignSubTableRow(task, rowIdNum, assigneeId)
+        if (task !== props.taskId || rows.value[rowIndex] !== row) throw new AssignmentReceiptConflict()
+        const receipt = unwrapPortalApiPayload<AssignSubTableRowResponse>(response)
+        if (receipt?.rowVersion !== undefined && (receipt.assigneeField !== props.assigneeField || receipt.assigneeId !== assigneeId)) throw new AssignmentReceiptConflict()
+        return receipt
+      })
       const assigneePresent =
         result != null &&
         result.assigneeId != null &&
@@ -199,6 +202,7 @@ export function useSubTableAssignment(
       ElMessage.error(hint)
       return false
     } catch (error: unknown) {
+      if (error instanceof AssignmentReceiptConflict) { ElMessage.error(t('task.assignmentAcceptedRefreshRequired')); return false }
       console.error('Failed to assign sub-table row:', error)
       const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
       const msg =
