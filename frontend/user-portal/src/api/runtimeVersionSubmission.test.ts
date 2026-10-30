@@ -28,8 +28,8 @@ describe('Portal transport excludes server-owned runtime version context', () =>
       formData: values, subTableBindingScopes: scopes, comment: 'Review completed' })
     expect(transport.post).toHaveBeenCalledWith('/tasks/task-a/complete', {
       taskId: 'task-a', action: 'APPROVE', variables: businessOnly(), formData: businessOnly(),
-      subTableBindingScopes: scopes, comment: 'Review completed',
-    })
+      subTableBindingScopes: scopes, comment: 'Review completed', operationId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    }, { skipGlobalErrorHandler: true })
     expect(values).toEqual(form())
   })
   it('does not add form or variable values to a comment-only completion', async () => {

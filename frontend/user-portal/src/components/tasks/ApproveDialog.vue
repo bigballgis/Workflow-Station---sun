@@ -1,13 +1,16 @@
 <template>
+  <CompletionStatus v-if="!visible" :value="completion" @refresh="$emit('refresh-completion')" />
   <el-dialog
     v-model="visible"
     :title="title"
     width="500px"
   >
+    <CompletionStatus :value="completion" @refresh="$emit('refresh-completion')" />
     <el-form
       :model="formData"
       label-width="auto"
       label-position="left"
+      :disabled="completion != null && completion.state !== 'NOT_ACCEPTED'"
     >
       <el-form-item
         :label="$t('task.comment')"
@@ -29,6 +32,7 @@
       <el-button
         type="primary"
         :loading="submitting"
+        :disabled="completion != null && completion.state !== 'NOT_ACCEPTED'"
         @click="$emit('confirm')"
       >
         {{ $t('common.confirm') }}
@@ -39,6 +43,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import CompletionStatus from './CompletionStatus.vue'
+import type { CompletionRecoveryState } from '@/composables/tasks/useCompletionRecovery'
 
 const props = defineProps<{
   modelValue: boolean
@@ -46,11 +52,13 @@ const props = defineProps<{
   formData: { comment: string }
   submitting: boolean
   commentRequired?: boolean
+  completion?: CompletionRecoveryState | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'confirm'): void
+  (e: 'refresh-completion'): void
 }>()
 
 const visible = ref(props.modelValue)

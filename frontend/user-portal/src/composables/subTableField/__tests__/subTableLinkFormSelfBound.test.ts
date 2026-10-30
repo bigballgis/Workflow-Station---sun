@@ -119,6 +119,24 @@ function stubScope() {
   }
 }
 
+it('never opens another configured parent child when heuristic candidates share the same assignee', () => {
+  const binding = atmTxBinding(42, { tableId: 22, primaryKeyFields: ['entry_token'],
+    fieldDefinitions: [{ fieldName: 'owner_ref', isForeignKey: true, refTableId: 11, refPrimaryKeyFields: ['party_key'] }],
+    formFields: [{ key: 'entry_token', label: 'Entry', type: 'input' }],
+    data: [{ entry_token: 'CHILD-A', owner_ref: 'PARTY-A', assignee: 'same-user' }] })
+  const dialog = stubDialog(binding)
+  dialog.resolveLinkedFallbackRows = () => binding.data
+  const props = { bindingId: 7, tableId: 11, title: 'Parent', columns: [], editable: false,
+    primaryKeyFields: ['party_key'], linkedSubTableBindings: [binding] } as SubTableFieldProps
+  const open = useSubTableLinkFormOpen(props, dialog as any, stubScope() as any)
+  const column = { field: 'details', label: 'Details', props: { boundSubTableBindingId: 42 } }
+  open.handleLinkFormClick(column, { party_key: 'PARTY-A', assignee: 'same-user' }, 0)
+  expect(dialog.linkedFormData.value.entry_token).toBe('CHILD-A')
+  open.handleLinkFormClick(column, { party_key: 'PARTY-B', assignee: 'same-user' }, 1)
+  expect(dialog.linkedSubTableRows.value).toEqual([])
+  expect(dialog.linkedFormData.value.entry_token).toBeUndefined()
+})
+
 describe('handleLinkFormClick self-bound ATM Details', () => {
   it('fills Details from the clicked ATM Transaction row when nested 1127 is missing (MI isolate)', () => {
     const binding = atmTxBinding(1127)

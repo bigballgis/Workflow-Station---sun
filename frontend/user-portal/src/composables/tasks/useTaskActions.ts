@@ -1,5 +1,6 @@
 import { ref, unref, type MaybeRef, type Ref } from 'vue'
-import { batchAssignmentFeedback } from '@/utils/batchAssignmentFeedback'
+import { showCompletionFeedback, showCompletionFailure } from './completionFeedback'
+import { useCompletionRecovery } from './useCompletionRecovery'
 import { subTableStoreKey, isCanonicalStoreKey } from './subTableStore'
 import { projectWritableSubTables, type WritableSubTableBinding } from './writableSubTableProjection'
 import {
@@ -140,6 +141,7 @@ export function useTaskActions(options: {
 }) {
   const { t } = useI18n()
   const router = useRouter()
+  const recovery = useCompletionRecovery(options.taskId)
   const approveCommentRequired = ref(false)
   const actionReasonRequired = ref(false)
 
@@ -332,20 +334,12 @@ export function useTaskActions(options: {
         subTableBindingScopes,
         subTableBatchChanges,
       })
-      const assignmentResult = completion.data?.batchAssignmentVerification
-      if (assignmentResult && (assignmentResult.status !== 'VERIFIED' || assignmentResult.historyRecorded === false)) {
-        ElMessage({
-          type: 'warning',
-          message: batchAssignmentFeedback(assignmentResult, t, 'task'),
-          duration: 0,
-          showClose: true,
-        })
-      } else {
-        ElMessage.success(t('task.operationSuccess'))
-      }
+      recovery.accepted(completion.data)
+      if (!showCompletionFeedback(completion.data, t)) return
       options.approveDialogVisible.value = false
       router.push('/tasks')
     } catch (e) {
+      if (showCompletionFailure(e, t, recovery.unknown)) return
       console.error('submitApprove failed:', e)
       // Axios interceptor already showed ApiResponse / HTTP error body; avoid duplicate generic toast.
       if (!(e as { response?: unknown })?.response) {
@@ -353,7 +347,7 @@ export function useTaskActions(options: {
       }
     } finally {
       options.submitting.value = false
-      options.onSubmitSettled?.()
+      if (!recovery.completionState.value || recovery.completionState.value.state === 'NOT_ACCEPTED') options.onSubmitSettled?.()
     }
   }
   async function submitAction() {
@@ -423,6 +417,11 @@ export function useTaskActions(options: {
     }
   }
   return {
+    completionState: recovery.completionState,
+    refreshCompletion: async () => {
+      await recovery.refreshCompletion()
+      if (recovery.completionState.value?.state === 'NOT_ACCEPTED') options.onSubmitSettled?.()
+    },
     validateSubTableAssigneesForComplete,
     searchUsers,
     onActionDialogOpened,

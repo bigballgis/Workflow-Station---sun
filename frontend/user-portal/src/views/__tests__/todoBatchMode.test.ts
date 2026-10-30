@@ -4,7 +4,8 @@ import { createI18n } from 'vue-i18n'
 import TodoTasks from '../tasks/index.vue'
 import BatchTaskGroups from '@/components/tasks/BatchTaskGroups.vue'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
-import { queryTodoTasks, getBatchTaskGroups, batchCompleteTasks, claimBatch, type BatchTaskGroup } from '@/api/task'
+import { queryTodoTasks, getBatchTaskGroups, batchCompleteTasks, getCompletionOperationStatus, claimBatch, type BatchTaskGroup } from '@/api/task'
+import { ElMessage } from 'element-plus'
 import { TODO_TOOLBAR_QUERY_KEY } from '@/composables/tasks/todoToolbarQuery'
 
 vi.mock('@/api/task', () => ({
@@ -16,6 +17,7 @@ vi.mock('@/api/task', () => ({
   unclaimTask: vi.fn(),
   getBatchTaskGroups: vi.fn(),
   batchCompleteTasks: vi.fn(),
+  getCompletionOperationStatus: vi.fn(),
 }))
 
 const pendingStore = vi.hoisted(() => ({
@@ -55,7 +57,7 @@ const messageBox = vi.hoisted(() => ({
 vi.mock('element-plus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('element-plus')>()),
   ElMessageBox: messageBox,
-  ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
 const GROUP: BatchTaskGroup = {
@@ -101,6 +103,7 @@ function mountPage() {
         'el-tabs': { template: '<div><slot /></div>' },
         'el-tab-pane': { template: '<div><slot name="label" /></div>' },
         'el-dialog': true,
+        'el-alert': { props: ['title'], template: '<div>{{ title }}</div>' },
         'el-button': {
           props: ['type'],
           inheritAttrs: false,
@@ -366,5 +369,29 @@ describe('To Do batch actions tab', () => {
     await w.findAll('[data-test="batch-complete-btn"]')[0].trigger('click')
     await flushPromises()
     expect(batchCompleteTasks).not.toHaveBeenCalled()
+  })
+
+  it('keeps accepted pending operations visible after the list reload and queries the original UUID', async () => {
+    routeState.query = { tab: 'batch', group: 'fu:cat-1023', node: 'dept' }
+    messageBox.confirm.mockResolvedValue('confirm')
+    vi.mocked(ElMessage.success).mockClear()
+    const operationId = '10000000-0000-4000-8000-000000000001'
+    vi.mocked(batchCompleteTasks).mockResolvedValue({ data: { succeeded: ['t2'], failed: [],
+      pending: [{ taskId: 't1', operationId, state: 'PENDING_SYNC' }] } })
+    vi.mocked(getCompletionOperationStatus).mockResolvedValue({ data: { taskId: 't1', operationId, state: 'READY' } })
+    const w = mountPage()
+    await flushPromises()
+    w.findComponent({ name: 'ElTableStub' }).vm.$emit('selection-change', ROWS)
+    await flushPromises()
+    await w.findAll('[data-test="batch-complete-btn"]')[0].trigger('click')
+    await flushPromises()
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalled()
+    const status = w.find('[data-testid="completion-operation-status"]')
+    expect(status.text()).toContain(operationId)
+    await status.find('button').trigger('click')
+    await flushPromises()
+    expect(getCompletionOperationStatus).toHaveBeenCalledWith(operationId)
+    expect(w.find('[data-testid="completion-operation-status"]').text()).toContain('task.assignmentCompletion.batchState_ready')
   })
 })

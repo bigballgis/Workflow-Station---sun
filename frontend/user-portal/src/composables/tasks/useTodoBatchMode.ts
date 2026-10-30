@@ -12,6 +12,10 @@ import {
 import { getStoredUser } from '@/api/auth'
 import type { TodoBatchGroupRef } from '@/composables/tasks/useTodoTasksPage'
 import { isActionVisibleForSession } from '@/utils/actionAllowedRoles'
+import { BatchCompletionDeliveryUnknown } from '@/api/batchTaskCompletion'
+import { useBatchCompletionRecovery } from './useBatchCompletionRecovery'
+import { reportBatchCompletion } from './batchCompletionFeedback'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 export type TodoTab = 'all' | 'batch'
 
@@ -40,6 +44,7 @@ export function useTodoBatchMode() {
   const route = useRoute()
   const router = useRouter()
   const { t } = useI18n()
+  const recovery = useBatchCompletionRecovery()
 
   const groups = ref<BatchTaskGroup[]>([])
   const groupsLoading = ref(false)
@@ -138,23 +143,16 @@ export function useTodoBatchMode() {
     runningActionId.value = action.actionId
     try {
       const res = await batchCompleteTasks(tasks.map((task) => task.taskId), action.actionId, comment)
-      const { succeeded, failed } = res.data
-      if (failed.length === 0) {
-        ElMessage.success(t('task.batchAllSucceeded', { count: succeeded.length }))
-      } else {
-        const label = (taskId: string) => tasks.find((task) => task.taskId === taskId)?.requestId || taskId
-        const lines = failed.map((f) => `${label(f.taskId)}: ${f.reason}`).join('\n')
-        await ElMessageBox.alert(
-          `${t('task.batchPartialResult', { ok: succeeded.length, failed: failed.length })}\n${lines}`,
-          title,
-          { type: succeeded.length > 0 ? 'warning' : 'error', customStyle: { whiteSpace: 'pre-line' } },
-        ).catch(() => undefined)
-      }
+      recovery.completed(res.data.succeeded)
+      recovery.record(res.data.pending ?? [])
+      await reportBatchCompletion(res.data, tasks, title, t)
       return true
     } catch (error) {
-      if (!(error as { response?: unknown })?.response) {
-        ElMessage.error(error instanceof Error ? error.message : t('common.error'))
-      }
+      if (error instanceof BatchCompletionDeliveryUnknown) {
+        recovery.record(Object.entries(error.operations).map(([taskId, operationId]) => ({ taskId, operationId, state: 'DELIVERY_UNKNOWN' })))
+        ElMessage.warning(t('task.assignmentCompletion.batchUnknown'))
+      } else ElMessage.error(pickHttpErrorBodyMessage((error as { response?: { data?: unknown } })?.response?.data)
+        || (error instanceof Error ? error.message : t('common.error')))
       return true
     } finally {
       runningActionId.value = null
@@ -162,6 +160,7 @@ export function useTodoBatchMode() {
   }
 
   return {
+    pendingCompletions: recovery.rows, refreshBatchCompletion: recovery.refresh,
     groups,
     groupsLoading,
     batchRunning,

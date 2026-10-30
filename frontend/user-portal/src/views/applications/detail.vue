@@ -17,13 +17,7 @@
           {{ getStatusLabel(processInfo.status) }}
         </el-tag>
       </div>
-      <el-button
-        :icon="Refresh"
-        :loading="loading"
-        @click="loadProcessDetail"
-      >
-        {{ t('applicationDetail.refresh') }}
-      </el-button>
+      <ApplicationDetailToolbar :process-id="processId" :status="processInfo.status" :loading="loading" @refresh="loadProcessDetail" />
     </div>
 
     <!-- Loading state -->
@@ -484,7 +478,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, InfoFilled, Document, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, InfoFilled, Document, Bell, RefreshLeft } from '@element-plus/icons-vue'
 import WorkflowDiagramCollapsibleSection from '@/components/WorkflowDiagramCollapsibleSection.vue'
 import ProcessDiagram from '@/components/ProcessDiagram.vue'
 import ProcessHistory from '@/components/ProcessHistory.vue'
@@ -519,6 +513,7 @@ import { createApplicationDetailActions } from '@/composables/applicationDetail/
 import { createApplicationDetailDiagramParser } from '@/composables/applicationDetail/useApplicationDetailDiagramParser'
 import type { ProcessNode } from '@/components/ProcessDiagram.vue'
 import { useCallActivityDiagramStatus } from '@/composables/useCallActivityDiagramStatus'
+import ApplicationDetailToolbar from '@/components/ApplicationDetailToolbar.vue'
 
 const route = useRoute()
 const router = useRouter()

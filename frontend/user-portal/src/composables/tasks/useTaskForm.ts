@@ -35,6 +35,7 @@ import { removeRowsWithMissingParentsFromCanonicalStore } from './assembleScoped
 import { mergeBatchChanges, beginBatchSave } from '@/utils/subTableBatchChanges'
 import { batchMembershipBindings } from '@/utils/subTableBatchScope'
 import { projectWritableSubTables } from './writableSubTableProjection'
+import { provideSubTableAssignmentSync } from './subTableAssignmentSync'
 
 type TaskFormSnapshot = {
   fieldValues?: Record<string, unknown>
@@ -67,6 +68,7 @@ function stampBindingTableNameAliases(
 
 export function useTaskForm(options: {
   subTableBindings: Ref<any[]>
+  assignmentTracked?: Ref<boolean>
   isMiSubTaskMode: Ref<boolean>
   isCompletedTask: Ref<boolean>
   effectiveTaskId: Ref<string>
@@ -176,19 +178,7 @@ export function useTaskForm(options: {
     const submitBindings = resolveSubTableSubmitBindings()
     const snapshot = (formData.value.__subTables__ as Record<string, any>) || {}
     const subTables: Record<string, any> = { ...snapshot }
-    /**
-     * 这里曾有一段 `pruneDeletedRowsFromNestedCaches` —— 靠比较「顶层切片」和「嵌套副本」
-     * 哪边行数更少来猜谁是权威，以此补偿「删除没进 payload」。已删除。
-     *
-     * <p><b>为什么删掉。</b>那是在错误前提上打的补丁：真正的缺陷是
-     * `PortalFormFields` 没有 `update:sub-table-data` 这个 emit，inline 表格的编辑只写进宿主行的
-     * `__subTables__`，`binding.data` 永远不同步，于是同一张表出现两份互相矛盾的数据。
-     *
-     * <p>而「取行数少的一方」这个启发式**方向是反的**：删除时少的一方新，
-     * **新增时多的一方才新** —— 照此规则新增的行会被当成「已删除」剪掉，静默丢数据。
-     *
-     * <p>补上那个 emit 后两份数据由同一次事件同时更新，天然一致，不需要任何权威判定。
-     */
+    // Inline edits update both slices through the same event; row counts never decide which copy is authoritative.
     // 主键列 + 子表结构外键：flatten 按父行替换顶层子行时要靠它们解析归属。
     const { primaryKeyFieldsBySliceKey, parentLink } = flattenSliceMapsFromBindings(
       submitBindings,
@@ -402,7 +392,7 @@ export function useTaskForm(options: {
       }
     }
 
-    if (taskFormDTO.value?.subTableBatchRuntimeEnabled === true) {
+    if (taskFormDTO.value?.subTableBatchRuntimeEnabled === true || options.assignmentTracked?.value === true) {
       const writableBindings = submitBindings.filter(binding => binding.bindingMode !== 'READONLY')
       const bindingIds = new Set(writableBindings.map(binding => String(binding.bindingId)))
       const projected = projectWritableSubTables(subTables, writableBindings)
@@ -484,7 +474,7 @@ export function useTaskForm(options: {
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
       if (JSON.stringify(formData.value.__subTables__) === pageSnapshot) {
-        const tables = taskFormDTO.value?.subTableBatchRuntimeEnabled === true
+        const tables = taskFormDTO.value?.subTableBatchRuntimeEnabled === true || options.assignmentTracked?.value === true
           ? { ...formData.value.__subTables__, ...payload.formData.__subTables__ }
           : payload.formData.__subTables__
         formData.value = { ...formData.value, __subTables__: tables }
@@ -533,6 +523,8 @@ export function useTaskForm(options: {
     beginSave: payload => beginBatchSave(pendingSubTableBatchChanges, payload),
     onError: () => ElMessage.error(t('task.operationFailed')),
   })
+
+  provideSubTableAssignmentSync({ ...options, formData, loadedSubTableBaseline, pauseSubTableAutosave, resumeSubTableAutosave, subTableSaveError })
 
   function getCurrentFormFieldKeys(): string[] {
     const keys = new Set(collectLeafFormFieldKeys(formFields.value, formTabs.value))
