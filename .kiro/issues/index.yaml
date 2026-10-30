@@ -5591,3 +5591,17 @@
     2026-10-29 验证 #1721 时日志：column batch_id of relation up_change_history does not exist。
     长生命周期本地卷未吃到后续 init-script。current_node 在 TX1 已提交，不受影响。
     未在本轮补列。
+- id: "1723"
+  status: fixed
+  fixed_at: "2026-10-30"
+  severity: major
+  category: bug
+  summary: "Email Monitor 建案 409 VERSION_CONTEXT_MODIFICATION_DENIED（variables 带保留键）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  detail: |
+    根因：buildStartVariables 把 functionUnitId/functionUnitCode 写入 variables，
+    门户 InternalEmailProcessStartComponent 原样拷到 formData，rejectClientMetadata 409。
+    修复：不再写入保留键，返回前按 RuntimeVersionContext.metadataKeys() 剥离；
+    身份仍走内部请求顶层 functionUnitCode。守卫未关。
+    验证：EmailMonitorProcessorTest 10/10；workflow-engine 已重建 healthy。
+    端到端未重发邮件（重启后 sys_email_monitor_rules 0 条启用规则）。

@@ -3,7 +3,7 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-29)
+## 统计 (截至 2026-10-30)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
@@ -17,6 +17,8 @@
 2026-10-26：#1716 已修复本地 BI Schema 落后导致的 Portal 首页 502；备份并应用已有97/98升级、重启Admin/Portal，两个同BU请求及首页截图红→绿，未修改业务代码。Open/Wontfix数量不变。证据见 `docs/verification/2026-10-26-bi-schema-upgrade.md`。
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
+
+2026-10-30：#1723 已修复 Email Monitor 建案 409 `VERSION_CONTEXT_MODIFICATION_DENIED`。variables 不再带保留键，身份走请求顶层 `functionUnitCode`。`EmailMonitorProcessorTest` 10/10；engine 已重建。端到端未重发邮件。Open 不变。
 
 2026-10-29：#1721 已修复 Email Monitor 建案 MAIN View Current Step 为空。internal start 未打开详情：库与 View 50303 均为 Case Submission。顺带记录 #1722（本地 `up_change_history.batch_id` 缺失）。Open 51→52。
 
