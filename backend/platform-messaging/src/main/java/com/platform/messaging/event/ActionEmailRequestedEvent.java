@@ -39,6 +39,9 @@ public class ActionEmailRequestedEvent extends BaseEvent {
     private String comment;
     /** The Action's {@code postEmail} block, same keys as the BPMN Send Task email properties. */
     private Map<String, Object> postEmail;
+    /** Protected completion mail reads its original Portal snapshot; absent for legacy Action events. */
+    private java.util.UUID assignmentOperationId;
+    private Integer assignmentRuleIndex;
 
     @Override
     @JsonIgnore

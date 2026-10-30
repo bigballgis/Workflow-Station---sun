@@ -56,4 +56,15 @@ public final class SafeUrlInput {
     public static String encodeQueryValue(String value) {
         return value == null ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
+
+    /** Configured internal service origin only; credentials, paths, queries and fragments are not origins. */
+    public static java.net.URI requireServiceOrigin(String value) {
+        java.net.URI base = java.net.URI.create(value);
+        if (!("http".equals(base.getScheme()) || "https".equals(base.getScheme())) || base.getHost() == null
+                || base.getUserInfo() != null || base.getQuery() != null || base.getFragment() != null
+                || !(base.getPath().isEmpty() || "/".equals(base.getPath()))) {
+            throw new IllegalArgumentException("Invalid internal service origin");
+        }
+        return base;
+    }
 }

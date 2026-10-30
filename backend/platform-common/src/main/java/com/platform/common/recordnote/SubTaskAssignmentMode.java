@@ -6,4 +6,7 @@ public final class SubTaskAssignmentMode {
     public static boolean allowsRole(String mode) {
         return mode==null || "role".equalsIgnoreCase(mode.trim()) || "both".equalsIgnoreCase(mode.trim());
     }
+    public static boolean allowsUser(String mode) {
+        return mode == null || mode.isBlank() || "user".equalsIgnoreCase(mode.trim()) || "both".equalsIgnoreCase(mode.trim());
+    }
 }
