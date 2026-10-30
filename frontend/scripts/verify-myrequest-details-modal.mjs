@@ -79,6 +79,7 @@ if (detailRows.length >= 2) {
   for (const row of detailRows) classified.push(await classifyRow(page, row.rowId))
   const unprocessed = classified.find((row) => row.opened && isBlankDisplayId(row.id))
   const completed = classified.find((row) => row.opened && UUID_RE.test(row.id))
+  if (process.env.MI_FIXTURE_ONLY === '1') console.log('[details]', JSON.stringify(classified))
   if (process.env.MI_FIXTURE_ONLY === '1' && (!unprocessed || !completed)) {
     fail('Synthetic fixture must demonstrate both an unprocessed row and a filled UUID row; unit coverage is not a substitute')
   }

@@ -25,7 +25,7 @@
 #   - Skip Maven when backend JARs are newer than sources/poms
 #   - Skip Vite when frontend dist is newer than sources/config
 #   - Skip Docker build when image is newer than Dockerfile + build inputs
-#   - Schema SQL runs only when file content SHA-256 changed (per Postgres volume)
+#   - Existing volumes receive the idempotent assignment upgrade (100-108); base schemas run only on new volumes
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
@@ -596,18 +596,13 @@ function Invoke-SchemaMigrations {
         [Parameter(Mandatory = $true)][bool]$VolumeExistedBeforeUp
     )
 
-    if ($VolumeExistedBeforeUp) {
-        Write-Host "  postgres_dev_data volume already existed — skipping schema SQL." -ForegroundColor DarkGray
-        return
-    }
-
     $InitScriptsDir = Join-Path $RootDir "deploy/init-scripts/00-schema"
     if (-not (Test-Path $InitScriptsDir)) {
         Write-Host "  No schema dir at $InitScriptsDir — skipping." -ForegroundColor DarkGray
         return
     }
 
-    Write-Host "  postgres_dev_data volume is new — running schema SQL." -ForegroundColor DarkGray
+    Write-Host "  Applying schema SQL (existing volume: $VolumeExistedBeforeUp)." -ForegroundColor DarkGray
 
     # Orchestrators use psql \i includes; they are for host-side `psql -f` only.
     # This runner pipes SQL via stdin into docker exec, so \i cannot resolve paths —
@@ -619,6 +614,11 @@ function Invoke-SchemaMigrations {
     )
 
     $files = Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name
+    if ($VolumeExistedBeforeUp) {
+        # Only this reviewed, repeatable upgrade is safe to replay against existing business data.
+        $files = $files | Where-Object { $_.Name -match '^10[0-8]-assignment-.+\.sql$' }
+        if (@($files).Count -ne 9) { throw "Assignment schema upgrade requires all migrations 100-108." }
+    }
     foreach ($file in $files) {
         if ($orchestratorNames -contains $file.Name) {
             Write-Host "    skip (orchestrator) $($file.Name)" -ForegroundColor DarkGray
@@ -906,6 +906,10 @@ if ($Service) {
     }
 
     Write-Host "`n[2/2] Deploying $Service..." -ForegroundColor Yellow
+    if ($svc.Type -eq "backend") {
+        $postgresContainerId = Wait-ForContainerHealth -ServiceName "postgres" -DisplayName "PostgreSQL" -MaxRetries 20
+        Invoke-SchemaMigrations -PostgresContainerId $postgresContainerId -VolumeExistedBeforeUp $true
+    }
     # 前端 Dockerfile.local 仅 COPY dist；compose 单独 --build 时常命中缓存层，容器内仍是旧资源，表现为「部署了但页面没变」
     if ($svc.Type -eq "frontend") {
         docker compose -f $ComposeFile --env-file $EnvFile build --no-cache $Service
@@ -1138,6 +1142,8 @@ if (-not $SkipInfra) {
     Write-Host "  Infrastructure ready." -ForegroundColor Green
 } else {
     Write-Host "`n[3/4] Skipping infrastructure start" -ForegroundColor DarkGray
+    $postgresContainerId = Wait-ForContainerHealth -ServiceName "postgres" -DisplayName "PostgreSQL" -MaxRetries 20
+    Invoke-SchemaMigrations -PostgresContainerId $postgresContainerId -VolumeExistedBeforeUp $true
 }
 
 # Step 4: Build and start all services

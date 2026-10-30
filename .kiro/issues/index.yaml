@@ -5541,6 +5541,54 @@
     /function-units-import*（deploy、import、deprecate、disable 等）。2026-10-26 独立 code review 发现，
     import 的 disable 当天已修成真正落库，影响随之变大。用户决定先记录、单独立项：需先设计所需权限，
     以及 DW→Admin 代用户调用和服务令牌如何带身份。
+- id: "1721"
+  status: fixed
+  severity: major
+  category: bug
+  fixed_at: "2026-10-30"
+  summary: "受保护流程的首步自动提交重复claim且仍走旧完成接口"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartComponent.java"
+  detail: |
+    FU50122真实发起停在submit，ASSIGNMENT_STATE_CHANGED。首步改用稳定UUID的SUBMIT完成账本和同步协议，
+    接受后的业务投影不再被起始记账覆盖；Pending/Conflict不误报未完成。公共SUBMIT拒绝，Engine核验真实首步原发起人。
+    重复领取先红后绿；普通审批伪造SUBMIT拒绝。重建Engine/Portal后真实新请求自动进入assignment，后续整单完成。
+    专项带PG测试、独立审查通过；见docs/verification/2026-10-30-assignment-50122.md。
+- id: "1722"
+  status: fixed
+  severity: major
+  category: bug
+  fixed_at: "2026-10-30"
+  summary: "受保护发起人节点释放后TaskInfo仍补造发起人holder，备用人看到Held无法领取"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/TaskInfoAssembler.java"
+  detail: |
+    INITIATOR的旧补全分支覆盖了真实空holder。现在仅正向识别legacy后补全，保护任务保留native候选与holder。
+    参数回归先红后绿、Common50+Engine512测试全绿；同一50122任务Held→Claim，李娜页面领取后DB holder为本人且来源BACKUP。
+    无Portal权限放宽。已重建Engine并独立审查PASS，见docs/verification/2026-10-30-assignment-50122.md。
+- id: "1723"
+  status: fixed
+  severity: major
+  category: bug
+  fixed_at: "2026-10-30"
+  summary: "受保护非batch表单把只读Lookup缓存回传为子表写入，自动保存403并阻止完成"
+  file: "frontend/user-portal/src/composables/tasks/useTaskForm.ts"
+  detail: |
+    可写store投影原仅受batchRuntime开关控制；现同时读取服务端assignmentTracked，按表单绑定组装请求，
+    保存成功回写保留只读渲染缓存，不猜表名，legacy行为不变。新反例先红后绿且实际保存验证缓存仍在。
+    13项专项、236项MI单测和6个浏览器场景通过；正常前端构建重建后同任务autosave红→绿，真实两人MI整单完成。
+    增量独立重审PASS；见docs/verification/2026-10-30-assignment-50122.md。
+- id: "1720"
+  status: fixed
+  severity: major
+  category: bug
+  fixed_at: "2026-10-30"
+  summary: "已有本地数据库卷漏跑互斥 assignment 100–108 迁移，受保护 FU 部署报 AssignmentFailure"
+  file: "deploy/environments/dev/build-and-deploy.ps1"
+  detail: |
+    本地 Engine 日志报 ac_assignment_authority_fence 不存在，协调主库证明失败；FU50122部署受阻。
+    已有卷原直接跳过SQL；修为仅重跑已审核的100–108，覆盖单后端服务、完整部署及SkipInfra/ServicesOnly。
+    独立初始化脚本补齐九项，ON_ERROR_STOP及迁移失败立即中止。数据库备份后迁移成功，重复执行成功。
+    同一FU真实前端部署到1.0.2成功、进度100%；脚本增量独立重审PASS。
+    本记录仅认定部署故障已修复，运行互斥办理仍单独验证。见docs/verification/2026-10-30-assignment-50122.md。
 - id: "1719"
   status: open
   severity: minor

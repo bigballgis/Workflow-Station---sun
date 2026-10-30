@@ -1,3 +1,4 @@
+import assignmentExclusionGuide from './assignmentExclusion.zh-CN'
 import tableDataMessages from './tableData.zh-CN'
 import formEventMessages from './formEvents.zh-CN'
 import formCtlMessages from './formCtl.zh-CN'
@@ -9,6 +10,7 @@ import aiStudioMessages from './aiStudio.zh-CN'
 import slaPoliciesMessages from './slaPolicies.zh-CN'
 
 export default {
+  assignmentExclusionGuide,
   biAudienceGuide: {
     title: 'Audience Assignment',
     intro: '配置谁可以从门户首页打开 Dashboard。Table View 内的报表请使用 [[/bi-data-view-assignment]]。',

@@ -27,7 +27,7 @@ function Exec-Sql {
     if (-not (Test-Path $File)) { Write-Fail "$Desc - not found: $File"; return $false }
     $env:PGPASSWORD = $DbPassword
     try {
-        & psql -h $DbHost -p $DbPort -U $DbUser -d $DbName -f $File 2>&1 | Out-Null
+        & psql -h $DbHost -p $DbPort -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $File 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { Write-Ok $Desc; return $true }
         else { Write-Fail $Desc; return $false }
     } finally { $env:PGPASSWORD = "" }
@@ -158,12 +158,21 @@ $migrations = @(
     "00-schema/90-up-sla-recalc-jobs.sql",
     "00-schema/91-dw-ai-document-minor-renumber.sql",
     "00-schema/92-we-action-email-deliveries.sql",
-    "00-schema/96-up-sub-table-audit-latest-index.sql"
+    "00-schema/96-up-sub-table-audit-latest-index.sql",
+    "00-schema/100-assignment-exclusion.sql",
+    "00-schema/101-assignment-authority-change-hooks.sql",
+    "00-schema/102-assignment-portal-source-presence.sql",
+    "00-schema/103-assignment-post-action-context.sql",
+    "00-schema/104-assignment-completion-observation.sql",
+    "00-schema/105-assignment-coordination-probes.sql",
+    "00-schema/106-assignment-definition-retention.sql",
+    "00-schema/107-assignment-authority-time-boundaries.sql",
+    "00-schema/108-assignment-reconciliation-fairness.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
     if (-not (Test-Path $path)) { Write-Fail "Missing: $m"; exit 1 }
-    Exec-Sql -File $path -Desc (Split-Path $m -Leaf) | Out-Null
+    if (-not (Exec-Sql -File $path -Desc (Split-Path $m -Leaf))) { throw "Schema migration failed: $m" }
 }
 
 # Step 3: Roles, groups, admin user

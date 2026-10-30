@@ -1008,3 +1008,19 @@ cd deploy/k8s
 ```
 
 这确保 Windows 上 checkout 的 shell 脚本在 Linux 容器内可以正常执行。
+
+## 节点 Assign 排除规则（1179）升级
+
+已有数据库卷不会自动重跑初始化脚本。部署本功能前，用数据库维护账号按文件名顺序执行 `deploy/init-scripts/00-schema/100-assignment-exclusion.sql` 至 `108-assignment-reconciliation-fairness.sql`，并核对各脚本执行结果。这些脚本新增协调表、同步账本和索引，不删除业务数据；应保留重复执行产生的 NOTICE，不能忽略 SQL 错误。
+
+本地 `deploy/environments/dev/build-and-deploy.ps1` 会在后端启动前为已有卷补跑这九个可重复执行的升级，包括单服务、`-SkipInfra` 和 `-ServicesOnly` 路径；不会重跑已有卷的基础建表脚本。直接使用 Docker Compose 启动服务时，仍须先手工完成迁移。缺少迁移会使受保护流程部署返回 `AssignmentFailure`，引擎日志可见 `ac_assignment_authority_fence` 等协调表不存在。
+
+Engine、Portal、Admin 必须连接同一写主库，并具备这些协调表的运行权限。DW 发布也需要冻结定义和能力探测链路可用。内部服务令牌沿用现有配置，四服务必须一致；不要把该令牌放进浏览器配置。能力探测还会验证同主库，不以“地址看起来相同”代替证明。
+
+重新打包并更新 Engine、Admin、DW、Portal 四个后端，以及 Portal、Designer、Help 前端。后端应先全部健康，再发布启用了新规则的 FU。已有未启用规则的定义及旧单保留原行为，不自动迁移历史责任；重开保护单据沿原冻结版本和原发起人/BU，记录实际重开操作者。
+
+验收可运行 `scripts/verify-assignment-exclusion-p0.ps1`（自建独立数据库并检查零跳过），以及 `pnpm -C frontend run regression:mi`（单测和浏览器截图均需要）。完整回归与包构建还须按实际部署环境执行，P0 脚本不代替跨服务业务验收。
+
+本机使用 JDK21 且旧 Byte Buddy 报不支持 Java21 时，可使用 JDK17，或只给测试进程临时附加 `-Dnet.bytebuddy.experimental=true`。该兼容参数不属于生产配置，不应加入服务环境文件。
+
+回退时保留 100～108 的所有表、责任记录、完成/重开账本及冻结定义。已运行保护单据时，不要单独换回缺少保护守卫的旧 Engine 或 Portal；应保留兼容的四服务版本完成在途同步及业务处理，再评估应用回退。不能通过删表、删责任或改为 legacy 来解除保护。
