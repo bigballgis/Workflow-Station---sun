@@ -54,7 +54,7 @@ public class TaskCompletionService {
     @Autowired
     @Lazy
     private com.workflow.recordnote.RecordNoteRollbackSupport recordNoteRollbackSupport;
-
+    @Autowired private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
     @Autowired
     private TaskService taskService;
 
@@ -113,6 +113,7 @@ public class TaskCompletionService {
                                              boolean sendNotification,
                                              String onBehalfOfUserId) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.COMPLETE, userId);
             validateUserId(userId);
 
             Task flowableTask = taskService.createTaskQuery()
@@ -225,7 +226,7 @@ public class TaskCompletionService {
             try {
                 Authentication.setAuthenticatedUserId(userId);
                 if (variables != null && !variables.isEmpty()) {
-                    log.info("Completing task {} with variables: {}", taskId, variables);
+                    log.info("Completing task {} with {} variable keys", taskId, variables.size());
                     taskService.complete(taskId, variables);
                 } else {
                     log.info("Completing task {} without variables", taskId);
@@ -261,7 +262,7 @@ public class TaskCompletionService {
 
         } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
             throw e;
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (MultiInstanceDataResolver.OptimisticLockException e) {
             throw e;
@@ -273,6 +274,7 @@ public class TaskCompletionService {
 
     public TaskAssignmentResult returnTask(String taskId, TaskReturnRequest request) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.RETURN, request.getUserId());
             validateTaskReturnRequest(request);
 
             Task currentTask = taskService.createTaskQuery()
@@ -340,7 +342,7 @@ public class TaskCompletionService {
                 request.getUserId(),
                 "Task returned successfully, returned to activity: " + targetActivityId);
 
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_RETURN_ERROR",
@@ -544,7 +546,7 @@ public class TaskCompletionService {
 
     boolean isCompleteAuthorized(Task task, ExtendedTaskInfo extended, String actorUserId,
                                  String onBehalfOfUserId) {
-        if (flowableRuntimeAuthorizesComplete(task, actorUserId)) {
+        if (assignmentBoundary.authorizesComplete(task, actorUserId, onBehalfOfUserId) || flowableRuntimeAuthorizesComplete(task, actorUserId)) {
             return true;
         }
         if (!StringUtils.hasText(onBehalfOfUserId) || task == null) {
@@ -552,7 +554,7 @@ public class TaskCompletionService {
                 try {
                     taskActionService.validateCompletePermission(extended, actorUserId);
                     return true;
-                } catch (WorkflowValidationException e) {
+                } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
                     return false;
                 }
             }

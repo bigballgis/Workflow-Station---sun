@@ -26,6 +26,11 @@ class DeploymentEngineIdentityTest {
         when(definition.getVersion()).thenReturn(3);
         var component = new ProcessDeploymentManager();
         ReflectionTestUtils.setField(component, "repositoryService", repository);
+        var compiler=new com.workflow.assignment.impl.AssignmentDeploymentCompilerImpl(repository,
+                mock(com.workflow.assignment.AssignmentIdentityClient.class),new com.fasterxml.jackson.databind.ObjectMapper(),
+                mock(com.workflow.client.AdminCenterClient.class));
+        ReflectionTestUtils.setField(component,"assignmentDeploymentPreparation",new com.workflow.assignment.AssignmentDeploymentPreparation(
+                compiler,new com.workflow.assignment.AssignmentRuntimeSupport()));
         var request = new ProcessDefinitionRequest(); request.setKey("synthetic"); request.setName("Synthetic deployment identity");
         request.setBpmnXml("""
                 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="urn:synthetic">

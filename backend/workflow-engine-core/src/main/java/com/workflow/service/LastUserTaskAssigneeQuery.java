@@ -31,24 +31,25 @@ public class LastUserTaskAssigneeQuery {
             return Optional.empty();
         }
         try {
-            List<HistoricTaskInstance> list = historyService.createHistoricTaskInstanceQuery()
-                    .processInstanceId(processInstanceId.trim())
-                    .finished()
-                    .orderByHistoricTaskInstanceEndTime()
-                    .desc()
-                    .list();
-            for (HistoricTaskInstance hti : list) {
-                if (hti == null) {
-                    continue;
-                }
-                String assignee = hti.getAssignee();
-                if (assignee != null && !assignee.isBlank()) {
-                    return Optional.of(assignee.trim());
-                }
-            }
+            return lookupLastAssignee(processInstanceId);
         } catch (Exception e) {
             log.warn("Failed to query last completed user task assignee for instance {}: {}",
                     processInstanceId, e.getMessage());
+        }
+        return Optional.empty();
+    }
+    public Optional<String> findLastCompletedUserTaskAssigneeStrict(String processInstanceId) {
+        if (processInstanceId==null || processInstanceId.isBlank()) throw new com.platform.common.assignment.AssignmentFailure(
+                com.platform.common.assignment.AssignmentFailure.Reason.ASSIGNMENT_CONTEXT_UNAVAILABLE);
+        try { return lookupLastAssignee(processInstanceId); }
+        catch (RuntimeException failure) { throw new com.platform.common.assignment.AssignmentFailure(
+                com.platform.common.assignment.AssignmentFailure.Reason.ASSIGNMENT_DEPENDENCY_UNAVAILABLE,failure); }
+    }
+    private Optional<String> lookupLastAssignee(String processInstanceId) {
+        List<HistoricTaskInstance> list=historyService.createHistoricTaskInstanceQuery().processInstanceId(processInstanceId.trim())
+                .finished().orderByHistoricTaskInstanceEndTime().desc().list();
+        for (HistoricTaskInstance task:list) {
+            if (task!=null && task.getAssignee()!=null && !task.getAssignee().isBlank()) return Optional.of(task.getAssignee().trim());
         }
         return Optional.empty();
     }

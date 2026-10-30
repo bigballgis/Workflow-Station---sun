@@ -208,7 +208,7 @@ public class AdminCenterClient {
             return null;
         }
         String key = userId.trim();
-
+        if (com.workflow.assignment.AssignmentIdentityReadScope.active()) return fetchUserInfo(key);
         CachedUser cached = userInfoCache.get(key);
         if (cached != null && !cached.isExpired()) {
             return cached.value();
@@ -479,11 +479,10 @@ public class AdminCenterClient {
     
     /**
      * 获取业务单元中拥有指定角色的用户ID列表
-     * @param businessUnitId 业务单元ID
-     * @param roleId 角色ID（BU_BOUNDED类型）
-     * @return 用户ID列表
      */
     public List<String> getUsersByBusinessUnitAndRole(String businessUnitId, String roleId) {
+        if (com.workflow.assignment.AssignmentIdentityReadScope.active()) return com.workflow.assignment.AssignmentActiveCandidateTransport.read(
+                restTemplate,adminCenterUrl,serviceInternalToken,Map.of("kind","BU_ROLE","buCode",businessUnitId,"roleCode",roleId));
         try {
             String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/roles/" + SafeUrlInput.requirePathToken(roleId) + "/users";
             ResponseEntity<List<String>> response = restTemplate.exchange(
@@ -529,10 +528,10 @@ public class AdminCenterClient {
     
     /**
      * 获取拥有指定BU无关型角色的用户ID列表
-     * @param roleId 角色ID（BU_UNBOUNDED类型）
-     * @return 用户ID列表
      */
     public List<String> getUsersByUnboundedRole(String roleId) {
+        if (com.workflow.assignment.AssignmentIdentityReadScope.active()) return com.workflow.assignment.AssignmentActiveCandidateTransport.read(
+                restTemplate,adminCenterUrl,serviceInternalToken,Map.of("kind","ROLE","roleCode",roleId));
         try {
             String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/" + SafeUrlInput.requirePathToken(roleId) + "/users";
             ResponseEntity<List<String>> response = restTemplate.exchange(
@@ -554,13 +553,13 @@ public class AdminCenterClient {
         }
     }
 
-    /**
-     * 按虚拟组编码（BPMN VIRTUAL_GROUP 的 assigneeValue，如 DOCUMENT_VERIFIERS）获取成员用户 ID。
-     */
+    /** 按 BPMN 配置中的虚拟组业务编码获取成员用户 ID。 */
     public List<String> getUsersByVirtualGroupCode(String code) {
         if (code == null || code.isBlank()) {
             return Collections.emptyList();
         }
+        if (com.workflow.assignment.AssignmentIdentityReadScope.active()) return com.workflow.assignment.AssignmentActiveCandidateTransport.read(
+                restTemplate,adminCenterUrl,serviceInternalToken,Map.of("kind","VIRTUAL_GROUP","groupCode",code.trim()));
         try {
             String url = UriComponentsBuilder
                     .fromUriString(adminCenterUrl + "/api/v1/admin/task-assignment/virtual-groups/by-code/{code}/users")

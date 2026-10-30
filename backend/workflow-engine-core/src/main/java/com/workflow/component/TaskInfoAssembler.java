@@ -67,6 +67,8 @@ public class TaskInfoAssembler {
 
     @Autowired
     private com.workflow.repository.ExtendedTaskInfoRepository extendedTaskInfoRepository;
+    @Autowired @org.springframework.context.annotation.Lazy
+    private com.workflow.assignment.AssignmentTaskTrackingQuery assignmentTracking;
 
     // ==================== Current Step (MI-aware) Resolution ====================
 
@@ -398,7 +400,7 @@ public class TaskInfoAssembler {
         if (TaskQueryService.isBpmnProcessInitiatorType(bpmnAssigneeType)
                 && StringUtils.hasText(initiatorId)
                 && !StringUtils.hasText(currentAssignee)
-                && initiatorId != null) {
+                && !assignmentTracking.trackedInstance(task.getProcessInstanceId(), processDefinitionId)) {
             assignmentType = AssignmentType.USER;
             assignmentTarget = initiatorId.trim();
             currentAssignee = initiatorId.trim();

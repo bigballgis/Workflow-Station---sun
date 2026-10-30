@@ -56,6 +56,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Autowired
     @Lazy
     private LastUserTaskAssigneeQuery lastUserTaskAssigneeQuery;
+    @Autowired @Lazy private com.workflow.assignment.AssignmentTaskStateRepository assignmentStates;
 
     @Autowired
     @Lazy
@@ -244,7 +245,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
         log.info("Task created: taskId={}, taskName={}, taskDefKey={}, processInstanceId={}",
                 taskId, task.getName(), taskDefinitionKey, processInstanceId);
 
-        if (task.getAssignee() != null && !task.getAssignee().isEmpty()) {
+        if (task.getAssignee() != null && !task.getAssignee().isEmpty()
+                && TaskAssignmentSourceCapture.preassigned(bpmnActionParser,task)) {
             log.info("Task {} already has assignee: {}", taskId, task.getAssignee());
             notifyNewTask(task.getAssignee(), taskId, task.getName(), processInstanceId);
             // BPMN often resolves assignee before this listener runs; we still need wf_extended_task_info
@@ -337,6 +339,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                                 "assigneeVariable"));
             }
 
+            if ((assigneeTypeRaw==null || assigneeTypeRaw.isEmpty()) && com.workflow.assignment.AssignmentCreationBuffer.active(taskId)) return;
             if (assigneeTypeRaw == null || assigneeTypeRaw.isEmpty()) {
                 cachedVariables = runtimeService.getVariables(processInstanceId);
                 assigneeTypeRaw = getStringVariable(cachedVariables, "assigneeType");
@@ -367,7 +370,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     ? cachedVariables
                     : runtimeService.getVariables(processInstanceId);
 
-            String initiatorId = getStringVariable(processVariables, "initiator");
+            var root=TaskAssignmentSourceCapture.context(task,assignmentStates);
+            String initiatorId = root==null?getStringVariable(processVariables,"initiator"):root.initiator();
             if (initiatorId == null || initiatorId.isEmpty()) {
                 ProcessInstance pi = runtimeService.createProcessInstanceQuery()
                         .processInstanceId(processInstanceId)
@@ -434,17 +438,17 @@ public class TaskAssignmentListener implements FlowableEventListener {
                                         : runtimeService.getVariables(processInstanceId), "activeBusinessUnitId"));
             }
 
-            AssigneeAnchor anchor = computeAnchor(assigneeTypeRaw.trim(), resolvedType, assigneeAnchorExt);
+            AssigneeAnchor anchor = com.workflow.util.AssigneeAnchorPolicy.resolve(assigneeTypeRaw.trim(), resolvedType, assigneeAnchorExt);
             String anchorUserId = null;
             if (resolvedType.requiresAnchorUserId()) {
-                anchorUserId = resolveAnchorUserId(anchor, initiatorId, processInstanceId);
+                anchorUserId = resolveAnchorUserId(anchor, initiatorId, processInstanceId,root!=null);
             }
 
             // activeBusinessUnitId is the workspace-context variable, still stored as a BU *id*.
             // The task-assignment chain is code-based (BPMN role/BU are codes), so convert it to a
             // BU code before handing it to the resolver (used as the hierarchy anchor BU).
             String activeBusinessUnitIdRaw = getStringVariable(processVariables, "activeBusinessUnitId");
-            String activeBusinessUnitId = mapActiveBusinessUnitIdToCode(activeBusinessUnitIdRaw);
+            String activeBusinessUnitId = root==null?mapActiveBusinessUnitIdToCode(activeBusinessUnitIdRaw):root.startBu();
 
             List<String> resolvedRoleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
 
@@ -464,6 +468,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
             applyResolveResult(taskId, task, processInstanceId, processDefinitionId, taskDefinitionKey, result,
                     assigneeTypeRaw);
         } catch (Exception e) {
+            if (com.workflow.assignment.AssignmentCreationBuffer.active(taskId)) com.workflow.assignment.AssignmentCreationBuffer.fail(taskId,e);
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
             // 任务照常创建（isFailOnException=false），但必须留痕：否则任务静默无主，
             // 直到用户报"My Request 显示 -"才被发现。
@@ -625,12 +630,14 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return Optional.empty();
     }
 
-    private TaskAssigneeResolver.ResolveResult resolveManualAssign(String taskDefKey,
+    public TaskAssigneeResolver.ResolveResult resolveManualAssign(String taskDefKey,
                                                                    String manualAssignVariable,
                                                                    String manualAssignBuVariable,
                                                                    String manualAssignRoleVariable,
                                                                    Map<String, Object> variables,
                                                                    String initiatorId) {
+        com.workflow.assignment.AssignmentCreationBuffer.record(com.workflow.assignment.AssignmentSourceSpec.manual(
+                manualAssignVariable, manualAssignBuVariable, manualAssignRoleVariable));
         String defKey = taskDefKey != null ? taskDefKey : "task";
         String userVar = manualAssignVariable != null && !manualAssignVariable.isBlank()
                 ? manualAssignVariable.trim()
@@ -662,8 +669,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return taskAssigneeResolver.resolve(AssigneeType.BU_ROLE, rid, buId, initiatorId, null);
     }
 
-    private TaskAssigneeResolver.ResolveResult resolveAssigneeFromVariable(String varName,
+    public TaskAssigneeResolver.ResolveResult resolveAssigneeFromVariable(String varName,
                                                                             Map<String, Object> variables) {
+        com.workflow.assignment.AssignmentCreationBuffer.record(com.workflow.assignment.AssignmentSourceSpec.variable(varName));
         if (varName == null || varName.isBlank()) {
             return TaskAssigneeResolver.ResolveResult.builder()
                     .assigneeType(AssigneeType.ASSIGNEE_FROM_VARIABLE)
@@ -712,37 +720,12 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return b;
     }
 
-    private AssigneeAnchor computeAnchor(String assigneeTypeRaw, AssigneeType type, String extAnchor) {
-        if (extAnchor != null && !extAnchor.isBlank()) {
-            return AssigneeAnchor.fromCode(extAnchor);
-        }
-        if (type == AssigneeType.HIERARCHY_ROLE) {
-            return inferHierarchyAnchorFromRaw(assigneeTypeRaw);
-        }
-        return AssigneeAnchor.INITIATOR;
-    }
-
-    private static AssigneeAnchor inferHierarchyAnchorFromRaw(String raw) {
-        if (raw == null) {
-            return AssigneeAnchor.INITIATOR;
-        }
-        String u = raw.trim().toUpperCase();
-        if ("CURRENT_BU_ROLE".equals(u) || "CURRENT_PARENT_BU_ROLE".equals(u)) {
-            return AssigneeAnchor.LAST_TASK_ASSIGNEE;
-        }
-        if ("DEPT_OTHERS".equals(u) || "DEPTOTHERS".equals(u)
-                || "PARENT_DEPT".equals(u) || "PARENTDEPT".equals(u)) {
-            return AssigneeAnchor.LAST_TASK_ASSIGNEE;
-        }
-        return AssigneeAnchor.INITIATOR;
-    }
-
-    private String resolveAnchorUserId(AssigneeAnchor anchor, String initiatorId, String processInstanceId) {
+    private String resolveAnchorUserId(AssigneeAnchor anchor, String initiatorId, String processInstanceId,boolean protectedTask) {
         if (anchor == AssigneeAnchor.INITIATOR) {
             return initiatorId;
         }
-        return lastUserTaskAssigneeQuery.findLastCompletedUserTaskAssignee(processInstanceId)
-                .orElse(initiatorId);
+        return (protectedTask?lastUserTaskAssigneeQuery.findLastCompletedUserTaskAssigneeStrict(processInstanceId)
+                :lastUserTaskAssigneeQuery.findLastCompletedUserTaskAssignee(processInstanceId)).orElse(initiatorId);
     }
 
     private static String normalizeLegacyAssigneeType(String assigneeType, String assigneeValue) {
@@ -796,31 +779,12 @@ public class TaskAssignmentListener implements FlowableEventListener {
     }
 
     void notifyNewTask(String userId, String taskId, String taskName, String processInstanceId) {
-        if (userId == null || userId.isBlank() || notificationDispatchHelper == null) {
-            return;
-        }
-        String label = taskName != null && !taskName.isBlank() ? taskName : taskId;
-        notificationDispatchHelper.publishToUserAfterCommit(
-                userId.trim(),
-                "TASK",
-                "New Task",
-                String.format("You have a new task \"%s\". Process: %s", label, processInstanceId != null ? processInstanceId : "-"),
-                "/tasks/" + taskId,
-                "workflow-engine");
+        TaskAssignmentNotifications.send(notificationDispatchHelper,
+                new TaskAssignmentNotifications.Notice(userId, taskId, taskName, processInstanceId, false));
     }
 
     void notifyCandidateTask(String userId, String taskId, String taskName, String processInstanceId) {
-        if (userId == null || userId.isBlank() || notificationDispatchHelper == null) {
-            return;
-        }
-        String label = taskName != null && !taskName.isBlank() ? taskName : taskId;
-        notificationDispatchHelper.publishToUserAfterCommit(
-                userId.trim(),
-                "TASK",
-                "New Candidate Task",
-                String.format("You have been added as a candidate for task \"%s\". You can claim it from your pending tasks. Process: %s",
-                        label, processInstanceId != null ? processInstanceId : "-"),
-                "/tasks/" + taskId,
-                "workflow-engine");
+        TaskAssignmentNotifications.send(notificationDispatchHelper,
+                new TaskAssignmentNotifications.Notice(userId, taskId, taskName, processInstanceId, true));
     }
 }

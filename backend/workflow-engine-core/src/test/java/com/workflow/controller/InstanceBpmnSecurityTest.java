@@ -84,6 +84,9 @@ class InstanceBpmnSecurityTest {
     @EnableWebMvc
     @Import(SecurityConfig.class)
     static class TestConfig {
+        @Bean com.workflow.assignment.AssignmentTaskTrackingQuery assignmentTracking() {
+            return mock(com.workflow.assignment.AssignmentTaskTrackingQuery.class);
+        }
         @Bean JwtTokenService tokens() { return mock(JwtTokenService.class); }
         @Bean JwtAuthenticationFilter jwtFilter(JwtTokenService tokens) {
             return new JwtAuthenticationFilter(tokens, new JwtProperties());

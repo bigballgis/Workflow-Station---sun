@@ -62,6 +62,7 @@ class TaskClaimSupportReassignTest {
     @Mock
     private UserPermissionService userPermissionService;
 
+    @Mock private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
     @InjectMocks
     private TaskClaimSupport taskClaimSupport;
 

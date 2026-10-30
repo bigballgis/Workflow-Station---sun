@@ -71,6 +71,8 @@ public class TaskOrphanRepairService {
     @Autowired
     private BpmnActionParser bpmnActionParser;
 
+    @Autowired private com.workflow.assignment.AssignmentTaskStateRepository assignmentStates;
+
     // ==================== Rate-limited Orphan Repair ====================
 
     void maybeRepairOrphanTasks(int fetchLimit) {
@@ -119,6 +121,7 @@ public class TaskOrphanRepairService {
         if (t == null || !StringUtils.hasText(t.getId())) {
             return;
         }
+        if (assignmentStates.find(t.getId()).isPresent()) return; // Protected pools belong to the durable assignment reconciler.
         if (hasCandidateIdentityLink(t)) {
             return;
         }
@@ -213,6 +216,7 @@ public class TaskOrphanRepairService {
                 .listPage(0, fetchLimit);
         for (Task t : unassigned) {
             try {
+                if (assignmentStates.find(t.getId()).isPresent()) continue;
                 String pdId = t.getProcessDefinitionId();
                 String defKey = t.getTaskDefinitionKey();
                 String at = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
@@ -434,6 +438,7 @@ public class TaskOrphanRepairService {
         List<Task> orphans = query.listPage(0, fetchLimit);
         for (Task t : orphans) {
             try {
+                if (assignmentStates.find(t.getId()).isPresent()) continue;
                 String assigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
                         t.getProcessDefinitionId(), t.getTaskDefinitionKey(), "assigneeType");
                 String flowableAssignee = null;

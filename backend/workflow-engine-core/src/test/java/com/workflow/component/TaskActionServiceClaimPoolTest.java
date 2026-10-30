@@ -52,6 +52,7 @@ class TaskActionServiceClaimPoolTest {
     @Mock
     private TaskOrphanRepairService taskOrphanRepairService;
 
+    @Mock private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
     @InjectMocks
     private TaskClaimSupport taskClaimSupport;
 

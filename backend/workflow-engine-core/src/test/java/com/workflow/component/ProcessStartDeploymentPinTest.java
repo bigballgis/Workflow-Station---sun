@@ -18,6 +18,7 @@ class ProcessStartDeploymentPinTest {
     private final RuntimeService runtime = mock(RuntimeService.class);
     private final ProcessDefinition definition = mock(ProcessDefinition.class);
     private final ProcessInstance instance = mock(ProcessInstance.class);
+    private com.workflow.component.impl.ProcessStartComponentImpl starter;
 
     private StartProcessRequest request(String expected) {
         var query = mock(ProcessDefinitionQuery.class, RETURNS_SELF);
@@ -28,6 +29,11 @@ class ProcessStartDeploymentPinTest {
         when(instance.getId()).thenReturn("synthetic-instance");
         ReflectionTestUtils.setField(component, "repositoryService", repository);
         ReflectionTestUtils.setField(component, "runtimeService", runtime);
+        var manager = mock(org.springframework.transaction.PlatformTransactionManager.class);
+        when(manager.getTransaction(any())).thenReturn(mock(org.springframework.transaction.TransactionStatus.class));
+        starter = new com.workflow.component.impl.ProcessStartComponentImpl(repository, runtime, mock(ProcessDeploymentManager.class),
+                mock(com.workflow.assignment.AssignmentRootStarter.class), manager);
+        ReflectionTestUtils.setField(component, "processStartComponent", starter);
         var request = new StartProcessRequest();
         request.setProcessDefinitionKey("synthetic"); request.setExpectedProcessDefinitionId(expected);
         request.setBusinessKey("synthetic-business"); request.setVariables(Map.of("synthetic", true));
@@ -68,8 +74,8 @@ class ProcessStartDeploymentPinTest {
 
     @Test void authenticatedInitiatorAlsoStartsByTheVerifiedIdAndClearsThreadIdentity() {
         var request = request("synthetic:2:current"); request.setStartUserId("synthetic-user");
-        ReflectionTestUtils.setField(component, "i18nService", mock(com.platform.common.i18n.I18nService.class));
-        ReflectionTestUtils.setField(component, "notificationDispatchHelper", mock(com.platform.messaging.support.NotificationDispatchHelper.class));
+        ReflectionTestUtils.setField(starter, "i18nService", mock(com.platform.common.i18n.I18nService.class));
+        ReflectionTestUtils.setField(starter, "notificationDispatchHelper", mock(com.platform.messaging.support.NotificationDispatchHelper.class));
         when(runtime.startProcessInstanceById("synthetic:2:current", request.getBusinessKey(), request.getVariables())).thenReturn(instance);
         assertThat(component.startProcess(request).isSuccess()).isTrue();
         verify(runtime).startProcessInstanceById("synthetic:2:current", request.getBusinessKey(), request.getVariables());
