@@ -409,7 +409,7 @@ dev 组件需按 HOWTO §2 **手工预装**进 Automation 容器（容器重建�
 | 组件单元测试（10 个） | `cd automation/packages/pieces/community/content-organizer && npx vitest run` |
 | 组件类型检查 | 同目录 `npx tsc -p tsconfig.lib.json --noEmit` |
 | 引擎信封（含用户身份） | `cd backend/workflow-engine-core && mvn test -Dtest='ServiceTaskExecutor*Test'`（JDK 17） |
-| 环境冒烟（Pod 内） | `node deploy/scripts/content-organizer-smoke.mjs [pdf] [工号]`（见 §12.3 L4） |
+| 环境冒烟（Pod 内） | `node deploy/scripts/content-organizer-smoke.mjs [pdf] [工号]`；Hermes Master 用 `--chat <工号>`（见 §12.3 L4） |
 | Portal 端到端 | `cd frontend && PROCESS_KEY=<FU code> OCR_SAMPLE_PDF=<PDF 路径> node scripts/verify-portal-ocr-receipt-notice.mjs` |
 
 端到端脚本：发起 → 上传 PDF → 提交 → 打开核对任务 → 校验预填值 → 确认，截图存 `frontend/user-portal/verification-screenshots/`。
@@ -511,6 +511,15 @@ kubectl -n <ns> exec <ap-pod> -- node /tmp/smoke.mjs /tmp/sample.pdf <你的工�
 期望：`CO upload (#9) — HTTP 200 {"code":"00000",…"file_id":…}`、`CO completion (#1) — HTTP 200 {"title": …}`。
 completion 用的就是组件那套 `promptSetting`（脚本先打印 `INFO  prompt setting=… workflow=… version=…`），字段清单只有一个 `title`。
 失败时脚本打印 CO 返回的原文，对照 §12.4 的 CO 部分。冒烟里调 CO 的 DNS / TLS 失败按 L4 同样处理。
+
+Hermes Master 的 Chat（不上传文件）单独验：
+
+```bash
+kubectl -n <ns> exec <ap-pod> -- node /tmp/smoke.mjs --chat <你的工号>
+```
+
+期望：`CO chat completion (Hermes Master) — HTTP 200 <Markdown 回答>`。查的是 `CONTENT_ORGANIZER_CHAT_PROMPT_*` 这一对（§6.5）；
+报 `Prompt setting not found` 说明本环境 CO 没有共享 dev 的「Hermes Master」setting，按 §6.5 重建并换 ID。
 
 **L7 引擎信封与回写**
 

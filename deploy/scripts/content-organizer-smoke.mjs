@@ -7,8 +7,10 @@
  *   kubectl -n <ns> cp deploy/scripts/content-organizer-smoke.mjs <activepieces-pod>:/tmp/smoke.mjs
  *   kubectl -n <ns> cp <a-labelled.pdf> <activepieces-pod>:/tmp/sample.pdf          # optional
  *   kubectl -n <ns> exec <activepieces-pod> -- node /tmp/smoke.mjs [/tmp/sample.pdf] [staffId]
+ *   kubectl -n <ns> exec <activepieces-pod> -- node /tmp/smoke.mjs --chat <staffId>    # Hermes Master chat
  *
- * Without a PDF it stops after the iB2B token. It runs as plain node, i.e. OUTSIDE the engine
+ * Without a PDF it stops after the iB2B token. `--chat` skips the upload and runs one completion with
+ * the Hermes Master prompt setting (CONTENT_ORGANIZER_CHAT_PROMPT_*), as the piece's Chat action does. It runs as plain node, i.e. OUTSIDE the engine
  * sandbox: it proves network / TLS / credentials, not AP_SSRF_ALLOW_LIST or
  * AP_SANDBOX_PROPAGATED_ENV_VARS (the guide checks those separately).
  * Guide: docs/guides/content-organizer-ocr-guide.md §12.
@@ -18,7 +20,8 @@ import { lookup } from 'node:dns/promises';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-const [pdfPath, staffIdArg] = process.argv.slice(2);
+const chatMode = process.argv[2] === '--chat';
+const [pdfPath, staffIdArg] = chatMode ? [undefined, process.argv[3]] : process.argv.slice(2);
 const env = (n) => (process.env[n] ?? '').trim();
 let failed = false;
 
@@ -44,10 +47,12 @@ async function post(url, init) {
 
 const preview = (t) => (t.length > 300 ? `${t.slice(0, 297)}...` : t);
 
-// 1. environment
+// 1. environment — each mode needs its own prompt setting pair
 const names = [
   'IB2B_TOKEN_URL', 'IB2B_USERNAME', 'IB2B_SECRET', 'CONTENT_ORGANIZER_BASE_URL', 'CONTENT_ORGANIZER_APPLICATION_ID',
-  'CONTENT_ORGANIZER_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID',
+  ...(chatMode
+    ? ['CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID']
+    : ['CONTENT_ORGANIZER_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID']),
 ];
 for (const n of names) {
   const v = env(n);
@@ -97,15 +102,70 @@ if (ib2b.error) {
     }
   }
 }
-if (!token || !pdfPath) {
+if (!token || (!pdfPath && !chatMode)) {
   if (!pdfPath && token) console.log('INFO  no PDF given — stopping after the token. Pass a labelled PDF to test upload + completion.');
   process.exit(failed ? 1 : 0);
 }
 
-// 4. CO #9 upload
 const staffId = staffIdArg || env('SMOKE_STAFF_ID');
-if (!step('staff id given', Boolean(staffId), 'second argument or SMOKE_STAFF_ID')) process.exit(1);
+if (!step('staff id given', Boolean(staffId), chatMode ? 'argument after --chat or SMOKE_STAFF_ID' : 'second argument or SMOKE_STAFF_ID')) process.exit(1);
 const sessionId = `hermes-smoke-${randomUUID()}`;
+const workflow = env('CONTENT_ORGANIZER_WORKFLOW') || 'default';
+const workflowVersion = env('CONTENT_ORGANIZER_WORKFLOW_VERSION') || '1.0';
+
+/** CO #1 completion with the same body the piece sends; one prompt setting variable. */
+async function completion(name, { message, settingId, variableId, value }) {
+  console.log(`INFO  prompt setting=${settingId} workflow=${workflow} version=${workflowVersion}`);
+  const done = await post(`${base}/api/management-service/chat/completion`, {
+    headers: { 'Content-Type': 'application/json', 'X-HSBC-E2E-Trust-Token': token },
+    body: JSON.stringify({
+      sessionId,
+      userId: staffId,
+      metadata: { apiVersion: env('CONTENT_ORGANIZER_API_VERSION') || '2024-10-01-preview' },
+      parameter: {
+        applicationId: appId,
+        applicationName: env('CONTENT_ORGANIZER_APPLICATION_NAME') || 'Hermes Workflow',
+        model: env('CONTENT_ORGANIZER_MODEL') || 'gemini-3.5-flash',
+        llmProvider: 'OpenAI',
+        apiVersion: '2023-03-15-preview',
+        promptEngineer: 'true',
+        enableQuestionDetection: 'false',
+        numberOfRelevantDocument: 3,
+        searchingScore: 0.3,
+        temperature: 1,
+        referDocumentList: [],
+        referDocumentbaseList: [],
+        messages: [{ role: 'user', content: message }],
+        promptSetting: { id: settingId, promptVars: [{ name: variableId, value: [value] }], settingType: 'PROMPT' },
+      },
+      workflow,
+      version: workflowVersion,
+      defaultOptions: { language: 'English', noOfOutput: 1 },
+    }),
+  });
+  if (done.error) {
+    step(name, false, done.error);
+    return;
+  }
+  let content;
+  try { content = JSON.parse(done.text)?.data?.message?.[0]?.content; } catch { /* reported below */ }
+  step(name, done.res.ok && typeof content === 'string',
+    `HTTP ${done.res.status} ${preview(typeof content === 'string' ? content : done.text)}`);
+}
+
+if (chatMode) {
+  // 4'. Hermes Master: no upload, the context travels in the prompt setting's variable
+  const question = 'How do I create a Function Unit?';
+  await completion('CO chat completion (Hermes Master)', {
+    message: question,
+    settingId: env('CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID'),
+    variableId: env('CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID'),
+    value: `## Where the user is\nDW page: FunctionUnits\n\nUser: ${question}`,
+  });
+  process.exit(failed ? 1 : 0);
+}
+
+// 4. CO #9 upload
 const form = new FormData();
 form.append('files', new Blob([await readFile(pdfPath)], { type: 'application/pdf' }), basename(pdfPath));
 form.append('userId', staffId);
@@ -119,46 +179,10 @@ if (up.error || !step('CO upload (#9)', up.res.ok, `HTTP ${up.res.status} ${prev
 }
 
 // 5. CO #1 completion (same sessionId + applicationId + userId), same body as the piece sends
-const workflow = env('CONTENT_ORGANIZER_WORKFLOW') || 'default';
-const workflowVersion = env('CONTENT_ORGANIZER_WORKFLOW_VERSION') || '1.0';
-console.log(`INFO  prompt setting=${env('CONTENT_ORGANIZER_PROMPT_SETTING_ID')} workflow=${workflow} version=${workflowVersion}`);
-const done = await post(`${base}/api/management-service/chat/completion`, {
-  headers: { 'Content-Type': 'application/json', 'X-HSBC-E2E-Trust-Token': token },
-  body: JSON.stringify({
-    sessionId,
-    userId: staffId,
-    metadata: { apiVersion: env('CONTENT_ORGANIZER_API_VERSION') || '2024-10-01-preview' },
-    parameter: {
-      applicationId: appId,
-      applicationName: env('CONTENT_ORGANIZER_APPLICATION_NAME') || 'Hermes Workflow',
-      model: env('CONTENT_ORGANIZER_MODEL') || 'gemini-3.5-flash',
-      llmProvider: 'OpenAI',
-      apiVersion: '2023-03-15-preview',
-      promptEngineer: 'true',
-      enableQuestionDetection: 'false',
-      numberOfRelevantDocument: 3,
-      searchingScore: 0.3,
-      temperature: 1,
-      referDocumentList: [],
-      referDocumentbaseList: [],
-      messages: [{ role: 'user', content: 'Extract the fields from the uploaded document.' }],
-      promptSetting: {
-        id: env('CONTENT_ORGANIZER_PROMPT_SETTING_ID'),
-        promptVars: [{ name: env('CONTENT_ORGANIZER_PROMPT_VARIABLE_ID'), value: ['- title: "Title" (text) - the document title'] }],
-        settingType: 'PROMPT',
-      },
-    },
-    workflow,
-    version: workflowVersion,
-    defaultOptions: { language: 'English', noOfOutput: 1 },
-  }),
+await completion('CO completion (#1)', {
+  message: 'Extract the fields from the uploaded document.',
+  settingId: env('CONTENT_ORGANIZER_PROMPT_SETTING_ID'),
+  variableId: env('CONTENT_ORGANIZER_PROMPT_VARIABLE_ID'),
+  value: '- title: "Title" (text) - the document title',
 });
-if (done.error) {
-  step('CO completion (#1)', false, done.error);
-} else {
-  let content;
-  try { content = JSON.parse(done.text)?.data?.message?.[0]?.content; } catch { /* reported below */ }
-  step('CO completion (#1)', done.res.ok && typeof content === 'string',
-    `HTTP ${done.res.status} ${preview(typeof content === 'string' ? content : done.text)}`);
-}
 process.exit(failed ? 1 : 0);
