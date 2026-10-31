@@ -66,7 +66,7 @@ docker save activepieces:0.84.0-ee-removed | gzip > activepieces-0.84.0-ee-remov
 
 ```sh
 docker build \
-  --build-arg NODE_IMAGE=nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/node:24.14.0-bullseye-slim \
+  --build-arg NODE_IMAGE=nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/node:24.22.1-bookworm-slim \
   -t nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed .
 docker push nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
 ```

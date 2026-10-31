@@ -1,9 +1,9 @@
 {
   "name": "@activepieces/piece-content-organizer",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "displayName": "Content Organizer",
   "logoUrl": "/ap-cdn/pieces/hermes/content-organizer.svg",
-  "description": "文档 OCR / 字段抽取（Content Organizer；iB2B 服务账号凭证取自部署环境）。",
+  "description": "文档 OCR / 字段抽取与对话（Content Organizer；iB2B 服务账号凭证与 prompt setting 取自部署环境）。",
   "minimumSupportedRelease": "0.82.0",
   "auth": null,
   "actions": {
@@ -68,6 +68,40 @@
             }
           },
           "type": "ARRAY"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "chat": {
+      "name": "chat",
+      "displayName": "Chat",
+      "description": "Asks Content Organizer one question with the chat prompt setting of this environment (no document). Credentials and the prompt setting come from the environment, not from the flow.",
+      "props": {
+        "message": {
+          "displayName": "Message",
+          "description": "The latest user message, e.g. {{trigger.output.body.message}}.",
+          "required": true,
+          "type": "LONG_TEXT"
+        },
+        "context": {
+          "displayName": "Context",
+          "description": "Fills the prompt setting's variable — the application context and conversation so far, e.g. {{trigger.output.body.userInput}}.",
+          "required": true,
+          "type": "LONG_TEXT"
+        },
+        "staffId": {
+          "displayName": "Staff ID",
+          "description": "Whose request this is, for Content Organizer auditing, e.g. {{trigger.output.body.staffId}}.",
+          "required": true,
+          "type": "SHORT_TEXT"
         }
       },
       "requireAuth": true,

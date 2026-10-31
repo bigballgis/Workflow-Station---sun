@@ -22,6 +22,7 @@ import {
   scoreMiLinkChildRowQuality,
 } from './miLinkChildIdentity'
 import type { MiChildFkConfig } from './miLinkChildIdentity'
+import { sliceRowsByDeclaredFilter } from './subTableFilterProjection'
 
 /**
  * The row's own allocated primary key value, read through the DESIGNER's PK column.
@@ -439,6 +440,11 @@ export function scopeLinkChildRowsToMiHostRow(
       .map(k => normalizeMiLinkMatchId(hostRow![k]))
       .find(v => v != null)
   if (!pid) return candidateRows
+  // An explicit binding filter is authoritative even if this is the only
+  // binding for its table. Empty FK is not evidence of local creation (#1226).
+  if (config?.filterFkFieldName) {
+    return sliceRowsByDeclaredFilter(candidateRows, config, [pid])
+  }
 
   return candidateRows.filter(raw => {
     if (!raw || typeof raw !== 'object') return true

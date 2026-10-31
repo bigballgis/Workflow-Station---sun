@@ -99,7 +99,8 @@ public class WorkflowEngineProcessClient {
         }
         var startContext=assignmentStarts.prepare(processDefinitionKey,expectedProcessDefinitionId);
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances" + (expectedProcessDefinitionId == null ? "" : "/pinned");
+            String url = engine.engineUrl() + "/api/v1/processes/instances"
+                    + (expectedProcessDefinitionId != null && engine.hasInboundAuthorization() ? "/pinned" : "");
 
             Map<String, Object> request = new HashMap<>();
             request.put("processDefinitionKey", processDefinitionKey);

@@ -1,6 +1,7 @@
 package com.workflow.email.inbound;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.RuntimeVersionContext;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.response.ProcessInstanceResult;
 import com.workflow.email.extract.EmailMessage;
@@ -102,10 +103,37 @@ class EmailMonitorProcessorTest {
                 eq("case_process"), eq("FU-MCY"), eq("system"), isNull(), vars.capture());
         assertThat(vars.getValue()).containsEntry("case_number", "ABC-7");
         assertThat(vars.getValue()).containsEntry("initiator", "system");
-        assertThat(vars.getValue()).containsEntry("functionUnitCode", "FU-MCY");
+        assertThat(vars.getValue()).doesNotContainKeys("functionUnitCode", "functionUnitId");
         @SuppressWarnings("unchecked")
         Map<String, Object> inbound = (Map<String, Object>) vars.getValue().get("__inboundEmail__");
         assertThat(inbound).containsEntry("messageId", "m2");
+    }
+
+    @Test
+    void mappedReservedVersionKeysAreStrippedFromStartVariables() {
+        SysEmailMonitorRule rule = rule(Map.of("fields", List.of(
+                Map.of("target", "case_number", "source", "TEXT", "type", "LABEL",
+                        "label", "Case No: ", "required", true),
+                Map.of("target", "functionUnitCode", "source", "TEXT", "type", "LABEL",
+                        "label", "Code: ", "required", true),
+                Map.of("target", "processDefinitionId", "source", "TEXT", "type", "LABEL",
+                        "label", "Def: ", "required", true))));
+        EmailMessage email = new EmailMessage(
+                "m-reserved", "s", "a@b.com", "Case No: ABC-7\nCode: FU-FORGED\nDef: forged-def", null, Map.of());
+        when(portalSyncComponent.startPortalProcess(any(), any(), any(), any(), any()))
+                .thenReturn(ProcessInstanceResult.builder()
+                        .processInstanceId("pi-reserved").success(true).build());
+
+        String status = processor.process(rule, email);
+
+        assertThat(status).isEqualTo(ProcessedEmailMessage.STATUS_STARTED);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> vars = ArgumentCaptor.forClass(Map.class);
+        verify(portalSyncComponent).startPortalProcess(
+                eq("case_process"), eq("FU-MCY"), eq("system"), isNull(), vars.capture());
+        assertThat(vars.getValue()).containsEntry("case_number", "ABC-7");
+        assertThat(vars.getValue()).containsEntry("initiator", "system");
+        assertThat(vars.getValue().keySet()).doesNotContainAnyElementsOf(RuntimeVersionContext.metadataKeys());
     }
 
     @Test

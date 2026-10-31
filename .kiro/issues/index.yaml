@@ -5541,7 +5541,7 @@
     /function-units-import*（deploy、import、deprecate、disable 等）。2026-10-26 独立 code review 发现，
     import 的 disable 当天已修成真正落库，影响随之变大。用户决定先记录、单独立项：需先设计所需权限，
     以及 DW→Admin 代用户调用和服务令牌如何带身份。
-- id: "1721"
+- id: "1726"
   status: fixed
   severity: major
   category: bug
@@ -5553,7 +5553,7 @@
     接受后的业务投影不再被起始记账覆盖；Pending/Conflict不误报未完成。公共SUBMIT拒绝，Engine核验真实首步原发起人。
     重复领取先红后绿；普通审批伪造SUBMIT拒绝。重建Engine/Portal后真实新请求自动进入assignment，后续整单完成。
     专项带PG测试、独立审查通过；见docs/verification/2026-10-30-assignment-50122.md。
-- id: "1722"
+- id: "1727"
   status: fixed
   severity: major
   category: bug
@@ -5564,7 +5564,7 @@
     INITIATOR的旧补全分支覆盖了真实空holder。现在仅正向识别legacy后补全，保护任务保留native候选与holder。
     参数回归先红后绿、Common50+Engine512测试全绿；同一50122任务Held→Claim，李娜页面领取后DB holder为本人且来源BACKUP。
     无Portal权限放宽。已重建Engine并独立审查PASS，见docs/verification/2026-10-30-assignment-50122.md。
-- id: "1723"
+- id: "1728"
   status: fixed
   severity: major
   category: bug
@@ -5576,7 +5576,7 @@
     保存成功回写保留只读渲染缓存，不猜表名，legacy行为不变。新反例先红后绿且实际保存验证缓存仍在。
     13项专项、236项MI单测和6个浏览器场景通过；正常前端构建重建后同任务autosave红→绿，真实两人MI整单完成。
     增量独立重审PASS；见docs/verification/2026-10-30-assignment-50122.md。
-- id: "1720"
+- id: "1725"
   status: fixed
   severity: major
   category: bug
@@ -5601,3 +5601,69 @@
     RelationTableStructureDiff 比 lookupConfig 时也会把不同环境的同一表判为结构不同（旧的
     FU_IMPORT_RT_BOUND_OTHER_FU 判断受影响；新的 referenceOnly 比对已在 10-26 忽略 refTableId）。
     修法方向：导出补 refTableName，导入按名映射回本环境 id。
+- id: "1720"
+  status: fixed
+  fixed_at: "2026-10-29"
+  severity: major
+  category: bug
+  summary: "wangEditor create-time onChange 用空 <p><br></p> 覆盖已保存 / Email Monitor HTML"
+  file: "frontend/user-portal/src/composables/editorCreateGate.ts"
+  detail: |
+    主表单 useFieldEditor 与子表弹窗 useSubTableDialogEditor 共用 armEditorChangeGate，
+    忽略 create 当拍 onChange，nextTick 且实例仍匹配后才写入。17 项单测通过。
+    Portal Process_MCY 开始表单截图见
+    frontend/user-portal/verification-screenshots/2026-10-29_editor-create-gate-main.png。
+    子表弹窗本表单无 editor 列，未截。
+    审查 Question 已拍板：保持 nextTick 门闩，不为晚到 onChange 加延时；
+    不为「画布空但 formData 有值」做 setHtml/重挂（解析失败另开）。
+- id: "1721"
+  status: fixed
+  fixed_at: "2026-10-29"
+  severity: major
+  category: bug
+  summary: "Email Monitor 建案后 MAIN View Current Step 为空，打开表单才有值"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartComponent.java"
+  detail: |
+    View 读 up_process_instance.current_node。Email/internal start 无 JWT，auto-complete
+    查任务 403 后 TX2 曾用 null 覆盖 TX1。引擎 start 现返回 nextTaskName，TX1 写入，
+    TX2 仅在 outcome 非空时更新。无 JWT 的 pinned start 改走 permitAll /instances（body 仍带 pin）。
+    验证：internal start Process_MCY pid dc278e71-d36a-11f1-bd58-7a2eb99a99d9，
+    未打开详情；库 current_node=Case Submission；View 50303 同值。
+- id: "1722"
+  status: open
+  severity: minor
+  category: deploy
+  summary: "本地 up_change_history 缺 batch_id，Email start TX2 记变更历史失败"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistoryComponent.java"
+  detail: |
+    2026-10-29 验证 #1721 时日志：column batch_id of relation up_change_history does not exist。
+    长生命周期本地卷未吃到后续 init-script。current_node 在 TX1 已提交，不受影响。
+    未在本轮补列。
+- id: "1723"
+  status: fixed
+  fixed_at: "2026-10-30"
+  severity: major
+  category: bug
+  summary: "Email Monitor 建案 409 VERSION_CONTEXT_MODIFICATION_DENIED（variables 带保留键）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  detail: |
+    根因：buildStartVariables 把 functionUnitId/functionUnitCode 写入 variables，
+    门户 InternalEmailProcessStartComponent 原样拷到 formData，rejectClientMetadata 409。
+    修复：不再写入保留键，返回前按 RuntimeVersionContext.metadataKeys() 剥离；
+    身份仍走内部请求顶层 functionUnitCode。守卫未关。
+    验证：EmailMonitorProcessorTest 10/10；workflow-engine 已重建 healthy。
+    端到端未重发邮件（重启后 sys_email_monitor_rules 0 条启用规则）。
+- id: "1724"
+  status: fixed
+  fixed_at: "2026-10-30"
+  severity: major
+  category: bug
+  summary: "同表多绑定将已有 Case 行补成交易子行，引起提交 403"
+  file: "frontend/user-portal/src/composables/taskDetail/useTaskDetailMiLinkChild.ts"
+  detail: |
+    用服务端快照和配置行身份保护已有归属；结构 FK 按 binding 的 filter FK 解析；
+    显式单绑定和嵌套读取过滤归属，MI 隔离保留画布外主表主键。
+    本地真实页面 403→200，Save/Complete、交易嵌套新增与查库通过；
+    8 项归属回归、主表键及共享关系回归、MI 单元 248 项通过，前端已构建并重建。
+    远程 Dev 两个实际按钮、完整 MI 截图门禁仍未验证，审查 CONDITIONAL。
+    证据：docs/verification/2026-10-30-multi-binding-403.md。

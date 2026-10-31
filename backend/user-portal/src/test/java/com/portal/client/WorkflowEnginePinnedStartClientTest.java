@@ -29,6 +29,7 @@ class WorkflowEnginePinnedStartClientTest {
     }
     @Test void pinnedStartUsesTheDistinctRouteAndAnExplicitTypedField() {
         prepare();
+        when(engine.hasInboundAuthorization()).thenReturn(true);
         server.expect(requestTo(URL + "/pinned"))
                 .andExpect(header(com.platform.common.assignment.AssignmentStartContext.HEADER,"synthetic:1:verified"))
                 .andExpect(jsonPath("$.expectedProcessDefinitionId").value("synthetic:1:verified"))
@@ -40,9 +41,21 @@ class WorkflowEnginePinnedStartClientTest {
         server.verify();
     }
     @Test void anOldEngineRejectingTheRouteCannotBeRetriedAsAnUnpinnedStart() {
-        prepare(); server.expect(requestTo(URL + "/pinned")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        prepare();
+        when(engine.hasInboundAuthorization()).thenReturn(true);
+        server.expect(requestTo(URL + "/pinned")).andRespond(withStatus(HttpStatus.NOT_FOUND));
         assertThatThrownBy(() -> client.startProcess("synthetic", null, null, Map.of(), "synthetic:1:verified"))
                 .hasMessageContaining("404");
+        server.verify();
+    }
+    @Test void emailStartWithoutJwtPinsOnThePermitAllRoute() {
+        prepare();
+        when(engine.hasInboundAuthorization()).thenReturn(false);
+        server.expect(requestTo(URL))
+                .andExpect(jsonPath("$.expectedProcessDefinitionId").value("synthetic:1:verified"))
+                .andRespond(withSuccess("{\"success\":true,\"data\":{\"processInstanceId\":\"email-instance\"}}", MediaType.APPLICATION_JSON));
+        assertThat(client.startProcess("synthetic", null, "synthetic-user", Map.of(), "synthetic:1:verified"))
+                .containsEntry("processInstanceId", "email-instance");
         server.verify();
     }
     @Test void legacyStartKeepsTheOriginalRouteAndRequestShape() {

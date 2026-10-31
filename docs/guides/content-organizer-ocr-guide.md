@@ -72,6 +72,19 @@ OCR 失败**不阻断提交**：用户照样进入核对节点，表单上显示
 - 日期统一 `YYYY-MM-DD`，数字不带千分位和货币符号——正好对得上表单的日期控件和数字控件。
 - 模型回答里找不到 JSON 时**报错**，不会返回一张全空的表冒充"文档里什么都没有"。
 
+### 4.1b 动作 `chat`（Chat / 对话，1.0.3 起）
+
+给 Hermes Master（DW 全局助手）用：不上传文件，只发一次 completion。
+
+| 属性 | 必填 | 说明 |
+|---|---|---|
+| Message | 是 | 本轮用户消息，`{{trigger.output.body.message}}` |
+| Context | 是 | 填进 prompt setting「Hermes Master」唯一变量 `{user_input}` 的整段上下文（页面 + 设计摘要 + 对话转写），`{{trigger.output.body.userInput}}` |
+| Staff ID | 是 | 工号，`{{trigger.output.body.staffId}}`（DW 按当前用户的 `sys_users.employee_id` 填） |
+
+输出 `{ "reply": "<Markdown 回答>", "sessionId": "hermes-<uuid>" }`。每次调用一个新 session，CO 侧不留对话状态。
+flow 样例与 DW 侧开关见 [examples/hermes-master/README.md](examples/hermes-master/README.md)。
+
 ### 4.2 行为细节
 
 - **每次运行一个新 session**（CO 每个 session 最多 3 个文件）。
@@ -98,13 +111,16 @@ OCR 失败**不阻断提交**：用户照样进入核对节点，表单上显示
 | `CONTENT_ORGANIZER_APPLICATION_ID` | 是 | Hermes use case 的 applicationId：`57c0247a-249f-4414-936e-a4599d81cccd`（已开通文件上传） |
 | `CONTENT_ORGANIZER_PROMPT_SETTING_ID` | 是 | 抽取用 prompt setting 的 ID：`a20e508c-3101-4be2-a8dd-c3a98e6f560c`（§6.4） |
 | `CONTENT_ORGANIZER_PROMPT_VARIABLE_ID` | 是 | 该模板 `{fields}` 变量的 **ID**（不是变量名）：`02486f43-1614-4f07-b5c7-2b4bf5ecaec1` |
+| `CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID` | Chat 动作必填 | Hermes Master 用 prompt setting 的 ID：`01a186d0-b0ed-77c1-8645-0cde09e69286`（§6.5） |
+| `CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID` | Chat 动作必填 | 该模板 `{user_input}` 变量的 **ID**：`01a186e9-29f4-7791-a045-6127433642a1` |
 | `CONTENT_ORGANIZER_API_VERSION` | 否 | 请求里的 `metadata.apiVersion`，默认 `2024-10-01-preview` |
 | `CONTENT_ORGANIZER_WORKFLOW` | 否 | 请求顶层 `workflow`，默认 `default`（API 文档的值）；CO 网页自己发的是 `ReasearchChatCompletion` |
 | `CONTENT_ORGANIZER_WORKFLOW_VERSION` | 否 | 请求顶层 `version`，默认 `1.0`（API 文档的值）；CO 网页自己发的是 `001` |
 | `CONTENT_ORGANIZER_MODEL` | 否 | `parameter.model`，默认 `gemini-3.5-flash`（Hermes use case 配置的模型）。**真实 API 必填**，文档没写 |
 | `CONTENT_ORGANIZER_APPLICATION_NAME` | 否 | `parameter.applicationName`，默认 `Hermes Workflow`。**真实 API 必填**，文档没写 |
 
-缺任何一个必填项，运行时报错并列出缺的变量名。**这些变量必须同时列在 `AP_SANDBOX_PROPAGATED_ENV_VARS` 里**，
+缺任何一个必填项，运行时报错并列出缺的变量名。两套 prompt setting 各管各的动作：`Extract Fields` 只要求抽取那一对，
+`Chat` 只要求 Chat 那一对，环境里只用到一种时另一对可以不配。**这些变量必须同时列在 `AP_SANDBOX_PROPAGATED_ENV_VARS` 里**，
 否则执行进程里读不到（Automation 的执行进程只继承白名单内的变量）。
 
 ---
@@ -218,6 +234,20 @@ Field list (one per line: key: "label" (type) - hint):
 - **其他环境**：applicationId 各环境相同（CO 团队确认）；在 CO dev 建的 prompt setting **UAT 实测可用**（2026-10-07），
   PPD / prod 未验证。若某环境 completion 报 `Prompt setting not found`，在该环境的 CO 网页按上表重建、激活，把新 ID 写进该环境 ConfigMap。
 
+### 6.5 Prompt setting（Hermes Master 对话模板）
+
+| 项 | 值 |
+|---|---|
+| 名称 | Hermes Master（Hermes Workflow use case → Prompt Settings Workbench，2026-10-30 激活） |
+| `promptSetting.id` | `01a186d0-b0ed-77c1-8645-0cde09e69286` |
+| 变量 | `user_input`（必填 TextArea），ID `01a186e9-29f4-7791-a045-6127433642a1` |
+| 模板 | 由 DW 原 `HermesMasterChatServiceImpl.SYSTEM_PROMPT` 改写：DW 菜单与 Tab 的准确名称、设计建议、只做建议、防注入、按用户语言、**Markdown** 输出；末行 `{user_input}` |
+
+- 用户消息（`messages[0].content`）是本轮问题；完整的上下文在 `{user_input}` 里。
+- dev mock（§10）里有一份同样的模板（`mock-content-organizer.mjs` 的 `CHAT_TEMPLATE`），改 CO 上的模板时一起改；
+  直连 gateway 的回退链路（DW `provider=GAIP`）用的是 `SYSTEM_PROMPT`，也要同步。
+- 其他环境是否共享 dev 的这个 setting 与 §6.4 同理：报 `Prompt setting not found` 就在该环境重建并换 ID。
+
 ---
 
 ## 7. 在 Function Unit 里使用
@@ -278,10 +308,10 @@ export const code = async (inputs) => {
 
 | # | 位置 | 内容 | 仓库文件 |
 |---|---|---|---|
-| 1 | ConfigMap `workflow-platform-config` | `IB2B_TOKEN_URL`、`IB2B_USERNAME`、`CONTENT_ORGANIZER_BASE_URL`、`CONTENT_ORGANIZER_APPLICATION_ID`、`CONTENT_ORGANIZER_PROMPT_SETTING_ID`、`CONTENT_ORGANIZER_PROMPT_VARIABLE_ID`（可选：`CONTENT_ORGANIZER_WORKFLOW`、`_WORKFLOW_VERSION`、`_MODEL`、`_APPLICATION_NAME`） | `deploy/k8s/config_map/<env>/configmap-workflow-platform-config.yml` |
+| 1 | ConfigMap `workflow-platform-config` | `IB2B_TOKEN_URL`、`IB2B_USERNAME`、`CONTENT_ORGANIZER_BASE_URL`、`CONTENT_ORGANIZER_APPLICATION_ID`、`CONTENT_ORGANIZER_PROMPT_SETTING_ID`、`CONTENT_ORGANIZER_PROMPT_VARIABLE_ID`、`CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID`、`CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID`（可选：`CONTENT_ORGANIZER_WORKFLOW`、`_WORKFLOW_VERSION`、`_MODEL`、`_APPLICATION_NAME`） | `deploy/k8s/config_map/<env>/configmap-workflow-platform-config.yml` |
 | 2 | 同上 | `ACTIVEPIECES_SSRF_ALLOW_LIST` 含 `cmb-ib2b-dsp-pprod-ap.hk.hsbc` 与 CO 主机（uat：`uat-api.gcp.cloud.hk.hsbc`，ppd：`ppd-api.gcp.cloud.hk.hsbc`） | 同上 |
 | 3 | Secret `workflow-platform-secrets`（Key Vault 同步） | `IB2B_SECRET`（服务账号密码，**不得为空**） | `deploy/k8s/secret/<env>/…`（仓库里是空值占位） |
-| 4 | Deployment `activepieces` | 上述变量注入（7 个必填 + 4 个可选，都是 `optional: true` 引用）+ `AP_SANDBOX_PROPAGATED_ENV_VARS` | `deploy/k8s/activepieces.yaml` |
+| 4 | Deployment `activepieces` | 上述变量注入（7 个必填 + 2 个 Chat 用 + 4 个可选，都是 `optional: true` 引用）+ `AP_SANDBOX_PROPAGATED_ENV_VARS` | `deploy/k8s/activepieces.yaml` |
 | 5 | Istio `Sidecar activepieces-sidecar` | egress hosts 含 iB2B 与 CO 主机 | 同上 |
 | 6 | Istio `ServiceEntry content-organizer-egress` | 上述主机 MESH_EXTERNAL，端口 8443 / 443，协议 TLS（应用自己做 HTTPS，Envoy 透传） | 同上 |
 | 7 | 集群 / 防火墙 / NetworkPolicy | Automation Pod → `cmb-ib2b-dsp-pprod-ap.hk.hsbc:8443`、`<env>-api.gcp.cloud.hk.hsbc:443` 放行 | 运维 |
@@ -304,7 +334,7 @@ prompt setting 的两个 ID 见 §6.4。
 
 | 半边 | 文件 |
 |---|---|
-| 运行时 | `automation/hermes/tarballs/activepieces-piece-content-organizer-1.0.2.tgz`（`automation/hermes/pieces.json` 已登记） |
+| 运行时 | `automation/hermes/tarballs/activepieces-piece-content-organizer-1.0.3.tgz`（`automation/hermes/pieces.json` 已登记） |
 | 元数据 | `deploy/pieces/metadata/piece-content-organizer.json` → 已汇入 `deploy/pieces/metadata/pieces-seed.sql` |
 | 图标 | `automation/packages/web/public/ap-cdn/pieces/hermes/content-organizer.svg` |
 
@@ -315,8 +345,9 @@ prompt setting 的两个 ID 见 §6.4。
    **不一定是平台的 schema**：preprod 的平台在 `hmhkdev` 库的 `hmwfst` schema，Automation 在同库的默认 schema。
 4. **重启 Automation**：`kubectl -n <ns> rollout restart deployment/activepieces`（不重启则设计器单查组件 404）。
 
-> **版本**：当前是 **1.0.2**。1.0.0 不带 `promptSetting`；1.0.1 带了但缺 `parameter.model` / `applicationName`（UAT 返回 422）——
-> 两者对真实 CO 都必然失败，已从白名单移除。
+> **版本**：当前是 **1.0.3**。1.0.0 不带 `promptSetting`；1.0.1 带了但缺 `parameter.model` / `applicationName`（UAT 返回 422）——
+> 两者对真实 CO 都必然失败，已从白名单移除。1.0.3 新增 `Chat` 动作（Hermes Master 用，见 §6.5），`Extract Fields` 与 1.0.2 行为一致，
+> 但 1.0.2 已从白名单移除：**已有 OCR flow 要随新镜像一起换到 1.0.3**（见下一段）。
 > Automation 的 flow 步骤**精确锁定组件版本**（不支持 `~` / `^` 范围），所以升级组件后，引用旧版本的 flow 要在设计器里把该步骤
 > 换到新版本（或重新导入已改好版本号的 flow）再发布，否则运行时找不到旧版本（`PieceNotFound`）。
 
@@ -378,7 +409,7 @@ dev 组件需按 HOWTO §2 **手工预装**进 Automation 容器（容器重建�
 | 组件单元测试（10 个） | `cd automation/packages/pieces/community/content-organizer && npx vitest run` |
 | 组件类型检查 | 同目录 `npx tsc -p tsconfig.lib.json --noEmit` |
 | 引擎信封（含用户身份） | `cd backend/workflow-engine-core && mvn test -Dtest='ServiceTaskExecutor*Test'`（JDK 17） |
-| 环境冒烟（Pod 内） | `node deploy/scripts/content-organizer-smoke.mjs [pdf] [工号]`（见 §12.3 L4） |
+| 环境冒烟（Pod 内） | `node deploy/scripts/content-organizer-smoke.mjs [pdf] [工号]`；Hermes Master 用 `--chat <工号>`（见 §12.3 L4） |
 | Portal 端到端 | `cd frontend && PROCESS_KEY=<FU code> OCR_SAMPLE_PDF=<PDF 路径> node scripts/verify-portal-ocr-receipt-notice.mjs` |
 
 端到端脚本：发起 → 上传 PDF → 提交 → 打开核对任务 → 校验预填值 → 确认，截图存 `frontend/user-portal/verification-screenshots/`。
@@ -427,12 +458,12 @@ select name, version from piece_metadata where name = '@activepieces/piece-conte
 ```
 
 ```bash
-kubectl -n <ns> exec <ap-pod> -- ls /usr/src/app/cache/v13/common/pieces/@activepieces/piece-content-organizer-1.0.2/ready
+kubectl -n <ns> exec <ap-pod> -- ls /usr/src/app/cache/v13/common/pieces/@activepieces/piece-content-organizer-1.0.3/ready
 ```
 
-期望：表里有 `1.0.2`；`ready` 文件存在。
+期望：表里有 `1.0.3`；`ready` 文件存在。
 不对：表里没有 → 跑 `pieces-seed.sql` 并重启；`ready` 不存在 → 镜像不是含该组件的新版本（运行时报 `PieceNotFound`）。
-另查 flow 步骤引用的版本：设计器里打开 `Extract fields (OCR)` 步骤，版本应为 1.0.2（§8.2 的版本说明）。
+另查 flow 步骤引用的版本：设计器里打开 `Extract fields (OCR)` 步骤，版本应为 1.0.3（§8.2 的版本说明）。
 
 **L3 出网白名单（仅看配置，冒烟脚本测不到这一层）**
 
@@ -480,6 +511,15 @@ kubectl -n <ns> exec <ap-pod> -- node /tmp/smoke.mjs /tmp/sample.pdf <你的工�
 期望：`CO upload (#9) — HTTP 200 {"code":"00000",…"file_id":…}`、`CO completion (#1) — HTTP 200 {"title": …}`。
 completion 用的就是组件那套 `promptSetting`（脚本先打印 `INFO  prompt setting=… workflow=… version=…`），字段清单只有一个 `title`。
 失败时脚本打印 CO 返回的原文，对照 §12.4 的 CO 部分。冒烟里调 CO 的 DNS / TLS 失败按 L4 同样处理。
+
+Hermes Master 的 Chat（不上传文件）单独验：
+
+```bash
+kubectl -n <ns> exec <ap-pod> -- node /tmp/smoke.mjs --chat <你的工号>
+```
+
+期望：`CO chat completion (Hermes Master) — HTTP 200 <Markdown 回答>`。查的是 `CONTENT_ORGANIZER_CHAT_PROMPT_*` 这一对（§6.5）；
+报 `Prompt setting not found` 说明本环境 CO 没有共享 dev 的「Hermes Master」setting，按 §6.5 重建并换 ID。
 
 **L7 引擎信封与回写**
 
@@ -556,7 +596,7 @@ order by created_at desc limit 5;
 | `File "…" exceeds the maximum allowed size …` | 文件过大 |
 | `The maximum number of file uploads for this use case, has been reached for today. …` | 当天 100 个文件额度用完 |
 | `The maximum number of file uploads per session has been reached …` | 不应出现（组件每次运行新开 session）；出现说明 session 被复用，联系开发 |
-| HTTP 422 `{"detail":[{"type":"missing","loc":["body","parameter","model"],…}]}` | 组件是 1.0.1 或更早：请求体缺 `parameter.model` / `applicationName`。升到 1.0.2（§8.2），flow 步骤换版本 |
+| HTTP 422 `{"detail":[{"type":"missing","loc":["body","parameter","model"],…}]}` | 组件是 1.0.1 或更早：请求体缺 `parameter.model` / `applicationName`。升到 1.0.3（§8.2），flow 步骤换版本 |
 | `Prompt setting not found` | `CONTENT_ORGANIZER_PROMPT_SETTING_ID` 不对，或该环境的 CO 没有这个 setting / 未激活：按 §6.4 重建或核对 ID |
 | 提示缺少必填变量 / 变量相关报错 | `CONTENT_ORGANIZER_PROMPT_VARIABLE_ID` 填成了变量名或旧 ID：按 §6.4 从 Payload 取变量 ID |
 | `workflow` / `version` 相关报错 | 按 §9 第 2 项改用网页值 |

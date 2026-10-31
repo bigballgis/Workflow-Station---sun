@@ -29,6 +29,9 @@ class ProcessStartDeploymentPinTest {
         when(instance.getId()).thenReturn("synthetic-instance");
         ReflectionTestUtils.setField(component, "repositoryService", repository);
         ReflectionTestUtils.setField(component, "runtimeService", runtime);
+        var status = mock(ProcessInstanceStatusReader.class);
+        when(status.getProcessInstanceStatus("synthetic-instance")).thenReturn(Map.of("nextTaskName", "Case Submission"));
+        ReflectionTestUtils.setField(component, "processInstanceStatusReader", status);
         var manager = mock(org.springframework.transaction.PlatformTransactionManager.class);
         when(manager.getTransaction(any())).thenReturn(mock(org.springframework.transaction.TransactionStatus.class));
         starter = new com.workflow.component.impl.ProcessStartComponentImpl(repository, runtime, mock(ProcessDeploymentManager.class),
@@ -44,7 +47,9 @@ class ProcessStartDeploymentPinTest {
         var request = request("synthetic:2:current");
         when(runtime.startProcessInstanceById("synthetic:2:current", request.getBusinessKey(), request.getVariables())).thenReturn(instance);
         when(runtime.startProcessInstanceByKey("synthetic", request.getBusinessKey(), request.getVariables())).thenReturn(instance);
-        assertThat(component.startProcess(request).isSuccess()).isTrue();
+        var result = component.startProcess(request);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getNextTaskName()).isEqualTo("Case Submission");
         verify(runtime).startProcessInstanceById("synthetic:2:current", request.getBusinessKey(), request.getVariables());
         verify(runtime, never()).startProcessInstanceByKey(anyString(), anyString(), anyMap());
     }

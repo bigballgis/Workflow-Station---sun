@@ -216,5 +216,10 @@ data:
   # CONTENT_ORGANIZER_MODEL / _APPLICATION_NAME(默认 gemini-3.5-flash / Hermes Workflow)。
   CONTENT_ORGANIZER_PROMPT_SETTING_ID: "a20e508c-3101-4be2-a8dd-c3a98e6f560c"
   CONTENT_ORGANIZER_PROMPT_VARIABLE_ID: "02486f43-1614-4f07-b5c7-2b4bf5ecaec1"
+  # Hermes Master 的 prompt setting「Hermes Master」(content-organizer 的 Chat 动作;DW 的 Hermes Master 经
+  # Automation flow hermes-master-chat 调用)与其 {user_input} 变量的 ID。取自 CO dev(2026-10-30 激活);
+  # 本环境 CO 不共享时(completion 报 Prompt setting not found)在本环境 CO 重建后换成新 ID。
+  CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID: "01a186d0-b0ed-77c1-8645-0cde09e69286"
+  CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID: "01a186e9-29f4-7791-a045-6127433642a1"
   # Pause durable Record Note notification delivery; keep pending intents.
   PORTAL_RECORD_NOTE_DELIVERY_PAUSED: "false"

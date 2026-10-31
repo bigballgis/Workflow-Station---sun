@@ -1,6 +1,7 @@
 package com.workflow.email.inbound;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.functionunit.RuntimeVersionContext;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.response.ProcessInstanceResult;
 import com.workflow.email.extract.EmailExtractionSpec;
@@ -112,8 +113,7 @@ public class EmailMonitorProcessor {
                     "functionUnitCode could not be resolved for rule " + rule.getId());
         }
 
-        Map<String, Object> startVariables = buildStartVariables(
-                rule, email, extraction, functionUnitCode.get(), attachments);
+        Map<String, Object> startVariables = buildStartVariables(rule, email, extraction, attachments);
         // Same as Portal New Request: no businessKey, so Process Title falls back to
         // processDefinitionName (Function Unit name). Idempotency is (ruleUid, messageId).
         ProcessInstanceResult result = portalSyncComponent.startPortalProcess(
@@ -170,16 +170,11 @@ public class EmailMonitorProcessor {
             SysEmailMonitorRule rule,
             EmailMessage email,
             ExtractionResult extraction,
-            String functionUnitCode,
             EmailInboundAttachmentBinder.BindResult attachments) {
         Map<String, Object> variables = new HashMap<>(extraction.getFields());
         if (StringUtils.hasText(rule.getSystemInitiatorUserId())) {
             variables.put("initiator", rule.getSystemInitiatorUserId());
         }
-        if (StringUtils.hasText(rule.getFunctionUnitId())) {
-            variables.put("functionUnitId", rule.getFunctionUnitId());
-        }
-        variables.put("functionUnitCode", functionUnitCode);
         if (StringUtils.hasText(rule.getProcessDefinitionKey())) {
             variables.put("processDefinitionKey", rule.getProcessDefinitionKey());
         }
@@ -187,6 +182,8 @@ public class EmailMonitorProcessor {
         if (!extraction.getSubTables().isEmpty()) {
             variables.put("__subTables__", extraction.getSubTables());
         }
+        // Identity stays on the internal start request; reserved keys in formData are 409.
+        RuntimeVersionContext.metadataKeys().forEach(variables::remove);
         return variables;
     }
 

@@ -107,3 +107,9 @@ logging:
 # 集团 AI gateway 的 FQDN 若在集群内解析到内网地址，要在各环境的 SSRF_ALLOWED_HOSTS 里补上。
 ssrf:
   allowed-hosts: ${SSRF_ALLOWED_HOSTS:activepieces}
+
+# Hermes Master 经 Automation 时的 AP sync webhook 基址(与引擎 service-task.webhook-base-url 同源)。
+ai-generation:
+  hermes-master:
+    automation:
+      webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://activepieces:80}

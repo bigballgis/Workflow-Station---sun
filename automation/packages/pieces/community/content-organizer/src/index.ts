@@ -1,10 +1,11 @@
 import { PieceAuth, createPiece } from '@activepieces/pieces-framework';
 import { PieceCategory } from '@activepieces/shared';
+import { chatAction } from './lib/actions/chat';
 import { extractFieldsAction } from './lib/actions/extract-fields';
 
 export const contentOrganizer = createPiece({
   displayName: 'Content Organizer',
-  description: '文档 OCR / 字段抽取（Content Organizer；iB2B 服务账号凭证取自部署环境）。',
+  description: '文档 OCR / 字段抽取与对话（Content Organizer；iB2B 服务账号凭证与 prompt setting 取自部署环境）。',
   // No per-flow connection: one service account per environment, injected by the deployment
   // (K8s ConfigMap + Key Vault) — see lib/common/config.ts.
   auth: PieceAuth.None(),
@@ -12,6 +13,6 @@ export const contentOrganizer = createPiece({
   logoUrl: '/ap-cdn/pieces/hermes/content-organizer.svg', // HERMES: self-hosted icon (X-3)
   authors: ['workflow-station'],
   categories: [PieceCategory.CONTENT_AND_FILES],
-  actions: [extractFieldsAction],
+  actions: [extractFieldsAction, chatAction],
   triggers: [],
 });

@@ -12,12 +12,13 @@ export type ContentOrganizerConfig = {
   applicationId: string;
   apiVersion: string;
   /**
-   * The extraction prompt setting configured in the Content Organizer Prompt Settings Workbench
-   * ("Hermes Field Extraction (JSON)"): Content Organizer rejects a completion without one. The
-   * template holds the extraction rules; this piece only fills its `{fields}` variable.
+   * The prompt setting of the action being run, configured in the Content Organizer Prompt Settings
+   * Workbench: Content Organizer rejects a completion without one. The template holds the
+   * instructions; this piece only fills its one variable. Extraction uses "Hermes Field Extraction
+   * (JSON)" (variable `{fields}`), chat uses "Hermes Master" (variable `{user_input}`).
    */
   promptSettingId: string;
-  /** ID (not name) of the template's `{fields}` variable — `promptVars[].name` takes the ID. */
+  /** ID (not name) of the template's one variable — `promptVars[].name` takes the ID. */
   promptVariableId: string;
   /**
    * Top-level `workflow` / `version` of the completion request. The API document's values
@@ -40,8 +41,14 @@ const REQUIRED = {
   ib2bSecret: 'IB2B_SECRET',
   baseUrl: 'CONTENT_ORGANIZER_BASE_URL',
   applicationId: 'CONTENT_ORGANIZER_APPLICATION_ID',
-  promptSettingId: 'CONTENT_ORGANIZER_PROMPT_SETTING_ID',
-  promptVariableId: 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID',
+} as const;
+
+/** Each action has its own prompt setting, so an environment only needs the ones its flows use. */
+export type PromptSettingUse = 'extraction' | 'chat';
+
+const PROMPT_SETTING = {
+  extraction: { id: 'CONTENT_ORGANIZER_PROMPT_SETTING_ID', variableId: 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID' },
+  chat: { id: 'CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID', variableId: 'CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID' },
 } as const;
 
 /** API version sent in `metadata.apiVersion` — the value in the Content Organizer request examples. */
@@ -52,8 +59,9 @@ const DEFAULT_WORKFLOW_VERSION = '1.0';
 const DEFAULT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_APPLICATION_NAME = 'Hermes Workflow';
 
-export function readConfig(env: NodeJS.ProcessEnv = process.env): ContentOrganizerConfig {
-  const missing = Object.values(REQUIRED).filter((name) => !env[name]?.trim());
+export function readConfig(env: NodeJS.ProcessEnv = process.env, use: PromptSettingUse = 'extraction'): ContentOrganizerConfig {
+  const setting = PROMPT_SETTING[use];
+  const missing = [...Object.values(REQUIRED), setting.id, setting.variableId].filter((name) => !env[name]?.trim());
   if (missing.length > 0) {
     throw new Error(
       `Content Organizer is not configured on this Automation instance; missing environment variable(s): ${missing.join(', ')}. ` +
@@ -68,8 +76,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ContentOrganiz
     baseUrl: value(REQUIRED.baseUrl).replace(/\/+$/, ''),
     applicationId: value(REQUIRED.applicationId),
     apiVersion: env['CONTENT_ORGANIZER_API_VERSION']?.trim() || DEFAULT_API_VERSION,
-    promptSettingId: value(REQUIRED.promptSettingId),
-    promptVariableId: value(REQUIRED.promptVariableId),
+    promptSettingId: value(setting.id),
+    promptVariableId: value(setting.variableId),
     workflow: env['CONTENT_ORGANIZER_WORKFLOW']?.trim() || DEFAULT_WORKFLOW,
     workflowVersion: env['CONTENT_ORGANIZER_WORKFLOW_VERSION']?.trim() || DEFAULT_WORKFLOW_VERSION,
     model: env['CONTENT_ORGANIZER_MODEL']?.trim() || DEFAULT_MODEL,

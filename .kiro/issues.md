@@ -3,11 +3,13 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-26)
+## 统计 (截至 2026-10-30)
+
+2026-10-30：#1724 同表多绑定 403 已在本地修复并完成页面及查库验证；已有 Case 归属不变，交易新增正常。远程原按钮和完整 MI 截图门禁有缺口，审查 CONDITIONAL。Open 数量不变。证据见 `docs/verification/2026-10-30-multi-binding-403.md`。
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **51** | `index.yaml`（按当前条目重新计数） |
+| 🔓 Open | **52** | `index.yaml`（按当前条目重新计数） |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 
@@ -18,9 +20,14 @@
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
 
-2026-10-30：#1720 修复已有本地卷漏跑 assignment 100–108 迁移；覆盖单服务及跳过基础设施启动路径，SQL 错误立即中止。备份后迁移、重复迁移及 FU50122 真实页面部署到 1.0.2 通过，脚本增量重审 PASS；运行互斥办理另行验证。Open/Wontfix 数量不变。证据见 `docs/verification/2026-10-30-assignment-50122.md`。
+2026-10-30：#1725 修复已有本地卷漏跑 assignment 100–108 迁移；覆盖单服务及跳过基础设施启动路径，SQL 错误立即中止。备份后迁移、重复迁移及 FU50122 真实页面部署到 1.0.2 通过，脚本增量重审 PASS；运行互斥办理另行验证。Open/Wontfix 数量不变。证据见 `docs/verification/2026-10-30-assignment-50122.md`。
 
-2026-10-30：#1721–#1723 修复受保护首步旧提交协议、备用候选假 holder、Lookup 缓存误提交三处现场遗漏。FU50122 已页面配置并部署 1.0.3，两人参与的完整流程结束，6条责任对应6个任务，账本全部APPLIED；中途测试单撤回后已完成责任保留。后端专项、前端13项、完整MI236项及6个浏览器场景通过，增量独立重审PASS。Open/Wontfix数量不变；见同份验收记录。
+2026-10-30：#1726–#1728 修复受保护首步旧提交协议、备用候选假 holder、Lookup 缓存误提交三处现场遗漏。FU50122 已页面配置并部署 1.0.3，两人参与的完整流程结束，6条责任对应6个任务，账本全部APPLIED；中途测试单撤回后已完成责任保留。后端专项、前端13项、完整MI236项及6个浏览器场景通过，增量独立重审PASS。Open/Wontfix数量不变；见同份验收记录。
+2026-10-30：#1723 已修复 Email Monitor 建案 409 `VERSION_CONTEXT_MODIFICATION_DENIED`。variables 不再带保留键，身份走请求顶层 `functionUnitCode`。`EmailMonitorProcessorTest` 10/10；engine 已重建。端到端未重发邮件。Open 不变。
+
+2026-10-29：#1721 已修复 Email Monitor 建案 MAIN View Current Step 为空。internal start 未打开详情：库与 View 50303 均为 Case Submission。顺带记录 #1722（本地 `up_change_history.batch_id` 缺失）。Open 51→52。
+
+2026-10-29：#1720 已修复 wangEditor create-time onChange 覆盖已保存 HTML。17 项单测通过；Portal 截图 `frontend/user-portal/verification-screenshots/2026-10-29_editor-create-gate-main.png`。子表弹窗本表单无 editor 列。审查 Question 已拍板：保持 nextTick，不延时、不重挂画布。
 
 2026-10-23：#1712 方案二已分离普通权限与batch附加限制，修复Lookup身份解析；原失败Request Approval同任务红转绿，原FU新请求CRUD/批量分派/进入审批及第二FU不同映射保存通过。后端364、前端专项60、MI234项通过，前后端重建，独立增量重审PASS；UAT/完整生命周期仍未验收。
 
@@ -87,6 +94,8 @@
 | 1666 | major | quality | TaskActionService 引擎/lookup 异常 catch→emptyList，与「无 actionIds」无法区分（Allowed Roles 轮次 3-A 暂不修） |
 | 1688 | major | security | Send Email HTML 正文 `${subTableField}`/`${lookupField}` 未转义；标量值内 `${x}`/`${env:KEY}` 会被二次展开 |
 | 1689 | minor | quality | DW 重新部署后已打开页面懒加载旧 chunk 404，Email 模板 Body 等异步组件静默空白（无 preloadError 处理） |
+| 1693 | major | bug | 创建含中文名称的 FU 时自动 code 含中文，MinimalBpmnTemplate 拒绝 XML 流程 ID |
+| 1722 | minor | deploy | 本地 `up_change_history` 缺 `batch_id`，Email start TX2 记变更历史失败 |
 ### Wontfix
 
 | ID | 分类 | 描述 |

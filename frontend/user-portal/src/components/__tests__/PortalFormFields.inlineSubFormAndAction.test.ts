@@ -22,6 +22,24 @@ const globalStubs = {
 }
 
 describe('PortalFormFields — inlineSubForm dispatch and ACTION binding-type wiring', () => {
+  it('keeps a declared MAIN relationship shared inside a transaction host', () => {
+    const rows = [{ message_key: 'Case-message', case_ref: 'Case-1' }]
+    const wrapper = mount(PortalFormFields, {
+      props: {
+        fields: [{ key: 'caseMessages', type: 'subTable', _bindingId: 42 } as FormField],
+        model: { transaction_key: 'Transaction-A' }, hostTableId: 2,
+        hostPrimaryTableId: 1,
+        subTableBindings: [{ bindingId: 42, tableName: 'messages', columns: [], data: rows,
+          filterFkFieldName: 'case_ref', filterFkRefTableId: 1,
+          fieldDefinitions: [{ fieldName: 'case_ref', isForeignKey: true, refTableId: 1 }] },
+          { bindingId: 20, tableId: 2, tableName: 'transactions', columns: [], data: [],
+            primaryKeyFields: ['transaction_key'] }],
+      },
+      global: { stubs: { ...globalStubs,
+        SubTableField: { name: 'SubTableField', template: '<div />', props: ['modelValue'] } } },
+    })
+    expect(wrapper.findComponent({ name: 'SubTableField' }).props('modelValue')).toEqual(rows)
+  })
   it('field.type === "subTable" passes the resolved binding bindingType through to SubTableField (not blank/undefined)', () => {
     const fields: FormField[] = [
       { key: 'meetingRemark', type: 'subTable', _bindingId: 42, span: 24 } as unknown as FormField,

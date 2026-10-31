@@ -9,6 +9,9 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 const MI_REGRESSION_FILES = [
+  'src/components/__tests__/PortalFormFields.inlineSubFormAndAction.test.ts',
+  'src/composables/taskDetail/__tests__/miDualBindingOwnership.test.ts',
+  'src/composables/taskDetail/__tests__/miMainKeyProjection.test.ts',
   'src/composables/tasks/__tests__/linkFormMiIsolation.test.ts',
   'src/composables/subTableField/__tests__/subTableLinkFormSelfBound.test.ts',
   'src/composables/subTableField/__tests__/linkFormCanonicalRows.test.ts',
@@ -62,5 +65,6 @@ export default defineConfig({
       // Keep in sync with vite.config.ts — cross-app shared TS sources.
       '@platform-shared': resolve(__dirname, '../shared/src'),
     },
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue', '@form-create/element-ui'],
   },
 })

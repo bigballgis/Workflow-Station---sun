@@ -272,6 +272,19 @@ spec:
               name: workflow-platform-config
               key: CONTENT_ORGANIZER_PROMPT_VARIABLE_ID
               optional: true
+        # Hermes Master's prompt setting (the piece's Chat action), separate from the extraction one.
+        - name: CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID
+              optional: true
+        - name: CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID
+              optional: true
         - name: CONTENT_ORGANIZER_WORKFLOW
           valueFrom:
             configMapKeyRef:
@@ -302,7 +315,7 @@ spec:
         # with a bare "fetch failed" (cause SELF_SIGNED_CERT_IN_CHAIN) although the same calls
         # succeed from the AP main process (UAT 2026-10-08). Unset in an environment = not passed.
         - name: AP_SANDBOX_PROPAGATED_ENV_VARS
-          value: "NODE_EXTRA_CA_CERTS,IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION,CONTENT_ORGANIZER_PROMPT_SETTING_ID,CONTENT_ORGANIZER_PROMPT_VARIABLE_ID,CONTENT_ORGANIZER_WORKFLOW,CONTENT_ORGANIZER_WORKFLOW_VERSION,CONTENT_ORGANIZER_MODEL,CONTENT_ORGANIZER_APPLICATION_NAME"
+          value: "NODE_EXTRA_CA_CERTS,IB2B_TOKEN_URL,IB2B_USERNAME,IB2B_SECRET,CONTENT_ORGANIZER_BASE_URL,CONTENT_ORGANIZER_APPLICATION_ID,CONTENT_ORGANIZER_API_VERSION,CONTENT_ORGANIZER_PROMPT_SETTING_ID,CONTENT_ORGANIZER_PROMPT_VARIABLE_ID,CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID,CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID,CONTENT_ORGANIZER_WORKFLOW,CONTENT_ORGANIZER_WORKFLOW_VERSION,CONTENT_ORGANIZER_MODEL,CONTENT_ORGANIZER_APPLICATION_NAME"
         ports:
         - containerPort: 80
           name: http

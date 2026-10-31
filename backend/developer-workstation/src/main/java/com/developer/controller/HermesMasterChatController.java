@@ -23,8 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Hermes Master（HM）对话入口：常驻 DW 每个页面的助手。
  *
- * <p>模型接入方式与 {@link AiStudioChatController} 同源：同一把开关 {@code ai-generation.enabled}、
- * 同一条集团 AI gateway 链路、同一套 AMToken 凭证解析。</p>
+ * <p>与 {@link AiStudioChatController} 共用开关 {@code ai-generation.enabled}。模型链路默认经 Automation 走
+ * Content Organizer（{@code ai-generation.hermes-master.provider}）；AMToken 仍照常解析，只在切回直连 gateway 时用到。</p>
  */
 @RestController
 @RequestMapping("/ai-generation/hermes-master")

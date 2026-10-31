@@ -4,8 +4,9 @@ import type { HermesMasterChatPayload, HermesMasterChatResult } from '@/types/he
 
 export const hermesMasterApi = {
   /**
-   * Hermes Master 单轮对话。模型链路与 AI Studio Copilot 同源：AMToken 经 X-AM-Token 头透传，
-   * 读不到就不带，后端以 AI_GATEWAY_TOKEN_MISSING 显式失败。
+   * Hermes Master 单轮对话。后端默认经 Automation 走 Content Organizer，此时用不到 AMToken；
+   * 只有后端切回直连 AI gateway（ai-generation.hermes-master.provider=GAIP）时才用它，
+   * 所以仍照常经 X-AM-Token 头透传，读不到就不带。
    * 错误由气泡自己展示，所以关掉全局错误提示。
    */
   chat: (data: HermesMasterChatPayload, signal?: AbortSignal) => {

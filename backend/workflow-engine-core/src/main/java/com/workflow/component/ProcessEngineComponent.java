@@ -115,7 +115,9 @@ public class ProcessEngineComponent {
     )
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public ProcessInstanceResult startProcess(StartProcessRequest request) {
-        return processStartComponent.startProcess(request);
+        var result = processStartComponent.startProcess(request);
+        result.applyRuntimeStatus(processInstanceStatusReader.getProcessInstanceStatus(result.getProcessInstanceId()));
+        return result;
     }
 
     /**

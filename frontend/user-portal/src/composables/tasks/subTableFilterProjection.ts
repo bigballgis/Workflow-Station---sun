@@ -7,9 +7,8 @@
  * Intersection, not exclusive partition: a row with both FKs appears in both
  * widgets. Widget edits merge the slice back into the canonical array.
  *
- * V1 is unchanged unless the form actually has two SUB bindings on the same
- * table with different configured filter FKs. Missing parent → empty list, not
- * the full store.
+ * Explicit filters apply even without sibling bindings. Legacy bindings without
+ * an explicit filter retain the multi-binding detection. Missing parent → empty.
  */
 
 import { declaredFilterFkFields } from './miBindingKindFromConfig'
@@ -22,6 +21,7 @@ export interface FilterProjectionBinding {
   tableName?: string | null
   designerTableName?: string | null
   bindingType?: string | null
+  bindingLinkMode?: string | null
   primaryKeyFields?: string[] | null
   fieldDefinitions?: Array<{
     fieldName?: string
@@ -69,7 +69,8 @@ export function projectSavedRowsForBinding<T>(
   form: FilterProjectionFormContext,
 ): T[] | undefined {
   if (!rows) return rows
-  if (!shouldProjectByFilter(binding, siblings)) return rows
+  if (!shouldProjectByFilter(binding, siblings)
+    && (!binding.filterFkFieldName || binding.bindingLinkMode === 'miParticipantRow')) return rows
   const rowsByTable = snapshotRowsByTable(siblings)
   const parentValues = resolveFilterParentValues(binding, form, rowsByTable, siblings)
   // Multi-filter table whose parent key is not on the form: claim nothing.

@@ -34,6 +34,8 @@ import {
   subTableRowsLackSavedFieldPayload,
 } from './subTableRowUtils'
 import { resolveSubTablePrimaryKeyFields } from '@/composables/tasks/useMiConfig'
+import { sameSubTableRow } from '@/composables/tasks/subTableRowMerge'
+import { sliceRowsByDeclaredFilter } from '@/composables/tasks/subTableFilterProjection'
 import type { TaskDetailCtx } from './context'
 
 export interface TaskDetailMiLinkChildFns {
@@ -235,12 +237,31 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       // current participant; leave foreign placeholders byte-for-byte intact. (#1444)
       const foreignRows: Record<string, unknown>[] = []
       const seedableRows: Record<string, unknown>[] = []
+      const snapshot = miFullSubTablesSnapshotRef.value
+      const savedRows = snapshot
+        ? ctx.getSavedSubTableRows(snapshot, b, false) ?? []
+        : []
+      const localNestedRows = parentRow
+        ? pullNestedRowsForBindingFromParentRows(b, [parentRow])
+        : []
       for (const raw of b.data) {
         if (!raw || typeof raw !== 'object') {
           foreignRows.push(raw as Record<string, unknown>)
           continue
         }
         const row = raw as Record<string, unknown>
+        // Saved ownership is authoritative. Missing FK does not mean a new child:
+        // the same canonical table can also contain case-level records (#1226).
+        if (savedRows.some(saved => sameSubTableRow(saved, row, b.primaryKeyFields))) {
+          foreignRows.push(row)
+          continue
+        }
+        if (b.filterFkFieldName
+          && sliceRowsByDeclaredFilter([row], b, [myRowId]).length === 0
+          && !localNestedRows.some(local => local === row || sameSubTableRow(local, row, b.primaryKeyFields))) {
+          foreignRows.push(row)
+          continue
+        }
         if (linkChildRowIsForeignParticipantPlaceholder(row, myRowId, fkConfig)) {
           foreignRows.push(row)
           continue

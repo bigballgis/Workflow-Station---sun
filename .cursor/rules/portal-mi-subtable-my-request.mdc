@@ -6,6 +6,15 @@ alwaysApply: false
 
 # Portal — My Request × MI 子表数据规则
 
+## 同表不同父关系的归属（#1724 / 用户报告 1226）
+
+- `filterFkFieldName` / `filterFkRefTableId` 是每条 binding 的关系声明；结构 FK 解析优先它，不能取整表字段中的第一个非空 FK。合法双外键行允许在两条关系中出现。
+- 已有行通过服务端快照与配置主键 / `platformRowUuid` 识别；缺少当前交易 FK 不代表新行，不得在加载或提交准备阶段补写其归属。
+- 新行补值须证明属于当前关系或当前父行的本地嵌套编辑区；不能只因主键已分配就判断它已保存。
+- 显式过滤关系在单 binding 表单中也适用；MI collection 保持参与者切片语义。画布外的主表配置主键须保留，否则 Case 投影会错误为空。
+- 已移除的判据：显式关系下“空 FK 即当前交易新行”；显式关系读取依赖 sibling binding 在场；同表多 FK 按元数据顺序取第一个。
+- 回归：`miDualBindingOwnership.test.ts`、`miMainKeyProjection.test.ts`、`subTableFilterProjection.test.ts`；页面与查库脚本 `frontend/scripts/verify-1226-ownership.mjs`。核查入口：`rg -n 'filterFkFieldName|savedRows|localNestedRows' frontend/user-portal/src/composables/tasks/miLinkChildIdentity.ts frontend/user-portal/src/composables/taskDetail/useTaskDetailMiLinkChild.ts`。
+
 与 `portal-design-parity.mdc` **数据 parity** 配套：同一 `__subTables__` 在不同 **viewContext** 下 MUST 按下列语义 hydrate，不得混用 To Do 的 MI 切片逻辑。
 
 ## `__subTables__` 规范 key —— 一张表一份数据（单一真相源）
