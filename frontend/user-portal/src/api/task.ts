@@ -106,7 +106,7 @@ export interface TaskActionInfo {
 export interface TaskInfo {
   taskId: string
   taskName: string
-  /** 「当前步骤」名（MI 感知）：普通节点=taskName；多实例子任务=外层多实例 subProcess name（如 "multi"）。 */
+  /** 「当前步骤」名：普通节点=taskName；MI 子任务=外层节点名: 子任务名（如 "multi: sub form1"）。 */
   currentStepName?: string
   description?: string
   processInstanceId: string
@@ -125,6 +125,7 @@ export interface TaskInfo {
   assignmentTarget?: string
   assignee: string
   assigneeName?: string
+  assigneeDisplay?: string
   delegatorId?: string
   delegatorName?: string
   delegatedTargetType?: string

@@ -90,6 +90,7 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
   }
 
   function getCurrentAssigneeDisplay() {
+    if (taskInfo.value.assigneeDisplay != null) return taskInfo.value.assigneeDisplay || '-'
     if (taskInfo.value.assigneeName) return taskInfo.value.assigneeName
     if (taskInfo.value.assignee) return taskInfo.value.assignee
     if (taskInfo.value.candidateUsers) {

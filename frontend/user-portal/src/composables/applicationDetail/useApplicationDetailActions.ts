@@ -39,6 +39,7 @@ export function createApplicationDetailActions(ctx: ApplicationDetailCtx): Appli
   })
 
   const getCurrentAssigneeDisplay = () => {
+    if (processInfo.value.currentAssigneeDisplay != null) return processInfo.value.currentAssigneeDisplay || '-'
     // Direct assignee
     if (processInfo.value.currentAssignee) {
       return processInfo.value.currentAssignee

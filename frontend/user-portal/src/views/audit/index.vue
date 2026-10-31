@@ -159,7 +159,7 @@
                     {{ getStatusLabel(row.status) }}
                   </el-tag>
                   <template v-else>
-                    {{ row[col.field as keyof ProcessInstance] || '-' }}
+                    {{ (col.field === 'currentAssignee' ? row.currentAssigneeDisplay ?? row.currentAssignee : row[col.field as keyof ProcessInstance]) || '-' }}
                   </template>
                 </template>
               </el-table-column>

@@ -67,7 +67,7 @@ public class TaskInfo {
     private String miBusinessUnitCode;
 
     /**
-     * 「当前步骤」名（MI 感知）：普通节点=任务名；多实例子任务=外层多实例 subProcess name（如 "multi"）。
+     * 「当前步骤」名（MI 感知）：普通节点=任务名；多实例子任务=外层节点名: 子任务名（如 "multi: sub form1"）。
      * 供 To Do/Completed 列表与详情展示，区别于 taskName（具体内层子任务名）。
      */
     private String currentStepName;

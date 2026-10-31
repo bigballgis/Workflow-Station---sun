@@ -11,10 +11,12 @@ export function formatTodoCurrentAssignee(
   task: {
     assignee?: string | null
     assigneeName?: string | null
+    assigneeDisplay?: string | null
     claimedByCurrentUser?: boolean
   },
   youLabel: string,
 ): string {
+  if (task.assigneeDisplay != null) return task.assigneeDisplay || '-'
   const name = String(task.assigneeName || task.assignee || '').trim()
   if (!name) return '-'
   if (task.claimedByCurrentUser) return youLabel

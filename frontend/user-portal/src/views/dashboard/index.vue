@@ -385,7 +385,7 @@
                 {{ row.currentStepName || row.currentNode || '—' }}
               </td>
               <td class="cell-muted">
-                {{ row.currentAssignee || '—' }}
+                {{ (row.currentAssigneeDisplay ?? row.currentAssignee) || '—' }}
               </td>
               <td>
                 <span
