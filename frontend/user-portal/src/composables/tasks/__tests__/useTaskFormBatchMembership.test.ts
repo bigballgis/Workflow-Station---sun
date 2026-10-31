@@ -8,12 +8,12 @@ vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), error: vi.fn() }
 vi.mock('@/api/processForm', () => ({ submitTaskForm: vi.fn(), getTaskFormData: vi.fn() }))
 
 describe('batch membership submit payload', () => {
-  it('protected assignment without batch runtime does not submit or erase lookup caches', async () => {
+  it.each([false, true])('task without batch runtime does not submit or erase lookup caches, protected=%s', async tracked => {
     const rows = [{ entry_key: 'A', amount: 1, _wsRowVersion: 1 }]
     const lookup = [{ directory_key: 'U1', display_name: 'Display only' }]
     const form = useTaskForm({ subTableBindings: ref([
       { bindingId: 2, tableId: 20, tableName: 'renamed_lines', bindingMode: 'EDITABLE', primaryKeyFields: ['entry_key'], data: rows },
-    ]), assignmentTracked: ref(true), isMiSubTaskMode: ref(false), isCompletedTask: ref(false), effectiveTaskId: ref('task-1'),
+    ]), assignmentTracked: ref(tracked), isMiSubTaskMode: ref(false), isCompletedTask: ref(false), effectiveTaskId: ref('task-1'),
     taskFormDTO: ref({ subTableBatchRuntimeEnabled: false, fieldValues: { __subTables__: { 'dw:renamed_lines': rows } } }) })
     form.formData.value = { __subTables__: { 'dw:renamed_lines': rows, 'rt:renamed_directory': lookup } }
     expect(form.buildCurrentTaskFormSubmitPayload().formData.__subTables__).toEqual({ 'dw:renamed_lines': rows })
@@ -37,7 +37,7 @@ describe('batch membership submit payload', () => {
       { bindingId: '2', storeKey: 'dw:lines', rowKeys: [{ entry_key: 'A' }], emptied: false },
     ])
   })
-  it('omits read-only display copies only for enhanced instances, without erasing page data', async () => {
+  it('omits read-only display copies for all tasks without erasing page data', async () => {
     const parent = [{ parent_key: 'P1', assignee_display_name: 'Synthetic display', __subTables__: {} }]
     const child = [{ line_key: 'L1', description: 'edited', _wsRowVersion: 1 }]
     const dto = ref({ subTableBatchRuntimeEnabled: true, fieldValues: { __subTables__: {
@@ -56,7 +56,7 @@ describe('batch membership submit payload', () => {
     await form.saveCurrentTaskForm()
     expect(form.formData.value.__subTables__['dw:parents']).toEqual(parent)
     dto.value.subTableBatchRuntimeEnabled = false
-    expect(form.buildCurrentTaskFormSubmitPayload().formData.__subTables__).toHaveProperty('dw:parents')
+    expect(form.buildCurrentTaskFormSubmitPayload().formData.__subTables__).not.toHaveProperty('dw:parents')
   })
   it('declares deletion-to-empty with frozen identities and the saved row version', () => {
     const capabilities = { grid: { batchControlId: 'grid', bindingId: '101', originalCrud: {},

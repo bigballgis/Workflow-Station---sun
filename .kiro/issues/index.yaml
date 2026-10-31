@@ -5568,14 +5568,16 @@
   status: fixed
   severity: major
   category: bug
-  fixed_at: "2026-10-30"
-  summary: "受保护非batch表单把只读Lookup缓存回传为子表写入，自动保存403并阻止完成"
+  fixed_at: "2026-10-31"
+  summary: "普通及受保护任务把只读Lookup缓存回传为子表写入，自动保存403并阻止完成"
   file: "frontend/user-portal/src/composables/tasks/useTaskForm.ts"
   detail: |
-    可写store投影原仅受batchRuntime开关控制；现同时读取服务端assignmentTracked，按表单绑定组装请求，
-    保存成功回写保留只读渲染缓存，不猜表名，legacy行为不变。新反例先红后绿且实际保存验证缓存仍在。
-    13项专项、236项MI单测和6个浏览器场景通过；正常前端构建重建后同任务autosave红→绿，真实两人MI整单完成。
-    增量独立重审PASS；见docs/verification/2026-10-30-assignment-50122.md。
+    10-30已处理受保护非batch任务；10-31确认普通任务同样受后端TaskSubTableSubmission绑定校验，
+    前端却只在batch/assignmentTracked时过滤，导致29055528把rt:sys_users展示缓存当写请求。
+    所有Task按显式可写binding投影，保留空数组删除及行版本声明；保存成功合并页面缓存，不猜表名、不放宽后端权限。
+    主线合并的新bundle仍红，修复后同任务submit200，lock_version2→3，业务行内容及数量不变，Lookup仍显示且不入业务存储。
+    普通/保护回归先红后绿，四文件31项通过，独立增量审查通过；任务未批准或推进。
+    见docs/verification/2026-10-31-task-lookup-write.md及原2026-10-30-assignment-50122.md。
 - id: "1725"
   status: fixed
   severity: major

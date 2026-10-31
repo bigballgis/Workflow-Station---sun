@@ -392,22 +392,15 @@ export function useTaskForm(options: {
       }
     }
 
-    if (taskFormDTO.value?.subTableBatchRuntimeEnabled === true || options.assignmentTracked?.value === true) {
-      const writableBindings = submitBindings.filter(binding => binding.bindingMode !== 'READONLY')
-      const bindingIds = new Set(writableBindings.map(binding => String(binding.bindingId)))
-      const projected = projectWritableSubTables(subTables, writableBindings)
-      return {
-        formData: { __subTables__: projected },
-        subTableData: projectWritableSubTables(subTableData, writableBindings),
-        emptiedSubTableKeys: emptiedSubTableKeys.filter(key => Object.prototype.hasOwnProperty.call(projected, key)),
-        subTableBindingScopes: subTableBindingScopes.filter(scope => bindingIds.has(scope.bindingId)),
-      }
-    }
+    // Every task write is checked against its form bindings, including ordinary tasks.
+    const writableBindings = submitBindings.filter(binding => binding.bindingMode !== 'READONLY')
+    const bindingIds = new Set(writableBindings.map(binding => String(binding.bindingId)))
+    const projected = projectWritableSubTables(subTables, writableBindings)
     return {
-      formData: { __subTables__: subTables },
-      subTableData,
-      emptiedSubTableKeys,
-      subTableBindingScopes,
+      formData: { __subTables__: projected },
+      subTableData: projectWritableSubTables(subTableData, writableBindings),
+      emptiedSubTableKeys: emptiedSubTableKeys.filter(key => Object.prototype.hasOwnProperty.call(projected, key)),
+      subTableBindingScopes: subTableBindingScopes.filter(scope => bindingIds.has(scope.bindingId)),
     }
   }
 
@@ -474,9 +467,7 @@ export function useTaskForm(options: {
       // re-hydration (variables resync / polling) reverts the link form to the
       // page-load snapshot until a full refresh.
       if (JSON.stringify(formData.value.__subTables__) === pageSnapshot) {
-        const tables = taskFormDTO.value?.subTableBatchRuntimeEnabled === true || options.assignmentTracked?.value === true
-          ? { ...formData.value.__subTables__, ...payload.formData.__subTables__ }
-          : payload.formData.__subTables__
+        const tables = { ...formData.value.__subTables__, ...payload.formData.__subTables__ }
         formData.value = { ...formData.value, __subTables__: tables }
       }
       if (payload.subTableBindingScopes.length) await refreshSavedSubTableVersions(payload)
