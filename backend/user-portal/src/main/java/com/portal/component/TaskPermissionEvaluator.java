@@ -28,6 +28,7 @@ public class TaskPermissionEvaluator {
     private final DelegationRuleRepository delegationRuleRepository;
     private final WorkflowEngineClient workflowEngineClient;
     private final WorkspaceTaskFilterComponent workspaceTaskFilterComponent;
+    private final AssignmentClaimReadAnnotator assignmentClaims;
 
     /**
      * Runtime empty pool: no assignee, candidates, groups, or assignmentTarget (matches Flowable identity links); do not tighten by assignmentType.
@@ -182,10 +183,14 @@ public class TaskPermissionEvaluator {
      * cannot drift apart on who holds a request.
      */
     public void annotateClaimState(TaskInfo task, String userId, String portalUsername) {
+        if (task != null) annotateClaimState(List.of(task), userId, portalUsername);
+    }
+
+    private void annotateExistingClaimState(TaskInfo task, String userId, String portalUsername) {
         if (task == null) {
             return;
         }
-        boolean pool = BuRolePoolTasks.isClaimPoolTask(task);
+        boolean pool = BuRolePoolTasks.isClaimPoolTask(task) || isVerifiedBackupParticipation(task);
         task.setClaimPoolTask(pool);
         if (!pool) {
             task.setClaimedByCurrentUser(false);
@@ -201,9 +206,17 @@ public class TaskPermissionEvaluator {
         if (tasks == null) {
             return;
         }
+        assignmentClaims.annotate(tasks, userId);
         for (TaskInfo task : tasks) {
-            annotateClaimState(task, userId, portalUsername);
+            annotateExistingClaimState(task, userId, portalUsername);
+            assignmentClaims.enforce(task);
         }
+    }
+
+    private boolean isVerifiedBackupParticipation(TaskInfo task) {
+        var access=task.getAssignmentClaimAccess();
+        return access!=null && Boolean.TRUE.equals(access.tracked()) && access.claim()!=null
+                && ("BACKUP".equals(access.claim().poolSource()) || "BACKUP".equals(access.claim().holderSource()));
     }
 
     public boolean isHeldByUser(TaskInfo task, String userId, String portalUsername) {

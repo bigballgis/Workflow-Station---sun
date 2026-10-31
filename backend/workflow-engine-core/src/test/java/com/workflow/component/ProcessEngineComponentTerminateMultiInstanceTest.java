@@ -36,6 +36,7 @@ class ProcessEngineComponentTerminateMultiInstanceTest {
     /** Terminating an instance also terminates any Function Unit sub-processes it called. */
     @Mock
     private ProcessCallCascade processCallCascade;
+    @Mock private com.workflow.assignment.AssignmentProcessWriteBoundary assignmentProcessWrites;
 
     @InjectMocks
     private ProcessEngineComponent processEngineComponent;

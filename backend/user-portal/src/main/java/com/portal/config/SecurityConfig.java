@@ -43,6 +43,7 @@ public class SecurityConfig {
                 // their existing controller-level authorization; the BI facade is explicitly
                 // fail-closed here and also resolves its user solely from SecurityContext.
                 .requestMatchers("/health/**", "/.well-known/health").permitAll()
+                .requestMatchers("/internal/assignment/source-snapshots").permitAll()
                 .requestMatchers("/bi/**").authenticated()
                 .anyRequest().permitAll())
             .exceptionHandling(exceptions -> exceptions

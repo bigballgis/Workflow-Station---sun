@@ -59,6 +59,8 @@ public class ProcessInstanceQueryManager {
 
     @Autowired
     private MultiInstanceCanceller multiInstanceCanceller;
+    @Autowired @org.springframework.context.annotation.Lazy
+    private com.workflow.assignment.AssignmentLegacyHistoryCheck assignmentCleanup;
 
     /**
      * Query process instances
@@ -135,6 +137,7 @@ public class ProcessInstanceQueryManager {
         if (!StringUtils.hasText(processInstanceId)) {
             return;
         }
+        assignmentCleanup.requireLegacyInstance(processInstanceId); // Outside the legacy best-effort catches, before any task/history deletion.
         try {
             ProcessInstance runtimePi = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)

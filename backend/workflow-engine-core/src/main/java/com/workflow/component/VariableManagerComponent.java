@@ -44,6 +44,8 @@ public class VariableManagerComponent {
     private final ProcessVariableRepository processVariableRepository;
     private final ObjectMapper objectMapper;
     private final DataTableManagerComponent dataTableManagerComponent;
+    @org.springframework.beans.factory.annotation.Autowired @org.springframework.context.annotation.Lazy
+    private com.workflow.assignment.AssignmentLegacyTaskCheck assignmentLegacy;
 
     /**
      * 设置流程变量
@@ -59,7 +61,13 @@ public class VariableManagerComponent {
         
         // 验证请求参数
         validateVariableSetRequest(request);
-        
+        // Protected writes require the platform's final-check/receipt command, not this generic setter.
+        switch (request.getScope()) {
+            case PROCESS_INSTANCE -> assignmentLegacy.requireLegacyInstance(request.getProcessInstanceId());
+            case EXECUTION -> assignmentLegacy.requireLegacyExecution(request.getExecutionId());
+            case TASK -> assignmentLegacy.requireLegacy(request.getTaskId());
+            default -> throw new IllegalArgumentException("Unsupported variable scope");
+        }
         try {
             // 根据作用域设置变量
             switch (request.getScope()) {
@@ -167,6 +175,7 @@ public class VariableManagerComponent {
      */
     @Transactional
     public void removeVariable(String processInstanceId, String variableName) {
+        assignmentLegacy.requireLegacyInstance(processInstanceId);
         log.info("删除流程变量: processInstanceId={}, name={}", processInstanceId, variableName);
         
         try {
@@ -211,13 +220,7 @@ public class VariableManagerComponent {
                 .build();
     }
 
-    /**
-     * 类型转换和格式化
-     * 
-     * @param value 原始值
-     * @param targetType 目标类型
-     * @return 转换后的值
-     */
+    /** 类型转换和格式化。 */
     public Object convertVariableType(Object value, VariableType targetType) {
         if (value == null) {
             return null;
@@ -305,9 +308,7 @@ public class VariableManagerComponent {
         runtimeService.setVariableLocal(request.getTaskId(), request.getName(), processedValue);
     }
 
-    /**
-     * 处理变量值，根据类型进行序列化
-     */
+    /** 处理变量值，根据类型进行序列化。 */
     private Object processVariableValue(Object value, VariableType type) {
         if (value == null) {
             return null;
@@ -341,9 +342,7 @@ public class VariableManagerComponent {
         }
     }
 
-    /**
-     * 创建变量实体用于历史记录
-     */
+    /** 创建变量实体用于历史记录。 */
     private ProcessVariable createVariableEntity(VariableSetRequest request) {
         ProcessVariable.ProcessVariableBuilder builder = ProcessVariable.builder()
                 .name(request.getName())

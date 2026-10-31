@@ -46,6 +46,7 @@ class TodoListBatchGroupKeyTest {
     @Mock private TaskPermissionEvaluator taskPermissionEvaluator;
     @Mock private ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
     @Mock private MineTaskScanner mineTaskScanner;
+    @Mock private TaskQueryPresentation taskPresentation;
 
     @InjectMocks
     private TodoListQueryComponent component;
@@ -61,6 +62,7 @@ class TodoListBatchGroupKeyTest {
     private static TaskInfo.TaskInfoBuilder task(String taskId) {
         return TaskInfo.builder()
                 .taskId(taskId)
+                .assignmentClaimAccess(com.portal.testsupport.AssignmentReadTestSupport.legacy(taskId))
                 .processInstanceId("pi-" + taskId)
                 .processDefinitionId("purchase:3:abc")
                 .taskDefinitionKey("dept")

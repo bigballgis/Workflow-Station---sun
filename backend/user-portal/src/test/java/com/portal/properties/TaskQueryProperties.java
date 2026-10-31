@@ -93,12 +93,12 @@ class TaskQueryProperties {
                 workflowEngineClient, processInstanceRepository, workspaceFilter);
         MineTaskListCache mineCache = new MineTaskListCache();
         TaskPermissionEvaluator permissionEvaluator =
-                new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
+                new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter, org.mockito.Mockito.mock(com.portal.component.AssignmentClaimReadAnnotator.class));
         ClaimForceUnclaimAnnotator claimAnnotator =
                 org.mockito.Mockito.mock(ClaimForceUnclaimAnnotator.class);
         MineTaskScanner mineScanner = new MineTaskScanner(
                 mineCache, engineFetcher, requestIdEnricher, permissionEvaluator, claimAnnotator,
-                workspaceFilter, processInstanceRepository);
+                workspaceFilter, processInstanceRepository, org.mockito.Mockito.mock(com.portal.component.TaskQueryPresentation.class));
         taskQueryComponent = new TaskQueryComponent(
             workflowEngineClient,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
@@ -109,7 +109,8 @@ class TaskQueryProperties {
             engineFetcher,
             org.mockito.Mockito.mock(TaskDetailQueryComponent.class),
             org.mockito.Mockito.mock(TodoListQueryComponent.class),
-            mineCache
+            mineCache,
+            org.mockito.Mockito.mock(com.portal.component.TaskQueryPresentation.class)
         );
         random = new Random();
         

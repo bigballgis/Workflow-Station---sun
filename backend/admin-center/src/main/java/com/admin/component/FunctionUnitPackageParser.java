@@ -70,6 +70,9 @@ public class FunctionUnitPackageParser {
         addJsonDir(rawFiles, "connections/", connections);
         addJsonDir(rawFiles, "email-monitors/", emailMonitors);
         RecordNotePackageValidator.validate(contents, forms, objectMapper);
+        for (var content : contents) if (content.getContentType() == ContentType.PROCESS) {
+            com.platform.common.assignment.AssignmentExclusionBpmnValidator.policies(content.getContentData());
+        }
 
         FunctionUnitManagerComponent.FunctionPackageContent packageContent =
                 FunctionUnitManagerComponent.FunctionPackageContent.builder()

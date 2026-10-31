@@ -89,7 +89,7 @@ export function createTaskDetailState(options: { taskId: string }) {
   const diagramInViewport = ref(false)
 
   const submitting = ref(false)
-  const taskInfo = ref<Partial<TaskInfo>>({})
+  const taskInfo = ref<Partial<TaskInfo> & { assignmentLocalDraftRetained?: boolean; assignmentWriteCheckPending?: boolean }>({})
   const effectiveTaskId = computed(() => {
     const currentTaskId = (taskInfo.value as Record<string, unknown>)?.taskId
     return typeof currentTaskId === 'string' && currentTaskId.trim().length > 0 ? currentTaskId : taskId

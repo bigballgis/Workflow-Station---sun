@@ -1,6 +1,7 @@
 import type { ComputedRef } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getTaskDetail } from '@/api/task'
+import { isAssignmentWriteBlocked } from '@/utils/assignmentWriteAccess'
 import { processApi } from '@/api/process'
 import {
   coerceSubTablesVariableToMap,
@@ -17,6 +18,7 @@ import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
 import { settleHistoryThenRefreshOwnerOverlay } from '@/composables/owner/overlayOwnerFromCompletedSnapshot'
 import { pinnedCatalogContentRef } from '@/utils/pinnedCatalogContentRef'
 import type { TaskDetailCtx } from './context'
+import { retainAssignmentDraft, retainAssignmentDraftAfterReadFailure, resetTaskDetailForHydration } from './taskDetailReloadState'
 
 /**
  * Setup-only externals the loader needs that are not registered on `ctx`.
@@ -32,9 +34,8 @@ export interface TaskDetailLoaderFns {
 }
 
 /**
- * Top-level task-detail load orchestrator — extracted verbatim from detail.vue
- * `loadTaskDetail`. Behavior is unchanged; cross-module calls resolve through
- * `ctx.*` at invocation time, exactly as in the original single-file version.
+ * Task-detail loading checks eligibility before resetting/hydrating the mounted form.
+ * Cross-module calls resolve through ctx so qualification loss can retain local input.
  */
 export function createTaskDetailLoader(
   ctx: TaskDetailCtx,
@@ -45,10 +46,6 @@ export function createTaskDetailLoader(
   const {
     loading,
     formRenderReady,
-    fuFormSubTableFields,
-    detailUiPhase,
-    diagramInViewport,
-    nodeFormMap,
     previousForms,
     subTableBindings,
     taskError,
@@ -67,27 +64,23 @@ export function createTaskDetailLoader(
   const cloneSubTableRows = cloneSubTableRowsImpl
 
   const loadTaskDetail = async () => {
-    loading.value = true
-    formRenderReady.value = false
-    fuFormSubTableFields.value = []
-    detailUiPhase.value = 0
-    diagramInViewport.value = false
-    ctx.disconnectDiagramViewportObserver()
-    ctx.deferredNodeFormMapContent = null
-    nodeFormMap.value = new Map()
-    // #1446: in-place reload (e.g. after MI save) must start from the same blank slate as a fresh
-    // mount — stale previous-step rows / pre-save binding rows would otherwise re-enter the MI
-    // merge candidates (mergePriorStepSubTablesAfterMiIsolate seeds from current binding data)
-    // and win over the refetched values.
-    previousForms.value = []
-    subTableBindings.value = []
-    taskError.value = null
-    // Re-derived below from completion, BPMN readOnly and claim state; without the reset an
-    // in-place reload after claiming would keep the read-only flag the previous pass set.
-    formReadOnly.value = false
+    let keptDraft = false
+    const wasEditable = !formReadOnly.value
+    const claim = taskInfo.value.assignmentClaimAccess
+    const legacy = claim?.tracked === false && claim.state === 'LEGACY' && !taskInfo.value.assignmentLocalDraftRetained
+    if (legacy) resetTaskDetailForHydration(ctx)
+    else {
+      ctx.taskForm.clearAutosaveTimer()
+      formReadOnly.value = true
+      loading.value = !formRenderReady.value || taskInfo.value.taskId !== taskId
+      taskInfo.value = { ...taskInfo.value, assignmentWriteCheckPending: true }
+    }
     try {
       const res = await getTaskDetail(taskId)
       const data = res.data || res
+      keptDraft = !!data && retainAssignmentDraft(ctx, data, wasEditable)
+      if (keptDraft) return
+      if (!legacy) resetTaskDetailForHydration(ctx)
       if (data) {
         taskInfo.value = data
         isCompletedTask.value = ctx.isCompletedTaskData(data) || ctx.hasCompletedSnapshotRoute()
@@ -100,6 +93,7 @@ export function createTaskDetailLoader(
         if (data.claimPoolTask && !data.claimedByCurrentUser) {
           formReadOnly.value = true
         }
+        if (isAssignmentWriteBlocked(data)) formReadOnly.value = true
         // Set before any hydration runs (loadFunctionUnitContent / loadProcessAndTaskFormData /
         // rehydrateSharedProcessSubTableBindings below): those calls gate cross-binding sibling-slice
         // merging on this flag for MI dashboard bindings, and observing it still `false` here let an
@@ -268,6 +262,9 @@ export function createTaskDetailLoader(
         })
       }
     } catch (error: any) {
+      keptDraft = !legacy && retainAssignmentDraftAfterReadFailure(ctx, wasEditable)
+      if (keptDraft) return
+      if (!legacy && !taskInfo.value.assignmentLocalDraftRetained) resetTaskDetailForHydration(ctx)
       console.error('Failed to load task detail:', error)
       const status = error.response?.status
       const msg = resolveUserFacingHttpMessage(error, t)
@@ -337,8 +334,9 @@ export function createTaskDetailLoader(
       }
       ElMessage.error(taskError.value)
     } finally {
+      if (!legacy) taskInfo.value.assignmentWriteCheckPending = false
       loading.value = false
-      if (!taskError.value) {
+      if (!taskError.value && !keptDraft) {
         formRenderReady.value = true
         ctx.scheduleDetailUiPhases()
       }

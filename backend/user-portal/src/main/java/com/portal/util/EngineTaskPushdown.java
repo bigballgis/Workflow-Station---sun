@@ -14,9 +14,9 @@ import java.util.Set;
  * Decides when Portal To Do chrome can be pushed into workflow-engine {@code TaskQuery}
  * (engine window page + engine filtered total) instead of a portal fullScan.
  *
- * <p>Pushable: taskName / currentStepName, processDefinitionName, priority ENUM bands,
+ * <p>Pushable: taskName, processDefinitionName, priority ENUM bands,
  * createTime / dueDate (incl. relative day ops), and sorts on createTime/dueDate/priority/name.
- * Memory-only: initiatorName, assigneeName, requestId, functionUnitCode, assignmentType,
+ * Memory-only: currentStepName, initiatorName, assigneeName, requestId, functionUnitCode, assignmentType,
  * keyword / legacy list filters.
  */
 public final class EngineTaskPushdown {
@@ -32,7 +32,6 @@ public final class EngineTaskPushdown {
 
     private static final Set<String> PUSHABLE_FIELDS = Set.of(
             "taskName",
-            "currentStepName",
             "processDefinitionName",
             "priority",
             "createTime",
@@ -100,9 +99,6 @@ public final class EngineTaskPushdown {
             return false;
         }
         List<ListColumnFilter> filters = TaskQueryColumnFilters.normalize(request.getFilters());
-        if (hasBothTaskNameAndCurrentStepName(filters)) {
-            return false;
-        }
         for (ListColumnFilter filter : filters) {
             if (!isPushableFilter(filter)) {
                 return false;
@@ -135,7 +131,7 @@ public final class EngineTaskPushdown {
             }
             String field = f.field();
             String op = normalizeOp(f.operator());
-            if ("taskName".equals(field) || "currentStepName".equals(field)) {
+            if ("taskName".equals(field)) {
                 String value = f.value() != null ? f.value().trim() : "";
                 if (value.isEmpty()) {
                     continue;
@@ -213,22 +209,6 @@ public final class EngineTaskPushdown {
                 sortBy, sortDirection);
     }
 
-    private static boolean hasBothTaskNameAndCurrentStepName(List<ListColumnFilter> filters) {
-        boolean taskName = false;
-        boolean step = false;
-        for (ListColumnFilter filter : filters) {
-            if (!isPushableFilter(filter)) {
-                continue;
-            }
-            if ("taskName".equals(filter.field())) {
-                taskName = true;
-            } else if ("currentStepName".equals(filter.field())) {
-                step = true;
-            }
-        }
-        return taskName && step;
-    }
-
     private static boolean isPushableFilter(ListColumnFilter filter) {
         if (filter == null || filter.field() == null) {
             return false;
@@ -239,7 +219,7 @@ public final class EngineTaskPushdown {
         }
         String op = normalizeOp(filter.operator());
         return switch (field) {
-            case "taskName", "currentStepName", "processDefinitionName" -> PUSHABLE_TEXT_OPS.contains(op);
+            case "taskName", "processDefinitionName" -> PUSHABLE_TEXT_OPS.contains(op);
             case "priority" -> "eq".equals(op) && priorityBandBounds(filter.value()) != null;
             case "createTime", "dueDate" -> dateBounds(filter) != null;
             default -> false;

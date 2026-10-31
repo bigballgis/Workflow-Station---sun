@@ -113,7 +113,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
 
         // Auto-correct stale IDs (formId, subTableId, actionIds) using name lookup
         bpmnXml = fixStaleIds(functionUnitId, bpmnXml);
-
+        com.developer.util.AssignmentDesignValidation.requireValid(bpmnXml);
         ProcessDefinition existing = processDefinitionRepository
                 .findByFunctionUnitId(functionUnitId)
                 .orElse(null);

@@ -8,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.Optional;
@@ -25,6 +24,7 @@ public class SubTableRowAssignmentComponent {
 
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskPermissionEvaluator taskPermissionEvaluator;
+    private final AssignmentSubTableAssignment protectedAssignments;
 
     /** Lazy: breaks cycle with {@link TaskProcessComponent} (auto-claim and task loading stay on the facade). */
     @Lazy
@@ -34,18 +34,15 @@ public class SubTableRowAssignmentComponent {
     /**
      * Assigns sub-table row processor (MI sub-process prerequisite) via {@link WorkflowEngineClient}.
      */
-    @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId) {
         return assignSubTableRow(taskId, rowId, null, assigneeId, userId, null);
     }
 
-    @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId,
                                                  String portalUsername) {
         return assignSubTableRow(taskId, rowId, null, assigneeId, userId, portalUsername);
     }
 
-    @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, Map<String, Object> rowKey, String assigneeId,
                                                  String userId, String portalUsername) {
         if (!workflowEngineClient.isAvailable()) {
@@ -70,6 +67,8 @@ public class SubTableRowAssignmentComponent {
             taskProcessComponent.claimTask(taskId, userId, portalUsername);
         }
 
+        var protectedResult=protectedAssignments.assign(task,rowId,rowKey,assigneeId,userId);
+        if (protectedResult.isPresent()) return protectedResult.get();
         long pathRowId = rowId != null ? rowId : 0L;
         Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, pathRowId, assigneeId, rowKey);
         if (result.isEmpty()) {

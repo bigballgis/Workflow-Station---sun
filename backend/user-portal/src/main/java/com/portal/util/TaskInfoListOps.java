@@ -88,6 +88,7 @@ public final class TaskInfoListOps {
     }
 
     private static String assigneeSortKey(TaskInfo task) {
+        if (task.getAssigneeDisplay() != null) return task.getAssigneeDisplay();
         String name = task.getAssigneeName();
         if (name != null && !name.isBlank()) {
             return name;

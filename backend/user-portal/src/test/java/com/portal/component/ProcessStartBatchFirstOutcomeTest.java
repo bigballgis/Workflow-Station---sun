@@ -29,6 +29,8 @@ class ProcessStartBatchFirstOutcomeTest {
         ReflectionTestUtils.setField(component, "processInstanceRepository", instances);
         ReflectionTestUtils.setField(component, "ownerFieldComponent", mock(OwnerFieldComponent.class));
         ReflectionTestUtils.setField(component, "taskFormComponent", forms);
+        ReflectionTestUtils.setField(component, "initialTaskCompletion", new AssignmentInitialTaskCompletion(
+                mock(AssignmentCompletionOrchestrator.class), engine));
         ProcessInstance instance = new ProcessInstance(); instance.setProcessDefinitionId("frozen-definition");
         instance.setVariables(Map.of(SubTableWriteIsolation.BATCH_RUNTIME_FIELD, Map.of("schemaVersion", 1)));
         when(instances.findById("synthetic-instance")).thenReturn(Optional.of(instance));
@@ -44,7 +46,50 @@ class ProcessStartBatchFirstOutcomeTest {
     }
     private Object complete() {
         return ReflectionTestUtils.invokeMethod(component, "autoCompleteFirstTask", "synthetic-instance", "synthetic-user",
-                new HashMap<String, Object>(), new ProcessStartComponent.ActiveCatalogPin("catalog", "synthetic-process", "1"));
+                new HashMap<String, Object>(), new ProcessStartComponent.ActiveCatalogPin("catalog", "synthetic-process", "1"), false);
+    }
+
+    @Test void firstTaskAlreadyAssignedToInitiatorDoesNotRequireAnotherClaim() {
+        var task = new HashMap<>(firstTask()); task.put("currentAssignee", "synthetic-user");
+        when(engine.getProcessInstanceTasks("synthetic-instance")).thenReturn(Optional.of(Map.of("tasks", List.of(task))))
+                .thenReturn(Optional.of(Map.of("tasks", List.of())));
+        when(engine.claimTask("intake-task", "synthetic-user")).thenThrow(new com.platform.common.assignment.AssignmentFailure(
+                com.platform.common.assignment.AssignmentFailure.Reason.ASSIGNMENT_STATE_CHANGED));
+        when(engine.completeTask(eq("intake-task"), eq("synthetic-user"), eq("SUBMIT"), anyMap()))
+                .thenReturn(Optional.of(Map.of("success", true)));
+        Object outcome = complete();
+        assertThat(ReflectionTestUtils.getField(outcome, "firstStepError")).isNull();
+        verify(engine, never()).claimTask(anyString(), anyString());
+        verify(engine).completeTask(eq("intake-task"), eq("synthetic-user"), eq("SUBMIT"), anyMap());
+    }
+
+    @Test void protectedInitialSubmissionUsesAcceptedEffectInsteadOfLegacyCompletionAndSnapshot() {
+        var initial = mock(AssignmentInitialTaskCompletion.class);
+        ReflectionTestUtils.setField(component, "initialTaskCompletion", initial);
+        var plan = new SubTableBatchInitialMiOutcome.Plan("synthetic-instance", "frozen-definition", expected);
+        when(initial.complete("intake-task", "synthetic-user")).thenReturn(Optional.of(
+                new AssignmentCompletionOrchestrator.Result(java.util.UUID.randomUUID(), "READY", plan)));
+        Object outcome = complete();
+        assertThat(ReflectionTestUtils.getField(outcome, "firstStepError")).isNull();
+        assertThat(ReflectionTestUtils.getField(outcome, "assignmentPlan")).isEqualTo(plan);
+        verify(engine, never()).claimTask(anyString(), anyString());
+        verify(engine, never()).completeTask(anyString(), anyString(), anyString(), anyMap());
+        verifyNoInteractions(forms);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"PENDING_SYNC","SYNC_CONFLICT"})
+    void acceptedInitialSubmissionIsNeverReportedAsAnUncompletedFirstTask(String state) {
+        var initial = mock(AssignmentInitialTaskCompletion.class);
+        ReflectionTestUtils.setField(component, "initialTaskCompletion", initial);
+        var accepted = new AssignmentCompletionOrchestrator.Result(java.util.UUID.randomUUID(),state,null);
+        when(initial.complete("intake-task", "synthetic-user")).thenReturn(Optional.of(accepted));
+        Object outcome = complete();
+        assertThat(ReflectionTestUtils.getField(outcome, "firstStepError")).isNull();
+        assertThat(ReflectionTestUtils.getField(outcome, "initialCompletion")).isSameAs(accepted);
+        verify(engine, never()).claimTask(anyString(),anyString());
+        verify(engine, never()).completeTask(anyString(),anyString(),anyString(),anyMap());
+        verifyNoInteractions(forms);
     }
 
     @Test void onlySuccessfulEngineCompletionRetainsTheFrozenObservationPlan() {

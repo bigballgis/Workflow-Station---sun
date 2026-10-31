@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +37,16 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
     private final EventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final ActionEmailRuleConditionEvaluator ruleConditionEvaluator;
+
+    java.util.Optional<com.platform.common.assignment.AssignmentPostAction.Plan> prepareCompletion(com.portal.dto.TaskCompleteRequest request) {
+        var context=ActionPostEmailContext.builder().taskId(request.getTaskId()).actionId(request.getActionId())
+                .operation(request.getAction()).build();
+        var resolved=resolveIfNeeded(context);
+        if (resolved==null) return java.util.Optional.empty(); // No enabled mail rule is configured on this bound Action.
+        var info=resolved.info();
+        return java.util.Optional.of(new com.platform.common.assignment.AssignmentPostAction.Plan(info.getActionId(),info.getActionName(),info.getActionType(),
+                request.getComment(),resolved.rules()));
+    }
 
     @Override
     public <T> T runWithPostEmail(ActionPostEmailContext context, Supplier<T> action) {
@@ -263,23 +272,7 @@ public class ActionPostEmailComponentImpl implements ActionPostEmailComponent {
     }
 
     static Map<String, Object> buildPostEmailPayload(Map<String, Object> rule) {
-        Map<String, Object> postEmail = new HashMap<>();
-        for (String key : List.of(
-                "connectionId", "emailTo", "emailCc", "emailBcc", "emailFrom",
-                "emailTemplateId", "emailAttachments")) {
-            Object value = rule.get(key);
-            if (value != null) {
-                postEmail.put(key, value);
-            }
-        }
-        postEmail.put("enabled", true);
-        if (rule.get("id") != null) {
-            postEmail.put("ruleId", rule.get("id").toString());
-        }
-        if (rule.get("name") != null && StringUtils.hasText(rule.get("name").toString())) {
-            postEmail.put("ruleName", rule.get("name").toString());
-        }
-        return postEmail;
+        return com.platform.common.assignment.AssignmentPostAction.payload(rule);
     }
 
     private String resolveProcessInstanceId(ActionPostEmailContext context, Object result) {

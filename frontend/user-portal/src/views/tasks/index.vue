@@ -11,6 +11,7 @@
       @auto-preview-change="onAutoPreviewChange"
     />
 
+    <BatchCompletionStatus :rows="pendingCompletions" @refresh="refreshBatchCompletion" />
     <el-tabs
       :model-value="activeTab"
       class="todo-tabs"
@@ -418,6 +419,7 @@ import { computed, onMounted, onActivated, watch } from 'vue'
 import { ArrowLeft, Loading } from '@element-plus/icons-vue'
 import TodoListToolbar from './TodoListToolbar.vue'
 import TodoPageHeader from './TodoPageHeader.vue'
+import BatchCompletionStatus from '@/components/tasks/BatchCompletionStatus.vue'
 import TodoClaimRowActions from '@/components/tasks/TodoClaimRowActions.vue'
 import TaskReassignDialog from '@/components/tasks/TaskReassignDialog.vue'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
@@ -434,12 +436,10 @@ import { useTodoBatchMode } from '@/composables/tasks/useTodoBatchMode'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 import { actionButtonStyle, resolveActionButtonType } from '@/utils/actionButtonColor'
 import { actionIconComponent } from '@/utils/actionIcon'
-
 defineOptions({ name: 'Tasks' })
-
 const pendingTaskStore = usePendingTaskStore()
 const {
-  groups,
+  groups, pendingCompletions, refreshBatchCompletion,
   groupsLoading,
   batchRunning,
   runningActionId,

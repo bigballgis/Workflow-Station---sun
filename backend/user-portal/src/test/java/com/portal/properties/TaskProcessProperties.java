@@ -117,13 +117,13 @@ class TaskProcessProperties {
         WorkspaceTaskFilterComponent workspaceFilter = new WorkspaceTaskFilterComponent(
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository);
         TaskPermissionEvaluator taskPermissionEvaluator =
-            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
+            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter, org.mockito.Mockito.mock(com.portal.component.AssignmentClaimReadAnnotator.class));
         EngineVisibleTaskFetcher engineFetcher = new EngineVisibleTaskFetcher(
                 workflowEngineClient, processInstanceRepository, workspaceFilter);
         MineTaskListCache mineCache = new MineTaskListCache();
         MineTaskScanner mineScanner = new MineTaskScanner(
                 mineCache, engineFetcher, requestIdEnricher, taskPermissionEvaluator,
-                Mockito.mock(ClaimForceUnclaimAnnotator.class), workspaceFilter, processInstanceRepository);
+                Mockito.mock(ClaimForceUnclaimAnnotator.class), workspaceFilter, processInstanceRepository, Mockito.mock(com.portal.component.TaskQueryPresentation.class));
         TaskDetailQueryComponent taskDetail = new TaskDetailQueryComponent(
                 processInstanceRepository, workflowEngineClient, engineSubTableHydrator, taskActionService,
                 new MiParticipantEnrichmentComponent(jdbcTemplate), requestIdEnricher);
@@ -143,7 +143,8 @@ class TaskProcessProperties {
             engineFetcher,
             taskDetail,
             Mockito.mock(TodoListQueryComponent.class),
-            mineCache
+            mineCache,
+            Mockito.mock(com.portal.component.TaskQueryPresentation.class)
         );
         ProcessInstanceSyncComponent processInstanceSyncComponent =
             new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository,
@@ -163,7 +164,8 @@ class TaskProcessProperties {
         );
         SubTableRowAssignmentComponent subTableRowAssignmentComponent = new SubTableRowAssignmentComponent(
             workflowEngineClient,
-            taskPermissionEvaluator
+            taskPermissionEvaluator,
+            Mockito.mock(com.portal.component.AssignmentSubTableAssignment.class)
         );
         MiOverlayComponent miOverlayComponent = new MiOverlayComponent(
             workflowEngineClient,

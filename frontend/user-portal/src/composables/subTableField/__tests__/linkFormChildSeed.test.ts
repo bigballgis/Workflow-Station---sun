@@ -22,6 +22,12 @@ describe('actual linked form child seed', () => {
   const child = { entry_token: 'CHILD-A', owner_ref: 'PARENT-A', quantity: 0,
     __subTables__: { 'dw:grandchildren': [{ token: 'OWN' }] } }
 
+  it('keeps case-sensitive text parent keys distinct like the declared database key', () => {
+    const { api, binding } = dialog({ data: [child, { ...child, entry_token: 'LOWER-CHILD', owner_ref: 'parent-a' }] })
+    expect(api.buildLinkedFormData(binding, { readonly: true }, { party_key: 'PARENT-A' }).entry_token).toBe('CHILD-A')
+    expect(api.buildLinkedFormData(binding, { readonly: true }, { party_key: 'parent-a' }).entry_token).toBe('LOWER-CHILD')
+  })
+
   it('uses configured child-to-parent FK, not equality between unrelated primary keys', () => {
     const { api, binding } = dialog({ data: [child] })
     const result = api.buildLinkedFormData(binding, { readonly: true }, { party_key: 'PARENT-A' })

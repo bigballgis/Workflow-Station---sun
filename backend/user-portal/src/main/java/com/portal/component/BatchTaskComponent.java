@@ -6,7 +6,8 @@ import com.portal.dto.BatchCompleteRequest;
 import com.portal.dto.BatchCompleteResponse;
 import com.portal.dto.BatchTaskGroup;
 import com.portal.dto.TaskActionInfo;
-import com.portal.dto.TaskCompleteRequest;
+import com.portal.dto.TaskCompletionResult;
+import com.platform.common.assignment.AssignmentFailure;
 import com.portal.dto.TaskInfo;
 import com.portal.exception.PortalException;
 import com.portal.service.TaskActionService;
@@ -41,7 +42,7 @@ public class BatchTaskComponent {
     private final TaskActionService taskActionService;
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskProcessComponent taskProcessComponent;
-    private final ActionPostEmailComponent actionPostEmailComponent;
+    private final BatchCompletionRecovery completion;
     private final MineTaskListCache mineTaskListCache;
 
     public List<BatchTaskGroup> listGroups(String userId) {
@@ -96,11 +97,23 @@ public class BatchTaskComponent {
     public BatchCompleteResponse complete(String userId, String username, BatchCompleteRequest request) {
         List<String> succeeded = new ArrayList<>();
         List<BatchCompleteResponse.Failure> failed = new ArrayList<>();
+        List<BatchCompleteResponse.Pending> pending = new ArrayList<>();
+        Map<String,java.util.UUID> completedOperations=new LinkedHashMap<>();
         for (String taskId : new LinkedHashSet<>(request.taskIds())) {
             try {
-                completeOne(taskId, userId, username, request);
-                succeeded.add(taskId);
+                var result=completion.run(taskId,request,userId,username,()->completeOne(taskId,userId,username,request));
+                if (result!=null && result.state()!=null && !"READY".equals(result.state())) {
+                    pending.add(new BatchCompleteResponse.Pending(taskId,result.operationId(),result.state()));
+                } else {
+                    succeeded.add(taskId);
+                    if (result!=null && result.operationId()!=null) completedOperations.put(taskId,result.operationId());
+                }
             } catch (Exception e) {
+                if (request.operationIds().containsKey(taskId) && e instanceof AssignmentFailure typed
+                        && "ASSIGNMENT_DEPENDENCY_UNAVAILABLE".equals(typed.getDetails().get("reason"))) {
+                    pending.add(new BatchCompleteResponse.Pending(taskId,request.operationIds().get(taskId),"DELIVERY_UNKNOWN"));
+                    continue;
+                }
                 log.warn("Batch complete failed for task {} by user {}: {}", taskId, userId, e.getMessage());
                 failed.add(new BatchCompleteResponse.Failure(taskId,
                         e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
@@ -110,10 +123,10 @@ public class BatchTaskComponent {
             // The To Do list / groups / badge read a 15s Mine cache; completed tasks must leave it now.
             mineTaskListCache.invalidate();
         }
-        return new BatchCompleteResponse(succeeded, failed);
+        return new BatchCompleteResponse(succeeded, failed,pending,completedOperations);
     }
 
-    private void completeOne(String taskId, String userId, String username, BatchCompleteRequest request) {
+    private TaskCompletionResult completeOne(String taskId, String userId, String username, BatchCompleteRequest request) {
         Map<String, Object> engineTask = fetchEngineTask(taskId)
                 .orElseThrow(() -> new PortalException("404", "Task not found or already completed"));
         TaskInfo task = EngineTaskMapper.convertMapToTaskInfo(engineTask);
@@ -145,20 +158,7 @@ public class BatchTaskComponent {
             taskProcessComponent.claimTask(taskId, userId, username);
         }
 
-        TaskCompleteRequest complete = TaskCompleteRequest.builder()
-                .taskId(taskId)
-                .action(completeAction)
-                .actionId(action.getActionId())
-                .comment(comment)
-                .build();
-        actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
-                .actionId(action.getActionId())
-                .operation("REJECT".equals(completeAction)
-                        ? ActionPostEmailContext.OP_REJECT : ActionPostEmailContext.OP_APPROVE)
-                .taskId(taskId)
-                .operatorId(userId)
-                .comment(comment)
-                .build(), () -> taskProcessComponent.completeTask(complete, userId, username));
+        return completion.complete(taskId,request,completeAction,userId,username);
     }
 
     /**

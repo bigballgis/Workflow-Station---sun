@@ -67,6 +67,8 @@ public class RecordNoteComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskPermissionEvaluator taskPermissionEvaluator;
     private final com.portal.component.RecordNoteUploadSourceResolver recordNoteUploadSources;
+    @org.springframework.beans.factory.annotation.Autowired
+    private AssignmentPortalWriteExecutor assignmentWrites;
 
     public PageResponse<NoteItem> list(String userId, NoteTarget target, int page, int size,
                                        String processInstanceId) {
@@ -103,8 +105,10 @@ public class RecordNoteComponent {
                 ? target.getTargetId() : processInstanceId);
         target.setTaskId(taskId);
         target.setVerifiedUploadSource(recordNoteUploadSources.resolve(userId, target));
-        NoteItem created = recordNoteSubmissions.submit(new com.portal.recordnote.RecordNoteSubmissionComponent.Submission(userId, resolveName(userId), target,
-                subject, bodyHtml, files, adoptInlineIds));
+        var submission=new com.portal.recordnote.RecordNoteSubmissionComponent.Submission(userId,resolveName(userId),target,subject,bodyHtml,files,adoptInlineIds);
+        NoteItem created = taskId==null || taskId.isBlank() ? recordNoteSubmissions.submit(submission)
+                : assignmentWrites.execute(AssignmentPortalWriteGuard.Request.of(taskId,userId,"RECORD_NOTE",recordNoteSubmissions.fingerprint(submission),target.getProcessInstanceId()),
+                        false,()->recordNoteSubmissions.submit(submission));
         if (!Boolean.TRUE.equals(created.getReplayed())) {
             audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
                     null, RecordNoteAuditSummary.created(created, uploadedFileNames(files)));
@@ -119,7 +123,12 @@ public class RecordNoteComponent {
         checkWriteAccess(userId, target, processInstanceId, taskId);
         target.setProcessInstanceId(RecordNote.TARGET_TABLE.equals(target.getTargetType())
                 ? target.getTargetId() : processInstanceId);
-        return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
+        target.setTaskId(taskId);
+        String name=resolveName(userId);
+        if (taskId==null || taskId.isBlank()) return recordNoteService.createAttachment(target,file,true,userId,name);
+        var submission=new com.portal.recordnote.RecordNoteSubmissionComponent.Submission(userId,name,target,null,null,List.of(file),List.of());
+        return assignmentWrites.execute(AssignmentPortalWriteGuard.Request.of(taskId,userId,"ATTACHMENT",recordNoteSubmissions.fingerprint(submission),target.getProcessInstanceId()),
+                false,()->recordNoteService.createAttachment(target,file,true,userId,name));
     }
 
     /**

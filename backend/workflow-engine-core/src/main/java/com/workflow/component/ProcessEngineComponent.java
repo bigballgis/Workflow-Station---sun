@@ -19,10 +19,6 @@ import com.workflow.enums.AuditOperationType;
 import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
-
-import com.platform.common.i18n.I18nService;
-import com.platform.messaging.support.NotificationDispatchHelper;
-
 import lombok.extern.slf4j.Slf4j;
 
 import org.flowable.engine.RepositoryService;
@@ -77,10 +73,8 @@ public class ProcessEngineComponent {
     private ProcessCallCascade processCallCascade;
 
     @Autowired
-    private NotificationDispatchHelper notificationDispatchHelper;
-
-    @Autowired
-    private I18nService i18nService;
+    private ProcessStartComponent processStartComponent;
+    @Autowired private com.workflow.assignment.AssignmentProcessWriteBoundary assignmentProcessWrites;
 
     @Autowired
     private ProcessDeploymentManager processDeploymentManager;
@@ -119,81 +113,11 @@ public class ProcessEngineComponent {
         captureArgs = true,
         captureResult = true
     )
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public ProcessInstanceResult startProcess(StartProcessRequest request) {
-        try {
-            // Validate request parameters
-            validateStartProcessRequest(request);
-
-            // Verify process definition exists
-            ProcessDefinition processDefinition;
-            if (request.getExpectedProcessDefinitionId() == null) {
-                processDefinition = getProcessDefinition(request.getProcessDefinitionKey());
-            } else {
-                processDefinition = repositoryService.createProcessDefinitionQuery()
-                        .processDefinitionId(request.getExpectedProcessDefinitionId()).singleResult();
-                if (processDefinition == null) {
-                    // FALLBACK(migration): pre-isolation catalogs stored key:version:uuid display ids.
-                    // Resolve that exact version/id, never latest. Remove after those catalogs are backfilled.
-                    String exact = processDeploymentManager.flowableDefinitionId(request.getExpectedProcessDefinitionId());
-                    if (exact != null) processDefinition = repositoryService.createProcessDefinitionQuery()
-                            .processDefinitionId(exact).singleResult();
-                }
-                if (processDefinition == null || processDefinition.isSuspended()
-                        || !request.getProcessDefinitionKey().equals(processDefinition.getKey())) {
-                    throw new com.platform.common.functionunit.FunctionUnitVersionException(
-                            "VERSION_DEFINITION_MISMATCH", request.getExpectedProcessDefinitionId());
-                }
-            }
-
-            // Start process instance with start user
-            ProcessInstance processInstance;
-            if (StringUtils.hasText(request.getStartUserId())) {
-                // Set start user ID
-                org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(request.getStartUserId());
-                try {
-                    processInstance = startValidatedDefinition(request, processDefinition);
-                } finally {
-                    // Clear authenticated user ID
-                    org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(null);
-                }
-            } else {
-                processInstance = startValidatedDefinition(request, processDefinition);
-            }
-
-            ProcessInstanceResult result = ProcessInstanceResult.builder()
-                .processInstanceId(processInstance.getId())
-                .processDefinitionId(processInstance.getProcessDefinitionId())
-                .processDefinitionKey(processInstance.getProcessDefinitionKey())
-                .businessKey(processInstance.getBusinessKey())
-                .name(processInstance.getName())
-                .startTime(processInstance.getStartTime() != null ?
-                    LocalDateTime.ofInstant(processInstance.getStartTime().toInstant(), ZoneId.systemDefault()) : null)
-                .startUserId(request.getStartUserId()) // Use the request startUserId
-                .variables(request.getVariables())
-                .success(true)
-                .message("Process instance started successfully")
-                .build();
-            result.applyRuntimeStatus(processInstanceStatusReader.getProcessInstanceStatus(processInstance.getId()));
-
-            if (StringUtils.hasText(request.getStartUserId())) {
-                String key = request.getProcessDefinitionKey();
-                notificationDispatchHelper.publishToUserAfterCommit(
-                        request.getStartUserId(),
-                        "PROCESS",
-                        i18nService.getMessage("workflow.notification.process_started_title"),
-                        i18nService.getMessage(
-                                "workflow.notification.process_started_body",
-                                key,
-                                processInstance.getId()),
-                        "/tasks",
-                        "workflow-engine");
-            }
-
-            return result;
-
-        } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_START_ERROR", "Failed to start process instance: " + e.getMessage(), e);
-        }
+        var result = processStartComponent.startProcess(request);
+        result.applyRuntimeStatus(processInstanceStatusReader.getProcessInstanceStatus(result.getProcessInstanceId()));
+        return result;
     }
 
     /**
@@ -267,7 +191,7 @@ public class ProcessEngineComponent {
                     "Process instance does not exist");
             }
 
-            // Execute the corresponding operation
+            assignmentProcessWrites.enter(request.getProcessInstanceId());
             switch (request.getAction().toLowerCase()) {
                 case "suspend" -> {
                     if (processInstance.isSuspended()) {
@@ -343,6 +267,7 @@ public class ProcessEngineComponent {
                 }
             }
 
+        } catch (com.platform.common.assignment.AssignmentFailure denied) { throw denied;
         } catch (WorkflowValidationException e) {
             return ProcessInstanceControlResult.failure(
                 request.getProcessInstanceId(),
@@ -744,38 +669,6 @@ public class ProcessEngineComponent {
             return ((Number) value).doubleValue();
         }
         return Double.parseDouble(String.valueOf(value));
-    }
-
-    private void validateStartProcessRequest(StartProcessRequest request) {
-        if (!StringUtils.hasText(request.getProcessDefinitionKey())) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition key must not be empty", request.getProcessDefinitionKey())));
-        }
-    }
-
-    private ProcessInstance startValidatedDefinition(StartProcessRequest request, ProcessDefinition definition) {
-        return request.getExpectedProcessDefinitionId() == null
-                ? runtimeService.startProcessInstanceByKey(request.getProcessDefinitionKey(), request.getBusinessKey(), request.getVariables())
-                : runtimeService.startProcessInstanceById(definition.getId(), request.getBusinessKey(), request.getVariables());
-    }
-
-    private ProcessDefinition getProcessDefinition(String processDefinitionKey) {
-        ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
-            .processDefinitionKey(processDefinitionKey)
-            .latestVersion()
-            .singleResult();
-
-        if (processDefinition == null) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition does not exist", processDefinitionKey)));
-        }
-
-        if (processDefinition.isSuspended()) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition is suspended, cannot start new instance", processDefinitionKey)));
-        }
-
-        return processDefinition;
     }
 
     private void validateProcessInstanceControlRequest(ProcessInstanceControlRequest request) {

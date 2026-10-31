@@ -13,9 +13,13 @@ final class SubTableBatchTaskWriteContext {
                    Map<String, Object> formData, Map<String, Object> baseline) { }
 
     static Map<String, Object> resolve(Request request, WorkflowEngineClient engine) {
+        return resolve(request,engine,false);
+    }
+
+    static Map<String, Object> resolve(Request request, WorkflowEngineClient engine,boolean protectedAssignment) {
         Map<String, Object> submitted = request.formData();
-        if (request.baseline() == null || !request.baseline().containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)
-                || submitted == null) return submitted;
+        if (submitted==null || !protectedAssignment && (request.baseline() == null
+                || !request.baseline().containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD))) return submitted;
         Map<String, Object> detail = engine.requireTaskWriteContext(request.taskId());
         if (detail == null || !(detail.get("writeContext") instanceof Map<?, ?> context)
                 || !request.taskId().equals(context.get("taskId")) || !request.processId().equals(context.get("processInstanceId"))
@@ -28,7 +32,7 @@ final class SubTableBatchTaskWriteContext {
         if (mi) {
             if (!(context.get("currentItem") instanceof Map<?, ?> item) || !(item.get("rowKey") instanceof Map<?, ?> key)
                     || key.isEmpty() || key.entrySet().stream().anyMatch(entry -> !(entry.getKey() instanceof String name)
-                    || name.isBlank() || !(entry.getValue() instanceof String || entry.getValue() instanceof Number)
+                    || name.isBlank() || !(entry.getValue() instanceof String || entry.getValue() instanceof Number || entry.getValue() instanceof Boolean)
                     || String.valueOf(entry.getValue()).isBlank())) throw invalid();
             result.put("_currentItem", Map.of("rowKey", new LinkedHashMap<>(key)));
         }

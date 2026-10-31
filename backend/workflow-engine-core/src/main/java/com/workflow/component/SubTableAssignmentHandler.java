@@ -69,6 +69,8 @@ public class SubTableAssignmentHandler {
 
     @Autowired
     private I18nService i18nService;
+    @Autowired
+    private com.workflow.assignment.AssignmentLegacyTaskCheck assignmentLegacy;
     
     /**
      * Assign sub-table row assignee.
@@ -92,6 +94,7 @@ public class SubTableAssignmentHandler {
         if (task == null) {
             throw new WorkflowValidationException("Task not found: " + taskId);
         }
+        assignmentLegacy.requireLegacy(task); // Protected rows are written atomically with the Portal source snapshot.
 
         // 2. Retrieve sub-table configuration from task extended properties or process definition
         SubTableConfig config = getSubTableConfig(task);

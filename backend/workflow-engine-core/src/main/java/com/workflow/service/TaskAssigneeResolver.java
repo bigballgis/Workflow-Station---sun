@@ -39,6 +39,8 @@ public class TaskAssigneeResolver {
          * false + errorMessage != null = 配置/数据错误（如角色无准入、无候选人，重试无用，需人工修配置）。
          */
         private boolean infraFailure;
+        /** A successful source lookup with nobody available; distinct from malformed configuration or transport failure. */
+        private boolean emptyPool;
     }
 
     /**
@@ -56,6 +58,10 @@ public class TaskAssigneeResolver {
 
     public ResolveResult resolveWithRoleIds(String assigneeTypeCode, List<String> roleIds, String businessUnitId,
                                  String initiatorId, String anchorUserId, String anchorActiveBusinessUnitId) {
+        if (com.workflow.assignment.AssignmentCreationBuffer.active()) {
+            com.workflow.assignment.AssignmentCreationBuffer.record(com.workflow.assignment.AssignmentSourceSpec.resolver(
+                    new com.workflow.assignment.AssignmentSourceSpec.Resolver(assigneeTypeCode, roleIds, businessUnitId, initiatorId, anchorUserId, anchorActiveBusinessUnitId)));
+        }
         AssigneeType assigneeType = AssigneeType.fromCode(assigneeTypeCode);
         if (assigneeType == null) {
             log.warn("Unknown or deprecated assignee type: {}", assigneeTypeCode);
@@ -114,6 +120,8 @@ public class TaskAssigneeResolver {
                         .errorMessage("Unsupported assignee type in resolver: " + assigneeType)
                         .build();
             };
+        } catch (com.platform.common.assignment.AssignmentFailure e) {
+            throw e;
         } catch (AdminCenterUnavailableException e) {
             log.error("admin-center unavailable while resolving assignee: type={}, error={}",
                     assigneeType, e.getMessage());
@@ -151,6 +159,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(assigneeType)
                     .errorMessage("ASSIGNEE_FROM_VARIABLE: no user IDs resolved")
+                    .emptyPool(true)
                     .build();
         }
         if (ids.size() == 1) {
@@ -195,11 +204,11 @@ public class TaskAssigneeResolver {
     private ResolveResult resolveFunctionalManager(String anchorUserId) {
         Map<String, Object> userInfo = adminCenterClient.getUserInfo(anchorUserId);
         if (userInfo == null) {
-            return failedManager(AssigneeType.FUNCTIONAL_MANAGER, "Cannot get user info: " + anchorUserId);
+            return failedManager(AssigneeType.FUNCTIONAL_MANAGER, "Cannot get user info: " + anchorUserId, false);
         }
         String managerId = (String) userInfo.get("functionManagerId");
         if (managerId == null || managerId.isEmpty()) {
-            return failedManager(AssigneeType.FUNCTIONAL_MANAGER, "User has no function manager: " + anchorUserId);
+            return failedManager(AssigneeType.FUNCTIONAL_MANAGER, "User has no function manager: " + anchorUserId, true);
         }
         return ResolveResult.builder()
                 .assignee(managerId)
@@ -211,11 +220,11 @@ public class TaskAssigneeResolver {
     private ResolveResult resolveEntityManager(String anchorUserId) {
         Map<String, Object> userInfo = adminCenterClient.getUserInfo(anchorUserId);
         if (userInfo == null) {
-            return failedManager(AssigneeType.ENTITY_MANAGER, "Cannot get user info: " + anchorUserId);
+            return failedManager(AssigneeType.ENTITY_MANAGER, "Cannot get user info: " + anchorUserId, false);
         }
         String managerId = (String) userInfo.get("entityManagerId");
         if (managerId == null || managerId.isEmpty()) {
-            return failedManager(AssigneeType.ENTITY_MANAGER, "User has no entity manager: " + anchorUserId);
+            return failedManager(AssigneeType.ENTITY_MANAGER, "User has no entity manager: " + anchorUserId, true);
         }
         return ResolveResult.builder()
                 .assignee(managerId)
@@ -224,11 +233,12 @@ public class TaskAssigneeResolver {
                 .build();
     }
 
-    private static ResolveResult failedManager(AssigneeType type, String msg) {
+    private static ResolveResult failedManager(AssigneeType type, String msg, boolean empty) {
         return ResolveResult.builder()
                 .assigneeType(type)
                 .requiresClaim(false)
                 .errorMessage(msg)
+                .emptyPool(empty)
                 .build();
     }
 
@@ -304,6 +314,8 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(type)
                     .errorMessage(emptyMsg)
+                    .emptyPool(true)
+                    .requiresClaim(true)
                     .build();
         }
         return ResolveResult.builder()

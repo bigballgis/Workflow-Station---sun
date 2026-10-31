@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * behavior is unchanged.
  */
 @Slf4j
-final class AssigneeUserIdNormalizer {
+public final class AssigneeUserIdNormalizer {
 
     /** Flowable ACT_RU/HI identity link USER_ID_/GROUP_ID_ columns are varchar(255). */
     static final int FLOWABLE_IDENTITY_USER_ID_MAX = 255;
@@ -45,7 +45,7 @@ final class AssigneeUserIdNormalizer {
         return null;
     }
 
-    static String normalizeFlowableUserIdValue(Object raw) {
+    public static String normalizeFlowableUserIdValue(Object raw) {
         if (raw == null) {
             return null;
         }

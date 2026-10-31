@@ -120,12 +120,12 @@ class EngineTaskPushdownTest {
     }
 
     @Test
-    void currentStepNamePushesAsTaskName() {
+    void currentStepNameMustNotPushThePaintedStageIntoNativeTaskName() {
         TaskQueryRequest request = TaskQueryRequest.builder()
-                .filters(List.of(new ListColumnFilter("currentStepName", "contains", "Review", null)))
+                .filters(List.of(new ListColumnFilter("currentStepName", "contains", "multi: Review", null)))
                 .build();
-        assertTrue(EngineTaskPushdown.canFullyPush(request));
-        assertEquals("Review", EngineTaskPushdown.from(request).taskNameLike());
+        assertFalse(EngineTaskPushdown.canFullyPush(request));
+        assertEquals(null, EngineTaskPushdown.from(request).taskNameLike());
     }
 
     @Test
@@ -136,5 +136,6 @@ class EngineTaskPushdownTest {
                         new ListColumnFilter("currentStepName", "contains", "Review", null)))
                 .build();
         assertFalse(EngineTaskPushdown.canFullyPush(request));
+        assertEquals("Approve", EngineTaskPushdown.from(request).taskNameLike());
     }
 }

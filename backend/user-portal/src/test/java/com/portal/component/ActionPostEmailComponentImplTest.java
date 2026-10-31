@@ -84,6 +84,21 @@ class ActionPostEmailComponentImplTest {
         verify(eventPublisher, never()).publish(any());
     }
 
+    @Test void protectedCompletionFreezesOnlyTheOriginalBoundActionWithoutPublishingOrHydrating() {
+        when(taskActionService.getTaskActions("t1")).thenReturn(List.of(action("7","APPROVE",enabledJson())));
+        var request=com.portal.dto.TaskCompleteRequest.builder().taskId("t1").actionId("7").action("APPROVE").comment("original comment").build();
+        var frozen=component.prepareCompletion(request).orElseThrow();
+        assertEquals("7",frozen.actionId()); assertEquals("APPROVE",frozen.actionType());
+        assertEquals("original comment",frozen.comment()); assertEquals(1,frozen.rules().size());
+        org.mockito.Mockito.verifyNoInteractions(eventPublisher,taskQueryComponent,processInstanceRepository,ruleConditionEvaluator);
+    }
+
+    @Test void protectedCompletionDoesNotInventAMailActionWhenNoneIsConfigured() {
+        var request=com.portal.dto.TaskCompleteRequest.builder().taskId("t1").action("APPROVE").build();
+        assertTrue(component.prepareCompletion(request).isEmpty());
+        org.mockito.Mockito.verifyNoInteractions(taskActionService,eventPublisher,taskQueryComponent,processInstanceRepository,ruleConditionEvaluator);
+    }
+
     @Test
     void unboundAction_runsWithoutPublish() {
         when(taskActionService.getTaskActions("t1")).thenReturn(List.of());

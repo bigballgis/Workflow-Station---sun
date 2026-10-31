@@ -18,6 +18,9 @@ import java.util.Map;
 @AllArgsConstructor
 public class TaskCompleteRequest {
 
+    /** Stable across retries of the same completion; required by the protected completion protocol. */
+    private java.util.UUID operationId;
+
     /** 任务ID */
     @NotBlank(message = "{validation.task_id_required}")
     private String taskId;

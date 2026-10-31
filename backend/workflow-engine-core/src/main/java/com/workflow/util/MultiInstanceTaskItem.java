@@ -25,7 +25,10 @@ public final class MultiInstanceTaskItem {
     }
 
     public static Object resolve(RepositoryService definitions, RuntimeService runtime, Task task) {
-        var model = definitions.getBpmnModel(task.getProcessDefinitionId());
+        return resolve(definitions.getBpmnModel(task.getProcessDefinitionId()), runtime, task);
+    }
+
+    public static Object resolve(org.flowable.bpmn.model.BpmnModel model, RuntimeService runtime, Task task) {
         var element = model == null ? null : model.getFlowElement(task.getTaskDefinitionKey());
         if (element == null) throw new IllegalStateException("Deployed assignment task definition is unavailable");
         var loop = loopFor(element);

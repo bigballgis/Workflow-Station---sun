@@ -42,6 +42,7 @@ class ProcessApplicationQueryListEnrichmentTest {
                 mock(FunctionUnitAccessComponent.class),
                 mock(JdbcTemplate.class),
                 mock(MiOuterStepResolver.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(component, "taskPresentation", org.mockito.Mockito.mock(ApplicationTaskPresentation.class));
 
         component.enrichRunningAssigneesFromEngine(List.of(instance));
 

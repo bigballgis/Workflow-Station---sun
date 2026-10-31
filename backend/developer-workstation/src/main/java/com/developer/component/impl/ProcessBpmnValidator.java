@@ -119,7 +119,7 @@ public class ProcessBpmnValidator {
         }
 
         validateSendEmailTasks(bpmnXml, result);
-
+        com.developer.util.AssignmentDesignValidation.collect(bpmnXml, result);
         return result;
     }
 

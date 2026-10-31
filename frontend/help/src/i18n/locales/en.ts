@@ -1,3 +1,4 @@
+import assignmentExclusionGuide from './assignmentExclusion.en'
 import tableDataMessages from './tableData.en'
 import formEventMessages from './formEvents.en'
 import formCtlMessages from './formCtl.en'
@@ -9,6 +10,7 @@ import aiStudioMessages from './aiStudio.en'
 import slaPoliciesMessages from './slaPolicies.en'
 
 export default {
+  assignmentExclusionGuide,
   biAudienceGuide: {
     title: 'Audience Assignment',
     intro: 'Choose who can open a Dashboard from the Portal home page. For Dashboards inside a Table View, use [[/bi-data-view-assignment]].',

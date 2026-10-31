@@ -67,6 +67,9 @@ class SubTableAssignmentHandlerTest {
 
     @Mock
     private BpmnActionParser bpmnActionParser;
+
+    @Mock
+    private com.workflow.assignment.AssignmentLegacyTaskCheck assignmentLegacy;
     
     @Mock
     private TaskQuery taskQuery;

@@ -1,7 +1,11 @@
 import type { AxiosRequestConfig } from 'axios'
+import type { SubTableAssignmentReceipt } from '@/types/subTableAssignmentReceipt'
 import { request } from './request'
 import { withoutRuntimeVersionContext } from '@/utils/runtimeVersionSubmission'
-import type { BatchAssignmentVerification } from './process'
+export type { BatchCompleteResult, TaskCompletionResult } from '@/types/assignmentCompletionResult'
+import { submitTaskCompletion } from './assignmentCompletion'
+import { submitBatchTaskCompletion } from './batchTaskCompletion'
+export { getCompletionOperationStatus } from './assignmentCompletion'
 
 import type { ListColumnFilterRequest, ListColumnMeta } from '@platform-shared/list/columnMeta'
 
@@ -73,11 +77,6 @@ export interface BatchTaskGroup {
   actions: BatchTaskAction[]
 }
 
-export interface BatchCompleteResult {
-  succeeded: string[]
-  failed: { taskId: string; reason: string }[]
-}
-
 export interface TaskQueryRequest {
   userId?: string
   assignmentTypes?: string[]
@@ -107,7 +106,7 @@ export interface TaskActionInfo {
 export interface TaskInfo {
   taskId: string
   taskName: string
-  /** 「当前步骤」名（MI 感知）：普通节点=taskName；多实例子任务=外层多实例 subProcess name（如 "multi"）。 */
+  /** 「当前步骤」名：普通节点=taskName；MI 子任务=外层节点名: 子任务名（如 "multi: sub form1"）。 */
   currentStepName?: string
   description?: string
   processInstanceId: string
@@ -126,6 +125,7 @@ export interface TaskInfo {
   assignmentTarget?: string
   assignee: string
   assigneeName?: string
+  assigneeDisplay?: string
   delegatorId?: string
   delegatorName?: string
   delegatedTargetType?: string
@@ -171,6 +171,8 @@ export interface TaskInfo {
   claimedByCurrentUser?: boolean
   /** Claim pool row free to claim by the signed-in user. */
   claimable?: boolean
+  assignmentClaimAccess?: import('@/types/assignmentClaimAccess').AssignmentClaimAccess
+  assignmentWriteAccess?: import('@/types/assignmentWriteAccess').AssignmentWriteAccess | null
   /** Leader / BU Approver / SYS_ADMIN may release someone else's hold. */
   canForceUnclaim?: boolean
   /** Leader / BU Approver / SYS_ADMIN may assign this pool task to a specified member. */
@@ -188,6 +190,7 @@ export interface PageResponse<T> {
 }
 
 export interface TaskCompleteRequest {
+  operationId?: string
   taskId: string
   action: string
   comment?: string
@@ -349,11 +352,8 @@ export function reassignTask(taskId: string, targetUserId: string) {
 }
 
 // Complete task
-export interface TaskCompletionResult {
-  batchAssignmentVerification: BatchAssignmentVerification
-}
 export function completeTask(taskId: string, data: TaskCompleteRequest) {
-  return request.post<{ data?: TaskCompletionResult | null }>(`/tasks/${taskId}/complete`, {
+  return submitTaskCompletion(taskId, {
     ...data,
     variables: data.variables && withoutRuntimeVersionContext(data.variables),
     formData: data.formData && withoutRuntimeVersionContext(data.formData),
@@ -408,7 +408,7 @@ export function getBatchTaskGroups() {
 
 /** Per-task results; one task failing never fails the others. */
 export function batchCompleteTasks(taskIds: string[], actionId: string, comment?: string) {
-  return request.post<{ data: BatchCompleteResult }>('/tasks/batch/complete', { taskIds, actionId, comment })
+  return submitBatchTaskCompletion(taskIds, actionId, comment)
 }
 
 /** One To Do task reachable from a Views grid row. */
@@ -435,7 +435,7 @@ export interface AssignSubTableRowRequest {
   assigneeId: string
 }
 
-export interface AssignSubTableRowResponse {
+export interface AssignSubTableRowResponse extends SubTableAssignmentReceipt {
   success: boolean
   rowId: number
   assigneeId: string

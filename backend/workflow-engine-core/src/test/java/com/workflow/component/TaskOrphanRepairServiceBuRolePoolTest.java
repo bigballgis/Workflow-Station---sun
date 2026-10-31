@@ -42,6 +42,7 @@ class TaskOrphanRepairServiceBuRolePoolTest {
     @BeforeEach
     void setUp() {
         service = new TaskOrphanRepairService();
+        ReflectionTestUtils.setField(service, "assignmentStates", org.mockito.Mockito.mock(com.workflow.assignment.AssignmentTaskStateRepository.class));
         ReflectionTestUtils.setField(service, "taskService", taskService);
         ReflectionTestUtils.setField(service, "runtimeService", runtimeService);
         ReflectionTestUtils.setField(service, "repositoryService", repositoryService);

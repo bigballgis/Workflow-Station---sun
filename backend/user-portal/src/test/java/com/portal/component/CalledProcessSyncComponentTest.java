@@ -43,6 +43,7 @@ class CalledProcessSyncComponentTest {
             return pi;
         });
         engine = mock(WorkflowEngineClient.class);
+        when(engine.getProcessInstance(anyString())).thenReturn(Optional.of(Map.of("assignmentTracked",false)));
         when(engine.getSubProcesses(anyString())).thenReturn(List.of());
         hydration = mock(ProcessInstanceHydrationComponent.class);
         // Hydration from the engine: a called instance has no catalog pin and no start user.
@@ -65,6 +66,21 @@ class CalledProcessSyncComponentTest {
             m.put((String) kv[i], kv[i + 1]);
         }
         return m;
+    }
+    @Test void protectedCalledWorkDoesNotUseTheLegacyHydrationAndOwnerWriter() {
+        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("assignmentTracked",true)));
+        when(engine.getSubProcesses("purchase")).thenReturn(List.of(Map.of("subProcessInstanceId","protected-child","callActivityId","call","embedded",false)));
+        component.recordCalledWork("purchase",status("nextTaskProcessInstanceId","protected-child","nextTaskName","Review"));
+        verify(hydration,never()).requireProcessInstance(anyString());
+        verify(sync,never()).updateProcessInstanceAssignee(anyString(),any(),any(),any());
+        verify(repository,never()).save(any());
+    }
+    @Test void protectedCallersAreProjectedOnlyByTheirAcceptedOperation() {
+        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("assignmentTracked",true)));
+        when(engine.getProcessInstanceStatus("purchase")).thenReturn(Optional.of(status("completed",false,"nextTaskName","Review")));
+        component.refreshCallers(status("completed",true,"processInstanceId","child","superProcessInstanceId","purchase"));
+        verify(sync,never()).updateProcessInstanceAssignee(anyString(),any(),any(),any());
+        verify(repository,never()).save(any());
     }
 
     @Test
@@ -149,7 +165,7 @@ class CalledProcessSyncComponentTest {
                     </bpmn:callActivity>
                   </bpmn:process>
                 </bpmn:definitions>"""));
-        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("variables", Map.of(
+        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of(
                 "vendor_check_result", "QUALIFIED", "title", "stale engine copy"))));
         when(engine.getProcessInstanceStatus("purchase")).thenReturn(Optional.of(status("completed", false)));
 
@@ -182,7 +198,7 @@ class CalledProcessSyncComponentTest {
                     </bpmn:callActivity>
                   </bpmn:process>
                 </bpmn:definitions>""".formatted(reserved)));
-        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("variables", Map.of(
+        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of(
                 reserved, Map.of("forged", true), "title", "engine"))));
 
         component.refreshCallers(status("completed", true, "processInstanceId", "vendor-check",
@@ -204,7 +220,7 @@ class CalledProcessSyncComponentTest {
                     <f:out source="result" target="%s"/>
                   </extensionElements></callActivity></process>
                 </definitions>""".formatted(reserved)));
-        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("variables", Map.of(reserved, "forged"))));
+        when(engine.getProcessInstance("purchase")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of(reserved, "forged"))));
 
         component.refreshCallers(status("completed", true, "processInstanceId", "vendor-check",
                 "superProcessInstanceId", "purchase"));
@@ -221,7 +237,7 @@ class CalledProcessSyncComponentTest {
         rows.get("purchase").setVariables(new HashMap<>(Map.of("__subTables__", Map.of("dw:lines", List.of(original)))));
         rows.put("child", ProcessInstance.builder().id("child").callActivityId("call")
                 .variables(Map.of(reserved, Map.of("private", "server-owned"))).build());
-        when(engine.getProcessInstance("child")).thenReturn(Optional.of(Map.of("variables", Map.of(
+        when(engine.getProcessInstance("child")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of(
                 "__callRow", Map.of("platformRowUuid", "A")))));
         when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:c="http://custom.bpmn.io/schema">
@@ -250,7 +266,7 @@ class CalledProcessSyncComponentTest {
         rows.put("check-b", ProcessInstance.builder().id("check-b").processDefinitionKey("fu-vendor")
                 .parentProcessInstanceId("purchase").callActivityId("PR_Call_ExtraVendors")
                 .variables(new HashMap<>(Map.of("check_result", "QUALIFIED"))).build());
-        when(engine.getProcessInstance("check-b")).thenReturn(Optional.of(Map.of("variables", Map.of(
+        when(engine.getProcessInstance("check-b")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of(
                 "__callRow", Map.of("platformRowUuid", "B", "vendor_name", "Initech")))));
         when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -287,7 +303,7 @@ class CalledProcessSyncComponentTest {
         rows.put("check-b", ProcessInstance.builder().id("check-b").processDefinitionKey("fu-vendor")
                 .parentProcessInstanceId("purchase").callActivityId("PR_Call_ExtraVendors")
                 .variables(new HashMap<>(Map.of("check_result", "QUALIFIED"))).build());
-        when(engine.getProcessInstance("check-b")).thenReturn(Optional.of(Map.of("variables", Map.of(
+        when(engine.getProcessInstance("check-b")).thenReturn(Optional.of(Map.of("assignmentTracked",false,"variables", Map.of(
                 "__callRow", Map.of("vendor_code", "V2", "vendor_name", "Initech")))));
         when(engine.getBpmnXml("fu-purchase", "purchase")).thenReturn(Optional.of("""
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"

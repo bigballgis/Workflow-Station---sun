@@ -67,7 +67,7 @@ public class TaskInfo {
     private String miBusinessUnitCode;
 
     /**
-     * 「当前步骤」名（MI 感知）：普通节点=任务名；多实例子任务=外层多实例 subProcess name（如 "multi"）。
+     * 「当前步骤」名（MI 感知）：普通节点=任务名；多实例子任务=外层节点名: 子任务名（如 "multi: sub form1"）。
      * 供 To Do/Completed 列表与详情展示，区别于 taskName（具体内层子任务名）。
      */
     private String currentStepName;
@@ -82,6 +82,7 @@ public class TaskInfo {
 
     /** 分配人/组名称 */
     private String assigneeName;
+    private String assigneeDisplay;
 
     /** 委托人ID（如果是委托任务） */
     private String delegatorId;
@@ -204,6 +205,10 @@ public class TaskInfo {
     /** 当前用户可以认领（认领池任务 + 本人在候选池 + 尚未被任何人 Claim）。 */
     @Builder.Default
     private boolean claimable = false;
+
+    /** Informational claim restriction; does not grant form viewing or processing permission. */
+    private com.platform.common.assignment.AssignmentTaskReadSnapshot.Entry assignmentClaimAccess;
+    private AssignmentTaskWriteAccess assignmentWriteAccess;
 
     /**
      * Leader / BU Approver / SYS_ADMIN may force-unclaim a hold that is not theirs.

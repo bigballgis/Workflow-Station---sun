@@ -45,6 +45,8 @@ public class ProcessController {
     private final ProcessEngineComponent processEngineComponent;
     private final org.flowable.engine.RuntimeService runtimeService;
     private final InstanceBpmnReader instanceBpmnReader;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.workflow.assignment.AssignmentTaskTrackingQuery assignmentTracking;
 
     /**
      * 部署流程定义
@@ -143,6 +145,7 @@ public class ProcessController {
             Map<String, Object> result = new HashMap<>();
             result.put("processInstanceId", instance.getProcessInstanceId());
             result.put("processDefinitionId", instance.getProcessDefinitionId());
+            result.put("assignmentTracked",assignmentTracking.trackedInstance(processInstanceId,instance.getProcessDefinitionId()));
             result.put("processDefinitionKey", instance.getProcessDefinitionKey());
             result.put("processDefinitionName", instance.getProcessDefinitionName());
             result.put("businessKey", instance.getBusinessKey());

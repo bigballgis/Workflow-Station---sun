@@ -41,6 +41,8 @@ public class TaskManagerComponent {
     @Lazy @Autowired private TaskActionService taskActionService;
     @Lazy @Autowired private TaskCompletionService taskCompletionService;
     @Lazy @Autowired private TaskStatsService taskStatsService;
+    @Lazy @Autowired private com.workflow.assignment.AssignmentWriteExecutor assignmentWrites;
+    @Lazy @Autowired private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
 
     // ==================== Task Query ====================
 
@@ -102,47 +104,63 @@ public class TaskManagerComponent {
         captureArgs = true,
         captureResult = true
     )
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult assignTask(String taskId, TaskAssignmentRequest request) {
-        return taskActionService.assignTask(taskId, request);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.ASSIGN, request.getOperatorUserId(), null,
+                request.getAssignmentType() == com.workflow.enums.AssignmentType.USER ? request.getAssignmentTarget() : null),
+                () -> taskActionService.assignTask(taskId, request));
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult delegateTask(String taskId, TaskDelegationRequest request) {
-        return taskActionService.delegateTask(taskId, request);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.DELEGATE, request.getDelegatedBy(), null,
+                request.isBuRoleTarget() ? null : request.getDelegatedTo()), () -> taskActionService.delegateTask(taskId, request));
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
-        return taskActionService.claimTask(taskId, request);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.CLAIM, request.getClaimedBy(), null, null),
+                () -> taskActionService.claimTask(taskId, request));
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult unclaimTask(String taskId, String userId) {
-        return taskActionService.unclaimTask(taskId, userId);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.UNCLAIM, userId, null, null), () -> taskActionService.unclaimTask(taskId, userId));
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult reassignClaim(String taskId, String operatorUserId, String targetUserId) {
-        return taskActionService.reassignClaim(taskId, operatorUserId, targetUserId);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.REASSIGN, operatorUserId, null, targetUserId),
+                () -> taskActionService.reassignClaim(taskId, operatorUserId, targetUserId));
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
-        return taskActionService.transferTask(taskId, fromUserId, toUserId, reason);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.TRANSFER, fromUserId, null, toUserId),
+                () -> taskActionService.transferTask(taskId, fromUserId, toUserId, reason));
     }
 
     // ==================== Task Completion and Rollback ====================
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                              Map<String, Object> variables) {
-        return taskCompletionService.completeTask(taskId, userId, variables);
+        return completeTask(taskId, userId, variables, true, null);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                              Map<String, Object> variables,
                                              boolean sendNotification) {
-        return taskCompletionService.completeTask(taskId, userId, variables, sendNotification);
+        return completeTask(taskId, userId, variables, sendNotification, null);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                              Map<String, Object> variables,
                                              boolean sendNotification,
                                              String onBehalfOfUserId) {
+        assignmentBoundary.requireLegacyCompletion(taskId);
         return taskCompletionService.completeTask(taskId, userId, variables, sendNotification, onBehalfOfUserId);
     }
 
@@ -153,8 +171,15 @@ public class TaskManagerComponent {
         captureArgs = true,
         captureResult = true
     )
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.SUPPORTS)
     public TaskAssignmentResult returnTask(String taskId, TaskReturnRequest request) {
-        return taskCompletionService.returnTask(taskId, request);
+        return assignmentWrites.execute(command(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.RETURN, request.getUserId(), null, null),
+                () -> taskCompletionService.returnTask(taskId, request));
+    }
+
+    private com.workflow.assignment.AssignmentWriteGuard.Command command(String task, com.workflow.assignment.AssignmentMutationScope.Operation operation, String actor, String represented, String target) {
+        return new com.workflow.assignment.AssignmentWriteGuard.Command(task,
+                operation, actor, represented, target);
     }
 
     public List<TaskListResult.TaskInfo> getReturnableActivities(String taskId) {

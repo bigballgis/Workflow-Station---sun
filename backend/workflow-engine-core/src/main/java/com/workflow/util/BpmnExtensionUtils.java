@@ -1,7 +1,7 @@
 package com.workflow.util;
 
 import org.flowable.bpmn.model.ExtensionElement;
-import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.BaseElement;
 
 import java.util.List;
 import java.util.Map;
@@ -14,7 +14,7 @@ public final class BpmnExtensionUtils {
     private BpmnExtensionUtils() {
     }
 
-    public static String getExtensionProperty(FlowElement flowElement, String propertyName) {
+    public static String getExtensionProperty(BaseElement flowElement, String propertyName) {
         if (flowElement.getExtensionElements() == null) {
             return null;
         }

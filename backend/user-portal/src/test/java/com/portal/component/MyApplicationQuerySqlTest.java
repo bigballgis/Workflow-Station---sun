@@ -45,6 +45,7 @@ class MyApplicationQuerySqlTest {
         component = new MyApplicationListQueryComponent(
                 jdbcTemplate, new com.fasterxml.jackson.databind.ObjectMapper(),
                 processApplicationQueryComponent, userDisplayNameResolver);
+        org.springframework.test.util.ReflectionTestUtils.setField(component, "taskPresentation", org.mockito.Mockito.mock(ApplicationTaskPresentation.class));
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
@@ -98,13 +99,20 @@ class MyApplicationQuerySqlTest {
     }
 
     @Test
-    void currentAssigneeContainsLooksAtCandidatePoolNotOnlyClaimedUser() {
+    void currentAssigneePresentationFilterIsNotPushedIntoStoredIdentitySql() {
         component.query("user-1", request(null,
                 List.of(new ListColumnFilter("currentAssignee", "contains", "id-a", null))));
 
-        assertThat(preparedSql.get(0)).contains("pi.candidate_users");
-        assertThat(preparedSql.get(0)).contains("concat_ws");
-        assertThat(pageSql()).contains("pi.candidate_users");
+        assertThat(preparedSql.get(0)).doesNotContain("pi.candidate_users");
+        assertThat(preparedSql.get(0)).doesNotContain("concat_ws");
+        assertThat(pageSql()).contains("pi.start_user_id = ?").doesNotContain("concat_ws");
+    }
+
+    @Test
+    void keywordScanStillUsesBoundNativePredicates() {
+        component.query("user-1", new MyApplicationQueryRequest(0,20,null,List.of(),null,null,"no-match"));
+        assertThat(preparedSql).anyMatch(sql->sql.contains("ILIKE") && sql.contains("pi.start_user_id = ?"));
+        assertThat(preparedSql).noneMatch(sql->sql.contains("no-match"));
     }
 
     @Test

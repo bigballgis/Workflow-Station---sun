@@ -50,6 +50,7 @@ class ProcessApplicationQueryComponentCompletionReconcileTest {
                 org.mockito.Mockito.mock(FunctionUnitAccessComponent.class),
                 jdbcTemplate,
                 org.mockito.Mockito.mock(MiOuterStepResolver.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(component, "taskPresentation", org.mockito.Mockito.mock(ApplicationTaskPresentation.class));
     }
 
     @Test

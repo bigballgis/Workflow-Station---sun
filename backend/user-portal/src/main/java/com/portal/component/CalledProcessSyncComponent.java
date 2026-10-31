@@ -68,6 +68,7 @@ public class CalledProcessSyncComponent {
             return;
         }
         try {
+            if (!legacySource(processInstanceId)) return;
             linkCalledInstances(processInstanceId, 0);
             processInstanceSyncComponent.updateProcessInstanceAssignee(
                     taskInstanceId,
@@ -92,6 +93,7 @@ public class CalledProcessSyncComponent {
                 return;
             }
             try {
+                if (!legacySource(callerId)) return;
                 if (Boolean.TRUE.equals(current.get("completed"))) {
                     copyOutputsToCaller(asString(current.get("processInstanceId")), callerId);
                 }
@@ -117,6 +119,12 @@ public class CalledProcessSyncComponent {
                 return;
             }
         }
+    }
+
+    /** Absence/unknown context cannot grant the old variable and Owner writer access to a protected mirror. */
+    private boolean legacySource(String instance) {
+        return workflowEngineClient.getProcessInstance(instance)
+                .map(AssignmentEngineReadContext::isLegacy).orElse(false);
     }
 
     /**

@@ -29,6 +29,22 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class SubTableWriteIsolationTest {
+    @Test void protectedPartialWritePreservesOmittedUnversionedStoresWithoutInventingWriteClaims() {
+        var isolation=new SubTableWriteIsolation(mock(MiSubTaskSubTableRowMerger.class),mock(SubTableBindingScopeGuard.class));
+        var participants=List.of(Map.of("participant_ref","A"),Map.of("participant_ref","B"));
+        var baseline=Map.<String,Object>of("__subTables__",Map.of("dw:participants",participants));
+        var inbound=new HashMap<String,Object>(Map.of("__subTables__",Map.of("dw:people",List.of(Map.of("person_ref","P")))));
+        isolation.apply(new SubTableWriteIsolation.Request(Map.of(),inbound,baseline,List.of(),List.of(),FU,null,null,null,true));
+        assertThat(((Map<?,?>)inbound.get("__subTables__")).get("dw:participants")).isEqualTo(participants);
+        assertThat(((Map<?,?>)inbound.get("__subTables__")).get("dw:people")).isEqualTo(List.of(Map.of("person_ref","P")));
+    }
+    @Test void protectedExplicitEmptyStoreIsNotReplacedByTheOmittedStorePreservation() {
+        var isolation=new SubTableWriteIsolation(mock(MiSubTaskSubTableRowMerger.class),mock(SubTableBindingScopeGuard.class));
+        var baseline=Map.<String,Object>of("__subTables__",Map.of("dw:participants",List.of(Map.of("participant_ref","A"))));
+        var inbound=new HashMap<String,Object>(Map.of("__subTables__",Map.of("dw:participants",List.of())));
+        isolation.apply(new SubTableWriteIsolation.Request(Map.of(),inbound,baseline,List.of(),List.of(),FU,null,null,null,true));
+        assertThat(((Map<?,?>)inbound.get("__subTables__")).get("dw:participants")).isEqualTo(List.of());
+    }
 
     @Test
     void stripTransportMetadataRemovesServerOwnedBatchRuntimeSnapshot() {

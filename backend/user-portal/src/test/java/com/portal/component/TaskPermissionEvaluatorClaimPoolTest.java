@@ -37,7 +37,7 @@ class TaskPermissionEvaluatorClaimPoolTest {
 
     private TaskPermissionEvaluator evaluator() {
         return new TaskPermissionEvaluator(
-                delegationRuleRepository, workflowEngineClient, workspaceTaskFilterComponent);
+                delegationRuleRepository, workflowEngineClient, workspaceTaskFilterComponent, org.mockito.Mockito.mock(com.portal.component.AssignmentClaimReadAnnotator.class));
     }
 
     @Test

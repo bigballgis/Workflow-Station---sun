@@ -115,6 +115,7 @@ public class FunctionUnitImporter {
         // A missing flow must abort the import before any function unit content is touched —
         // importing anyway would land a half-working unit whose service tasks fail at runtime.
         assertReferencedAutomationFlowsResolvable((String) packageData.get("process"));
+        com.developer.util.AssignmentDesignValidation.requireValid((String) packageData.get("process"));
 
         // Name exists → replace the existing unit's content with the imported package (snapshotting the
         // old content for rollback); the version number is NOT changed here — deploy/publish owns version

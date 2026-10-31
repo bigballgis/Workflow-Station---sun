@@ -10,6 +10,7 @@ vi.mock('element-plus', () => ({ ElMessage: mocks.message }))
 vi.mock('@/api/task', () => ({ completeTask: mocks.complete, delegateTask: vi.fn(), transferTask: vi.fn(), urgeTask: vi.fn() }))
 vi.mock('@/api/user', () => ({ userApi: { searchUsers: vi.fn() } }))
 import { useTaskActions } from '../useTaskActions'
+import { CompletionDeliveryUnknown } from '@/utils/completionOperation'
 
 function setup() {
   const visible = ref(true)
@@ -44,6 +45,26 @@ describe('completion assignment observation', () => {
     expect(mocks.message.success).toHaveBeenCalledWith('task.operationSuccess')
     expect(mocks.message).not.toHaveBeenCalled()
     expect(mocks.push).toHaveBeenCalledWith('/tasks')
+  })
+  it.each(['PENDING_SYNC', 'SYNC_CONFLICT'])('retains form values and warns about accepted %s instead of repeating completion', async state => {
+    mocks.complete.mockResolvedValue({ data: { operationId: 'operation', state } })
+    const { actions, visible } = setup()
+    await actions.submitApprove()
+    expect(visible.value).toBe(true)
+    expect(actions.completionState.value?.state).toBe(state)
+    expect(mocks.complete).toHaveBeenCalledTimes(1)
+    expect(mocks.message.success).not.toHaveBeenCalled()
+    expect(mocks.message.error).not.toHaveBeenCalled()
+    expect(mocks.push).not.toHaveBeenCalled()
+  })
+  it('preserves an unconfirmed network submission without announcing a failed workflow', async () => {
+    mocks.complete.mockRejectedValue(new CompletionDeliveryUnknown('operation'))
+    const { actions, visible } = setup()
+    await actions.submitApprove()
+    expect(visible.value).toBe(true)
+    expect(actions.completionState.value).toEqual({ operationId: 'operation', state: 'DELIVERY_UNKNOWN' })
+    expect(mocks.message.error).not.toHaveBeenCalled()
+    expect(mocks.message).toHaveBeenCalledWith(expect.objectContaining({ message: 'task.assignmentCompletion.unknown' }))
   })
   it('uses ordinary success only for an explicitly verified assignment outcome', async () => {
     mocks.complete.mockResolvedValue({ data: { batchAssignmentVerification: { status: 'VERIFIED', issues: [] } } })

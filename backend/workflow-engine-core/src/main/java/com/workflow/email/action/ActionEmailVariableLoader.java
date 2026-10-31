@@ -20,10 +20,26 @@ public class ActionEmailVariableLoader {
 
     private final RuntimeService runtimeService;
     private final HistoryService historyService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.workflow.assignment.AssignmentPostActionSnapshotClient assignmentSnapshots;
 
     public Map<String, Object> load(ActionEmailRequestedEvent event) {
         String processInstanceId = event.getProcessInstanceId();
         Map<String, Object> variables = new HashMap<>();
+        if (event.getAssignmentOperationId()!=null || event.getAssignmentRuleIndex()!=null) {
+            if (event.getAssignmentOperationId()==null || event.getAssignmentRuleIndex()==null) throw new IllegalArgumentException("Incomplete completion mail identity");
+            variables.putAll(assignmentSnapshots.read(new com.platform.common.assignment.AssignmentPostAction.SnapshotRequest(
+                    event.getAssignmentOperationId(),event.getAssignmentRuleIndex(),event.getEventId(),processInstanceId,event.getOperatorId())));
+        } else variables.putAll(legacyVariables(processInstanceId));
+        variables.put("actionName", nullToEmpty(event.getActionName()));
+        variables.put("actionType", nullToEmpty(event.getActionType()));
+        variables.put("actionOperator", nullToEmpty(event.getOperatorId()));
+        variables.put("actionComment", nullToEmpty(event.getComment()));
+        return variables;
+    }
+
+    private Map<String,Object> legacyVariables(String processInstanceId) {
+        Map<String,Object> variables=new HashMap<>();
         boolean running = runtimeService.createProcessInstanceQuery()
                 .processInstanceId(processInstanceId).count() > 0;
         if (running) {
@@ -36,10 +52,6 @@ public class ActionEmailVariableLoader {
                 }
             }
         }
-        variables.put("actionName", nullToEmpty(event.getActionName()));
-        variables.put("actionType", nullToEmpty(event.getActionType()));
-        variables.put("actionOperator", nullToEmpty(event.getOperatorId()));
-        variables.put("actionComment", nullToEmpty(event.getComment()));
         return variables;
     }
 

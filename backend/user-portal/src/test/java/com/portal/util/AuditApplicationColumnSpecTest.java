@@ -11,6 +11,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuditApplicationColumnSpecTest {
 
     @Test
+    void presentationKeywordScanExcludesStoredAssigneeAndHiddenCandidates() {
+        List<Object> params=new ArrayList<>();
+        String where=AuditApplicationColumnSpec.nativeTextSearchClause("hidden candidate",params);
+        assertThat(where).doesNotContain("pi.current_assignee","pi.candidate_users");
+        assertThat(where).contains("pi.start_user_name","pi.business_key","FROM sys_users u","pi.start_user_id IN");
+        assertThat(params).hasSize(5).allMatch("%hidden candidate%"::equals);
+    }
+
+    @Test
     void initiatorIsAUserColumnBetweenTitleAndAssignee() {
         assertThat(AuditApplicationColumnSpec.columns())
                 .extracting(ListColumnMeta::field)

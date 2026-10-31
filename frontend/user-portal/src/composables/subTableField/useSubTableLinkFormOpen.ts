@@ -24,6 +24,7 @@ import {
 } from './subTableLinkFormFields'
 import type { useSubTableLinkFormDialog } from './useSubTableLinkFormDialog'
 import type { useSubTableLinkFormScope } from './useSubTableLinkFormScope'
+import { linkedFormChildScope } from './subTableLinkFormSeed'
 
 /** Open flow for the Link Form detail modal: resolve the child rows that belong to the clicked parent row. */
 export function useSubTableLinkFormOpen(
@@ -63,6 +64,8 @@ export function useSubTableLinkFormOpen(
     effectiveSavedRows: any[],
     skipParentBackfill: boolean,
   ) {
+    const childScope = linkedFormChildScope(props, binding, row, effectiveSavedRows)
+    if (childScope) { effectiveSavedRows = childScope.rows; skipParentBackfill = true }
     linkedSubTableRows.value = [...effectiveSavedRows]
     linkedFormData.value = buildLinkedFormData(
       { ...(binding || ({} as SubTableBinding)), data: effectiveSavedRows },
@@ -70,6 +73,7 @@ export function useSubTableLinkFormOpen(
       // 传入被点击的父行：只有 data[0] 确实是它时才继承嵌套切片（见 buildLinkedFormData）。
       row ?? null,
     )
+    if (childScope) Object.assign(linkedFormData.value, childScope.seed)
     if (row && binding?.formFields?.length && !skipParentBackfill) {
       backfillMiLinkFormModalFieldsFromParent(
         linkedFormData.value,
@@ -407,11 +411,6 @@ export function useSubTableLinkFormOpen(
       }
     }
 
-    /**
-     * {@code buildLinkedFormData} only reads {@code data[0]}. For editable tables we promote so the richest row is first;
-     * readonly + completed MI row must do the same when {@code effectiveSavedRows} still has multiple rows (placeholders
-     * from other iterations often sort first). Readonly + non-terminal uses {@code readOnlyIsolateLinkForm} instead.
-     */
     const shouldPromoteForReadonlyTerminal =
       !props.editable
       && !!binding?.formFields?.length

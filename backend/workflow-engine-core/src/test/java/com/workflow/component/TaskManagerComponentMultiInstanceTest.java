@@ -74,6 +74,7 @@ class TaskManagerComponentMultiInstanceTest {
 
     // completeTask 主体现在落在 TaskCompletionService；@InjectMocks 注入其同名字段
     // （taskService/runtimeService/repositoryService/extendedTaskInfoRepository/userPermissionService）。
+    @Mock private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
     @InjectMocks
     private TaskCompletionService taskCompletionService;
 
@@ -105,6 +106,7 @@ class TaskManagerComponentMultiInstanceTest {
         // completeTask 经 taskActionService.engineActorMatchesPortalUser 做完成授权（assignee 等于 userId 时短路通过）。
         // 用真实 TaskActionService 保证授权判断真实执行（equals 短路，不触达其它依赖）。
         TaskActionService taskActionService = new TaskActionService();
+        ReflectionTestUtils.setField(taskActionService, "taskClaimSupport", new TaskClaimSupport());
         ReflectionTestUtils.setField(taskActionService, "taskService", taskService);
         ReflectionTestUtils.setField(taskActionService, "userPermissionService", userPermissionService);
         ReflectionTestUtils.setField(taskCompletionService, "taskActionService", taskActionService);

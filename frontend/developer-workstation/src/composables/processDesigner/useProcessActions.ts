@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { createTaskAssignmentSaveGuard } from './taskAssignmentSaveGuard'
 import { normalizeActionBpmnXml } from '@/utils/actionBpmnProperties'
 import type { Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -255,16 +256,12 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     return isEmptyBpmnDiagram(xml) && !isEmptyBpmnDiagram(store.process?.bpmnXml)
   }
 
+  const canSaveTaskAssignments = createTaskAssignmentSaveGuard(getModeler, formatLastTaskTopologyViolations, autoSaveBlocked, t)
+
   async function handleSave(isAutoSave = false) {
     const bpmnModeler = getModeler()
     if (!bpmnModeler) return
-    const detail = formatLastTaskTopologyViolations()
-    if (detail) {
-      if (!isAutoSave) {
-        ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
-      }
-      return
-    }
+    if (!canSaveTaskAssignments(isAutoSave)) return
 
     // 兜底图护栏：import 失败后画布是默认的 Start→End，不是这个 FU 的流程。
     // 它有节点有 shape，空图护栏放行，自动保存会把真流程整条覆盖掉，所以单独挡一道。

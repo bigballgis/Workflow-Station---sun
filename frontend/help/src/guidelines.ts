@@ -1,42 +1,12 @@
-import type { Component } from 'vue'
+import type { Guideline, NavLeaf, NavGroup, NavNode, NavLeafWithArticle } from './guidelineTypes'
+export type { Guideline, NavLeaf, NavGroup, NavNode, NavLeafWithArticle } from './guidelineTypes'
 import { BASIC_FORM_CONTROLS } from '@/formCtlBasic'
 import { EXTEND_FORM_CONTROLS } from '@/formCtlExtend'
 
-export interface Guideline {
-  id: string
-  path: string
-  titleKey: string
-  summaryKey: string
-  load: () => Promise<{ default: Component }>
-  /** Skip the home “by job” grid (per-control articles). */
-  omitFromHome?: boolean
-}
-
-export interface NavLeaf {
-  kind: 'leaf'
-  id: string
-  titleKey: string
-  /** Article path, optional hash, e.g. /email-send#connection */
-  to?: string
-  /** Sidebar only — skip the home card grid (per-control leaves). */
-  omitFromHome?: boolean
-}
-
-/** Leaf that already has a guideline `to` (home cards, not grey menus). */
-export type NavLeafWithArticle = NavLeaf & { to: string }
-
-export interface NavGroup {
-  kind: 'group'
-  id: string
-  titleKey: string
-  open?: boolean
-  children: NavNode[]
-}
-
-export type NavNode = NavGroup | NavLeaf
-
 /** Add a guideline: append here, then add the view + i18n keys + a NAV_TREE leaf. */
 export const GUIDELINES: Guideline[] = [
+  { id: 'assignment-exclusion', path: '/assignment-exclusion', titleKey: 'assignmentExclusionGuide.title',
+    summaryKey: 'assignmentExclusionGuide.intro', load: () => import('@/views/AssignmentExclusionGuide.vue') },
   { id: 'ac-bi-assign', path: '/bi-audience-assignment', titleKey: 'biAudienceGuide.title',
     summaryKey: 'biAudienceGuide.intro', load: () => import('@/views/BiAssignmentGuide.vue') },
   { id: 'ac-bi-data-view-assign', path: '/bi-data-view-assignment', titleKey: 'biViewGuide.title',
@@ -319,6 +289,7 @@ export const NAV_TREE: NavNode[] = [
           { kind: 'leaf', id: 'dw-ai-studio', titleKey: 'nav.aiStudio', to: '/ai-studio' },
           { kind: 'leaf', id: 'dw-fu-settings', titleKey: 'nav.functionUnitSettings', to: '/fu-documents' },
           { kind: 'group', id: 'dw-process', titleKey: 'nav.processDesign', children: [
+            { kind: 'leaf', id: 'dw-assignment-exclusion', titleKey: 'assignmentExclusionGuide.title', to: '/assignment-exclusion' },
             { kind: 'leaf', id: 'dw-node-action-order', titleKey: 'nodeActionOrderGuide.title', to: '/node-action-order' },
           ] },
           {

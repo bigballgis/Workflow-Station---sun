@@ -23,6 +23,9 @@ public interface UserRepository extends JpaRepository<User, String> {
      * Find user by username (includes soft-deleted rows; supports reviving legacy data).
      */
     Optional<User> findByUsername(String username);
+
+    /** Exact, batched identity binding for assignment policies. */
+    List<User> findByUsernameIn(java.util.Collection<String> usernames);
     
     /**
      * Find user by email.

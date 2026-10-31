@@ -69,6 +69,8 @@ public class TaskController {
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.workflow.component.TaskWriteContextResolver taskWriteContextResolver;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.workflow.assignment.AssignmentTaskTrackingQuery assignmentTracking;
 
     /**
      * Query task list.
@@ -263,15 +265,13 @@ public class TaskController {
             @PathVariable String taskId,
             @RequestParam(value = "includeWriteContext", defaultValue = "false") boolean includeWriteContext) {
         
-        log.info("Getting task details: {}", taskId);
         TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
+        taskInfo.setAssignmentTracked(assignmentTracking.tracked(taskInfo));
         if (includeWriteContext) taskInfo.setWriteContext(taskWriteContextResolver.resolve(taskId));
         return ResponseEntity.ok(ApiResponse.success(taskInfo));
     }
     
-    /**
-     * Get task transition history.
-     */
+    /** Get task transition history. */
     @GetMapping("/{taskId}/history")
     @Operation(summary = "Get Task Flow History", description = "Get the flow history of a task's process instance")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTaskHistory(
@@ -672,45 +672,7 @@ public class TaskController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     
-    /**
-     * Check whether the user may perform an operation on the task.
-     */
-    @GetMapping("/{taskId}/check-permission")
-    @Operation(summary = "Check Task Permission", description = "Check if user has permission to operate on the specified task")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> checkTaskPermission(
-            @Parameter(description = "Task ID", required = true)
-            @PathVariable String taskId,
-            @Parameter(description = "User ID", required = true)
-            @RequestParam("userId") String userId) {
-        
-        Optional<String> actor = WorkflowActorResolver.currentUserId();
-        if (actor.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
-        }
-        if (!actor.get().equals(userId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error("FORBIDDEN", "Can only check permissions for the authenticated user"));
-        }
 
-        log.info("Checking task permission for user: {} on task: {}", userId, taskId);
-        
-        TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
-        
-        boolean hasPermission = userPermissionService.hasTaskPermission(
-                userId, 
-                taskInfo.getAssignmentType(), 
-                taskInfo.getAssignmentTarget());
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("taskId", taskId);
-        result.put("userId", userId);
-        result.put("hasPermission", hasPermission);
-        result.put("assignmentType", taskInfo.getAssignmentType());
-        result.put("assignmentTarget", taskInfo.getAssignmentTarget());
-        
-        return ResponseEntity.ok(ApiResponse.success(result));
-    }
     
     /**
      * Assign sub-table row assignee (MI pre-task Assign action).
@@ -740,8 +702,8 @@ public class TaskController {
             
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
+            if (e instanceof com.platform.common.assignment.AssignmentFailure failure) throw failure;
             log.error("Failed to assign sub-table row handler: taskId={}, rowId={}", taskId, rowId, e);
-            
             return ResponseEntity.badRequest().body(
                 ApiResponse.error("ASSIGN_SUBTABLE_ROW_FAILED", e.getMessage())
             );

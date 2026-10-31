@@ -230,15 +230,17 @@ public final class TaskQueryColumnFilters {
         String expected = filter.value() != null ? filter.value() : "";
         String name = task.getAssigneeName();
         String id = task.getAssignee();
+        String display = task.getAssigneeDisplay();
         if ("isNull".equals(op)) {
-            return isBlank(name) && isBlank(id);
+            return display != null ? isBlank(display) : isBlank(name) && isBlank(id);
         }
         if ("isNotNull".equals(op)) {
-            return !isBlank(name) || !isBlank(id);
+            return display != null ? !isBlank(display) : !isBlank(name) || !isBlank(id);
         }
         boolean nameHit = textMatches(name, positiveTextOp(op), expected);
         boolean idHit = textMatches(id, positiveTextOp(op), expected);
-        boolean paintedHit = paintedClaimedByMeMatches(task, positiveTextOp(op), expected);
+        boolean paintedHit = textMatches(display, positiveTextOp(op), expected)
+                || paintedClaimedByMeMatches(task, positiveTextOp(op), expected);
         return switch (op) {
             case "eq", "contains", "startsWith", "endsWith" -> nameHit || idHit || paintedHit;
             case "ne", "notContains" -> !nameHit && !idHit && !paintedHit;
@@ -386,7 +388,8 @@ public final class TaskQueryColumnFilters {
                     || textMatches(resolveFieldValue(task, "functionUnitName"), "contains", expected);
         }
         if ("assigneeName".equals(field)) {
-            return textMatches(task.getAssigneeName(), "contains", expected)
+            return textMatches(task.getAssigneeDisplay(), "contains", expected)
+                    || textMatches(task.getAssigneeName(), "contains", expected)
                     || textMatches(task.getAssignee(), "contains", expected)
                     || paintedClaimedByMeMatches(task, "contains", expected);
         }

@@ -57,10 +57,13 @@ public class TaskActionService {
     @Autowired
     private TaskClaimSupport taskClaimSupport;
 
+    @Autowired private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
+
     // ==================== Public Action Methods ====================
 
     public TaskAssignmentResult assignTask(String taskId, TaskAssignmentRequest request) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.ASSIGN, request.getOperatorUserId());
             validateTaskAssignmentRequest(request);
 
             Task flowableTask = taskService.createTaskQuery()
@@ -91,7 +94,7 @@ public class TaskActionService {
                 request.getOperatorUserId(),
                 "Task assigned successfully");
 
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_ASSIGN_ERROR",
@@ -101,6 +104,7 @@ public class TaskActionService {
 
     public TaskAssignmentResult delegateTask(String taskId, TaskDelegationRequest request) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.DELEGATE, request.getDelegatedBy());
             validateTaskDelegationRequest(request);
 
             Task flowableTask = taskService.createTaskQuery()
@@ -145,7 +149,7 @@ public class TaskActionService {
                 request.getDelegatedBy(),
                 "Task delegated successfully");
 
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_DELEGATION_ERROR",
@@ -187,6 +191,7 @@ public class TaskActionService {
 
     public TaskAssignmentResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.TRANSFER, fromUserId);
             validateUserId(fromUserId);
             validateUserId(toUserId);
 
@@ -254,7 +259,7 @@ public class TaskActionService {
                 fromUserId,
                 "Task transferred successfully");
 
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_TRANSFER_ERROR",

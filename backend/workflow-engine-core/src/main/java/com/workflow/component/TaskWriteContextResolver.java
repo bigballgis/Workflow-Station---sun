@@ -19,11 +19,16 @@ public class TaskWriteContextResolver {
     private final TaskService taskService;
     private final RepositoryService repositoryService;
     private final RuntimeService runtimeService;
+    private final com.workflow.assignment.AssignmentTaskStateRepository states;
+    private final com.workflow.assignment.AssignmentDefinitionPolicy policies;
 
-    public TaskWriteContextResolver(TaskService taskService, RepositoryService repositoryService, RuntimeService runtimeService) {
+    public TaskWriteContextResolver(TaskService taskService, RepositoryService repositoryService, RuntimeService runtimeService,
+            com.workflow.assignment.AssignmentTaskStateRepository states, com.workflow.assignment.AssignmentDefinitionPolicy policies) {
         this.taskService = taskService;
         this.repositoryService = repositoryService;
         this.runtimeService = runtimeService;
+        this.states = states;
+        this.policies = policies;
     }
 
     public TaskWriteContext resolve(String taskId) {
@@ -44,17 +49,41 @@ public class TaskWriteContextResolver {
                     || task.getProcessInstanceId().equals(instance.getExecutionId())
                     || !task.getProcessInstanceId().equals(instance.getProcessInstanceId())) throw invalid();
             Object value = instance.getValue();
+            if (policies.tracked(task.getProcessDefinitionId())) value = frozenParticipant(task, element);
             if (!(value instanceof Map<?, ?> row) || !(row.get("rowKey") instanceof Map<?, ?> key) || key.isEmpty()) throw invalid();
             Map<String, Object> rowKey = new LinkedHashMap<>();
             key.forEach((name, identity) -> {
                 if (!(name instanceof String field) || field.isBlank()
-                        || !(identity instanceof String || identity instanceof Number) || String.valueOf(identity).isBlank()) throw invalid();
+                        || !(identity instanceof String || identity instanceof Number || identity instanceof Boolean)
+                        || String.valueOf(identity).isBlank()) throw invalid();
                 rowKey.put(field, identity);
             });
             item = Map.of("rowKey", rowKey);
         }
         return new TaskWriteContext(task.getId(), task.getProcessInstanceId(), task.getProcessDefinitionId(),
                 task.getTaskDefinitionKey(), loop != null, item);
+    }
+
+    private Map<String,Object> frozenParticipant(org.flowable.task.api.Task task, FlowElement element) {
+        var state = states.find(task.getId()).orElseThrow(TaskWriteContextResolver::invalid);
+        if (!task.getId().equals(state.taskId()) || !state.active() || !task.getProcessDefinitionId().equals(state.definition())
+                || !task.getProcessInstanceId().equals(state.instance()) || !task.getTaskDefinitionKey().equals(state.node())) throw invalid();
+        FlowElement scope = element;
+        while (scope != null && !(scope instanceof org.flowable.bpmn.model.Activity activity && activity.getLoopCharacteristics() != null)) scope = scope.getSubProcess();
+        if (scope == null) throw invalid();
+        var positions = states.position(task.getId()).path("multiInstances");
+        if (!positions.isArray()) throw invalid();
+        com.fasterxml.jackson.databind.JsonNode identity = null;
+        boolean matched = false;
+        for (var position : positions) if (scope.getId().equals(position.path("scope").asText())) {
+            if (matched) throw invalid();
+            matched = true;
+            identity = position.get("row");
+        }
+        if (identity == null || !identity.isObject() || identity.isEmpty()) throw invalid();
+        Map<String,Object> key = com.platform.common.util.JsonUtils.getObjectMapper().convertValue(identity,
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String,Object>>() { });
+        return Map.of("rowKey", key);
     }
 
     private static boolean blank(String value) { return value == null || value.isBlank(); }

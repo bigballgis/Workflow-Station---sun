@@ -82,6 +82,7 @@ public class ProcessDeploymentManager {
 
     @Autowired
     private ServiceTaskFlowRefResolver serviceTaskFlowRefResolver;
+    @Autowired private com.workflow.assignment.AssignmentDeploymentPreparation assignmentDeploymentPreparation;
 
     /**
      * Deploy process definition
@@ -105,14 +106,9 @@ public class ProcessDeploymentManager {
             // Every callActivity must name a process that is already deployed here. Pinned
             // calls come back with calledElement set to Flowable's real definition id.
             enhancedBpmnXml = resolveCalledElements(enhancedBpmnXml, request.getKey());
+            enhancedBpmnXml = assignmentDeploymentPreparation.prepare(enhancedBpmnXml);
 
-            // Create deployment
-            Deployment deployment = repositoryService.createDeployment()
-                .name(request.getName())
-                .category(request.getCategory())
-                .key(request.getKey())
-                .addString(request.getKey() + ".bpmn", enhancedBpmnXml)
-                .deploy();
+            Deployment deployment = deployCompiled(request,enhancedBpmnXml);
 
             // Get deployed process definitions
             List<ProcessDefinition> processDefinitions = repositoryService
@@ -121,35 +117,29 @@ public class ProcessDeploymentManager {
                 .list();
 
             if (!processDefinitions.isEmpty()) {
-                ProcessDefinition processDefinition = processDefinitions.get(0);
-                // Ensure the process definition ID is always in key:version:uuid format.
-                // In some Flowable versions getId() may return only the raw UUID part;
-                // explicitly construct the composite format when that happens.
-                String rawId = processDefinition.getId();
-                String compositeId = rawId.contains(":")
-                        ? rawId
-                        : String.format("%s:%d:%s",
-                                processDefinition.getKey(),
-                                processDefinition.getVersion(),
-                                rawId);
-                DeploymentResult result = DeploymentResult.success(
-                    deployment.getId(),
-                    compositeId,
-                    processDefinition.getKey(),
-                    processDefinition.getName(),
-                    processDefinition.getVersion()
-                );
-                result.setEngineProcessDefinitionId(rawId);
-                return result;
+                return ProcessDeploymentResultFactory.success(deployment.getId(),processDefinitions.get(0));
             } else {
                 return DeploymentResult.failure("Deployment succeeded but no process definition found");
             }
 
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             // Re-throw validation exceptions so they can be caught by tests
             throw e;
         } catch (Exception e) {
             return DeploymentResult.failure("Failed to deploy process definition: " + e.getMessage());
+        }
+    }
+
+    private Deployment deployCompiled(ProcessDefinitionRequest request,String compiledXml) {
+        String resourceName=request.getKey()+".bpmn";
+        try {
+            return com.workflow.assignment.AssignmentCompiledDeployment.deploy(resourceName,compiledXml,()->repositoryService.createDeployment()
+                    .name(request.getName()).category(request.getCategory()).key(request.getKey())
+                    .addString(resourceName,compiledXml).deploy());
+        } catch (org.flowable.common.engine.api.FlowableException invalid) {
+            // The actual deployment performs Flowable validation atomically, after capability checks and compilation.
+            throw new WorkflowValidationException(Collections.singletonList(new WorkflowValidationException.ValidationError(
+                    "bpmnXml","BPMN file format validation failed: "+invalid.getMessage(),null)));
         }
     }
 
@@ -230,6 +220,8 @@ public class ProcessDeploymentManager {
 
         } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
             throw e;
+        } catch (com.platform.common.assignment.AssignmentFailure e) {
+            throw e;
         } catch (WorkflowValidationException e) {
             // Re-throw validation exceptions as-is
             throw e;
@@ -304,19 +296,11 @@ public class ProcessDeploymentManager {
     }
 
     private void validateBpmnFile(String bpmnContent) {
-        // First perform basic content checks
         if (bpmnContent == null || bpmnContent.trim().isEmpty()) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("bpmnXml", "BPMN content must not be empty", bpmnContent)));
         }
 
-        // Check for whitespace-only content
-        if (bpmnContent.trim().matches("^\\s*$")) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: content contains only whitespace", bpmnContent)));
-        }
-
-        // Check for valid XML format
         try {
             javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
@@ -390,22 +374,6 @@ public class ProcessDeploymentManager {
                 new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: " + e.getMessage(), bpmnContent)));
         }
 
-        // Finally use Flowable for deeper validation (only after basic validation passes)
-        try {
-            String normalizedBpmnContent = normalizeBpmnXml(bpmnContent);
-            String enhancedBpmnContent = BpmnDeployEnhancer.enhance(normalizedBpmnContent);
-            Deployment tempDeployment = repositoryService.createDeployment()
-                .name("temp-validation")
-                .addInputStream("temp.bpmn", new ByteArrayInputStream(enhancedBpmnContent.getBytes()))
-                .deploy();
-
-            // Validation succeeded, delete temp deployment
-            repositoryService.deleteDeployment(tempDeployment.getId(), true);
-
-        } catch (Exception e) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: " + e.getMessage(), bpmnContent)));
-        }
     }
 
     /**
@@ -495,7 +463,7 @@ public class ProcessDeploymentManager {
      * real id, or the {@code key:version:uuid} composite built in {@link #deployProcess}
      * when the real id is the bare uuid.
      */
-    String flowableDefinitionId(String pinnedId) {
+    public String flowableDefinitionId(String pinnedId) {
         if (repositoryService.createProcessDefinitionQuery().processDefinitionId(pinnedId).count() > 0) {
             return pinnedId;
         }

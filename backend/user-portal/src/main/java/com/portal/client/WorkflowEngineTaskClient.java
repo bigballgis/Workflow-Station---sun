@@ -356,9 +356,7 @@ public class WorkflowEngineTaskClient {
         }
     }
 
-    /**
-     * Claims task
-     */
+    /** Claims task. */
     public Optional<Map<String, Object>> claimTask(String taskId, String userId) {
         if (!engine.isAvailable()) {
             return Optional.empty();
@@ -382,6 +380,7 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to claim task in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
@@ -424,6 +423,7 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to delegate task in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
@@ -456,9 +456,7 @@ public class WorkflowEngineTaskClient {
         return Optional.empty();
     }
 
-    /**
-     * Unclaims task
-     */
+    /** Unclaims task. */
     public Optional<Map<String, Object>> unclaimTask(String taskId, String userId) {
         if (!engine.isAvailable()) {
             return Optional.empty();
@@ -482,6 +480,7 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to unclaim task in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
@@ -514,14 +513,13 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to reassign task in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }
 
-    /**
-     * Transfers task
-     */
+    /** Transfers task. */
     public Optional<Map<String, Object>> transferTask(String taskId, String fromUserId,
                                                        String toUserId, String reason) {
         if (!engine.isAvailable()) {
@@ -548,14 +546,13 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to transfer task in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }
 
-    /**
-     * Assigns sub-table row assignee (MI sub-process prerequisite task)
-     */
+    /** Assigns sub-table row assignee before the MI sub-process. */
     public Optional<Map<String, Object>> assignSubTableRow(String taskId, long rowId, String assigneeId) {
         return assignSubTableRow(taskId, rowId, assigneeId, null);
     }
@@ -591,6 +588,7 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(unwrapped);
             }
         } catch (HttpClientErrorException e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             String raw = e.getResponseBodyAsString();
             String msg = engine.parseWorkflowEngineErrorMessage(raw);
             log.warn("assignSubTableRow client error: status={}, message={}", e.getStatusCode(), msg);
@@ -599,6 +597,7 @@ public class WorkflowEngineTaskClient {
             err.put("message", msg != null ? msg : "Assignment failed");
             return Optional.of(err);
         } catch (HttpServerErrorException e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             String raw = e.getResponseBodyAsString();
             String msg = engine.parseWorkflowEngineErrorMessage(raw);
             log.warn("assignSubTableRow server error: status={}, message={}", e.getStatusCode(), msg);
@@ -607,14 +606,13 @@ public class WorkflowEngineTaskClient {
             err.put("message", msg != null ? msg : "Assignment failed");
             return Optional.of(err);
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to assign sub-table row in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }
 
-    /**
-     * Returns task to specified historic activity
-     */
+    /** Returns task to a historic activity. */
     public Optional<Map<String, Object>> returnTask(String taskId, String targetActivityId,
                                                      String userId, String reason) {
         return returnTask(taskId, targetActivityId, userId, reason, null);
@@ -656,6 +654,7 @@ public class WorkflowEngineTaskClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            AssignmentRemoteFailure.rethrowKnown(e);
             log.warn("Failed to return task in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();

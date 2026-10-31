@@ -65,6 +65,9 @@ public class TaskListResult {
         /** Present only on the explicit strict write-context task-detail request. */
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         private TaskWriteContext writeContext;
+        /** Server-verified detail context; absent on list rows until their batch annotation runs. */
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        private Boolean assignmentTracked;
         
         /**
          * Task name

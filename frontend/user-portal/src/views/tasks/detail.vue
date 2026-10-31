@@ -449,9 +449,9 @@
       v-model="approveDialogVisible"
       :title="approveDialogTitle"
       :form-data="approveForm"
-      :submitting="submitting"
+      :submitting="submitting" :completion="taskActions.completionState.value"
       :comment-required="approveCommentRequired"
-      @confirm="submitApprove"
+      @confirm="submitApprove" @refresh-completion="taskActions.refreshCompletion"
     />
 
     <!-- Delegate/Transfer dialog -->
@@ -516,6 +516,7 @@ import { onMounted, onBeforeUnmount, computed, nextTick, ref, watch, defineAsync
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { isAssignmentWriteBlocked } from '@/utils/assignmentWriteAccess'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { ProcessNode } from '@/components/ProcessDiagram.vue'
 import WorkflowDiagramCollapsibleSection from '@/components/WorkflowDiagramCollapsibleSection.vue'
@@ -712,7 +713,7 @@ const resolveMiRowOwnershipPredicate = (binding: unknown) => {
   return (row: unknown) => belongs(row, myRowId, binding as any)
 }
 
-const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
+const taskForm = useTaskForm({ subTableBindings, assignmentTracked: computed(() => taskInfo.value?.assignmentClaimAccess?.tracked === true), isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName, resolveMiRowOwnershipPredicate, primaryTableBinding })
 const { subTableSaveError, retrySubTableAutosave } = taskForm
 function warnUnsavedSubTables(event: BeforeUnloadEvent) {
   if (!subTableSaveError.value) return
@@ -919,9 +920,8 @@ const {
   handleFormPopupSubTableUpdate,
 } = customActions
 
-/** BU Role pool request held by somebody else (or by nobody yet): view only, no action bar. */
 const claimLocked = computed(
-  () => !!taskInfo.value?.claimPoolTask && !taskInfo.value?.claimedByCurrentUser,
+  () => isAssignmentWriteBlocked(taskInfo.value) || (!!taskInfo.value?.claimPoolTask && !taskInfo.value?.claimedByCurrentUser),
 )
 const claimSubmitting = ref(false)
 const { claim: claimHeld, unclaim: unclaimHeld, forceUnclaim: forceUnclaimHeld, reassign: reassignHeld } = useTaskClaimActions({

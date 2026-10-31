@@ -58,7 +58,11 @@ public class TaskController {
     private final RestTemplate restTemplate;
 
     @org.springframework.beans.factory.annotation.Autowired
-    private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+    private com.portal.component.TaskCompletionEndpoint taskCompletionEndpoint;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.AssignmentTaskWriteReadAnnotator assignmentWriteRead;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.TaskPresentationLabels taskPresentation;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -79,7 +83,8 @@ public class TaskController {
     public ApiResponse<PortalListPage<TaskInfo>> queryTodoTasks(
             @CurrentUserId String userId,
             @RequestBody @Valid TodoTaskQueryRequest request) {
-        return ApiResponse.success(taskQueryComponent.queryTodoList(userId, request));
+        var result = taskQueryComponent.queryTodoList(userId, request);
+        return ApiResponse.success(result);
     }
 
     @Operation(summary = "My To Do tasks on the given process instances (Views grid row marker)")
@@ -100,13 +105,14 @@ public class TaskController {
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
         taskProcessComponent.annotateClaimState(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        // Consistent with TaskFormController: canView = canViewTaskForm (initiator + assignee), not just canProcessTask
         if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {
             log.warn("User {} denied access to task {} (assignee={}, assignmentType={}, initiatorId={})",
                     userId, taskId, task.getAssignee(), task.getAssignmentType(), task.getInitiatorId());
             return ApiResponse.error("403", "You do not have permission to access this task");
         }
+        assignmentWriteRead.annotate(task, userId);
+        taskPresentation.annotate(List.of(task));
         return ApiResponse.success(task);
     }
 
@@ -204,17 +210,7 @@ public class TaskController {
             throw new PortalException("401", "Authentication required");
         }
         request.setTaskId(taskId);
-        var observationPlan = actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
-                .actionId(request.getActionId())
-                .operation(completeOperation(request.getAction()))
-                .taskId(taskId)
-                .operatorId(userId)
-                .comment(request.getComment())
-                .build(), () -> { return taskProcessComponent.completeTaskWithObservationPlan(request, userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null)); });
-        var observation = taskProcessComponent.observeCompletion(observationPlan);
-        if (observationPlan != null) observation = batchAssignmentHistory.record(observationPlan, observation, userId, taskId);
-        return ApiResponse.success(observation == null ? null : new com.portal.dto.TaskCompletionResult(observation));
+        return ApiResponse.success(taskCompletionEndpoint.complete(request,userId,SecurityContextUtils.getCurrentUsername().orElse(null)));
     }
 
     @Operation(summary = "To Do batch groups (process version + node with allowBatch)")
@@ -317,7 +313,9 @@ public class TaskController {
     public ApiResponse<PortalListPage<TaskInfo>> queryCompletedTasks(
             @CurrentUserId String userId,
             @RequestBody CompletedTaskQueryRequest request) {
-        return ApiResponse.success(taskQueryComponent.queryCompletedTasks(userId, request));
+        var result = taskQueryComponent.queryCompletedTasks(userId, request);
+        taskPresentation.annotate(result.content());
+        return ApiResponse.success(result);
     }
 
     @Operation(summary = "Search users (for transfer/delegate)")
@@ -378,18 +376,6 @@ public class TaskController {
                 .delegatedTo(delegateId)
                 .reason(reason)
                 .build();
-    }
-
-    static String completeOperation(String action) {
-        if (action == null) {
-            return ActionPostEmailContext.OP_APPROVE;
-        }
-        return switch (action.trim().toUpperCase()) {
-            case "REJECT" -> ActionPostEmailContext.OP_REJECT;
-            case "RETURN" -> ActionPostEmailContext.OP_RETURN;
-            case "DRAFT" -> ActionPostEmailContext.OP_DRAFT;
-            default -> ActionPostEmailContext.OP_APPROVE;
-        };
     }
 
     private static boolean isEmptyDelegateBody(TaskDelegateRequest body) {

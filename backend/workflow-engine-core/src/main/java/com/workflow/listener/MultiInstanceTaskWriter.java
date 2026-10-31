@@ -299,7 +299,7 @@ class MultiInstanceTaskWriter {
                         bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
                                 "buField"));
             }
-
+            TaskAssignmentSourceCapture.row(assigneeFieldFromBpmn, roleFieldFromBpmn, buFieldFromBpmn, assigneeModeFromBpmn);
             // 分派方式由「行内实际填了什么」逐行决定（支持场景 C：同一 MI 节点两种方式混用，逐行二选一）。
             // assigneeMode 仅作节点级「允许了哪些方式」的参考（user|role|both），不再用于硬分流。
             boolean roleAllowed = com.platform.common.recordnote.SubTaskAssignmentMode.allowsRole(assigneeModeFromBpmn);

@@ -36,6 +36,7 @@ public class MineTaskScanner {
     private final ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
     private final WorkspaceTaskFilterComponent workspaceTaskFilter;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final TaskQueryPresentation taskPresentation;
 
     @Lazy
     @Autowired
@@ -48,6 +49,7 @@ public class MineTaskScanner {
         List<TaskInfo> cached = mineTaskListCache.get(cacheKey);
         if (cached != null) {
             log.info("[PERF] query.fullScan cacheHit=true engineTasks={}", cached.size());
+            taskPermissionEvaluator.annotateClaimState(cached, userId, SecurityContextUtils.getCurrentUsername().orElse(null));
             return cached;
         }
         long tFetch0 = System.nanoTime();
@@ -55,6 +57,7 @@ public class MineTaskScanner {
                 userId, assignmentTypes, push);
         long tFetch1 = System.nanoTime();
         List<TaskInfo> allTasks = applyPortalPostEngineFilters(userId, new ArrayList<>(engineTasks));
+        if (TaskQueryPresentation.neededBeforeFiltering(request)) taskPresentation.annotate(allTasks);
         long tPost = System.nanoTime();
         if (TaskInfoQueryFilters.needsRequestIdEnrichment(request)) {
             requestIdEnricher.enrichTaskRequestIds(allTasks);

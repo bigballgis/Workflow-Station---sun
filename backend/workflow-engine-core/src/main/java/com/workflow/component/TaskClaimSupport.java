@@ -55,8 +55,11 @@ public class TaskClaimSupport {
     @Autowired
     private TaskOrphanRepairService taskOrphanRepairService;
 
+    @Autowired private com.workflow.assignment.AssignmentWriteBoundary assignmentBoundary;
+
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.CLAIM, request.getClaimedBy());
             Task flowableTask = requireTask(taskId);
             if (flowableTask.getAssignee() != null && !flowableTask.getAssignee().isEmpty()) {
                 throw validation("taskId", "Task already claimed", taskId);
@@ -77,7 +80,7 @@ public class TaskClaimSupport {
             return TaskAssignmentResult.success(
                     taskId, AssignmentType.USER, request.getClaimedBy(), request.getClaimedBy(),
                     "Task claimed successfully");
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_CLAIM_ERROR",
@@ -87,6 +90,7 @@ public class TaskClaimSupport {
 
     public TaskAssignmentResult reassignClaim(String taskId, String operatorUserId, String targetUserId) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.REASSIGN, operatorUserId);
             String target = requireText(targetUserId, "targetUserId", "Target user is required");
             Task flowableTask = requireTask(taskId);
             if (!actorMayForceUnclaim(flowableTask, operatorUserId)) {
@@ -95,7 +99,7 @@ public class TaskClaimSupport {
             List<String> candidates = FlowableCandidateUsers.userIds(taskService, taskId);
             validateReassignTarget(flowableTask, taskId, target, candidates);
             return applyReassignHold(taskId, operatorUserId, target, candidates);
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_REASSIGN_ERROR",
@@ -105,6 +109,7 @@ public class TaskClaimSupport {
 
     public TaskAssignmentResult unclaimTask(String taskId, String userId) {
         try {
+            assignmentBoundary.require(taskId, com.workflow.assignment.AssignmentMutationScope.Operation.UNCLAIM, userId);
             Task flowableTask = requireTask(taskId);
             String assignee = flowableTask.getAssignee();
             if (assignee == null || assignee.isEmpty()) {
@@ -148,7 +153,7 @@ public class TaskClaimSupport {
             }
             return TaskAssignmentResult.success(
                     taskId, resultType, resultTarget, userId, "Task unclaimed successfully");
-        } catch (WorkflowValidationException e) {
+        } catch (WorkflowValidationException | com.platform.common.assignment.AssignmentFailure e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_UNCLAIM_ERROR",

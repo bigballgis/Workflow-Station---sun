@@ -67,6 +67,8 @@ public class TaskInfoAssembler {
 
     @Autowired
     private com.workflow.repository.ExtendedTaskInfoRepository extendedTaskInfoRepository;
+    @Autowired @org.springframework.context.annotation.Lazy
+    private com.workflow.assignment.AssignmentTaskTrackingQuery assignmentTracking;
 
     // ==================== Current Step (MI-aware) Resolution ====================
 
@@ -82,7 +84,7 @@ public class TaskInfoAssembler {
      */
     public String resolveCurrentStepName(String processDefinitionId, String taskDefinitionKey, String taskName) {
         String miName = resolveMiSubProcessName(processDefinitionId, taskDefinitionKey);
-        return StringUtils.hasText(miName) ? miName : taskName;
+        return StringUtils.hasText(miName) ? miName + ": " + (StringUtils.hasText(taskName) ? taskName : taskDefinitionKey) : taskName;
     }
 
     // 同一流程定义 + element 的 MI 归属是静态的，缓存避免列表里每行重复解析 BpmnModel。
@@ -398,7 +400,7 @@ public class TaskInfoAssembler {
         if (TaskQueryService.isBpmnProcessInitiatorType(bpmnAssigneeType)
                 && StringUtils.hasText(initiatorId)
                 && !StringUtils.hasText(currentAssignee)
-                && initiatorId != null) {
+                && !assignmentTracking.trackedInstance(task.getProcessInstanceId(), processDefinitionId)) {
             assignmentType = AssignmentType.USER;
             assignmentTarget = initiatorId.trim();
             currentAssignee = initiatorId.trim();

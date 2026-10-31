@@ -68,6 +68,7 @@ class RecordNoteWriteAccessTest {
     private TaskPermissionEvaluator taskPermissionEvaluator;
 
     @Mock private com.portal.recordnote.RecordNoteSubmissionComponent recordNoteSubmissions;
+    @Mock private AssignmentPortalWriteExecutor assignmentWrites;
     @Mock private com.portal.recordnote.RecordNoteCatalogRepository recordNoteCatalog;
 
     @Mock
@@ -86,6 +87,10 @@ class RecordNoteWriteAccessTest {
     @BeforeEach
     void setUp() {
         taskId = null;
+        org.springframework.test.util.ReflectionTestUtils.setField(component,"assignmentWrites",assignmentWrites);
+        // This suite covers legacy note access; protected transaction fences have dedicated PostgreSQL tests.
+        when(assignmentWrites.execute(any(),org.mockito.ArgumentMatchers.anyBoolean(),any())).thenAnswer(call ->
+                ((java.util.function.Supplier<?>)call.getArgument(2)).get());
         instance.setId(INSTANCE_ID);
         instance.setFunctionUnitCode(FU_CODE);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);

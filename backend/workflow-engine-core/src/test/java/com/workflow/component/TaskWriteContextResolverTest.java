@@ -16,7 +16,9 @@ class TaskWriteContextResolverTest {
     private final TaskService tasks = mock(TaskService.class);
     private final RepositoryService definitions = mock(RepositoryService.class);
     private final RuntimeService runtime = mock(RuntimeService.class);
-    private final TaskWriteContextResolver resolver = new TaskWriteContextResolver(tasks, definitions, runtime);
+    private final com.workflow.assignment.AssignmentTaskStateRepository states = mock(com.workflow.assignment.AssignmentTaskStateRepository.class);
+    private final com.workflow.assignment.AssignmentDefinitionPolicy policies = mock(com.workflow.assignment.AssignmentDefinitionPolicy.class);
+    private final TaskWriteContextResolver resolver = new TaskWriteContextResolver(tasks, definitions, runtime, states, policies);
     private final Task task = mock(Task.class);
     private final BpmnModel model = new BpmnModel();
     private final org.flowable.bpmn.model.Process process = new org.flowable.bpmn.model.Process();
@@ -75,6 +77,54 @@ class TaskWriteContextResolverTest {
         process.addFlowElement(userTask);
         item("directItem", Map.of("rowKey", Map.of("numeric_key", 3)), "execution-one");
         assertThat(resolver.resolve("task-one").currentItem()).isEqualTo(Map.of("rowKey", Map.of("numeric_key", 3)));
+    }
+
+    @Test
+    void protectedRawParticipantUsesFrozenConfiguredCompositeIdentity() throws Exception {
+        var loop = new MultiInstanceLoopCharacteristics();
+        loop.setElementVariable("rawItem");
+        userTask.setLoopCharacteristics(loop);
+        process.addFlowElement(userTask);
+        item("rawItem", Map.of("region", "HK", "sequence_no", 7), "execution-one");
+        when(policies.tracked("deployed:1:old-definition")).thenReturn(true);
+        var state = mock(com.workflow.assignment.AssignmentTaskStateRepository.State.class);
+        when(state.taskId()).thenReturn("task-one"); when(state.active()).thenReturn(true); when(state.definition()).thenReturn("deployed:1:old-definition");
+        when(state.instance()).thenReturn("instance-one"); when(state.node()).thenReturn("review");
+        when(states.find("task-one")).thenReturn(java.util.Optional.of(state));
+        when(states.position("task-one")).thenReturn(new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                "{\"multiInstances\":[{\"scope\":\"review\",\"row\":{\"region\":\"HK\",\"sequence_no\":7}}]}"));
+        assertThat(resolver.resolve("task-one").currentItem()).isEqualTo(Map.of("rowKey", Map.of("region", "HK", "sequence_no", 7)));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void protectedCompositeIdentityPreservesBooleanPrimaryKeyType(boolean flag) throws Exception {
+        protectedRawParticipantUsesFrozenConfiguredCompositeIdentity();
+        var key = Map.of("tenant", "HK", "flag", flag);
+        when(states.position("task-one")).thenReturn(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(
+                Map.of("multiInstances", java.util.List.of(Map.of("scope", "review", "row", key)))));
+        assertThat(resolver.resolve("task-one").currentItem()).isEqualTo(Map.of("rowKey", key));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"{}", "{\"multiInstances\":[]}",
+            "{\"multiInstances\":[{\"scope\":\"other\",\"row\":{\"id\":1}}]}",
+            "{\"multiInstances\":[{\"scope\":\"review\",\"row\":{} }]}",
+            "{\"multiInstances\":[{\"scope\":\"review\"},{\"scope\":\"review\",\"row\":{\"id\":1}}]}",
+            "{\"multiInstances\":[{\"scope\":\"review\",\"row\":{\"id\":1}},{\"scope\":\"review\",\"row\":{\"id\":2}}]}",
+            "{\"multiInstances\":[{\"scope\":\"review\",\"row\":{\"id\":{\"nested\":1}}}]}"})
+    void damagedProtectedPositionCannotFallBackToRuntimeWrapper(String position) throws Exception {
+        protectedRawParticipantUsesFrozenConfiguredCompositeIdentity();
+        item("rawItem", Map.of("rowKey", Map.of("forged", "fallback")), "execution-one");
+        when(states.position("task-one")).thenReturn(new com.fasterxml.jackson.databind.ObjectMapper().readTree(position));
+        assertThatThrownBy(() -> resolver.resolve("task-one")).hasMessageContaining("cannot be verified");
+    }
+
+    @Test
+    void missingProtectedStateCannotFallBackToRuntimeWrapper() throws Exception {
+        protectedRawParticipantUsesFrozenConfiguredCompositeIdentity();
+        when(states.find("task-one")).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> resolver.resolve("task-one")).hasMessageContaining("cannot be verified");
     }
 
     @Test

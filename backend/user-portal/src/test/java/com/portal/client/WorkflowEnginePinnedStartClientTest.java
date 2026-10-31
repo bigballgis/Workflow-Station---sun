@@ -22,11 +22,16 @@ class WorkflowEnginePinnedStartClientTest {
         when(engine.isAvailable()).thenReturn(true);
         when(engine.engineUrl()).thenReturn("http://synthetic-engine");
         when(engine.restTemplate()).thenReturn(http);
+        var starts=mock(AssignmentStartCoordinationClient.class);
+        when(starts.prepare(eq("synthetic"),nullable(String.class))).thenAnswer(call->new com.platform.common.assignment.AssignmentStartContext(
+                1,"synthetic:1:verified","synthetic",false,call.getArgument(1)));
+        org.springframework.test.util.ReflectionTestUtils.setField(client,"assignmentStarts",starts);
     }
     @Test void pinnedStartUsesTheDistinctRouteAndAnExplicitTypedField() {
         prepare();
         when(engine.hasInboundAuthorization()).thenReturn(true);
         server.expect(requestTo(URL + "/pinned"))
+                .andExpect(header(com.platform.common.assignment.AssignmentStartContext.HEADER,"synthetic:1:verified"))
                 .andExpect(jsonPath("$.expectedProcessDefinitionId").value("synthetic:1:verified"))
                 .andExpect(jsonPath("$.variables.synthetic").value(true))
                 .andExpect(jsonPath("$.variables.__subTableBatchRuntime__").doesNotExist())
@@ -58,6 +63,14 @@ class WorkflowEnginePinnedStartClientTest {
         server.expect(requestTo(URL)).andExpect(jsonPath("$.expectedProcessDefinitionId").doesNotExist())
                 .andRespond(withSuccess("{\"success\":true,\"data\":{\"processInstanceId\":\"legacy-instance\"}}", MediaType.APPLICATION_JSON));
         assertThat(client.startProcess("synthetic", null, null, Map.of())).containsEntry("processInstanceId", "legacy-instance");
+        server.verify();
+    }
+    @Test void aRejectedPreflightNeverCallsTheOrdinaryStartEndpoint() {
+        prepare();
+        var starts=(AssignmentStartCoordinationClient)org.springframework.test.util.ReflectionTestUtils.getField(client,"assignmentStarts");
+        when(starts.prepare(anyString(),nullable(String.class))).thenThrow(new com.platform.common.assignment.AssignmentFailure(
+                com.platform.common.assignment.AssignmentFailure.Reason.ASSIGNMENT_DEPENDENCY_UNAVAILABLE));
+        assertThatThrownBy(()->client.startProcess("synthetic",null,null,Map.of())).isInstanceOf(com.platform.common.assignment.AssignmentFailure.class);
         server.verify();
     }
 }

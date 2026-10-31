@@ -3,7 +3,9 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-30)
+## 统计 (截至 2026-10-31)
+
+2026-10-31：#1728补齐普通任务Lookup缓存提交过滤；合并主线后仍复现403，修复后原任务自动保存200、业务行保留且未推进。合并重复编号1720–1723中的assignment项调整为1725–1728。Open数量不变，见 `docs/verification/2026-10-31-task-lookup-write.md`。
 
 2026-10-30：#1724 同表多绑定 403 已在本地修复并完成页面及查库验证；已有 Case 归属不变，交易新增正常。远程原按钮和完整 MI 截图门禁有缺口，审查 CONDITIONAL。Open 数量不变。证据见 `docs/verification/2026-10-30-multi-binding-403.md`。
 
@@ -20,6 +22,9 @@
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
 
+2026-10-30：#1725 修复已有本地卷漏跑 assignment 100–108 迁移；覆盖单服务及跳过基础设施启动路径，SQL 错误立即中止。备份后迁移、重复迁移及 FU50122 真实页面部署到 1.0.2 通过，脚本增量重审 PASS；运行互斥办理另行验证。Open/Wontfix 数量不变。证据见 `docs/verification/2026-10-30-assignment-50122.md`。
+
+2026-10-30：#1726–#1728 修复受保护首步旧提交协议、备用候选假 holder、Lookup 缓存误提交三处现场遗漏。FU50122 已页面配置并部署 1.0.3，两人参与的完整流程结束，6条责任对应6个任务，账本全部APPLIED；中途测试单撤回后已完成责任保留。后端专项、前端13项、完整MI236项及6个浏览器场景通过，增量独立重审PASS。Open/Wontfix数量不变；见同份验收记录。
 2026-10-30：#1723 已修复 Email Monitor 建案 409 `VERSION_CONTEXT_MODIFICATION_DENIED`。variables 不再带保留键，身份走请求顶层 `functionUnitCode`。`EmailMonitorProcessorTest` 10/10；engine 已重建。端到端未重发邮件。Open 不变。
 
 2026-10-29：#1721 已修复 Email Monitor 建案 MAIN View Current Step 为空。internal start 未打开详情：库与 View 50303 均为 Case Submission。顺带记录 #1722（本地 `up_change_history.batch_id` 缺失）。Open 51→52。
