@@ -23,6 +23,7 @@ import {
   resolveMiChildStructuralParentFk,
 } from '@/composables/tasks/shared'
 import { bindingDeclaresMiParticipantRow } from '@/composables/tasks/miBindingKindFromConfig'
+import { sliceRowsByDeclaredFilter } from '@/composables/tasks/subTableFilterProjection'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
@@ -70,6 +71,7 @@ export interface PortalSubTableBindingLite {
    */
   foreignKeyField?: string | null
   filterFkFieldName?: string | null
+  filterFkRefTableId?: number | null
   fkFillSources?: import('@/utils/tableFkRuntime').FkFillSourceConfig[] | null
 }
 
@@ -291,6 +293,9 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
   const participantScoped =
     isMiParticipantScopedSubTableBinding(binding, miKindContext.value)
     && hostRowIsMiParticipant(hostRow, miKindContext.value.collectionPrimaryKeyFields)
+  const filtersHost = binding.filterFkFieldName
+    && !(binding.filterFkRefTableId != null && props.hostPrimaryTableId != null
+      && Number(binding.filterFkRefTableId) === Number(props.hostPrimaryTableId))
   const scope = (rows: unknown[]) =>
     participantScoped
       ? scopeLinkChildRowsToMiHostRow(
@@ -299,7 +304,9 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
           miChildFkConfigOfBinding(binding as never),
           miKindContext.value.collectionPrimaryKeyFields,
         )
-      : rows
+      : filtersHost
+        ? sliceRowsByDeclaredFilter(rows, binding, [resolveHostRowKey(hostRow) ?? resolveHostRowKey(props.parentRow ?? null)])
+        : rows
 
   // Model first: it carries local __subTables__ edits before the host round-trips them
   // into parentRow (SubTableInlineForm rowModel vs. currentRow).
@@ -335,6 +342,7 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
   if (participantScoped) return []
 
   const flat = Array.isArray(binding.data) ? binding.data : []
+  if (binding.filterFkFieldName) return scope(flat)
   /**
    * `binding.data` 是**跨父行**的池子。宿主行能解析出标识时，只显示外键指向它的那些行 ——
    * 否则一个父行的 Link Form 会显示（并允许编辑、删除）**另一个父行**的子表数据。
