@@ -31,6 +31,11 @@ public class AuditApplicationListQueryComponent {
 
     public PortalListPage<ProcessInstanceInfo> query(String functionUnitCode,
                                                      MyApplicationQueryRequest request) {
+        if (ApplicationPresentationQuery.needed(request)) return ApplicationPresentationQuery.query(request,
+                AuditApplicationColumnSpec.sql(),(nativeRequest,enrich)->queryNative(functionUnitCode,nativeRequest,enrich));
+        return queryNative(functionUnitCode,request,true);
+    }
+    private PortalListPage<ProcessInstanceInfo> queryNative(String functionUnitCode,MyApplicationQueryRequest request,boolean enrich) {
         if (functionUnitCode == null || functionUnitCode.isBlank()) {
             throw new IllegalArgumentException("functionUnitCode is required for fu-applications");
         }
@@ -41,7 +46,7 @@ public class AuditApplicationListQueryComponent {
         StringBuilder where = new StringBuilder(
                 " FROM up_process_instance pi WHERE pi.function_unit_code = ?");
         appendStatus(where, params, request.status());
-        where.append(AuditApplicationColumnSpec.textSearchClause(request.keyword(), params));
+        where.append(AuditApplicationColumnSpec.nativeTextSearchClause(request.keyword(), params));
         where.append(filterSql.whereClause(request.filters(), params));
 
         long total = ListQuerySupport.requireCount(
@@ -51,7 +56,7 @@ public class AuditApplicationListQueryComponent {
 
         List<String> ids = loadPageIds(filterSql, where.toString(), params, request);
         long afterSql = System.nanoTime();
-        List<ProcessInstanceInfo> rows = myApplicationListQueryComponent.toListRows(ids);
+        List<ProcessInstanceInfo> rows = myApplicationListQueryComponent.toListRows(ids,enrich);
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, LIST_KEY, request.page(), request.size(), total, elapsedMs,

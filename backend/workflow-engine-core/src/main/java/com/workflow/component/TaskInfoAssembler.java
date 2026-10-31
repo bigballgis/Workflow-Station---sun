@@ -84,7 +84,7 @@ public class TaskInfoAssembler {
      */
     public String resolveCurrentStepName(String processDefinitionId, String taskDefinitionKey, String taskName) {
         String miName = resolveMiSubProcessName(processDefinitionId, taskDefinitionKey);
-        return StringUtils.hasText(miName) ? miName : taskName;
+        return StringUtils.hasText(miName) ? miName + ": " + (StringUtils.hasText(taskName) ? taskName : taskDefinitionKey) : taskName;
     }
 
     // 同一流程定义 + element 的 MI 归属是静态的，缓存避免列表里每行重复解析 BpmnModel。

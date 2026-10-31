@@ -29,6 +29,18 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ProcessApplicationQueryComponentDetailAccessTest {
+    @Test void presentationTextDoesNotMakeAnUnrelatedUserAParticipant() {
+        var detail=ProcessInstanceInfo.builder().id("p").startUserId("initiator").currentAssignee("multi")
+                .candidateUsers("real-person").currentAssigneeDisplay("Finance + Manager").build();
+        when(userDisplayNameResolver.resolve("outsider")).thenReturn("Finance + Manager");
+        assertThat(component.isProcessParticipant("outsider",detail)).isFalse();
+        assertThat(component.isProcessParticipant("real-person",detail)).isTrue();
+    }
+    @Test void actualHolderIdentityStillWorksWhenParallelPresentationHasStagePrefixes() {
+        var detail=ProcessInstanceInfo.builder().id("p").startUserId("initiator").currentAssignee("actual-holder")
+                .currentAssigneeDisplay("multi: Stage A → Alice; multi: Stage B → Bob").build();
+        assertThat(component.isProcessParticipant("actual-holder",detail)).isTrue();
+    }
 
     @Mock private ProcessInstanceRepository processInstanceRepository;
     @Mock private com.portal.client.WorkflowEngineClient workflowEngineClient;
@@ -57,6 +69,7 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 functionUnitAccessComponent,
                 jdbcTemplate,
                 org.mockito.Mockito.mock(MiOuterStepResolver.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(component, "taskPresentation", org.mockito.Mockito.mock(ApplicationTaskPresentation.class));
         lenient().when(workflowEngineClient.isAvailable()).thenReturn(false);
     }
 

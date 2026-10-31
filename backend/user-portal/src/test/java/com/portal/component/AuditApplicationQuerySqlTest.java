@@ -20,6 +20,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -54,7 +55,7 @@ class AuditApplicationQuerySqlTest {
                     when(rs.next()).thenReturn(false);
                     return call.<ResultSetExtractor<?>>getArgument(1).extractData(rs);
                 });
-        when(myApplicationListQueryComponent.toListRows(any())).thenReturn(List.of());
+        when(myApplicationListQueryComponent.toListRows(any(), anyBoolean())).thenReturn(List.of());
     }
 
     @Test
@@ -71,10 +72,10 @@ class AuditApplicationQuerySqlTest {
     void keywordSearchIsInsideTheSharedPredicate() {
         component.query("expense", request(null, "  请假  "));
 
-        assertThat(preparedSql.get(0)).contains("pi.variables->>'__request_id' ILIKE ?");
-        assertThat(preparedSql.get(0)).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)");
-        assertThat(preparedSql.get(0)).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')");
-        assertThat(preparedSql.get(0)).contains("FROM sys_users u");
+        assertThat(pageSql()).contains("pi.variables->>'__request_id' ILIKE ?");
+        assertThat(pageSql()).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)");
+        assertThat(pageSql()).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')");
+        assertThat(pageSql()).contains("FROM sys_users u").doesNotContain("pi.candidate_users");
         assertThat(preparedSql.get(0)).doesNotContain("pi.status ILIKE");
         assertThat(preparedSql.get(0)).doesNotContain("pi.function_unit_code ILIKE");
         assertThat(preparedSql.get(0)).doesNotContain("pi.start_time::text");
@@ -85,7 +86,7 @@ class AuditApplicationQuerySqlTest {
     void typedStatusLabelSearchesTheStoredCode() {
         component.query("expense", request(null, "Running"));
 
-        assertThat(preparedSql.get(0)).contains("pi.status IN (?)");
+        assertThat(pageSql()).contains("pi.status IN (?)");
         assertThat(pageSql()).contains("pi.status IN (?)");
     }
 
@@ -94,7 +95,7 @@ class AuditApplicationQuerySqlTest {
         component.query("expense", request("RUNNING", "ann"));
 
         assertThat(preparedSql.get(0)).contains("pi.status = ?");
-        assertThat(preparedSql.get(0)).contains("ILIKE");
+        assertThat(pageSql()).contains("ILIKE");
         assertThat(pageSql()).contains("pi.status = ?").contains("ILIKE");
     }
 

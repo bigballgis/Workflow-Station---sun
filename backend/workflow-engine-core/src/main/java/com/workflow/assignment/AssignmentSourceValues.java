@@ -33,6 +33,10 @@ public class AssignmentSourceValues {
     }
     public Map<String,Object> row(Task task,List<String> fields) {
         if (AssignmentCreationBuffer.active(task.getId())) return runtimeRow(task);
+        var snapshot = snapshot(task,fields,selector(task));
+        return snapshot.state()==AssignmentSourceSnapshot.State.INITIAL ? runtimeRow(task) : values(snapshot.values());
+    }
+    private AssignmentSourceSnapshot.Row selector(Task task) {
         FlowElement scope = definitions.model(task.getProcessDefinitionId()).getFlowElement(task.getTaskDefinitionKey());
         while (scope!=null && !(scope instanceof Activity activity && activity.getLoopCharacteristics()!=null)) scope=scope.getSubProcess();
         if (scope==null) throw unavailable();
@@ -46,9 +50,55 @@ public class AssignmentSourceValues {
             key=item.get("row");
         }
         if (key==null || !key.isObject() || key.isEmpty()) throw unavailable();
-        var snapshot = snapshot(task,fields,new AssignmentSourceSnapshot.Row(store,key));
-        return snapshot.state()==AssignmentSourceSnapshot.State.INITIAL ? runtimeRow(task) : values(snapshot.values());
+        return new AssignmentSourceSnapshot.Row(store,key);
     }
+    /** One batched Portal RPC per bounded slice, limited to dynamic presentation source fields. */
+    public Map<String,Map<String,Object>> presentationSources(Map<Task,AssignmentTaskStateRepository.State> selected) {
+        var pending=new java.util.ArrayList<Presentation>();
+        var epochs=new java.util.LinkedHashMap<java.util.UUID,Epoch>();
+        for (var entry:selected.entrySet()) {
+            var task=entry.getKey(); var state=entry.getValue();
+            if (state==null || !state.active() || !task.getId().equals(state.taskId())
+                    || !task.getProcessInstanceId().equals(state.instance()) || !task.getProcessDefinitionId().equals(state.definition())
+                    || !task.getTaskDefinitionKey().equals(state.node())) throw unavailable();
+            var source=state.sourceSpec();
+            if (source==null) throw unavailable();
+            if (source.kind()!=AssignmentSourceSpec.Kind.ROW && source.kind()!=AssignmentSourceSpec.Kind.MANUAL) continue;
+            var fields=source.kind()==AssignmentSourceSpec.Kind.ROW
+                    ? java.util.stream.Stream.of(source.assigneeField(),source.roleField(),source.buField())
+                        .filter(field->field!=null && !field.isBlank()).distinct().toList()
+                    : List.of(manualField(source.manualUserVariable(),"manualAssignee_",task),
+                        manualField(source.manualBuVariable(),"manualAssignBu_",task),
+                        manualField(source.manualRoleVariable(),"manualAssignRole_",task)).stream().distinct().toList();
+            if (fields.isEmpty()) throw unavailable();
+            epochs.computeIfAbsent(state.caseId(),id->epoch(id));
+            pending.add(new Presentation(task,new AssignmentSourceSnapshot.Request(state.caseId(),state.instance(),state.definition(),fields,
+                    source.kind()==AssignmentSourceSpec.Kind.ROW?selector(task):null)));
+        }
+        var result=new java.util.LinkedHashMap<String,Map<String,Object>>();
+        for (int offset=0;offset<pending.size();offset+=1000) {
+            var batch=pending.subList(offset,Math.min(offset+1000,pending.size()));
+            var snapshots=portal.readMany(batch.stream().map(Presentation::request).toList());
+            if (snapshots.size()!=batch.size()) throw unavailable();
+            for (int index=0;index<batch.size();index++) {
+                var item=batch.get(index); var snapshot=snapshots.get(index); var expected=epochs.get(item.request().caseId());
+                if (snapshot.caseRevision()!=expected.caseRevision() || snapshot.portalRevision()!=expected.portalRevision()) throw changed();
+                var source=snapshot.state()==AssignmentSourceSnapshot.State.INITIAL
+                        ? item.request().row()==null?runtime.getVariables(item.task().getProcessInstanceId()):runtimeRow(item.task())
+                        : values(snapshot.values());
+                var projected=new java.util.LinkedHashMap<String,Object>();
+                for (String field:item.request().fields()) if (source.containsKey(field)) projected.put(field,source.get(field));
+                if (result.put(item.task().getId(),java.util.Collections.unmodifiableMap(projected))!=null) throw unavailable();
+            }
+        }
+        epochs.forEach((id,expected)->{if (!expected.equals(epoch(id))) throw changed();});
+        return java.util.Collections.unmodifiableMap(result);
+    }
+    private Epoch epoch(java.util.UUID id) { return new Epoch(states.caseContext(id).revision(),states.portalRevision(id)); }
+    private String manualField(String field,String prefix,Task task) { return field==null || field.isBlank()?prefix+task.getTaskDefinitionKey():field; }
+    private record Epoch(long caseRevision,long portalRevision) { }
+    private record Presentation(Task task,AssignmentSourceSnapshot.Request request) { }
+    private AssignmentFailure changed() { return new AssignmentFailure(AssignmentFailure.Reason.ASSIGNMENT_STATE_CHANGED); }
     private AssignmentSourceSnapshot snapshot(Task task,List<String> fields,AssignmentSourceSnapshot.Row row) {
         var state = states.find(task.getId()).orElseThrow(this::unavailable);
         long revision = states.caseContext(state.caseId()).revision();

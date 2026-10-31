@@ -61,7 +61,7 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
 
     private ProcessApplicationQueryComponent newComponent(
             ProcessInstanceRepository repository, WorkflowEngineClient client) {
-        return new ProcessApplicationQueryComponent(
+        var result = new ProcessApplicationQueryComponent(
                 repository,
                 client,
                 new EngineSubTableHydrator(client),
@@ -73,6 +73,8 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
                 mock(FunctionUnitAccessComponent.class),
                 mock(JdbcTemplate.class),
                 mock(MiOuterStepResolver.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(result, "taskPresentation", mock(ApplicationTaskPresentation.class));
+        return result;
     }
 
     @Test

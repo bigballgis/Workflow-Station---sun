@@ -18,13 +18,32 @@ public class AssignmentSourceSnapshotComponent {
         this.repository = repository; this.json = json;
     }
     public AssignmentSourceSnapshot read(AssignmentSourceSnapshot.Request request) {
-        if (request.fields().contains("__subTables__") || new HashSet<>(request.fields()).size()!=request.fields().size()) throw unavailable();
+        validate(request);
         var stored = repository.read(request);
+        return select(request,stored,new java.util.HashMap<>());
+    }
+    public java.util.List<AssignmentSourceSnapshot> readMany(java.util.List<AssignmentSourceSnapshot.Request> requests) {
+        if (requests==null || requests.isEmpty() || requests.size()>1000) throw unavailable();
+        requests.forEach(this::validate);
+        var stored=repository.readMany(requests);
+        if (stored.size()!=requests.size()) throw unavailable();
+        var decoded=new java.util.HashMap<AssignmentSourceSnapshotRepository.Stored,JsonNode>();
+        var result=new java.util.ArrayList<AssignmentSourceSnapshot>();
+        for (int index=0;index<requests.size();index++) result.add(select(requests.get(index),stored.get(index),decoded));
+        return java.util.List.copyOf(result);
+    }
+    private void validate(AssignmentSourceSnapshot.Request request) {
+        if (request==null || request.fields()==null || request.fields().isEmpty() || request.fields().size()>16
+                || request.fields().contains("__subTables__") || request.fields().stream().anyMatch(field->field==null || field.isBlank())
+                || new HashSet<>(request.fields()).size()!=request.fields().size()) throw unavailable();
+    }
+    private AssignmentSourceSnapshot select(AssignmentSourceSnapshot.Request request,AssignmentSourceSnapshotRepository.Stored stored,
+            java.util.Map<AssignmentSourceSnapshotRepository.Stored,JsonNode> decoded) {
         if (!stored.present()) {
             if (stored.previouslyPresent()) throw unavailable();
             return result(request,stored,AssignmentSourceSnapshot.State.INITIAL,json.createObjectNode());
         }
-        JsonNode source = decode(stored.variables());
+        JsonNode source = decoded.computeIfAbsent(stored,value->decode(value.variables()));
         if (request.row()!=null) source = row(source,request.row());
         var values = json.createObjectNode();
         for (String field : request.fields()) if (source.has(field)) values.set(field,source.get(field));

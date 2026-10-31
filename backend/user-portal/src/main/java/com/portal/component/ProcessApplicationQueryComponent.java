@@ -57,6 +57,7 @@ public class ProcessApplicationQueryComponent {
     @Autowired
     @Qualifier(com.portal.config.PortalAsyncConfig.AGGREGATION_EXECUTOR)
     private java.util.concurrent.Executor aggregationExecutor;
+    @Autowired private ApplicationTaskPresentation taskPresentation;
 
     /** Decides COMPLETED vs REJECTED; when absent, finished instances stay COMPLETED as before. */
     @Autowired(required = false)
@@ -223,6 +224,7 @@ public class ProcessApplicationQueryComponent {
                 .peek(info -> info.setVariables(null))
                 .toList();
 
+        taskPresentation.annotate(instances);
         return new PageImpl<>(instances, pageable, instancePage.getTotalElements());
     }
 
@@ -273,7 +275,7 @@ public class ProcessApplicationQueryComponent {
         if (currentNode != null && miNameMapByProcessDefKey != null) {
             miMap = miNameMapByProcessDefKey.get(instance.getProcessDefinitionId());
             if (miMap != null) {
-                currentStepName = miMap.getOrDefault(currentNode, currentNode);
+                currentStepName = miMap.containsKey(currentNode) ? miMap.get(currentNode) + ": " + currentNode : currentNode;
             }
         }
         String currentAssigneeName = OwnerCaseHandlerCalculator.applicationCurrentAssigneeDisplay(
@@ -565,21 +567,8 @@ public class ProcessApplicationQueryComponent {
             miOverlayComponent.reconcileCurrentNodeWithMiOverlay(info, miProgress);
         }
 
-        // 「当前步骤」(MI 感知)：流程正处于多实例子任务内部时，展示外层多实例 subProcess 的 name（如 "multi"），
-        // 而非某个具体内层子任务名；普通节点则等于 currentNode。终态由前端显示 '-'（此处 currentNode 已为 null）。
-        if ("RUNNING".equals(instance.getStatus())) {
-            String miActivityName = (miProgress != null && !miProgress.isEmpty())
-                    ? miOverlayComponent.getMiActivityName(processId) : null;
-            info.setCurrentStepName(miActivityName != null ? miActivityName : info.getCurrentNode());
-        } else {
-            info.setCurrentStepName(info.getCurrentNode());
-        }
-        Map<String, String> miMap = buildMiNodeNameMaps(List.of(instance))
-                .get(instance.getProcessDefinitionId());
-        String peopleDisplay = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
-                instance.getCurrentAssignee(), instance.getCandidateUsers(), new HashMap<>());
-        info.setCurrentAssignee(OwnerCaseHandlerCalculator.applicationCurrentAssigneeDisplay(
-                instance.getStatus(), info.getCurrentNode(), miMap, peopleDisplay));
+        info.setCurrentStepName(info.getCurrentNode());
+        taskPresentation.annotate(List.of(info));
         if (hasSubTables) {
             subTableEnrichmentComponent.enrichSubTablesWithAssignmentData(info, miProgress);
         }

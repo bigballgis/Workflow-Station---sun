@@ -52,8 +52,14 @@ public class MyApplicationListQueryComponent {
     private final ObjectMapper objectMapper;
     private final ProcessApplicationQueryComponent processApplicationQueryComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
+    @org.springframework.beans.factory.annotation.Autowired private ApplicationTaskPresentation taskPresentation;
 
     public PortalListPage<ProcessInstanceInfo> query(String userId, MyApplicationQueryRequest request) {
+        if (ApplicationPresentationQuery.needed(request)) return ApplicationPresentationQuery.query(request,
+                MyApplicationColumnSpec.sql(),(nativeRequest,enrich)->queryNative(userId,nativeRequest,enrich));
+        return queryNative(userId,request,true);
+    }
+    private PortalListPage<ProcessInstanceInfo> queryNative(String userId, MyApplicationQueryRequest request,boolean enrich) {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId is required for my-applications");
         }
@@ -66,6 +72,7 @@ public class MyApplicationListQueryComponent {
         StringBuilder where = new StringBuilder(
                 " FROM up_process_instance pi WHERE pi.start_user_id = ? AND pi.parent_process_instance_id IS NULL");
         appendStatus(where, params, request.status());
+        where.append(com.portal.util.AuditApplicationColumnSpec.nativeTextSearchClause(request.keyword(),params));
         where.append(filterSql.whereClause(request.filters(), params));
 
         long total = ListQuerySupport.requireCount(
@@ -76,7 +83,7 @@ public class MyApplicationListQueryComponent {
 
         PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         long afterSql = System.nanoTime();
-        List<ProcessInstanceInfo> rows = toListRows(pageIds.ids());
+        List<ProcessInstanceInfo> rows = toListRows(pageIds.ids(),enrich);
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, LIST_KEY, request.page(), request.size(), total, elapsedMs,
@@ -102,6 +109,9 @@ public class MyApplicationListQueryComponent {
     }
 
     List<ProcessInstanceInfo> toListRows(List<String> ids) {
+        return toListRows(ids,true);
+    }
+    List<ProcessInstanceInfo> toListRows(List<String> ids,boolean enrich) {
         if (ids.isEmpty()) {
             return List.of();
         }
@@ -143,6 +153,7 @@ public class MyApplicationListQueryComponent {
             info.setVariables(null);
             rows.add(info);
         }
+        if (enrich) taskPresentation.annotate(rows);
         return rows;
     }
 

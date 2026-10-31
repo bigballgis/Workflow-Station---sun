@@ -46,6 +46,7 @@ public class TodoListQueryComponent {
     private final TaskPermissionEvaluator taskPermissionEvaluator;
     private final ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
     private final MineTaskScanner mineTaskScanner;
+    private final TaskQueryPresentation taskPresentation;
 
     public PortalListPage<TaskInfo> queryTodoList(String userId, TodoTaskQueryRequest request) {
         long started = System.nanoTime();
@@ -162,6 +163,7 @@ public class TodoListQueryComponent {
                     .filter(t -> BatchTaskEligibility.inGroup(t, request.batchGroupKey(), request.batchTaskDefinitionKey()))
                     .collect(Collectors.toCollection(ArrayList::new));
         }
+        taskPresentation.annotate(merged);
         maybeEnrichRequestIds(merged, adapted);
         List<TaskInfo> filtered = TaskInfoQueryFilters.apply(merged, adapted);
         filtered = TaskInfoListOps.applySorting(filtered, adapted);

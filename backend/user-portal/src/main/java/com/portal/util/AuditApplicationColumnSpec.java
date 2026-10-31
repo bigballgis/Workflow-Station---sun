@@ -43,18 +43,28 @@ public final class AuditApplicationColumnSpec {
      * matched: labels → status codes, names → sys_users ids, dates as YYYY-MM-DD HH:mm.
      */
     public static String textSearchClause(String keyword, List<Object> params) {
+        return textSearchClause(keyword,params,true);
+    }
+
+    public static String nativeTextSearchClause(String keyword,List<Object> params) {
+        return textSearchClause(keyword,params,false);
+    }
+
+    private static String textSearchClause(String keyword,List<Object> params,boolean storedAssignee) {
         if (keyword == null || keyword.isBlank()) {
             return "";
         }
         String trimmed = keyword.trim();
         String like = "%" + ListFilterSql.escapeLike(trimmed) + "%";
-        List<String> likeTerms = List.of(
+        List<String> likeTerms = new ArrayList<>(List.of(
                 "pi.variables->>'__request_id'" + ListFilterSql.ILIKE,
                 "COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)" + ListFilterSql.ILIKE,
                 "COALESCE(pi.start_user_name, pi.start_user_id)" + ListFilterSql.ILIKE,
-                ProcessAssigneeStoredSql.EXPRESSION + ListFilterSql.ILIKE,
-                paintedUserNameExistsSql(),
-                "to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')" + ListFilterSql.ILIKE);
+                "to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')" + ListFilterSql.ILIKE));
+        if (storedAssignee) {
+            likeTerms.add(ProcessAssigneeStoredSql.EXPRESSION + ListFilterSql.ILIKE);
+        }
+        likeTerms.add(paintedUserNameExistsSql(storedAssignee));
         likeTerms.forEach(ignored -> params.add(like));
         return " AND ("
                 + String.join(" OR ", likeTerms)
@@ -86,7 +96,7 @@ public final class AuditApplicationColumnSpec {
      * Name on screen → sys_users row → stored start_user_id / assignee ids.
      * Identifiers are allowlisted at the concatenation site.
      */
-    private static String paintedUserNameExistsSql() {
+    private static String paintedUserNameExistsSql(boolean includeAssignee) {
         String users = SqlIdentifiers.requireQualifiedName("sys_users");
         String id = SqlIdentifiers.requireIdentifier("id");
         String username = SqlIdentifiers.requireIdentifier("username");
@@ -98,10 +108,10 @@ public final class AuditApplicationColumnSpec {
         String identities = "u." + id + "::text, u." + username + ", u." + employeeId;
         return "EXISTS (SELECT 1 FROM " + users + " u WHERE " + name + ListFilterSql.ILIKE
                 + " AND (pi.start_user_id IN (" + identities + ")"
-                + " OR pi.current_assignee IN (" + identities + ")"
+                + (includeAssignee ? " OR pi.current_assignee IN (" + identities + ")"
                 + " OR EXISTS (SELECT 1 FROM unnest(regexp_split_to_array("
                 + "btrim(pi.candidate_users), E'\\\\s*,\\\\s*')) AS token(v)"
-                + " WHERE token.v IN (" + identities + "))))";
+                + " WHERE token.v IN (" + identities + "))" : "") + "))";
     }
 
     static List<String> storedStatusCodesForKeyword(String keyword) {

@@ -37,6 +37,10 @@ public class ProcessInstanceInfo {
      */
     private String currentStepName;
     private String currentAssignee;
+    /** Display only; never consumed by participant or write permission checks. */
+    private String currentAssigneeDisplay;
+    /** Actual user identity aliases used only by USER column filters, never derived from display text. */
+    private java.util.List<String> currentAssigneeUserIds;
     private String candidateUsers;
     @JsonIgnoreProperties({SubTableBatchMetadata.RUNTIME_FIELD, SubTableBatchMetadata.DELETED_ROWS_FIELD})
     private Map<String, Object> variables;

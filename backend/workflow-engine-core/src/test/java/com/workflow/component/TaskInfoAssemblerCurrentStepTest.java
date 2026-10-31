@@ -89,14 +89,14 @@ class TaskInfoAssemblerCurrentStepTest {
     @DisplayName("MI inner task returns the outer multi-instance subProcess name (\"multi\"), not the inner task name")
     void miInnerTaskReturnsSubProcessName() {
         assertThat(assembler.resolveCurrentStepName(PD_ID, "subForm1Task", "sub form1"))
-                .isEqualTo("multi");
+                .isEqualTo("multi: sub form1");
     }
 
     @Test
     @DisplayName("MI subProcess without a name falls back to the subProcess id")
     void miWithoutNameFallsBackToSubProcessId() {
         assertThat(assembler.resolveCurrentStepName(PD_ID, "subForm2Task", "sub form2"))
-                .isEqualTo("MultiInstance_NoName");
+                .isEqualTo("MultiInstance_NoName: sub form2");
     }
 
     @Test

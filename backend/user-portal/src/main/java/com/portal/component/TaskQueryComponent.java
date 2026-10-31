@@ -48,6 +48,7 @@ public class TaskQueryComponent {
     private final TaskDetailQueryComponent taskDetailQueryComponent;
     private final TodoListQueryComponent todoListQueryComponent;
     private final MineTaskListCache mineTaskListCache;
+    private final TaskQueryPresentation taskPresentation;
 
     @PostConstruct
     public void init() {
@@ -147,6 +148,7 @@ public class TaskQueryComponent {
             String userId, TaskQueryRequest request, int page, int size) {
         List<TaskInfo> allTasks = new ArrayList<>(queryDelegatedTasks(userId));
         allTasks = mineTaskScanner.applyPortalPostEngineFilters(userId, allTasks);
+        taskPresentation.annotate(allTasks);
         if (TaskInfoQueryFilters.needsRequestIdEnrichment(request)) {
             requestIdEnricher.enrichTaskRequestIds(allTasks);
         }
@@ -162,6 +164,7 @@ public class TaskQueryComponent {
             String userId, TaskQueryRequest request, List<String> assignmentTypes, int page, int size) {
         List<TaskInfo> filteredSorted = mineTaskScanner.scanMineTasks(userId, request, assignmentTypes, size);
         List<TaskInfo> pagedTasks = new ArrayList<>(TaskInfoListOps.pageOf(filteredSorted, page, size));
+        taskPresentation.annotate(pagedTasks);
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, filteredSorted.size());
@@ -185,6 +188,7 @@ public class TaskQueryComponent {
         log.info("[PERF] query.window mine engine={}ms postFilter={}ms engineTasks={} total={} push={}",
                 (tJoin - t0) / 1_000_000L, (System.nanoTime() - tJoin) / 1_000_000L,
                 engineTasks.size(), engineTotal, push != null && push.hasAny());
+        taskPresentation.annotate(pageTasks);
         requestIdEnricher.enrichTaskRequestIds(pageTasks);
         EngineTaskMapper.clearTaskVariablesForList(pageTasks);
         long totalElements = engineTotal > 0 ? engineTotal : pageTasks.size();

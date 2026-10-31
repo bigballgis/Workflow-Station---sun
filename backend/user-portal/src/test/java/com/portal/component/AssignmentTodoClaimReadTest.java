@@ -22,7 +22,7 @@ class AssignmentTodoClaimReadTest {
     private final TaskPermissionEvaluator permissions=new TaskPermissionEvaluator(mock(DelegationRuleRepository.class),engine,
             workspace,new AssignmentClaimReadAnnotator(reads));
     private final TodoListQueryComponent todo=new TodoListQueryComponent(engine,mock(ProcessInstanceRepository.class),workspace,
-            mock(RequestIdEnricher.class),permissions,mock(ClaimForceUnclaimAnnotator.class),scanner);
+            mock(RequestIdEnricher.class),permissions,mock(ClaimForceUnclaimAnnotator.class),scanner,mock(TaskQueryPresentation.class));
     private void setup() {
         var raw=IntStream.range(0,105).mapToObj(i->Map.<String,Object>of("taskId","task-"+i,
                 "processDefinitionId","definition","taskDefinitionKey","review","bpmnAssigneeType","BU_ROLE",

@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/write-decisions")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/sub-table-plans")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/task-reads")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/task-presentations")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/capabilities")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/coordination-proofs/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/assignment/start-context")).permitAll()

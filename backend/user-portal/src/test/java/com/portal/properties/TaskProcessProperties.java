@@ -123,7 +123,7 @@ class TaskProcessProperties {
         MineTaskListCache mineCache = new MineTaskListCache();
         MineTaskScanner mineScanner = new MineTaskScanner(
                 mineCache, engineFetcher, requestIdEnricher, taskPermissionEvaluator,
-                Mockito.mock(ClaimForceUnclaimAnnotator.class), workspaceFilter, processInstanceRepository);
+                Mockito.mock(ClaimForceUnclaimAnnotator.class), workspaceFilter, processInstanceRepository, Mockito.mock(com.portal.component.TaskQueryPresentation.class));
         TaskDetailQueryComponent taskDetail = new TaskDetailQueryComponent(
                 processInstanceRepository, workflowEngineClient, engineSubTableHydrator, taskActionService,
                 new MiParticipantEnrichmentComponent(jdbcTemplate), requestIdEnricher);
@@ -143,7 +143,8 @@ class TaskProcessProperties {
             engineFetcher,
             taskDetail,
             Mockito.mock(TodoListQueryComponent.class),
-            mineCache
+            mineCache,
+            Mockito.mock(com.portal.component.TaskQueryPresentation.class)
         );
         ProcessInstanceSyncComponent processInstanceSyncComponent =
             new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository,

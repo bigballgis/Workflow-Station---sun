@@ -82,6 +82,7 @@ public class TaskInfo {
 
     /** 分配人/组名称 */
     private String assigneeName;
+    private String assigneeDisplay;
 
     /** 委托人ID（如果是委托任务） */
     private String delegatorId;

@@ -56,6 +56,7 @@ class ProcessApplicationQueryComponentAuditAccessTest {
                 functionUnitAccessComponent,
                 jdbcTemplate,
                 org.mockito.Mockito.mock(MiOuterStepResolver.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(component, "taskPresentation", org.mockito.Mockito.mock(ApplicationTaskPresentation.class));
         lenient().when(workflowEngineClient.isAvailable()).thenReturn(false);
         // No published views, so nothing leaks in through the view path.
         lenient().when(jdbcTemplate.queryForList(anyString(), anyString())).thenReturn(List.of());

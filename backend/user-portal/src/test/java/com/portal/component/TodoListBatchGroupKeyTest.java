@@ -46,6 +46,7 @@ class TodoListBatchGroupKeyTest {
     @Mock private TaskPermissionEvaluator taskPermissionEvaluator;
     @Mock private ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
     @Mock private MineTaskScanner mineTaskScanner;
+    @Mock private TaskQueryPresentation taskPresentation;
 
     @InjectMocks
     private TodoListQueryComponent component;

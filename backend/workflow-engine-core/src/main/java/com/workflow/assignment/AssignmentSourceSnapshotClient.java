@@ -27,14 +27,30 @@ public class AssignmentSourceSnapshotClient {
             var response = http.exchange(uri,HttpMethod.POST,new HttpEntity<>(request,headers),
                     new ParameterizedTypeReference<ApiResponse<AssignmentSourceSnapshot>>() { }).getBody();
             var value = response==null || !response.isSuccess() ? null : response.getData();
-            if (value==null || value.contractVersion()!=1 || !request.caseId().equals(value.caseId())
-                    || !request.instanceId().equals(value.instanceId()) || value.caseRevision()<0 || value.portalRevision()<0
-                    || value.state()==null || value.values()==null || !value.values().isObject()) throw unavailable();
-            var fields = value.values().fieldNames();
-            while (fields.hasNext()) if (!request.fields().contains(fields.next())) throw unavailable();
-            if (value.state()==AssignmentSourceSnapshot.State.INITIAL && !value.values().isEmpty()) throw unavailable();
-            return value;
+            return validate(request,value);
         } catch (RestClientException | IllegalArgumentException failure) { throw unavailable(); }
+    }
+    public java.util.List<AssignmentSourceSnapshot> readMany(java.util.List<AssignmentSourceSnapshot.Request> requests) {
+        if (serviceToken.isBlank() || requests==null || requests.isEmpty() || requests.size()>1000) throw unavailable();
+        try {
+            var uri=SafeUrlInput.requireServiceOrigin(baseUrl).resolve("/api/portal/internal/assignment/source-snapshots");
+            var headers=new HttpHeaders(); headers.set("X-Internal-Token",serviceToken);
+            var response=http.exchange(uri,HttpMethod.POST,new HttpEntity<>(java.util.Map.of("requests",requests),headers),
+                    new ParameterizedTypeReference<ApiResponse<java.util.List<AssignmentSourceSnapshot>>>() { }).getBody();
+            var values=response==null || !response.isSuccess()?null:response.getData();
+            if (values==null || values.size()!=requests.size()) throw unavailable();
+            for (int index=0;index<requests.size();index++) validate(requests.get(index),values.get(index));
+            return java.util.List.copyOf(values);
+        } catch (RestClientException | IllegalArgumentException failure) { throw unavailable(); }
+    }
+    private AssignmentSourceSnapshot validate(AssignmentSourceSnapshot.Request request,AssignmentSourceSnapshot value) {
+        if (value==null || value.contractVersion()!=1 || !request.caseId().equals(value.caseId())
+                || !request.instanceId().equals(value.instanceId()) || value.caseRevision()<0 || value.portalRevision()<0
+                || value.state()==null || value.values()==null || !value.values().isObject()) throw unavailable();
+        var fields = value.values().fieldNames();
+        while (fields.hasNext()) if (!request.fields().contains(fields.next())) throw unavailable();
+        if (value.state()==AssignmentSourceSnapshot.State.INITIAL && !value.values().isEmpty()) throw unavailable();
+        return value;
     }
     private AssignmentFailure unavailable() { return new AssignmentFailure(AssignmentFailure.Reason.ASSIGNMENT_DEPENDENCY_UNAVAILABLE); }
 }

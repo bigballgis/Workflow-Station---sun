@@ -10,6 +10,12 @@ import org.springframework.stereotype.Repository;
 public class AssignmentSourceSnapshotRepository {
     private final JdbcTemplate jdbc;
     public AssignmentSourceSnapshotRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    public java.util.List<Stored> readMany(java.util.List<AssignmentSourceSnapshot.Request> requests) {
+        var sources=new java.util.HashMap<Binding,Stored>();
+        return requests.stream().map(request->sources.computeIfAbsent(
+                new Binding(request.caseId(),request.instanceId(),request.definitionId()),ignored->read(request))).toList();
+    }
+    private record Binding(java.util.UUID caseId,String instance,String definition) { }
     public Stored read(AssignmentSourceSnapshot.Request request) {
         // Engine authenticates the case/instance binding. Portal reads only shared revisions and its own mirror.
         return jdbc.query("SELECT c.revision,c.portal_revision,p.id,p.variables::text,s.process_instance_id "
