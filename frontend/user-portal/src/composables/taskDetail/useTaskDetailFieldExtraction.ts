@@ -1,3 +1,4 @@
+import { applyDesignerControlProps } from '@/utils/applyDesignerControlProps'
 import { createRecordNoteFormField } from '@/components/formRendererHelpers/recordNoteFields'
 import type { FormField } from '@/components/FormRenderer.vue'
 import {
@@ -116,6 +117,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
       }
       if (isRowRule(item)) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'row'),
           label: '',
           type: 'row',
@@ -126,6 +128,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
         continue
       } else if (isColRule(item)) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'col'),
           label: '',
           type: 'col',
@@ -138,6 +141,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
         const nestedTabs = extractTabsFromTabsRule(item, (children) => extractFieldsRecursive(children))
         if (nestedTabs.length > 0) {
           fields.push({
+            sourceRule: item,
             key: getLayoutKey(item, fields.length, 'tabs'),
             label: '',
             type: 'tabs',
@@ -151,6 +155,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
         const collapsePanels = extractCollapsePanelsFromRule(item, (children) => extractFieldsRecursive(children))
         if (collapsePanels.length > 0) {
           fields.push({
+            sourceRule: item,
             key: getLayoutKey(item, fields.length, 'collapse'),
             label: '',
             type: 'collapse',
@@ -162,6 +167,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
       }
       if (isCardRule(item)) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'card'),
           label: getLayoutLabel(item),
           type: 'card',
@@ -171,6 +177,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
         continue
       } else if (item.type === 'miAssignment') {
         const marker: FormField = {
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'miAssignment'),
           label: '',
           type: 'miAssignment',
@@ -303,6 +310,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
     applyDesignerHideFlagToFormField(field, rule)
     applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
     applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
+    applyDesignerControlProps(field, rule)
     return field
   }
 

@@ -17,10 +17,18 @@ export interface FormField {
   required?: boolean
   placeholder?: string
   span?: number
-  options?: Array<{ label: string; value: string | number }>
+  options?: Array<{ label: string; value: string | number; disabled?: boolean }>
   multiple?: boolean
   filterable?: boolean
   maxLength?: number
+  showWordLimit?: boolean
+  controlsPosition?: '' | 'right'
+  format?: string
+  valueFormat?: string
+  startPlaceholder?: string
+  endPlaceholder?: string
+  activeValue?: string | number | boolean
+  inactiveValue?: string | number | boolean
   min?: number
   max?: number
   step?: number

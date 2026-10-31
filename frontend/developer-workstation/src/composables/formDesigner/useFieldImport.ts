@@ -18,6 +18,8 @@ interface UseFieldImportOptions {
   selectedForm: Ref<FormDefinition | null>
   designerRef: Ref<any>
   subDesignerRefs: Ref<any[]>
+  batchDesignerRefs: Ref<Array<{ getRule: () => unknown[]; setRule: (rules: unknown[]) => void }>>
+  subTableActiveTab: Readonly<Ref<string>>
   designerSubBindings: ComputedRef<Array<{ bindingId: number; bindingType: string; tableId: number; tableName: string }>>
   activeDesignerTab: Ref<string>
   relationViewState: Ref<Record<number, { allFields: any[]; viewFields: any[] }>>
@@ -38,7 +40,7 @@ interface UseFieldImportOptions {
  */
 export function useFieldImport(options: UseFieldImportOptions) {
   const {
-    functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
+    functionUnitId, store, selectedForm, designerRef, subDesignerRefs, batchDesignerRefs, subTableActiveTab, designerSubBindings,
     activeDesignerTab, relationViewState, subTableViewState,
     getSubTableListViewBaseColumns,
     mapFieldsToFormRules, getRequestIdConfigByTableId, mergeTaskPermissionsForFields,
@@ -78,6 +80,9 @@ export function useFieldImport(options: UseFieldImportOptions) {
   // Get bindingId for a given tableId (for relation table imports)
   // Checks formBindings first, then designerSubBindings, then falls back to active tab
   function getBindingIdForTable(tableId: number): number | null {
+    const activeBinding = designerSubBindings.value.find(b =>
+      b.bindingId === Number(activeDesignerTab.value) && b.tableId === tableId)
+    if (activeBinding) return activeBinding.bindingId
     // Check formBindings (populated in handleImportFieldsToDesigner)
     const fromFormBindings = formBindings.value.find(b => b.tableId === tableId)
     if (fromFormBindings) return fromFormBindings.id as number
@@ -123,7 +128,8 @@ export function useFieldImport(options: UseFieldImportOptions) {
       : Number(activeDesignerTab.value)
     if (!bindingId) return null
     const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
-    return index >= 0 ? subDesignerRefs.value[index] : null
+    const refs = subTableActiveTab.value === 'batchForm' ? batchDesignerRefs : subDesignerRefs
+    return index >= 0 ? refs.value[index] : null
   }
 
   // Computed: field names already present on the target form/sub-table canvas,
@@ -377,11 +383,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
         mergeTaskPermissionsForFields(selectedImportFields.value)
 
         // Find target sub designer ref
-        let targetRef: any = null
-        if (bindingId) {
-          const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
-          if (index >= 0) targetRef = subDesignerRefs.value[index]
-        }
+        const targetRef = getImportTargetRef()
 
         let addedCount = 0
         if (targetRef) {
@@ -404,7 +406,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
           }
         }
 
-        if (bindingId) {
+        if (bindingId && subTableActiveTab.value !== 'batchForm') {
           subTableViewState.value = {
             ...subTableViewState.value,
             [bindingId]: {
@@ -414,7 +416,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
           }
         }
 
-        refreshFormRulesFromTableMetadata()
+        if (subTableActiveTab.value !== 'batchForm') refreshFormRulesFromTableMetadata()
 
         if (addedCount > 0) {
           ElMessage.success(t('form.importedSuccess', { count: addedCount }))
@@ -431,14 +433,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
       mergeTaskPermissionsForFields(selectedImportFields.value)
 
       // Determine target designer: active sub tab or main
-      let targetRef: any = null
-      if (activeDesignerTab.value !== 'main') {
-        const bindingId = Number(activeDesignerTab.value)
-        const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
-        if (index >= 0) targetRef = subDesignerRefs.value[index]
-      }
-      // Fall back to main designer if no sub ref found
-      if (!targetRef) targetRef = designerRef.value
+      const targetRef = getImportTargetRef()
 
       if (targetRef) {
         const currentRules: any[] = targetRef.getRule() || []

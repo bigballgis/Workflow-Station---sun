@@ -78,6 +78,25 @@ class SubTableBatchAssignmentDifferencesTest {
     }
 
     @Test
+    void lookupObjectAndScalarForSamePersonDoNotChangeAssignment() {
+        Map<String, Object> selected = new HashMap<>(ROW);
+        selected.put("handlerCode", Map.of("id", "person-original", "email", "test@example.invalid"));
+        assertEquals(List.of(), SubTableBatchAssignmentDifferences.changedControls(BASELINE, CONTROLS, payload(List.of(selected))));
+        assertEquals(java.util.Set.of(), SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(selected))));
+    }
+
+    @Test
+    void changedLookupUsesStrictIdentityAndRejectsMalformedOrMultipleSelections() {
+        Map<String, Object> selected = new HashMap<>(ROW);
+        selected.put("handlerCode", Map.of("id", "person-new", "email", "test@example.invalid"));
+        assertEquals(java.util.Set.of("person-new"), SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(selected))));
+        for (Object invalid : List.of(Map.of("email", "test@example.invalid"), Map.of("id", ""), List.of(Map.of("id", "person-new")))) {
+            selected.put("handlerCode", invalid);
+            assertThrows(com.portal.exception.PortalException.class, () -> SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(selected))));
+        }
+    }
+
+    @Test
     void personalQualificationUsesOnlyActualChangedTargetsAndFrozenFieldNames() {
         Map<String, Object> unchanged = new HashMap<>(ROW); unchanged.put("description", "other-edit");
         assertEquals(java.util.Set.of(), SubTableBatchAssignmentDifferences.changedPersonalTargets(BASELINE, CONTROLS, payload(List.of(unchanged))));

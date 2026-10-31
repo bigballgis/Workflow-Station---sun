@@ -426,7 +426,7 @@ const LAYOUT_CONTAINER_TYPES = new Set([
 function shouldRenderLeafField(field: FormField): boolean {
   if (isDisplayOnlyLayoutField(field)) return true
   if (LAYOUT_CONTAINER_TYPES.has(field.type)) return true
-  if (!props.isFieldVisible) return true
+  if (!props.isFieldVisible) return field.hidden !== true
   return props.isFieldVisible(field.key)
 }
 

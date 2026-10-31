@@ -86,6 +86,7 @@ import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { cloneFormRules, collectUploadRulesFromTree, injectPreviewUploadHandlers } from '@/utils/formDesigner'
+import { normalizeSubTablePreviewLayout } from '@/utils/normalizeSubTablePreviewLayout'
 import { syncDesignerComponentEventsForFcPreview } from '@/utils/formCreatePreviewEvents'
 import { isFormCreateRuleHidden, mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import {
@@ -186,10 +187,8 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
     form: {
       ...defaultFormOption.form,
       ...(optionForm && typeof optionForm === 'object' ? optionForm : {}),
-      // 弹窗内强制 auto + left：EP 取最长 label 宽度整列对齐、文字左对齐，
-      // 长 label 不折行不错位（设计器配置的固定值/right 也覆盖）
       labelWidth: 'auto',
-      labelPosition: 'left',
+      labelPosition: optionForm?.labelPosition ?? 'left',
       ...(props.readOnly ? { disabled: true } : {}),
     },
   }
@@ -421,6 +420,7 @@ function rebuildFormRule() {
     mapFormCreateRulesReadonlyDeep(cloneFormRules(rawRule.value || [])) as any[]
   )
   injectDemoBuRoleOptions(filtered)
+  normalizeSubTablePreviewLayout(filtered)
   // Row-scope Notes live on sub-table forms; keep the canvas placeholder off this preview.
   retypeRecordNoteRulesForPreview(filtered)
   formRule.value = filtered

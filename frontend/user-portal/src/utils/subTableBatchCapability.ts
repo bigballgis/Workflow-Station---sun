@@ -147,6 +147,8 @@ export function allowsFrozenBatchAdd(capability: SubTableBatchCapability | null,
 }
 
 export function extractBatchEditableFields(capability: SubTableBatchCapability): BatchEditableField[] | null {
-  const fields = extractBatchFields(capability.batchForm.rule)
+  const fields = extractBatchFields(capability.batchForm.rule,
+    [capability.assignmentConfig?.assigneeField, capability.assignmentConfig?.buField, capability.assignmentConfig?.roleField]
+      .filter((field): field is string => !!field))
   return fields?.length ? fields : null
 }

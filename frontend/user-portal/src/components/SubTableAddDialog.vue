@@ -30,7 +30,9 @@
       :model="formData"
       :rules="formRules"
       :label-width="stableLabelWidth"
-      label-position="left"
+      :label-position="designedLabelPosition"
+      :label-suffix="designedFormOptions.labelSuffix"
+      :size="designedFormOptions.size"
       :validate-on-rule-change="false"
     >
       <el-form-item
@@ -57,25 +59,13 @@
           />
         </el-select>
       </el-form-item>
-      <template
-        v-for="group in dialogLayoutGroups"
-        :key="group.key"
+      <SubTableDialogLayout
+        :fields="formFields"
+        :columns="visibleColumns"
+        :extra-fields="extraLayoutFields"
+        :assignment-fields="assignmentOwnedFields"
       >
-        <component
-          :is="group.title !== null ? 'el-card' : 'div'"
-          v-bind="group.title !== null ? { shadow: 'never' } : {}"
-          :class="group.title !== null ? 'sub-table-dialog-card' : undefined"
-        >
-          <template
-            v-if="group.title"
-            #header
-          >
-            <span class="sub-table-dialog-card-title">{{ group.title }}</span>
-          </template>
-          <template
-            v-for="item in group.items"
-            :key="item.key"
-          >
+        <template #default="{ item }">
             <!-- Assignment Mode block: routing this row to a person or to a role pool.
              The mode cards and the picker the chosen mode needs live in one box, so
              the block is never an empty frame (see mi-assignment-block CSS). -->
@@ -131,7 +121,7 @@
                 >
                   <!-- MI 按角色分派：BU 级联树选择（父 BU 可展开子 BU，与 admin 一致；按 field 名抢先匹配） -->
                   <el-cascader
-                    v-if="col.field === configuredBuField"
+                    v-if="col.field === configuredBuField && !col.sourceRule"
                     v-model="selectedBuId"
                     :options="buTree"
                     :props="(buCascaderProps as any)"
@@ -147,7 +137,7 @@
 
                   <!-- MI 按角色分派：Role 选择（选项随所选 BU 收敛） -->
                   <el-select
-                    v-else-if="configuredBuField && col.field === configuredRoleField"
+                    v-else-if="configuredBuField && col.field === configuredRoleField && !col.sourceRule"
                     v-model="formData[col.field]"
                     :placeholder="col.placeholder || t('subTable.selectRole')"
                     :loading="roleLoading"
@@ -168,7 +158,7 @@
                   </el-select>
 
                   <SubTableAssigneeField
-                    v-else-if="col.field === configuredAssigneeField"
+                    v-else-if="col.field === configuredAssigneeField && !col.sourceRule"
                     v-model="formData[col.field]"
                     :readonly="isColDisabled(col) || effectiveAssignmentConfig?.allowUser === false"
                     @update:model-value="(value: unknown) => onDialogFieldChange(col.field, value)"
@@ -178,8 +168,9 @@
                   <el-input
                     v-else-if="(!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
                     :model-value="textDisplay(col)"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :maxlength="col.props?.maxlength"
+                    :show-word-limit="col.props?.showWordLimit === true"
                     :disabled="isColDisabled(col)"
                     :readonly="showMasked(col) && !isColDisabled(col)"
                     :clearable="!isColDisabled(col) && !showMasked(col)"
@@ -195,8 +186,9 @@
                     v-model="formData[col.field]"
                     type="textarea"
                     :rows="col.props?.rows || 3"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :maxlength="col.props?.maxlength"
+                    :show-word-limit="col.props?.showWordLimit === true"
                     :disabled="isColDisabled(col)"
                     @change="() => onDialogFieldChange(col.field)"
                     @blur="() => onDialogFieldBlur(col.field)"
@@ -207,9 +199,11 @@
                     v-else-if="col.type === 'number'"
                     v-model="formData[col.field]"
                     :precision="col.props?.precision"
+                    :step="col.props?.step ?? 1"
+                    :controls-position="col.props?.controlsPosition"
                     :min="col.props?.min"
                     :max="col.props?.max"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :disabled="isColDisabled(col)"
                     style="width: 100%"
                     @change="(v: number | undefined) => onDialogFieldChange(col.field, v)"
@@ -218,8 +212,9 @@
                   <!-- select -->
                   <el-select
                     v-else-if="col.type === 'select'"
+                    :filterable="col.props?.filterable === true"
                     v-model="formData[col.field]"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :multiple="col.props?.multiple"
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
@@ -233,6 +228,7 @@
                       :key="opt.value"
                       :label="opt.label"
                       :value="opt.value"
+                      :disabled="opt.disabled === true"
                     />
                   </el-select>
 
@@ -247,6 +243,7 @@
                       v-for="opt in (col.props?.options ?? col.options ?? [])"
                       :key="opt.value"
                       :value="opt.value"
+                      :disabled="opt.disabled === true"
                     >
                       {{ opt.label }}
                     </el-radio>
@@ -263,6 +260,7 @@
                       v-for="opt in (col.props?.options ?? col.options ?? [])"
                       :key="opt.value"
                       :value="opt.value"
+                      :disabled="opt.disabled === true"
                     >
                       {{ opt.label }}
                     </el-checkbox>
@@ -274,26 +272,11 @@
                     v-model="formData[col.field]"
                     type="password"
                     show-password
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :disabled="isColDisabled(col)"
                     :clearable="!isColDisabled(col)"
                     @change="() => onDialogFieldChange(col.field)"
                     @blur="() => onDialogFieldBlur(col.field)"
-                  />
-
-                  <!-- timerange -->
-                  <el-time-picker
-                    v-else-if="col.type === 'timerange'"
-                    v-model="formData[col.field]"
-                    is-range
-                    value-format="HH:mm:ss"
-                    :start-placeholder="col.props?.startPlaceholder || t('subTable.startTime')"
-                    :end-placeholder="col.props?.endPlaceholder || t('subTable.endTime')"
-                    :disabled="isColDisabled(col)"
-                    :teleported="true"
-                    :popper-class="datePopperClass"
-                    style="width: 100%"
-                    @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
 
                   <!-- treeselect -->
@@ -303,7 +286,7 @@
                     :data="col.props?.treeData || []"
                     :multiple="col.props?.multiple"
                     :check-strictly="col.props?.checkStrictly !== false"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
@@ -331,36 +314,26 @@
                   <el-switch
                     v-else-if="col.type === 'switch'"
                     v-model="formData[col.field]"
+                    :active-text="col.props?.activeText"
+                    :inactive-text="col.props?.inactiveText"
+                    :active-value="col.props?.activeValue ?? true"
+                    :inactive-value="col.props?.inactiveValue ?? false"
                     :disabled="isColDisabled(col)"
                     @change="(v: unknown) => onDialogFieldChange(col.field, v)"
                   />
 
-                  <!-- date -->
-                  <el-date-picker
-                    v-else-if="col.type === 'date'"
+                  <DesignedDateTimeField
+                    v-else-if="col.type === 'date' || col.type === 'datetime' || col.type === 'daterange' || col.type === 'datetimerange' || col.type === 'time' || col.type === 'timerange'"
                     v-model="formData[col.field]"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    :placeholder="col.placeholder || col.label"
+                    :kind="col.type"
+                    :value-format="col.props?.valueFormat"
+                    :format="col.props?.format"
+                    :placeholder="col.placeholder"
+                    :start-placeholder="col.props?.startPlaceholder"
+                    :end-placeholder="col.props?.endPlaceholder"
                     :disabled="isColDisabled(col)"
-                    :teleported="true"
                     :popper-class="datePopperClass"
-                    style="width: 100%"
-                    @change="(v: unknown) => onDialogFieldChange(col.field, v)"
-                  />
-
-                  <!-- datetime -->
-                  <el-date-picker
-                    v-else-if="col.type === 'datetime'"
-                    v-model="formData[col.field]"
-                    type="datetime"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    :placeholder="col.placeholder || col.label"
-                    :disabled="isColDisabled(col)"
-                    :teleported="true"
-                    :popper-class="datePopperClass"
-                    style="width: 100%"
-                    @change="(v: unknown) => onDialogFieldChange(col.field, v)"
+                    @change="(value: unknown) => onDialogFieldChange(col.field, value)"
                   />
 
                   <!-- upload (readonly): keep cards clickable so file details can open -->
@@ -469,7 +442,7 @@
                     />
                     <Editor
                       :model-value="formData[col.field] || ''"
-                      :default-config="{ placeholder: col.placeholder || col.label }"
+                      :default-config="{ placeholder: col.placeholder ?? (col.sourceRule ? undefined : col.label) }"
                       mode="simple"
                       style="height: 200px; overflow-y: hidden"
                       @on-created="(editor: any) => onEditorCreated(editor, col.field)"
@@ -531,7 +504,7 @@
                     v-model="formData[col.field]"
                     :options="col.props?.options ?? col.options ?? []"
                     :props="col.props?.cascaderProps"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :clearable="!isColDisabled(col)"
                     :disabled="isColDisabled(col)"
                     :teleported="true"
@@ -555,7 +528,7 @@
                       :filter-conditions="effectiveLookupFilterConditions(col)"
                       :lookup-config="col.props?.lookupConfig"
                       :view-fields="col.props?.viewFields || []"
-                      :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                       :readonly="isColDisabled(col)"
                       :multiple="col.props?.multiple === true"
                       @select="(row: Record<string, any>) => onLookupSelectWithEvents(col.field, row)"
@@ -624,21 +597,18 @@
                   <el-input
                     v-else-if="col.type && !HANDLED_TYPES.has(col.type)"
                     v-model="formData[col.field]"
-                    :placeholder="col.placeholder || col.label"
+                    :placeholder="col.placeholder ?? (col.sourceRule ? undefined : col.label)"
                     :disabled="isColDisabled(col)"
                     :clearable="!isColDisabled(col)"
                   />
                 </template>
               </el-form-item>
             </template>
-          </template>
-        </component>
-      </template>
-    </el-form>
-
+        </template>
+        <template #placement="{ field }">
     <!-- Nested sub-tables placed in this binding's form design (sub-table-in-sub-table) -->
     <div
-      v-for="nested in nestedSubTables || []"
+      v-for="nested in nestedForField(field)"
       :key="`nested-sub-table-${nested.bindingId}`"
       class="dialog-nested-sub-table"
     >
@@ -684,7 +654,7 @@
          edited row (disabled until the row is saved), TABLE scope binds this
          sub-table's shared stream within the current process. -->
     <div
-      v-for="rn in recordNoteFields || []"
+      v-for="rn in noteForField(field)"
       :key="rn.key"
       class="dialog-record-note"
     >
@@ -698,6 +668,10 @@
         :readonly="hostTaskId != null && rn._recordNote?.readonly === true"
       />
     </div>
+
+        </template>
+      </SubTableDialogLayout>
+    </el-form>
 
     <template #footer>
       <el-button @click="handleClose">
@@ -726,6 +700,8 @@
 </template>
 
 <script setup lang="ts">
+import SubTableDialogLayout from './SubTableDialogLayout'
+import DesignedDateTimeField from './DesignedDateTimeField.vue'
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
@@ -792,6 +768,7 @@ const HANDLED_TYPES = new Set([
   'text', 'textarea', 'number', 'select', 'radio', 'checkbox',
   'password', 'timerange', 'treeselect', 'tree', 'switch', 'date',
   'datetime', 'upload', 'advancedUpload', 'colorPicker', 'rate', 'slider', 'editor',
+  'time', 'daterange', 'datetimerange',
   'signature', 'transfer', 'cascader', 'lookup', 'user', 'department', 'owner',
 ])
 
@@ -874,6 +851,17 @@ const emit = defineEmits<{
   (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
 }>()
 
+const extraLayoutFields = computed<FormField[]>(() => [
+  ...(props.nestedSubTables ?? []).map(nested => ({ key: `__dialog_nested_${nested.bindingId}`, label: nested.tableName, type: 'subTable', _bindingId: Number(nested.bindingId) })),
+  ...(props.recordNoteFields ?? []),
+])
+function nestedForField(field: FormField) {
+  return field.type === 'subTable' ? (props.nestedSubTables ?? []).filter(nested => Number(nested.bindingId) === Number(field._bindingId)) : []
+}
+function noteForField(field: FormField) {
+  return field.type === 'recordNote' ? (props.recordNoteFields ?? []).filter(note => note.key === field.key) : []
+}
+
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
 const selectedParentValue = ref('')
@@ -919,7 +907,7 @@ const editingRowStableId = computed<string | null>(() =>
  * Widen the shell whenever nested tables are present; plain field-only rows keep 600px.
  */
 const dialogWidth = computed(() =>
-  props.nestedSubTables?.length ? 'min(1100px, calc(100vw - 48px))' : '600px')
+  props.nestedSubTables?.length ? 'min(1100px, calc(100vw - 48px))' : 'min(700px, calc(100vw - 48px))')
 
 /**
  * Base layer when this dialog opens straight from a page (nothing stacked above it).
@@ -1300,6 +1288,11 @@ const visibleColumns = computed(() => {
  * move anything. See portal-dialog-form-labels.
  */
 const stableLabelWidth = ref<string>('auto')
+const designedFormOptions = computed(() => {
+  const option = props.formOptions ?? {}
+  return (option.form ?? option) as { labelPosition?: 'left' | 'right' | 'top'; labelWidth?: string | number; labelSuffix?: string; size?: 'small' | 'default' | 'large' }
+})
+const designedLabelPosition = computed(() => designedFormOptions.value.labelPosition ?? 'left')
 
 /**
  * Measure every label the dialog can show — including the ones the current mode hides —
@@ -1333,7 +1326,8 @@ function syncStableLabelWidth() {
   const pad = sample
     ? Number.parseFloat(getComputedStyle(sample).paddingRight || '0') || 12
     : 12
-  stableLabelWidth.value = `${Math.ceil(widest + pad + 8)}px`
+  const configuredWidth = Number.parseFloat(String(designedFormOptions.value.labelWidth ?? '0')) || 0
+  stableLabelWidth.value = `${Math.ceil(Math.max(widest + pad + 8, configuredWidth))}px`
 }
 
 // A fresh dialog must not inherit the previous row's width.

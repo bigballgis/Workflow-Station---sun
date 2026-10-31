@@ -103,7 +103,7 @@ final class SubTableBatchMiCollection {
         result.put("rowKey", key);
         if (key.size() == 1) result.put("rowId", key.values().iterator().next());
         Map<?, ?> config = contract.assignment();
-        String person = target(row, config.get("assigneeField"));
+        String person = personTarget(row, config.get("assigneeField"));
         String role = target(row, config.get("roleField"));
         String bu = target(row, config.get("buField"));
         if ((person == null) == (role == null)) throw invalid("Assignment row must have exactly one target mode");
@@ -118,6 +118,12 @@ final class SubTableBatchMiCollection {
             if (config.get("buField") != null) result.put(text(config.get("buField")), bu);
         }
         return result;
+    }
+
+    private static String personTarget(Map<?, ?> row, Object field) {
+        if (field == null) return null;
+        String identity = AssignmentPersonIdentity.optional(row.get(text(field)));
+        return identity.isEmpty() ? null : identity;
     }
 
     private static String target(Map<?, ?> row, Object field) {

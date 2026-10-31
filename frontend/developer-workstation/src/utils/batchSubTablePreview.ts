@@ -25,7 +25,8 @@ export function buildBatchPreviewDefinition(
   const form = batchForm && typeof batchForm === 'object' ? batchForm as Record<string, unknown> : undefined
   const validForm = validateEnabledBatchForms([placed], { [bindingId]: form ?? {} })
   const rules = validForm ? form!.rule as Array<Record<string, unknown>> : []
-  const fields = extractBatchFields(rules)
+  const fields = extractBatchFields(rules, [assignmentConfig?.assigneeField, assignmentConfig?.buField, assignmentConfig?.roleField]
+    .filter((field): field is string => !!field))
   const assignmentValid = props.allowBatchAssign !== true || isAssignmentConfigured(assignmentConfig)
   const invalid = !batchControlId.trim() || !validForm || !assignmentValid
     || fields === null || (!fields.length && props.allowBatchAssign !== true)

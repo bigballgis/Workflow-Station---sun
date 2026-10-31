@@ -38,23 +38,38 @@ final class SubTableBatchEditedRowGuard {
     }
 
     private static void validateRow(List<?> fields, Map<?, ?> form, Map<?, ?> row) {
-        validateMetadata(fields, row);
+        validateMetadata(fields, row, form);
         try { SubTableBatchFormRules.validateRow(form, row); }
         catch (PortalException error) { throw invalid(error.getMessage()); }
     }
 
     /** Shared by ordinary writes on enhanced instances; does not apply the batch form's column/rule restrictions. */
     static void validateMetadata(List<?> fields, Map<?, ?> row) {
+        validateMetadata(fields, row, Map.of());
+    }
+
+    static void validateMetadata(List<?> fields, Map<?, ?> row, Map<?, ?> form) {
+        Map<String, Map<?, ?>> rules = SubTableBatchFormRules.fields(form);
         try {
             for (Object raw : fields) {
                 if (!(raw instanceof Map<?, ?> field) || !(field.get("fieldName") instanceof String name) || name.isBlank()) {
                     throw invalid("Frozen batch edit field identity is invalid");
                 }
-                SubTableBatchAddedRowGuard.validateField(field, row);
+                validateField(field, row, rules.get(name));
             }
         } catch (PortalException error) {
             throw invalid(error.getMessage());
         }
+    }
+
+    static void validateField(Map<?, ?> field, Map<?, ?> row, Map<?, ?> rule) {
+        String name = String.valueOf(field.get("fieldName"));
+        Object value = row.get(name);
+        if (rule != null && "lookup".equals(rule.get("type")) && value != null && !"".equals(value)) {
+            Object identity = BatchLookupValue.identity(rule, value);
+            if (List.of("VARCHAR", "TEXT", "CHAR").contains(field.get("dataType"))) identity = String.valueOf(identity);
+            SubTableBatchAddedRowGuard.validateField(field, Map.of(name, identity));
+        } else SubTableBatchAddedRowGuard.validateField(field, row);
     }
 
     private static Map<?, ?> map(Object value) { return value instanceof Map<?, ?> map ? map : Map.of(); }

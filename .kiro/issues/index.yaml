@@ -5669,3 +5669,51 @@
     8 项归属回归、主表键及共享关系回归、MI 单元 248 项通过，前端已构建并重建。
     远程 Dev 两个实际按钮、完整 MI 截图门禁仍未验证，审查 CONDITIONAL。
     证据：docs/verification/2026-10-30-multi-binding-403.md。
+
+- id: "1729"
+  status: fixed
+  fixed_at: "2026-10-31"
+  severity: major
+  category: bug
+  summary: "子表 Lookup 分派对象在 Edit、保存比较和 Complete 集合边界被误转或拒绝"
+  file: "backend/user-portal/src/main/java/com/portal/component/AssignmentPersonIdentity.java"
+  detail: |
+    按 assignmentConfig 统一严格身份解析，保留设计 Lookup 对象和 email 事件输入；
+    Edit 尊重 sourceRule，显示名补充不再覆盖原值，冻结 MI 集合只在任务边界提取 ID。
+    后续排版补修：Edit 保留 Assign 全部设计子字段归属，传递 placeholder / showWordLimit，空占位文字不再回退字段标题；同任务 Playwright 红→绿，61项相关测试通过。
+    全面对照后分轮补齐递归布局（行列、Tabs、Collapse、嵌套卡片、展示节点）、时间/范围控件、数字步长、Select 搜索与禁用选项、开关文案及原生标题字号；顶部标签和小尺寸在 Edit/Details/DW Preview 验证通过。缺省 placeholder 使用原生默认，显式空串才留空。
+    最终真实页面反例、保存和 Complete 通过；完整 Portal 单测2599通过/1项已存在的范围外失败，MI250项+6场景通过。类型诊断基线383/最终381，无新增；总体 CONDITIONAL，未 commit。
+    追修 Details change 断链：原验证复用了 Edit email，未证明 Details 回填。现用空行真实复现后接入 Edit 的字段事件解释器；同任务选人回填并保存、清空/隔离/只读测试及完整 MI 门禁通过。Batch 回填仍按批准方案在 Apply 时逐行执行。
+    本地 MCY 独立副本复现 /submit 409、控件分叉和 Complete 500；原失败任务修复后通过，
+    查库确认生成三个 Investigation 任务；314项后端、54项前端专项及完整 MI250项+6截图场景通过。
+    原远程 Credit Card、独立双账号及全生命周期未验收，类型检查存量错误使终审 CONDITIONAL。
+    证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
+
+- id: "1730"
+  status: fixed
+  fixed_at: "2026-10-31"
+  severity: major
+  category: bug
+  summary: "Batch Form Import Fields 错用普通 Form 的去重和写入目标"
+  file: "frontend/developer-workstation/src/composables/formDesigner/useFieldImport.ts"
+  detail: |
+    导入目标和去重统一选择活动画布，同表多 binding 优先当前 binding。
+    Batch 导入不重写 List View，也不刷新普通 Form 元数据。
+    真实 DW 页面复现已导入误判，修复后独立导入成功；新增红→绿测试及DW31项专项通过。
+    证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
+
+- id: "1731"
+  status: fixed
+  fixed_at: "2026-10-31"
+  severity: major
+  category: bug
+  summary: "Batch Lookup 与逐行 change 回填契约缺失，发布后 New Request 加载失败"
+  file: "frontend/shared/src/batch/rowEvents.ts"
+  detail: |
+    经用户确认补逐行 change：只作用于勾选行，行 API 只开放 getValue/setValue/form，
+    只允许写入已声明且可编辑的字段，失败时不提交部分结果。
+    普通 Lookup 和人员 Assign Lookup 保留查询展示与对象值；前后端共享各自的能力校验，
+    DW保存、发布、Admin包导入及运行时提前拒绝未支持的控件/事件/validator。
+    MCY副本实际发布、新建、两行操作、第三行业务数据不变、刷新和Complete通过；
+    两行不同card_number后缀证明事件使用各自行上下文。帮助页三语同步。
+    BU/Role自定义Lookup组合未逐项验收。证据：docs/verification/2026-10-31-subtable-assignment-1232.md。

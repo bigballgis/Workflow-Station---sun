@@ -53,9 +53,7 @@ function collapseActiveNames(field: FormField): string[] {
   return initial
 }
 
-// el-collapse 的 update:model-value 实际给的是 CollapseModelValue
-// （Array<string | number>，折叠面板 name 可以是数字）。原签名只写 string | string[]，
-// 函数体本来就用 String() 归一化了两种情况，这里只是把签名对齐真实入参。
+// Element Plus pane names may be numeric; normalize them to the stored string keys.
 function onCollapseActiveChange(fieldKey: string, names: string | number | Array<string | number>) {
   collapseActiveByKey.value[fieldKey] = Array.isArray(names) ? names.map(String) : [String(names)]
 }
@@ -159,6 +157,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         </el-tabs>
       </el-col>
       <el-tabs
+        :model-value="field.tabs?.[0]?.name"
         v-else
         class="form-renderer-nested-tabs"
       >
@@ -185,7 +184,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         <el-collapse
           :model-value="collapseActiveNames(field)"
           class="form-renderer-collapse"
-          @update:model-value="(names) => onCollapseActiveChange(field.key, names)"
+          @update:model-value="(names: string | number | Array<string | number>) => onCollapseActiveChange(field.key, names)"
         >
           <el-collapse-item
             v-for="(panel, panelIdx) in field.collapsePanels"
@@ -201,7 +200,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
         v-else
         :model-value="collapseActiveNames(field)"
         class="form-renderer-collapse"
-        @update:model-value="(names) => onCollapseActiveChange(field.key, names)"
+        @update:model-value="(names: string | number | Array<string | number>) => onCollapseActiveChange(field.key, names)"
       >
         <el-collapse-item
           v-for="(panel, panelIdx) in field.collapsePanels"

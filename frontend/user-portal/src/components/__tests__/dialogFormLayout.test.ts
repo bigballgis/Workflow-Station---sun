@@ -293,6 +293,14 @@ function field(key: string): FormField {
 }
 
 describe('groupAssignmentFieldsUnderMarker', () => {
+  it.each([false, true])('keeps all designed assignment children inside the block (card=%s)', card => {
+    const marker: FormField = { key: 'assignment', type: 'miAssignment', children: [field('person'), field('email')] }
+    const fields: FormField[] = card ? [{ key: 'card', type: 'card', children: [marker, field('note')] }] : [marker, field('note')]
+    const groups = buildDialogLayoutGroups(fields, cols('person', 'email', 'note'))
+    const result = groups.flatMap(group => groupAssignmentFieldsUnderMarker(group.items, ['person']))
+    expect(result.filter(item => item.type === 'column').map(item => [item.key, item.assignmentSlot]))
+      .toEqual([['person', 'owned'], ['email', 'last'], ['note', undefined]])
+  })
   const items = (...keys: string[]): DialogLayoutItem[] =>
     keys.map(key => key === 'MARKER'
       ? { type: 'miAssignment', key: 'marker' }

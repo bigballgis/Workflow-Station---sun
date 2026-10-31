@@ -2,6 +2,7 @@ import { computed, ref, unref, type Ref } from 'vue'
 import { mergeSubTableRowsByRowId, stripLinkFormDesignerTableLabel } from '@/composables/tasks/shared'
 import type { Column, SubTableBinding, SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
 import { linkedFormSeedRow } from './subTableLinkFormSeed'
+import { useLinkFormChangeEvents } from './useLinkFormChangeEvents'
 import {
   isLinkFormBoundToHostGrid,
   isMiStyleParentRowForLinkForm,
@@ -100,6 +101,13 @@ export function useSubTableLinkFormDialog(
   })
 
   const linkedFormFields = computed(() => selectedLinkBinding.value?.formFields || [])
+  const changeEvents = useLinkFormChangeEvents(linkedFormData, () => linkedFormFields.value,
+    () => selectedLinkBinding.value?.formOptions)
+  const linkedFormPresentation = computed(() => {
+    const option = selectedLinkBinding.value?.formOptions ?? {}
+    const form = (option.form ?? option) as { labelPosition?: 'left' | 'right' | 'top'; labelSuffix?: string; size?: 'small' | 'default' | 'large' }
+    return { labelPosition: form.labelPosition ?? 'left', labelSuffix: form.labelSuffix, size: form.size }
+  })
   // 弹窗内强制 auto（与 DW SubTableFormDialog 一致）：设计器配置的固定 labelWidth
   // 会让超长 label 折行/错位，EP auto 取最长 label 整列严格对齐
   const linkedFormLabelWidth = computed(() => 'auto')
@@ -216,6 +224,7 @@ export function useSubTableLinkFormDialog(
 
   function updateLinkedFormField(key: string, value: any) {
     linkedFormData.value = { ...linkedFormData.value, [key]: value }
+    if (canEditSelectedLinkBinding.value) changeEvents.onDialogFieldChange(key, value)
   }
 
   /** Header close / Cancel: with To Do footer, discard edits; otherwise auto-save field link form when editable. */
@@ -333,6 +342,7 @@ export function useSubTableLinkFormDialog(
     linkFormDialogSnapshot,
     resolveLinkBindingForColumn,
     selectedLinkBinding,
+    linkedFormPresentation,
     linkFormModalTitle,
     linkedFormFields,
     linkedFormLabelWidth,

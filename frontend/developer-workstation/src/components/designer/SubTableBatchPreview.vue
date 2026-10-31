@@ -9,6 +9,7 @@
     :rules="definition.rule" :options="definition.options" :selected-row-ids="targetIds" :mode="mode"
     :field-definitions="workspaceFields" :default-value-for-field="defaultValueForField" :format-error="formatError"
     :field-write-modes="definition.fieldWriteModes"
+    :run-row-events="runRowEvents"
     :allow-edit="definition.flags.edit" :show-assign="definition.flags.assign && mode !== 'add'"
     :prepare-rows="prepareRows" :collect-assignment="collectAssignment" :assignment-has-changes="assignmentHasChanges"
     @apply="rows => applyRows(rows)" @apply-workspace="(rows, _changes, prepared) => applyRows(rows, prepared)"
@@ -22,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, provide } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import BatchWorkspace from '@platform-shared/batch/BatchWorkspace.vue'
@@ -41,6 +42,12 @@ import { createBatchPreviewKeyAllocator } from '@/utils/batchPreviewKeyAllocator
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { useBatchPreviewDirectory } from '@/composables/designerSubTableField/useBatchPreviewDirectory'
 import DesignerHelpLink from './DesignerHelpLink.vue'
+import LookupComponent from './LookupComponent.vue'
+import { batchLookupComponentKey } from '@platform-shared/batch/lookupComponent'
+import { createBatchRowEventRunner, BatchRowEventError } from '@platform-shared/batch/rowEvents'
+import { parseFormCreateEventHandler, createPortalFormApi } from '@/utils/formCreateEventRuntime'
+provide(batchLookupComponentKey, LookupComponent)
+const runRowEvents = createBatchRowEventRunner(parseFormCreateEventHandler, createPortalFormApi)
 
 const props = defineProps<SubTableFieldProps & { definition: BatchPreviewDefinition; selectedRowIds: string[]; rowIdentity: (row: Record<string, unknown>) => string | null }>()
 const emit = defineEmits<{
@@ -53,7 +60,9 @@ const mode = ref<'edit' | 'add'>('edit')
 const targetIds = ref<string[]>([])
 const workingRows = ref<Array<Record<string, unknown>>>([])
 const assignmentEditor = ref<InstanceType<typeof BatchAssignmentEditor>>()
-const fields = computed(() => extractBatchFields(props.definition.rule) ?? [])
+const fields = computed(() => extractBatchFields(props.definition.rule,
+  [props.definition.assignmentConfig?.assigneeField, props.definition.assignmentConfig?.buField, props.definition.assignmentConfig?.roleField]
+    .filter((field): field is string => !!field)) ?? [])
 const workspaceFields = computed(() => (props.config.fieldDefinitions ?? []).map(field => {
   const normalized = normalizeFieldDefinitionForRuntime(field as FieldDefinition)
   return { ...normalized, requiresAllocation: normalized.isPrimaryKey === true
@@ -96,6 +105,7 @@ function defaultValueForField(field: BatchEditableField): unknown {
     field.defaultValue ?? metadata?.defaultValue ?? null, { options: field.options })
 }
 function formatError(error: unknown): string {
+  if (error instanceof BatchRowEventError) return t(error.message, { field: error.field })
   return error instanceof Error && /^(subTable|form)\./.test(error.message) ? t(error.message) : resolveUserFacingHttpMessage(error, t)
 }
 function collectAssignment(rows: Array<Record<string, unknown>>) {

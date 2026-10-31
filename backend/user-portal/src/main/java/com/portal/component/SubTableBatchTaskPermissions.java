@@ -103,7 +103,7 @@ final class SubTableBatchTaskPermissions {
             }
             boolean assignmentOnly = SubTableBatchAssignmentOnly.validate(control, fields, original, row, changes);
             if (metadataChanged && !assignmentOnly && rowChanges.stream().anyMatch(change -> !"ASSIGN".equals(change.getOperation()))) {
-                SubTableBatchEditedRowGuard.validateMetadata(fields, row);
+                SubTableBatchEditedRowGuard.validateMetadata(fields, row, map(control.get("batchForm")));
             }
         }
     }

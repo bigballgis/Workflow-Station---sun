@@ -32,9 +32,9 @@ function assignmentRule(hidden: boolean) {
 // form-create is registered globally (main.ts plugin), not imported locally —
 // stub it here and capture whatever `rule` prop it receives.
 const FormCreateStub = {
-  props: ['rule'],
+  props: ['rule', 'option'],
   render() {
-    return h('div', { class: 'fc-stub', 'data-rule': JSON.stringify(this.rule) })
+    return h('div', { class: 'fc-stub', 'data-rule': JSON.stringify(this.rule), 'data-option': JSON.stringify(this.option) })
   },
 }
 
@@ -62,6 +62,18 @@ function stubbedRule(wrapper: ReturnType<typeof mountDialog>): any[] {
 }
 
 describe('SubTableFormDialog — Assignment Mode respects the designer Hide toggle', () => {
+  it('normalizes hidden controls, opens the first named tab and keeps label placement', async () => {
+    const wrapper = mountDialog(false)
+    await wrapper.setProps({ rule: [
+      { type: 'input', field: 'private', props: { hidden: true } },
+      { type: 'elTabs', children: [{ type: 'elTabPane', props: { name: 'first', label: 'First' }, children: [] }] },
+    ], option: { form: { labelPosition: 'top' } } })
+    await flushPromises()
+    const rule = stubbedRule(wrapper)
+    expect(rule[0].hidden).toBe(true)
+    expect(rule[1].props.modelValue).toBe('first')
+    expect(JSON.parse(wrapper.find('.fc-stub').attributes('data-option')).form.labelPosition).toBe('top')
+  })
   it('renders the miAssignment block and its owned fields when not hidden', async () => {
     const wrapper = mountDialog(false)
     await flushPromises()

@@ -11,7 +11,7 @@ export interface FieldRendererProps {
   readonly?: boolean
   disabled?: boolean
   visible?: boolean
-  options?: Array<{ label: string; value: any }>
+  options?: Array<{ label: string; value: any; disabled?: boolean }>
   uploadUrl?: string
   userSearchResults?: Array<{ id: string; name: string }>
 }

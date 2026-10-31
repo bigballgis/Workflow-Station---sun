@@ -129,11 +129,14 @@ function initialValueFor(col: DialogColumn): unknown {
     case 'number':
       return undefined
     case 'switch':
-      return false
+      return col.props?.inactiveValue ?? false
     case 'checkbox':
       return []
     case 'date':
     case 'datetime':
+    case 'daterange':
+    case 'datetimerange':
+    case 'time':
     case 'timerange':
       return null
     case 'treeselect':
@@ -224,7 +227,7 @@ function buildRequiredOnlyRules(col: DialogColumn): Array<Record<string, unknown
   const trigger = defaultRequiredTrigger(col)
   if (col.type === 'switch') {
     return [{
-      type: 'boolean',
+      type: typeof (col.props?.inactiveValue ?? col.props?.activeValue ?? false),
       required: true,
       message: `${col.label} is required`,
       trigger,

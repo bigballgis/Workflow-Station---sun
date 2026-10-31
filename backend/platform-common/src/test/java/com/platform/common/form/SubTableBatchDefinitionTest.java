@@ -8,6 +8,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchDefinitionTest {
     @Test
+    void rejectsUnsupportedBatchControlsAndHooksBeforePublicationOrImport() {
+        assertThatThrownBy(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
+                "rule", List.of(Map.of("type", "upload", "field", "documents"))), false))
+                .hasMessageContaining("documents");
+        assertThatThrownBy(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
+                "rule", List.of(Map.of("type", "input", "field", "email", "hook", Map.of("mounted", "$FNX:bad()")))), false))
+                .hasMessageContaining("email").hasMessageContaining("mounted");
+        assertThatCode(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
+                "rule", List.of(Map.of("type", "lookup", "field", "person", "on", Map.of("change", "$FNX:api.setValue('email', value.email)")))), false))
+                .doesNotThrowAnyException();
+    }
+    @Test
     void acceptsDesignerRootBindingAndRejectsConflictingBindingSlots() {
         Map<String, Object> form = Map.of("schemaVersion", 1, "rule", List.of(Map.of("type", "input", "field", "value")));
         Map<String, Object> designer = Map.of("type", "subTable", "title", "New lines", "_bindingId", 101,

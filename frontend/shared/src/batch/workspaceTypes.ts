@@ -35,6 +35,7 @@ export interface SubTableBatchChange {
 export interface BatchAssignmentCollection {
   rows: Array<Record<string, unknown>>
   change?: SubTableBatchChange
+  editedFields?: string[]
 }
 
 export interface BatchAssignmentConfig {

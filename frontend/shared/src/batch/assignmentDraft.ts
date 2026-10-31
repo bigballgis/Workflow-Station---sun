@@ -1,5 +1,6 @@
 import type { BatchAssignmentConfig as AssignmentConfig, BatchAssignmentCapability as SubTableBatchCapability, SubTableBatchChange } from './workspaceTypes'
 import { applyBatchAssignment, type BatchAssignmentIntent } from './draft'
+import { batchPersonIdentity } from './personIdentity'
 
 export type BatchAssignmentState = {
   mode: 'person' | 'role'
@@ -14,7 +15,7 @@ export type BatchUniformAssignmentState = Omit<BatchAssignmentState, 'mode'> & {
 export function initialBatchAssignment(row: Record<string, unknown>, config: AssignmentConfig): BatchAssignmentState {
   return {
     mode: config.allowRole && (!config.allowUser || !!(config.roleField && row[config.roleField])) ? 'role' : 'person',
-    assigneeId: config.assigneeField ? String(row[config.assigneeField] ?? '') : '',
+    assigneeId: config.assigneeField ? batchPersonIdentity(row[config.assigneeField]) : '',
     businessUnitId: '',
     businessUnitCode: config.buField ? String(row[config.buField] ?? '') : '',
     roleCode: config.roleField ? String(row[config.roleField] ?? '') : '',

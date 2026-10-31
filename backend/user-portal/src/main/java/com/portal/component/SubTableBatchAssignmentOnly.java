@@ -43,7 +43,8 @@ final class SubTableBatchAssignmentOnly {
         // assignee must not masquerade as empty when switching to a role target.
         List<?> targetFields = fields.stream().filter(raw -> assignmentFields.contains(requiredMap(raw).get("fieldName"))).toList();
         if (targetFields.stream().anyMatch(raw -> protectedField(requiredMap(raw)))) throw invalid();
-        SubTableBatchEditedRowGuard.validateMetadata(targetFields, row);
+        SubTableBatchEditedRowGuard.validateMetadata(targetFields, row,
+                control.get("batchForm") instanceof Map<?, ?> batchForm ? batchForm : Map.of());
         return original != null && !changed.isEmpty() && assignmentFields.containsAll(changed);
     }
 

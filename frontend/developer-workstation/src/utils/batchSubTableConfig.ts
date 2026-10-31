@@ -3,6 +3,8 @@
  * independent of bindingId: multiple controls may render the same binding with
  * different batch capabilities.
  */
+import { batchControlIssue, batchFormOptionsIssue } from '@platform-shared/batch/controlContract'
+
 export function createBatchControlId(): string {
   const randomUuid = globalThis.crypto?.randomUUID
   if (typeof randomUuid === 'function') {
@@ -43,6 +45,7 @@ export function initializeBatchControlIdOnEnable({ value, rule }: { value: unkno
 type BatchFormLike = {
   schemaVersion?: unknown
   rule?: unknown
+  options?: unknown
 }
 
 function containsMiAssignment(value: unknown): boolean {
@@ -115,6 +118,8 @@ export function findBatchFormIssue(
     if (rule.props?.allowBatchAssign === true && !containsMiAssignment(batchForm.rule)) {
       return { key: 'batchMissingAssignment', params }
     }
+    const issue = batchControlIssue(batchForm.rule as Array<Record<string, unknown>>) ?? batchFormOptionsIssue(batchForm.options)
+    if (issue) return { key: 'batchUnsupportedField', params: { ...params, field: issue } }
   }
   return null
 }

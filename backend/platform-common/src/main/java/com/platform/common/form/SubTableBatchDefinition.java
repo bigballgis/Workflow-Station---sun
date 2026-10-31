@@ -45,6 +45,8 @@ public final class SubTableBatchDefinition {
         if (!(version instanceof Number) || !versionOne(version)) throw invalid("Unsupported batch form schemaVersion");
         if (!(form.get("rule") instanceof List<?> rules)) throw invalid("Batch form rule must be an array");
         if (rules.stream().anyMatch(rule -> !(rule instanceof Map<?, ?>))) throw invalid("Batch form rule must contain objects");
+        BatchFormControlContract.validate(rules);
+        BatchFormControlContract.validateOptions(form.get("options"));
         if (form.containsKey("options") && !(form.get("options") instanceof Map<?, ?>)) throw invalid("Batch form options must be an object");
         return form;
     }
