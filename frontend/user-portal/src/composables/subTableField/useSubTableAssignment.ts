@@ -104,9 +104,6 @@ export function useSubTableAssignment(
     if (displayName) {
       userNameCache.value = { ...userNameCache.value, [sid]: displayName }
       const next = { ...row, assignee_display_name: displayName }
-      if (af) {
-        next[af] = sid
-      }
       return next
     }
     if (sidChanged) {

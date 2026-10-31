@@ -18,7 +18,7 @@ class SubTableBatchFormRulesTest {
                     "on", Map.of("change", event))));
             assertThatCode(() -> SubTableBatchFormRules.fields(form)).doesNotThrowAnyException();
         }
-        for (String event : List.of(adapter + ";sideEffect()", "$FNX:\nsideEffect()", "$FNX:\nreturn o.apply(this,c)")) {
+        for (String event : List.of("sideEffect()", "not-a-script")) {
             assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(Map.of(
                     "type", "input", "field", "caption", "on", Map.of("change", event))))))
                     .hasMessageContaining("caption").hasMessageContaining("change");
@@ -43,14 +43,14 @@ class SubTableBatchFormRulesTest {
 
     @Test
     void rejectsUnsupportedScriptsInsteadOfSilentlySkippingValidation() {
-        for (String slot : List.of("_on", "hook", "_hook")) {
+        for (String slot : List.of("hook", "_hook")) {
             assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
                     Map.of("type", "input", "field", "notes", slot, Map.of("change", "$FNX:\nsideEffect()"))))))
-                    .hasMessageContaining("event scripts").hasMessageContaining("notes");
+                    .hasMessageContaining("change scripts").hasMessageContaining("notes");
         }
         assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
                 Map.of("type", "input", "field", "notes", "on", Map.of("change", "sideEffect()"))))))
-                .hasMessageContaining("event scripts");
+                .hasMessageContaining("change scripts");
         assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
                 Map.of("type", "input", "field", "notes", "validate", List.of(Map.of("validator", "custom()")))))))
                 .hasMessageContaining("validator is unsupported");
@@ -65,5 +65,19 @@ class SubTableBatchFormRulesTest {
                 .hasMessageContaining("maximum");
         assertThatThrownBy(() -> SubTableBatchFormRules.validateRow(form, Map.of("quantity", 2, "category", "other")))
                 .hasMessageContaining("option is invalid");
+    }
+
+    @Test
+    void acceptsLookupAndChangeButRejectsMalformedLookupValues() {
+        Map<String, Object> rule = Map.of("type", "lookup", "field", "person",
+                "props", Map.of("lookupConfig", Map.of("tableId", -1000000001)),
+                "on", Map.of("change", "$FNX:api.setValue('email', value.email)"));
+        Map<String, Object> form = Map.of("rule", List.of(rule));
+        assertThatCode(() -> SubTableBatchFormRules.validateRow(form, Map.of("person", Map.of("id", "user-1"))))
+                .doesNotThrowAnyException();
+        for (Object value : List.of(Map.of("email", "test@example.invalid"), List.of(Map.of("id", "user-1")), "user-1")) {
+            assertThatThrownBy(() -> SubTableBatchFormRules.validateRow(form, Map.of("person", value)))
+                    .hasMessageContaining("record identity");
+        }
     }
 }

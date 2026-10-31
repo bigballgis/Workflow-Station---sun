@@ -11,7 +11,7 @@ export type BatchEditableField = {
   validators?: Array<{ type?: string; min?: number; max?: number; len?: number }>
 }
 
-const supportedEditTypes = new Set(['input', 'text', 'inputNumber', 'number', 'switch', 'select', 'date', 'datePicker', 'datetime'])
+export const supportedBatchFieldTypes = new Set(['input', 'text', 'inputNumber', 'number', 'switch', 'select', 'date', 'datePicker', 'datetime', 'lookup'])
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -36,7 +36,7 @@ function optionList(value: unknown): Array<{ label: string; value: unknown }> {
  * A field-bearing unsupported node invalidates the whole workspace rather than being
  * silently omitted. Layout-only containers are traversed.
  */
-export function extractBatchFields(rules: unknown[]): BatchEditableField[] | null {
+export function extractBatchFields(rules: unknown[], assignmentFields: string[] = []): BatchEditableField[] | null {
   const fields: BatchEditableField[] = []
   const seen = new Set<string>()
   let invalid = false
@@ -44,11 +44,15 @@ export function extractBatchFields(rules: unknown[]): BatchEditableField[] | nul
     if (Array.isArray(value)) return value.forEach(visit)
     const rule = record(value)
     if (!rule) return
-    if (rule.type === 'miAssignment') return // Dedicated Assignment intent, never an ordinary editable column.
+    if (rule.type === 'miAssignment') {
+      if (assignmentFields.length) visit(rule.children)
+      return
+    }
     const field = typeof rule.field === 'string' ? rule.field.trim() : ''
     if (field) {
+      if (assignmentFields.includes(field)) return
       const type = typeof rule.type === 'string' ? rule.type : 'input'
-      if (!supportedEditTypes.has(type) || seen.has(field)) {
+      if (!supportedBatchFieldTypes.has(type) || seen.has(field)) {
         invalid = true
         return
       }

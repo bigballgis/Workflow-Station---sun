@@ -597,7 +597,7 @@ describe('SubTableField - Row Assignment', () => {
       await wrapper.vm.$nextTick()
       expect(assignSubTableRow).not.toHaveBeenCalled()
       expect(ElMessage.error).not.toHaveBeenCalled()
-      expect(wrapper.vm.rows[0].assignee_id).toBe('user-002')
+      expect(wrapper.vm.rows[0].assignee_id).toEqual({ id: 'user-002', display_name: 'User Two', username: 'user2' })
       expect(wrapper.emitted('update:modelValue')).toBeTruthy()
       expect(wrapper.emitted('assignmentChanged')).toBeFalsy()
     })

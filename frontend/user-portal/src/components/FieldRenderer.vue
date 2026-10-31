@@ -10,7 +10,7 @@
         :model-value="textDisplayValue"
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
-        :show-word-limit="!!field.maxLength"
+        :show-word-limit="field.showWordLimit ?? !!field.maxLength"
         :disabled="isDisabled"
         :readonly="textInputReadonly && !isDisabled"
         :clearable="!showTextMasked"
@@ -42,7 +42,7 @@
         :rows="field.rows || 3"
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
-        :show-word-limit="!!field.maxLength"
+        :show-word-limit="field.showWordLimit ?? !!field.maxLength"
         :disabled="isDisabled"
         @update:model-value="onUpdate"
         @blur="onBlur"
@@ -64,6 +64,7 @@
         :min="field.min"
         :max="field.max"
         :step="field.step || 1"
+        :controls-position="field.controlsPosition"
         :precision="field.precision"
         :disabled="isDisabled"
         style="width: 100%"
@@ -92,6 +93,7 @@
           :key="opt.value"
           :label="opt.label"
           :value="opt.value"
+          :disabled="opt.disabled === true"
         />
       </el-select>
     </template>
@@ -107,6 +109,7 @@
           v-for="opt in resolvedOptions"
           :key="opt.value"
           :label="opt.value"
+          :disabled="opt.disabled === true"
         >
           {{ opt.label }}
         </el-radio>
@@ -124,6 +127,7 @@
           v-for="opt in resolvedOptions"
           :key="opt.value"
           :label="opt.value"
+          :disabled="opt.disabled === true"
         >
           {{ opt.label }}
         </el-checkbox>
@@ -136,87 +140,26 @@
         :model-value="modelValue"
         :active-text="field.activeText"
         :inactive-text="field.inactiveText"
+        :active-value="field.activeValue ?? true"
+        :inactive-value="field.inactiveValue ?? false"
         :disabled="isDisabled"
         @update:model-value="onUpdate"
       />
     </template>
 
-    <!-- date -->
-    <template v-else-if="field.type === 'date'">
-      <el-date-picker
-        :model-value="modelValue"
-        type="date"
-        :placeholder="field.placeholder"
-        :disabled="isDisabled"
-        value-format="YYYY-MM-DD"
-        style="width: 100%"
-        :teleported="true"
-        popper-class="form-renderer-popper"
-        @update:model-value="onUpdate"
-      />
-    </template>
-
-    <!-- datetime -->
-    <template v-else-if="field.type === 'datetime'">
-      <el-date-picker
-        :model-value="modelValue"
-        type="datetime"
-        :placeholder="field.placeholder"
-        :disabled="isDisabled"
-        value-format="YYYY-MM-DD HH:mm:ss"
-        style="width: 100%"
-        :teleported="true"
-        popper-class="form-renderer-popper"
-        @update:model-value="onUpdate"
-      />
-    </template>
-
-    <!-- daterange -->
-    <template v-else-if="field.type === 'daterange'">
-      <el-date-picker
-        :model-value="modelValue"
-        type="daterange"
-        :range-separator="t('common.to')"
-        :start-placeholder="t('common.startDate')"
-        :end-placeholder="t('common.endDate')"
-        :disabled="isDisabled"
-        value-format="YYYY-MM-DD"
-        style="width: 100%"
-        :teleported="true"
-        popper-class="form-renderer-popper"
-        @update:model-value="onUpdate"
-      />
-    </template>
-
-    <!-- time -->
-    <template v-else-if="field.type === 'time'">
-      <el-time-picker
-        :model-value="modelValue"
-        :placeholder="field.placeholder"
-        :disabled="isDisabled"
-        value-format="HH:mm:ss"
-        style="width: 100%"
-        :teleported="true"
-        popper-class="form-renderer-popper"
-        @update:model-value="onUpdate"
-      />
-    </template>
-
-    <!-- timerange -->
-    <template v-else-if="field.type === 'timerange'">
-      <el-time-picker
-        :model-value="modelValue"
-        is-range
-        value-format="HH:mm:ss"
-        :start-placeholder="(field as any).startPlaceholder || t('common.startDate')"
-        :end-placeholder="(field as any).endPlaceholder || t('common.endDate')"
-        :disabled="isDisabled"
-        style="width: 100%"
-        :teleported="true"
-        popper-class="form-renderer-popper"
-        @update:model-value="onUpdate"
-      />
-    </template>
+    <DesignedDateTimeField
+      v-else-if="field.type === 'date' || field.type === 'datetime' || field.type === 'daterange' || field.type === 'datetimerange' || field.type === 'time' || field.type === 'timerange'"
+      :kind="field.type"
+      :model-value="modelValue"
+      :format="field.format"
+      :value-format="field.valueFormat"
+      :placeholder="field.placeholder"
+      :start-placeholder="field.startPlaceholder"
+      :end-placeholder="field.endPlaceholder"
+      :disabled="isDisabled"
+      popper-class="form-renderer-popper"
+      @update:model-value="onUpdate"
+    />
 
     <!-- cascader -->
     <template v-else-if="field.type === 'cascader'">
@@ -554,12 +497,7 @@
 
     <!-- title (fcTitle) -->
     <template v-else-if="field.type === 'title'">
-      <div
-        class="form-layout-title"
-        :class="`form-layout-title--${field.titleSize || 'default'}`"
-      >
-        {{ field.label }}
-      </div>
+      <DesignedFormTitle :title="field.label" :size="field.titleSize === 'default' ? undefined : field.titleSize" />
     </template>
 
     <!-- static text -->
@@ -712,6 +650,8 @@
 </template>
 
 <script setup lang="ts">
+import DesignedDateTimeField from './DesignedDateTimeField.vue'
+import DesignedFormTitle from '@platform-shared/batch/DesignedFormTitle.vue'
 // ---------------------------------------------------------------------------
 // FieldRenderer — orchestrator. Single field renderer (render hot-path).
 // Behaviour is unchanged: logic lives in src/composables/fieldRenderer/*,
@@ -758,7 +698,7 @@ interface Props {
   readonly?: boolean
   disabled?: boolean
   visible?: boolean
-  options?: Array<{ label: string; value: any }>
+  options?: Array<{ label: string; value: any; disabled?: boolean }>
   uploadUrl?: string
   userSearchResults?: Array<{ id: string; name: string }>
 }
@@ -1030,27 +970,6 @@ onMounted(() => {
 
 .file-preview-link:hover {
   color: #0e44cc;
-}
-
-.form-layout-title {
-  font-weight: 600;
-  color: #303133;
-  margin: 4px 0 12px;
-  line-height: 1.4;
-}
-
-.form-layout-title--h1 {
-  font-size: 20px;
-}
-
-.form-layout-title--h2,
-.form-layout-title--default {
-  font-size: 16px;
-}
-
-.form-layout-title--h3,
-.form-layout-title--h4 {
-  font-size: 14px;
 }
 
 .form-layout-static-text {

@@ -148,11 +148,11 @@ final class SubTableBatchChangeGuard {
         if (assigneeField.isEmpty() && roleField.isEmpty()) throw forbidden("Batch assignment has no frozen field mapping");
         if (intent == null) throw forbidden("Batch assignment row has no intent");
         if ("PERSON".equals(intent.getMode())) {
-            if (!same(row.get(assigneeField), intent.getAssigneeId()) || !empty(row.get(roleField)) || !empty(row.get(buField))) {
+            if (!AssignmentPersonIdentity.optional(row.get(assigneeField)).equals(intent.getAssigneeId()) || !empty(row.get(roleField)) || !empty(row.get(buField))) {
                 throw forbidden("Batch assignment canonical fields do not match the person intent");
             }
         } else if ("ROLE".equals(intent.getMode())) {
-            if (!same(row.get(roleField), intent.getRoleCode()) || !empty(row.get(assigneeField))
+            if (!same(row.get(roleField), intent.getRoleCode()) || !AssignmentPersonIdentity.optional(row.get(assigneeField)).isEmpty()
                     || (!buField.isEmpty() && !same(row.get(buField), intent.getBusinessUnitCode()))) {
                 throw forbidden("Batch assignment canonical fields do not match the role intent");
             }

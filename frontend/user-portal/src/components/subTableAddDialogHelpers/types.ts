@@ -15,6 +15,9 @@ export type ColumnType =
   | 'switch'
   | 'date'
   | 'datetime'
+  | 'daterange'
+  | 'datetimerange'
+  | 'time'
   | 'upload'
   | 'user'
   | 'department'
@@ -60,19 +63,27 @@ export interface DialogColumn {
   sourceRule?: Record<string, unknown>
   placeholder?: string
   minWidth?: number
-  options?: Array<{ label: string; value: string | number }>
+  options?: Array<{ label: string; value: string | number; disabled?: boolean }>
   props?: {
     action?: string
     accept?: string
     fileNameTargetField?: string
     cannotDownload?: boolean
-    options?: Array<{ label: string; value: string | number }>
+    options?: Array<{ label: string; value: string | number; disabled?: boolean }>
     multiple?: boolean
     precision?: number
     min?: number
     max?: number
     rows?: number
     maxlength?: number
+    showWordLimit?: boolean
+    controlsPosition?: '' | 'right'
+    filterable?: boolean
+    format?: string
+    activeText?: string
+    inactiveText?: string
+    activeValue?: string | number | boolean
+    inactiveValue?: string | number | boolean
     userType?: 'user' | 'department'
     treeData?: TreeNode[]
     tableId?: number

@@ -44,6 +44,8 @@ const LAYOUT_CONTAINER_TYPES = new Set([
   'el-col', 'elCol', 'col',
   'group', 'subForm', 'tableForm', 'tableFormColumn',
   'miAssignment',
+  'el-tabs', 'elTabs', 'tabs', 'el-tab-pane', 'elTabPane', 'tabPane',
+  'el-collapse', 'elCollapse', 'collapse', 'el-collapse-item', 'elCollapseItem', 'collapseItem',
 ])
 
 function getLayoutRuleChildren(item: Record<string, unknown>): unknown[] {
@@ -124,6 +126,8 @@ export const SUB_FORM_CANVAS_COLUMN_PROP_KEYS = [
   'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
   'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
   'boundSubTableBindingId', 'ownerConfig',
+  'showWordLimit',
+  'controlsPosition', 'filterable', 'format', 'activeText', 'inactiveText', 'activeValue', 'inactiveValue',
 ] as const
 
 export function copySubFormCanvasProps(rProps: Record<string, unknown>): Record<string, unknown> {
@@ -158,7 +162,7 @@ export function mapSubFormRuleToDialogColumns(
     } else if (r.type === 'switch') {
       type = 'switch'
     } else if (r.type === 'datePicker') {
-      type = rProps.type === 'datetime' ? 'datetime' : 'date'
+      type = ['datetime', 'daterange', 'datetimerange'].includes(String(rProps.type)) ? String(rProps.type) : 'date'
     } else if (r.type === 'timePicker') {
       type = rProps.isRange === true ? 'timerange' : 'time'
     } else if (r.type === 'treeSelect' || r.type === 'elTreeSelect') {
@@ -195,9 +199,10 @@ export function mapSubFormRuleToDialogColumns(
     const options = rawOptions
       ? (type === 'cascader'
         ? rawOptions
-        : (rawOptions as Array<{ label?: unknown; value?: unknown }>).map(o => ({
+        : (rawOptions as Array<{ label?: unknown; value?: unknown; disabled?: boolean }>).map(o => ({
           label: o.label ?? o.value,
           value: o.value,
+          ...(o.disabled === true ? { disabled: true } : {}),
         })))
       : undefined
 
@@ -234,6 +239,10 @@ export function mapSubFormRuleToDialogColumns(
     // thing the Add/Edit dialog sees, so a dropped flag made the field render anyway.
     const hidden = isFormCreateRuleHidden(r)
     const elRules = mapFormCreateValidateToElementPlusRules(r, type)
+    if (type === 'switch') {
+      const valueType = typeof (rProps.inactiveValue ?? rProps.activeValue ?? false)
+      if (valueType === 'string' || valueType === 'number') elRules.forEach(rule => { if (rule.type === 'boolean') rule.type = valueType })
+    }
     const defaultValue = resolveRuleDefaultValue(r)
 
     return {
@@ -241,6 +250,7 @@ export function mapSubFormRuleToDialogColumns(
       label: String(r.title ?? r.field ?? field),
       type: type as DialogColumn['type'],
       required,
+      ...(typeof rProps.placeholder === 'string' ? { placeholder: rProps.placeholder } : {}),
       ...(readonly ? { readonly } : {}),
       ...(hidden ? { hidden } : {}),
       ...(elRules.length > 0 ? { rules: elRules } : {}),

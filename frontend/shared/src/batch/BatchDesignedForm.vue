@@ -9,6 +9,7 @@ import formCreate from '@form-create/element-ui'
 import '@form-create/element-ui/src/style/index.css'
 import DesignedFormTitle from './DesignedFormTitle.vue'
 import { batchRuleChildren, batchLayoutAliases } from './batchFormRules'
+import { batchLookupComponentKey } from './lookupComponent'
 
 const props = defineProps<{
   rules: Array<Record<string, any>>
@@ -22,6 +23,8 @@ const slots = defineSlots<{ assignment(props: { rule: Record<string, any> }): VN
 const ready = ref(false)
 // An isolated instance keeps batch adapters out of DW's authoring canvas registry.
 const NativeForm = formCreate.factory(true)
+const lookupComponent = inject(batchLookupComponentKey, null)
+if (lookupComponent) NativeForm.component('batchLookup', lookupComponent)
 const assignmentKey: InjectionKey<(rule: Record<string, any>) => VNodeChild> = Symbol('batch-assignment')
 provide(assignmentKey, rule => slots.assignment?.({ rule }))
 NativeForm.component('batchAssignment', defineComponent({
@@ -49,7 +52,7 @@ NativeForm.component('batchText', defineComponent({
 NativeForm.componentAlias({ ...batchLayoutAliases, number: 'el-input-number',
   divider: 'el-divider', elDivider: 'el-divider', fcAlert: 'el-alert', alert: 'el-alert' })
 const runtimeOptions = computed(() => ({
-  ...props.options,
+  ...Object.fromEntries(Object.entries(props.options ?? {}).filter(([key]) => !key.startsWith('on') && !key.startsWith('before'))),
   form: { labelWidth: 'auto', ...props.options?.form },
   submitBtn: false, resetBtn: false,
 }))
@@ -57,6 +60,7 @@ const runtimeRules = computed(() => {
   const rules = formCreate.copyRules(props.rules) as Array<Record<string, any>>
   function visit(items: Array<Record<string, any>>, inheritedReadonly = false) {
     for (const rule of items) {
+      delete rule.on; delete rule._on; delete rule.hook; delete rule._hook
       const locked = inheritedReadonly || rule.props?.disabled === true || rule.props?.readonly === true
       if (rule.type === 'miAssignment') {
         const original = { ...rule, props: { ...rule.props, disabled: locked } }
@@ -68,6 +72,10 @@ const runtimeRules = computed(() => {
           if (rule.type === 'space' || rule.type === 'fcSpace') rule.type = 'div'
         }
         if (rule.field) {
+          if (rule.type === 'lookup' && !props.adaptedFields?.includes(rule.field)) {
+            if (!lookupComponent) throw new Error('Batch Lookup renderer is missing')
+            rule.type = 'batchLookup'
+          }
           if (rule.type === 'text') rule.type = 'input'
           if (rule.type === 'date' || rule.type === 'datetime') {
             rule.props = { type: rule.type, ...rule.props }; rule.type = 'datePicker'

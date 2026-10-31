@@ -1,3 +1,4 @@
+import { applyDesignerControlProps } from '@/utils/applyDesignerControlProps'
 import type { FormField } from '@/components/FormRenderer.vue'
 import { isFormCreateRuleReadonly, applyDesignerHideFlagToFormField } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
@@ -123,5 +124,6 @@ export function convertFormCreateRule(rule: any, blockedFieldKeys?: UploadSceneF
 
   applyDesignerHideFlagToFormField(field, rule)
 
+  applyDesignerControlProps(field, rule)
   return field
 }

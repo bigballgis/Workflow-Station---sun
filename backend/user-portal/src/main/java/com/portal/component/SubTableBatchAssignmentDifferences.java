@@ -34,7 +34,7 @@ final class SubTableBatchAssignmentDifferences {
             Map<List<String>, Map<?, ?>> originals = baseline.containsKey(store) ? index(baseline.get(store), keys) : Map.of();
             boolean differs = index(tables.get(store), keys).entrySet().stream().anyMatch(entry -> {
                 Map<?, ?> old = originals.get(entry.getKey());
-                return fields.stream().anyMatch(field -> !same(old == null ? null : old.get(field), entry.getValue().get(field)));
+                return fields.stream().anyMatch(field -> !same(config, field, old == null ? null : old.get(field), entry.getValue().get(field)));
             });
             if (differs) changed.add(new Control(requiredText(control.get("batchControlId")), requiredText(control.get("bindingId"))));
         }
@@ -61,7 +61,7 @@ final class SubTableBatchAssignmentDifferences {
         java.util.Set<String> targets = new java.util.LinkedHashSet<>();
         for (ChangedRow changed : changedRows(variables, controls, submitted)) {
             Object field = changed.config().get("assigneeField");
-            if (field != null && !empty(changed.row().get(field))) targets.add(requiredText(changed.row().get(field)));
+            if (field != null && !empty(changed.row().get(field))) targets.add(AssignmentPersonIdentity.optional(changed.row().get(field)));
         }
         return targets;
     }
@@ -97,7 +97,7 @@ final class SubTableBatchAssignmentDifferences {
             Map<List<String>, Map<?, ?>> old = baseline.containsKey(store) ? index(baseline.get(store), keys) : Map.of();
             index(tables.get(store), keys).forEach((identity, row) -> {
                 Map<?, ?> before = old.get(identity);
-                if (assignmentFields.stream().anyMatch(key -> !same(before == null ? null : before.get(key), row.get(key)))) {
+                if (assignmentFields.stream().anyMatch(key -> !same(config, key, before == null ? null : before.get(key), row.get(key)))) {
                     changedRows.add(new ChangedRow(config, row));
                 }
             });
@@ -105,7 +105,10 @@ final class SubTableBatchAssignmentDifferences {
         return changedRows;
     }
 
-    private static boolean same(Object first, Object second) {
+    private static boolean same(Map<?, ?> config, String field, Object first, Object second) {
+        if (field.equals(config.get("assigneeField"))) {
+            return AssignmentPersonIdentity.optional(first).equals(AssignmentPersonIdentity.optional(second));
+        }
         return (empty(first) && empty(second)) || Objects.equals(first, second);
     }
     private static boolean empty(Object value) { return value == null || "".equals(value); }

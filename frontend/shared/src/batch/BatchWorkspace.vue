@@ -31,6 +31,7 @@ import type { BatchEditableField } from './fields'
 import { applyBatchDraft, type BatchDraftChangeSet, type BatchFieldIntent } from './draft'
 import { batchRuleChildren, unsupportedBatchControl } from './batchFormRules'
 import BatchDesignedForm from './BatchDesignedForm.vue'
+import type { BatchRowEventRunner } from './rowEvents'
 const props = withDefaults(defineProps<{
   visible: boolean; rows: Array<Record<string, unknown>>; fields: BatchEditableField[]
   rules: Array<Record<string, any>>; options?: Record<string, any>; selectedRowIds?: string[]; mode?: 'edit' | 'add'
@@ -41,6 +42,7 @@ const props = withDefaults(defineProps<{
   assignmentHasChanges?: () => boolean; allowEdit?: boolean; fieldDefinitions?: BatchWorkspaceField[]
   parentSelection?: BindingParentSelection | null
   prepareRows?: (rows: Array<Record<string, unknown>>, parentValue?: string) => Promise<PreparedBatchRows>
+  runRowEvents?: BatchRowEventRunner
 }>(), { allowEdit: true, mode: 'edit' })
 const emit = defineEmits<{
   (event: 'update:visible', visible: boolean): void
@@ -124,6 +126,7 @@ async function apply() {
     const patch = Object.fromEntries(fields.filter(field => intents[field.field]).map(field => [field.field, intents[field.field]!]))
     const changes: BatchDraftChangeSet = Object.keys(patch).length && props.mode === 'edit' ? { uniformPatches: [{ rowIds: [...targetIds.value], fields: patch }] } : {}
     let next = applyBatchDraft(props.rows, row => props.rowIdentity(row)!, changes)
+    const touched = new Set(Object.keys(patch))
     let assignment: SubTableBatchChange | undefined
     if (props.showAssign && props.assignmentHasChanges?.()) {
       if (!props.collectAssignment) throw new Error(t('common.operationFailed'))
@@ -131,33 +134,55 @@ async function apply() {
       const byId = new Map(collected.rows.map(row => [props.rowIdentity(row), row]))
       next = next.map(row => byId.get(props.rowIdentity(row)) ?? row)
       assignment = collected.change
+      collected.editedFields?.forEach(field => touched.add(field))
     }
+    next = applyEvents(next, touched, changes)
     let prepared: PreparedBatchRows | undefined
     if (props.mode === 'add') {
-      const row = Object.fromEntries(fields.map(field => [field.field, intents[field.field]?.kind === 'clear' ? null : values[field.field]]))
-      const fresh = Array.from({ length: addCount.value }, () => JSON.parse(JSON.stringify(row)))
-      const error = firstBatchFieldError(fresh, fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false })))
-      if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
-      if (!props.prepareRows) throw new Error(t('common.operationFailed'))
-      prepared = await props.prepareRows(fresh, selectedParentValue.value)
-      const known = new Set(props.rows.map(props.rowIdentity))
-      for (const added of prepared.rows) {
-        const key = props.rowIdentity(added)
-        if (!key || known.has(key)) throw new Error(t('subTable.batchDuplicateIdentity'))
-        known.add(key)
-      }
-      if (prepared.rows.length !== fresh.length) throw new Error(t('common.operationFailed'))
+      prepared = await prepareAdded(fields, touched)
       next = [...props.rows, ...prepared.rows]
-    } else if (Object.keys(patch).length) {
+    } else if (touched.size) {
       const error = firstBatchFieldError(next.filter(row => targetIds.value.includes(props.rowIdentity(row)!)), fields)
       if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
     }
     assertFresh()
     if (prepared || assignment) emit('apply-workspace', next, changes, prepared, assignment)
-    else if (Object.keys(patch).length) emit('apply', next, changes)
+    else if (Object.keys(patch).length || changes.rowPatches?.length) emit('apply', next, changes)
     emit('update:visible', false)
   } catch (error) { ElMessage.error(props.formatError(error)) }
   finally { applying.value = false }
+}
+function applyEvents(rows: Array<Record<string, unknown>>, touched: Set<string>, changes: BatchDraftChangeSet) {
+  if (props.mode !== 'edit' || !touched.size || !props.runRowEvents) return rows
+  const baseline = new Map(baselineRows.value.map(row => [props.rowIdentity(row), row]))
+  const next = rows.map(row => targetIds.value.includes(props.rowIdentity(row)!)
+    ? props.runRowEvents!(row, props.rules, [...touched], readonly) : row)
+  changes.rowPatches = next.filter(row => targetIds.value.includes(props.rowIdentity(row)!)).flatMap(row => {
+    const before = baseline.get(props.rowIdentity(row))!
+    const fields = Object.fromEntries(props.fields.filter(field => !readonly(field.field)
+      && JSON.stringify(before[field.field]) !== JSON.stringify(row[field.field]))
+      .map(field => [field.field, { kind: 'set' as const, value: row[field.field] }]))
+    return Object.keys(fields).length ? [{ rowId: props.rowIdentity(row)!, fields }] : []
+  })
+  delete changes.uniformPatches
+  return next
+}
+async function prepareAdded(fields: BatchEditableField[], touched: Set<string>): Promise<PreparedBatchRows> {
+  const row = Object.fromEntries(fields.map(field => [field.field, intents[field.field]?.kind === 'clear' ? null : values[field.field]]))
+  const fresh = Array.from({ length: addCount.value }, () => props.runRowEvents
+    ? props.runRowEvents(row, props.rules, [...touched], readonly) : JSON.parse(JSON.stringify(row)))
+  const error = firstBatchFieldError(fresh, fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false })))
+  if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+  if (!props.prepareRows) throw new Error(t('common.operationFailed'))
+  const prepared = await props.prepareRows(fresh, selectedParentValue.value)
+  const known = new Set(props.rows.map(props.rowIdentity))
+  for (const added of prepared.rows) {
+    const key = props.rowIdentity(added)
+    if (!key || known.has(key)) throw new Error(t('subTable.batchDuplicateIdentity'))
+    known.add(key)
+  }
+  if (prepared.rows.length !== fresh.length) throw new Error(t('common.operationFailed'))
+  return prepared
 }
 </script>
 <style scoped>

@@ -9,6 +9,8 @@ export type DialogLayoutItem =
       column: DialogColumn
       /** Rendered inside the Assignment Mode block; `last` closes the box. */
       assignmentSlot?: 'owned' | 'last'
+      /** Authored child of the assignment container, including ordinary backfill fields. */
+      assignmentChild?: boolean
     }
   | { type: 'miAssignment'; key: string }
 
@@ -20,6 +22,7 @@ export type DialogLayoutGroup = {
 }
 
 /**
+ * Preserve every authored assignment child, including ordinary backfill fields.
  * The designer's Readonly toggle on the Assignment Mode block fixes this row's
  * assignment, so it must reach the pickers the block owns — the block itself renders no
  * control, so marking only the marker changed nothing on screen.
@@ -27,13 +30,12 @@ export type DialogLayoutGroup = {
  * `isColDisabled` already reads `column.readonly`, so stamping it here is all the
  * dialog needs; a column that is readonly for its own reasons is left as it is.
  */
-function applyAssignmentReadonly(
+function assignmentChildItems(
   items: DialogLayoutItem[],
   readonly: boolean,
 ): DialogLayoutItem[] {
-  if (!readonly) return items
   return items.map(item => item.type === 'column'
-    ? { ...item, column: { ...item.column, readonly: true } }
+    ? { ...item, assignmentChild: true, column: readonly ? { ...item.column, readonly: true } : item.column }
     : item)
 }
 
@@ -75,7 +77,7 @@ function collectLayoutItems(
       // The container owns its fields as children — emit them immediately after
       // the marker so they render inside the block. groupAssignmentFieldsUnderMarker
       // then only has to tag them; it finds them already adjacent.
-      items.push(...applyAssignmentReadonly(
+      items.push(...assignmentChildItems(
         collectLayoutItems(ch.children || [], colByField, used),
         ch.readonly === true,
       ))
@@ -90,7 +92,7 @@ function collectLayoutItems(
 }
 
 /**
- * Move the assignment-driven columns (assignee / role / BU) so they immediately
+ * Move authored children and assignment-driven columns (assignee / role / BU) so they immediately
  * follow the `miAssignment` marker, letting the dialog render them INSIDE the
  * Assignment Mode block instead of stranding them wherever the designer happened
  * to place them.
@@ -106,11 +108,10 @@ export function groupAssignmentFieldsUnderMarker(
   const markerAt = items.findIndex((item) => item.type === 'miAssignment')
   if (markerAt < 0) return items
   const owned = new Set(assignmentFields.filter(Boolean))
-  if (owned.size === 0) return items
 
   const pulled = items.filter(
     (item): item is Extract<DialogLayoutItem, { type: 'column' }> =>
-      item.type === 'column' && owned.has(item.column.field),
+      item.type === 'column' && (item.assignmentChild === true || owned.has(item.column.field)),
   )
   if (pulled.length === 0) return items
 
@@ -211,7 +212,7 @@ export function buildDialogLayoutGroups(
           title: null,
           items: [
             { type: 'miAssignment', key: f.key },
-            ...applyAssignmentReadonly(
+            ...assignmentChildItems(
               collectLayoutItems(f.children || [], colByField, used),
               f.readonly === true,
             ),

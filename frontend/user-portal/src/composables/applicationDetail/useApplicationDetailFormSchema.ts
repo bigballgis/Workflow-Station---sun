@@ -1,3 +1,4 @@
+import { applyDesignerControlProps } from '@/utils/applyDesignerControlProps'
 import { createRecordNoteFormField } from '@/components/formRendererHelpers/recordNoteFields'
 import type { FormField } from '@/components/FormRenderer.vue'
 import {
@@ -133,6 +134,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
       }
       if (isRowRule(item)) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'row'),
           label: '',
           type: 'row',
@@ -143,6 +145,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
         continue
       } else if (isColRule(item)) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'col'),
           label: '',
           type: 'col',
@@ -155,6 +158,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
         const nestedTabs = extractTabsFromTabsRule(item, (children) => extractFieldsRecursive(children, ctx))
         if (nestedTabs.length > 0) {
           fields.push({
+            sourceRule: item,
             key: getLayoutKey(item, fields.length, 'tabs'),
             label: '',
             type: 'tabs',
@@ -168,6 +172,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
         const collapsePanels = extractCollapsePanelsFromRule(item, (children) => extractFieldsRecursive(children, ctx))
         if (collapsePanels.length > 0) {
           fields.push({
+            sourceRule: item,
             key: getLayoutKey(item, fields.length, 'collapse'),
             label: '',
             type: 'collapse',
@@ -179,6 +184,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
       }
       if (isCardRule(item)) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'card'),
           label: getLayoutLabel(item),
           type: 'card',
@@ -188,6 +194,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
         continue
       } else if (item.type === 'miAssignment') {
         const marker: FormField = {
+          sourceRule: item,
           key: getLayoutKey(item, fields.length, 'miAssignment'),
           label: '',
           type: 'miAssignment',
@@ -344,6 +351,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
     applyDesignerHideFlagToFormField(field, rule)
     applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
     applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
+    applyDesignerControlProps(field, rule)
     return field
   }
 

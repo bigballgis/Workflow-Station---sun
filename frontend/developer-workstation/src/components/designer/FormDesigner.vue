@@ -1727,6 +1727,8 @@ const {
   selectedForm,
   designerRef,
   subDesignerRefs,
+  batchDesignerRefs,
+  subTableActiveTab: computed(() => subTableActiveTab.value),
   designerSubBindings,
   activeDesignerTab,
   relationViewState,

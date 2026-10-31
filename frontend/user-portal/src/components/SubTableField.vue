@@ -60,7 +60,7 @@
         :row-key="batchTableRowKey"
         @selection-change="onSelectionChange"
       >
-        <el-table-column v-if="canBatchEdit || canBatchAssign || canBatchDelete" type="selection" width="48" :reserve-selection="true" :selectable="row => resolveBatchRowIdentity(row) !== null" />
+        <el-table-column v-if="canBatchEdit || canBatchAssign || canBatchDelete" type="selection" width="48" :reserve-selection="true" :selectable="(row: Record<string, unknown>) => resolveBatchRowIdentity(row) !== null" />
         <el-table-column
           v-for="col in columns"
           :key="col.field"
@@ -469,7 +469,7 @@
               v-if="selectedLinkBinding && linkedFormFields.length > 0"
               :model="linkedFormData"
               :label-width="linkedFormLabelWidth"
-              label-position="left"
+              v-bind="linkedFormPresentation"
             >
               <el-row :gutter="20">
                 <!--
@@ -1204,7 +1204,7 @@ const {
   selectedLinkBinding,
   linkFormModalTitle,
   linkedFormFields,
-  linkedFormLabelWidth,
+  linkedFormLabelWidth, linkedFormPresentation,
   canEditSelectedLinkBinding,
   showLinkFormDetailActionFooter,
   linkedSubTableRows,

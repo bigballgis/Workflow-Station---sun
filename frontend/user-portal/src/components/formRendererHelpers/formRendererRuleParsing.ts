@@ -1,3 +1,4 @@
+import { AUXILIARY_LAYOUT_TYPE_MAP } from './auxiliaryLayoutTypes'
 import { createRecordNoteFormField } from './recordNoteFields'
 /**
  * form-create rule → {@link FormField} layout parsing: container/auxiliary
@@ -22,12 +23,12 @@ export function getRuleChildren(item: Record<string, unknown>): Record<string, u
 
 export function isRowRule(item: Record<string, unknown>): boolean {
   const type = String(item.type ?? '')
-  return type === 'fcRow' || type === 'row' || type === 'el-row'
+  return type === 'fcRow' || type === 'row' || type === 'el-row' || type === 'elRow'
 }
 
 export function isColRule(item: Record<string, unknown>): boolean {
   const type = String(item.type ?? '')
-  return type === 'fcCol' || type === 'col' || type === 'el-col'
+  return type === 'fcCol' || type === 'col' || type === 'el-col' || type === 'elCol'
 }
 
 export function getColSpan(item: Record<string, unknown>): number {
@@ -42,25 +43,6 @@ export function getRowGutter(item: Record<string, unknown>): number {
   const props = item.props as Record<string, unknown> | undefined
   const gutter = props?.gutter
   return typeof gutter === 'number' && Number.isFinite(gutter) ? gutter : 20
-}
-
-const AUXILIARY_LAYOUT_TYPE_MAP: Record<string, FormField['type']> = {
-  fcTitle: 'title',
-  title: 'title',
-  text: 'staticText',
-  html: 'html',
-  divider: 'divider',
-  elDivider: 'divider',
-  alert: 'alert',
-  fcAlert: 'alert',
-  tag: 'tag',
-  elTag: 'tag',
-  button: 'button',
-  fcButton: 'button',
-  space: 'space',
-  fcSpace: 'space',
-  image: 'image',
-  fcImage: 'image',
 }
 
 export function isTabsRule(item: Record<string, unknown>): boolean {
@@ -101,6 +83,7 @@ export function convertAuxiliaryLayoutField(
       if (Number.isFinite(parsed)) step = parsed
     }
     return {
+      sourceRule: item,
       key: getLayoutKey(item, index, 'space'),
       label: '',
       type: 'space',
@@ -112,6 +95,7 @@ export function convertAuxiliaryLayoutField(
   if (!mapped) return null
   const props = item.props as Record<string, unknown> | undefined
   const field: FormField = {
+    sourceRule: item,
     key: getLayoutKey(item, index, mapped),
     label: String(item.title ?? props?.title ?? props?.content ?? props?.value ?? props?.label ?? ''),
     type: mapped,
@@ -161,6 +145,7 @@ function buildRowFormField(
   extractItems: (items: Record<string, unknown>[]) => FormField[],
 ): FormField {
   return {
+    sourceRule: item,
     key: getLayoutKey(item, index, 'row'),
     label: '',
     type: 'row',
@@ -179,6 +164,7 @@ export function extractRowColumnFields(
   getRuleChildren(rowItem).forEach((colItem, index) => {
     if (isColRule(colItem)) {
       columns.push({
+        sourceRule: colItem,
         key: getLayoutKey(colItem, index, 'col'),
         label: '',
         type: 'col',
@@ -205,6 +191,7 @@ export function extractFieldsRecursive(
     const bindingId = item._bindingId ?? props?._bindingId
     if (item.type === 'miAssignment') {
       const marker: FormField = {
+        sourceRule: item,
         key: getLayoutKey(item, index, 'miAssignment'),
         label: '',
         type: 'miAssignment',
@@ -270,6 +257,7 @@ export function extractFieldsRecursive(
     }
     if (isCardRule(item)) {
       fields.push({
+        sourceRule: item,
         key: getLayoutKey(item, index, 'card'),
         label: getLayoutLabel(item),
         type: 'card',
@@ -284,6 +272,7 @@ export function extractFieldsRecursive(
     }
     if (isColRule(item)) {
       fields.push({
+        sourceRule: item,
         key: getLayoutKey(item, index, 'col'),
         label: '',
         type: 'col',
@@ -296,6 +285,7 @@ export function extractFieldsRecursive(
       const nestedTabs = extractTabsFromTabsRule(item, (children) => extractFieldsRecursive(children, converter))
       if (nestedTabs.length > 0) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, index, 'tabs'),
           label: '',
           type: 'tabs',
@@ -309,6 +299,7 @@ export function extractFieldsRecursive(
       const collapsePanels = extractCollapsePanelsFromRule(item, (children) => extractFieldsRecursive(children, converter))
       if (collapsePanels.length > 0) {
         fields.push({
+          sourceRule: item,
           key: getLayoutKey(item, index, 'collapse'),
           label: '',
           type: 'collapse',

@@ -1,9 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ElMessage } from 'element-plus'
 import { workspace, state, rows } from './batchWorkspaceTestHelpers'
+import { createBatchRowEventRunner } from '@platform-shared/batch/rowEvents'
+import { createPortalFormApi, parseFormCreateEventHandler } from '@/utils/formCreateEventRuntime'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() }, ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) } }))
 describe('selected-row Batch Form', () => {
+  it('collects per-row event backfills in the declared patches and leaves unselected rows intact', async () => {
+    const runRowEvents = createBatchRowEventRunner(parseFormCreateEventHandler, createPortalFormApi)
+    const wrapper = workspace({ runRowEvents, rules: [
+      { field: 'caption', type: 'input', on: { change: '$FNX:api.setValue("amount", api.getValue("amount") + 10)' } },
+      { field: 'amount', type: 'inputNumber' },
+    ] })
+    state(wrapper).setValue('caption', 'Shared')
+    await state(wrapper).apply()
+    const [next, changes] = wrapper.emitted('apply')![0]!
+    expect(next).toMatchObject([{ caption: 'Shared', amount: 11 }, { caption: 'Shared', amount: 12 }, { caption: 'C', amount: 3 }])
+    expect(changes).toMatchObject({ rowPatches: [
+      { rowId: 'one', fields: { amount: { kind: 'set', value: 11 } } },
+      { rowId: 'two', fields: { amount: { kind: 'set', value: 12 } } },
+    ] })
+  })
   it('honors disabled layout ancestors when collecting user input', async () => {
     const wrapper = workspace({ rules: [{ type: 'elCard', props: { disabled: true }, children: [{ type: 'input', field: 'caption', title: 'Caption' }] }] })
     state(wrapper).setValue('caption', 'must not write')

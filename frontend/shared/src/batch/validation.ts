@@ -16,6 +16,7 @@ export function firstBatchFieldError(rows: Array<Record<string, unknown>>, field
 function invalidValue(value: unknown, field: BatchEditableField): boolean {
   const empty = value == null || value === ''
   if (empty) return field.required
+  if (field.type === 'lookup') return typeof value !== 'object' || Array.isArray(value)
   if (field.validators?.some(rule => invalidValidator(value, rule))) return true
   if (field.type === 'switch') return typeof value !== 'boolean'
   if (field.type === 'number' || field.type === 'inputNumber') {

@@ -6,6 +6,7 @@
     :default-value-for-field="defaultValueForField" :format-error="formatError"
     :allow-edit="allowEdit" :show-assign="showAssign && mode !== 'add'"
     :parent-selection="parentSelection" :prepare-rows="prepareRows"
+    :run-row-events="runRowEvents"
     :collect-assignment="collectAssignment" :assignment-has-changes="assignmentHasChanges"
     @update:visible="emit('update:visible', $event)"
     @apply="(next, changes) => emit('apply', next, changes)"
@@ -24,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BatchWorkspace from '@platform-shared/batch/BatchWorkspace.vue'
 import type { BatchEditableField } from '@platform-shared/batch/fields'
@@ -39,6 +40,12 @@ import type { BatchDraftChangeSet } from '@/utils/subTableBatchDraft'
 import type { SubTableBatchChange } from '@/utils/subTableBatchChanges'
 import DesignerHelpLink from './DesignerHelpLink.vue'
 import SubTableBatchAssignmentEditor from './SubTableBatchAssignmentEditor.vue'
+import BatchLookupField from './lookup/BatchLookupField.vue'
+import { batchLookupComponentKey } from '@platform-shared/batch/lookupComponent'
+import { createBatchRowEventRunner, BatchRowEventError } from '@platform-shared/batch/rowEvents'
+import { parseFormCreateEventHandler, createPortalFormApi } from '@/utils/formCreateEventRuntime'
+provide(batchLookupComponentKey, BatchLookupField)
+const runRowEvents = createBatchRowEventRunner(parseFormCreateEventHandler, createPortalFormApi)
 
 const props = withDefaults(defineProps<{
   selectedRowIds?: string[]
@@ -75,6 +82,7 @@ function defaultValueForField(field: BatchEditableField): unknown {
     field.defaultValue ?? metadata?.defaultValue ?? null, { options: field.options })
 }
 function formatError(error: unknown): string {
+  if (error instanceof BatchRowEventError) return t(error.message, { field: error.field })
   return error instanceof Error && error.message.startsWith('subTable.') ? t(error.message) : resolveUserFacingHttpMessage(error, t)
 }
 function collectAssignment(rows: Array<Record<string, unknown>>) {

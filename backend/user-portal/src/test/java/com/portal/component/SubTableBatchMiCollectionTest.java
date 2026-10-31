@@ -57,6 +57,20 @@ class SubTableBatchMiCollectionTest {
     }
 
     @Test
+    void lookupPersonIdentityIsUsedForTaskCreationWithoutChangingTheSourceRow() {
+        var row = new LinkedHashMap<>(row("one", "user-one"));
+        var person = Map.of("id", "user-one", "email", "test@example.invalid");
+        row.put("handler_code", person);
+        var variables = variables(List.of(row));
+        inject(variables, controls());
+        var item = (Map<?, ?>) ((List<?>) variables.get("rowsToCreate")).get(0);
+        assertThat(item.get("handler_code")).isEqualTo("user-one");
+        assertThat(row.get("handler_code")).isEqualTo(person);
+        row.put("handler_code", Map.of("email", "test@example.invalid"));
+        assertThatThrownBy(() -> inject(variables(List.of(row)), controls())).hasMessageContaining("source cannot be verified");
+    }
+
+    @Test
     void missingFrozenTargetCannotUseAnAssigneeAliasAndNeverPartiallyPublishesCollection() {
         var invalid = new LinkedHashMap<>(row("two", "user-two"));
         invalid.remove("handler_code"); invalid.put("assignee", "wrong-alias-person");

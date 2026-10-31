@@ -2,9 +2,10 @@
   <section class="batch-assignment-editor">
     <el-alert v-if="directory.error.value" :title="directory.error.value" type="error" :closable="false" />
     <BatchAssignmentModeFrame :config="config" :mode="uniform.mode" :disabled="assignmentLocked" @select="selectMode">
-      <BatchDesignedForm :rules="designedRules" :options="options" :readonly-field="assignmentReadonly" :adapted-fields="ownedFields">
+      <BatchDesignedForm :rules="designedRules" :options="options" :readonly-field="assignmentReadonly" :adapted-fields="ownedFields" @change="recordValue">
         <template #field="{ rule: fieldRule, update }">
           <BatchAssignmentInput :rule="fieldRule" :config="config" :uniform="uniform" :disabled="assignmentReadonly(fieldRule.field)"
+            :lookup-value="designedValues[fieldRule.field]"
             :directory="directory" :user-options="userOptionsFor('uniform', uniform.assigneeId)" :user-loading="userLoading.uniform === true"
             :role-options="uniformRoleOptions" :role-loading="uniformRoleLoading" @search="query => searchUsers('uniform', query)"
             @change="update" @business-unit="value => updateDesignedBusinessUnit(value, update)" />
@@ -26,10 +27,17 @@ import BatchDesignedForm from './BatchDesignedForm.vue'
 import BatchAssignmentInput from './BatchAssignmentInput.vue'
 import { batchRuleChildren } from './batchFormRules'
 import { assignmentControlRules } from './assignmentControlRules'
+import { batchPersonIdentity } from './personIdentity'
 const props = defineProps<{ rule?: Record<string, any>; options?: Record<string, any>; disabled?: boolean; rows: Array<Record<string, unknown>>; capability: BatchAssignmentCapability; fieldWriteModes?: Record<string, 'EDITABLE' | 'READONLY'>; rowIdentity: (row: Record<string, unknown>) => string | null; rowScopeKey: (row: Record<string, unknown>) => Record<string, unknown> | null; createDirectory: (t: (key: string) => string) => BatchAssignmentDirectory }>()
 const { t } = useI18n()
 const config = props.capability.assignmentConfig!
 const uniform = reactive<BatchUniformAssignmentState>({ mode: 'none', assigneeId: '', businessUnitId: '', businessUnitCode: '', roleCode: '' })
+const designedValues = reactive<Record<string, unknown>>({})
+function recordValue(field: string, value: unknown) {
+  if (assignmentReadonly(field)) return
+  designedValues[field] = value
+  if (field === config.assigneeField) uniform.assigneeId = batchPersonIdentity(value)
+}
 const ownedFields = [config.assigneeField, config.buField, config.roleField].filter((field): field is string => !!field)
 const designedRules = computed(() => {
   const rules = assignmentControlRules(formCreate.copyRules(batchRuleChildren(props.rule ?? {})), config, t)
@@ -59,6 +67,7 @@ const uniformRoleOptions = ref<Array<{ label: string; value: string }>>([])
 const uniformRoleLoading = ref(false)
 let uniformGeneration = 0
 function clearUniformInactive() {
+  for (const field of ownedFields) delete designedValues[field]
   uniformGeneration++
   uniformRoleLoading.value = false
   uniform.assigneeId = ''; uniform.businessUnitId = ''; uniform.businessUnitCode = ''; uniform.roleCode = ''
@@ -89,12 +98,16 @@ async function loadDirectory() {
   } catch (error) { directory.report(error) }
 }
 void loadDirectory()
-function hasChanges() { return !assignmentLocked.value && uniform.mode !== 'none' }
+function hasChanges() { return !assignmentLocked.value && (uniform.mode !== 'none' || Object.keys(designedValues).length > 0) }
 function collect(rows: Array<Record<string, unknown>>) {
   if (assignmentLocked.value) return { rows }
   if (hasChanges() && directory.error.value) throw new Error(directory.error.value)
   const states = Object.fromEntries(rows.map(row => [props.rowIdentity(row)!, initialBatchAssignment(row, config)]))
-  return collectBatchAssignments(rows, states, states, uniform, new Set(props.rows.map(row => props.rowIdentity(row)!)), props.capability, props.rowIdentity, props.rowScopeKey)
+  const result = collectBatchAssignments(rows, states, states, uniform, new Set(props.rows.map(row => props.rowIdentity(row)!)), props.capability, props.rowIdentity, props.rowScopeKey)
+  if (!hasChanges()) return result
+  const values = Object.fromEntries(Object.entries(designedValues).filter(([field]) => !assignmentReadonly(field)))
+  return { ...result, rows: result.rows.map(row => ({ ...row, ...values })),
+    editedFields: [...new Set([...Object.keys(values), ...(uniform.mode === 'none' ? [] : ownedFields)])] }
 }
 defineExpose({ collect, hasChanges })
 </script>
