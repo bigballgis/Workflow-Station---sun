@@ -5753,3 +5753,16 @@
     类型后缀记录正式操作、正文为空，原用户备注写入顺序保留；缺少证据的旧记录保持迁移兼容，不猜填。
     writer/reader先红后绿、额外5项测试及Engine相关458项0失败/197条件跳过；真实14请求逐任务操作与备注核对通过。
     扩展引擎组保留H2/Postgres基线失败；详见docs/verification/2026-11-01-mcy-all-paths.md及同名review。
+
+- id: "1734"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "My Request历史节点遗漏主表主键元数据，已保存的Case子表显示为空"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailNodeFormMap.ts"
+  detail: |
+    透传发布PRIMARY binding的primaryKeyFields和fieldDefinitions，与当前主表路径一致；不猜字段、不放宽外键投影。
+    原用户请求Case note=3已持久化但节点No Data，2项回归先红后绿、原单同节点显示恢复且不混入交易行。
+    普通和显式额外FK两类样本符合各自归属，新建Batch人员分派VERIFIED并走到引擎结束、重开仍可见。
+    Portal全量2613通过/同1基线失败、类型381无新增、MI250+6通过。详见docs/verification/2026-11-01-case-node-primary-identity.md。
