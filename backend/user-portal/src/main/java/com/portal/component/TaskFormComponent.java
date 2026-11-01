@@ -724,6 +724,7 @@ public class TaskFormComponent {
 
         final List<String> emptiedKeys = emptiedSubTableKeys;
         final List<SubTableBindingScope> bindingScopes = subTableBindingScopes;
+        final Set<String> explicitStores = SubTableWriteIsolation.explicitStoreKeys(editableData);
         var assignmentRequest = AssignmentPortalWriteGuard.Request.of(taskId, userId, "SAVE",
                 java.util.Arrays.asList(editableData, baselineValues, emptiedKeys, bindingScopes, subTableBatchChanges),taskInfo.processInstanceId);
         var assignmentDecision = assignmentGuard.prepare(assignmentRequest);
@@ -777,7 +778,7 @@ public class TaskFormComponent {
             subTableWriteIsolation().apply(new SubTableWriteIsolation.Request(
                     writeContext, inbound, currentVariables, emptiedKeys, bindingScopes,
                     processInstance.getFunctionUnitCode(), processInstance.getFunctionUnitCatalogId(),
-                    taskInfo.taskDefinitionKey, subTableBatchChanges,assignmentDecision.tracked()));
+                    taskInfo.taskDefinitionKey, subTableBatchChanges,assignmentDecision.tracked(),explicitStores));
 
             // Compare batch declarations with the canonical rows after the normal
             // binding/MI scope guard has produced the scoped write set.  This keeps

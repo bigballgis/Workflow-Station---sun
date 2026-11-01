@@ -457,6 +457,8 @@ public class TaskApprovalCompletionComponent {
                 .orElseGet(() -> task.getVariables() != null ? task.getVariables() : Map.of());
         String functionUnitCode = process.map(ProcessInstance::getFunctionUnitCode).orElse(null);
         Map<String, Object> formData = request.getFormData() != null ? request.getFormData() : variables;
+        Set<String> explicitStores = SubTableWriteIsolation.explicitStoreKeys(request.getFormData() != null
+                && request.getFormData().containsKey("__subTables__") ? request.getFormData() : request.getVariables());
         SubTableBatchTaskPermissions.preserveOmittedStores(baselineVars, variables);
         Map<String, Object> writeContext = SubTableBatchTaskWriteContext.resolve(new SubTableBatchTaskWriteContext.Request(
                 task.getTaskId(), processId, task.getTaskDefinitionKey(),
@@ -466,7 +468,7 @@ public class TaskApprovalCompletionComponent {
                 writeContext, variables, baselineVars,
                 request.getEmptiedSubTableKeys(), request.getSubTableBindingScopes(),
                 functionUnitCode, process.map(ProcessInstance::getFunctionUnitCatalogId).orElse(null),
-                task.getTaskDefinitionKey(), request.getSubTableBatchChanges(),protectedAssignment));
+                task.getTaskDefinitionKey(), request.getSubTableBatchChanges(),protectedAssignment,explicitStores));
         if (protectedAssignment || baselineVars.containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
             OwnerFieldComponent.stripProcessWideCurrentItem(variables);
             return writeContext;

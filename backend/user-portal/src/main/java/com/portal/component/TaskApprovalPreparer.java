@@ -59,21 +59,27 @@ final class TaskApprovalPreparer {
 
     private MiPreparation multiInstance(TaskInfo task,TaskCompleteRequest request,Submission submitted) {
         var variables=submitted.variables();
+        ProcessInstance instance=owner.instances().findById(task.getProcessInstanceId())
+                .orElseThrow(()->new IllegalStateException("Process instance is missing at completion"));
+        // TaskInfo contains display-enriched node/status values, not a business write baseline.
+        if (instance.getVariables() != null
+                && instance.getVariables().containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
+            variables.putIfAbsent("__subTables__", Map.of());
+            SubTableBatchTaskPermissions.preserveOmittedStores(instance.getVariables(), variables);
+        }
         owner.miCollections().mergeSubTablesFromTaskInfoForMi(task,variables);
         var context=owner.isolateOutboundSubTables(task,request,variables,protectedAssignment);
         owner.taskForms().validateSubTableBatchPayload(task.getTaskDefinitionKey(),task.getProcessInstanceId(),request.getSubTableBatchChanges(),request.getSubTableBindingScopes(),variables);
         List<SubTableBatchInitialMiOutcome.Expected> expected=List.of();
         String definition=null;
         if (context!=null) {
-            ProcessInstance instance=owner.instances().findById(task.getProcessInstanceId()).orElseThrow(()->new IllegalStateException("Process instance is missing at completion"));
             definition=instance.getProcessDefinitionId();
             if (instance.getVariables()!=null && instance.getVariables().containsKey(SubTableWriteIsolation.BATCH_RUNTIME_FIELD)) {
                 expected=owner.miCollections().injectMiCollectionFromBpmn(task.getProcessDefinitionKey(),task.getTaskDefinitionKey(),task.getProcessInstanceId(),variables,instance.getVariables());
             } else owner.miCollections().injectMiCollectionFromBpmn(task.getProcessDefinitionKey(),task.getTaskDefinitionKey(),task.getProcessInstanceId(),variables,true);
         } else owner.miCollections().injectMiCollectionFromBpmn(task.getProcessDefinitionKey(),task.getTaskDefinitionKey(),task.getProcessInstanceId(),variables);
         owner.preserveEngineSubTablesOnComplete(task.getProcessInstanceId(),variables,submitted.explicitTables(),
-                SubTableBatchDeletedRows.read(owner.instances().findById(task.getProcessInstanceId())
-                        .orElseThrow(()->new IllegalStateException("Process instance is missing at completion")).getVariables()));
+                SubTableBatchDeletedRows.read(instance.getVariables()));
         return new MiPreparation(context,expected,definition);
     }
 

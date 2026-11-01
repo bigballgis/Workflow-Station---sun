@@ -192,6 +192,8 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
           ? {
               tableId: primaryBinding.tableId != null ? Number(primaryBinding.tableId) : null,
               tableName: primaryBinding.tableDisplayName || primaryBinding.tableName,
+              primaryKeyFields: Array.isArray(primaryBinding.primaryKeyFields) ? primaryBinding.primaryKeyFields : undefined,
+              fieldDefinitions: primaryBinding.fieldDefinitions ?? [],
             }
           : null
         let configForSubTables: Record<string, any> = {}

@@ -60,6 +60,14 @@ class SubTableWriteIsolation {
         return keys;
     }
 
+    /** Capture client intent before persisted or display-only stores are merged in. */
+    static Set<String> explicitStoreKeys(Map<String, Object> submission) {
+        if (submission == null || !(submission.get("__subTables__") instanceof Map<?, ?> tables)) return Set.of();
+        Set<String> keys = new LinkedHashSet<>();
+        tables.keySet().forEach(key -> keys.add(String.valueOf(key)));
+        return Set.copyOf(keys);
+    }
+
     record Request(
             Map<String, Object> formData,
             Map<String, Object> inbound,
@@ -67,7 +75,13 @@ class SubTableWriteIsolation {
             List<String> emptiedSubTableKeys,
             List<SubTableBindingScope> scopes,
             String functionUnitCode, String catalogId, String stageId, List<com.portal.dto.SubTableBatchChange> batchChanges,
-            boolean protectedAssignment) {
+            boolean protectedAssignment, Set<String> explicitStores) {
+        Request(Map<String,Object> formData,Map<String,Object> inbound,Map<String,Object> baselineVariables,
+                List<String> emptiedSubTableKeys,List<SubTableBindingScope> scopes,String functionUnitCode,
+                String catalogId,String stageId,List<com.portal.dto.SubTableBatchChange> batchChanges,boolean protectedAssignment) {
+            this(formData,inbound,baselineVariables,emptiedSubTableKeys,scopes,functionUnitCode,catalogId,stageId,
+                    batchChanges,protectedAssignment,null);
+        }
         Request(Map<String,Object> formData,Map<String,Object> inbound,Map<String,Object> baselineVariables,
                 List<String> emptiedSubTableKeys,List<SubTableBindingScope> scopes,String functionUnitCode,
                 String catalogId,String stageId,List<com.portal.dto.SubTableBatchChange> batchChanges) {
@@ -110,7 +124,7 @@ class SubTableWriteIsolation {
         Map<String, SubTableWriteDesign.Binding> frozen = writeDesign == null ? null
                 : writeDesign.resolve(request.catalogId(), request.stageId());
         frozen = SubTableBatchScopeDesign.overlay(frozen, baselineVars, request.batchChanges());
-        requireScopesForFrozenMultiBindings(frozen, submitted, bindingScopes);
+        requireScopesForFrozenMultiBindings(frozen, submitted, baseline, bindingScopes, request.explicitStores());
         // Check client claims before restoring omitted stores: restoration is not a write claim.
         for (Map.Entry<String, Object> entry : baseline.entrySet()) {
             if (request.protectedAssignment() || versioned(entry.getValue())) submitted.putIfAbsent(entry.getKey(), entry.getValue());
@@ -160,12 +174,18 @@ class SubTableWriteIsolation {
     }
 
     private static void requireScopesForFrozenMultiBindings(Map<String, SubTableWriteDesign.Binding> frozen,
-            Map<String, Object> submitted, List<SubTableBindingScope> scopes) {
+            Map<String, Object> submitted, Map<String, Object> baseline,
+            List<SubTableBindingScope> scopes, Set<String> explicitStores) {
         if (frozen == null) return;
         Map<String, Long> counts = frozen.values().stream().collect(java.util.stream.Collectors.groupingBy(
                 SubTableWriteDesign.Binding::storeKey, java.util.stream.Collectors.counting()));
         for (Map.Entry<String, Long> entry : counts.entrySet()) {
             if (entry.getValue() < 2 || !submitted.containsKey(entry.getKey())) continue;
+            // Restored baseline is not a client write. Explicit or changed stores still need scopes.
+            if (explicitStores != null && explicitStores.stream().noneMatch(key -> {
+                var binding = frozen.get(key.trim());
+                return entry.getKey().equals(key.trim()) || binding != null && entry.getKey().equals(binding.storeKey());
+            }) && java.util.Objects.equals(submitted.get(entry.getKey()), baseline.get(entry.getKey()))) continue;
             boolean declared = scopes.stream().anyMatch(s -> s != null
                     && entry.getKey().equals(s.getStoreKey())
                     && s.getBindingId() != null && frozen.containsKey(s.getBindingId().trim()));

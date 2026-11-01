@@ -426,7 +426,7 @@
       :binding-id="bindingId"
       :field-permissions="fieldPermissions"
       :parent-selection="parentSelection"
-      @update:visible="dialogVisible = $event"
+      @update:visible="dialogVisible = $event" @update:primary-form-data="emit('update:primaryFormData', $event)"
       :save-row="handleDialogSaveAndSyncNested"
     />
 

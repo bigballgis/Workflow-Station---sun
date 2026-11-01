@@ -3,7 +3,19 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-10-31)
+## 统计 (截至 2026-11-01)
+
+2026-11-01 运行中节点追修：#1736补入REJECT已办历史，原任务Investigation灰→绿且当前Mark Completed仍橙；两入口10项回归先红后绿。全量2623通过/同1基线失败、类型381及lint9无新增，MI250+6通过；六组新单34办理页面/28个MI中途颜色断言，FU48/50126各完整Batch混合路径通过。Open仍52、Wontfix仍2。见docs/verification/2026-11-01-live-mi-node-completion.md。
+
+2026-11-01 嵌套对照追修：#1735区分服务端恢复基线与客户端写入声明，同任务Batch自动保存403→200后完整结束；新增4项红绿回归。FU50125六组全路径34次Case/52次交易Details隔离、FU48/50126各1完整Batch流程和MI250+6通过。Open仍52、Wontfix仍2，扩展全量2项原代码同错误及一次性DB环境缺口保留。见docs/verification/2026-11-01-nested-correspondence-and-restored-stores.md。
+
+2026-11-01 节点只读追修：#1734补齐主表主键元数据，原单Case Correspondence显示恢复；普通/显式双FK及新建Batch完整流程复验通过。Portal2613通过/同1基线失败、类型381无新增、MI250+6通过。Open仍52、Wontfix仍2。见docs/verification/2026-11-01-case-node-primary-identity.md。
+
+2026-11-01 全路径补验：#1732–#1733 通用修复流程图出口/拒绝终态及操作历史，最终两种配置共14份新请求完成三路径与Batch入口到引擎结束；MI250+6通过。Open仍52、Wontfix仍2，完整门禁基线失败保留。见 docs/verification/2026-11-01-mcy-all-paths.md。
+
+2026-11-01 追修：#1729 保留无写入意图的 MI store 顺序，修复同单双绑定 Request Approval；普通和显式额外 FK 两份新建请求均经浏览器完整走到引擎结束，MI250+6通过。当前 Mark Complete 动作类型 REJECT 导致 Portal 终态 REJECTED，未修改业务配置。Open/Wontfix 数量不变。
+
+2026-11-01：在 #1724 / #1729 原条目续记双绑定发起补值、合法额外 FK 重叠、嵌套主表 PK 事件及 Investigation 完成基线修复，不新增同源编号。草稿重开/编辑/删除/提交、两种 FK 配置查库、三个非法请求拒绝、已有 MCY 回填和节点绿色均通过；完整 MI250+6通过。Open/Wontfix 数量不变，完整门禁仍有已对照确认的基线失败。见 `docs/verification/2026-11-01-subtable-binding-and-completion.md`。
 
 2026-10-31：#1729–#1731 本地修复子表 Lookup 分派身份与控件分叉、Batch 导入画布路由及逐行 change 回填。后续补齐 Edit 的 Assign 子字段布局、占位文字与字数提示，61项相关测试及同任务截图检查通过。MCY 独立副本通过真实页面保存、查库和 Complete，既有 MI 样本 250 项及 6 个截图场景通过。Open/Wontfix 数量不变；全量类型检查存量错误和远程验收缺口使终审 CONDITIONAL。见 `docs/verification/2026-10-31-subtable-assignment-1232.md`。
 

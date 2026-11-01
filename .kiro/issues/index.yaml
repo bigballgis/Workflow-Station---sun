@@ -5669,6 +5669,11 @@
     8 项归属回归、主表键及共享关系回归、MI 单元 248 项通过，前端已构建并重建。
     远程 Dev 两个实际按钮、完整 MI 截图门禁仍未验证，审查 CONDITIONAL。
     证据：docs/verification/2026-10-30-multi-binding-403.md。
+    2026-11-01 续修：流程发起补值与 scope guard 共用发布 binding 的过滤 / 显式额外 FK 规则；
+    合法重叠要求单个完整授权 owner，多个部分权限不能取并集；未申报的单绑定表保留既有校验边界。
+    嵌套新增的主表 PK patch 补传宿主，避免同 Request 再分配 Case ID。
+    新 MCY 副本草稿重开、编辑、删除替换和 Submit 403→200；普通与显式双 FK 两样本查库均为两交易/三消息且父子身份一致。
+    三个非法浏览器请求403且不创建实例；最终MI250+6场景通过。完整门禁保留基线失败，详见 docs/verification/2026-11-01-subtable-binding-and-completion.md。
 
 - id: "1729"
   status: fixed
@@ -5689,6 +5694,11 @@
     原远程 Credit Card、独立双账号及全生命周期未验收，类型检查存量错误使终审 CONDITIONAL。
     证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
 
+    2026-11-01：完成链从持久化基线补齐省略的表，再做 TaskInfo hydration，避免动态展示状态被当作只读表写入。
+    原 Investigation 完成失败后真实200并生成下一步；新 MCY 流程再次验证 Assignment生成3个Investigation，推进后已走节点为绿色。
+    Batch Assignee配置和逐行email回填本轮现有能力复验通过，未另加专用逻辑；详情见2026-11-01验收报告。
+    同日追修：双绑定只读表在MI合并时无意义重排行导致Request Approval缺scope失败；原样且无清空声明的无scope表保留原顺序，真实修改仍拒绝。
+    新增3项红绿测试；633项后端0失败/20条件跳过。新建普通/显式双FK两份同单浏览器全流程到引擎结束，MI250+6通过；Mark Complete配置为REJECT的终态如实记录。
 - id: "1730"
   status: fixed
   fixed_at: "2026-10-31"
@@ -5717,3 +5727,71 @@
     MCY副本实际发布、新建、两行操作、第三行业务数据不变、刷新和Complete通过；
     两行不同card_number后缀证明事件使用各自行上下文。帮助页三语同步。
     BU/Role自定义Lookup组合未逐项验收。证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
+
+- id: "1732"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: minor
+  category: bug
+  summary: "My Request 未执行的MI出口标绿、拒绝终态MI外框仍为Current"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailDiagramParser.ts"
+  detail: |
+    出口复用Task既有历史判据，活动ID优先，不凭容器完成或结束节点名称推断；同名异ID不再混淆。
+    已进入MI在COMPLETED/REJECTED终态不再橙色，未进入容器仍pending。原失败实例和新增红绿测试通过。
+    两种FK配置12份三路径组合、2份Batch分派全流程结束，SVG状态与真实历史相符；全量前端2611通过/1基线失败，MI250+6通过。
+    证据：docs/verification/2026-11-01-mcy-all-paths.md。
+
+- id: "1733"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "实际Reject正常完成后deleteReason为空，Flow History误标Approve"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskHistoryAssembler.java"
+  detail: |
+    完成事务授权之后写入taskId绑定的原生操作标记，历史优先使用实际操作；不根据节点名或最后流程变量反推。
+    类型后缀记录正式操作、正文为空，原用户备注写入顺序保留；缺少证据的旧记录保持迁移兼容，不猜填。
+    writer/reader先红后绿、额外5项测试及Engine相关458项0失败/197条件跳过；真实14请求逐任务操作与备注核对通过。
+    扩展引擎组保留H2/Postgres基线失败；详见docs/verification/2026-11-01-mcy-all-paths.md及同名review。
+
+- id: "1734"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "My Request历史节点遗漏主表主键元数据，已保存的Case子表显示为空"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailNodeFormMap.ts"
+  detail: |
+    透传发布PRIMARY binding的primaryKeyFields和fieldDefinitions，与当前主表路径一致；不猜字段、不放宽外键投影。
+    原用户请求Case note=3已持久化但节点No Data，2项回归先红后绿、原单同节点显示恢复且不混入交易行。
+    普通和显式额外FK两类样本符合各自归属，新建Batch人员分派VERIFIED并走到引擎结束、重开仍可见。
+    Portal全量2613通过/同1基线失败、类型381无新增、MI250+6通过。详见docs/verification/2026-11-01-case-node-primary-identity.md。
+
+- id: "1735"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "Save/Complete补回未提交的原样多绑定只读store后，被误判为缺scope写入"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableWriteIsolation.java"
+  detail: |
+    在恢复前保存显式store集合；只有未显式提交且与持久化基线完全相等的store不再被当作写入声明。
+    显式store、旧bindingId别名及变更仍严格要求scope，原构造器默认严格路径不变，无业务表名/FU硬编码。
+    新增4项红绿回归，相关Portal1174通过/19跳过、Common48通过，真实原任务403到200后完整结束。
+    FU50125新1.0.4六组全路径34次Case/52次交易详情隔离，既有FU48和显式额外FK副本50126各一份完整Batch流程通过，MI250+6通过。
+    真实无scope显式多绑定请求仍403且variables不变；扩展全量保留2项经原代码复核的基线错误和一次性DB环境缺口。
+    证据：docs/verification/2026-11-01-nested-correspondence-and-restored-stores.md。
+
+- id: "1736"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "运行中MI的已办REJECT分支节点未计入完成集合，进入下一步后仍灰色"
+  file: "frontend/user-portal/src/composables/tasks/bpmnDiagramParser.ts"
+  detail: |
+    Task与My Request运行中MI集合均承认completed/rejected历史，当前节点优先级与兄弟下游抑制保持，操作审计不变。
+    原用户任务Investigation灰→绿，Mark Completed仍橙，代理未代办，历史API data前后逐值相等。
+    新增10项先4红后全绿，相关74通过，全量2613→2623通过且保留同1失败；类型381和lint9无新增。
+    build+Docker重建后同URL截图通过；六组34办理页面/28个MI任务中途颜色断言、34次Case/52次交易详情隔离，既有FU48/50126各完整Batch混合路径及MI250+6通过。
+    网关429限流失败保留后串行重跑，无关闭限流或业务/FU/节点硬编码。详见docs/verification/2026-11-01-live-mi-node-completion.md。

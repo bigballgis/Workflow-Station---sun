@@ -54,6 +54,7 @@ class SubTableBindingScopeGuard {
             applyOneScope(scope, formData, submitted, base, pkByStoreKey, frozen);
         }
         rejectUnclaimedChanges(scopes, submitted, base, pkByStoreKey);
+        new SubTableFkOwnership(frozen, scopes, Map.of()).assertNewRows(submitted, base);
         // All bindings validate the original client version before any row is mutated.
         // Intersections are one business row, so increment each table's claimed rows once.
         for (Map.Entry<String, List<String>> entry : pkByStoreKey.entrySet()) {
@@ -87,7 +88,6 @@ class SubTableBindingScopeGuard {
                 throw new PortalException("403", "Binding scope claimed a row that is not in the table store");
             }
             assertRowMatchesFilter(meta, expected, row);
-            assertNewRowOwnership(meta, row, baselineRow);
             assertRowVersion(row, baselineRow);
         }
         // Empty is a UI hint, never authority to delete rows the client did not read.
@@ -305,33 +305,6 @@ class SubTableBindingScopeGuard {
         throw new PortalException("403", "Binding is not allowed to write this sub-table row");
     }
 
-    private void assertNewRowOwnership(BindingMeta meta, Map<String, Object> row,
-                                       Map<String, Object> baselineRow) {
-        if (baselineRow != null || !StringUtils.hasText(meta.filterField())) {
-            return;
-        }
-        List<String> allowed = new ArrayList<>(meta.explicitFillFields());
-        allowed.add(meta.filterField());
-        for (String foreignKey : meta.foreignKeyFields()) {
-            if (containsIgnoreCase(allowed, foreignKey)) {
-                continue;
-            }
-            Object value = row.get(foreignKey);
-            if (value == null) {
-                value = ignoreCase(row, foreignKey);
-            }
-            if (value != null && StringUtils.hasText(String.valueOf(value))) {
-                throw new PortalException("403",
-                        "New sub-table row contains a foreign key not owned by this binding");
-            }
-        }
-    }
-
-    private static boolean containsIgnoreCase(List<String> values, String target) {
-        return values != null && target != null && values.stream()
-                .anyMatch(value -> value != null && value.equalsIgnoreCase(target));
-    }
-
     private void assertRowVersion(Map<String, Object> submittedRow, Map<String, Object> baselineRow) {
         if (baselineRow == null) {
             return;
@@ -486,7 +459,7 @@ class SubTableBindingScopeGuard {
         return null;
     }
 
-    private static Map<String, Object> rowKeyOf(Map<String, Object> row, List<String> pkColumns) {
+    static Map<String, Object> rowKeyOf(Map<String, Object> row, List<String> pkColumns) {
         List<String> pk = pkColumns == null ? List.of() : pkColumns;
         if (!pk.isEmpty()) {
             Map<String, Object> fromPk = SubTableRowKeySupport.rowKeyFromVariableRow(row, pk);
@@ -523,7 +496,7 @@ class SubTableBindingScopeGuard {
         return false;
     }
 
-    private static boolean keysMatch(Map<String, Object> a, Map<String, Object> b) {
+    static boolean keysMatch(Map<String, Object> a, Map<String, Object> b) {
         if (a == null || b == null || a.isEmpty() || b.isEmpty()) {
             return false;
         }
