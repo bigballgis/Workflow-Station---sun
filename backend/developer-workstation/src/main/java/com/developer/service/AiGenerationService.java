@@ -161,6 +161,12 @@ public interface AiGenerationService {
      */
     FunctionUnitContextDTO serializeFunctionUnitContext(Long functionUnitId);
 
+    /**
+     * 生成数据须遵守的枚举与结构元数据（formTypes / tableTypes / actionTypes / configJson 扩展结构等）。
+     * AI Generate 随请求下发给模型；IDE 扩展经 {@code /ai-generation/studio-chat/format-spec} 取同一份。
+     */
+    Map<String, Object> getSchemaMetadata();
+
     // ==================== AI webhook Session Memory Rebuild ====================
 
     /**

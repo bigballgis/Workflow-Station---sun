@@ -493,7 +493,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
 
         // Inject new architecture metadata to help AI generate data structures that conform to the new architecture (requirement 15)
-        body.put("schemaMetadata", buildSchemaMetadata());
+        body.put("schemaMetadata", getSchemaMetadata());
 
         // Instruct AI to include explanations when generating data (requirement 50)
         body.put("includeExplanations", true);
@@ -510,7 +510,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
      * Provides AI webhook/AI with understanding of the current system architecture to generate
      * standard-compliant data.
      */
-    private Map<String, Object> buildSchemaMetadata() {
+    @Override
+    public Map<String, Object> getSchemaMetadata() {
         Map<String, Object> metadata = new LinkedHashMap<>();
 
         // Enum value list

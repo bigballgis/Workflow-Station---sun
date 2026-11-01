@@ -4,7 +4,10 @@ import com.developer.dto.AiStudioApplyRequest;
 import com.developer.dto.AiStudioApplyResponse;
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.AiStudioChatResponse;
+import com.developer.dto.AiStudioFormatSpecResponse;
 import com.developer.dto.AiStudioProposalJobResponse;
+import com.developer.dto.AiStudioProposalPreview;
+import com.developer.dto.FunctionUnitContextDTO;
 
 /**
  * AI Studio Copilot 组件接口。
@@ -45,4 +48,16 @@ public interface AiStudioChatComponent {
 
     /** 撤销一次 Apply（逐项逆操作）；令牌过期/非本人 → AI_STUDIO_UNDO_EXPIRED。 */
     AiStudioApplyResponse undoApply(String undoToken, String userId);
+
+    /**
+     * 只校验不写库：与 {@link #applyProposal} 同样的 scope 裁剪与归一化，再走提案卡同款预览
+     * （会新增/更新/替换什么 + ERROR/WARN）。只读，不抢 AI 锁。
+     */
+    AiStudioProposalPreview dryRun(AiStudioApplyRequest request);
+
+    /** 功能单元当前设计（AI Studio 喂给模型的同一份上下文，字段名与 generatedData 同构）。 */
+    FunctionUnitContextDTO getDesignContext(Long functionUnitId);
+
+    /** generatedData 的格式说明：GENERATION 提示词 + schemaMetadata。 */
+    AiStudioFormatSpecResponse getFormatSpec();
 }

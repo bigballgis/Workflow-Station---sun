@@ -1,13 +1,17 @@
 package com.developer.component.impl;
 
+import com.developer.component.AiPromptTemplateComponent;
 import com.developer.component.AiStudioChatComponent;
 import com.developer.dto.AiGeneratedData;
 import com.developer.dto.AiStudioApplyRequest;
 import com.developer.dto.AiStudioApplyResponse;
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.AiStudioChatResponse;
+import com.developer.dto.AiStudioFormatSpecResponse;
 import com.developer.dto.AiStudioProposalJobResponse;
+import com.developer.dto.AiStudioProposalPreview;
 import com.developer.dto.AiValidationResult;
+import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.exception.AiGenerationException;
 import com.developer.exception.AiValidationFailedException;
 import com.developer.service.impl.AiStudioChatServiceImpl;
@@ -19,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiStudioChatService;
 import com.developer.service.AiStudioProposalJobService;
@@ -49,6 +54,8 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
     private final com.developer.service.impl.AiStudioProposalPreviewer previewer;
     private final com.developer.service.impl.AiStudioUndoService undoService;
     private final AiStudioThreadService threadService;
+    private final AiGenerationService aiGenerationService;
+    private final AiPromptTemplateComponent promptTemplateComponent;
     private final ObjectMapper objectMapper;
 
     public AiStudioChatComponentImpl(AiStudioChatService aiStudioChatService,
@@ -61,6 +68,8 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
                                      com.developer.service.impl.AiStudioProposalPreviewer previewer,
                                      com.developer.service.impl.AiStudioUndoService undoService,
                                      AiStudioThreadService threadService,
+                                     AiGenerationService aiGenerationService,
+                                     AiPromptTemplateComponent promptTemplateComponent,
                                      ObjectMapper objectMapper) {
         this.aiStudioChatService = aiStudioChatService;
         this.aiStudioProposalJobService = aiStudioProposalJobService;
@@ -72,6 +81,8 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
         this.previewer = previewer;
         this.undoService = undoService;
         this.threadService = threadService;
+        this.aiGenerationService = aiGenerationService;
+        this.promptTemplateComponent = promptTemplateComponent;
         this.objectMapper = objectMapper;
     }
 
@@ -199,15 +210,7 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
         // 与 AI Generate 共用同一把锁：并发的 AI 面板 apply / 其他用户的提案在此互斥（冲突 → 409）
         aiLockService.tryAcquire(functionUnitId, userId);
         try {
-            // 按 scope 裁剪切片（信任边界：body 由客户端回传）。范围外的切片写下去会撞
-            // clearScopedData 没清理的存量数据（如 processDefinition 的每 FU 唯一约束）。
-            Map<String, Object> sliced = new LinkedHashMap<>(request.getGeneratedData());
-            sliced.keySet().retainAll(AiStudioChatServiceImpl.allowedSlices(request.getScope()));
-            if (sliced.isEmpty()) {
-                throw new AiGenerationException("AI_STUDIO_PROPOSAL_EMPTY",
-                        "The proposal contains no data slices for scope " + request.getScope());
-            }
-            AiGeneratedData data = normalizedData(sliced);
+            AiGeneratedData data = scopedData(request);
 
             // scoped 提案不带 tableDefinitions（allowedSlices 也会裁掉模型回传的表定义），
             // 表单绑定/关系引用的是库里的表：把本 FU 的表名→字段名交给校验器当兜底目录
@@ -243,6 +246,41 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
         } finally {
             aiLockService.release(functionUnitId, userId);
         }
+    }
+
+    @Override
+    public AiStudioProposalPreview dryRun(AiStudioApplyRequest request) {
+        functionUnitWorkspaceAccessService.assertCanAccess(request.getFunctionUnitId(), WorkspaceAccessAction.VIEW);
+        // 与 Apply 看同一份数据：同样裁剪、同样归一化，预览结论才能代表 Apply 的结论
+        return previewer.preview(request.getFunctionUnitId(), request.getScope(), scopedData(request));
+    }
+
+    @Override
+    public FunctionUnitContextDTO getDesignContext(Long functionUnitId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
+        return aiGenerationService.serializeFunctionUnitContext(functionUnitId);
+    }
+
+    @Override
+    public AiStudioFormatSpecResponse getFormatSpec() {
+        return AiStudioFormatSpecResponse.builder()
+                .template(promptTemplateComponent.get("GENERATION").getContent())
+                .schemaMetadata(aiGenerationService.getSchemaMetadata())
+                .build();
+    }
+
+    /**
+     * 按 scope 裁剪切片后归一化（信任边界：body 由客户端回传）。范围外的切片写下去会撞
+     * clearScopedData 没清理的存量数据（如 processDefinition 的每 FU 唯一约束）。
+     */
+    private AiGeneratedData scopedData(AiStudioApplyRequest request) {
+        Map<String, Object> sliced = new LinkedHashMap<>(request.getGeneratedData());
+        sliced.keySet().retainAll(AiStudioChatServiceImpl.allowedSlices(request.getScope()));
+        if (sliced.isEmpty()) {
+            throw new AiGenerationException("AI_STUDIO_PROPOSAL_EMPTY",
+                    "The proposal contains no data slices for scope " + request.getScope());
+        }
+        return normalizedData(sliced);
     }
 
     @Override

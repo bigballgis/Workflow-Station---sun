@@ -7,7 +7,10 @@ import com.developer.dto.AiStudioApplyResponse;
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.AiStudioOneClickRequest;
 import com.developer.dto.AiStudioChatResponse;
+import com.developer.dto.AiStudioFormatSpecResponse;
 import com.developer.dto.AiStudioProposalJobResponse;
+import com.developer.dto.AiStudioProposalPreview;
+import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.security.AmTokenResolver;
 import com.developer.security.RequireDeveloperPermission;
 import com.platform.common.dto.ApiResponse;
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -138,5 +142,26 @@ public class AiStudioChatController extends BaseController {
         String userId = SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return handleRequest(() -> aiStudioChatComponent.undoApply(body.get("undoToken"), userId));
+    }
+
+    @PostMapping("/dry-run")
+    @Operation(summary = "Validate a change proposal without writing (same slicing and checks as /apply)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<AiStudioProposalPreview>> dryRun(@Valid @RequestBody AiStudioApplyRequest request) {
+        return handleRequest(() -> aiStudioChatComponent.dryRun(request));
+    }
+
+    @GetMapping("/design-context")
+    @Operation(summary = "Current design of a function unit in generatedData shape")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<FunctionUnitContextDTO>> getDesignContext(@RequestParam Long functionUnitId) {
+        return handleRequest(() -> aiStudioChatComponent.getDesignContext(functionUnitId));
+    }
+
+    @GetMapping("/format-spec")
+    @Operation(summary = "generatedData format spec: the effective GENERATION prompt plus schema metadata")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<AiStudioFormatSpecResponse>> getFormatSpec() {
+        return handleRequest(() -> aiStudioChatComponent.getFormatSpec());
     }
 }

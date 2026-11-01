@@ -402,6 +402,9 @@ platform:
           - http://localhost:3002/dev/sso/callback
           - http://127.0.0.1:3000/dev/sso/callback
           - http://127.0.0.1:3102/dev/sso/callback
+          # DW VS Code 扩展（tools/dw-copilot-vscode）的登录回调：VS Code 按扩展 id 路由到 UriHandler；
+          # 各环境相同的固定字面量，configmap 不需要覆盖
+          - vscode://workflow-station.dw-copilot/
 
 # LDAP 为用户画像权威源：定期对目标 AD 组成员对账 + 登录 JIT 回写 sys_users。
 # 所有连接参数/密钥仅经 ${ENV} 注入，严禁硬编码（见 security-guard）。默认关闭；本地用 OpenLDAP mock 验证。

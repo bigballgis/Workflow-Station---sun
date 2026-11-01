@@ -1,14 +1,21 @@
 package com.developer.component.impl;
 
+import com.developer.component.AiPromptTemplateComponent;
+import com.developer.dto.AiGeneratedData;
+import com.developer.dto.AiPromptTemplateResponse;
+import com.developer.dto.AiStudioApplyRequest;
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.AiStudioChatResponse;
 import com.developer.dto.AiStudioProposalJobResponse;
+import com.developer.dto.AiStudioFormatSpecResponse;
 import com.developer.dto.AiStudioProposalPreview;
+import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.entity.AiStudioMessage;
 import com.developer.exception.AiGenerationException;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiStudioChatService;
 import com.developer.service.AiStudioChatService.StudioChatResult;
@@ -34,6 +41,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,6 +69,8 @@ class AiStudioChatComponentImplTest {
     @Mock AiStudioProposalPreviewer previewer;
     @Mock AiStudioUndoService undoService;
     @Mock AiStudioThreadService threadService;
+    @Mock AiGenerationService aiGenerationService;
+    @Mock AiPromptTemplateComponent promptTemplateComponent;
 
     private AiStudioChatComponentImpl component;
 
@@ -68,7 +78,7 @@ class AiStudioChatComponentImplTest {
     void setUp() {
         component = new AiStudioChatComponentImpl(chatService, jobService, lockService, validationService,
                 writeService, accessService, referenceValidator, previewer, undoService, threadService,
-                new ObjectMapper());
+                aiGenerationService, promptTemplateComponent, new ObjectMapper());
     }
 
     private static AiStudioChatRequest request(String message) {
@@ -182,5 +192,73 @@ class AiStudioChatComponentImplTest {
         hook.getValue().accept(new StudioChatResult("Here you go", data, "TABLES", preview));
         verify(threadService).appendAssistantMessage(7L, "TABLE_DESIGN", "Here you go", "TABLES", data, preview,
                 new AiStudioThreadService.Author("u1", "u1"));
+    }
+
+    private static AiStudioApplyRequest applyRequest(String scope, Map<String, Object> generatedData) {
+        AiStudioApplyRequest r = new AiStudioApplyRequest();
+        r.setFunctionUnitId(7L);
+        r.setScope(scope);
+        r.setGeneratedData(generatedData);
+        return r;
+    }
+
+    @Test
+    void dryRunPreviewsTheSameScopedDataApplyWouldWriteAndNeverWrites() {
+        AiStudioProposalPreview preview = AiStudioProposalPreview.builder().checked(true).build();
+        when(previewer.preview(eq(7L), eq("TABLES"), any())).thenReturn(preview);
+
+        AiStudioProposalPreview result = component.dryRun(applyRequest("TABLES", Map.of(
+                "tableDefinitions", List.of(Map.of("tableName", "travel_request")),
+                "processDefinition", Map.of("bpmnXml", "<definitions/>"))));
+
+        assertSame(preview, result);
+        ArgumentCaptor<AiGeneratedData> data = ArgumentCaptor.forClass(AiGeneratedData.class);
+        verify(previewer).preview(eq(7L), eq("TABLES"), data.capture());
+        assertEquals("travel_request", data.getValue().getTableDefinitions().get(0).get("tableName"));
+        assertNull(data.getValue().getProcessDefinition(), "out-of-scope slices are cut exactly like /apply");
+        verify(accessService).assertCanAccess(7L, WorkspaceAccessAction.VIEW);
+        verifyNoInteractions(writeService, lockService, undoService, validationService);
+    }
+
+    @Test
+    void dryRunRejectsAProposalWithNoSliceForItsScope() {
+        AiGenerationException e = assertThrows(AiGenerationException.class, () -> component.dryRun(
+                applyRequest("TABLES", Map.of("processDefinition", Map.of("bpmnXml", "<definitions/>")))));
+
+        assertEquals("AI_STUDIO_PROPOSAL_EMPTY", e.getErrorCode());
+        verifyNoInteractions(previewer, writeService);
+    }
+
+    @Test
+    void readOnlyToolEndpointsStillRequireWorkspaceViewAccess() {
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("no access"))
+                .when(accessService).assertCanAccess(7L, WorkspaceAccessAction.VIEW);
+
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> component.dryRun(applyRequest("TABLES", Map.of("tableDefinitions", List.of()))));
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class, () -> component.getDesignContext(7L));
+        verifyNoInteractions(previewer, aiGenerationService);
+    }
+
+    @Test
+    void designContextIsTheSameContextAiStudioFeedsTheModel() {
+        FunctionUnitContextDTO context = new FunctionUnitContextDTO();
+        when(aiGenerationService.serializeFunctionUnitContext(7L)).thenReturn(context);
+
+        assertSame(context, component.getDesignContext(7L));
+    }
+
+    @Test
+    void formatSpecCombinesTheEffectiveGenerationPromptWithSchemaMetadata() {
+        AiPromptTemplateResponse prompt = new AiPromptTemplateResponse();
+        prompt.setContent("---GENERATED_DATA_START---");
+        when(promptTemplateComponent.get("GENERATION")).thenReturn(prompt);
+        Map<String, Object> metadata = Map.of("tableTypes", List.of("MAIN", "SUB"));
+        when(aiGenerationService.getSchemaMetadata()).thenReturn(metadata);
+
+        AiStudioFormatSpecResponse spec = component.getFormatSpec();
+
+        assertEquals("---GENERATED_DATA_START---", spec.getTemplate());
+        assertSame(metadata, spec.getSchemaMetadata());
     }
 }
