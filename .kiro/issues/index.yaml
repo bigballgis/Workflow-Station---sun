@@ -5669,6 +5669,11 @@
     8 项归属回归、主表键及共享关系回归、MI 单元 248 项通过，前端已构建并重建。
     远程 Dev 两个实际按钮、完整 MI 截图门禁仍未验证，审查 CONDITIONAL。
     证据：docs/verification/2026-10-30-multi-binding-403.md。
+    2026-11-01 续修：流程发起补值与 scope guard 共用发布 binding 的过滤 / 显式额外 FK 规则；
+    合法重叠要求单个完整授权 owner，多个部分权限不能取并集；未申报的单绑定表保留既有校验边界。
+    嵌套新增的主表 PK patch 补传宿主，避免同 Request 再分配 Case ID。
+    新 MCY 副本草稿重开、编辑、删除替换和 Submit 403→200；普通与显式双 FK 两样本查库均为两交易/三消息且父子身份一致。
+    三个非法浏览器请求403且不创建实例；最终MI250+6场景通过。完整门禁保留基线失败，详见 docs/verification/2026-11-01-subtable-binding-and-completion.md。
 
 - id: "1729"
   status: fixed
@@ -5689,6 +5694,9 @@
     原远程 Credit Card、独立双账号及全生命周期未验收，类型检查存量错误使终审 CONDITIONAL。
     证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
 
+    2026-11-01：完成链从持久化基线补齐省略的表，再做 TaskInfo hydration，避免动态展示状态被当作只读表写入。
+    原 Investigation 完成失败后真实200并生成下一步；新 MCY 流程再次验证 Assignment生成3个Investigation，推进后已走节点为绿色。
+    Batch Assignee配置和逐行email回填本轮现有能力复验通过，未另加专用逻辑；详情见2026-11-01验收报告。
 - id: "1730"
   status: fixed
   fixed_at: "2026-10-31"

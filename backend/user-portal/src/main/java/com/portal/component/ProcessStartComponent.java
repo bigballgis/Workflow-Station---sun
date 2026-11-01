@@ -247,7 +247,7 @@ public class ProcessStartComponent {
         } else {
             applyWorkspaceContextVariables(userId, variables);
         }
-        processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables);
+        processStartFormEnricherComponent.enrichOnInsert(pin.code(), userId, variables, request.getSubTableBindingScopes());
         isolateStartSubTables(variables, request, pin.code(), pin.catalogId());
         // Build the capability contract before Flowable starts, from this exact
         // catalog response. It stays only in local ProcessInstance.variables.

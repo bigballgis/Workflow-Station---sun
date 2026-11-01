@@ -647,6 +647,7 @@
         :field-permissions="fieldPermissions"
         @update:model-value="(nestedRows: unknown[]) => onNestedRowsUpdate(nested, nestedRows)"
         @update:parent-row="onNestedParentRowPatch"
+        @update:primary-form-data="emit('update:primaryFormData', $event)"
       />
     </div>
 
@@ -739,6 +740,7 @@ import { useSubTableDialogComponentEvents } from '@/composables/subTableAddDialo
 import { useSubTableDialogSensitiveMask } from '@/composables/subTableAddDialog/useSubTableDialogSensitiveMask'
 import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
+import type { SubTableDialogEmits } from './subTableAddDialogHelpers/types'
 import type { NestedSubTableDescriptor, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import {
@@ -846,10 +848,7 @@ const props = defineProps<{
   parentSelection?: BindingParentSelection | null
 }>()
 
-const emit = defineEmits<{
-  (e: 'update:visible', val: boolean): void
-  (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
-}>()
+const emit = defineEmits<SubTableDialogEmits>()
 
 const extraLayoutFields = computed<FormField[]>(() => [
   ...(props.nestedSubTables ?? []).map(nested => ({ key: `__dialog_nested_${nested.bindingId}`, label: nested.tableName, type: 'subTable', _bindingId: Number(nested.bindingId) })),

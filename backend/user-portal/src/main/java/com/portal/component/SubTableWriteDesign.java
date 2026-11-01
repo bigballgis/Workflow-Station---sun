@@ -23,11 +23,22 @@ class SubTableWriteDesign {
     record Binding(String id, String storeKey, String filterField, String refType,
                    String refTableName, List<String> pk, List<String> refPk, String linkMode,
                    List<String> foreignKeyFields, List<String> explicitFillFields) {
+        List<String> allowedFillFields() {
+            if (filterField == null || filterField.isBlank()) return foreignKeyFields;
+            return SubTableWriteDesign.allowedFillFields(filterField, explicitFillFields);
+        }
+
         Binding(String id, String storeKey, String filterField, String refType,
                 String refTableName, List<String> pk, List<String> refPk, String linkMode) {
             this(id, storeKey, filterField, refType, refTableName, pk, refPk, linkMode,
                     List.of(), List.of());
         }
+    }
+
+    static List<String> allowedFillFields(String filterField, List<String> explicitFillFields) {
+        java.util.Set<String> fields = new java.util.LinkedHashSet<>(explicitFillFields);
+        fields.add(filterField);
+        return List.copyOf(fields);
     }
 
     /** Null is exclusively the legacy, non-frozen form contract. */

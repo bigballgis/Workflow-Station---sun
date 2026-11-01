@@ -50,6 +50,8 @@ public class ProcessStartFormEnricherComponent {
     private final ComputedFieldRecalculator computedFieldRecalculator;
     private final RequestIdEnricher requestIdEnricher;
     private final UserDisplayNameResolver userDisplayNameResolver;
+    @Autowired
+    private SubTableWriteDesign subTableWriteDesign;
 
     /** Lazy: derives the readonly SLA due date; field-injected to keep ctor arity stable, null in tests skips it. */
     @Lazy
@@ -57,11 +59,16 @@ public class ProcessStartFormEnricherComponent {
     private SlaDueDateEnricher slaDueDateEnricher;
 
     public void enrichOnInsert(String functionUnitCode, String userId, Map<String, Object> variables) {
+        enrichOnInsert(functionUnitCode, userId, variables, List.of());
+    }
+
+    public void enrichOnInsert(String functionUnitCode, String userId, Map<String, Object> variables,
+            List<com.portal.dto.SubTableBindingScope> scopes) {
         if (variables == null) {
             return;
         }
         if (variables.get("functionUnitId") != null) {
-            enrichCatalog(functionUnitCode, userId, variables);
+            enrichCatalog(functionUnitCode, userId, variables, scopes);
             return;
         }
         Long fuId = requireFunctionUnitId(functionUnitCode);
@@ -89,7 +96,8 @@ public class ProcessStartFormEnricherComponent {
     @org.springframework.beans.factory.annotation.Autowired
     private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
 
-    private void enrichCatalog(String code, String userId, Map<String, Object> variables) {
+    private void enrichCatalog(String code, String userId, Map<String, Object> variables,
+            List<com.portal.dto.SubTableBindingScope> scopes) {
         String catalogId = String.valueOf(variables.get("functionUnitId"));
         var reader = catalogSnapshots;
         if (reader == null) reader = new com.platform.common.functionunit.CatalogSnapshotReader(jdbcTemplate, objectMapper);
@@ -126,9 +134,14 @@ public class ProcessStartFormEnricherComponent {
                         Long.valueOf(String.valueOf(parent.get("tableId"))), keys.stream().map(String::valueOf).toList()));
             }
         }
-        fillForeignKeys(variables, primaryId, aliases, fks);
+        Map<Long, String> stores = new HashMap<>();
+        for (var table : tables) stores.put(Long.valueOf(String.valueOf(table.get("tableId"))),
+                com.platform.common.subtable.SubTableStoreKeys.dwKey(String.valueOf(table.get("tableName"))));
+        SubTableFkOwnership ownership = new SubTableFkOwnership(
+                subTableWriteDesign.resolve(catalogId, null), scopes, stores);
+        fillForeignKeys(variables, primaryId, aliases, fks, ownership);
         processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(code, variables);
-        fillForeignKeys(variables, primaryId, aliases, fks);
+        fillForeignKeys(variables, primaryId, aliases, fks, ownership);
         ownerFieldComponent.applyOnSubmit(code, new OwnerFieldComponent.OwnerWriteContext(userId, userId, null, null, null), variables);
         SystemAuditFieldFiller.fillOnInsert(variables, userDisplayNameResolver.resolve(userId));
         computedFieldRecalculator.recalculate(code, variables);
@@ -198,6 +211,11 @@ public class ProcessStartFormEnricherComponent {
             Long primaryTableId,
             Map<String, Long> sliceToTable,
             List<FkMeta> fks) {
+        fillForeignKeys(main, primaryTableId, sliceToTable, fks, null);
+    }
+
+    private void fillForeignKeys(Map<String, Object> main, Long primaryTableId,
+            Map<String, Long> sliceToTable, List<FkMeta> fks, SubTableFkOwnership ownership) {
         if (sliceToTable.isEmpty() || fks.isEmpty()) {
             return;
         }
@@ -211,7 +229,7 @@ public class ProcessStartFormEnricherComponent {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> subTables = (Map<String, Object>) sub;
-        walkSubTables(subTables, ancestors, sliceToTable, fks);
+        walkSubTables(subTables, ancestors, sliceToTable, fks, ownership);
     }
 
     @SuppressWarnings("unchecked")
@@ -219,7 +237,7 @@ public class ProcessStartFormEnricherComponent {
             Map<String, Object> subTables,
             Map<Long, Map<String, Object>> ancestors,
             Map<String, Long> sliceToTable,
-            List<FkMeta> fks) {
+            List<FkMeta> fks, SubTableFkOwnership ownership) {
         for (Map.Entry<String, Object> entry : subTables.entrySet()) {
             Long tableId = resolveTableId(entry.getKey(), sliceToTable);
             if (tableId == null || !(entry.getValue() instanceof List<?> rows)) {
@@ -230,11 +248,11 @@ public class ProcessStartFormEnricherComponent {
                     continue;
                 }
                 Map<String, Object> row = (Map<String, Object>) item;
-                applyFksToRow(row, tableId, ancestors, fks);
+                applyFksToRow(row, tableId, ancestors, fks, ownership);
                 if (row.get(SUB_TABLES_KEY) instanceof Map<?, ?> nested) {
                     Map<Long, Map<String, Object>> childAncestors = new HashMap<>(ancestors);
                     childAncestors.put(tableId, row);
-                    walkSubTables((Map<String, Object>) nested, childAncestors, sliceToTable, fks);
+                    walkSubTables((Map<String, Object>) nested, childAncestors, sliceToTable, fks, ownership);
                 }
             }
         }
@@ -244,11 +262,12 @@ public class ProcessStartFormEnricherComponent {
             Map<String, Object> row,
             Long tableId,
             Map<Long, Map<String, Object>> ancestors,
-            List<FkMeta> fks) {
+            List<FkMeta> fks, SubTableFkOwnership ownership) {
         for (FkMeta fk : fks) {
             if (!tableId.equals(fk.tableId()) || !isBlank(row.get(fk.fieldName()))) {
                 continue;
             }
+            if (ownership != null && !ownership.allows(tableId, row, fk.fieldName())) continue;
             String encoded = encodeCompositePk(fk.refPkFields(), ancestors.get(fk.refTableId()));
             if (encoded != null) {
                 row.put(fk.fieldName(), encoded);

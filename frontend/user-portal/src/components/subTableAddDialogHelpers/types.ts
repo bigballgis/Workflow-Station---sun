@@ -154,3 +154,10 @@ export type ParsedLookupConfig = {
   filterConditions?: LookupFilterCondition[]
   showBackfillView?: boolean
 }
+
+/** Events relayed through nested row dialogs to their form host. */
+export interface SubTableDialogEmits {
+  (e: 'update:visible', val: boolean): void
+  (e: 'update:primaryFormData', patch: Record<string, unknown>): void
+  (e: 'save', rowData: Record<string, any>, selectedParentValue?: string): void
+}
