@@ -1,5 +1,7 @@
 # Case Correspondence 只读显示与 Batch 配置复核
 
+后续已完成两份FU各6组、全部从Batch人员分派走到结束的专项验证，详见 [Batch Assign 全路径验收](2026-11-01-batch-assignment-all-paths.md)。
+
 ## 结论
 
 用户确认的 FU 是 MCY dual binding 1101 1793499506034（50125），不是原始 MCY FU 48。本轮没有修改任何 FU 的设计配置或发布版本，没有推进用户的请求。

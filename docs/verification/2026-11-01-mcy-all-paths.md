@@ -1,5 +1,7 @@
 # 2026-11-01：MCY 全路径浏览器验收
 
+后续 Batch Assign 专项补验：两份 FU 各6份新请求全部经Batch入口走到结束，见 [Batch Assign 全路径验收](2026-11-01-batch-assignment-all-paths.md)。下文保留本报告当轮的14份验证范围，不将单行Edit分派混算为Batch。
+
 ## 结论与范围
 
 本轮相对 c21d0e7e7 修复三处平台通用缺陷：My Request 将未走过的 MI 出口标绿、REJECTED 终态的 MI 外框仍橙色、实际 Reject 的任务历史误显示 Approve。全部经过失败页面或失败测试取证后修复，构建并重建服务后复验。
