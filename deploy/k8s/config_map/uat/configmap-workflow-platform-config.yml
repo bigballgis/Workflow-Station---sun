@@ -234,7 +234,7 @@ data:
   # {fields} 变量的 ID(promptVars[].name 填 ID 不是变量名)。取自 CO dev;若本环境的 CO 不共享 dev 的
   # prompt setting(completion 报 Prompt setting not found),在本环境 CO 重建后换成新 ID。
   # 可选:CONTENT_ORGANIZER_WORKFLOW / _WORKFLOW_VERSION(默认 default / 1.0,UAT 已验证)、
-  # CONTENT_ORGANIZER_MODEL / _APPLICATION_NAME(默认 gemini-3.5-flash / Hermes Workflow)。
+  # CONTENT_ORGANIZER_APPLICATION_NAME(默认 Hermes Workflow)。
   CONTENT_ORGANIZER_PROMPT_SETTING_ID: "a20e508c-3101-4be2-a8dd-c3a98e6f560c"
   CONTENT_ORGANIZER_PROMPT_VARIABLE_ID: "02486f43-1614-4f07-b5c7-2b4bf5ecaec1"
   # Hermes Master 的 prompt setting「Hermes Master」(content-organizer 的 Chat 动作;DW 的 Hermes Master 经
@@ -242,6 +242,9 @@ data:
   # 本环境 CO 不共享时(completion 报 Prompt setting not found)在本环境 CO 重建后换成新 ID。
   CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID: "01a186d0-b0ed-77c1-8645-0cde09e69286"
   CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID: "01a186e9-29f4-7791-a045-6127433642a1"
+  # 必须与 CO 上 use case「Hermes Workflow」当前配置的 LLM Model 一致,不一致 CO 会报错;
+  # CO 侧换模型时这里同步改并重启 activepieces。2026-10-16 CO 切到 gpt-5.6-sol,2026-10-21 又切回 gemini-3.5-flash。
+  CONTENT_ORGANIZER_MODEL: "gemini-3.5-flash"
   VITE_DSP_PASSWORDLESS_ENABLED: "true"
   VITE_DSP_AUTHENTICATE_URL: "https://cmb-staff-dsp-uat.hk.hsbc:8443/dsp/dspAuthenticate.jsp?realm=staff&service=wdssoservice"
   VITE_DSP_CLIENT_ID: "HERMES"
