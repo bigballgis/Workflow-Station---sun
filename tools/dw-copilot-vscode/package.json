@@ -1,0 +1,334 @@
+{
+  "name": "dw-copilot",
+  "displayName": "DW Copilot",
+  "description": "Design Developer Workstation Function Units from GitHub Copilot: language model tools, an @dw chat participant and SSO sign-in.",
+  "version": "0.1.0",
+  "publisher": "workflow-station",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "tsc -p . && node --test \"out/test/*.test.js\"",
+    "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "3.6.0",
+    "typescript": "5.8.3"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "DW Copilot",
+      "properties": {
+        "dwCopilot.environments": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "DW environments. `url` is the site origin that serves `/login/`, `/dev/` and `/api/v1`, e.g. `{ \"name\": \"UAT\", \"url\": \"https://dw.example.com\" }`. User settings only: a workspace cannot redirect sign-in to another site.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "url"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          },
+          "scope": "application"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "dwCopilot.selectEnvironment",
+        "title": "DW: Select environment"
+      },
+      {
+        "command": "dwCopilot.signIn",
+        "title": "DW: Sign in"
+      },
+      {
+        "command": "dwCopilot.signOut",
+        "title": "DW: Sign out"
+      },
+      {
+        "command": "dwCopilot.refreshTree",
+        "title": "DW: Refresh function units",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dwCopilot.openInBrowser",
+        "title": "DW: Open in browser"
+      },
+      {
+        "command": "dwCopilot.openBackups",
+        "title": "DW: Open backups folder"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dwCopilot",
+          "title": "DW Copilot",
+          "icon": "$(symbol-structure)"
+        }
+      ]
+    },
+    "views": {
+      "dwCopilot": [
+        {
+          "id": "dwCopilot.functionUnits",
+          "name": "Function Units"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "dwCopilot.refreshTree",
+          "when": "view == dwCopilot.functionUnits",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dwCopilot.openInBrowser",
+          "when": "view == dwCopilot.functionUnits && viewItem == functionUnit"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "dwCopilot.dw",
+        "name": "dw",
+        "fullName": "Developer Workstation",
+        "description": "Design DW Function Units",
+        "isSticky": true
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "dw_list_workspaces",
+        "toolReferenceName": "dwListWorkspaces",
+        "displayName": "DW: list workspaces",
+        "modelDescription": "List the DW development workspaces (groups) the signed-in user can create function units in. Returns publicGroupId, memberGroupIds and groups. Needed before dw_create_function_unit.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "dw_list_function_units",
+        "toolReferenceName": "dwListFunctionUnits",
+        "displayName": "DW: list function units",
+        "modelDescription": "List DW function units visible to the user (id, name, status). Use keyword to filter by name. Use it to find a functionUnitId.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "keyword": {
+              "type": "string",
+              "description": "Optional name filter"
+            }
+          }
+        }
+      },
+      {
+        "name": "dw_create_function_unit",
+        "toolReferenceName": "dwCreateFunctionUnit",
+        "displayName": "DW: create function unit",
+        "modelDescription": "Create an empty DW function unit in a workspace. workspaceIds must come from dw_list_workspaces. Returns the new functionUnitId.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "workspaceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "name",
+            "workspaceIds"
+          ]
+        }
+      },
+      {
+        "name": "dw_get_format_spec",
+        "toolReferenceName": "dwFormatSpec",
+        "displayName": "DW: get design format spec",
+        "modelDescription": "Return the authoritative generatedData format (template) and enum/structure metadata (schemaMetadata; wins over the template when they differ). ALWAYS read it before writing generatedData.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "dw_get_design",
+        "toolReferenceName": "dwGetDesign",
+        "displayName": "DW: read function unit design",
+        "modelDescription": "Read the current design of a function unit (tables, forms, actions, decisions, relations, process, views, email, org catalog) in generatedData shape. Read it before changing an existing design so names and references match. A value ending with ...[truncated] was shortened for size: never write it back.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "functionUnitId": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "functionUnitId"
+          ]
+        }
+      },
+      {
+        "name": "dw_dry_run",
+        "toolReferenceName": "dwDryRun",
+        "displayName": "DW: validate design (dry run)",
+        "modelDescription": "Validate generatedData against a function unit without writing anything. Returns what would be added/updated/replaced and issues (ERROR/WARNING with fieldPath). Same checks as dw_apply_design.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "functionUnitId": {
+              "type": "number"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "TABLES",
+                "FORMS",
+                "ACTIONS",
+                "DECISIONS",
+                "PROCESS",
+                "TABLE_RELATIONS",
+                "EMAIL_TEMPLATES",
+                "CONNECTIONS",
+                "EMAIL_MONITORS",
+                "VIEWS",
+                "SERVICE_TASK_BINDINGS",
+                "ALL"
+              ]
+            },
+            "generatedData": {
+              "type": "object",
+              "description": "Design JSON in the dw_get_format_spec format"
+            }
+          },
+          "required": [
+            "functionUnitId",
+            "scope",
+            "generatedData"
+          ]
+        }
+      },
+      {
+        "name": "dw_apply_design",
+        "toolReferenceName": "dwApplyDesign",
+        "displayName": "DW: apply design",
+        "modelDescription": "Write generatedData to a function unit. It dry-runs first: on ERROR nothing is written and the issues come back to fix and retry. Before writing it exports a backup zip and asks the user to confirm. scope selects which slice is written; TABLES/FORMS/ACTIONS/DECISIONS replace that whole slice.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "functionUnitId": {
+              "type": "number"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "TABLES",
+                "FORMS",
+                "ACTIONS",
+                "DECISIONS",
+                "PROCESS",
+                "TABLE_RELATIONS",
+                "EMAIL_TEMPLATES",
+                "CONNECTIONS",
+                "EMAIL_MONITORS",
+                "VIEWS",
+                "SERVICE_TASK_BINDINGS",
+                "ALL"
+              ]
+            },
+            "generatedData": {
+              "type": "object",
+              "description": "Design JSON in the dw_get_format_spec format"
+            }
+          },
+          "required": [
+            "functionUnitId",
+            "scope",
+            "generatedData"
+          ]
+        }
+      },
+      {
+        "name": "dw_undo",
+        "toolReferenceName": "dwUndo",
+        "displayName": "DW: undo last apply",
+        "modelDescription": "Undo an apply using the undoToken it returned. Only some scopes return a token (PROCESS, TABLE_RELATIONS, VIEWS, SERVICE_TASK_BINDINGS, email scopes); tokens expire and are lost when DW restarts. For other scopes, restore from the backup zip instead.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "undoToken": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "undoToken"
+          ]
+        }
+      },
+      {
+        "name": "dw_export_function_unit",
+        "toolReferenceName": "dwExportFunctionUnit",
+        "displayName": "DW: export function unit zip",
+        "modelDescription": "Export a function unit as the zip that Admin Center imports, into the dw-exports folder of the open workspace folder.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "functionUnitId": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "functionUnitId"
+          ]
+        }
+      }
+    ]
+  }
+}

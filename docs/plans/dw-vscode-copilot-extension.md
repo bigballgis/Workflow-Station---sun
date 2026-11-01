@@ -154,9 +154,9 @@ IT 侧入口三选一已比选并拍板：
 
 | 问题 | 结论 | 证据 |
 |---|---|---|
-| ① `registerTool` 在公司禁 MCP 策略下能否被 agent 模式调用 | **机制可行，公司策略待实测** | 本机 VS Code 1.133 冒烟：扩展激活、4 个工具全部出现在 `vscode.lm.tools`、`invokeTool` 通路可达。公司 Copilot 账号的实测步骤见 `tools/dw-vscode-spike/README.md` |
+| ① `registerTool` 在公司禁 MCP 策略下能否被 agent 模式调用 | **能（公司机实测通过，2026-11-01）** | 公司工作机 VS Code 1.141.1 + 公司 Copilot 账号：自检 `4/4` 工具可见、`@dw` 退路可用模型 11 个；Agent 模式（自动路由 GPT-6 Luna）真实调用 `dw_list_function_units`，扩展日志记录 `tool dw_list_function_units input={}` 并把错误回传对话。本机 VS Code 1.133 冒烟同样通过 |
 | ② SSO 回调地址能否登记 | **能，且在我们自己手里** | 登录页是平台自己的统一登录（`frontend/login`），回调白名单是 admin-center 按 client 的前缀配置（`PlatformSsoService.validateRedirectUri`，`startsWith` 匹配）；登录页用 `window.location.href = redirectUri` 跳转（`useLogin.ts`），自定义 scheme 原理上可用。DSP 免密发生在登录页内部，不受影响。端到端实走放 P1 |
-| ③ 工具能否在浏览器外完成「写设计」 | **能** | curl 经 Kong：`/auth/login` 拿 JWT → 建 FU 50150（须带 `virtualGroupIds`，否则 `WORKSPACE_FORBIDDEN`）→ `studio-chat/apply` 反例 `dataType=MONEY` 被拒（`INVALID_ENUM` + `fieldPath`，模型可据此自修）→ 正例写入 → `GET /function-units/50150/tables` 回读一致 |
+| ③ 工具能否在浏览器外完成「写设计」 | **能（含 Copilot 端到端，UAT 实测 2026-11-01）** | **公司机 + UAT**（`https://hermes-cit-uat.hk.hsbc/api/v1`，`/auth/me` 200，企业 CA 被 VS Code 认可）：Agent 模式（GPT-6.1 Sol）一句自然语言需求 → 自行调 `dw_list_function_units` 找到测试 FU 388 → `dw_get_format_spec` → 写出 `generatedData` → 扩展确认框 Allow Once → `dw_apply_design` **首次即 HTTP 200**（无需校验重试）→ `dw_get_tables` 回读 5 字段类型全对，1 分 03 秒；DW 设计器 Table Design 页面复核一致。本机 dev 另用 curl 验证：`/auth/login` 拿 JWT → 建 FU 50150（须带 `virtualGroupIds`，否则 `WORKSPACE_FORBIDDEN`）→ `studio-chat/apply` 反例 `dataType=MONEY` 被拒（`INVALID_ENUM` + `fieldPath`，模型可据此自修）→ 正例写入 → `GET /function-units/50150/tables` 回读一致 |
 
 P0 附带发现：
 
@@ -172,7 +172,8 @@ P0 附带发现：
 4. ~~prompt-templates 够不够~~ → 基本够，需补 schemaMetadata 下发。
 5. Superset 鉴权：admin-center 代理带用户身份，还是 Superset 自身 API token？
 6. 扩展的发布者名（publisher）与分发渠道（私有 VSIX / 内部市场）。
-7. 公司 Copilot 账号实测问题 ①（按 spike README 操作）。
+7. ~~公司 Copilot 账号实测问题 ① / ③~~ → 全部通过（UAT）。**P0 关卡已过，可进 P1。** UAT 遗留测试 FU 388「P0 Spike Copilot Extension」待删。
+8. P1 登录：UAT 的 `JWT_EXPIRATION` = 12h、`JWT_REFRESH_EXPIRATION` = 3d，但 refresh cookie 写死 7 天（`DeveloperSsoExchangeService`），扩展续期按 3 天算。
 
 ---
 请确认以上设计 Plan。确认后若要开始实现，请回复 **按 playbook 执行**（或补充 / 修正项）。
