@@ -1,5 +1,7 @@
 # Case Correspondence 只读显示与 Batch 配置复核
 
+后续按用户要求为FU50125的Assignment/Sub Case显式放置只读Case子表，已发布1.0.3并完成6份流程、34个stage视图验证，见 [各stage直接显示Case记录](2026-11-01-case-correspondence-all-stages.md)。下文保留当时1.0.2默认表单未放置Case控件的结论。
+
 后续已完成两份FU各6组、全部从Batch人员分派走到结束的专项验证，详见 [Batch Assign 全路径验收](2026-11-01-batch-assignment-all-paths.md)。
 
 ## 结论
