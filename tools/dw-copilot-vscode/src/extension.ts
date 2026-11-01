@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CALLBACK_PATH, DwAuth, NoDwAccessError } from './auth';
+import { DwAuth, listenLoopback, NoDwAccessError } from './auth';
 import { DwClient } from './dwClient';
 import { ApplyInput, asToolText, DwTools, errorText, PreparedApply, readOnlyHandlers, ToolContext } from './tools';
 import { registerParticipant } from './participant';
@@ -16,7 +16,7 @@ export function activate(context: vscode.ExtensionContext): void {
   auth = new DwAuth({
     secrets: context.secrets,
     openExternal: url => Promise.resolve(vscode.env.openExternal(vscode.Uri.parse(url, true))),
-    callbackBase: `${vscode.env.uriScheme}://${context.extension.id}`,
+    listenLoopback,
     fetch,
   });
   const backupRoot = join(context.globalStorageUri.fsPath, 'backups');
@@ -70,12 +70,6 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     status,
     vscode.window.registerTreeDataProvider('dwCopilot.functionUnits', tree),
-    vscode.window.registerUriHandler({
-      handleUri: uri => {
-        if (uri.path !== CALLBACK_PATH) return;
-        auth.handleCallback(uri.query).catch(e => vscode.window.showErrorMessage((e as Error).message));
-      },
-    }),
     vscode.commands.registerCommand('dwCopilot.selectEnvironment', async () => {
       const all = environments();
       if (all.length === 0) {

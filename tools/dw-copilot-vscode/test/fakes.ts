@@ -1,4 +1,4 @@
-import { AuthHost, DwAuth } from '../src/auth';
+import { AuthHost, CallbackReply, DwAuth, ListenLoopback } from '../src/auth';
 
 export interface Call { url: string; method: string; headers: Record<string, string>; body?: string }
 
@@ -52,8 +52,24 @@ export function signedInAuth(fetchFn: typeof fetch, opened: string[] = []): { au
   const auth = new DwAuth({
     secrets,
     openExternal: async url => { opened.push(url); return true; },
-    callbackBase: 'vscode://workflow-station.dw-copilot',
+    listenLoopback: fakeLoopback().listenLoopback,
     fetch: fetchFn,
   });
   return { auth, secrets };
+}
+
+/** In-memory loopback listener: `request` plays the browser hitting http://127.0.0.1:<port><target>. */
+export function fakeLoopback(port = 54321) {
+  let handler: ((target: string) => Promise<CallbackReply>) | undefined;
+  const state = { closed: false, listened: false };
+  const listenLoopback: ListenLoopback = async onRequest => {
+    handler = onRequest;
+    state.listened = true;
+    return { port, close: () => { state.closed = true; } };
+  };
+  const request = (target: string): Promise<CallbackReply> => {
+    if (!handler || state.closed) throw new Error('connection refused');
+    return handler(target);
+  };
+  return { listenLoopback, request, state };
 }

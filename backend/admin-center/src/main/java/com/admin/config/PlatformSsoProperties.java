@@ -43,11 +43,18 @@ public class PlatformSsoProperties {
         private boolean enabled = true;
         private List<String> redirectUriPrefixes = new ArrayList<>();
         /**
-         * 与环境无关的固定回调前缀（如 VS Code 扩展的 vscode:// 回调），校验时与 {@link #redirectUriPrefixes} 合并。
+         * 与环境无关的固定回调前缀，校验时与 {@link #redirectUriPrefixes} 合并。
          * 单独成列是因为环境用 SPRING_APPLICATION_JSON 整表覆盖 redirectUriPrefixes（Spring 列表不合并），
          * 写在那里的固定条目会在 UAT/生产被静默丢弃。
          */
         private List<String> fixedRedirectUriPrefixes = new ArrayList<>();
+        /**
+         * RFC 8252 原生应用 loopback 回调的固定路径（如 VS Code 扩展的 {@code /sso-callback}）：只接受
+         * {@code http://127.0.0.1:<任意端口><path>} 的整串精确匹配，端口由客户端本机随机分配。
+         * 不走前缀匹配：前缀 {@code http://127.0.0.1:} 会放过 {@code http://127.0.0.1:80@evil.com/}（浏览器视为 evil.com）。
+         * 与 {@link #fixedRedirectUriPrefixes} 同理独立成列，不受环境整表覆盖影响。
+         */
+        private List<String> loopbackRedirectPaths = new ArrayList<>();
     }
 
     /**

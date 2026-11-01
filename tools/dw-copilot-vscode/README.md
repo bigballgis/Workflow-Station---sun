@@ -18,9 +18,18 @@ VS Code → Extensions → `…` → **Install from VSIX…** → `dw-copilot-<v
    ```
 
 2. **DW: Select environment** (or click the `DW:` status bar item).
-3. **DW: Sign in** — the browser opens the DW login page (SSO); after login it hands control back to VS Code.
-   Requires admin-center to whitelist `vscode://workflow-station.dw-copilot/`
-   (`platform.sso.clients.developer-workstation.fixed-redirect-uri-prefixes` in `application.yml`).
+3. **DW: Sign in** — the browser opens the DW login page (SSO). After login it returns to
+   `http://127.0.0.1:<port>/sso-callback`, a one-shot listener that the extension opens on a random local port
+   (RFC 8252 loopback), so the code reaches the VS Code window that started sign-in even when several VS Code
+   installs are on the machine. The page then says you can close it. The listener closes after the callback, on
+   failure, or after 5 minutes.
+   Requires admin-center to accept the loopback callback
+   (`platform.sso.clients.developer-workstation.loopback-redirect-paths: [/sso-callback]` in `application.yml`;
+   it matches exactly `http://127.0.0.1:<port>/sso-callback`). Since 0.1.2 the `vscode://` callback is no longer used.
+
+   If sign-in reports that it could not open a local port, or times out after the browser could not reach
+   `127.0.0.1`, security software on the computer (e.g. Trellix) is blocking local connections to VS Code:
+   ask IT to allow VS Code to listen on and be reached at `127.0.0.1`.
 
 Only accounts that can enter Developer Workstation can use the extension, by the same rule as the DW web app:
 a DW role (`SYS_ADMIN`, `TECH_LEAD`, `TEAM_LEAD`, `DEVELOPER`) gets full access; a member of a team that owns

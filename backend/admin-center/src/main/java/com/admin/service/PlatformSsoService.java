@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * SSO：在统一 /login 页校验账号后签发短期 code；各子系统凭内部密钥 redeem。
@@ -35,6 +37,8 @@ import java.util.UUID;
 public class PlatformSsoService {
 
     private static final String REDIS_KEY_PREFIX = "platform:sso:code:";
+    /** 整串匹配原始字符串，不经 URI 解析，避免与浏览器 URL 解析的差异；无 userinfo / query / fragment。 */
+    private static final Pattern LOOPBACK_REDIRECT = Pattern.compile("http://127\\.0\\.0\\.1:([1-9][0-9]{0,4})(/.*)");
 
     private final PlatformSsoProperties ssoProperties;
     private final UserRepository userRepository;
@@ -199,15 +203,23 @@ public class PlatformSsoService {
         }
         List<String> prefixes = new ArrayList<>(client.getRedirectUriPrefixes());
         prefixes.addAll(client.getFixedRedirectUriPrefixes());
-        if (prefixes.isEmpty()) {
+        if (prefixes.isEmpty() && client.getLoopbackRedirectPaths().isEmpty()) {
             throw new IllegalStateException("SSO client not configured: " + clientId);
         }
-        boolean ok = prefixes.stream().anyMatch(redirectUri::startsWith);
+        boolean ok = isAllowedLoopback(redirectUri, client.getLoopbackRedirectPaths())
+                || prefixes.stream().anyMatch(redirectUri::startsWith);
         if (!ok) {
-            log.warn("SSO redirect rejected for client {} uri {} (allowedPrefixes={})", clientId, redirectUri, prefixes);
+            log.warn("SSO redirect rejected for client {} uri {} (allowedPrefixes={}, loopbackPaths={})",
+                    clientId, redirectUri, prefixes, client.getLoopbackRedirectPaths());
             throw new IllegalArgumentException("redirectUri not allowed");
         }
     }
+
+    private static boolean isAllowedLoopback(String redirectUri, List<String> paths) {
+        Matcher m = LOOPBACK_REDIRECT.matcher(redirectUri);
+        return m.matches() && Integer.parseInt(m.group(1)) <= 65535 && paths.contains(m.group(2));
+    }
+
     private void recordLoginAuditFailure(String username, String ipAddress, String userAgent, String reason) {
         try {
             Optional<User> userOpt = userRepository.findByUsername(username);

@@ -5,6 +5,8 @@ import com.admin.repository.LoginAuditQueryRepository;
 import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
@@ -12,6 +14,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +37,8 @@ class PlatformSsoServiceRedirectTest {
         var applicationYml = new MapConfigurationPropertySource(Map.of(
                 "platform.sso.clients.developer-workstation.redirect-uri-prefixes[0]", "http://localhost:3000/dev/sso/callback",
                 "platform.sso.clients.developer-workstation.redirect-uri-prefixes[1]", "vscode://placed-in-the-wrong-list/",
-                "platform.sso.clients.developer-workstation.fixed-redirect-uri-prefixes[0]", "vscode://workflow-station.dw-copilot/"));
+                "platform.sso.clients.developer-workstation.fixed-redirect-uri-prefixes[0]", "vscode://workflow-station.dw-copilot/",
+                "platform.sso.clients.developer-workstation.loopback-redirect-paths[0]", "/sso-callback"));
         return new Binder(environmentOverride, applicationYml).bind("platform.sso", PlatformSsoProperties.class).get();
     }
 
@@ -52,6 +56,7 @@ class PlatformSsoServiceRedirectTest {
 
         assertThat(client.getRedirectUriPrefixes()).containsExactly("https://dw.example/dev/sso/callback");
         assertThat(client.getFixedRedirectUriPrefixes()).containsExactly("vscode://workflow-station.dw-copilot/");
+        assertThat(client.getLoopbackRedirectPaths()).containsExactly("/sso-callback");
     }
 
     @Test
@@ -89,6 +94,66 @@ class PlatformSsoServiceRedirectTest {
         properties.getClients().put("portal", portal);
 
         assertThatThrownBy(() -> service(properties).issueCodeForUser("u1", "portal", VSCODE_CALLBACK, null))
+                .hasMessage("redirectUri not allowed");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "http://127.0.0.1:54321/sso-callback",
+            "http://127.0.0.1:1/sso-callback",
+            "http://127.0.0.1:65535/sso-callback"})
+    void theExtensionLoopbackCallbackIsAcceptedOnAnyPortUnderAnEnvironmentOverride(String redirectUri) {
+        var response = service(bindLikeUat()).issueCodeForUser("u1", "developer-workstation", redirectUri, "s1");
+
+        assertThat(response.getRedirectUri()).isEqualTo(redirectUri);
+    }
+
+    /** The login page does {@code new URL(redirectUri)} and navigates there with the code appended. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            // userinfo: a "http://127.0.0.1:" prefix would accept these, and the browser sends the code to evil.com
+            "http://127.0.0.1:80@evil.com/sso-callback",
+            "http://127.0.0.1:80@evil.com/",
+            "http://127.0.0.1:80\\@evil.com/sso-callback",
+            "http://127.0.0.1.evil.com:80/sso-callback",
+            "http://127.0.0.1/sso-callback",
+            "http://127.0.0.1:/sso-callback",
+            "http://127.0.0.1:0/sso-callback",
+            "http://127.0.0.1:065/sso-callback",
+            "http://127.0.0.1:65536/sso-callback",
+            "http://localhost:54321/sso-callback",
+            "http://[::1]:54321/sso-callback",
+            "https://127.0.0.1:54321/sso-callback",
+            "HTTP://127.0.0.1:54321/sso-callback",
+            "http://127.0.0.1:54321/sso-callbackx",
+            "http://127.0.0.1:54321/sso-callback/../other",
+            "http://127.0.0.1:54321/sso-callback?next=https://evil.com",
+            "http://127.0.0.1:54321/sso-callback#x",
+            "http://127.0.0.1:54321/other"})
+    void anythingButTheExactLoopbackCallbackIsRejected(String redirectUri) {
+        var service = service(bindLikeUat());
+
+        assertThatThrownBy(() -> service.issueCodeForUser("u1", "developer-workstation", redirectUri, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("redirectUri not allowed");
+    }
+
+    @Test
+    void aLoopbackPrefixWouldHaveSentTheCodeToAnotherHost() {
+        String bypass = "http://127.0.0.1:80@evil.com/sso-callback";
+
+        assertThat(bypass).startsWith("http://127.0.0.1:");
+        assertThat(URI.create(bypass).getHost()).isEqualTo("evil.com");
+    }
+
+    @Test
+    void theLoopbackCallbackBelongsToItsOwnClientOnly() {
+        var properties = bindLikeUat();
+        var portal = new PlatformSsoProperties.SsoClient();
+        portal.setRedirectUriPrefixes(List.of("https://dw.example/portal/sso/callback"));
+        properties.getClients().put("portal", portal);
+
+        assertThatThrownBy(() -> service(properties).issueCodeForUser("u1", "portal", "http://127.0.0.1:54321/sso-callback", null))
                 .hasMessage("redirectUri not allowed");
     }
 }

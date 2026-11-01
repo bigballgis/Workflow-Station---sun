@@ -39,13 +39,21 @@
 | 文件 | 改什么 |
 |---|---|
 | `PlatformSsoProperties.SsoClient` | 新增 `fixedRedirectUriPrefixes`（与环境无关的固定回调前缀） |
-| `PlatformSsoService.validateRedirectUri` | 允许前缀 = `redirectUriPrefixes` ∪ `fixedRedirectUriPrefixes`，仍是 `startsWith` 匹配、仍按 client 隔离 |
-| `admin-center/src/main/resources/application.yml` | `platform.sso.clients.developer-workstation.fixed-redirect-uri-prefixes: [vscode://workflow-station.dw-copilot/]` |
+| `PlatformSsoProperties.SsoClient` | 新增 `loopbackRedirectPaths`（0.1.2 起：本机 loopback 回调的固定路径） |
+| `PlatformSsoService.validateRedirectUri` | 允许 = `redirectUriPrefixes` ∪ `fixedRedirectUriPrefixes` 的 `startsWith` 前缀匹配，或 loopback 整串精确匹配 `http://127.0.0.1:<1–65535>` + `loopbackRedirectPaths` 之一；仍按 client 隔离 |
+| `admin-center/src/main/resources/application.yml` | `platform.sso.clients.developer-workstation.loopback-redirect-paths: [/sso-callback]`（`fixed-redirect-uri-prefixes` 字段保留，0.1.2 起不再配 `vscode://`） |
 
 **为什么不直接追加到 `redirect-uri-prefixes`**（P1 首版就是这么做的，UAT 实测失败）：UAT/生产的 configmap 用
 `SPRING_APPLICATION_JSON` 整体定义了各 client 的 `redirect-uri-prefixes[0..3]`，Spring 绑定列表是**整表替换**不合并，
 yml 里追加的条目在这些环境被静默丢弃，登录页报 `redirectUri not allowed`。独立字段不在覆盖里，yml 默认值得以保留，
-各环境**不需要改 configmap**。单测 `PlatformSsoServiceRedirectTest` 用两层属性源复现了这一覆盖。
+各环境**不需要改 configmap**。单测 `PlatformSsoServiceRedirectTest` 用两层属性源复现了这一覆盖。`loopback-redirect-paths`
+同理独立成列。
+
+**loopback 为什么不用前缀 `http://127.0.0.1:`**：`startsWith` 会放过 `http://127.0.0.1:80@evil.com/…`——登录页用
+`new URL(redirectUri)` 拼上 code 后 `window.location.href` 跳转，浏览器把 `127.0.0.1:80` 当 userinfo、主机是 `evil.com`，
+code 直接落到对方手里（DW 的 exchange 不校验 redirect_uri，拿到 code 就能兑换）。所以对原始字符串整串正则匹配
+（不经 URI 解析，避免与浏览器解析差异）：只认 `http`、主机字面量 `127.0.0.1`、显式十进制端口 1–65535、路径恰为配置值，
+无 userinfo / query / fragment；`localhost`、`[::1]`、`https`、大写 scheme、路径穿越一律拒绝（单测逐条覆盖）。
 
 ### 1.3 扩展工程（新建 `tools/dw-copilot-vscode/`，替换 spike）
 
@@ -54,8 +62,8 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 | 文件 | 职责 |
 |---|---|
 | `package.json` | 扩展清单：id `workflow-station.dw-copilot`；`languageModelTools`（见 §1.4）、`@dw` participant、命令、视图、设置 `dwCopilot.environments` |
-| `src/extension.ts` | 激活：注册工具 / participant / 树 / 命令 / UriHandler |
-| `src/auth.ts` | SSO 登录、token 存取（SecretStorage，按环境分键）、401 时用 refresh 续期一次 |
+| `src/extension.ts` | 激活：注册工具 / participant / 树 / 命令 |
+| `src/auth.ts` | SSO 登录（含 127.0.0.1 一次性回调监听，`AuthHost.listenLoopback` 可注入）、token 存取（SecretStorage，按环境分键）、401 时用 refresh 续期一次 |
 | `src/dwClient.ts` | 唯一的 HTTP 出口：带 Bearer、超时、`ApiResponse` 解包；非 2xx 抛带 HTTP 状态 + 后端 `error.code/message` 的错误 |
 | `src/tools.ts` | 工具实现（agent 模式工具与 `@dw` 共用） |
 | （实现时合并）备份 / FU 树 / dry-run 预览 | 备份在 `tools.ts`，FU 树在 `extension.ts`；dry-run 摘要直接放进 apply 确认框，未单独做预览视图 |
@@ -85,7 +93,7 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 
 | 决策 | 选择 | 为什么不用另一种 |
 |---|---|---|
-| 登录回调 | `vscode://workflow-station.dw-copilot/sso-callback` + `vscode.window.registerUriHandler` | loopback（`127.0.0.1:端口`）要开本地端口、可能撞端口或被终端安全软件拦；`vscode://` 是 VS Code 扩展的标准做法（GitHub 登录同款），白名单是固定字面量 |
+| 登录回调（0.1.2 起） | 本机 loopback（RFC 8252）：`signIn` 在 `127.0.0.1` 上开临时 Node `http` 服务，端口由系统分配，`redirect_uri=http://127.0.0.1:<port>/sso-callback`；只认该路径 + 本次 `state`、只收一次，回一个「可以关闭此页」的页面（失败时显示原因）；成功 / 失败 / 5 分钟超时 / 浏览器没打开都关闭服务。监听失败、超时都报明「可能是本机安全软件拦了 127.0.0.1」 | 0.1.1 用 `vscode://workflow-station.dw-copilot/sso-callback` + UriHandler：UAT 公司机同时装了 1.141（免安装版）和卸不掉的 1.120（全机版），`vscode://` 协议登记在 1.120 名下，code 被交给 1.120 窗口、发起登录的窗口超时。随机端口不撞端口；**不保留 `vscode://` 做后备**：一次登录只能带一个 `redirect_uri`，后备只能在「监听失败」时启用，而 Trellix 这类拦截更可能表现为浏览器连不上（扩展侧无法察觉），后备又正是会被交错窗口的那条路；白名单里也就不再保留 `vscode://` 一项 |
 | 登录流程 | 浏览器打开 `<env>/login/?client_id=developer-workstation&redirect_uri=…&state=<随机>` → 回调校验 `state` → `POST /api/v1/auth/sso/exchange {code}` | 复用 DW 网页同一条 SSO（含 DSP 免密），零新后端；`state` 不匹配直接拒绝 |
 | 准入（只有能进 DW 的人能用） | 照搬 DW 网页路由的进入规则：`GET /api/v1/auth/me` 取角色 → 有 `SYS_ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER` 完整进入；纯 `AUDITOR` 拒绝；其余看 `GET /function-units/workspace-access` 的 `canView`，true 则只读进入（状态栏标 read-only），否则拒绝。登录、每次续期、启动/切环境时各查一次；被拒即清掉会话 | 能登录 ≠ 能进 DW：exchange 只挡锁定/停用账号。`workspace-access` 对 AUDITOR 也返回 true，所以先查角色。写操作仍由后端各接口权限把关，准入只保证与 DW 网页入口一致 |
 | 续期 | 401 时调 `POST /api/v1/auth/refresh {refreshToken}`（body 传，已核实支持），保存新的一对 token；同一环境的并发续期合并为一次；refresh 返回 400/401 → 清 token、提示重新登录，其他错误保留会话 | refresh token 会轮换（旧的进黑名单）：并发 401 各自续期会让后一次用掉已作废的 token、把新会话删掉；只重试一次，不循环 |
@@ -98,7 +106,7 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 ## 3. 影响链
 
 - **DW 后端**：新增 3 个只读端点 → 只调用已有 `AiStudioProposalPreviewer` / `serializeFunctionUnitContext` / `AiPromptTemplateComponent` → 无 Entity / SQL / init-scripts 变更；`getSchemaMetadata()` 提升可见性，唯一既有调用点同步改。
-- **admin-center**：SSO client 多一个 `fixedRedirectUriPrefixes` 字段，只有 `developer-workstation` 配了值；其他 client 为空列表，校验行为不变。
+- **admin-center**：SSO client 多 `fixedRedirectUriPrefixes`、`loopbackRedirectPaths` 两个字段，只有 `developer-workstation` 配了 `loopbackRedirectPaths`；其他 client 为空列表，校验行为不变。0.1.1 扩展（`vscode://` 回调）在新 admin-center 上不再能登录，须升到 0.1.2。
 - **Kong**：`/api/v1/ai-generation` 已路由到 DW（`developer-workstation-sse-route`），新端点自动覆盖，**不改**。
 - **CORS / CSRF**：扩展走 Node `fetch` 无 Origin，Bearer 头鉴权（P0 已验证 POST 可用），不涉及。
 - **前端三端**：不改。
@@ -115,10 +123,10 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 | 层 | 命令 / 动作 | 通过标准 |
 |---|---|---|
 | DW 单测 | `mvn -pl backend/developer-workstation -am clean package`（JDK17）含 `AiStudioChatComponentImplTest` 新用例 | dry-run：错 dataType → `issues` 含 ERROR + fieldPath，且 **repository 零 save 调用**；越权 FU → 抛工作区异常；context / format-spec 返回非空 |
-| 扩展单测 | `npm test`（`node --test`） | state 不匹配被拒；refresh 轮换后旧 token 不再使用；非 2xx 错误带 code |
+| 扩展单测 | `npm test`（`node --test`） | state / 路径不匹配被拒且不兑换、回调只收一次、成功失败超时都关闭监听、真实 127.0.0.1 监听走通；refresh 轮换后旧 token 不再使用；非 2xx 错误带 code |
 | 扩展冒烟 | `@vscode/test-electron` 隔离 profile（P0 同款） | 9 个工具注册可见 |
 | 本机 dev E2E | 重建 DW + admin-center 容器；扩展走 SSO 登录（localhost） | 登录成功；双样本 FU 各跑一轮：dry-run 拦住反例 → 备份 zip 落盘 → apply → 设计器截图 |
-| 公司机 UAT E2E | 镜像发布后用 bbox 在公司机跑同样两轮 | 同上；另验 SSO 回调在公司 Chrome 能拉起 VS Code |
+| 公司机 UAT E2E | 镜像发布后用 bbox 在公司机跑同样两轮 | 同上；另验公司 Chrome 能打开 `http://127.0.0.1:<port>/sso-callback`（Trellix 未拦），且回到发起登录的那个 VS Code 窗口 |
 | 恢复演练 | 用备份 zip 走 DW Import 同名导入 | FU 回到 apply 前，Version Management 多一个版本 |
 
 验证跑不了的项（例如镜像还没发 UAT）如实标 CONDITIONAL。

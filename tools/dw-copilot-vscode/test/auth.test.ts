@@ -1,43 +1,151 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DwAuth, NoDwAccessError, NotSignedInError } from '../src/auth';
-import { admission, fakeFetch, json, memorySecrets, ORIGIN, signedInAuth } from './fakes';
+import { DwAuth, listenLoopback, NoDwAccessError, NotSignedInError } from '../src/auth';
+import { admission, fakeFetch, fakeLoopback, json, memorySecrets, ORIGIN, signedInAuth } from './fakes';
 
-test('sign-in opens the unified login page and exchanges the code it gets back', async () => {
-  const { fetch, calls } = fakeFetch({
-    'POST /api/v1/auth/sso/exchange': () =>
-      json(200, { accessToken: 'a', refreshToken: 'r', user: { username: 'dev1' } }),
-    ...admission(['DEVELOPER']),
-  });
+/** Starts sign-in against an in-memory loopback listener; resolves once the login page has been opened. */
+async function startSignIn(routes: Parameters<typeof fakeFetch>[0], openResult = true) {
+  const { fetch, calls } = fakeFetch(routes);
   const opened: string[] = [];
   const secrets = memorySecrets();
+  const loopback = fakeLoopback();
   const auth = new DwAuth({
-    secrets, fetch, callbackBase: 'vscode://workflow-station.dw-copilot',
+    secrets, fetch, listenLoopback: loopback.listenLoopback,
+    openExternal: async url => { opened.push(url); return openResult; },
+  });
+  const signIn = auth.signIn(ORIGIN);
+  const outcome = signIn.then(session => ({ session }), (error: Error) => ({ error }));
+  await new Promise(r => setImmediate(r));
+  const login = opened[0] ? new URL(opened[0]) : undefined;
+  return { auth, outcome, login, state: login?.searchParams.get('state'), loopback, secrets, calls };
+}
+
+const exchangeOk = {
+  'POST /api/v1/auth/sso/exchange': () => json(200, { accessToken: 'a', refreshToken: 'r', user: { username: 'dev1' } }),
+};
+
+test('sign-in opens the unified login page with a 127.0.0.1 callback and exchanges the code it gets back', async () => {
+  const { auth, outcome, login, state, loopback, calls } = await startSignIn({ ...exchangeOk, ...admission(['DEVELOPER']) });
+  assert.equal(login!.origin + login!.pathname, `${ORIGIN}/login/`);
+  assert.equal(login!.searchParams.get('client_id'), 'developer-workstation');
+  assert.equal(login!.searchParams.get('redirect_uri'), 'http://127.0.0.1:54321/sso-callback');
+
+  const reply = await loopback.request(`/sso-callback?code=c1&state=${state}`);
+  const result = await outcome;
+
+  assert.equal(reply.status, 200);
+  assert.match(reply.html, /Signed in to DW as dev1/);
+  assert.ok('session' in result && result.session.readOnly === false);
+  assert.equal(JSON.parse(calls[0].body!).code, 'c1');
+  assert.equal(await auth.accessToken(ORIGIN), 'a');
+  assert.equal(loopback.state.closed, true);
+});
+
+test('a callback with another state or path is refused, never exchanged, and the real one still completes', async () => {
+  const { outcome, state, loopback, calls } = await startSignIn({ ...exchangeOk, ...admission(['DEVELOPER']) });
+
+  assert.equal((await loopback.request('/sso-callback?code=stolen&state=forged')).status, 400);
+  assert.equal((await loopback.request(`/other?code=c1&state=${state}`)).status, 404);
+  assert.equal((await loopback.request('/favicon.ico')).status, 404);
+  assert.equal(calls.length, 0);
+  assert.equal(loopback.state.closed, false);
+
+  assert.equal((await loopback.request(`/sso-callback?code=c1&state=${state}`)).status, 200);
+  assert.ok('session' in (await outcome));
+});
+
+test('the callback is used once: a replay of the same state is refused', async () => {
+  const { outcome, state, loopback, calls } = await startSignIn({ ...exchangeOk, ...admission(['DEVELOPER']) });
+
+  const first = loopback.request(`/sso-callback?code=c1&state=${state}`);
+  const replay = await loopback.request(`/sso-callback?code=c2&state=${state}`);
+  await first;
+  await outcome;
+
+  assert.equal(replay.status, 400);
+  assert.equal(calls.filter(c => c.url.endsWith('/sso/exchange')).length, 1);
+});
+
+test('a failed exchange shows the error in the browser, rejects sign-in and closes the listener', async () => {
+  const { outcome, state, loopback, secrets } = await startSignIn({
+    'POST /api/v1/auth/sso/exchange': () => json(400, {}),
+  });
+
+  const reply = await loopback.request(`/sso-callback?code=expired&state=${state}`);
+  const result = await outcome;
+
+  assert.equal(reply.status, 400);
+  assert.match(reply.html, /DW sign-in failed: DW \/api\/v1\/auth\/sso\/exchange failed: HTTP 400/);
+  assert.ok('error' in result);
+  assert.equal(secrets.data.size, 0);
+  assert.equal(loopback.state.closed, true);
+});
+
+test('a callback without a code rejects sign-in', async () => {
+  const { outcome, state, loopback, calls } = await startSignIn({});
+
+  assert.equal((await loopback.request(`/sso-callback?state=${state}`)).status, 400);
+  const result = await outcome;
+  assert.ok('error' in result && /no code/.test(result.error.message));
+  assert.equal(calls.length, 0);
+});
+
+test('if the browser is not opened, sign-in fails and the listener is closed', async () => {
+  const { outcome, loopback } = await startSignIn({}, false);
+
+  const result = await outcome;
+  assert.ok('error' in result && /browser was not opened/.test(result.error.message));
+  assert.equal(loopback.state.closed, true);
+});
+
+test('a listener that cannot start fails sign-in before the browser opens', async () => {
+  const opened: string[] = [];
+  const auth = new DwAuth({
+    secrets: memorySecrets(), fetch: fakeFetch({}).fetch,
+    listenLoopback: async () => { throw new Error('DW sign-in could not open a local port on 127.0.0.1'); },
+    openExternal: async url => { opened.push(url); return true; },
+  });
+
+  await assert.rejects(auth.signIn(ORIGIN), /could not open a local port on 127\.0\.0\.1/);
+  assert.equal(opened.length, 0);
+});
+
+test('sign-in times out after 5 minutes, names the callback address and closes the listener', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { outcome, loopback } = await startSignIn({});
+
+  t.mock.timers.tick(5 * 60 * 1000);
+  const result = await outcome;
+
+  assert.ok('error' in result && /timed out after 5 minutes/.test(result.error.message));
+  assert.match((result as { error: Error }).error.message, /http:\/\/127\.0\.0\.1:54321\/sso-callback/);
+  assert.equal(loopback.state.closed, true);
+});
+
+test('the real loopback listener binds 127.0.0.1, serves the callback page over HTTP and then closes', async () => {
+  const { fetch: dwFetch } = fakeFetch({ ...exchangeOk, ...admission(['DEVELOPER']) });
+  const opened: string[] = [];
+  const auth = new DwAuth({
+    secrets: memorySecrets(), fetch: dwFetch, listenLoopback,
     openExternal: async url => { opened.push(url); return true; },
   });
 
   const signIn = auth.signIn(ORIGIN);
-  await new Promise(r => setImmediate(r));
+  while (opened.length === 0) await new Promise(r => setImmediate(r));
   const login = new URL(opened[0]);
-  assert.equal(login.origin + login.pathname, `${ORIGIN}/login/`);
-  assert.equal(login.searchParams.get('client_id'), 'developer-workstation');
-  assert.equal(login.searchParams.get('redirect_uri'), 'vscode://workflow-station.dw-copilot/sso-callback');
+  const callback = new URL(login.searchParams.get('redirect_uri')!);
+  assert.equal(callback.hostname, '127.0.0.1');
+  assert.ok(Number(callback.port) > 0);
 
-  await auth.handleCallback(`code=c1&state=${login.searchParams.get('state')}`);
-  const session = await signIn;
+  const notFound = await fetch(new URL('/favicon.ico', callback));
+  assert.equal(notFound.status, 404);
+  const res = await fetch(`${callback}?code=c1&state=${login.searchParams.get('state')}`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') ?? '', /text\/html/);
+  assert.match(await res.text(), /You can close this tab/);
+  assert.equal((await signIn).username, 'dev1');
 
-  assert.equal(session.username, 'dev1');
-  assert.equal(session.readOnly, false);
-  assert.equal(JSON.parse(calls[0].body!).code, 'c1');
-  assert.equal(await auth.accessToken(ORIGIN), 'a');
-});
-
-test('a callback whose state this window did not issue is rejected and never exchanged', async () => {
-  const { fetch, calls } = fakeFetch({});
-  const { auth } = signedInAuth(fetch);
-
-  await assert.rejects(auth.handleCallback('code=stolen&state=forged'), /did not start/);
-  assert.equal(calls.length, 0);
+  await assert.rejects(fetch(callback), /fetch failed/);
 });
 
 test('refresh stores the rotated pair as a whole', async () => {
@@ -89,21 +197,12 @@ test('parallel 401s share one refresh instead of spending the rotating token twi
 
 /** Signs in through the browser callback with the given admission routes; returns the outcome and stored secrets. */
 async function signInWith(routes: Parameters<typeof fakeFetch>[0]) {
-  const { fetch, calls } = fakeFetch({
+  const started = await startSignIn({
     'POST /api/v1/auth/sso/exchange': () => json(200, { accessToken: 'a', refreshToken: 'r', user: { username: 'u1' } }),
     ...routes,
   });
-  const opened: string[] = [];
-  const secrets = memorySecrets();
-  const auth = new DwAuth({
-    secrets, fetch, callbackBase: 'vscode://workflow-station.dw-copilot',
-    openExternal: async url => { opened.push(url); return true; },
-  });
-  const signIn = auth.signIn(ORIGIN);
-  await new Promise(r => setImmediate(r));
-  await auth.handleCallback(`code=c1&state=${new URL(opened[0]).searchParams.get('state')}`);
-  const outcome = await signIn.then(session => ({ session }), (error: Error) => ({ error }));
-  return { outcome, secrets, calls };
+  await started.loopback.request(`/sso-callback?code=c1&state=${started.state}`);
+  return { outcome: await started.outcome, secrets: started.secrets, calls: started.calls };
 }
 
 test('a DW capability role signs in with full access', async () => {
