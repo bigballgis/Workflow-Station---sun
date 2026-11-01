@@ -1,6 +1,7 @@
 package com.workflow.controller;
 
 import com.workflow.component.TaskManagerComponent;
+import com.workflow.util.TaskCompletionComments;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -82,6 +83,7 @@ class TaskHistoryAssembler {
         // For each task, take the latest comment message.
         // Transfer-typed comments are tracked separately so we can inject synthetic TRANSFER entries.
         Map<String, String> taskComments = new HashMap<>();
+        Map<String, String> taskOutcomes = new HashMap<>();
         Map<String, String> taskReturnComments = new HashMap<>();
         Map<String, String> taskDraftComments = new HashMap<>();
         // Same runtime userTask keeps one taskId across multiple transfers; keep every transfer comment.
@@ -91,7 +93,9 @@ class TaskHistoryAssembler {
             if (allComments != null) {
                 for (Comment c : allComments) {
                     if (c.getTaskId() == null) continue;
-                    if ("return".equals(c.getType())) {
+                    if (c.getType() != null && c.getType().startsWith(TaskCompletionComments.OUTCOME_PREFIX)) {
+                        taskOutcomes.put(c.getTaskId(), c.getType().substring(TaskCompletionComments.OUTCOME_PREFIX.length()));
+                    } else if ("return".equals(c.getType())) {
                         if (c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
                             String msg = c.getFullMessage();
                             if (isDraftReturnCommentMessage(msg)) {
@@ -117,6 +121,8 @@ class TaskHistoryAssembler {
         } catch (Exception e) {
             log.warn("Failed to load Flowable comments for process {}: {}", processInstanceId, e.getMessage());
         }
+
+        taskOutcomes.replaceAll((taskId, outcome) -> TaskCompletionComments.requireOutcome(outcome));
 
         // Process instance info for startEvent initiator resolution
         HistoricProcessInstance processInstance = historyService
@@ -185,8 +191,10 @@ class TaskHistoryAssembler {
                             operationType = "DRAFT";
                         } else if (taskIdForActivity != null && taskReturnComments.containsKey(taskIdForActivity)) {
                             operationType = "RETURN";
+                        } else if (taskOutcomes.containsKey(taskIdForActivity)) {
+                            operationType = taskOutcomes.get(taskIdForActivity);
                         } else {
-                            // Use deleteReason to distinguish APPROVE vs REJECT vs rollback
+                            // FALLBACK(migration): older completions have no task-bound outcome; retain deleteReason interpretation.
                             String deleteReason = taskDeleteReasons.get(taskIdForActivity);
                             if (deleteReason != null) {
                                 String dr = deleteReason.toLowerCase(java.util.Locale.ROOT);

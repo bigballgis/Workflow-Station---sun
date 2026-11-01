@@ -14,12 +14,10 @@ export function resolveEndEventDiagramStatus(
   id: string,
   name: string,
 ): Extract<ProcessNode['status'], 'completed' | 'rejected' | 'pending'> {
-  const match = historyRecords.find(record => {
-    if (ck(record.nodeId) === ck(id)) return true
-    const recordName = norm(record.nodeName)
-    const nodeName = norm(name)
-    return recordName.length > 0 && nodeName.length > 0 && recordName === nodeName
-  })
+  // An activity ID is authoritative; equal labels on different exits are not identities.
+  const match = historyRecords.find(record => ck(record.nodeId) === ck(id))
+    ?? historyRecords.find(record => !ck(record.nodeId) && norm(name).length > 0
+      && norm(record.nodeName) === norm(name))
   if (!match) return 'pending'
   if (match.status === 'rejected') return 'rejected'
   if (match.status === 'completed') return 'completed'

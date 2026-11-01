@@ -11,6 +11,7 @@ import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.UserPermissionService;
 import com.workflow.util.RollbackAssigneeFallbackSupport;
+import com.workflow.util.TaskCompletionComments;
 
 import com.platform.messaging.support.NotificationDispatchHelper;
 import com.platform.common.i18n.I18nService;
@@ -210,12 +211,7 @@ public class TaskCompletionService {
 
             taskMultiInstanceService.detectAndInjectMultiInstanceData(processInstanceId, processDefinitionId, taskDefinitionKey);
 
-            if (variables != null) {
-                Object approverComment = variables.get("approverComments");
-                if (approverComment != null && !approverComment.toString().isBlank()) {
-                    taskService.addComment(taskId, processInstanceId, approverComment.toString());
-                }
-            }
+            TaskCompletionComments.appendUserComment(taskService, taskId, processInstanceId, variables);
             if (StringUtils.hasText(onBehalfOfUserId)
                     && !taskActionService.engineActorMatchesPortalUser(onBehalfOfUserId, userId)) {
                 taskService.addComment(taskId, processInstanceId,
@@ -225,6 +221,7 @@ public class TaskCompletionService {
             String previousActor = Authentication.getAuthenticatedUserId();
             try {
                 Authentication.setAuthenticatedUserId(userId);
+                TaskCompletionComments.append(taskService, taskId, processInstanceId, variables);
                 if (variables != null && !variables.isEmpty()) {
                     log.info("Completing task {} with {} variable keys", taskId, variables.size());
                     taskService.complete(taskId, variables);

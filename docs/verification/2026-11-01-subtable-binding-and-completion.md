@@ -205,3 +205,8 @@ Case 绑定按 related_case 过滤，Transaction 绑定按 related_transaction �
 ### 审查与边界
 
 增量审查见 `2026-11-01-request-approval-review.md`。全局前端单测、TypeScript 与 PostgreSQL IT 的已确认基线失败沿用上文，不宣称仓库全绿。未穷举 Reject/退回/撤回等其它业务分支、远程部署或独立双账号办理；Export/Import/Rollback 本次无持久化格式修改，未重跑全生命周期。
+
+
+## 后续全路径验收
+
+2026-11-01 再次补齐全部三条实际发布路径并完成 14 份请求。发现并通用修复未走出口标绿、拒绝终态 MI 外框橙色、Reject 历史误标 Approve；Batch 新版本与旧版本只读拒绝均验证。详见 [完整路径与截图](2026-11-01-mcy-all-paths.md) 和 [本轮审查](2026-11-01-mcy-all-paths-review.md)。这份补充覆盖前文尚未验收的 Reject 分支，不扩展为所有未启用业务分支均已验收。

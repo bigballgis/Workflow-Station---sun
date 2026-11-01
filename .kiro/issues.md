@@ -5,6 +5,8 @@
 
 ## 统计 (截至 2026-11-01)
 
+2026-11-01 全路径补验：#1732–#1733 通用修复流程图出口/拒绝终态及操作历史，最终两种配置共14份新请求完成三路径与Batch入口到引擎结束；MI250+6通过。Open仍52、Wontfix仍2，完整门禁基线失败保留。见 docs/verification/2026-11-01-mcy-all-paths.md。
+
 2026-11-01 追修：#1729 保留无写入意图的 MI store 顺序，修复同单双绑定 Request Approval；普通和显式额外 FK 两份新建请求均经浏览器完整走到引擎结束，MI250+6通过。当前 Mark Complete 动作类型 REJECT 导致 Portal 终态 REJECTED，未修改业务配置。Open/Wontfix 数量不变。
 
 2026-11-01：在 #1724 / #1729 原条目续记双绑定发起补值、合法额外 FK 重叠、嵌套主表 PK 事件及 Investigation 完成基线修复，不新增同源编号。草稿重开/编辑/删除/提交、两种 FK 配置查库、三个非法请求拒绝、已有 MCY 回填和节点绿色均通过；完整 MI250+6通过。Open/Wontfix 数量不变，完整门禁仍有已对照确认的基线失败。见 `docs/verification/2026-11-01-subtable-binding-and-completion.md`。

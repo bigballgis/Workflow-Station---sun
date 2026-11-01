@@ -5727,3 +5727,29 @@
     MCY副本实际发布、新建、两行操作、第三行业务数据不变、刷新和Complete通过；
     两行不同card_number后缀证明事件使用各自行上下文。帮助页三语同步。
     BU/Role自定义Lookup组合未逐项验收。证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
+
+- id: "1732"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: minor
+  category: bug
+  summary: "My Request 未执行的MI出口标绿、拒绝终态MI外框仍为Current"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailDiagramParser.ts"
+  detail: |
+    出口复用Task既有历史判据，活动ID优先，不凭容器完成或结束节点名称推断；同名异ID不再混淆。
+    已进入MI在COMPLETED/REJECTED终态不再橙色，未进入容器仍pending。原失败实例和新增红绿测试通过。
+    两种FK配置12份三路径组合、2份Batch分派全流程结束，SVG状态与真实历史相符；全量前端2611通过/1基线失败，MI250+6通过。
+    证据：docs/verification/2026-11-01-mcy-all-paths.md。
+
+- id: "1733"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "实际Reject正常完成后deleteReason为空，Flow History误标Approve"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskHistoryAssembler.java"
+  detail: |
+    完成事务授权之后写入taskId绑定的原生操作标记，历史优先使用实际操作；不根据节点名或最后流程变量反推。
+    类型后缀记录正式操作、正文为空，原用户备注写入顺序保留；缺少证据的旧记录保持迁移兼容，不猜填。
+    writer/reader先红后绿、额外5项测试及Engine相关458项0失败/197条件跳过；真实14请求逐任务操作与备注核对通过。
+    扩展引擎组保留H2/Postgres基线失败；详见docs/verification/2026-11-01-mcy-all-paths.md及同名review。

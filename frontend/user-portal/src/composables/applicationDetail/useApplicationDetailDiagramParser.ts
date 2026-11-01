@@ -1,5 +1,5 @@
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
-import { isRejectedName } from '@/utils/statusMatcher'
+import { resolveEndEventDiagramStatus } from '@/utils/endEventDiagramStatus'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 import {
   isHumanWorkflowTask,
@@ -229,40 +229,6 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
           }
         })
       }
-      // Completed multi-instance subprocesses: entered MI subprocesses where all child userTasks are done
-      const completedMultiInstanceSubProcesses = new Set<string>()
-      for (const [spId, sp] of subProcessMap) {
-        if (!enteredSubProcesses.has(spId)) continue
-        if (activeMultiInstanceSubProcesses.has(spId)) continue
-        const spChildren = sp.getElementsByTagName('*')
-        let isMultiInstance = false
-        for (let i = 0; i < spChildren.length; i++) {
-          const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-          if (childLocal === 'multiInstanceLoopCharacteristics') {
-            isMultiInstance = true
-            break
-          }
-        }
-        if (!isMultiInstance) continue
-        let allDone = true
-        let userTaskCount = 0
-        for (let i = 0; i < spChildren.length; i++) {
-          const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-          if (!isHumanWorkflowTask(childLocal)) continue
-          userTaskCount++
-          const taskName = spChildren[i].getAttribute('name') || ''
-          const taskId = spChildren[i].getAttribute('id') || ''
-          const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
-          if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
-            allDone = false
-            break
-          }
-        }
-        if (userTaskCount > 0 && allDone) {
-          completedMultiInstanceSubProcesses.add(spId)
-        }
-      }
-
       // Completed-task snapshot: multi-instance subprocess with a single userTask that matches snapshotTaskName
       const completedSnapshotSingleTaskSubProcesses = new Set<string>()
       if (snapshotTaskName) {
@@ -573,9 +539,9 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
             break
           }
         }
-        // Ended process: MI subprocess must show completed (green), not Current Step; Flowable still reports last activity as currentNode.
+        // Entered MI containers are no longer current after either normal terminal outcome.
         if (
-          processInfo.value.status === 'COMPLETED' &&
+          (processInfo.value.status === 'COMPLETED' || processInfo.value.status === 'REJECTED') &&
           enteredSubProcesses.has(spId) &&
           isMiSubProcess
         ) {
@@ -684,37 +650,10 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
         const pos = positionMap.get(id)
         const parentSpId = getParentSubProcessId(event)
 
-        // Check if end node should be marked as completed
-        let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
-
-        // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
-        if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
-          status = 'pending'
-        } else if (parentSpId && completedSnapshotSingleTaskSubProcesses.has(parentSpId)) {
-          status = 'completed'
-        } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-          status = 'pending'
-        } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
-          status = 'completed'
-        } else if (completedNodeNames.has(name)) {
-          // Match by exact node ID first to avoid cross-process name collision
-          const idMatch = historyRecords.value.find(h => h.nodeId === id)
-          if (idMatch) {
-            status = isRejectedName(name) ? 'rejected' : 'completed'
-          } else if (!parentSpId) {
-            status = isRejectedName(name) ? 'rejected' : 'completed'
-          }
-        } else if (snapshotActive) {
-          status = 'pending'
-        } else if (processInfo.value.status === 'COMPLETED') {
-          if (name === currentNodeName) {
-            status = isRejectedName(name) ? 'rejected' : 'completed'
-          }
-        } else if (processInfo.value.status === 'REJECTED') {
-          if (isRejectedName(name)) {
-            status = 'rejected'
-          }
-        }
+        // Only this activity's history proves an exit was executed, including inside MI.
+        const status = parentSpId && !enteredSubProcesses.has(parentSpId)
+          ? 'pending'
+          : resolveEndEventDiagramStatus(historyRecords.value, id, name)
         nodes.push({ id, name, type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
         if (status === 'completed' || status === 'rejected') completed.push(id)
       })
