@@ -2,7 +2,7 @@
 
 ## 结论
 
-按用户确认的推荐方案完成本地修复和浏览器复验。本次增量未发现剩余阻断问题；仓库完整门禁仍为 CONDITIONAL，既有失败见文末，不能表述为全量全绿。
+更正：首轮验收未覆盖同一份双绑定数据的 Request Approval 下游，不能作为完整流程通过的证据。后续补修与完整流程证据见文末“Request Approval 追修”。本地增量未发现剩余阻断问题；仓库完整门禁仍为 CONDITIONAL，既有失败见文末，不能表述为全量全绿。
 
 1. 双绑定外键问题已复现并修复，草稿保存 / 重开 / 编辑 / 删除替换 / 再次提交通过。
 2. Investigation 完成时的只读子表误写已修复。实际进入下一步后，任务页面上的 Investigation 为绿色；未复现需要另改着色代码的独立缺陷。
@@ -156,3 +156,52 @@ Case 绑定按 related_case 过滤，Transaction 绑定按 related_transaction �
 - 18 个暂存文件的新增行敏感信息扫描：0 个候选；运行时代码的 MCY / HMDC / FU ID / 具体业务列名判据扫描：0 个候选。
 - 暂存内容不含合法会话、Cookie、日志、截图、独立基线目录或临时探针。diff 空白检查通过。
 - 按用户此前“没有新增问题即可 commit”的明确授权提交本轮修复；完整门禁的 CONDITIONAL 与基线失败如上保留。仅本地提交，不推送远程。
+
+
+## Request Approval 追修：同一份双绑定数据从新建到结束
+
+### 首轮遗漏与实际失败
+
+首轮双绑定只验到 Draft → Submit；下游推进使用了没有 Correspondence 的另一 MCY 副本，并只走 Mark Complete。没有将同一份双绑定数据继续走 Request Approval，是验收覆盖遗漏。
+
+用户任务仍停在 Transaction Investigation。该 Operation ID 没有引擎接收记录；实际失败发生在 Portal 完成前校验，非已完成后等待同步。用户原任务未被本轮领取或提交。
+
+独立开发者测试实例 bd544233-d5a2-11f1-a759-6acd226d917b 通过真实页面复现：分派成功，Request Approval 返回 HTTP 500，内部错误为 409 / Versioned sub-table writes require binding scopes。截图：`frontend/user-portal/verification-screenshots/2026-11-01_request-approval-repro.png`。
+
+### 根因和最小修复
+
+只读、未提交的 versioned Correspondence 已由持久化基线恢复，但 MI 合并仍把当前交易行移到数组末尾。字段值没有变化，行顺序变化却被版本 guard 识别为无 scope 的写入。
+
+仅调整 MiSubTaskSubTableRowMerger：当前 store 没有 binding scope、未声明清空、且提交值与持久化基线完全相同时，保留原值与顺序。具备 scope 的修改仍走原有隔离分支；实际变化的无 scope versioned 写入仍被拒绝。不根据 FU、表名、列名或按钮名称放行，没有关闭权限或版本校验，没有增加 DB/HTTP 调用，没有配置/schema/接口变更。
+
+### 红 → 绿与部署
+
+- 新增 SubTableUnchangedMiStoreTest：3 项；修复前 2 失败，修复后 3 通过。覆盖原样传回、省略后恢复、实际修改仍拒绝。
+- `mvn -pl backend/user-portal -am package -Dnet.bytebuddy.experimental=true -Dtest=*SubTable*,*MiCollection*,*TaskApproval*,*ProcessStart*,*AssignmentCompletion*,!SubTableBatchPostgresTransactionIT -Dsurefire.failIfNoSpecifiedTests=false`：633 项，0 失败、0 错误、20 项条件跳过；613 项实际通过，BUILD SUCCESS。
+- 使用新 jar 重建并启动 dev user-portal Docker 服务后才运行以下浏览器验收。
+- 同一原失败的开发者实例：Request Approval、Approve、两个 Mark Completed 均返回 200，最后无活动任务，引擎实例已结束。
+
+### 修复后新建实例的完整浏览器流程
+
+使用真实页面点击、输入、保存和提交；数据库只读核对，不通过 API/SQL 强制完成任务。
+
+1. FU 50125 / 普通分层双绑定：新实例 `2a037e33-d5a8-11f1-a759-6acd226d917b`。
+2. FU 50126 / 显式额外 Case 外键：新实例 `7697390a-d5a8-11f1-a759-6acd226d917b`。
+
+两份均执行：新建两笔 Transaction，各新增自己的 Correspondence，另新增 Case Correspondence → Save Draft → 重开 → 核对 A/B 独立子行 → 编辑 A → 编辑并删除 B、替换新增 → 编辑 Case → 再次 Save Draft / 重开 → Case Submit → 领取并分别分派两行 → Confirmed all Assignment → A 的 Request Approval → B 的直接 Mark Complete → A 的 Approve → 两个 Mark Completed → My Request 重开。
+
+每个 /complete 均为 200；每步后逐值核对三条 Correspondence 的行值、顺序及版本与提交前相同。最终每个引擎实例有 end_time、活动任务数为 0，Portal 当前节点/处理人为空，两行交易显示 Completed，浏览器 pageerror 为 0。普通分层未增加额外 Case 外键；显式额外 FK 样本保留设计允许的重叠。整个过程没有修改发布配置来规避校验。
+
+**终态说明：** 两个 FU 的冻结配置都把 Mark Completed 节点上的 Mark Complete 动作定义为 REJECT。实际请求 action=REJECT，所以 Portal 最终状态与页面徽标为 REJECTED，符合当前配置；BPMN token 仍到达流程结束。这里验证的是配置定义的完整流转，不能宣称业务状态为 COMPLETED，也没有按按钮名称更改平台语义。若业务希望整单为 COMPLETED，需要另行调整动作设计及分支判据。
+
+截图（本地忽略目录，PR 另附）：
+
+- 普通双绑定结束页：`frontend/user-portal/verification-screenshots/2026-11-01_fullflow-2a037e33-completed.png`
+- 显式双外键结束页：`frontend/user-portal/verification-screenshots/2026-11-01_fullflow-7697390a-completed.png`
+- 两类样本各步截图：同目录 `2026-11-01_fullflow-2a037e33-*` / `2026-11-01_fullflow-7697390a-*`。文件名 completed 表示流程结束，不表示 Portal status=COMPLETED。
+
+完整 MI 回归在本次后端部署后重跑：32 文件、250 单测通过，6 个浏览器截图场景全部通过（既有独立 FU 50029）。日志保留本地 `.codex-1101-approval-final-mi.log`，不提交会话或运行数据。
+
+### 审查与边界
+
+增量审查见 `2026-11-01-request-approval-review.md`。全局前端单测、TypeScript 与 PostgreSQL IT 的已确认基线失败沿用上文，不宣称仓库全绿。未穷举 Reject/退回/撤回等其它业务分支、远程部署或独立双账号办理；Export/Import/Rollback 本次无持久化格式修改，未重跑全生命周期。

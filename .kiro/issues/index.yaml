@@ -5697,6 +5697,8 @@
     2026-11-01：完成链从持久化基线补齐省略的表，再做 TaskInfo hydration，避免动态展示状态被当作只读表写入。
     原 Investigation 完成失败后真实200并生成下一步；新 MCY 流程再次验证 Assignment生成3个Investigation，推进后已走节点为绿色。
     Batch Assignee配置和逐行email回填本轮现有能力复验通过，未另加专用逻辑；详情见2026-11-01验收报告。
+    同日追修：双绑定只读表在MI合并时无意义重排行导致Request Approval缺scope失败；原样且无清空声明的无scope表保留原顺序，真实修改仍拒绝。
+    新增3项红绿测试；633项后端0失败/20条件跳过。新建普通/显式双FK两份同单浏览器全流程到引擎结束，MI250+6通过；Mark Complete配置为REJECT的终态如实记录。
 - id: "1730"
   status: fixed
   fixed_at: "2026-10-31"

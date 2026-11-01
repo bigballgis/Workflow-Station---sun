@@ -237,11 +237,11 @@ class MiSubTaskSubTableRowMerger {
                                 baselineRows, submittedRowsList, pkCols, rowKey, fk, explEmptied), frozen));
                 continue;
             }
-            if (!isParticipantScopedBinding(key, tableFacts)) {
-                // Not scoped to one MI participant's row (e.g. a shared attachment table keyed by
-                // main_id to the whole request) — row-scoping this by the current sub-task's
-                // participant PK would never find a match and silently discard every submitted row.
-                // Pass the submission through unchanged, same as legacy putAll for this key.
+            if ((!emptied.contains(key) && java.util.Objects.equals(submittedValue, baselineValue)) || !isParticipantScopedBinding(key, tableFacts)) {
+                // An unchanged unscoped slice has no write intent; retain its exact row order.
+                // Shared tables likewise pass through. Scoping their rows by a participant PK
+                // could discard request-wide records. Changed participant tables still merge
+                // below and remain subject to the version/scope guard.
                 merged.put(key, submittedValue);
                 continue;
             }
