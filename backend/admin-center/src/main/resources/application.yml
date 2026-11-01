@@ -402,8 +402,9 @@ platform:
           - http://localhost:3002/dev/sso/callback
           - http://127.0.0.1:3000/dev/sso/callback
           - http://127.0.0.1:3102/dev/sso/callback
-          # DW VS Code 扩展（tools/dw-copilot-vscode）的登录回调：VS Code 按扩展 id 路由到 UriHandler；
-          # 各环境相同的固定字面量，configmap 不需要覆盖
+        # DW VS Code 扩展（tools/dw-copilot-vscode）的登录回调：VS Code 按扩展 id 路由到 UriHandler。
+        # 放在独立列表里：UAT/生产用 SPRING_APPLICATION_JSON 整表覆盖 redirect-uri-prefixes，写在那里会被丢弃。
+        fixed-redirect-uri-prefixes:
           - vscode://workflow-station.dw-copilot/
 
 # LDAP 为用户画像权威源：定期对目标 AD 组成员对账 + 登录 JIT 回写 sys_users。

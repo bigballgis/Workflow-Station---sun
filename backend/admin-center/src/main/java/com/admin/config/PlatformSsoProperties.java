@@ -42,6 +42,12 @@ public class PlatformSsoProperties {
         /** 为 false 时不接受该 client 的登录（例如生产关闭 developer-workstation） */
         private boolean enabled = true;
         private List<String> redirectUriPrefixes = new ArrayList<>();
+        /**
+         * 与环境无关的固定回调前缀（如 VS Code 扩展的 vscode:// 回调），校验时与 {@link #redirectUriPrefixes} 合并。
+         * 单独成列是因为环境用 SPRING_APPLICATION_JSON 整表覆盖 redirectUriPrefixes（Spring 列表不合并），
+         * 写在那里的固定条目会在 UAT/生产被静默丢弃。
+         */
+        private List<String> fixedRedirectUriPrefixes = new ArrayList<>();
     }
 
     /**

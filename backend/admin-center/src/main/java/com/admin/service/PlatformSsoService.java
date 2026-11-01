@@ -21,6 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -196,8 +197,9 @@ public class PlatformSsoService {
         if (client == null || !client.isEnabled()) {
             throw new IllegalArgumentException("Unknown or disabled client");
         }
-        List<String> prefixes = client.getRedirectUriPrefixes();
-        if (prefixes == null || prefixes.isEmpty()) {
+        List<String> prefixes = new ArrayList<>(client.getRedirectUriPrefixes());
+        prefixes.addAll(client.getFixedRedirectUriPrefixes());
+        if (prefixes.isEmpty()) {
             throw new IllegalStateException("SSO client not configured: " + clientId);
         }
         boolean ok = prefixes.stream().anyMatch(redirectUri::startsWith);
