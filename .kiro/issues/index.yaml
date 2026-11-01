@@ -5781,3 +5781,17 @@
     FU50125新1.0.4六组全路径34次Case/52次交易详情隔离，既有FU48和显式额外FK副本50126各一份完整Batch流程通过，MI250+6通过。
     真实无scope显式多绑定请求仍403且variables不变；扩展全量保留2项经原代码复核的基线错误和一次性DB环境缺口。
     证据：docs/verification/2026-11-01-nested-correspondence-and-restored-stores.md。
+
+- id: "1736"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "运行中MI的已办REJECT分支节点未计入完成集合，进入下一步后仍灰色"
+  file: "frontend/user-portal/src/composables/tasks/bpmnDiagramParser.ts"
+  detail: |
+    Task与My Request运行中MI集合均承认completed/rejected历史，当前节点优先级与兄弟下游抑制保持，操作审计不变。
+    原用户任务Investigation灰→绿，Mark Completed仍橙，代理未代办，历史API data前后逐值相等。
+    新增10项先4红后全绿，相关74通过，全量2613→2623通过且保留同1失败；类型381和lint9无新增。
+    build+Docker重建后同URL截图通过；六组34办理页面/28个MI任务中途颜色断言、34次Case/52次交易详情隔离，既有FU48/50126各完整Batch混合路径及MI250+6通过。
+    网关429限流失败保留后串行重跑，无关闭限流或业务/FU/节点硬编码。详见docs/verification/2026-11-01-live-mi-node-completion.md。

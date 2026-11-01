@@ -73,8 +73,10 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
     const completedHistoryIds = new Set<string>()
     const completedNodeNames = new Set<string>()
     inputs.historyRecords.forEach((record: any) => {
-      if (record.nodeId && record.status === 'completed') completedHistoryIds.add(record.nodeId)
-      if (record.nodeName && record.status === 'completed') completedNodeNames.add(record.nodeName)
+      // A rejected action also finishes the task; its outcome remains in Flow History.
+      if (record.status !== 'completed' && record.status !== 'rejected') return
+      if (record.nodeId) completedHistoryIds.add(record.nodeId)
+      if (record.nodeName) completedNodeNames.add(record.nodeName)
     })
 
     const showCurrentStep = !inputs.isCompletedTask

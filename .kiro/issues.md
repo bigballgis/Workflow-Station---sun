@@ -5,6 +5,8 @@
 
 ## 统计 (截至 2026-11-01)
 
+2026-11-01 运行中节点追修：#1736补入REJECT已办历史，原任务Investigation灰→绿且当前Mark Completed仍橙；两入口10项回归先红后绿。全量2623通过/同1基线失败、类型381及lint9无新增，MI250+6通过；六组新单34办理页面/28个MI中途颜色断言，FU48/50126各完整Batch混合路径通过。Open仍52、Wontfix仍2。见docs/verification/2026-11-01-live-mi-node-completion.md。
+
 2026-11-01 嵌套对照追修：#1735区分服务端恢复基线与客户端写入声明，同任务Batch自动保存403→200后完整结束；新增4项红绿回归。FU50125六组全路径34次Case/52次交易Details隔离、FU48/50126各1完整Batch流程和MI250+6通过。Open仍52、Wontfix仍2，扩展全量2项原代码同错误及一次性DB环境缺口保留。见docs/verification/2026-11-01-nested-correspondence-and-restored-stores.md。
 
 2026-11-01 节点只读追修：#1734补齐主表主键元数据，原单Case Correspondence显示恢复；普通/显式双FK及新建Batch完整流程复验通过。Portal2613通过/同1基线失败、类型381无新增、MI250+6通过。Open仍52、Wontfix仍2。见docs/verification/2026-11-01-case-node-primary-identity.md。

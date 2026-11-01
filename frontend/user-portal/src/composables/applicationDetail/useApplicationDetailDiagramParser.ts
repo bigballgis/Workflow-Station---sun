@@ -390,8 +390,10 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
       const completedHistoryIdsForMi = new Set<string>()
       const completedNodeNamesForMi = new Set<string>()
       historyRecords.value.forEach(record => {
-        if (record.status === 'completed' && record.nodeId) completedHistoryIdsForMi.add(String(record.nodeId).trim())
-        if (record.status === 'completed' && record.nodeName) completedNodeNamesForMi.add(record.nodeName)
+        // Active MI diagrams show task execution independently of the action outcome.
+        if (record.status !== 'completed' && record.status !== 'rejected') return
+        if (record.nodeId) completedHistoryIdsForMi.add(String(record.nodeId).trim())
+        if (record.nodeName) completedNodeNamesForMi.add(record.nodeName)
       })
 
       // Parse human workflow tasks (userTask, manualTask, … — parity with DW designer)
