@@ -5,6 +5,8 @@
 
 ## 统计 (截至 2026-11-01)
 
+2026-11-01 嵌套对照追修：#1735区分服务端恢复基线与客户端写入声明，同任务Batch自动保存403→200后完整结束；新增4项红绿回归。FU50125六组全路径34次Case/52次交易Details隔离、FU48/50126各1完整Batch流程和MI250+6通过。Open仍52、Wontfix仍2，扩展全量2项原代码同错误及一次性DB环境缺口保留。见docs/verification/2026-11-01-nested-correspondence-and-restored-stores.md。
+
 2026-11-01 节点只读追修：#1734补齐主表主键元数据，原单Case Correspondence显示恢复；普通/显式双FK及新建Batch完整流程复验通过。Portal2613通过/同1基线失败、类型381无新增、MI250+6通过。Open仍52、Wontfix仍2。见docs/verification/2026-11-01-case-node-primary-identity.md。
 
 2026-11-01 全路径补验：#1732–#1733 通用修复流程图出口/拒绝终态及操作历史，最终两种配置共14份新请求完成三路径与Batch入口到引擎结束；MI250+6通过。Open仍52、Wontfix仍2，完整门禁基线失败保留。见 docs/verification/2026-11-01-mcy-all-paths.md。

@@ -5766,3 +5766,18 @@
     原用户请求Case note=3已持久化但节点No Data，2项回归先红后绿、原单同节点显示恢复且不混入交易行。
     普通和显式额外FK两类样本符合各自归属，新建Batch人员分派VERIFIED并走到引擎结束、重开仍可见。
     Portal全量2613通过/同1基线失败、类型381无新增、MI250+6通过。详见docs/verification/2026-11-01-case-node-primary-identity.md。
+
+- id: "1735"
+  status: fixed
+  fixed_at: "2026-11-01"
+  severity: major
+  category: bug
+  summary: "Save/Complete补回未提交的原样多绑定只读store后，被误判为缺scope写入"
+  file: "backend/user-portal/src/main/java/com/portal/component/SubTableWriteIsolation.java"
+  detail: |
+    在恢复前保存显式store集合；只有未显式提交且与持久化基线完全相等的store不再被当作写入声明。
+    显式store、旧bindingId别名及变更仍严格要求scope，原构造器默认严格路径不变，无业务表名/FU硬编码。
+    新增4项红绿回归，相关Portal1174通过/19跳过、Common48通过，真实原任务403到200后完整结束。
+    FU50125新1.0.4六组全路径34次Case/52次交易详情隔离，既有FU48和显式额外FK副本50126各一份完整Batch流程通过，MI250+6通过。
+    真实无scope显式多绑定请求仍403且variables不变；扩展全量保留2项经原代码复核的基线错误和一次性DB环境缺口。
+    证据：docs/verification/2026-11-01-nested-correspondence-and-restored-stores.md。
