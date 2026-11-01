@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { CALLBACK_PATH, DwAuth } from './auth';
+import { CALLBACK_PATH, DwAuth, NoDwAccessError } from './auth';
 import { DwClient } from './dwClient';
 import { ApplyInput, asToolText, DwTools, errorText, PreparedApply, readOnlyHandlers, ToolContext } from './tools';
 import { registerParticipant } from './participant';
@@ -49,12 +49,22 @@ export function activate(context: vscode.ExtensionContext): void {
     try {
       const env = activeEnvironment();
       const session = await auth.session(new URL(env.url).origin);
-      status.text = `$(cloud) DW: ${env.name}${session ? ` (${session.username})` : ' — signed out'}`;
+      status.text = `$(cloud) DW: ${env.name}` +
+        (session ? ` (${session.username}${session.readOnly ? ', read-only' : ''})` : ' — signed out');
     } catch {
       status.text = '$(cloud) DW: no environment';
     }
     status.show();
     tree.refresh();
+  };
+  // Roles can change between sessions: re-check DW admission for the stored session, then redraw.
+  const verifyActive = async () => {
+    try {
+      await auth.verify(toolContext.origin());
+    } catch (e) {
+      if (e instanceof NoDwAccessError) vscode.window.showErrorMessage(e.message);
+    }
+    await refreshUi();
   };
 
   context.subscriptions.push(
@@ -75,14 +85,15 @@ export function activate(context: vscode.ExtensionContext): void {
       const pick = await vscode.window.showQuickPick(all.map(e => ({ label: e.name, description: e.url })));
       if (!pick) return;
       await context.globalState.update(ACTIVE_ENV_KEY, pick.label);
-      await refreshUi();
+      await verifyActive();
     }),
     vscode.commands.registerCommand('dwCopilot.signIn', () => reportErrors(async () => {
       const origin = toolContext.origin();
       const session = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: `DW: finish sign-in in the browser (${origin})` },
         () => auth.signIn(origin));
-      vscode.window.showInformationMessage(`Signed in to DW as ${session.username}`);
+      vscode.window.showInformationMessage(`Signed in to DW as ${session.username}` +
+        (session.readOnly ? ' (read-only: your team can view function units but you have no DW role to change them)' : ''));
       await refreshUi();
     })),
     vscode.commands.registerCommand('dwCopilot.signOut', () => reportErrors(async () => {
@@ -103,7 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ...registerTools(toolContext),
     registerParticipant(context, toolContext),
   );
-  void refreshUi();
+  void verifyActive();
 }
 
 export function deactivate(): void {}

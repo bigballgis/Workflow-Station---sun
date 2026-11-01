@@ -23,6 +23,8 @@ export interface Session {
   accessToken: string;
   refreshToken: string;
   username: string;
+  /** Admitted through the team-membership fallback only: DW opens read-only for this user. */
+  readOnly?: boolean;
 }
 
 export class NotSignedInError extends Error {
@@ -30,6 +32,18 @@ export class NotSignedInError extends Error {
     super(`Not signed in to DW at ${origin}. Run "DW: Sign in".`);
   }
 }
+
+export class NoDwAccessError extends Error {
+  constructor(origin: string) {
+    super(`This account cannot enter Developer Workstation at ${origin}, so it cannot use DW Copilot. ` +
+      'Ask for a DW role or to join a development team.');
+  }
+}
+
+/** Same roles as the DW web router's requiredRoles (frontend/developer-workstation/src/utils/permission.ts). */
+const CAPABILITY_ROLES = ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'];
+
+class TokenRejected extends Error {}
 
 interface Pending {
   origin: string;
@@ -106,6 +120,7 @@ export class DwAuth {
         accessToken: body.accessToken,
         refreshToken: body.refreshToken,
         username: body.user?.username ?? '',
+        readOnly: await this.admit(pending.origin, body.accessToken) === 'readOnly',
       };
       await this.host.secrets.store(this.key(pending.origin), JSON.stringify(session));
       pending.resolve(session);
@@ -136,13 +151,73 @@ export class DwAuth {
     if (!res.ok) throw new Error(`DW /api/v1/auth/refresh failed: HTTP ${res.status}`);
     const body = (await res.json()) as { accessToken?: string; refreshToken?: string };
     if (!body.accessToken || !body.refreshToken) throw new Error('DW refresh returned no tokens.');
-    await this.host.secrets.store(this.key(origin),
-      JSON.stringify({ ...current, accessToken: body.accessToken, refreshToken: body.refreshToken }));
+    // The old refresh token is already spent: keep the new pair even if admission fails transiently below.
+    const rotated: Session = { ...current, accessToken: body.accessToken, refreshToken: body.refreshToken };
+    await this.host.secrets.store(this.key(origin), JSON.stringify(rotated));
+    await this.storeAdmission(origin, rotated);
     return body.accessToken;
+  }
+
+  /**
+   * Re-checks DW admission for the stored session (on startup), refreshing once if the access token has expired.
+   * Roles can be revoked between sessions; a user who can no longer enter DW is signed out.
+   */
+  async verify(origin: string): Promise<Session | undefined> {
+    const current = await this.session(origin);
+    if (!current) return undefined;
+    try {
+      return await this.storeAdmission(origin, current);
+    } catch (e) {
+      if (!(e instanceof TokenRejected)) throw e;
+    }
+    await this.refresh(origin);
+    return this.session(origin);
   }
 
   async signOut(origin: string): Promise<void> {
     await this.host.secrets.delete(this.key(origin));
+  }
+
+  private async storeAdmission(origin: string, session: Session): Promise<Session> {
+    let level: 'full' | 'readOnly';
+    try {
+      level = await this.admit(origin, session.accessToken);
+    } catch (e) {
+      if (e instanceof NoDwAccessError) await this.host.secrets.delete(this.key(origin));
+      throw e;
+    }
+    // A refresh may have rotated the pair while we were checking: never write the checked (older) pair back over it.
+    const latest = await this.session(origin);
+    if (!latest || latest.accessToken !== session.accessToken) return latest ?? session;
+    const admitted = { ...latest, readOnly: level === 'readOnly' };
+    await this.host.secrets.store(this.key(origin), JSON.stringify(admitted));
+    return admitted;
+  }
+
+  /**
+   * The DW web router's entry rule, in its order: a pure AUDITOR is refused; a capability role enters; anyone else
+   * enters read-only only when the backend says their team owns function units (workspace-access, which on its own
+   * would also admit AUDITOR — hence the first check).
+   */
+  private async admit(origin: string, accessToken: string): Promise<'full' | 'readOnly'> {
+    const me = await this.getJson(origin, '/api/v1/auth/me', accessToken) as { roles?: string[] };
+    const roles = me.roles ?? [];
+    if (roles.some(r => CAPABILITY_ROLES.includes(r))) return 'full';
+    if (roles.includes('AUDITOR')) throw new NoDwAccessError(origin);
+    const access = await this.getJson(origin, '/api/v1/function-units/workspace-access', accessToken) as
+      { data?: { canView?: boolean } };
+    if (access.data?.canView === true) return 'readOnly';
+    throw new NoDwAccessError(origin);
+  }
+
+  private async getJson(origin: string, path: string, accessToken: string): Promise<unknown> {
+    const res = await this.host.fetch(new URL(path, origin), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (res.status === 401) throw new TokenRejected(`DW ${path}: HTTP 401`);
+    if (!res.ok) throw new Error(`DW ${path} failed: HTTP ${res.status}`);
+    return res.json();
   }
 
   private settle(state: string): Pending | undefined {

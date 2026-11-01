@@ -2,7 +2,7 @@
   "name": "dw-copilot",
   "displayName": "DW Copilot",
   "description": "Design Developer Workstation Function Units from GitHub Copilot: language model tools, an @dw chat participant and SSO sign-in.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "workflow-station",
   "private": true,
   "license": "UNLICENSED",

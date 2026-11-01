@@ -28,6 +28,7 @@ test('a 401 is retried once with the refreshed token', async () => {
       return json(200, { success: true, data: { publicGroupId: 'vg-dev-public' } });
     },
     'POST /api/v1/auth/refresh': () => json(200, { accessToken: 'access-2', refreshToken: 'refresh-2' }),
+    'GET /api/v1/auth/me': () => json(200, { username: 'dev1', roles: ['DEVELOPER'] }),
   });
 
   assert.match(await t.listWorkspaces(ORIGIN), /vg-dev-public/);

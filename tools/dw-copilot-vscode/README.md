@@ -19,7 +19,13 @@ VS Code → Extensions → `…` → **Install from VSIX…** → `dw-copilot-<v
 
 2. **DW: Select environment** (or click the `DW:` status bar item).
 3. **DW: Sign in** — the browser opens the DW login page (SSO); after login it hands control back to VS Code.
-   Requires admin-center to whitelist `vscode://workflow-station.dw-copilot/` (in `application.yml` since P1).
+   Requires admin-center to whitelist `vscode://workflow-station.dw-copilot/`
+   (`platform.sso.clients.developer-workstation.fixed-redirect-uri-prefixes` in `application.yml`).
+
+Only accounts that can enter Developer Workstation can use the extension, by the same rule as the DW web app:
+a DW role (`SYS_ADMIN`, `TECH_LEAD`, `TEAM_LEAD`, `DEVELOPER`) gets full access; a member of a team that owns
+function units gets read-only access (the status bar shows `read-only`); anyone else, including a pure `AUDITOR`,
+is refused and signed out. This is checked at sign-in, at every token refresh and when VS Code starts.
 
 ## Use
 

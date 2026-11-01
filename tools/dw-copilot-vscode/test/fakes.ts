@@ -3,7 +3,7 @@ import { AuthHost, DwAuth } from '../src/auth';
 export interface Call { url: string; method: string; headers: Record<string, string>; body?: string }
 
 /** fetch double: answers by "METHOD path" and records every call. */
-export function fakeFetch(routes: Record<string, (call: Call) => Response>): { fetch: typeof fetch; calls: Call[] } {
+export function fakeFetch(routes: Record<string, (call: Call) => Response | Promise<Response>>): { fetch: typeof fetch; calls: Call[] } {
   const calls: Call[] = [];
   const fn = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(input.toString());
@@ -36,6 +36,14 @@ export function memorySecrets(): AuthHost['secrets'] & { data: Map<string, strin
 }
 
 export const ORIGIN = 'https://dw.example.test';
+
+/** Routes DW admission reads: /auth/me roles and the team-membership fallback. */
+export function admission(roles: string[], canView = false): Record<string, (call: Call) => Response> {
+  return {
+    'GET /api/v1/auth/me': () => json(200, { username: 'dev1', roles }),
+    'GET /api/v1/function-units/workspace-access': () => json(200, { success: true, data: { canView } }),
+  };
+}
 
 export function signedInAuth(fetchFn: typeof fetch, opened: string[] = []): { auth: DwAuth; secrets: ReturnType<typeof memorySecrets> } {
   const secrets = memorySecrets();

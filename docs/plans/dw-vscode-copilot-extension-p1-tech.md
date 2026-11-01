@@ -34,13 +34,18 @@
 | `GET /ai-generation/studio-chat/design-context?functionUnitId=` | 读 FU 当前完整设计，给 Copilot 改已有设计用 | `assertCanAccess(id, VIEW)` → `aiGenerationService.serializeFunctionUnitContext(id)`（AI Studio 喂给模型的同一份 `FunctionUnitContextDTO`，字段名与 `generatedData` 同构） |
 | `GET /ai-generation/studio-chat/format-spec` | 格式说明一次拿全 | `{ template: aiPromptTemplateComponent.get("GENERATION").content, schemaMetadata: aiGenerationService.getSchemaMetadata() }`；模板取各环境当前生效内容（UAT 已有自定义版本，P0 实测可用） |
 
-### 1.2 后端（admin-center）——一行配置
+### 1.2 后端（admin-center）——独立的固定回调列表
 
 | 文件 | 改什么 |
 |---|---|
-| `admin-center/src/main/resources/application.yml` | `platform.sso.clients.developer-workstation.redirect-uri-prefixes` 追加 `vscode://workflow-station.dw-copilot/` |
+| `PlatformSsoProperties.SsoClient` | 新增 `fixedRedirectUriPrefixes`（与环境无关的固定回调前缀） |
+| `PlatformSsoService.validateRedirectUri` | 允许前缀 = `redirectUriPrefixes` ∪ `fixedRedirectUriPrefixes`，仍是 `startsWith` 匹配、仍按 client 隔离 |
+| `admin-center/src/main/resources/application.yml` | `platform.sso.clients.developer-workstation.fixed-redirect-uri-prefixes: [vscode://workflow-station.dw-copilot/]` |
 
-固定字面量，各环境相同，**不需要改 configmap**（configmap 只覆盖列表前两项 `SSO_REDIRECT_DW_*`）。
+**为什么不直接追加到 `redirect-uri-prefixes`**（P1 首版就是这么做的，UAT 实测失败）：UAT/生产的 configmap 用
+`SPRING_APPLICATION_JSON` 整体定义了各 client 的 `redirect-uri-prefixes[0..3]`，Spring 绑定列表是**整表替换**不合并，
+yml 里追加的条目在这些环境被静默丢弃，登录页报 `redirectUri not allowed`。独立字段不在覆盖里，yml 默认值得以保留，
+各环境**不需要改 configmap**。单测 `PlatformSsoServiceRedirectTest` 用两层属性源复现了这一覆盖。
 
 ### 1.3 扩展工程（新建 `tools/dw-copilot-vscode/`，替换 spike）
 
@@ -82,6 +87,7 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 |---|---|---|
 | 登录回调 | `vscode://workflow-station.dw-copilot/sso-callback` + `vscode.window.registerUriHandler` | loopback（`127.0.0.1:端口`）要开本地端口、可能撞端口或被终端安全软件拦；`vscode://` 是 VS Code 扩展的标准做法（GitHub 登录同款），白名单是固定字面量 |
 | 登录流程 | 浏览器打开 `<env>/login/?client_id=developer-workstation&redirect_uri=…&state=<随机>` → 回调校验 `state` → `POST /api/v1/auth/sso/exchange {code}` | 复用 DW 网页同一条 SSO（含 DSP 免密），零新后端；`state` 不匹配直接拒绝 |
+| 准入（只有能进 DW 的人能用） | 照搬 DW 网页路由的进入规则：`GET /api/v1/auth/me` 取角色 → 有 `SYS_ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER` 完整进入；纯 `AUDITOR` 拒绝；其余看 `GET /function-units/workspace-access` 的 `canView`，true 则只读进入（状态栏标 read-only），否则拒绝。登录、每次续期、启动/切环境时各查一次；被拒即清掉会话 | 能登录 ≠ 能进 DW：exchange 只挡锁定/停用账号。`workspace-access` 对 AUDITOR 也返回 true，所以先查角色。写操作仍由后端各接口权限把关，准入只保证与 DW 网页入口一致 |
 | 续期 | 401 时调 `POST /api/v1/auth/refresh {refreshToken}`（body 传，已核实支持），保存新的一对 token；同一环境的并发续期合并为一次；refresh 返回 400/401 → 清 token、提示重新登录，其他错误保留会话 | refresh token 会轮换（旧的进黑名单）：并发 401 各自续期会让后一次用掉已作废的 token、把新会话删掉；只重试一次，不循环 |
 | 多环境 | 设置 `dwCopilot.environments`：`[{name, url}]`（站点 origin），默认空，**application scope**（工作区设置不能覆盖，防恶意仓库把登录引到钓鱼站）；状态栏显示当前环境，切换命令 | 不内置任何公司域名；token 按 origin 分开存 |
 | 格式说明 | 服务端一次返回模板 + schemaMetadata | 扩展不内置格式，DW 升级不需扩展发版 |
@@ -92,7 +98,7 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 ## 3. 影响链
 
 - **DW 后端**：新增 3 个只读端点 → 只调用已有 `AiStudioProposalPreviewer` / `serializeFunctionUnitContext` / `AiPromptTemplateComponent` → 无 Entity / SQL / init-scripts 变更；`getSchemaMetadata()` 提升可见性，唯一既有调用点同步改。
-- **admin-center**：SSO 白名单多一个前缀，只影响 `developer-workstation` client 的 redirect 校验；其他 client 不变。
+- **admin-center**：SSO client 多一个 `fixedRedirectUriPrefixes` 字段，只有 `developer-workstation` 配了值；其他 client 为空列表，校验行为不变。
 - **Kong**：`/api/v1/ai-generation` 已路由到 DW（`developer-workstation-sse-route`），新端点自动覆盖，**不改**。
 - **CORS / CSRF**：扩展走 Node `fetch` 无 Origin，Bearer 头鉴权（P0 已验证 POST 可用），不涉及。
 - **前端三端**：不改。
