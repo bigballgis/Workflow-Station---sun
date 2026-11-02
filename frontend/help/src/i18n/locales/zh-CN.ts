@@ -352,7 +352,7 @@ export default {
     fSmtpUsername:
       'SMTP 登录（服务账号）。通常和发件邮箱不同。仅当中继不需要 SMTP AUTH 时才可留空。',
     fSmtpPassword:
-      '填了用户名时必填。选择 VAULT 环境变量（不能选 TEXT）。邮箱密码留在 Vault。见 [[/environment-variables]]。',
+      '填了用户名时必填。sit / uat 只能选择 VAULT 环境变量（不能选 TEXT），邮箱密码留在 Vault。本地 docker 环境的下拉同时列出 TEXT，取该变量的当前值或默认值作为密码。见 [[/environment-variables]]。',
     fSmtpHost: '本页不能填。SMTP 主机来自管理中心 → 系统配置（出站连接）。',
     fSmtpPort: '本页不能填。常见 25/587（STARTTLS）或 465（SSL）。与「使用 TLS」一起在系统配置里设。',
     fUseTls: '本页不能填。465 用 SSL、25/587 用 STARTTLS 时选是。在管理中心 → 系统配置中设置。',
@@ -579,7 +579,7 @@ export default {
     fMailboxEmail: '必填。要轮询的邮箱，同时作为连接名称。IMAP 用户名是服务账号时，监听会尝试用该账号打开这个邮箱（需邮件服务器支持）。空白无法保存。',
     fImapUsername: 'IMAP 登录（服务账号）。通常和邮箱地址不同。新建时与密码一起必填。用来认证；监听邮箱是将尝试读取的收件箱。',
     fImapPassword:
-      'IMAP 密码改为 VAULT 环境变量。填了用户名时必填。不再保存密文；旧连接需重新选择 VAULT 键。见 [[/environment-variables]]。',
+      'IMAP 密码在 sit / uat 必须是 VAULT 环境变量。填了用户名时必填。不再保存密文；旧连接需重新选择 VAULT 键。本地 docker 环境的下拉同时列出 TEXT。见 [[/environment-variables]]。',
     fImapHost: '本页不能填。IMAP 主机来自管理中心 → 系统配置（入站连接）。',
     fImapPort: '本页不能填。常见 993（SSL）或 143（STARTTLS/明文）。在系统配置里设。',
     fImapSsl: '本页不能填。是：imaps，通常 993。否：明文或 STARTTLS imap，通常 143。在系统配置里设。',
@@ -746,14 +746,14 @@ export default {
     pageTitle: '环境变量',
     crumb: '管理中心',
     intro:
-      '管理中心 → 环境变量保存 TEXT 取值和 VAULT 目录键。新建时仅当 Vault 还没有该路径才写入密码。编辑和删除都不会改 Vault。邮件连接密码只绑定 VAULT 变量键。',
+      '管理中心 → 环境变量保存 TEXT 取值和 VAULT 目录键。新建时仅当 Vault 还没有该路径才写入密码。编辑和删除都不会改 Vault。sit / uat 的邮件连接密码只绑定 VAULT 变量键。本地 docker 环境的下拉同时列出 TEXT。',
     flowTitle: '操作顺序',
     flow1: '新建 VAULT 变量：填写键，密码可选',
     flow2: '在「连接」里把密码选成该 VAULT 键',
     flow3: '测试发信或部署入站监听',
     catalogTitle: '目录字段',
     catalogBody:
-      '打开管理中心左侧的「环境变量」。TEXT 用于普通字符串（默认值必填、当前值可选），VAULT 只建目录键。字段在 Vault 中不存在时才写入密码；已有字段只建目录行。邮件密码必须是 VAULT — TEXT 不会出现在连接的密码下拉里。',
+      '打开管理中心左侧的「环境变量」。TEXT 用于普通字符串（默认值必填、当前值可选），VAULT 只建目录键。字段在 Vault 中不存在时才写入密码；已有字段只建目录行。sit / uat 的邮件密码必须是 VAULT，TEXT 不会出现在连接的密码下拉里。本地 docker 环境的下拉同时列出 TEXT。',
     catalogLead: '字段目录 — 新增/编辑变量。',
     fKindText: 'TEXT。默认值必填。当前值可选；空白或只有空格时用默认值。',
     fKindVault: 'VAULT。填写键。仅当 ame-hase-hermes/env-var 下还没有该字段时才需要密码。不填当前/默认文本。运行时读取该字段。',
@@ -766,14 +766,14 @@ export default {
     bindTitle: '绑到连接',
     bindBody:
       '开发工作站 → 连接：填了用户名就必须在「密码（VAULT）」里选本目录的 VAULT 键。主机仍来自系统配置 SMTP/IMAP。见 [[/email-send#connection]] 和 [[/email-monitor]]。',
-    fBindPassword: '填了用户名时必填。列表只有 VAULT。旧连接打开后必须重新选择 VAULT 键，密文列已删除。',
+    fBindPassword: '填了用户名时必填。sit / uat 列表只有 VAULT。本地 docker 环境的下拉同时列出 TEXT。旧连接打开后必须重新选择键，密文列已删除。',
     failTitle: '失败时',
     failBody: '改目录或连接绑定后再测试或 Deploy。',
     failTextBlank: 'TEXT 默认值为空 — 无法保存。当前值只有空格时回退默认值。',
     failDuplicateKey: '目录键已存在 — 无法保存。请直接使用已有环境变量，不必操作 Vault。',
     failVaultWrite: '写入 Vault 失败（连通、登录或权限）— 无法保存，页面会提示错误原因。',
     failVault404: 'Vault 404 — 不会当成「没有密码」跳过；收信/发信会明确报 Vault 错误。',
-    failTextForMail: '邮件密码绑了 TEXT — 管理中心拒绝；请改选 VAULT。',
+    failTextForMail: '非本地 docker 环境把邮件密码绑了 TEXT — 管理中心拒绝；请改选 VAULT。本地 docker 允许 TEXT。',
   },
   upTasksToClaimGuide: {
     historyTitle: '变更历史',
