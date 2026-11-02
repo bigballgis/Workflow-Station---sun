@@ -80,12 +80,14 @@ TypeScript，**零运行时依赖**（只用 VS Code API + Node 内置 `fetch`�
 | `dw_list_workspaces` | `GET /function-units/my-dev-groups` | 否 | 否 |
 | `dw_list_function_units` | `GET /function-units?name=` | 否 | 否 |
 | `dw_create_function_unit` | `POST /function-units`（必带 `virtualGroupIds`） | 是 | 是 |
-| `dw_get_format_spec` | 新 `GET …/format-spec` | 否 | 否 |
-| `dw_get_design` | 新 `GET …/design-context` | 否 | 否 |
+| `dw_get_format_spec` | 新 `GET …/format-spec`（模板 + schemaMetadata，分段返回） | 否 | 否 |
+| `dw_get_design` | 新 `GET …/design-context`；不带 `sections` 只回目录（各段数量与名称），带 `sections` 回所选段全文 | 否 | 否 |
 | `dw_dry_run` | 新 `POST …/dry-run` | 否 | 否 |
 | `dw_apply_design` | 现有 `POST …/apply` | 是 | 是，确认框里直接贴 dry-run 摘要 |
 | `dw_undo` | 现有 `POST …/undo` | 是 | 是 |
 | `dw_export_function_unit` | 现有 `GET /export-import/function-units/{id}/export` | 否（本地落文件） | 否 |
+
+**输出分段（0.1.3）**：只读工具输出超过约 4,000 字符就按行分段返回，每段带“第 n/N 段，下一段用 page: n+1”。原因是 Copilot 对大工具结果只给模型约 500 字符预览、其余存文件（UAT 实测 format-spec 28.3 KB、FU 388 设计 12.8 KB 都被截断，模型因此拒绝写 TABLES）。分段在扩展侧完成，后端不变。
 
 `dw_apply_design` 内部顺序固定：**dry-run → 有 ERROR 直接返回错误给模型（不弹框）→ 导出备份 → 弹确认框（带摘要 + 备份路径）→ apply**。
 

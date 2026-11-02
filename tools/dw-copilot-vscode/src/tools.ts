@@ -31,14 +31,53 @@ export interface ToolContext {
 /** Tools that need no confirmation, shared by agent-mode tools and the @dw participant. */
 export function readOnlyHandlers(ctx: ToolContext): Record<string, (input: any) => Promise<string>> {
   const { tools } = ctx;
-  return {
+  const handlers: Record<string, (input: any) => Promise<string>> = {
     dw_list_workspaces: () => tools.listWorkspaces(ctx.origin()),
     dw_list_function_units: i => tools.listFunctionUnits(ctx.origin(), i.keyword),
     dw_get_format_spec: () => tools.formatSpec(ctx.origin()),
-    dw_get_design: i => tools.getDesign(ctx.origin(), i.functionUnitId),
+    dw_get_design: i => tools.getDesign(ctx.origin(), i.functionUnitId, i.sections),
     dw_dry_run: i => tools.dryRun(ctx.origin(), i),
     dw_export_function_unit: i => tools.exportFunctionUnit(ctx.origin(), i.functionUnitId, ctx.exportFolder()),
   };
+  // `page` is ours, not the backend's: strip it before the input reaches a request body (dw_dry_run posts it as is).
+  return Object.fromEntries(Object.entries(handlers).map(([name, run]) =>
+    [name, async ({ page, ...input }: any = {}) => paged(await run(input), page)]));
+}
+
+/**
+ * Copilot shows the model only a short preview of a large tool result (about 500 characters; the rest goes to a
+ * file it rarely reads), so a 28 KB format spec or a 13 KB design arrives cut off. Long output is served in pages
+ * that each fit, and each page says how to fetch the next one.
+ */
+export const PAGE_CHARS = 4000;
+
+export function paged(text: string, page = 1): string {
+  const pages = splitPages(text);
+  if (pages.length === 1) return text;
+  if (!Number.isInteger(page) || page < 1 || page > pages.length) {
+    return `Error: page must be between 1 and ${pages.length}.`;
+  }
+  const next = page < pages.length
+    ? ` Call this tool again with the same arguments and "page": ${page + 1} for the next part.`
+    : ' This is the last part.';
+  return `[Part ${page} of ${pages.length}.${next} Read every part before relying on this output.]\n${pages[page - 1]}`;
+}
+
+function splitPages(text: string): string[] {
+  const pages: string[] = [];
+  let current = '';
+  for (const line of text.split('\n')) {
+    for (let i = 0; i < line.length || i === 0; i += PAGE_CHARS) {
+      const piece = line.slice(i, i + PAGE_CHARS) + (i + PAGE_CHARS >= line.length ? '\n' : '');
+      if (current.length + piece.length > PAGE_CHARS && current) {
+        pages.push(current);
+        current = '';
+      }
+      current += piece;
+    }
+  }
+  pages.push(current.replace(/\n$/, ''));
+  return pages;
 }
 
 export type PreparedApply =
@@ -82,12 +121,31 @@ export class DwTools {
   }
 
   async formatSpec(origin: string): Promise<string> {
-    return JSON.stringify(await this.client.json(origin, 'GET', '/ai-generation/studio-chat/format-spec'));
+    const spec = await this.client.json<{ template: string; schemaMetadata: unknown }>(
+      origin, 'GET', '/ai-generation/studio-chat/format-spec');
+    // Plain template text keeps its line breaks, so pages split between lines rather than inside one huge JSON string.
+    return `${spec.template}\n\nschemaMetadata (authoritative where it differs from the template):\n` +
+      JSON.stringify(spec.schemaMetadata, null, 1);
   }
 
-  async getDesign(origin: string, functionUnitId: number): Promise<string> {
-    return JSON.stringify(await this.client.json(origin, 'GET',
-      `/ai-generation/studio-chat/design-context?functionUnitId=${functionUnitId}`));
+  /**
+   * Without sections: a table of contents (counts and names per section), small enough to read whole.
+   * With sections: just those sections in full.
+   */
+  async getDesign(origin: string, functionUnitId: number, sections?: string[]): Promise<string> {
+    const design = await this.client.json<Record<string, unknown>>(origin, 'GET',
+      `/ai-generation/studio-chat/design-context?functionUnitId=${functionUnitId}`);
+    const { functionUnitId: id, name, description, ...rest } = design;
+    if (!sections?.length) {
+      const contents = Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, summarize(v)]));
+      return JSON.stringify({ functionUnitId: id, name, description, sections: contents }, null, 1) +
+        '\nCall again with "sections" to read the sections you need in full.';
+    }
+    const unknown = sections.filter(s => !(s in rest));
+    if (unknown.length) {
+      return `Error: unknown section(s) ${unknown.join(', ')}. Valid: ${Object.keys(rest).join(', ')}.`;
+    }
+    return JSON.stringify({ functionUnitId: id, name, ...Object.fromEntries(sections.map(s => [s, rest[s]])) }, null, 1);
   }
 
   async dryRun(origin: string, input: ApplyInput): Promise<string> {
@@ -171,6 +229,21 @@ export async function asToolText(run: () => Promise<string>): Promise<string> {
 
 export function errorText(e: unknown): string {
   return e instanceof DwApiError ? e.toToolText() : `Error: ${(e as Error).message}`;
+}
+
+const NAME_KEYS = ['tableName', 'formName', 'actionName', 'decisionKey', 'viewName', 'templateName', 'flowKey', 'name', 'key'];
+
+/** Section summary for the table of contents: arrays as count + item names, objects as their keys. */
+function summarize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const names = value.map(item => {
+      const key = NAME_KEYS.find(k => typeof (item as Record<string, unknown>)?.[k] === 'string');
+      return key ? (item as Record<string, string>)[key] : undefined;
+    }).filter(Boolean);
+    return names.length ? { count: value.length, names } : { count: value.length };
+  }
+  if (value && typeof value === 'object') return { keys: Object.keys(value) };
+  return value ?? null;
 }
 
 function timestamp(): string {

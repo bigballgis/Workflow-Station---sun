@@ -48,11 +48,14 @@ Or type `@dw …` in Ask mode.
 |---|---|---|
 | `#dwListWorkspaces`, `#dwListFunctionUnits` | no | find ids |
 | `#dwCreateFunctionUnit` | yes | asks to confirm |
-| `#dwFormatSpec`, `#dwGetDesign` | no | format + current design, read before writing |
+| `#dwFormatSpec`, `#dwGetDesign` | no | format + current design, read before writing. `dwGetDesign` without `sections` returns a table of contents; pass `sections` for full content |
 | `#dwDryRun` | no | same checks as apply |
 | `#dwApplyDesign` | yes | dry run → stops on ERROR → backup zip → confirm → write |
 | `#dwUndo` | yes | only scopes that return an undo token |
 | `#dwExportFunctionUnit` | no | zip into `<folder>/dw-exports/` for Admin Center import |
+
+Read-only tools return long output in parts of about 4,000 characters (`page`: 1, 2, ...), because Copilot only shows
+the model a short preview of a large tool result.
 
 **Restore**: every apply first saves the previous design as a zip (**DW: Open backups folder**).
 Import it in DW with the same name: DW keeps the current design as a version and replaces it with the backup.

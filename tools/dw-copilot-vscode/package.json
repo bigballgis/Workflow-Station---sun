@@ -2,7 +2,7 @@
   "name": "dw-copilot",
   "displayName": "DW Copilot",
   "description": "Design Developer Workstation Function Units from GitHub Copilot: language model tools, an @dw chat participant and SSO sign-in.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "workflow-station",
   "private": true,
   "license": "UNLICENSED",
@@ -133,14 +133,20 @@
         "canBeReferencedInPrompt": true,
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Part to read when the output says it has several parts (default 1)"
+            }
+          }
         }
       },
       {
         "name": "dw_list_function_units",
         "toolReferenceName": "dwListFunctionUnits",
         "displayName": "DW: list function units",
-        "modelDescription": "List DW function units visible to the user (id, name, status). Use keyword to filter by name. Use it to find a functionUnitId.",
+        "modelDescription": "List DW function units visible to the user (id, name, status). Use keyword to filter by name. Use it to find a functionUnitId. Long output comes in parts (page).",
         "canBeReferencedInPrompt": true,
         "inputSchema": {
           "type": "object",
@@ -148,6 +154,11 @@
             "keyword": {
               "type": "string",
               "description": "Optional name filter"
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Part to read when the output says it has several parts (default 1)"
             }
           }
         }
@@ -185,24 +196,42 @@
         "name": "dw_get_format_spec",
         "toolReferenceName": "dwFormatSpec",
         "displayName": "DW: get design format spec",
-        "modelDescription": "Return the authoritative generatedData format (template) and enum/structure metadata (schemaMetadata; wins over the template when they differ). ALWAYS read it before writing generatedData.",
+        "modelDescription": "Return the authoritative generatedData format (template) followed by schemaMetadata (wins over the template when they differ). ALWAYS read it before writing generatedData. Long output comes in parts: read every part (page 1, 2, ...) before writing.",
         "canBeReferencedInPrompt": true,
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Part to read when the output says it has several parts (default 1)"
+            }
+          }
         }
       },
       {
         "name": "dw_get_design",
         "toolReferenceName": "dwGetDesign",
         "displayName": "DW: read function unit design",
-        "modelDescription": "Read the current design of a function unit (tables, forms, actions, decisions, relations, process, views, email, org catalog) in generatedData shape. Read it before changing an existing design so names and references match. A value ending with ...[truncated] was shortened for size: never write it back.",
+        "modelDescription": "Read the current design of a function unit in generatedData shape. Without sections it returns a table of contents (count and names per section); then call again with the sections you need. Before writing a scope, read in full every section it replaces: TABLES -> tableDefinitions and tableRelations; TABLE_RELATIONS -> tableRelations; FORMS -> formDefinitions (and tableDefinitions for bindings); ACTIONS -> actionDefinitions; DECISIONS -> decisionDefinitions; PROCESS -> processDefinition. Long output comes in parts: read every part. A value ending with ...[truncated] was shortened for size: never write it back.",
         "canBeReferencedInPrompt": true,
         "inputSchema": {
           "type": "object",
           "properties": {
             "functionUnitId": {
               "type": "number"
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Part to read when the output says it has several parts (default 1)"
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Sections to read in full, e.g. [\"tableDefinitions\",\"tableRelations\"]. Omit to get the table of contents."
             }
           },
           "required": [
@@ -242,6 +271,11 @@
             "generatedData": {
               "type": "object",
               "description": "Design JSON in the dw_get_format_spec format"
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Part to read when the output says it has several parts (default 1)"
             }
           },
           "required": [
