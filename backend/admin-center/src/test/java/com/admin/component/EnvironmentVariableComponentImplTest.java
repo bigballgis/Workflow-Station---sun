@@ -4,6 +4,7 @@ import com.admin.dto.EnvironmentVariableRequest;
 import com.admin.entity.EnvironmentVariable;
 import com.admin.enums.EnvironmentValueKind;
 import com.admin.repository.EnvironmentVariableRepository;
+import com.platform.common.enums.ErrorCode;
 import com.platform.common.exception.BusinessException;
 import com.platform.security.vault.VaultSecretClient;
 import com.platform.security.vault.VaultSecretNotFoundException;
@@ -16,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.env.Environment;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
@@ -90,8 +92,40 @@ class EnvironmentVariableComponentImplTest {
                 .defaultValue("x")
                 .build();
         when(repository.findByVarKeyAndDeployEnv("smtp.from", "dev")).thenReturn(Optional.of(entity));
+        ReflectionTestUtils.setField(component, "allowTextPassword", false);
 
-        assertThrows(BusinessException.class, () -> component.resolveVaultPassword("smtp.from"));
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> component.resolveVaultPassword("smtp.from"));
+        assertEquals(ErrorCode.VALIDATION_FIELD_INVALID, ex.getErrorCode());
+    }
+
+    @Test
+    void resolveVaultPassword_textAllowed_returnsCurrentOrDefault() {
+        ReflectionTestUtils.setField(component, "allowTextPassword", true);
+        EnvironmentVariable current = EnvironmentVariable.builder()
+                .id("1")
+                .varKey("smtp.password")
+                .deployEnv("dev")
+                .valueKind(EnvironmentValueKind.TEXT)
+                .displayName("SMTP password")
+                .currentValue("from-current")
+                .defaultValue("from-default")
+                .build();
+        when(repository.findByVarKeyAndDeployEnv("smtp.password", "dev")).thenReturn(Optional.of(current));
+        assertEquals("from-current", component.resolveVaultPassword("smtp.password"));
+
+        EnvironmentVariable fallback = EnvironmentVariable.builder()
+                .id("2")
+                .varKey("smtp.password")
+                .deployEnv("dev")
+                .valueKind(EnvironmentValueKind.TEXT)
+                .displayName("SMTP password")
+                .currentValue("  ")
+                .defaultValue("from-default")
+                .build();
+        when(repository.findByVarKeyAndDeployEnv("smtp.password", "dev")).thenReturn(Optional.of(fallback));
+        assertEquals("from-default", component.resolveVaultPassword("smtp.password"));
+        verify(vaultSecretClient, never()).readPassword(any());
     }
 
     @Test

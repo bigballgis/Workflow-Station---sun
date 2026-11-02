@@ -103,6 +103,11 @@ logging:
     com.developer: INFO
     org.hibernate.SQL: WARN
 
+# Local docker only. sit/uat/prod leave this unset so the connection password list stays VAULT-only.
+email:
+  connection:
+    allow-text-password: true
+
 # Docker Compose service hostnames resolve to private IPs; allow trusted internal targets only.
 # 集团 AI gateway 的 FQDN 若在集群内解析到内网地址，要在各环境的 SSRF_ALLOWED_HOSTS 里补上。
 ssrf:

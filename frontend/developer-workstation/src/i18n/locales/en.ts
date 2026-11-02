@@ -2363,6 +2363,7 @@ export default {
     smtpSection: 'SMTP server',
     passwordRequired: 'A VAULT environment variable is required when username is set',
     passwordEnvPlaceholder: 'Select a VAULT variable',
+    passwordEnvPlaceholderAny: 'Select an environment variable',
     vaultOptionsLoadFailed: 'Failed to load VAULT environment variables',
     providerType: 'Email Provider',
     provider: {

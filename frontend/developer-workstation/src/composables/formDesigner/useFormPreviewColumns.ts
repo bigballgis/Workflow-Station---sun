@@ -63,7 +63,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         else if (r.type === 'colorPicker') type = 'colorPicker'
         else if (r.type === 'rate') type = 'rate'
         else if (r.type === 'slider') type = 'slider'
-        else if (r.type === 'editor') type = 'editor'
+        else if (r.type === 'editor' || r.type === 'fcEditor') type = 'editor'
         else if (r.type === 'signature') type = 'signature'
         else if (r.type === 'transfer') type = 'transfer'
         else if (r.type === 'cascader') type = 'cascader'

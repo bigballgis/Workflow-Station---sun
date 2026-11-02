@@ -2356,6 +2356,7 @@ export default {
     smtpSection: 'SMTP 服务器',
     passwordRequired: '填写用户名时必须选择 VAULT 环境变量',
     passwordEnvPlaceholder: '选择 VAULT 变量',
+    passwordEnvPlaceholderAny: '选择环境变量',
     vaultOptionsLoadFailed: '无法加载 VAULT 环境变量',
     providerType: '邮箱类型',
     provider: {

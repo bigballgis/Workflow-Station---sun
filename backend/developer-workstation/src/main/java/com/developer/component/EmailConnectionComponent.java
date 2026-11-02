@@ -23,5 +23,7 @@ public interface EmailConnectionComponent {
 
     List<VaultEnvOption> listVaultOptions();
 
+    boolean isTextPasswordAllowed();
+
     List<VaultEnvOption> listTextOptions();
 }

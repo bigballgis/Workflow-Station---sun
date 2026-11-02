@@ -8,6 +8,19 @@ import { useI18n } from 'vue-i18n'
 import type { FieldRendererProps, FieldRendererEmit } from './types'
 import { armEditorChangeGate } from '@/composables/editorCreateGate'
 
+/**
+ * Sanitized HTML is only for a field the designer marked read-only.
+ * An editable editor stays editable even when the stored value contains divs.
+ */
+export function shouldRenderStoredEditorHtml(
+  value: unknown,
+  readonly: boolean,
+  fieldReadonly: boolean,
+): boolean {
+  if (typeof value !== 'string' || value === '') return false
+  return readonly || fieldReadonly
+}
+
 export function useFieldEditor(props: FieldRendererProps, emit: FieldRendererEmit) {
   const { t } = useI18n()
 

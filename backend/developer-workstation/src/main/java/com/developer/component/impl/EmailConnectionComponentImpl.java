@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +51,10 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
     private List<String> ssrfAllowedHosts;
 
+    /** Local docker profile only. Default false so sit/uat/prod stay VAULT-only. */
+    @Value("${email.connection.allow-text-password:false}")
+    private boolean allowTextPassword;
+
     @Override
     @Transactional(readOnly = true)
     public List<EmailConnectionResponse> listByFunctionUnitId(Long functionUnitId) {
@@ -69,11 +74,22 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     @Transactional(readOnly = true)
     public List<VaultEnvOption> listVaultOptions() {
         try {
-            return adminCenterEnvironmentClient.listVaultVariables();
+            List<VaultEnvOption> vault = adminCenterEnvironmentClient.listVaultVariables();
+            if (!allowTextPassword) {
+                return vault;
+            }
+            List<VaultEnvOption> merged = new ArrayList<>(vault);
+            merged.addAll(adminCenterEnvironmentClient.listTextVariables());
+            return List.copyOf(merged);
         } catch (IllegalStateException ex) {
             throw new DeveloperBusinessException("VAULT_OPTIONS_UNAVAILABLE",
                     i18nService.getMessage("email.connection.vault_options_failed"));
         }
+    }
+
+    @Override
+    public boolean isTextPasswordAllowed() {
+        return allowTextPassword;
     }
 
     @Override

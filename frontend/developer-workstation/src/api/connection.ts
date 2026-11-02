@@ -55,6 +55,11 @@ export interface VaultEnvOption {
   displayName: string
 }
 
+export interface ConnectionPasswordOptions {
+  options: VaultEnvOption[]
+  textPasswordAllowed: boolean
+}
+
 export const connectionApi = {
   list(functionUnitId: number) {
     return functionUnitAxios.get<any, { data: EmailConnection[] }>(
@@ -62,7 +67,7 @@ export const connectionApi = {
     )
   },
   vaultOptions(functionUnitId: number) {
-    return functionUnitAxios.get<any, { data: VaultEnvOption[] }>(
+    return functionUnitAxios.get<any, { data: ConnectionPasswordOptions }>(
       `/api/v1/function-units/${functionUnitId}/connections/vault-options`
     )
   },

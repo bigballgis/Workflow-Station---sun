@@ -15,6 +15,7 @@ import com.platform.security.vault.VaultSecretNotFoundException;
 import com.platform.security.vault.VaultSecretUnavailableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,10 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
     private final EnvironmentVariableRepository repository;
     private final VaultSecretClient vaultSecretClient;
     private final Environment springEnvironment;
+
+    /** Local docker profile only. Default false so sit/uat/prod stay VAULT-only. */
+    @Value("${email.connection.allow-text-password:false}")
+    private boolean allowTextPassword;
 
     @Override
     @Transactional(readOnly = true)
@@ -125,6 +130,9 @@ public class EnvironmentVariableComponentImpl implements EnvironmentVariableComp
     @Transactional(readOnly = true)
     public String resolveVaultPassword(String varKey) {
         EnvironmentVariable entity = requireByKey(varKey);
+        if (allowTextPassword && entity.getValueKind() == EnvironmentValueKind.TEXT) {
+            return EnvironmentVariablePayloads.resolvedText(entity.getCurrentValue(), entity.getDefaultValue());
+        }
         if (entity.getValueKind() != EnvironmentValueKind.VAULT) {
             throw new BusinessException(ErrorCode.VALIDATION_FIELD_INVALID,
                     "Email passwords must reference a VAULT environment variable");

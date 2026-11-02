@@ -6,7 +6,13 @@
   >
     <!-- text / input (sensitive mask is display-only; model stays plaintext) -->
     <template v-if="field.type === 'text' || field.type === 'input'">
+      <div
+        v-if="showStoredHtml"
+        class="editor-readonly"
+        v-html="sanitize(String(modelValue))"
+      />
       <el-input
+        v-else
         :model-value="textDisplayValue"
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
@@ -36,14 +42,21 @@
 
     <!-- textarea -->
     <template v-else-if="field.type === 'textarea'">
+      <div
+        v-if="showStoredHtml"
+        class="editor-readonly"
+        v-html="sanitize(String(modelValue))"
+      />
       <el-input
+        v-else
         :model-value="modelValue"
         type="textarea"
         :rows="field.rows || 3"
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
-        :show-word-limit="field.showWordLimit ?? !!field.maxLength"
-        :disabled="isDisabled"
+        :show-word-limit="(field.showWordLimit ?? !!field.maxLength) && !isDisabled"
+        :readonly="isDisabled"
+        :class="{ 'textarea-locked': isDisabled }"
         @update:model-value="onUpdate"
         @blur="onBlur"
       />
@@ -301,9 +314,9 @@
     <!-- editor (Task 6.2) -->
     <template v-else-if="field.type === 'editor'">
       <div
-        v-if="readonly && modelValue"
+        v-if="showEditorHtml"
         class="editor-readonly"
-        v-html="sanitize(modelValue)"
+        v-html="sanitize(String(modelValue))"
       />
       <span v-else-if="readonly">-</span>
       <div
@@ -674,7 +687,7 @@ import { useFieldCore } from '@/composables/fieldRenderer/useFieldCore'
 import { useFieldSanitize } from '@/composables/fieldRenderer/useFieldSanitize'
 import { useFieldLookup } from '@/composables/fieldRenderer/useFieldLookup'
 import { useFieldUpload } from '@/composables/fieldRenderer/useFieldUpload'
-import { useFieldEditor } from '@/composables/fieldRenderer/useFieldEditor'
+import { shouldRenderStoredEditorHtml, useFieldEditor } from '@/composables/fieldRenderer/useFieldEditor'
 import { useFieldSignature } from '@/composables/fieldRenderer/useFieldSignature'
 import { useFieldDepartment } from '@/composables/fieldRenderer/useFieldDepartment'
 import { useFieldSensitiveMask } from '@/composables/fieldRenderer/useFieldSensitiveMask'
@@ -753,6 +766,10 @@ const {
 
 // XSS sanitization (Task 6.5)
 const { sanitize } = useFieldSanitize()
+const showStoredHtml = computed(() => {
+  if (!isDisabled.value) return false
+  return typeof props.modelValue === 'string' && /<\/?[a-z][\s\S]*>/i.test(props.modelValue)
+})
 
 // Lookup backfill state — registers the modelValue/type watch first.
 const {
@@ -851,6 +868,11 @@ const {
   onEditorCreated,
   onEditorChange,
 } = useFieldEditor(props, emit)
+const showEditorHtml = computed(() => shouldRenderStoredEditorHtml(
+  props.modelValue,
+  props.readonly === true,
+  props.field.readonly === true,
+))
 
 // Signature canvas — registers onBeforeUnmount second; setup called in onMounted.
 const {
@@ -912,6 +934,8 @@ onMounted(() => {
   border-radius: 4px;
   background: #f5f7fa;
   min-height: 40px;
+  max-height: 360px;
+  overflow: auto;
   line-height: 1.5;
   word-break: break-word;
   width: 100%;
@@ -949,6 +973,15 @@ onMounted(() => {
 
 .signature-actions {
   margin-top: 4px;
+}
+
+.textarea-locked {
+  :deep(.el-textarea__inner) {
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+    color: var(--el-disabled-text-color, #a8abb2);
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+    cursor: default;
+  }
 }
 
 .readonly-text {

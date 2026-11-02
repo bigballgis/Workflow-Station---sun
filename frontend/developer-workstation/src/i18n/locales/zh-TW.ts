@@ -2357,6 +2357,7 @@ export default {
     smtpSection: 'SMTP 伺服器',
     passwordRequired: '填寫使用者名稱時必須選擇 VAULT 環境變數',
     passwordEnvPlaceholder: '選擇 VAULT 變數',
+    passwordEnvPlaceholderAny: '選擇環境變數',
     vaultOptionsLoadFailed: '無法載入 VAULT 環境變數',
     providerType: '信箱類型',
     provider: {

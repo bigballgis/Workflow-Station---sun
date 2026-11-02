@@ -46,6 +46,7 @@ export function convertFormCreateRule(rule: any, blockedFieldKeys?: UploadSceneF
     'upload': 'upload',
     'advancedUpload': 'upload',
     'editor': 'editor',
+    'fcEditor': 'editor',
     'signature': 'signature',
     'transfer': 'transfer'
   }

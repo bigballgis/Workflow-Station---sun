@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick } from 'vue'
 import * as fc from 'fast-check'
-import { useFieldEditor } from '../useFieldEditor'
+import { shouldRenderStoredEditorHtml, useFieldEditor } from '../useFieldEditor'
 import type { FieldRendererEmit, FieldRendererProps } from '../types'
 
 vi.mock('vue-i18n', () => ({
@@ -41,6 +41,28 @@ function setup(modelValue = MANUAL_HTML) {
   const { api, unmount } = withSetup(() => useFieldEditor(props, emit))
   return { api, emitted, unmount }
 }
+
+describe('shouldRenderStoredEditorHtml', () => {
+  const mail = '<div style="line-height:1.43"><span style="color:rgb(159,18,57)">Hi</span></div>'
+
+  it('keeps mail HTML editable when the designer did not mark the field read-only', () => {
+    expect(shouldRenderStoredEditorHtml(mail, false, false)).toBe(false)
+  })
+
+  it('renders stored HTML when the field is read-only', () => {
+    expect(shouldRenderStoredEditorHtml(mail, true, false)).toBe(true)
+    expect(shouldRenderStoredEditorHtml('<p>typed by user</p>', false, true)).toBe(true)
+  })
+
+  it('keeps an ordinary editor document editable', () => {
+    expect(shouldRenderStoredEditorHtml('<p>typed by user</p>', false, false)).toBe(false)
+  })
+
+  it('stays on the editor when there is nothing to show', () => {
+    expect(shouldRenderStoredEditorHtml('', false, false)).toBe(false)
+    expect(shouldRenderStoredEditorHtml(null, true, false)).toBe(false)
+  })
+})
 
 describe('useFieldEditor', () => {
   it('does not emit create-time empty shell over a manually saved value', () => {

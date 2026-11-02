@@ -219,7 +219,7 @@ export function useEmailTemplateVariables(functionUnitId: MaybeRefOrGetter<numbe
 
 /**
  * Pure builder for Insert Variable → Rich text: MAIN fields that any form renders with the
- * `editor` control. Token form: ${richText:fieldName}
+ * `editor` or form-create's built-in `fcEditor`. Token form: ${richText:fieldName}
  */
 export function buildEmailRichTextGroup(
   tables: TableDefinition[],
@@ -229,7 +229,7 @@ export function buildEmailRichTextGroup(
   for (const form of forms || []) {
     const rules = (form.configJson as { rule?: unknown } | undefined)?.rule
     walkFormCreateRules(Array.isArray(rules) ? rules : [], (rule) => {
-      if (rule.type === 'editor' && typeof rule.field === 'string' && rule.field) {
+      if ((rule.type === 'editor' || rule.type === 'fcEditor') && typeof rule.field === 'string' && rule.field) {
         editorFields.add(rule.field)
       }
     })

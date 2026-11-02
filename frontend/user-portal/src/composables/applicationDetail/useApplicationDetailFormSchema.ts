@@ -322,7 +322,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
     let dateType = 'date'
     if (rule.props?.type === 'datetime') dateType = 'datetime'
     else if (rule.props?.type === 'daterange') dateType = 'daterange'
-    const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload', 'advancedUpload': 'upload', 'editor': 'editor', 'signature': 'signature', 'transfer': 'transfer' }
+    const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload', 'advancedUpload': 'upload', 'editor': 'editor', 'fcEditor': 'editor', 'signature': 'signature', 'transfer': 'transfer' }
     const field: FormField = { key: rule.field, label: rule.title || rule.field, type: mapDesignerUploadToPortalFieldType(rule.type) || typeMap[rule.type] || 'text', placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
     applySelectPropsFromRule(field, rule)
     const rawOptions = rule.options || rule.props?.options
