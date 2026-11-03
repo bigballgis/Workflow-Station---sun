@@ -40,7 +40,11 @@ final class SubTableBatchFormRules {
             Map<?, ?> props = map(rule.get("props"));
             if (Boolean.TRUE.equals(rule.get("required")) && empty(value)) fail("Batch field is required: " + name);
             if (rule.get("validate") instanceof List<?> validators) {
-                for (Object raw : validators) validateBounds(name, value, map(raw));
+                for (Object raw : validators) {
+                    Map<?, ?> validator = map(raw);
+                    if (!empty(value)) validateType(name, value, validator.get("type"));
+                    validateBounds(name, value, validator);
+                }
             }
             if (empty(value)) continue;
             if ("lookup".equals(rule.get("type"))) { BatchLookupValue.validate(rule, value); continue; }
@@ -57,7 +61,6 @@ final class SubTableBatchFormRules {
     private static void validateBounds(String name, Object value, Map<?, ?> rules) {
         if (Boolean.TRUE.equals(rules.get("required")) && empty(value)) fail("Batch field is required: " + name);
         if (empty(value)) return;
-        validateType(name, value, rules.get("type"));
         BigDecimal magnitude = value instanceof Number ? new BigDecimal(value.toString())
                 : value instanceof String text ? BigDecimal.valueOf(text.length()) : null;
         if (magnitude == null) return;

@@ -100,7 +100,7 @@ class AiStudioOneClickComponentImplTest {
     @SuppressWarnings("unchecked")
     private Steps start(AiStudioOneClickRequest request) {
         AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
-                7L, "PROCESS_DESIGN", "ALL", "msg", null, AiMode.NEW, List.of());
+                7L, "PROCESS_DESIGN", "ALL", "msg", null, AiMode.NEW, List.of(), null);
         when(chatService.prepareOneClick(any())).thenReturn(draft);
         when(jobService.submit(any(AiStudioProposalJobService.JobRequest.class), any(Supplier.class),
                 any(UnaryOperator.class), any(Consumer.class))).thenReturn(new AiStudioProposalJobResponse());

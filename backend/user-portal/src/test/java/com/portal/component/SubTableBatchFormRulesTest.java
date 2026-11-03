@@ -26,6 +26,20 @@ class SubTableBatchFormRulesTest {
     }
 
     @Test
+    void ignoresNativeControlTypeWhenValidatingBounds() {
+        for (String type : List.of("textarea", "password", "email")) {
+            Map<String, Object> form = Map.of("rule", List.of(Map.of("type", "input", "field", "notes",
+                    "props", Map.of("type", type, "maxlength", 20))));
+            assertThatCode(() -> SubTableBatchFormRules.validateRow(form, Map.of("notes", "synthetic")))
+                    .doesNotThrowAnyException();
+        }
+        Map<String, Object> date = Map.of("rule", List.of(Map.of("type", "datePicker", "field", "when",
+                "props", Map.of("type", "datetime"))));
+        assertThatCode(() -> SubTableBatchFormRules.validateRow(date, Map.of("when", "2026-11-03 12:00:00")))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     void enforcesDeclaredValidatorTypes() {
         Map<String, Object> form = Map.of("rule", List.of(Map.of("type", "input", "field", "notes",
                 "validate", List.of(Map.of("type", "string")))));
@@ -42,15 +56,15 @@ class SubTableBatchFormRulesTest {
     }
 
     @Test
-    void rejectsUnsupportedScriptsInsteadOfSilentlySkippingValidation() {
+    void acceptsMarkedHooksAndRejectsUnmarkedScriptsAndCustomValidators() {
         for (String slot : List.of("hook", "_hook")) {
-            assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
-                    Map.of("type", "input", "field", "notes", slot, Map.of("change", "$FNX:\nsideEffect()"))))))
-                    .hasMessageContaining("change scripts").hasMessageContaining("notes");
+            assertThatCode(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
+                    Map.of("type", "input", "field", "notes", slot, Map.of("value", "$FNX:api.setValue('notes', 'ok')"))))))
+                    .doesNotThrowAnyException();
         }
         assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
                 Map.of("type", "input", "field", "notes", "on", Map.of("change", "sideEffect()"))))))
-                .hasMessageContaining("change scripts");
+                .hasMessageContaining("Invalid Batch event script");
         assertThatThrownBy(() -> SubTableBatchFormRules.fields(Map.of("rule", List.of(
                 Map.of("type", "input", "field", "notes", "validate", List.of(Map.of("validator", "custom()")))))))
                 .hasMessageContaining("validator is unsupported");

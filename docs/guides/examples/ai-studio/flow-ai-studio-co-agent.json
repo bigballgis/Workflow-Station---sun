@@ -1,0 +1,86 @@
+{
+  "hermesFlowExport": 1,
+  "flowKey": "ai-studio-co-agent",
+  "displayName": "AI Studio - Content Organizer Agent",
+  "schemaVersion": "23",
+  "fromPublished": true,
+  "trigger": {
+    "name": "trigger",
+    "type": "PIECE_TRIGGER",
+    "valid": true,
+    "settings": {
+      "input": {
+        "authType": "none",
+        "authFields": {}
+      },
+      "pieceName": "@activepieces/piece-webhook",
+      "triggerName": "catch_webhook",
+      "pieceVersion": "0.1.40",
+      "propertySettings": {}
+    },
+    "nextAction": {
+      "name": "step_1",
+      "type": "PIECE",
+      "valid": true,
+      "settings": {
+        "input": {
+          "message": "{{trigger.output.body.message}}",
+          "staffId": "{{trigger.output.body.staffId}}"
+        },
+        "pieceName": "@activepieces/piece-content-organizer",
+        "actionName": "agent_chat",
+        "sampleData": {},
+        "pieceVersion": "1.0.5",
+        "propertySettings": {},
+        "errorHandlingOptions": {
+          "retryOnFailure": {
+            "value": false
+          },
+          "continueOnFailure": {
+            "value": true
+          }
+        }
+      },
+      "nextAction": {
+        "name": "step_2",
+        "type": "PIECE",
+        "valid": true,
+        "settings": {
+          "input": {
+            "fields": {
+              "body": {
+                "reply": "{{step_1.output.reply}}",
+                "error": "{{step_1.error}}"
+              },
+              "status": 200,
+              "headers": {}
+            },
+            "respond": "stop",
+            "responseType": "json"
+          },
+          "pieceName": "@activepieces/piece-webhook",
+          "actionName": "return_response",
+          "sampleData": {},
+          "pieceVersion": "0.1.40",
+          "propertySettings": {},
+          "errorHandlingOptions": {
+            "retryOnFailure": {
+              "value": false
+            },
+            "continueOnFailure": {
+              "value": false
+            }
+          }
+        },
+        "displayName": "Return Response",
+        "lastUpdatedDate": "2026-11-03T08:00:00.000Z"
+      },
+      "displayName": "Ask the Content Organizer agent",
+      "lastUpdatedDate": "2026-11-03T08:00:00.000Z"
+    },
+    "displayName": "Catch Webhook",
+    "lastUpdatedDate": "2026-11-03T08:00:00.000Z"
+  },
+  "notes": [],
+  "connections": []
+}

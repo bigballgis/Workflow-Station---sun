@@ -127,7 +127,7 @@
               filterable
               clearable
               style="width: 100%"
-              :placeholder="t('connection.passwordEnvPlaceholder')"
+              :placeholder="passwordEnvPlaceholder"
               :loading="vaultOptionsLoading"
             >
               <el-option
@@ -171,7 +171,7 @@
               filterable
               clearable
               style="width: 100%"
-              :placeholder="t('connection.passwordEnvPlaceholder')"
+              :placeholder="passwordEnvPlaceholder"
               :loading="vaultOptionsLoading"
             >
               <el-option
@@ -268,6 +268,12 @@ const defaultForm = (): ConnectionFormState => ({
 const form = reactive<ConnectionFormState>(defaultForm())
 const vaultOptions = ref<VaultEnvOption[]>([])
 const vaultOptionsLoading = ref(false)
+const textPasswordAllowed = ref(false)
+const passwordEnvPlaceholder = computed(() =>
+  textPasswordAllowed.value
+    ? t('connection.passwordEnvPlaceholderAny')
+    : t('connection.passwordEnvPlaceholder')
+)
 
 const isInboundOnly = computed(() => form.direction === 'INBOUND')
 
@@ -361,9 +367,15 @@ async function loadVaultOptions() {
   vaultOptionsLoading.value = true
   try {
     const res = await connectionApi.vaultOptions(props.functionUnitId)
-    vaultOptions.value = res.data || []
+    const body = res.data
+    if (!body || !Array.isArray(body.options)) {
+      throw new Error('password options missing')
+    }
+    vaultOptions.value = body.options
+    textPasswordAllowed.value = body.textPasswordAllowed === true
   } catch {
     vaultOptions.value = []
+    textPasswordAllowed.value = false
     ElMessage.error(t('connection.vaultOptionsLoadFailed'))
   } finally {
     vaultOptionsLoading.value = false

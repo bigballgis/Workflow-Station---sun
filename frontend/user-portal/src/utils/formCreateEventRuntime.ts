@@ -3,18 +3,9 @@
  * Designer stores functions as [[FORM-CREATE-PREFIX-function ...}-FORM-CREATE-SUFFIX]] strings.
  */
 
-import {
-  containsDangerousFormScript,
-  extractFunctionBody,
-  isEmptyFormCreateHandler,
-  normalizeFunctionSource,
-} from './formCreateEventScript'
-import {
-  createFormEventOptionsBridge,
-  type FormCreateChangeHandler,
-  type FormCreateEventContext,
-  type PortalFormApi,
-} from './formCreateEventApi'
+import { isEmptyFormCreateHandler } from '@platform-shared/formEvents/script'
+import { createFormEventParser } from '@platform-shared/formEvents/parser'
+import { createFormEventOptionsBridge, type FormCreateChangeHandler, type PortalFormApi } from './formCreateEventApi'
 import { readFormEventCurrentUser } from './formCreateEventUser'
 
 // Re-export the script primitives, API surface, and validator runtime so existing
@@ -54,127 +45,7 @@ export {
  * Parse a form-create stored handler (form-level or component-level).
  * Injects options/api/rule/self for designer EVENT panel scripts.
  */
-export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEventContext) => void) | null {
-  if (typeof raw === 'function') {
-    // Prefer tagged $FNX: / FORM-CREATE source so callers can pass a fresh ctx.api
-    // (e.g. visibility-wired PortalFormApi) instead of a stale closed-over api.
-    // Keep in sync with developer-workstation/src/utils/formCreateEventRuntime.ts
-    const tagged = raw as { __hermesFormEventSource?: unknown; __json?: unknown }
-    const source = tagged.__hermesFormEventSource ?? tagged.__json
-    if (typeof source === 'string' && !isEmptyFormCreateHandler(source)) {
-      return parseFormCreateEventHandler(source)
-    }
-    return (ctx) => {
-      try {
-        (raw as FormCreateChangeHandler)(ctx.field, ctx.value, ctx.api)
-      } catch (err) {
-        console.warn('[formCreateEventRuntime] handler error:', err)
-      }
-    }
-  }
-  if (typeof raw !== 'string') return null
-
-  const source = normalizeFunctionSource(raw)
-  if (!source || containsDangerousFormScript(source)) {
-    return null
-  }
-
-  const body = extractFunctionBody(source)
-  if (body == null) return null
-
-  const usesInject = /\$inject\b/.test(body)
-    || /function\s*\(\s*\$inject\s*\)/.test(source)
-
-  try {
-    if (usesInject) {
-      // $FNX: bodies are normalized to function($inject){…}. Designer scripts often use
-      // bare `api` / `value` (form-create docs) as well as `$inject.api` — bind both.
-      // formData/data: Form-level onSubmit / beforeSubmit param names.
-      // Keep in sync with developer-workstation/src/utils/formCreateEventRuntime.ts
-      const runner = new Function(
-        '$inject',
-        [
-          'var api = $inject.api;',
-          'var options = $inject.options;',
-          'var option = $inject.option;',
-          'var rule = $inject.rule;',
-          'var self = $inject.self;',
-          'var args = $inject.args;',
-          'var field = $inject.field;',
-          'var value = $inject.value;',
-          'var formData = $inject.formData;',
-          'var data = $inject.data;',
-          'var user = $inject.user;',
-          body,
-        ].join('\n'),
-      ) as (inject: Record<string, unknown>) => unknown
-      return (ctx) => {
-        const formSnapshot = ctx.api.form
-        return runner({
-          api: ctx.api,
-          rule: ctx.rule,
-          self: ctx.rule,
-          options: ctx.api,
-          option: {},
-          args: ctx.args ?? [],
-          field: ctx.field,
-          value: ctx.value,
-          formData: formSnapshot,
-          data: formSnapshot,
-          user: readFormEventCurrentUser(),
-        })
-      }
-    }
-
-    const runner = new Function(
-      'field',
-      'value',
-      'options',
-      'api',
-      'rule',
-      'self',
-      'option',
-      'args',
-      'formData',
-      'data',
-      'user',
-      body,
-    ) as (
-      field: string,
-      value: unknown,
-      options: PortalFormApi,
-      api: PortalFormApi,
-      rule: Record<string, unknown>,
-      self: Record<string, unknown>,
-      option: Record<string, unknown>,
-      args: unknown,
-      formData: Record<string, unknown>,
-      data: Record<string, unknown>,
-      user: ReturnType<typeof readFormEventCurrentUser>,
-    ) => unknown
-
-    return (ctx) => {
-      const options = createFormEventOptionsBridge(ctx.api, ctx.rule)
-      const formSnapshot = ctx.api.form
-      return runner(
-        ctx.field,
-        ctx.value,
-        options,
-        ctx.api,
-        ctx.rule,
-        ctx.rule,
-        {},
-        ctx.args,
-        formSnapshot,
-        formSnapshot,
-        readFormEventCurrentUser(),
-      )
-    }
-  } catch (err) {
-    console.warn('[formCreateEventRuntime] Failed to parse handler:', err)
-    return null
-  }
-}
+export const parseFormCreateEventHandler = createFormEventParser(readFormEventCurrentUser)
 
 /**
  * Parse a form-create stored handler into a callable function.

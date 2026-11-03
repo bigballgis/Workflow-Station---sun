@@ -15,6 +15,13 @@ describe('createBatchControlId', () => {
     expect(findBatchFormIssue([rule], { '101': { schemaVersion: 1, rule: [{ type: 'input', field: 'name' }] } }))
       .toEqual({ key: 'batchMissingAssignment', params: { subTable: 'New lines' } })
   })
+  it('accepts ordinary form onChange and component hooks after designer serialization', () => {
+    const rule = { _bindingId: 101, props: { allowBatchAssign: true } }
+    expect(findBatchFormIssue([rule], { '101': { schemaVersion: 1,
+      rule: [{ type: 'miAssignment', children: [{ type: 'lookup', field: 'person', on: { blur: '$FNX:api.required(true, "email")' }, hook: { value: '$FNX:api.setValue("email", value.email)' } }, { type: 'input', field: 'email' }] }],
+      options: { onChange: '$FNX:if (field === "person") api.setValue("email", value.email)' },
+    } })).toBeNull()
+  })
   it('initializes a legacy control only on explicit boolean opt-in and retains it across toggles', () => {
     const rule = { props: { allowBatchEdit: false } } as { batchControlId?: string; props: Record<string, unknown> }
     for (const value of [undefined, false, 'true', 1]) initializeBatchControlIdOnEnable({ value, rule })

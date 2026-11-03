@@ -3,11 +3,13 @@
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { BatchEventContext } from '@platform-shared/batch/eventContext'
 import BatchAssignmentEditor from '@platform-shared/batch/BatchAssignmentEditor.vue'
 import type { SubTableBatchCapability } from '@/utils/subTableBatchCapability'
 import { useBatchAssignmentDirectory } from '@/composables/subTableField/useBatchAssignmentDirectory'
 
 defineProps<{
+  eventContext?: BatchEventContext
   rule?: Record<string, any>
   options?: Record<string, any>
   disabled?: boolean

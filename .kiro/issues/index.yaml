@@ -5727,6 +5727,15 @@
     MCY副本实际发布、新建、两行操作、第三行业务数据不变、刷新和Complete通过；
     两行不同card_number后缀证明事件使用各自行上下文。帮助页三语同步。
     BU/Role自定义Lookup组合未逐项验收。证据：docs/verification/2026-10-31-subtable-assignment-1232.md。
+    2026-11-03方案二扩展：普通/Batch共用事件解析与API，Batch保留逐行独立草稿；前后端开放同步表单事件及控件hook。
+    MCY结构合成副本50128已验证DW保存、Assign选人即时email回填、Cancel不落库、Apply正式ASSIGN+EDIT、两行查库及第三行业务数据不变。
+    修复原生DOM不响应回填、分派原身份被草稿覆盖、初始化失败绕过及条件规则ownership保护；Portal101/DW107/Common6专项通过，四后端及三前端已重建。
+    MI250单测通过但附件截图缺样本；全量类型保留基线381/164，DW Preview等未独立验收，总审查CONDITIONAL。
+    证据：docs/verification/2026-11-03-batch-form-events.md。
+    同日扩大验收：八个表单事件、七个hook、DW/Portal组合、BU/Role→人员→同Role切换与MCY email均实际运行。
+    追修DW临时disabled被只读parser固化、resetOptions残留、原生focus不兼容、beforeFetch循环引用/取消/失败链、标签宽度、控件props.type误作validator、模式切换旧值及初始显隐回退。
+    新增红绿证据；DW109/Portal252专项、Common6/Portal302后端专项通过；Portal全量2741通过/同1原代码基线失败，类型164/381无新增类别。
+    独立regression:batch-events入口最终整组PASS；补附件后MI250+6入口通过。限制和CONDITIONAL复审见docs/verification/2026-11-03-batch-form-events-expanded.md。
 
 - id: "1732"
   status: fixed
@@ -5795,3 +5804,29 @@
     新增10项先4红后全绿，相关74通过，全量2613→2623通过且保留同1失败；类型381和lint9无新增。
     build+Docker重建后同URL截图通过；六组34办理页面/28个MI任务中途颜色断言、34次Case/52次交易详情隔离，既有FU48/50126各完整Batch混合路径及MI250+6通过。
     网关429限流失败保留后串行重跑，无关闭限流或业务/FU/节点硬编码。详见docs/verification/2026-11-01-live-mi-node-completion.md。
+
+- id: "1737"
+  status: open
+  severity: major
+  category: bug
+  summary: "MI测试模板克隆被动作表单引用校验阻止"
+  detail: |
+    2026-11-03扩展Batch事件验收时，源FU50084与50005的真实clone接口均返回
+    Action form reference is not present in the Function Unit package，未产生可用副本。
+    与本次事件运行时无直接关系，未修改打包/克隆逻辑；验收改用明确命名的既有合成MI fixture。
+
+- id: "1738"
+  status: fixed
+  fixed_at: "2026-11-03"
+  severity: major
+  category: bug
+  summary: "Form Design与Batch Form空事件模板计数跳变及关闭事件弹窗自动应用"
+  detail: |
+    FU50125的Batch Assignee首次Event角标10，X关闭后1，重选组件恢复10。
+    空模板与真实脚本混在一起；关闭watcher清空模板并自动应用，重选再次补齐。
+    最终组件编辑器分离已配置脚本与新增草稿，添加入口保留事件模板，角标只计实际脚本；
+    Form event分离已配置/未配置，空包装函数不计数。仅OK应用，X/Esc/Cancel丢弃，
+    添加新事件前保留当前编辑器内容到弹窗草稿。三语帮助与文案同改。
+    30项专项通过；原FU50125及新克隆50135两种设计入口真实页面新增/删除/取消/保存查配置通过，
+    原FU配置未变，浏览器无运行错误。DW全量1265通过并保留同2处locale解析基线失败，类型164无新增。
+    详见docs/verification/2026-11-03-designer-event-editor.md；总体审查CONDITIONAL。

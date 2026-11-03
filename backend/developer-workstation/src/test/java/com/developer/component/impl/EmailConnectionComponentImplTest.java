@@ -7,6 +7,7 @@ import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.entity.EmailConnection;
 import com.developer.entity.FunctionUnit;
 import com.developer.dto.EmailConnectionResponse;
+import com.developer.dto.VaultEnvOption;
 import com.developer.enums.ConnectionType;
 import com.developer.enums.EmailConnectionDirection;
 import com.developer.dto.EmailConnectionRequest;
@@ -97,6 +98,22 @@ class EmailConnectionComponentImplTest {
                 () -> emailConnectionComponent.listVaultOptions());
 
         assertEquals("VAULT_OPTIONS_UNAVAILABLE", ex.getErrorCode());
+        verify(adminCenterEnvironmentClient, never()).listTextVariables();
+    }
+
+    @Test
+    void listVaultOptions_whenTextPasswordAllowed_appendsTextKeys() {
+        ReflectionTestUtils.setField(emailConnectionComponent, "allowTextPassword", true);
+        when(adminCenterEnvironmentClient.listVaultVariables())
+                .thenReturn(List.of(new VaultEnvOption("vault.key", "Vault")));
+        when(adminCenterEnvironmentClient.listTextVariables())
+                .thenReturn(List.of(new VaultEnvOption("text.key", "Text")));
+
+        List<VaultEnvOption> options = emailConnectionComponent.listVaultOptions();
+
+        assertEquals(List.of("vault.key", "text.key"),
+                options.stream().map(VaultEnvOption::varKey).toList());
+        assertTrue(emailConnectionComponent.isTextPasswordAllowed());
     }
 
     @Test

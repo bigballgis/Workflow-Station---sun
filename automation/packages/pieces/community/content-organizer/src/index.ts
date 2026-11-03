@@ -1,5 +1,6 @@
 import { PieceAuth, createPiece } from '@activepieces/pieces-framework';
 import { PieceCategory } from '@activepieces/shared';
+import { agentChatAction } from './lib/actions/agent-chat';
 import { chatAction } from './lib/actions/chat';
 import { extractFieldsAction } from './lib/actions/extract-fields';
 
@@ -13,6 +14,6 @@ export const contentOrganizer = createPiece({
   logoUrl: '/ap-cdn/pieces/hermes/content-organizer.svg', // HERMES: self-hosted icon (X-3)
   authors: ['workflow-station'],
   categories: [PieceCategory.CONTENT_AND_FILES],
-  actions: [extractFieldsAction, chatAction],
+  actions: [extractFieldsAction, chatAction, agentChatAction],
   triggers: [],
 });

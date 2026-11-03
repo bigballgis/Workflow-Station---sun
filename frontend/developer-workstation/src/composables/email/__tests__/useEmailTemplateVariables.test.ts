@@ -131,6 +131,17 @@ describe('buildEmailRichTextGroup', () => {
     expect(group?.options).toEqual([{ token: '${richText:email_body}', label: 'Body (email_body)' }])
   })
 
+  it('offers a richText token when the field is form-create fcEditor', () => {
+    const forms = [{
+      id: 1,
+      formName: 'Main',
+      configJson: { rule: [{ type: 'fcEditor', field: 'email_body' }] },
+    } as FormDefinition]
+    expect(buildEmailRichTextGroup([table], forms)?.options).toEqual([
+      { token: '${richText:email_body}', label: 'Body (email_body)' },
+    ])
+  })
+
   it('returns null when no form uses an editor control', () => {
     const forms = [{ id: 1, formName: 'Main', configJson: { rule: [{ type: 'input', field: 'email_body' }] } } as FormDefinition]
     expect(buildEmailRichTextGroup([table], forms)).toBeNull()

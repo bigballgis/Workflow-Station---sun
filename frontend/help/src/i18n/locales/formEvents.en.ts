@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    batchTitle: 'Batch Assign: fill another field',
+    batchBody: 'In a Sub-Table Batch Form, use Form event → onChange or the Lookup field’s change event to fill another declared field. Each selected record has its own draft: scripts read that record’s values, and the preview selector lets you inspect each result. Apply validates all selected records before applying them together; Cancel discards the drafts. Field permissions still apply. A target outside the Assign area must also be editable through Batch Edit. Focus and other control interaction events run when you operate that control. Fetch hooks run only when the renderer actually performs a remote fetch.',
+    batchSample: 'Form onChange sample. Replace requester_lookup and requester_email with your configured field names, and include email in the Lookup data.',
     pageTitle: 'Form events',
     crumb: 'Developer Workstation · Function Units · Form Design · Controls',
     intro:
@@ -30,7 +33,7 @@ export default {
       'Purchase Request Title. Edit dialog: Create on the left lists each function with grey trigger text; the script editor is on the right.',
     openTitle: 'Open the dialog',
     openBody:
-      'For a control: select it on the canvas, then Edit. For the whole form: Form tab → Form event → Edit. Create picks a built-in event, then hooks, then Custom. Save writes the function; Ok keeps the list. Footer Cancel discards dialog edits.',
+      'In Form Design and Batch Form, the Event badge counts scripts with content. Component Event opens Configured scripts; Add event provides built-in events, hooks and Custom. An empty new event appears under New event drafts until its script is saved. Form event separates Configured scripts from Unconfigured events. Save keeps the current function in the dialog draft; Ok applies the draft to the designer. X, Esc and footer Cancel discard all dialog edits, including functions saved within the dialog. Then save the form to persist the configuration.',
     whenTitle: 'When each event runs',
     whenBody:
       'Create lists this control’s events, then hooks, then Custom. Grey text in that list is the trigger. Only write a name that appears there. Extra names such as removeTag or calendarChange are on that control’s page. Whole-form names are on Form event.',

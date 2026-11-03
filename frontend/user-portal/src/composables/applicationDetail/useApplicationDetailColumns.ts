@@ -122,7 +122,7 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
           type = 'rate'
         } else if (r.type === 'slider') {
           type = 'slider'
-        } else if (r.type === 'editor') {
+        } else if (r.type === 'editor' || r.type === 'fcEditor') {
           type = 'editor'
         } else if (r.type === 'signature') {
           type = 'signature'

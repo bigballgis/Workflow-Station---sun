@@ -50,6 +50,32 @@ describe('process start cannotDownload (New Request)', () => {
     expect(field?.cannotDownload).toBe(true)
   })
 
+  it('maps form-create fcEditor to the portal editor, and keeps editor as editor', () => {
+    const builtin = convertFormCreateRule({
+      type: 'fcEditor',
+      field: 'content',
+      title: 'content',
+      props: {},
+    })
+    const own = convertFormCreateRule({
+      type: 'editor',
+      field: 'content',
+      title: 'content',
+      props: {},
+    })
+    expect(builtin?.type).toBe('editor')
+    expect(builtin?.type).not.toBe('text')
+    expect(own?.type).toBe('editor')
+  })
+
+  it('maps a sub-form fcEditor column to editor', () => {
+    const [col] = mapSubFormRuleToDialogColumns(
+      [{ type: 'fcEditor', field: 'content', title: 'content', props: {} }],
+      emptyLookup,
+    )
+    expect(col.type).toBe('editor')
+  })
+
   it('stamps sub-form upload columns from rule-level cannotDownload', () => {
     const [col] = mapSubFormRuleToDialogColumns(
       [{ type: 'upload', field: 'line_file', title: 'Line File', cannotDownload: true, props: {} }],

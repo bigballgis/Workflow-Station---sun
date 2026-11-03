@@ -35,11 +35,11 @@ public final class BatchFormControlContract {
         validate(rule.get("children"));
     }
 
-    /** Batch supports row-local field changes; executable form lifecycle events are excluded. */
+    /** Stored handlers use the ordinary form script format; each batch row has an isolated runtime. */
     public static void validateOptions(Object raw) {
         if (!(raw instanceof Map<?, ?> options)) return;
         for (String key : List.of("onChange", "onCreated", "onMounted", "onReload", "beforeSubmit", "onSubmit", "onReset", "beforeFetch")) {
-            if (!isEmptyEvent(options.get(key))) throw new IllegalArgumentException("Batch form events are unsupported: " + key + ". Use a field change event.");
+            if (!validHandler(options.get(key))) throw new IllegalArgumentException("Invalid Batch form event: " + key);
         }
     }
 
@@ -48,12 +48,16 @@ public final class BatchFormControlContract {
         if (!(raw instanceof Map<?, ?> events)) throw new IllegalArgumentException("Invalid Batch events: " + field);
         for (var event : events.entrySet()) {
             if (isEmptyEvent(event.getValue())) continue;
-            if (!("on".equals(kind) || "_on".equals(kind)) || !"change".equals(event.getKey())
-                    || !(event.getValue() instanceof String script)
-                    || !(script.startsWith("$FNX:") || script.startsWith("[[FORM-CREATE-PREFIX-"))) {
-                throw new IllegalArgumentException("Batch supports only field change scripts: " + field + " (" + event.getKey() + ")");
+            if (!validHandler(event.getValue())) {
+                throw new IllegalArgumentException("Invalid Batch event script: " + field + " (" + event.getKey() + ")");
             }
         }
+    }
+
+    private static boolean validHandler(Object value) {
+        if (isEmptyEvent(value)) return true;
+        if (value instanceof List<?> list) return list.stream().allMatch(BatchFormControlContract::validHandler);
+        return value instanceof String script && (script.startsWith("$FNX:") || script.startsWith("[[FORM-CREATE-PREFIX-"));
     }
 
     /** Recognize only empty handlers and the exact historical non-executable adapter. */

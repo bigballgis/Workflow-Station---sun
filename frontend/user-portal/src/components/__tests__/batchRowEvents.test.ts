@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { reactive } from 'vue'
 import { createBatchRowEventRunner } from '@platform-shared/batch/rowEvents'
-import { createPortalFormApi, parseFormCreateEventHandler } from '@/utils/formCreateEventRuntime'
+import { parseFormCreateEventHandler } from '@/utils/formCreateEventRuntime'
 import { batchPersonIdentity } from '@platform-shared/batch/personIdentity'
 
-const run = createBatchRowEventRunner(parseFormCreateEventHandler, createPortalFormApi)
+const run = createBatchRowEventRunner(parseFormCreateEventHandler)
 const rules = [{ type: 'miAssignment', children: [
   { type: 'lookup', field: 'handler', on: { change: '$FNX:api.setValue("email", value.email + api.getValue("suffix"));' } },
   { type: 'input', field: 'email' }, { type: 'input', field: 'suffix' },
@@ -29,7 +29,8 @@ describe('Batch row change events', () => {
     expect(row.email).toBe('keep')
     const unknown = [{ field: 'handler', on: { change: '$FNX:api.setValue("other", "bad")' } }]
     expect(() => run(row, unknown, ['handler'], () => false)).toThrow('batchEventWriteDenied')
-    const unsupported = [{ field: 'handler', on: { change: '$FNX:api.hidden(true, "email")' } }]
-    expect(() => run(row, unsupported, ['handler'], () => false)).toThrow('batchEventApiUnsupported')
+    const session = run.createSession(row, rules, () => false)
+    session.api.hidden(true, 'email')
+    expect(session.hidden.get('email')).toBe(true)
   })
 })

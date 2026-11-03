@@ -110,6 +110,11 @@ bi:
 service-task:
   internal-url: ${ACTIVEPIECES_INTERNAL_URL:http://activepieces:80}
 
+# Local docker only. sit/uat/prod leave this unset so connection passwords stay VAULT-only.
+email:
+  connection:
+    allow-text-password: true
+
 # Logging - reduce verbosity in Docker
 logging:
   level:

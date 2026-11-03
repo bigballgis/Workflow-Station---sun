@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    batchTitle: 'Batch Assign：同时回填其他字段',
+    batchBody: '在子表的 Batch Form 中，可在 Form event → onChange 或 Lookup 字段的 change 事件中回填另一个已声明字段。每条选中记录都有独立草稿，脚本读取该记录自己的值；通过预览记录选择器检查各行结果。Apply 会校验所有选中记录后一起应用；Cancel 丢弃草稿。字段权限仍然生效，Assign 区域外的回填目标还须允许 Batch Edit。焦点等控件交互事件在操作该控件时触发；取数 Hook 仅在渲染器实际发起远程取数时触发。',
+    batchSample: 'Form onChange 样例。将 requester_lookup 和 requester_email 替换为配置的字段名，并让 Lookup 返回 email。',
     pageTitle: '表单事件',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls',
     intro:
@@ -29,7 +32,7 @@ export default {
     openFigure: '采购申请 Title。Edit 对话框：左侧 Create 列出每个函数及灰色触发说明；右侧是脚本编辑器。',
     openTitle: '打开对话框',
     openBody:
-      '写控件：在画布上选中后点 Edit。写整张表：Form 页签 → Form event → Edit。Create 先选内置事件，再是 hooks，最后是 Custom。Save 写入当前函数；Ok 把列表留下。页脚 Cancel 会丢弃这次对话框里的改动。',
+      'Form Design 和 Batch Form 的 Event 角标只统计有内容的脚本。组件 Event 默认展示“已配置脚本”；通过“添加事件”选择内置事件、Hook 或 Custom。新增空事件显示在“新建事件草稿”，保存脚本后归入已配置列表。Form event 将“已配置脚本”和“未配置事件”分组展示。Save 将当前函数写入弹窗草稿；Ok 将草稿应用到设计器。右上角 X、Esc 和页脚 Cancel 均丢弃本次弹窗的全部改动，包括在弹窗中 Save 过的函数。最后保存表单才会持久化配置。',
     whenTitle: '每种事件何时触发',
     whenBody:
       'Create 先列出本控件事件，再是 hooks，最后是 Custom。列表里的灰色文字就是触发时机。只写 Create 里出现的名字。removeTag、calendarChange 这类额外名字写在该控件自己的页面。整表事件见 Form event。',

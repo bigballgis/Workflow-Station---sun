@@ -104,7 +104,7 @@ class AiStudioChatComponentImplTest {
     void chatUsesTheSharedHistoryAndRecordsBothMessagesAfterTheReply() {
         AiStudioChatRequest req = request("how many tables?");
         when(threadService.recentHistory(7L, "TABLE_DESIGN")).thenReturn(List.of(shared("teammate discussion")));
-        when(chatService.chat(any(), eq("am"))).thenAnswer(inv -> {
+        when(chatService.chat(any(), eq("u1"), eq("am"))).thenAnswer(inv -> {
             AiStudioChatRequest seen = inv.getArgument(0);
             assertEquals("teammate discussion", seen.getHistory().get(0).getContent());
             return new StudioChatResult("two", null, null);
@@ -115,7 +115,7 @@ class AiStudioChatComponentImplTest {
         assertEquals("two", res.getReply());
         InOrder order = inOrder(accessService, chatService, threadService);
         order.verify(accessService).assertCanAccess(7L, WorkspaceAccessAction.MODIFY);
-        order.verify(chatService).chat(any(), eq("am"));
+        order.verify(chatService).chat(any(), eq("u1"), eq("am"));
         order.verify(threadService).appendUserMessage(eq(7L), eq("TABLE_DESIGN"), eq("how many tables?"), any());
         order.verify(threadService).appendAssistantMessage(eq(7L), eq("TABLE_DESIGN"), eq("two"),
                 isNull(), isNull(), isNull(), any());
@@ -125,7 +125,7 @@ class AiStudioChatComponentImplTest {
     void emptyOrBrokenSharedThreadFallsBackToTheClientHistoryAndNeverFailsTheRound() {
         AiStudioChatRequest req = request("hi");
         when(threadService.recentHistory(7L, "TABLE_DESIGN")).thenThrow(new IllegalStateException("table missing"));
-        when(chatService.chat(any(), anyString())).thenAnswer(inv -> {
+        when(chatService.chat(any(), anyString(), anyString())).thenAnswer(inv -> {
             assertEquals("from the browser", inv.<AiStudioChatRequest>getArgument(0).getHistory().get(0).getContent());
             return new StudioChatResult("hello", null, null);
         });
@@ -143,7 +143,7 @@ class AiStudioChatComponentImplTest {
     @Test
     void failedRoundLeavesTheSharedThreadUntouched() {
         when(threadService.recentHistory(7L, "TABLE_DESIGN")).thenReturn(List.of());
-        when(chatService.chat(any(), anyString())).thenThrow(new AiGenerationException("AI_GATEWAY_EMPTY_RESPONSE", "empty"));
+        when(chatService.chat(any(), anyString(), anyString())).thenThrow(new AiGenerationException("AI_GATEWAY_EMPTY_RESPONSE", "empty"));
 
         assertThrows(AiGenerationException.class, () -> component.chat(request("hi"), "u1", "am"));
         verify(threadService, never()).appendUserMessage(any(), any(), any(), any());
@@ -167,8 +167,8 @@ class AiStudioChatComponentImplTest {
         AiStudioChatRequest req = request("add orders");
         when(threadService.recentHistory(7L, "TABLE_DESIGN")).thenReturn(List.of());
         AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
-                7L, "TABLE_DESIGN", "TABLES", "msg", null, null, List.of());
-        when(chatService.prepareProposal(req)).thenReturn(draft);
+                7L, "TABLE_DESIGN", "TABLES", "msg", null, null, List.of(), null);
+        when(chatService.prepareProposal(req, "u1")).thenReturn(draft);
         AiStudioProposalJobResponse snapshot = AiStudioProposalJobResponse.builder().jobId("j1").build();
         ArgumentCaptor<Consumer<StudioChatResult>> hook = ArgumentCaptor.forClass(Consumer.class);
         ArgumentCaptor<AiStudioProposalJobService.JobRequest> submitted =

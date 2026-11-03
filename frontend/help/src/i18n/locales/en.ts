@@ -364,7 +364,7 @@ export default {
     fSmtpUsername:
       'SMTP login (service account). Usually different from the sender email. Leave blank only for an anonymous relay that does not use SMTP AUTH.',
     fSmtpPassword:
-      'Required when Username is set. Select a VAULT environment variable (not TEXT). The mailbox password stays in Vault. See [[/environment-variables]].',
+      'Required when Username is set. On sit / uat, select a VAULT environment variable (not TEXT); the mailbox password stays in Vault. The local docker dropdown also lists TEXT and uses that variable’s current or default value as the password. See [[/environment-variables]].',
     fSmtpHost:
       'Not typed here. SMTP hostname comes from Admin Center → System Config (Outbound connections).',
     fSmtpPort:
@@ -613,7 +613,7 @@ export default {
     fImapUsername:
       'IMAP login (service account). Usually different from the mailbox address. Required with password for a new row. Authenticates the session; Mailbox Email is the inbox the monitor will try to read.',
     fImapPassword:
-      'IMAP password is a VAULT environment variable. Required when username is set. Ciphertext is no longer stored; re-select a VAULT key on old rows. See [[/environment-variables]].',
+      'On sit / uat the IMAP password must be a VAULT environment variable. Required when username is set. Ciphertext is no longer stored; re-select a VAULT key on old rows. The local docker dropdown also lists TEXT. See [[/environment-variables]].',
     fImapHost:
       'Not typed here. IMAP hostname comes from Admin Center → System Config (Inbound connections).',
     fImapPort:
@@ -804,14 +804,14 @@ export default {
     pageTitle: 'Environment variables',
     crumb: 'Admin Center',
     intro:
-      'Admin Center → Environment variables holds TEXT values and VAULT catalog keys. Creating a VAULT variable writes the password into HashiCorp Vault only when that path does not already exist. Edit and delete never change Vault. Email Connection passwords only bind a VAULT key.',
+      'Admin Center → Environment variables holds TEXT values and VAULT catalog keys. Creating a VAULT variable writes the password into HashiCorp Vault only when that path does not already exist. Edit and delete never change Vault. On sit / uat, Email Connection passwords only bind a VAULT key. The local docker dropdown also lists TEXT.',
     flowTitle: 'Order of work',
     flow1: 'Create a VAULT variable: key and optional password',
     flow2: 'On Connections, pick that key as Password (VAULT)',
     flow3: 'Test send or Deploy the inbound monitor',
     catalogTitle: 'Catalog fields',
     catalogBody:
-      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the field under ame-hase-hermes/env-var is new, Admin writes it. If that field already exists, Admin only creates the catalog row. Email passwords must be VAULT — TEXT keys never appear in the Connections password list.',
+      'Open Environment variables in the Admin Center sidebar. Add TEXT for ordinary strings (default required, current optional) or VAULT for a catalog key. If the field under ame-hase-hermes/env-var is new, Admin writes it. If that field already exists, Admin only creates the catalog row. On sit / uat, email passwords must be VAULT — TEXT keys never appear in the Connections password list. The local docker dropdown also lists TEXT.',
     catalogLead: 'Field catalog — Add / Edit variable.',
     fKindText:
       'TEXT. Default value is required. Current value is optional; blank or whitespace uses the default.',
@@ -827,14 +827,14 @@ export default {
     bindBody:
       'In Developer Workstation → Connections, Username plus Password (VAULT) select a VAULT key from this catalog. Host still comes from System Config SMTP/IMAP. See [[/email-send#connection]] and [[/email-monitor]].',
     fBindPassword:
-      'Required when Username is set. Only VAULT keys are listed. Opening an old connection after this change: re-select a VAULT key; ciphertext is gone.',
+      'Required when Username is set. On sit / uat only VAULT keys are listed. The local docker dropdown also lists TEXT. Opening an old connection after this change: re-select a key; ciphertext is gone.',
     failTitle: 'What fails',
     failBody: 'Fix the catalog or the Connection binding, then Test or Deploy again.',
     failTextBlank: 'TEXT default empty — save is blocked. Whitespace current value falls back to default.',
     failDuplicateKey: 'Duplicate catalog key — save is blocked. Use the existing environment variable. Do not operate Vault.',
     failVaultWrite: 'Vault write failed (connectivity, login, or permissions) — save is blocked and a toast shows the error.',
     failVault404: 'Vault 404 — IMAP/SMTP does not treat this as “no password”; the poll/send fails with a Vault error.',
-    failTextForMail: 'Email password bound to TEXT — Admin rejects it; pick a VAULT key.',
+    failTextForMail: 'Outside local docker, an email password bound to TEXT is rejected; pick a VAULT key. Local docker allows TEXT.',
   },
   upTasksToClaimGuide: {
     historyTitle: 'Change History',

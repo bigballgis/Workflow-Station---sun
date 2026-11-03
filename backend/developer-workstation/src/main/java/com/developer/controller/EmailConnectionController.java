@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.EmailConnectionComponent;
+import com.developer.dto.ConnectionPasswordOptions;
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
 import com.developer.dto.VaultEnvOption;
@@ -32,11 +33,13 @@ public class EmailConnectionController {
     }
 
     @GetMapping("/vault-options")
-    @Operation(summary = "列出当前环境可用的 VAULT 环境变量")
-    public ResponseEntity<ApiResponse<List<VaultEnvOption>>> vaultOptions(
+    @Operation(summary = "列出连接密码可选的环境变量")
+    public ResponseEntity<ApiResponse<ConnectionPasswordOptions>> vaultOptions(
             @PathVariable Long functionUnitId) {
         emailConnectionComponent.listByFunctionUnitId(functionUnitId);
-        return ResponseEntity.ok(ApiResponse.success(emailConnectionComponent.listVaultOptions()));
+        return ResponseEntity.ok(ApiResponse.success(new ConnectionPasswordOptions(
+                emailConnectionComponent.listVaultOptions(),
+                emailConnectionComponent.isTextPasswordAllowed())));
     }
 
     @GetMapping

@@ -6,7 +6,7 @@ Automation flow, whose Content Organizer **Chat** step answers with the CO promp
 ```
 DW  POST /ai-generation/hermes-master/chat
  └─ HermesMasterAutomationClient ── POST <AP>/api/v1/webhooks/<flowId>/sync  {message, userInput, staffId}
-     └─ flow hermes-master-chat: Catch Webhook → Content Organizer · Chat 1.0.3 → Return Response {reply, error}
+     └─ flow hermes-master-chat: Catch Webhook → Content Organizer · Chat 1.0.5 → Return Response {reply, error}
          └─ Content Organizer completion (prompt setting "Hermes Master", variable {user_input} = userInput)
 ```
 
@@ -16,7 +16,7 @@ DW  POST /ai-generation/hermes-master/chat
 
 ## Prerequisites
 
-- content-organizer piece **1.0.3** (adds the `chat` action) and the Content Organizer configuration of the
+- content-organizer piece **1.0.3+** (1.0.3 added the `chat` action; the whitelist now ships 1.0.5) and the Content Organizer configuration of the
   [OCR guide](../../content-organizer-ocr-guide.md) §8, plus `CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID` /
   `CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID` (§4.3, §6.5).
 - Every DW user who chats needs an employee ID (`sys_users.employee_id`); Content Organizer audits each call by it.

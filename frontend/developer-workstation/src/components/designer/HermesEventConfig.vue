@@ -25,7 +25,7 @@
                                          :placement="'bottom-start'">
                               <span class="el-dropdown-link">
                                 <el-button link type="primary" size="default">
-                                    {{ t('event.create') }}<i class="el-icon-arrow-down el-icon--right"></i>
+                                    {{ editorText('add') }}<i class="el-icon-arrow-down el-icon--right"></i>
                                 </el-button>
                               </span>
                                 <template #dropdown>
@@ -58,11 +58,13 @@
                                 </template>
                             </el-dropdown>
                         </el-header>
+                        <div v-if="!Object.keys(event).length" class="_fd-event-empty">{{ editorText('empty') }}</div>
                         <el-main>
                             <el-menu
                                 :default-active="defActive"
                                 v-model="activeData">
-                                <template v-for="(item, name) in event">
+                                <el-menu-item-group v-for="group in eventGroups" :key="group.key" :title="editorText(group.key)">
+                                <template v-for="(item, name) in group.events">
                                     <template v-if="Array.isArray(item)">
                                         <template v-for="(event, index) in item" :key="name + index">
                                             <el-menu-item :index="name + index">
@@ -94,6 +96,7 @@
                                         </div>
                                     </el-menu-item>
                                 </template>
+                                </el-menu-item-group>
                                 <el-menu-item v-if="cus" style="padding-left: 10px;" index="custom">
                                     <div class="_fd-event-title" @click.stop>
                                         <el-input type="text" v-model="cusValue" size="default"
@@ -148,7 +151,7 @@ import unique from '@form-create/utils/lib/unique';
 import {defineComponent} from 'vue';
 import FnEditor from '@form-create/designer/src/components/FnEditor.vue';
 import {getInjectArg} from '@form-create/designer/src/utils';
-import {normalizeEventEditorBody} from '@/utils/formCreateDefaultEvents';
+import {getComponentEventNamesForRule, normalizeEventEditorBody} from '@/utils/formCreateDefaultEvents';
 import {loadEventData, parseEventData} from '@/composables/hermesEventConfig/eventSerialization';
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue';
 import i18n from '@/i18n';
@@ -180,8 +183,6 @@ export default defineComponent({
             cus: false,
             cusValue: '',
             eventStr: '',
-            /** Footer Cancel only — X / OK still persist dialog edits to activeRule._on / _hook. */
-            discardOnClose: false,
         };
     },
     computed: {
@@ -201,9 +202,10 @@ export default defineComponent({
             return this.eventName;
         },
         eventList() {
-            return this.orgEvent.map(v => {
+            const declared = this.orgEvent.map(v => {
                 return typeof v === 'object' ? v.name : v;
-            })
+            });
+            return [...new Set([...declared, ...getComponentEventNamesForRule(this.activeRule || {}).on])];
         },
         eventInfo() {
             const info = {};
@@ -220,15 +222,14 @@ export default defineComponent({
             return info;
         },
         eventNum() {
-            let num = 0;
-            Object.keys(this.modelValue || {}).forEach(k => {
-                num += Array.isArray(this.modelValue[k]) ? this.modelValue[k].length : 1;
-            });
-            const hooks = this.activeRule ? {...this.activeRule._hook || {}} : {};
-            Object.keys(hooks).forEach(k => {
-                num += Array.isArray(hooks[k]) ? hooks[k].length : 1;
-            });
-            return num;
+            return Object.values(this.loadFN()).reduce((count, handlers) => count + handlers.length, 0);
+        },
+        eventGroups() {
+            return ['configured', 'drafts'].map(key => ({
+                key,
+                events: Object.fromEntries(Object.entries(this.event).filter(([, bodies]) =>
+                    bodies.some(body => body.trim()) === (key === 'configured'))),
+            })).filter(group => Object.keys(group.events).length);
         },
         fnArgs() {
             return [getInjectArg(this.t)];
@@ -237,21 +238,19 @@ export default defineComponent({
     watch: {
         visible(v) {
             if (v) {
-                this.discardOnClose = false;
                 this.event = this.loadFN();
                 this.openFirstEvent();
                 return;
             }
-            if (!this.discardOnClose) {
-                this.applyEventsToRule();
-            }
-            this.discardOnClose = false;
             this.event = {};
             this.destroy();
             this.closeCus();
         },
     },
     methods: {
+        editorText(key) {
+            return i18n.global.t('form.eventEditor.' + key);
+        },
         addCus() {
             const val = this.cusValue && this.cusValue.trim();
             if (val) {
@@ -284,6 +283,7 @@ export default defineComponent({
             return parseEventData(e);
         },
         add(name) {
+            if (this.activeData && !this.commitActiveEditor()) return;
             let data = {};
             if (Array.isArray(this.event[name])) {
                 this.event[name].push('');
@@ -309,9 +309,7 @@ export default defineComponent({
                     index: 0,
                 };
             }
-            if (!this.activeData) {
-                this.edit(data);
-            }
+            this.edit(data);
         },
         edit(data) {
             data.key = unique();
@@ -380,7 +378,6 @@ export default defineComponent({
             this.destroy();
         },
         cancelDialog() {
-            this.discardOnClose = true;
             this.visible = false;
         },
         applyEventsToRule() {
@@ -461,6 +458,13 @@ export default defineComponent({
 
 ._fd-event-head .el-button.is-link {
     color: #2f73ff;
+}
+
+._fd-event-empty {
+    padding: 20px 15px;
+    color: #606266;
+    font-size: 13px;
+    line-height: 1.6;
 }
 
 ._fd-event-r {

@@ -2,14 +2,18 @@ package com.developer.service.impl;
 
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.FunctionUnitContextDTO;
+import com.developer.entity.User;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
 import com.developer.enums.AiStudioPhase;
 import com.developer.exception.AiGenerationException;
+import com.developer.repository.UserRepository;
 import com.developer.service.AiGenerationService;
+import com.developer.service.AiPromptTemplateService;
 import com.developer.service.AiStudioChatService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
@@ -24,6 +28,12 @@ import java.util.UUID;
  * <p>Prompt 不走 {@code AiPromptBuilder}（那套模板与 AI Generate 的三阶段/文档协议绑定），
  * 而是本类自带的顾问式 system prompt + 明文对话转写。响应仍交 {@link AiResponseParser}——
  * 它负责 OpenAI 兼容信封的拆取与空响应显式失败，Copilot 只取其中的 {@code reply}。</p>
+ *
+ * <p>两条模型链路，由 {@code ai-generation.ai-studio.provider} 选：{@code AUTOMATION}（默认）经
+ * {@link AiStudioAutomationClient} 调 Content Organizer 的 agent setting「Function Unit」，请求按
+ * docs/design/developer-workstation-ai-studio-co-output-contract.md 分节拼成一条消息，回答仍交
+ * {@link AiResponseParser} 解析与校验；{@code GAIP} 是原来的直连集团 AI gateway。一键生成暂时总走 GAIP——
+ * CO 每次只有一个专家回答，整套生成要由 DW 逐阶段编排，尚未实现。</p>
  */
 @Slf4j
 @Service
@@ -39,6 +49,10 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
 
     private static final com.fasterxml.jackson.databind.ObjectMapper HISTORY_JSON =
             new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** CO 消息里的设计上下文与元数据：上下文里可能有时间类型，注册 classpath 上的模块。 */
+    private static final com.fasterxml.jackson.databind.ObjectMapper AGENT_JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
 
     private static final String SYSTEM_PROMPT = """
             You are AI Copilot inside AI Studio of Workflow Station, a low-code workflow platform \
@@ -103,37 +117,55 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
         return slices;
     }
 
+    /** 模型链路：AUTOMATION = Automation flow → Content Organizer agent setting；GAIP = 直连集团 AI gateway。 */
+    public enum Provider { AUTOMATION, GAIP }
+
     private final AiGatewayClient aiGatewayClient;
     private final AiResponseParser aiResponseParser;
     private final AiGenerationService aiGenerationService;
     private final AiStudioContextDigest contextDigest;
     private final FunctionUnitDocumentService documentService;
+    private final AiStudioAutomationClient automationClient;
+    private final AiPromptTemplateService promptTemplateService;
+    private final UserRepository userRepository;
+    private final Provider provider;
 
     public AiStudioChatServiceImpl(AiGatewayClient aiGatewayClient, AiResponseParser aiResponseParser,
                                    AiGenerationService aiGenerationService,
                                    AiStudioContextDigest contextDigest,
-                                   FunctionUnitDocumentService documentService) {
+                                   FunctionUnitDocumentService documentService,
+                                   AiStudioAutomationClient automationClient,
+                                   AiPromptTemplateService promptTemplateService,
+                                   UserRepository userRepository,
+                                   @Value("${ai-generation.ai-studio.provider:AUTOMATION}") Provider provider) {
         this.aiGatewayClient = aiGatewayClient;
         this.aiResponseParser = aiResponseParser;
         this.aiGenerationService = aiGenerationService;
         this.contextDigest = contextDigest;
         this.documentService = documentService;
+        this.automationClient = automationClient;
+        this.promptTemplateService = promptTemplateService;
+        this.userRepository = userRepository;
+        this.provider = provider;
     }
 
     @Override
-    public StudioChatResult chat(AiStudioChatRequest request, String amToken) {
+    public StudioChatResult chat(AiStudioChatRequest request, String userId, String amToken) {
         if (request.isPropose()) {
             // 同步形态只留给单测与直接调用；HTTP 入口走 prepare + 后台 run（见 AiStudioProposalJobService）
-            return runProposal(prepareProposal(request), amToken);
+            return runProposal(prepareProposal(request, userId), amToken);
         }
-        return new StudioChatResult(advisoryChat(request, amToken), null, null);
+        String reply = provider == Provider.AUTOMATION
+                ? agentAdvisoryChat(request, staffId(userId))
+                : advisoryChat(request, amToken);
+        return new StudioChatResult(reply, null, null);
     }
 
     /**
      * 提案第一步：校验阶段、序列化上下文（JPA 懒加载，必须在请求线程）、拼 scoped 消息。
      */
     @Override
-    public ProposalDraft prepareProposal(AiStudioChatRequest request) {
+    public ProposalDraft prepareProposal(AiStudioChatRequest request, String userId) {
         // propose 轮次的写入范围：AI Studio 阶段 → AiWriteService 的 regenerateScope；
         // 邮件三阶段、视图与 service task 绑定的切片是 upsert 语义（见 AiWriteServiceImpl）
         String scope = AiStudioPhase.fromKey(request.getPhase())
@@ -149,8 +181,16 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                 .entrySet().stream()
                 .map(e -> Map.of("documentType", e.getKey().name(), "content", e.getValue()))
                 .toList();
+        if (provider == Provider.AUTOMATION) {
+            // 工号与整条消息都在请求线程定下：后台作业线程里既没有当前用户，也不该再碰 JPA
+            String message = AiStudioAgentMessage.build("PROPOSE", request.getPhase(), scope, toJson(context),
+                    toJson(aiGenerationService.getSchemaMetadata()), promptTemplateService.resolve("GENERATION"),
+                    documents, historyTranscript(request), request.getMessage());
+            return new ProposalDraft(request.getFunctionUnitId(), request.getPhase(), scope, message, context, mode,
+                    documents, staffId(userId));
+        }
         return new ProposalDraft(request.getFunctionUnitId(), request.getPhase(), scope,
-                buildProposalMessage(request, scope), context, mode, documents);
+                buildProposalMessage(request, scope), context, mode, documents, null);
     }
 
     @Override
@@ -163,7 +203,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                 .map(e -> Map.of("documentType", e.getKey().name(), "content", e.getValue()))
                 .toList();
         return new ProposalDraft(request.getFunctionUnitId(), request.getPhase(), SCOPE_ALL,
-                buildOneClickMessage(request), context, mode, documents);
+                buildOneClickMessage(request), context, mode, documents, null);
     }
 
     /**
@@ -174,9 +214,11 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
     @Override
     public StudioChatResult runProposal(ProposalDraft draft, String amToken) {
         String scope = draft.scope();
-        Map<String, Object> parsed = aiGenerationService.callAiModel(
-                UUID.randomUUID(), draft.message(), AiPhase.GENERATION, draft.mode(),
-                draft.context(), draft.functionUnitId(), draft.documents(), scope, amToken);
+        Map<String, Object> parsed = draft.staffId() != null
+                ? agentProposal(draft)
+                : aiGenerationService.callAiModel(
+                        UUID.randomUUID(), draft.message(), AiPhase.GENERATION, draft.mode(),
+                        draft.context(), draft.functionUnitId(), draft.documents(), scope, amToken);
 
         Object reply = parsed.get("reply");
         Object generatedData = parsed.get("generatedData");
@@ -193,7 +235,8 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
             throw new AiGenerationException("AI_STUDIO_PROPOSAL_EMPTY",
                     "The model returned neither a proposal data block nor an explanation");
         }
-        log.info("AI Studio proposal round: functionUnitId={}, phase={}, scope={}, hasProposal={}, replyChars={}",
+        log.info("AI Studio proposal round: provider={}, functionUnitId={}, phase={}, scope={}, hasProposal={}, "
+                        + "replyChars={}", draft.staffId() != null ? Provider.AUTOMATION : Provider.GAIP,
                 draft.functionUnitId(), draft.phase(), scope, proposal != null,
                 reply instanceof String r ? r.length() : 0);
         return new StudioChatResult(
@@ -241,6 +284,77 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                 + "Do NOT output email templates, connections, email monitors, main table views or service task "
                 + "bindings, do NOT rename the function unit, and do NOT include an icon.\n"
                 + "========== End of one-click generation request ==========";
+    }
+
+    /**
+     * CO 提案：消息已在请求线程拼好（{@link #prepareProposal}）。回答与网关链路走同一个解析器，标记块解析、归一化与
+     * 语义校验完全一样；可修的结构违规照网关链路的做法带着校验原话再问一次，只修一次。
+     */
+    private Map<String, Object> agentProposal(ProposalDraft draft) {
+        String reply = automationClient.chat(draft.message(), draft.staffId());
+        try {
+            return aiResponseParser.parseText(reply);
+        } catch (AiGenerationException e) {
+            if (!AiGenerationServiceImpl.REPAIRABLE_ERROR_CODES.contains(e.getErrorCode())) {
+                throw e;
+            }
+            log.warn("AI Studio agent proposal rejected by platform validation ({}), asking once more with the "
+                    + "violation fed back: {}", e.getErrorCode(), e.getMessage());
+            String repaired = automationClient.chat(
+                    AiGenerationServiceImpl.buildRepairMessage(draft.message(), e), draft.staffId());
+            return aiResponseParser.parseText(repaired);
+        }
+    }
+
+    /**
+     * CO 顾问轮：完整设计上下文（专家按名字落地回答）+ 文档 + 历史 + 本轮问题，回答原样返回。
+     * 上下文序列化失败时与网关链路一样降级为空设计——没有上下文只是回答得泛。
+     */
+    private String agentAdvisoryChat(AiStudioChatRequest request, String staffId) {
+        AiStudioPhase phase = AiStudioPhase.fromKey(request.getPhase())
+                .orElseThrow(() -> new AiGenerationException("AI_STUDIO_UNKNOWN_PHASE",
+                        "Unknown AI Studio phase: " + request.getPhase()));
+        String context;
+        try {
+            context = toJson(aiGenerationService.serializeFunctionUnitContext(request.getFunctionUnitId()));
+        } catch (RuntimeException e) {
+            // FALLBACK(ux): 与网关顾问轮的 advisoryDigest 同一取舍——没有上下文只是回答得泛，不让整轮对话失败
+            log.warn("AI Studio agent chat continues without the design context (functionUnitId={}): {}",
+                    request.getFunctionUnitId(), e.getMessage());
+            context = "{}";
+        }
+        List<Map<String, String>> documents = documentService.latestContents(request.getFunctionUnitId())
+                .entrySet().stream()
+                .map(e -> Map.of("documentType", e.getKey().name(), "content", e.getValue()))
+                .toList();
+        String message = AiStudioAgentMessage.build("ADVISORY", phase.name(), phase.proposalScope().orElse("NONE"),
+                context, toJson(aiGenerationService.getSchemaMetadata()), null, documents,
+                historyTranscript(request), request.getMessage());
+        String reply = automationClient.chat(message, staffId).trim();
+        log.info("AI Studio agent replied: functionUnitId={}, phase={}, historySize={}, messageChars={}, replyChars={}",
+                request.getFunctionUnitId(), request.getPhase(),
+                request.getHistory() == null ? 0 : request.getHistory().size(), message.length(), reply.length());
+        return reply;
+    }
+
+    /** Content Organizer 每次调用都要工号（审计到人）；没有就明确失败，不拿别的身份顶替。 */
+    private String staffId(String userId) {
+        return userRepository.findById(userId)
+                .map(User::getEmployeeId)
+                .filter(id -> !id.isBlank())
+                .map(String::trim)
+                .orElseThrow(() -> new AiGenerationException("AI_STUDIO_NO_EMPLOYEE_ID",
+                        "Your account has no employee ID, which Content Organizer requires; "
+                                + "ask an administrator to set it in Admin Center"));
+    }
+
+    private static String toJson(Object value) {
+        try {
+            return AGENT_JSON.writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new AiGenerationException("AI_STUDIO_CONTEXT_SERIALIZATION_FAILED",
+                    "Could not serialize the design for Content Organizer: " + e.getOriginalMessage());
+        }
     }
 
     private String advisoryChat(AiStudioChatRequest request, String amToken) {
@@ -342,16 +456,22 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
      * （超长消息已被 DTO 的 @Size(max=4000) 挡在门外）。
      */
     private String buildTranscript(AiStudioChatRequest request) {
-        StringBuilder tail = new StringBuilder("User: ").append(request.getMessage());
+        String tail = "User: " + request.getMessage();
+        String history = historyLines(request, TRANSCRIPT_CHAR_BUDGET - tail.length());
+        return history.isEmpty() ? tail : "Conversation so far:\n" + history + tail;
+    }
 
+    /** CO 消息的 CONVERSATION 分节：只有历史，本轮消息另放 USER REQUEST。 */
+    private String historyTranscript(AiStudioChatRequest request) {
+        return historyLines(request, TRANSCRIPT_CHAR_BUDGET).strip();
+    }
+
+    /** 从最新的历史往回收，收满预算为止，再按时间序拼出（每条一行，带换行）；没有历史为空串。 */
+    private static String historyLines(AiStudioChatRequest request, int budget) {
         List<AiStudioChatRequest.HistoryMessage> history = request.getHistory();
         if (history == null || history.isEmpty()) {
-            return tail.toString();
+            return "";
         }
-
-        StringBuilder transcript = new StringBuilder();
-        int budget = TRANSCRIPT_CHAR_BUDGET - tail.length();
-        // 从最新的历史往回收，收满预算为止，再按时间序拼出
         int start = history.size();
         int used = 0;
         String[] rendered = new String[history.size()];
@@ -363,11 +483,11 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
             used += cost;
             start--;
         }
-        transcript.append("Conversation so far:\n");
+        StringBuilder lines = new StringBuilder();
         for (int i = start; i < history.size(); i++) {
-            transcript.append(rendered[i]).append('\n');
+            lines.append(rendered[i]).append('\n');
         }
-        return transcript.append(tail).toString();
+        return lines.toString();
     }
 
     /**
