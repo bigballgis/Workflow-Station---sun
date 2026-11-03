@@ -1,0 +1,1232 @@
+<title>Automation 组件分层方案</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap">
+<style>
+/* Layout: 单栏文档。正文窄栏，图和效果图放宽。颜色只表达三件事：蓝 = 调用，绿 = 碰数据库，红 = 被拦截；琥珀只给 FU 专属组件 */
+:root {
+  --bg: #F4F6F9;
+  --surface: #FFFFFF;
+  --band: #E9EDF3;
+  --fg: #18202C;
+  --muted: #5A6577;
+  --line: #D6DCE5;
+  --line-strong: #AEB8C6;
+  --accent: #2F5BD3;
+  --accent-soft: #E3EAFB;
+  --data: #0B7F63;
+  --data-soft: #DCF1E9;
+  --block: #C23B3B;
+  --block-soft: #FBE7E7;
+  --fu: #9A5A00;
+  --fu-soft: #FBEFD8;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F141B; --surface: #171E27; --band: #1D2531; --fg: #E5EAF1; --muted: #9AA5B5;
+    --line: #2A3441; --line-strong: #46525F;
+    --accent: #7C9CFF; --accent-soft: #1E2A47;
+    --data: #3CC79C; --data-soft: #12302A;
+    --block: #F27878; --block-soft: #3A1B1E;
+    --fu: #F0B45A; --fu-soft: #3A2A12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F141B; --surface: #171E27; --band: #1D2531; --fg: #E5EAF1; --muted: #9AA5B5;
+  --line: #2A3441; --line-strong: #46525F;
+  --accent: #7C9CFF; --accent-soft: #1E2A47;
+  --data: #3CC79C; --data-soft: #12302A;
+  --block: #F27878; --block-soft: #3A1B1E;
+  --fu: #F0B45A; --fu-soft: #3A2A12;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+.wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 44px 88px;
+  display: grid;
+  gap: 64px;
+}
+a { color: var(--accent); }
+a:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--band); padding: 1px 6px; border-radius: 5px; }
+
+/* ---------- header ---------- */
+header { display: grid; gap: 18px; }
+.eyebrow { font-size: 12.5px; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4.4vw, 40px);
+  line-height: 1.25;
+  margin: 0;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.lede { font-size: 17px; max-width: 40em; margin: 0; }
+.lede b { color: var(--data); }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc a {
+  font-size: 13px; text-decoration: none; color: var(--fg);
+  border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px 12px;
+  background: var(--surface);
+}
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- sections ---------- */
+section { display: grid; gap: 20px; scroll-margin-top: 20px; }
+h2 {
+  font-family: var(--font-display);
+  font-size: 25px; line-height: 1.35; margin: 0; font-weight: 700;
+  text-wrap: balance;
+}
+h3 { font-size: 16.5px; margin: 0; line-height: 1.4; }
+.prose { max-width: 46em; display: grid; gap: 12px; }
+.prose p { margin: 0; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.note { color: var(--muted); font-size: 14px; margin: 0; }
+
+/* rule strip */
+.rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rule {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+}
+.rule .g {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 700; font-size: 15px;
+}
+.g-ok { background: var(--data-soft); color: var(--data); }
+.g-no { background: var(--block-soft); color: var(--block); }
+.g-go { background: var(--accent-soft); color: var(--accent); }
+.rule b { display: block; font-size: 15px; line-height: 1.45; }
+.rule span { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+@media (max-width: 760px) { .rules { grid-template-columns: 1fr; } }
+
+/* ---------- figures ---------- */
+figure.fig { margin: 0; display: grid; gap: 10px; }
+.fig-scroll {
+  overflow-x: auto; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+}
+.fig-scroll svg { display: block; width: 100%; min-width: 680px; height: auto; font-family: var(--font-body); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 52em; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; }
+.legend .l-call { border-color: var(--accent); }
+.legend .l-data { border-color: var(--data); }
+.legend .l-block { border-color: var(--block); border-top-style: dashed; }
+.legend .l-ret { border-color: var(--muted); border-top-style: dashed; }
+
+svg .band { fill: var(--band); }
+svg .band-data { fill: var(--data-soft); }
+svg .box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
+svg .box-data { fill: var(--surface); stroke: var(--data); stroke-width: 1.4; }
+svg .t { fill: var(--fg); font-size: 14px; font-weight: 700; }
+svg .s { fill: var(--muted); font-size: 12px; }
+svg .smono { fill: var(--muted); font-size: 11.5px; font-family: var(--font-mono); }
+svg .g1 { fill: var(--fg); font-size: 13px; font-weight: 700; }
+svg .g2 { fill: var(--muted); font-size: 12px; }
+svg .lab { fill: var(--accent); font-size: 12px; font-weight: 500; }
+svg .lab-data { fill: var(--data); font-size: 12px; font-weight: 500; }
+svg .lab-block { fill: var(--block); font-size: 12px; font-weight: 700; }
+svg .lab-muted { fill: var(--muted); font-size: 12px; }
+svg .lab-fg { fill: var(--fg); font-size: 12px; font-weight: 500; }
+svg .ln { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+svg .ln-data { stroke: var(--data); stroke-width: 1.8; fill: none; }
+svg .ln-block { stroke: var(--block); stroke-width: 1.6; fill: none; stroke-dasharray: 6 5; }
+svg .ln-muted { stroke: var(--line-strong); stroke-width: 1.4; fill: none; }
+svg .ret { stroke-dasharray: 5 4; }
+svg .life { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 3 5; fill: none; }
+svg .mk { fill: var(--accent); }
+svg .mk-data { fill: var(--data); }
+svg .mk-block { fill: var(--block); }
+svg .mk-muted { fill: var(--line-strong); }
+svg .db { fill: var(--data-soft); stroke: var(--data); stroke-width: 1.4; }
+
+/* ---------- tables ---------- */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table.doc { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+table.doc th, table.doc td { text-align: left; padding: 10px 16px; vertical-align: top; }
+table.doc th { font-size: 12.5px; color: var(--muted); font-weight: 600; background: var(--band); letter-spacing: 0.02em; }
+table.doc td { border-top: 1px solid var(--line); }
+table.doc td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* ---------- step/sequence list ---------- */
+ol.seq { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 46em; }
+ol.seq li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+ol.seq .n {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12.5px; font-weight: 700; background: var(--accent-soft); color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+ol.seq .n.d { background: var(--data-soft); color: var(--data); }
+
+/* ---------- mockups ---------- */
+.mock-head { display: grid; gap: 6px; max-width: 46em; }
+.mock {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+}
+.mock-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); background: var(--band);
+}
+.mock-bar b { color: var(--fg); font-weight: 600; }
+.mock-bar .sep { color: var(--line-strong); }
+.tag {
+  font-size: 12px; padding: 1px 9px; border-radius: 999px; line-height: 1.7;
+  border: 1px solid var(--line-strong); color: var(--muted); background: var(--surface);
+}
+.tag-data { border-color: var(--data); color: var(--data); background: var(--data-soft); }
+.tag-call { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tag-mock { margin-left: auto; border-style: dashed; }
+.mock-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+.canvas {
+  padding: 24px 20px;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 16px 16px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.step {
+  width: 100%; max-width: 290px; display: flex; gap: 10px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
+}
+.step.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.step.bad { border-color: var(--block); box-shadow: 0 0 0 3px var(--block-soft); }
+.ic {
+  width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center;
+  font-size: 11.5px; font-weight: 700; flex: none; line-height: 1;
+}
+.ic-trg { background: var(--band); color: var(--muted); }
+.ic-data { background: var(--data-soft); color: var(--data); }
+.ic-call { background: var(--accent-soft); color: var(--accent); }
+.ic-fu { background: var(--fu-soft); color: var(--fu); }
+.ic-ret { background: var(--band); color: var(--muted); }
+.step .txt { min-width: 0; }
+.step .nm { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.step .ds { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.conn { width: 2px; height: 16px; background: var(--line-strong); }
+.panel { border-left: 1px solid var(--line); padding: 18px 20px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.panel-title { display: flex; align-items: center; gap: 10px; }
+.panel-title .nm { font-weight: 700; font-size: 14.5px; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field .lbl { font-size: 12px; color: var(--muted); font-weight: 500; }
+.inp {
+  border: 1px solid var(--line-strong); border-radius: 7px; padding: 5px 10px; font-size: 13px;
+  background: var(--surface); display: flex; justify-content: space-between; gap: 8px; min-width: 0;
+}
+.inp .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.inp .caret { color: var(--muted); flex: none; }
+.inp.expr .v { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.inp.auto { border-style: dashed; color: var(--data); }
+.cond { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.4fr); gap: 6px; }
+.kv { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.6fr); gap: 6px; }
+.addlink { font-size: 12.5px; color: var(--accent); }
+pre.out {
+  margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6;
+  background: var(--band); border-radius: 8px; padding: 10px 12px; overflow-x: auto; color: var(--fg);
+}
+.err {
+  display: grid; gap: 4px;
+  border: 1px solid var(--block); background: var(--block-soft); border-radius: 10px;
+  padding: 12px 14px; font-size: 13.5px; line-height: 1.6;
+}
+.err b { color: var(--block); }
+@media (max-width: 760px) {
+  .mock-body { grid-template-columns: 1fr; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+/* compare cards (调用数据 flow) */
+.compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cmp { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: grid; align-content: start; }
+.cmp-h { padding: 12px 16px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--line); }
+.cmp-h b { font-size: 14.5px; }
+.cmp.bad .cmp-h { background: var(--block-soft); }
+.cmp.good .cmp-h { background: var(--data-soft); }
+.cmp-b { padding: 16px; display: grid; gap: 12px; }
+.pts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.6; }
+.pts li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; }
+.pts .x { color: var(--block); font-weight: 700; }
+.pts .ok { color: var(--data); font-weight: 700; }
+.pin { font-size: 12px; color: var(--block); font-weight: 500; }
+.envmap { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.envmap th, .envmap td { text-align: left; padding: 5px 8px; border-top: 1px solid var(--line); }
+.envmap th { color: var(--muted); font-weight: 500; border-top: 0; }
+.envmap td.mono { font-size: 12px; }
+@media (max-width: 760px) { .compare { grid-template-columns: 1fr; } }
+
+/* mini BPMN */
+.bpmn { display: flex; align-items: center; gap: 0; flex-wrap: wrap; justify-content: center; row-gap: 10px; }
+.bp-ev { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); flex: none; }
+.bp-ev.end { border-width: 4px; }
+.bp-ar { width: 22px; height: 2px; background: var(--line-strong); flex: none; }
+.bp-task {
+  font-size: 12.5px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--surface); line-height: 1.3; text-align: center; flex: none;
+}
+.bp-task small { display: block; color: var(--muted); font-size: 11px; }
+.bp-task.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* admin list */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; align-items: center; }
+.chip { font-size: 12.5px; padding: 2px 11px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); }
+.chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chips .btn { margin-left: auto; font-size: 12.5px; padding: 3px 12px; border-radius: 7px; background: var(--accent); color: var(--surface); font-weight: 600; }
+table.mt { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+table.mt th, table.mt td { text-align: left; padding: 9px 14px; border-top: 1px solid var(--line); white-space: nowrap; }
+table.mt th { font-size: 12px; color: var(--muted); font-weight: 600; }
+table.mt td.num { font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.cat { font-size: 12px; padding: 1px 8px; border-radius: 6px; font-weight: 500; }
+.cat-tool { background: var(--band); color: var(--muted); }
+.cat-data { background: var(--data-soft); color: var(--data); }
+.cat-ext { background: var(--accent-soft); color: var(--accent); }
+.cat-fu { background: var(--fu-soft); color: var(--fu); }
+.on-dot { display: inline-flex; align-items: center; gap: 6px; }
+.on-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--data); }
+
+/* piece category cards */
+.cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.catcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 10px; align-content: start; }
+.catcard .top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.catcard p { margin: 0; font-size: 14px; line-height: 1.7; }
+.catcard .who { font-size: 13px; color: var(--muted); }
+.status { font-size: 12px; color: var(--muted); margin-left: auto; }
+.status.new { color: var(--accent); font-weight: 600; }
+@media (max-width: 760px) { .cats { grid-template-columns: 1fr; } }
+
+/* release steps (真实顺序) */
+.release { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; counter-reset: rel; }
+.rel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.rel .k { font-size: 12px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rel b { font-size: 14.5px; }
+.rel span { font-size: 13px; color: var(--muted); line-height: 1.6; }
+@media (max-width: 860px) { .release { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .release { grid-template-columns: 1fr; } }
+
+/* options */
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.opt { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 10px; align-content: start; }
+.opt.rec { border-color: var(--data); }
+.opt .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.opt .top b { font-size: 15px; }
+.rec-tag { font-size: 12px; padding: 1px 9px; border-radius: 999px; background: var(--data); color: var(--surface); font-weight: 600; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 8px; max-width: 52em; }
+.callout p { margin: 0; font-size: 14.5px; }
+@media (max-width: 760px) { .opts { grid-template-columns: 1fr; } }
+
+/* decisions */
+.decide { display: grid; gap: 12px; }
+.dq { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 4px 12px; }
+.dq .n { grid-row: span 3; width: 28px; height: 28px; border-radius: 8px; background: var(--fg); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.dq b { font-size: 15.5px; }
+.dq .ch { display: flex; flex-wrap: wrap; gap: 6px; }
+.dq .ch span { font-size: 13px; padding: 2px 10px; border-radius: 7px; border: 1px solid var(--line-strong); }
+.dq .ch span.r { border-color: var(--data); color: var(--data); background: var(--data-soft); font-weight: 600; }
+.dq .why { font-size: 13.5px; color: var(--muted); }
+
+/* category detail */
+.catsec { display: grid; gap: 16px; padding-top: 20px; border-top: 1px solid var(--line); }
+.catsec-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.catsec-h h3 { font-size: 18px; }
+h4.sub { margin: 0; font-size: 15px; }
+svg .box-fu { fill: var(--surface); stroke: var(--fu); stroke-width: 1.6; }
+svg .box-call { fill: var(--surface); stroke: var(--accent); stroke-width: 1.4; }
+svg .box-block { fill: var(--surface); stroke: var(--block); stroke-width: 1.4; stroke-dasharray: 6 5; }
+svg .row-hi { fill: var(--fu-soft); }
+svg .lab-fu { fill: var(--fu); font-size: 12px; font-weight: 600; }
+svg .t-fu { fill: var(--fu); font-size: 14px; font-weight: 700; }
+svg .ln-fu { stroke: var(--fu); stroke-width: 1.6; fill: none; }
+svg .mk-fu { fill: var(--fu); }
+svg .zoom { fill: var(--band); }
+svg .num-c { fill: var(--accent-soft); }
+svg .num-t { fill: var(--accent); font-size: 12px; font-weight: 700; }
+svg .rule-line { stroke: var(--line); stroke-width: 1; }
+.legend .l-fu { border-color: var(--fu); }
+.usecases { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.uc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+.uc b { font-size: 14px; }
+.uc span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.dodont { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.dd { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+.dd h4 { margin: 0; font-size: 14.5px; }
+@media (max-width: 760px) { .dodont { grid-template-columns: 1fr; } }
+pre.code {
+  margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; overflow-x: auto;
+}
+pre.code .c { color: var(--muted); }
+.proto-cta {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; max-width: 52em;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 12px; padding: 12px 16px;
+}
+.proto-cta a { font-weight: 700; }
+.proto-cta span { font-size: 14px; }
+
+/* repo tree */
+.where-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+pre.tree {
+  margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.75;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
+  overflow-x: auto; color: var(--fg);
+}
+pre.tree .c { color: var(--muted); }
+pre.tree .nw { color: var(--accent); font-weight: 500; }
+pre.tree .fu { color: var(--fu); font-weight: 500; }
+@media (max-width: 860px) { .where-grid { grid-template-columns: 1fr; } }
+
+.next { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14.5px; }
+.next span { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; }
+.next i { font-style: normal; color: var(--muted); }
+
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">方案稿 · 2026-10-30 · 还没开始实现</div>
+  <h1>Automation 组件分层方案</h1>
+  <p class="lede">一句话：<b>只有数据 flow 能连数据库</b>。Service Task 和普通 flow 自己都不连库，要查数据、改数据，就去调用数据 flow。</p>
+  <div class="proto-cta"><a href="https://claude.ai/artifact/GPurtrSrEeME9a8Z1H2VfB" target="_blank" rel="noopener">打开可点击原型 →</a><span>DW 的 Automation、Function Unit 的 Service Task、Admin Center 的组件管理都能点，右侧有演示路线。</span></div>
+  <nav class="toc" aria-label="目录">
+    <a href="#layers">三层结构</a>
+    <a href="#cdf">「调用数据 flow」是什么</a>
+    <a href="#example">走一遍例子</a>
+    <a href="#mockups">效果图</a>
+    <a href="#pieces">三类组件</a>
+    <a href="#cat-ext">调外部系统</a>
+    <a href="#cat-fu">FU 专属详解</a>
+    <a href="#where">东西放在哪</a>
+    <a href="#release">组件怎么上线</a>
+    <a href="#db">数据库连接</a>
+    <a href="#decide">待你定的 4 件事</a>
+  </nav>
+</header>
+
+<section aria-label="核心规则">
+  <div class="rules">
+    <div class="rule"><div class="g g-ok">✓</div><div><b>数据 flow 可以连数据库</b><span>用数据组件。只放在一个专用 workspace，由管理员维护。</span></div></div>
+    <div class="rule"><div class="g g-no">✕</div><div><b>普通 flow、Service Task 不能直接连</b><span>就算把数据组件拖进普通 flow，运行时也会报错。</span></div></div>
+    <div class="rule"><div class="g g-go">→</div><div><b>要查、要改数据，就调用数据 flow</b><span>Service Task 填业务键调用；普通 flow 用「调用数据 flow」组件调用。</span></div></div>
+  </div>
+</section>
+
+<section id="layers">
+  <h2>三层结构</h2>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg viewBox="0 0 960 500" role="img" aria-label="三层结构：Service Task 和普通 flow 按业务键调用数据 flow；只有数据 flow 通过数据组件连数据库；普通 flow 跳过数据 flow 直接用数据组件会被拦截。">
+        <defs>
+          <marker id="f1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+          <marker id="f1-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-data"/></marker>
+          <marker id="f1-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-block"/></marker>
+          <marker id="f1-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-muted"/></marker>
+        </defs>
+
+        <rect x="10" y="10" width="940" height="110" rx="12" class="band"/>
+        <text x="34" y="60" class="g1">第 3 层</text>
+        <text x="34" y="80" class="g2">调用方</text>
+        <rect x="170" y="37" width="260" height="56" rx="8" class="box"/>
+        <text x="300" y="61" text-anchor="middle" class="t">Service Task</text>
+        <text x="300" y="81" text-anchor="middle" class="s">Function Unit 流程里的节点</text>
+        <rect x="530" y="37" width="260" height="56" rx="8" class="box"/>
+        <text x="660" y="61" text-anchor="middle" class="t">普通 flow</text>
+        <text x="660" y="81" text-anchor="middle" class="s">各团队自己的 workspace</text>
+        <line x1="432" y1="65" x2="525" y2="65" class="ln-muted" marker-end="url(#f1-m)"/>
+        <text x="480" y="56" text-anchor="middle" class="lab-muted">也可以调</text>
+
+        <line x1="300" y1="93" x2="300" y2="189" class="ln" marker-end="url(#f1-a)"/>
+        <text x="312" y="146" class="lab">调用 · 按业务键</text>
+        <line x1="660" y1="93" x2="660" y2="189" class="ln" marker-end="url(#f1-a)"/>
+        <text x="672" y="146" class="lab">调用 · 按业务键</text>
+
+        <rect x="10" y="160" width="940" height="120" rx="12" class="band-data"/>
+        <text x="34" y="214" class="g1">第 2 层</text>
+        <text x="34" y="234" class="g2">数据 flow</text>
+        <rect x="170" y="192" width="260" height="56" rx="8" class="box-data"/>
+        <text x="300" y="216" text-anchor="middle" class="t">查询供应商</text>
+        <text x="300" y="236" text-anchor="middle" class="smono">supplier.query</text>
+        <text x="480" y="225" text-anchor="middle" class="g2">……</text>
+        <rect x="530" y="192" width="260" height="56" rx="8" class="box-data"/>
+        <text x="660" y="216" text-anchor="middle" class="t">更新订单折扣</text>
+        <text x="660" y="236" text-anchor="middle" class="smono">order.update-discount</text>
+
+        <line x1="300" y1="248" x2="300" y2="328" class="ln-data" marker-end="url(#f1-d)"/>
+        <text x="312" y="300" class="lab-data">用数据组件</text>
+        <line x1="660" y1="248" x2="660" y2="328" class="ln-data" marker-end="url(#f1-d)"/>
+        <text x="672" y="300" class="lab-data">用数据组件</text>
+
+        <rect x="10" y="310" width="940" height="100" rx="12" class="band-data"/>
+        <text x="34" y="354" class="g1">第 1 层</text>
+        <text x="34" y="374" class="g2">数据组件</text>
+        <rect x="170" y="332" width="620" height="56" rx="8" class="box-data"/>
+        <text x="480" y="356" text-anchor="middle" class="t">数据组件（唯一能连数据库）</text>
+        <text x="480" y="376" text-anchor="middle" class="s">Find Rows · Get Row by Key · Count · Insert · Update · Upsert · Deactivate / Delete</text>
+
+        <path d="M790,65 H870 V360 H797" class="ln-block" marker-end="url(#f1-b)"/>
+        <text x="860" y="298" text-anchor="end" class="lab-block">跳过数据 flow</text>
+        <text x="860" y="326" text-anchor="end" class="lab-block">✕ 运行时报错</text>
+
+        <line x1="480" y1="388" x2="480" y2="426" class="ln-data" marker-end="url(#f1-d)"/>
+        <text x="492" y="423" class="lab-data">连库</text>
+        <path d="M400,440 V478 A80,11 0 0 0 560,478 V440" class="db"/>
+        <ellipse cx="480" cy="440" rx="80" ry="11" class="db"/>
+        <text x="480" y="470" text-anchor="middle" class="t">数据库</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="l-call"></i>调用</span>
+      <span><i class="l-data"></i>碰数据库</span>
+      <span><i class="l-block"></i>被拦截</span>
+    </div>
+    <figcaption>绿色区域就是「能碰数据库」的范围，只包括数据 flow 和它用的数据组件。上面一层的 Service Task 和普通 flow 只能往下调用数据 flow，不能绕过去。</figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+    <table class="doc">
+      <thead><tr><th>调用方</th><th>想做的事</th><th>怎么做</th></tr></thead>
+      <tbody>
+        <tr><td>Service Task</td><td>操作数据库</td><td>直接调数据 flow，填它的业务键</td></tr>
+        <tr><td>Service Task</td><td>业务处理</td><td>调普通 flow，填它的业务键</td></tr>
+        <tr><td>Service Task</td><td>用某个组件（比如 FU 专属组件）</td><td>包一个只有一步的普通 flow（收到调用 → 执行该组件 → 返回结果），放在<b>这个 FU 所属团队的 workspace</b>，Service Task 填它的业务键。见<a href="#where">东西放在哪</a></td></tr>
+        <tr><td>普通 flow</td><td>操作数据库</td><td>用「调用数据 flow」组件</td></tr>
+        <tr><td>普通 flow</td><td>调外部系统</td><td>http 组件，或该系统的外部系统组件</td></tr>
+        <tr><td>普通 flow</td><td>执行 FU 逻辑</td><td>FU 专属组件</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="cdf">
+  <h2>「调用数据 flow」是什么</h2>
+  <div class="prose">
+    <p>它是给<b>普通 flow</b> 用的一个组件（英文名 Call Data Flow），只做一件事：选一个数据 flow，把参数传过去，再把结果拿回来。它本身不连数据库，所以任何 workspace 的普通 flow 都能用。</p>
+    <p>为什么要专门做它？普通 flow 现在要调用另一个 flow，只能用 http 组件去打对方的 webhook 地址，问题有三个：</p>
+  </div>
+
+  <div class="compare">
+    <div class="cmp bad">
+      <div class="cmp-h"><b>不用它：在普通 flow 里用 http 组件</b></div>
+      <div class="cmp-b">
+        <div class="field"><span class="lbl">方法</span><div class="inp"><span class="v">POST</span><span class="caret">▾</span></div></div>
+        <div class="field"><span class="lbl">地址</span><div class="inp"><span class="v mono">…/api/v1/webhooks/7Hq2Kd9xP/sync</span></div><span class="pin">↑ 地址里的 7Hq2Kd9xP 是 flowId，uat 和 prod 不一样</span></div>
+        <div class="field"><span class="lbl">请求头</span><div class="inp"><span class="v mono">Authorization: Basic ••••••</span></div></div>
+        <div class="field"><span class="lbl">请求体</span><div class="inp"><span class="v mono">{ "code": "{{trigger.body.supplierCode}}" }</span></div></div>
+        <ul class="pts">
+          <li><span class="x">✕</span><span>flow 迁到 prod，地址就失效了，要一个个手改。</span></li>
+          <li><span class="x">✕</span><span>鉴权要每个 flow 自己配，密钥散落在各个 flow 里。</span></li>
+          <li><span class="x">✕</span><span>参数名、返回格式全靠记，写错了运行时才发现。</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="cmp good">
+      <div class="cmp-h"><b>用它：「调用数据 flow」组件</b></div>
+      <div class="cmp-b">
+        <div class="field"><span class="lbl">数据 flow</span><div class="inp"><span class="v">查询供应商 · <span class="mono">supplier.query</span></span><span class="caret">▾</span></div></div>
+        <div class="field"><span class="lbl">参数</span>
+          <div class="kv"><div class="inp"><span class="v mono">code</span></div><div class="inp expr"><span class="v">{{trigger.body.supplierCode}}</span></div></div>
+        </div>
+        <div class="field"><span class="lbl">鉴权</span><div class="inp auto"><span class="v">自动，不用配置</span></div></div>
+        <table class="envmap">
+          <thead><tr><th>环境</th><th>业务键（不变）</th><th>实际 flowId（每个环境不同）</th></tr></thead>
+          <tbody>
+            <tr><td>uat</td><td class="mono">supplier.query</td><td class="mono">7Hq2Kd9xP</td></tr>
+            <tr><td>prod</td><td class="mono">supplier.query</td><td class="mono">X9k2Lm4Qa</td></tr>
+          </tbody>
+        </table>
+        <ul class="pts">
+          <li><span class="ok">✓</span><span>按业务键选，运行时自动找到本环境的数据 flow，迁移不用改。</span></li>
+          <li><span class="ok">✓</span><span>鉴权由组件自动带上，flow 里看不到密钥。</span></li>
+          <li><span class="ok">✓</span><span>和 Service Task 用同一套业务键，规则只有一份。</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <p class="note">AP 自带的「flow 调 flow」组件（subflows）现在只在测试里用，不在生产白名单里；看框架接口，它也只能调同一个 workspace 的 flow，这一点还要实测确认。所以要自己做这个组件。它具体怎么跨 workspace 找到数据 flow，放到技术方案里讲。表中的 flowId 是示意值。</p>
+</section>
+
+<section id="example">
+  <h2>走一遍例子：采购流程计算折扣</h2>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg viewBox="0 0 880 580" role="img" aria-label="时序：Service Task 调用普通 flow；普通 flow 两次调用数据 flow，一次查询供应商、一次更新订单折扣；中间用 FU 组件算出折扣；只有数据 flow 访问数据库；最后结果返回给 Service Task。">
+        <defs>
+          <marker id="f3-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+          <marker id="f3-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-data"/></marker>
+        </defs>
+
+        <line x1="100" y1="62" x2="100" y2="566" class="life"/>
+        <line x1="300" y1="62" x2="300" y2="566" class="life"/>
+        <line x1="560" y1="62" x2="560" y2="566" class="life"/>
+        <line x1="780" y1="62" x2="780" y2="566" class="life"/>
+
+        <rect x="10" y="10" width="180" height="52" rx="8" class="box"/>
+        <text x="100" y="33" text-anchor="middle" class="t">Service Task</text>
+        <text x="100" y="52" text-anchor="middle" class="s">采购流程里的节点</text>
+        <rect x="210" y="10" width="180" height="52" rx="8" class="box"/>
+        <text x="300" y="33" text-anchor="middle" class="t">普通 flow</text>
+        <text x="300" y="52" text-anchor="middle" class="s">采购-计算折扣</text>
+        <rect x="470" y="10" width="180" height="52" rx="8" class="box-data"/>
+        <text x="560" y="33" text-anchor="middle" class="t">数据 flow</text>
+        <text x="560" y="52" text-anchor="middle" class="s">数据 workspace</text>
+        <rect x="690" y="10" width="180" height="52" rx="8" class="box-data"/>
+        <text x="780" y="33" text-anchor="middle" class="t">数据库</text>
+        <text x="780" y="52" text-anchor="middle" class="s">供应商表 · 采购订单表</text>
+
+        <line x1="100" y1="104" x2="297" y2="104" class="ln" marker-end="url(#f3-a)"/>
+        <text x="200" y="96" text-anchor="middle" class="lab">① 调用（按业务键）</text>
+
+        <line x1="300" y1="150" x2="557" y2="150" class="ln" marker-end="url(#f3-a)"/>
+        <text x="430" y="142" text-anchor="middle" class="lab">② 调用数据 flow「查询供应商」</text>
+        <line x1="560" y1="194" x2="777" y2="194" class="ln-data" marker-end="url(#f3-d)"/>
+        <text x="670" y="186" text-anchor="middle" class="lab-data">查询 code = S001</text>
+        <line x1="780" y1="232" x2="563" y2="232" class="ln-data ret" marker-end="url(#f3-d)"/>
+        <text x="670" y="224" text-anchor="middle" class="lab-data">返回 1 行</text>
+        <line x1="560" y1="270" x2="303" y2="270" class="ln ret" marker-end="url(#f3-a)"/>
+        <text x="430" y="262" text-anchor="middle" class="lab">供应商信息（等级 A）</text>
+
+        <path d="M300,306 H352 V338 H304" class="ln" marker-end="url(#f3-a)"/>
+        <text x="362" y="327" class="lab-fg">③ FU 组件算出折扣 8%</text>
+
+        <line x1="300" y1="380" x2="557" y2="380" class="ln" marker-end="url(#f3-a)"/>
+        <text x="430" y="372" text-anchor="middle" class="lab">④ 调用数据 flow「更新订单折扣」</text>
+        <line x1="560" y1="424" x2="777" y2="424" class="ln-data" marker-end="url(#f3-d)"/>
+        <text x="670" y="416" text-anchor="middle" class="lab-data">修改折扣 = 8%</text>
+        <line x1="780" y1="462" x2="563" y2="462" class="ln-data ret" marker-end="url(#f3-d)"/>
+        <text x="670" y="454" text-anchor="middle" class="lab-data">成功</text>
+        <line x1="560" y1="500" x2="303" y2="500" class="ln ret" marker-end="url(#f3-a)"/>
+        <text x="430" y="492" text-anchor="middle" class="lab">完成</text>
+
+        <line x1="300" y1="546" x2="103" y2="546" class="ln ret" marker-end="url(#f3-a)"/>
+        <text x="200" y="538" text-anchor="middle" class="lab">⑤ 返回 discount = 0.08</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="l-call"></i>调用</span>
+      <span><i class="l-data"></i>碰数据库</span>
+      <span><i class="l-ret"></i>返回（虚线）</span>
+    </div>
+    <figcaption>从上往下按时间顺序读。绿色箭头只出现在数据 flow 和数据库之间：整个过程里，只有数据 flow 访问了数据库。</figcaption>
+  </figure>
+  <ol class="seq">
+    <li><span class="n">1</span><span>流程走到 Service Task，它调用普通 flow「采购-计算折扣」。</span></li>
+    <li><span class="n d">2</span><span>普通 flow 用「调用数据 flow」组件调用「查询供应商」，拿到供应商信息。</span></li>
+    <li><span class="n">3</span><span>普通 flow 用 FU 专属组件「计算折扣」算出折扣 8%。这一步只算，不碰数据库。</span></li>
+    <li><span class="n d">4</span><span>普通 flow 调用数据 flow「更新订单折扣」，把 8% 写回订单。</span></li>
+    <li><span class="n">5</span><span>结果返回给 Service Task，流程继续往下走。</span></li>
+  </ol>
+</section>
+
+<section id="mockups">
+  <h2>效果图</h2>
+  <p class="note">以下都是示意，用来说明各处怎么用，不是最终界面。</p>
+
+  <div class="mock-head">
+    <h3>数据 flow：在 DW Automation 里的样子</h3>
+    <p class="note">数据 flow 放在数据 workspace，只有管理员能改。右边是数据组件「查询」的配置：选表名、加条件就能查。</p>
+  </div>
+  <div class="mock">
+    <div class="mock-bar"><b>Developer Workstation</b><span class="sep">/</span>Automation<span class="sep">/</span><span class="tag tag-data">数据 workspace</span><b>查询供应商</b><span class="tag tag-mock">示意</span></div>
+    <div class="mock-body">
+      <div class="canvas">
+        <div class="step"><div class="ic ic-trg">触发</div><div class="txt"><div class="nm">收到调用</div><div class="ds">业务键 supplier.query · 需鉴权</div></div></div>
+        <div class="conn"></div>
+        <div class="step sel"><div class="ic ic-data">数据</div><div class="txt"><div class="nm">平台数据 · Find Rows</div><div class="ds">表 supplier，2 个条件</div></div></div>
+        <div class="conn"></div>
+        <div class="step"><div class="ic ic-ret">返回</div><div class="txt"><div class="nm">返回结果</div><div class="ds">把查到的行返回给调用方</div></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><div class="ic ic-data">数据</div><div class="nm">平台数据 · Find Rows</div></div>
+        <div class="field"><span class="lbl">表名</span><div class="inp"><span class="v">supplier（供应商）</span><span class="caret">▾</span></div></div>
+        <div class="field"><span class="lbl">条件（全部满足）</span>
+          <div class="cond">
+            <div class="inp"><span class="v">code</span><span class="caret">▾</span></div>
+            <div class="inp"><span class="v">等于</span><span class="caret">▾</span></div>
+            <div class="inp expr"><span class="v">{{trigger.body.code}}</span></div>
+          </div>
+          <div class="cond">
+            <div class="inp"><span class="v">status</span><span class="caret">▾</span></div>
+            <div class="inp"><span class="v">等于</span><span class="caret">▾</span></div>
+            <div class="inp"><span class="v">ACTIVE</span></div>
+          </div>
+          <span class="addlink">+ 添加条件</span>
+        </div>
+        <div class="kv">
+          <div class="field"><span class="lbl">排序</span><div class="inp"><span class="v">name 升序</span><span class="caret">▾</span></div></div>
+          <div class="field"><span class="lbl">最多返回</span><div class="inp"><span class="v">100 行</span></div></div>
+        </div>
+        <div class="field"><span class="lbl">试运行结果</span>
+<pre class="out">{ "rows": [ { "code": "S001", "name": "华东物流", "level": "A" } ],
+  "total": 1 }</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-head">
+    <h3>普通 flow：用「调用数据 flow」组件</h3>
+    <p class="note">各团队在自己的 workspace 里建。要数据时调用数据 flow，算逻辑用 FU 专属组件。</p>
+  </div>
+  <div class="mock">
+    <div class="mock-bar"><b>Developer Workstation</b><span class="sep">/</span>Automation<span class="sep">/</span><span class="tag tag-call">采购团队 workspace</span><b>采购-计算折扣</b><span class="tag tag-mock">示意</span></div>
+    <div class="mock-body">
+      <div class="canvas">
+        <div class="step"><div class="ic ic-trg">触发</div><div class="txt"><div class="nm">收到调用</div><div class="ds">业务键 purchase.calc-discount</div></div></div>
+        <div class="conn"></div>
+        <div class="step sel"><div class="ic ic-call">调用</div><div class="txt"><div class="nm">调用数据 flow · 查询供应商</div><div class="ds">supplier.query</div></div></div>
+        <div class="conn"></div>
+        <div class="step"><div class="ic ic-fu">FU</div><div class="txt"><div class="nm">采购组件 · 计算折扣</div><div class="ds">只算，不连数据库</div></div></div>
+        <div class="conn"></div>
+        <div class="step"><div class="ic ic-call">调用</div><div class="txt"><div class="nm">调用数据 flow · 更新订单折扣</div><div class="ds">order.update-discount</div></div></div>
+        <div class="conn"></div>
+        <div class="step"><div class="ic ic-ret">返回</div><div class="txt"><div class="nm">返回结果</div><div class="ds">discount 返回给 Service Task</div></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><div class="ic ic-call">调用</div><div class="nm">调用数据 flow</div></div>
+        <div class="field"><span class="lbl">数据 flow</span><div class="inp"><span class="v">查询供应商 · <span class="mono">supplier.query</span></span><span class="caret">▾</span></div></div>
+        <div class="field"><span class="lbl">参数</span>
+          <div class="kv"><div class="inp"><span class="v mono">code</span></div><div class="inp expr"><span class="v">{{trigger.body.supplierCode}}</span></div></div>
+        </div>
+        <div class="field"><span class="lbl">鉴权</span><div class="inp auto"><span class="v">自动，不用配置</span></div></div>
+        <div class="field"><span class="lbl">如果有人把数据组件直接拖进这个 flow，试运行会看到：</span>
+          <div class="err"><b>运行失败</b><span>「平台数据」组件只能在数据 workspace 的 flow 里使用。请改用「调用数据 flow」组件。</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-head">
+    <h3>Service Task：在 Function Unit 流程里填业务键</h3>
+    <p class="note">可以填普通 flow 的业务键，也可以直接填数据 flow 的业务键。</p>
+  </div>
+  <div class="mock">
+    <div class="mock-bar"><b>Developer Workstation</b><span class="sep">/</span>Function Unit<span class="sep">/</span><b>采购申请</b><span class="sep">/</span>流程设计<span class="tag tag-mock">示意</span></div>
+    <div class="mock-body">
+      <div class="canvas" style="justify-content:center">
+        <div class="bpmn">
+          <div class="bp-ev"></div><div class="bp-ar"></div>
+          <div class="bp-task">部门审批<small>User Task</small></div><div class="bp-ar"></div>
+          <div class="bp-task sel">计算折扣<small>Service Task</small></div><div class="bp-ar"></div>
+          <div class="bp-task">财务审批<small>User Task</small></div><div class="bp-ar"></div>
+          <div class="bp-ev end"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><div class="nm">计算折扣 · Service Task</div></div>
+        <div class="field"><span class="lbl">Automation flow 业务键</span><div class="inp"><span class="v mono">purchase.calc-discount</span><span class="caret">▾</span></div></div>
+        <div><span class="tag tag-call">本 workspace 的普通 flow · 已发布</span></div>
+        <p class="note">只需要查一下数据、不需要别的逻辑时，这里直接填数据 flow 的业务键，例如 <code>supplier.query</code>。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-head">
+    <h3>Admin Center：Automation Pieces 按类别显示</h3>
+    <p class="note">组件包在这里导入、启停。新增「类别」列和筛选，一眼分清四类。</p>
+  </div>
+  <div class="mock">
+    <div class="mock-bar"><b>Admin Center</b><span class="sep">/</span>Automation Pieces<span class="tag tag-mock">示意</span></div>
+    <div class="chips">
+      <span class="chip on">全部 17</span>
+      <span class="chip">基础工具 13</span>
+      <span class="chip">数据 3</span>
+      <span class="chip">FU 专属 1</span>
+      <span class="btn">导入组件包</span>
+    </div>
+    <div class="tbl-wrap" style="border:0;border-radius:0">
+      <table class="mt">
+        <thead><tr><th>组件</th><th>类别</th><th>版本</th><th>谁能用</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>HTTP</td><td><span class="cat cat-tool">基础工具</span></td><td class="num">0.11.18</td><td>所有 flow</td><td><span class="on-dot">启用</span></td></tr>
+          <tr><td>CSV</td><td><span class="cat cat-tool">基础工具</span></td><td class="num">0.4.20</td><td>所有 flow</td><td><span class="on-dot">启用</span></td></tr>
+          <tr><td>平台数据</td><td><span class="cat cat-data">数据</span></td><td class="num">1.0.0</td><td>只限数据 workspace</td><td><span class="on-dot">启用</span></td></tr>
+          <tr><td>PostgreSQL</td><td><span class="cat cat-data">数据</span></td><td class="num">0.3.0</td><td>只限数据 workspace</td><td><span class="on-dot">启用</span></td></tr>
+          <tr><td>调用数据 flow</td><td><span class="cat cat-data">数据</span></td><td class="num">1.0.0</td><td>所有 flow</td><td><span class="on-dot">启用</span></td></tr>
+          <tr><td>Content Organizer</td><td><span class="cat cat-tool">基础工具</span></td><td class="num">1.0.2</td><td>所有 flow</td><td><span class="on-dot">启用</span></td></tr>
+          <tr><td>采购（fu-purchase）</td><td><span class="cat cat-fu">FU 专属</span></td><td class="num">1.0.0</td><td>所有 flow，按命名区分</td><td><span class="on-dot">启用</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p class="note">组件目录是全平台共用的，FU 专属组件在所有团队的组件面板里都看得到，只能靠命名区分。真要按团队隐藏，就要改 AP。</p>
+</section>
+
+<section id="pieces">
+  <h2>三类组件</h2>
+  <div class="cats">
+    <div class="catcard">
+      <div class="top"><span class="cat cat-tool">基础工具</span><span class="status">已有</span></div>
+      <p>http、csv、json、xml、pdf、文件处理、文本处理、数据映射、定时、webhook、业务日历等。</p>
+      <div class="who">谁能用：所有 flow</div>
+    </div>
+    <div class="catcard">
+      <div class="top"><span class="cat cat-data">数据</span><span class="status new">新做 2 个，已有 1 个</span></div>
+      <p><b>平台数据</b>（新做）：List Tables、Get Schema、Find Rows、Get Row by Key、Count、Insert Row(s)、Update Row、Upsert、Deactivate Row、Delete Row。Find Rows 选表名、加条件（AND，最多一层 OR）、排序、分页、选列，每页最多 1000 行。<br><b>PostgreSQL</b>（已有）：连外部系统的库，条件写 SQL。<br><b>调用数据 flow</b>（新做）：普通 flow 用来调用数据 flow，自己不连库。</p>
+      <div class="who">谁能用：「平台数据」「PostgreSQL」只限数据 workspace；「调用数据 flow」所有 flow 都能用</div>
+    </div>
+    <div class="catcard">
+      <div class="top"><span class="cat cat-tool">不单独成类</span><span class="status">已定</span></div>
+      <p><b>调外部系统</b>：用 HTTP 组件，选 Admin Center 里的「连接」。连接按环境存地址、用户名、密码，不再给每个外部系统单独做组件。现有的 Content Organizer 照旧保留，归到基础工具。</p>
+      <div class="who">见下面「调外部系统」一节</div>
+    </div>
+    <div class="catcard">
+      <div class="top"><span class="cat cat-fu">FU 专属</span><span class="status new">按需做</span></div>
+      <p>给某个 Function Unit 写的逻辑。一个 FU 一个包，每个 API 是一个 action。<b>只写逻辑，不连数据库</b>，要数据就在 flow 里调用数据 flow。</p>
+      <div class="who">谁能用：所有 flow，按命名区分</div>
+    </div>
+  </div>
+
+  <div class="catsec" id="cat-tool">
+    <div class="catsec-h"><span class="cat cat-tool">基础工具</span><h3>和业务无关，配好参数就能用</h3></div>
+    <div class="prose"><p>这类组件不关心你的业务，只做通用的事：收发请求、转换格式、处理文本和文件、定时启动。多数是 AP 自带的，业务日历和哈希是我们自己写的。所有 flow 都能用，不连数据库。</p></div>
+    <figure class="fig">
+      <div class="fig-scroll">
+        <svg viewBox="0 0 900 200" role="img" aria-label="例子：每天 8 点同步汇率。定时、HTTP、CSV 三步都是基础工具，数据从 CSV 文本变成一行行数据；最后一步用调用数据 flow 交给数据 flow 写表。">
+          <defs>
+            <marker id="ft-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-muted"/></marker>
+            <marker id="ft-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-data"/></marker>
+          </defs>
+          <rect x="10" y="40" width="190" height="64" rx="8" class="box"/>
+          <text x="105" y="66" text-anchor="middle" class="t">定时</text>
+          <text x="105" y="88" text-anchor="middle" class="s">每天 08:00 启动</text>
+          <rect x="240" y="40" width="190" height="64" rx="8" class="box"/>
+          <text x="335" y="66" text-anchor="middle" class="t">HTTP</text>
+          <text x="335" y="88" text-anchor="middle" class="s">下载汇率 CSV</text>
+          <rect x="470" y="40" width="190" height="64" rx="8" class="box"/>
+          <text x="565" y="66" text-anchor="middle" class="t">CSV</text>
+          <text x="565" y="88" text-anchor="middle" class="s">转成一行行数据</text>
+          <rect x="700" y="40" width="190" height="64" rx="8" class="box-data"/>
+          <text x="795" y="66" text-anchor="middle" class="t">调用数据 flow</text>
+          <text x="795" y="88" text-anchor="middle" class="s">交给数据 flow 写表</text>
+          <line x1="200" y1="72" x2="236" y2="72" class="ln-muted" marker-end="url(#ft-a)"/>
+          <line x1="430" y1="72" x2="466" y2="72" class="ln-muted" marker-end="url(#ft-a)"/>
+          <line x1="660" y1="72" x2="696" y2="72" class="ln-data" marker-end="url(#ft-d)"/>
+          <text x="105" y="130" text-anchor="middle" class="smono">08:00 到点</text>
+          <text x="335" y="130" text-anchor="middle" class="smono">currency,rate</text>
+          <text x="335" y="146" text-anchor="middle" class="smono">USD,7.12 …</text>
+          <text x="565" y="130" text-anchor="middle" class="smono">[{"currency":"USD",</text>
+          <text x="565" y="146" text-anchor="middle" class="smono">"rate":"7.12"}, …]</text>
+          <text x="795" y="130" text-anchor="middle" class="smono">fx.upsert</text>
+          <path d="M10,162 V170 H660 V162" class="ln-muted"/>
+          <text x="335" y="190" text-anchor="middle" class="lab-muted">基础工具：和业务无关，配好参数就能用</text>
+          <path d="M700,162 V170 H890 V162" class="ln-data"/>
+          <text x="795" y="190" text-anchor="middle" class="lab-data">数据类</text>
+        </svg>
+      </div>
+      <figcaption>例子：每天 8 点同步汇率。前三步都是基础工具，数据从 CSV 文本变成一行行数据（灰色小字是每一步的输出）；最后一步交给数据 flow 写进汇率表。</figcaption>
+    </figure>
+    <div class="usecases">
+      <div class="uc"><b>Webhook</b><span>被调用的 flow 的第一步「收到调用」和最后一步「返回结果」</span></div>
+      <div class="uc"><b>HTTP</b><span>调一个简单接口，比如下载汇率文件</span></div>
+      <div class="uc"><b>定时</b><span>每天 8 点、每小时、按 Cron 表达式启动 flow</span></div>
+      <div class="uc"><b>CSV / JSON / XML</b><span>格式互转，比如把 CSV 文本转成一行行数据</span></div>
+      <div class="uc"><b>PDF / 文件处理</b><span>提取 PDF 文字、合并；解压 zip、改编码</span></div>
+      <div class="uc"><b>文本处理 / 数据映射</b><span>拼接、替换；把 A 系统的字段名对应到 B 系统</span></div>
+      <div class="uc"><b>业务日历</b><span>算「加 3 个工作日是哪天」，跳过周末和节假日</span></div>
+      <div class="uc"><b>哈希</b><span>算文件指纹、Base64 编解码</span></div>
+    </div>
+  </div>
+
+  <div class="catsec" id="cat-data">
+    <div class="catsec-h"><span class="cat cat-data">数据</span><h3>唯一能碰数据库的一类</h3></div>
+    <div class="prose"><p>三个组件，规则只有一条：<b>连数据库的组件只能在数据 workspace 里用</b>。普通 flow 要数据，就用「调用数据 flow」去调用数据 flow。</p></div>
+    <figure class="fig">
+      <div class="fig-scroll">
+        <svg viewBox="0 0 900 310" role="img" aria-label="左边团队 workspace 的普通 flow 只能用调用数据 flow；平台数据和 PostgreSQL 放进普通 flow 会被拦截。右边数据 workspace 的数据 flow 用平台数据连平台数据库、用 PostgreSQL 连外部系统的库。">
+          <defs>
+            <marker id="fd-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+            <marker id="fd-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-data"/></marker>
+            <marker id="fd-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-block"/></marker>
+          </defs>
+          <rect x="10" y="10" width="330" height="290" rx="12" class="band"/>
+          <text x="30" y="38" class="g1">采购团队 workspace</text>
+          <text x="30" y="58" class="g2">普通 flow</text>
+          <rect x="40" y="80" width="270" height="60" rx="8" class="box-call"/>
+          <text x="175" y="104" text-anchor="middle" class="t">调用数据 flow</text>
+          <text x="175" y="124" text-anchor="middle" class="s">按业务键 supplier.query</text>
+          <rect x="40" y="200" width="270" height="60" rx="8" class="box-block"/>
+          <text x="175" y="224" text-anchor="middle" class="t">平台数据 / PostgreSQL</text>
+          <text x="175" y="244" text-anchor="middle" class="lab-block">放进普通 flow：运行时报错</text>
+
+          <rect x="420" y="10" width="470" height="170" rx="12" class="band-data"/>
+          <text x="440" y="38" class="g1">Public（数据 workspace）</text>
+          <text x="440" y="58" class="g2">数据 flow</text>
+          <rect x="450" y="80" width="190" height="60" rx="8" class="box-data"/>
+          <text x="545" y="104" text-anchor="middle" class="t">平台数据</text>
+          <text x="545" y="124" text-anchor="middle" class="s">选表名 + 条件</text>
+          <rect x="670" y="80" width="190" height="60" rx="8" class="box-data"/>
+          <text x="765" y="104" text-anchor="middle" class="t">PostgreSQL</text>
+          <text x="765" y="124" text-anchor="middle" class="s">条件写 SQL</text>
+
+          <line x1="310" y1="110" x2="446" y2="110" class="ln" marker-end="url(#fd-a)"/>
+          <text x="378" y="102" text-anchor="middle" class="lab">调用</text>
+
+          <line x1="545" y1="140" x2="545" y2="218" class="ln-data" marker-end="url(#fd-d)"/>
+          <text x="555" y="204" class="lab-data">JSON 行存储</text>
+          <line x1="765" y1="140" x2="765" y2="218" class="ln-data" marker-end="url(#fd-d)"/>
+          <text x="775" y="204" class="lab-data">物理表</text>
+
+          <path d="M465,232 V280 A80,10 0 0 0 625,280 V232" class="db"/>
+          <ellipse cx="545" cy="232" rx="80" ry="10" class="db"/>
+          <text x="545" y="260" text-anchor="middle" class="t">平台数据库</text>
+          <text x="545" y="277" text-anchor="middle" class="s">Relation Table</text>
+          <path d="M685,232 V280 A80,10 0 0 0 845,280 V232" class="db"/>
+          <ellipse cx="765" cy="232" rx="80" ry="10" class="db"/>
+          <text x="765" y="260" text-anchor="middle" class="t">外部系统的库</text>
+          <text x="765" y="277" text-anchor="middle" class="s">ERP 等</text>
+
+          <path d="M310,230 H400 V256 H459" class="ln-block" marker-end="url(#fd-b)"/>
+          <text x="318" y="222" class="lab-block">✕ 被拦截</text>
+        </svg>
+      </div>
+      <figcaption>普通 flow 只拿得到「调用数据 flow」这一个入口。真正连库的两个组件只在数据 workspace 里起作用。</figcaption>
+    </figure>
+    <div class="tbl-wrap">
+      <table class="doc">
+        <thead><tr><th>组件</th><th>连哪里</th><th>怎么填</th><th>谁能用</th></tr></thead>
+        <tbody>
+          <tr><td>平台数据（新做）</td><td>平台自己的 Relation Table</td><td>Find Rows：选表名，加条件（字段 + 运算符 + 值；AND，最多一层 OR），排序、分页、选列，每页最多 1000 行。Insert 走平台主键分配、字段校验、审计字段；Update 默认按主键，按条件批量要填最大影响行数；优先 Deactivate，硬删只按主键</td><td>只限数据 workspace</td></tr>
+          <tr><td>PostgreSQL（已有）</td><td>外部系统的数据库</td><td>条件写 SQL，例如 <code>status = $1</code></td><td>只限数据 workspace</td></tr>
+          <tr><td>调用数据 flow（新做）</td><td>不连库，调用数据 flow</td><td>按业务键选数据 flow，填参数，鉴权自动带上</td><td>所有 flow</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="catsec" id="cat-ext">
+    <div class="catsec-h"><span class="cat cat-tool">已定</span><h3>调外部系统：HTTP 组件 + Admin Center 连接</h3></div>
+    <div class="prose">
+      <p>外部系统不单独做组件，也不单独成一类。Admin Center 新增「连接」管理：每个连接按环境存外部系统的地址、用户名、密码。flow 里的 HTTP 组件选一个连接，只填接口路径，就能调外部 API。</p>
+    </div>
+    <div class="tbl-wrap">
+      <table class="doc">
+        <thead><tr><th>在哪</th><th>做什么</th></tr></thead>
+        <tbody>
+          <tr><td>Admin Center</td><td>建连接：名称（各环境相同）、地址、认证方式、用户名、密码。uat、prod 各填各的值。</td></tr>
+          <tr><td>DW 的 flow</td><td>HTTP 组件选连接，填路径（例如 <code>/orders</code>）、方法、请求体。flow 里没有地址和密码。</td></tr>
+          <tr><td>迁移到 prod</td><td>flow 里只记连接的名称；prod 有同名连接就能直接跑。迁移页现有的「连接预检」会提示缺哪个连接。</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h4 class="sub">落地时要定的几件事</h4>
+    <ul class="pts">
+      <li><span class="x">!</span><span>现在的 HTTP 组件不能选连接：认证方式只有 None / Basic Auth / Bearer Token，直接填在步骤里。要么改 HTTP 组件，要么另做一个「带连接的 HTTP」组件；改的话，要保证现有用 HTTP 的 flow 不受影响。</span></li>
+      <li><span class="x">!</span><span>AP 的连接是按 workspace 存的。Admin 建一个连接，要定它给哪些 workspace 用。</span></li>
+      <li><span class="x">!</span><span>要先换 token、签名，或者返回 200 却可能是业务失败的接口，Basic / Bearer 连接管不了。现有的 Content Organizer 照旧保留；以后遇到这类接口再单独看。</span></li>
+      <li><span class="x">!</span><span>HTTP 组件底层每次请求都会关掉证书校验（<code>fetch-http-client.ts</code> 第 29 行）。HTTP 成了调外部系统的主路径，这个要先修。</span></li>
+    </ul>
+  </div>
+
+  <div class="catsec" id="cat-fu">
+    <div class="catsec-h"><span class="cat cat-fu">FU 专属</span><h3>把某个 FU 的业务规则写成组件</h3></div>
+    <div class="prose">
+      <p>每个 Function Unit 都有只属于自己的业务规则。比如采购申请有「A 级供应商、金额满 10 万打 8 折」「申请金额不能超过部门预算」。把这些规则写进 FU 专属组件，它就变成组件面板里可以拖的一个步骤。</p>
+      <p>它有三个特点：</p>
+      <ul>
+        <li><b>只算</b>：输入几个值，按规则算出结果。不查库、不调外部系统、不等人审批。</li>
+        <li><b>数据从外面传进来</b>：要用的数据由 flow 先调用数据 flow 取出来，再传给它；算出的结果，再由 flow 调用数据 flow 写回去。</li>
+        <li><b>规则写在代码里，有版本</b>：改规则就是改代码、发新版本、重新导入。改动有记录，也能写测试。</li>
+      </ul>
+    </div>
+    <figure class="fig">
+      <div class="fig-scroll">
+        <svg viewBox="0 0 900 300" role="img" aria-label="计算折扣组件：左边输入金额来自 Service Task、供应商等级来自数据 flow 查询供应商；中间是组件里写好的折扣规则表，命中 A 级且金额不少于 10 万得 8%；右边输出交给数据 flow 更新订单折扣，并返回给 Service Task。">
+          <defs>
+            <marker id="fu-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+            <marker id="fu-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-data"/></marker>
+            <marker id="fu-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="mk-fu"/></marker>
+          </defs>
+          <text x="10" y="26" class="g2">输入从哪来</text>
+          <rect x="10" y="40" width="200" height="60" rx="8" class="box"/>
+          <text x="110" y="64" text-anchor="middle" class="t">Service Task 传入</text>
+          <text x="110" y="84" text-anchor="middle" class="s">金额 = 120,000</text>
+          <rect x="10" y="180" width="200" height="60" rx="8" class="box-data"/>
+          <text x="110" y="204" text-anchor="middle" class="t">数据 flow「查询供应商」</text>
+          <text x="110" y="224" text-anchor="middle" class="s">供应商等级 = A</text>
+          <line x1="210" y1="70" x2="286" y2="96" class="ln" marker-end="url(#fu-a)"/>
+          <text x="232" y="68" class="lab">金额</text>
+          <line x1="210" y1="210" x2="286" y2="186" class="ln-data" marker-end="url(#fu-d)"/>
+          <text x="232" y="226" class="lab-data">等级</text>
+
+          <rect x="290" y="20" width="320" height="260" rx="12" class="box-fu"/>
+          <text x="450" y="46" text-anchor="middle" class="t-fu">采购组件 · 计算折扣</text>
+          <text x="450" y="64" text-anchor="middle" class="smono">fu-purchase / calc_discount</text>
+          <text x="318" y="94" class="lab-fu">条件</text>
+          <text x="560" y="94" class="lab-fu">折扣</text>
+          <line x1="306" y1="104" x2="594" y2="104" class="rule-line"/>
+          <rect x="306" y="105" width="288" height="29" class="row-hi"/>
+          <text x="318" y="124" class="lab-fg">A 级，金额 ≥ 100,000</text>
+          <text x="560" y="124" class="lab-fu">8%</text>
+          <line x1="306" y1="134" x2="594" y2="134" class="rule-line"/>
+          <text x="318" y="154" class="lab-fg">A 级，金额 &lt; 100,000</text>
+          <text x="560" y="154" class="lab-fg">5%</text>
+          <line x1="306" y1="164" x2="594" y2="164" class="rule-line"/>
+          <text x="318" y="184" class="lab-fg">B 级</text>
+          <text x="560" y="184" class="lab-fg">3%</text>
+          <line x1="306" y1="194" x2="594" y2="194" class="rule-line"/>
+          <text x="318" y="214" class="lab-fg">C 级</text>
+          <text x="560" y="214" class="lab-fg">0%</text>
+          <line x1="306" y1="224" x2="594" y2="224" class="rule-line"/>
+          <text x="450" y="258" text-anchor="middle" class="s">只算：不查库、不调外部系统、不等人</text>
+
+          <text x="690" y="26" class="g2">结果交给谁</text>
+          <line x1="610" y1="96" x2="686" y2="70" class="ln-fu" marker-end="url(#fu-f)"/>
+          <text x="622" y="70" class="lab-fu">折扣 8%</text>
+          <line x1="610" y1="186" x2="686" y2="210" class="ln-fu" marker-end="url(#fu-f)"/>
+          <text x="622" y="222" class="lab-fu">折扣 8%</text>
+          <rect x="690" y="40" width="200" height="60" rx="8" class="box-data"/>
+          <text x="790" y="64" text-anchor="middle" class="t">数据 flow「更新订单折扣」</text>
+          <text x="790" y="84" text-anchor="middle" class="s">写回采购订单</text>
+          <rect x="690" y="180" width="200" height="60" rx="8" class="box"/>
+          <text x="790" y="204" text-anchor="middle" class="t">返回给 Service Task</text>
+          <text x="790" y="224" text-anchor="middle" class="s">流程继续往下走</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="l-call"></i>来自流程</span>
+        <span><i class="l-data"></i>来自 / 交给数据 flow</span>
+        <span><i class="l-fu"></i>FU 组件的输出</span>
+      </div>
+      <figcaption>FU 专属组件夹在两次数据 flow 调用中间：左边把数据传进来，中间按规则算，右边把结果交出去。高亮的那一行是这次命中的规则。</figcaption>
+    </figure>
+
+    <h4 class="sub">采购申请这个 FU 可能有哪些 API（每个 API 是包里的一个 action）</h4>
+    <div class="tbl-wrap">
+      <table class="doc">
+        <thead><tr><th>类型</th><th>API</th><th>输入</th><th>输出</th><th>流程里哪一步用</th></tr></thead>
+        <tbody>
+          <tr><td>计算</td><td>计算折扣</td><td>金额、供应商等级</td><td>折扣率</td><td>下单前</td></tr>
+          <tr><td>校验</td><td>检查预算</td><td>申请金额、预算余额</td><td>是否通过、超出多少</td><td>部门审批之后</td></tr>
+          <tr><td>判断走向</td><td>决定审批路线</td><td>金额、采购类别</td><td>路线 A 或 B</td><td>交给流程里的网关，决定下一步找谁审批</td></tr>
+          <tr><td>生成</td><td>生成通知内容</td><td>订单号、供应商、金额</td><td>邮件标题和正文</td><td>审批通过后发通知</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">换一个 FU 也一样。比如报销申请（<code>fu-expense</code>）：「按职级算报销上限」输入职级和费用类型、输出上限金额；「检查发票是否重复」输入本次发票号和历史发票号（由数据 flow 查出），输出重复的发票号。</p>
+
+    <div class="dodont">
+      <div class="dd">
+        <h4>写进 FU 专属组件</h4>
+        <ul class="pts">
+          <li><span class="ok">✓</span><span>只有这个 FU 才有的规则：折扣、预算校验、审批路线判断。</span></li>
+          <li><span class="ok">✓</span><span>规则会改，需要留版本、写测试的。</span></li>
+          <li><span class="ok">✓</span><span>好几个 flow 都要用同一套规则的。</span></li>
+        </ul>
+      </div>
+      <div class="dd">
+        <h4>不写进去，放到别处</h4>
+        <ul class="pts">
+          <li><span class="x">✕</span><span>读写数据库：放在数据 flow 里。</span></li>
+          <li><span class="x">✕</span><span>调外部系统：用外部系统组件。</span></li>
+          <li><span class="x">✕</span><span>人工审批、等待：放在流程里的 User Task。</span></li>
+          <li><span class="x">✕</span><span>很多 FU 都能用的（算工作日）：做成基础工具。</span></li>
+          <li><span class="x">✕</span><span>只用一次的几行小转换：用 flow 里的「代码」步骤（AP 自带，可以直接写几行 JavaScript，不能联网），不用打包。</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <h4 class="sub">代码长什么样（示意）</h4>
+<pre class="code"><span class="c">// automation/packages/pieces/community/fu-purchase/src/lib/actions/calc-discount.ts</span>
+import { Property, createAction } from '@activepieces/pieces-framework';
+
+export const calcDiscount = createAction({
+  name: 'calc_discount',        <span class="c">// 机器名，写进 flow，发布后不要改</span>
+  displayName: '计算折扣',
+  description: '按供应商等级和金额算采购折扣',
+  props: {                      <span class="c">// 组件面板里看到的输入框</span>
+    amount: Property.Number({ displayName: '金额', required: true }),
+    level: Property.ShortText({ displayName: '供应商等级', required: true }),
+  },
+  run: async (ctx) =&gt; {         <span class="c">// 规则本身：只算，不查库</span>
+    const { amount, level } = ctx.propsValue;
+    if (level === 'A') return { discount: amount &gt;= 100_000 ? 0.08 : 0.05 };
+    if (level === 'B') return { discount: 0.03 };
+    if (level === 'C') return { discount: 0 };
+    throw new Error(`供应商等级 ${level} 不在规则里`);
+  },
+});</pre>
+    <p class="note">在<a href="https://claude.ai/artifact/GPurtrSrEeME9a8Z1H2VfB" target="_blank" rel="noopener">可点击原型</a>里打开「采购-计算折扣」，点第 3 步，可以改金额和等级试算折扣。</p>
+  </div>
+
+  <h3>两种业务 API 怎么做</h3>
+  <div class="tbl-wrap">
+    <table class="doc">
+      <thead><tr><th></th><th>外部系统提供的 API</th><th>给 FU 自己写的 API</th></tr></thead>
+      <tbody>
+        <tr><td>简单或一次性</td><td>flow 里直接用 http 组件，不用打包</td><td>—</td></tr>
+        <tr><td>复用或要账号密码</td><td>HTTP 组件 + Admin Center 连接</td><td>做成 FU 专属组件</td></tr>
+        <tr><td>在 flow 里用</td><td>从组件面板拖进去</td><td>同左</td></tr>
+        <tr><td>在 Service Task 里用</td><td>包一个只有一步的普通 flow，Service Task 填它的业务键</td><td>同左</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">组件用 TypeScript 写，跑在 AP 里。如果想用 Java 写 FU 逻辑，就不是组件了，得另做一套插件机制，不建议。</p>
+</section>
+
+<section id="where">
+  <h2>东西放在哪</h2>
+  <div class="tbl-wrap">
+    <table class="doc">
+      <thead><tr><th>东西</th><th>放在哪</th><th>谁维护</th></tr></thead>
+      <tbody>
+        <tr><td>组件代码（四类都是）</td><td>Git 仓库 <code>automation/packages/pieces/community/&lt;名字&gt;/</code>（类别看名字前缀，不分目录）</td><td>开发者写代码、提交</td></tr>
+        <tr><td>打好的组件包</td><td>仓库 <code>automation/hermes/tarballs/</code> 留档，再导入 Admin Center「Automation Pieces」</td><td>管理员导入</td></tr>
+        <tr><td>数据 flow</td><td>DW → Automation → Public workspace</td><td>SYS_ADMIN</td></tr>
+        <tr><td>普通 flow</td><td>DW → Automation → 各团队自己的 workspace</td><td>该团队</td></tr>
+        <tr><td>包 FU 组件的一步 flow</td><td>DW → Automation → <b>这个 FU 所属团队的 workspace</b>。业务键用 <code>FU 名.API 名</code>，例如 <code>purchase.check-budget</code></td><td>该 FU 的团队</td></tr>
+        <tr><td>Service Task</td><td>DW → Function Unit → 流程设计，填 flow 的业务键</td><td>该 FU 的团队</td></tr>
+        <tr><td>数据库连接</td><td>部署环境（推荐，见<a href="#db">数据库连接</a>）</td><td>运维</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="where-grid">
+    <div class="prose">
+      <h3>FU 专属的 API 写在哪</h3>
+      <p>和我们现有的自研组件放在同一个目录：<code>automation/packages/pieces/community/</code>。一个组件一个文件夹，FU 专属的叫 <code>fu-&lt;FU 名&gt;</code>，每个 API 是 <code>src/lib/actions/</code> 下的一个文件。</p>
+      <p>类别不是目录，是按名字前缀认出来的：<code>fu-</code> 是 FU 专属；数据类是固定的 3 个；其余都是基础工具（包括已有的 Content Organizer）。这样不用改仓库的构建配置，<code>community/</code> 本来就是放自研组件的地方。</p>
+      <p>注意两边分开放：FU 的表单、流程这些设计存在 DW 里；FU 专属组件的代码存在 Git 仓库里。两边靠命名对应（<code>fu-purchase</code> 对应 FU「采购申请」），再由一步 flow 的业务键把 Service Task 和组件接起来。</p>
+    </div>
+<pre class="tree" aria-label="组件代码目录结构"><span class="c">automation/packages/pieces/</span>
+├─ core/                  <span class="c">上游基础工具，不动</span>
+└─ community/             <span class="c">自研组件都放这里</span>
+   ├─ biz-calendar/       <span class="c">已有 · 基础工具</span>
+   ├─ hash-helper/        <span class="c">已有 · 基础工具</span>
+   ├─ json/  postgres/    <span class="c">已有</span>
+   ├─ content-organizer/  <span class="c">已有 · 基础工具</span>
+   ├─ <span class="nw">platform-data/</span>      <span class="c">新增 · 数据</span>
+   ├─ <span class="nw">call-data-flow/</span>     <span class="c">新增 · 数据</span>
+   └─ <span class="fu">fu-purchase/</span>        <span class="c">新增 · FU 专属：采购申请</span>
+      ├─ package.json       <span class="c">包名、版本号</span>
+      └─ src/
+         ├─ index.ts        <span class="c">组件名、图标、有哪些 API</span>
+         └─ lib/actions/
+            ├─ <span class="fu">calc-discount.ts</span>  <span class="c">API：计算折扣</span>
+            └─ <span class="fu">check-budget.ts</span>   <span class="c">API：检查预算</span></pre>
+  </div>
+
+  <div class="mock-head">
+    <h3>效果图：采购团队 workspace 里的 flow 列表</h3>
+    <p class="note">包 FU 组件的一步 flow 就是这里的一条普通 flow，和其他 flow 放在一起。</p>
+  </div>
+  <div class="mock">
+    <div class="mock-bar"><b>Developer Workstation</b><span class="sep">/</span>Automation<span class="sep">/</span><span class="tag tag-call">采购团队 workspace</span><span class="tag tag-mock">示意</span></div>
+    <div class="tbl-wrap" style="border:0;border-radius:0">
+      <table class="mt">
+        <thead><tr><th>flow 名称</th><th>业务键</th><th>里面是什么</th><th>谁在调用</th></tr></thead>
+        <tbody>
+          <tr><td>采购-计算折扣</td><td class="num">purchase.calc-discount</td><td>查供应商 → 计算折扣 → 更新订单（多步）</td><td>Service Task「计算折扣」</td></tr>
+          <tr><td>采购-检查预算</td><td class="num">purchase.check-budget</td><td>只有一步：<span class="cat cat-fu">FU 专属</span> 检查预算</td><td>Service Task「检查预算」</td></tr>
+          <tr><td>采购-同步 SAP</td><td class="num">purchase.sync-sap</td><td>只有一步：HTTP（连接：SAP）下单</td><td>Service Task「下单」</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="release">
+  <h2>组件怎么开发和上线</h2>
+  <div class="release">
+    <div class="rel"><span class="k">第 1 步</span><b>写代码</b><span>在仓库 <code>automation/packages/pieces/community/</code> 下建一个文件夹，例如 <code>fu-purchase/</code></span></div>
+    <div class="rel"><span class="k">第 2 步</span><b>打包</b><span>打成一个 .tgz 组件包</span></div>
+    <div class="rel"><span class="k">第 3 步</span><b>导入</b><span>在 Admin Center「Automation Pieces」导入。dev → uat → prod 用同一个包</span></div>
+    <div class="rel"><span class="k">第 4 步</span><b>使用</b><span>在 DW Automation 的 flow 里，从组件面板拖出来用</span></div>
+  </div>
+  <div class="prose">
+    <p class="note">flow 本身怎么上线：数据 flow 和普通 flow 都用 Admin 现有的 flow 迁移页，从 uat 导到 prod。</p>
+    <p class="note">注意：「prod 从 Admin 导入组件」这件事（D9）还是草稿。按草稿，prod 现在只能查看和导出组件，不能导入。见第 4 件待定事项。</p>
+  </div>
+</section>
+
+<section id="db">
+  <h2>数据库连接</h2>
+  <div class="prose">
+    <p>你原来说在 DW 的 flow 里配连接信息。dev 和 uat 可以这么做，但 <b>prod 没有 DW</b>；Admin 的 flow 迁移页也只检查目标环境缺哪些连接，本身建不了连接。所以 prod 的连接要另找地方配：</p>
+  </div>
+  <div class="opts">
+    <div class="opt">
+      <div class="top"><b>由部署环境注入</b></div>
+      <ul class="pts">
+        <li><span class="ok">✓</span><span>每个环境一份，放在 K8s 配置和 Key Vault 里，和 Content Organizer 现在的做法一样。</span></li>
+        <li><span class="ok">✓</span><span>密码不进 flow，迁移时什么都不用带。</span></li>
+        <li><span class="ok">✓</span><span>「平台数据」组件运行时检查调用它的 flow 是否在数据 workspace，不在就报错。flow 作者改不了这个检查。</span></li>
+      </ul>
+    </div>
+    <div class="opt rec">
+      <div class="top"><b>Admin Center 连接管理</b><span class="rec-tag">推荐</span></div>
+      <ul class="pts">
+        <li><span class="ok">✓</span><span>调外部系统已经定了要做这个连接管理，数据库连接放同一处。</span></li>
+        <li><span class="ok">✓</span><span>prod 上也能建、改连接；连接只给数据 workspace 用，就限制住了谁能连库。</span></li>
+        <li><span class="x">✕</span><span>工作量更大，还要做权限和审计。</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    <p><b>两种都要遵守：</b>单独开一个数据库账号，只给需要的表增删改查权限，不用 AP 自己的账号，也不用平台应用的账号。</p>
+    <p><b>如果连的是平台自己的 Relation Table：</b>这些表的数据都存在一张统一的 JSON 表里，不是一张表对应一张物理表。所以「平台数据」组件要按表名找到表结构，再把条件翻译成查询；写入时还要补上 Admin 写入时会做的事：分配主键、填审计字段、记审计日志、设置状态。不补的话，flow 写进去的行在 Admin 和 Portal 里会缺东西。</p>
+    <p><b>如果连的是外部系统的库：</b>现有的 postgres 组件已经能查、增、改、删，只是条件要手写 SQL。给它加一个「选字段 + 运算符 + 值」的条件编辑就行。</p>
+  </div>
+
+  <h3>要改的旧规定</h3>
+  <div class="prose">
+    <p>Automation 的架构决定都记在 <code>docs/ap-integration/DECISIONS.md</code> 里，后面 code review 以它为准。这个方案要改两条：</p>
+    <ul>
+      <li><b>新增 D15</b>：允许数据 flow 直连数据库。条件是专用 workspace、专用数据库账号、操作有审计。</li>
+      <li><b>定下 D9</b>：允许 prod 从 Admin 导入组件。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="decide">
+  <h2>待你定的 4 件事</h2>
+  <div class="decide">
+    <div class="dq">
+      <div class="n">1</div>
+      <b>连哪个库？</b>
+      <div class="ch"><span>平台的 Relation Table</span><span>外部系统的库</span><span>两种都要</span></div>
+      <div class="why">决定做什么组件：Relation Table 要新写「平台数据」组件；外部系统的库在现有 postgres 组件上加条件编辑就行。</div>
+    </div>
+    <div class="dq">
+      <div class="n">2</div>
+      <b>prod 的数据库连接在哪配？</b>
+      <div class="ch"><span class="r">也放进 Admin Center 连接管理（推荐）</span><span>部署环境注入</span></div>
+      <div class="why">调外部系统的连接已经定了放在 Admin Center。数据库连接放同一处，管理方式统一；连接只给数据 workspace 用，PostgreSQL 组件也就不用改代码来限制。</div>
+    </div>
+    <div class="dq">
+      <div class="n">3</div>
+      <b>数据 flow 放在哪？</b>
+      <div class="ch"><span class="r">Public workspace，只有 SYS_ADMIN 能改（推荐）</span><span>另建一个专用 workspace</span></div>
+      <div class="why">Public 已经是「只有 SYS_ADMIN 能改、其他人只读」，不用新建。</div>
+    </div>
+    <div class="dq">
+      <div class="n">4</div>
+      <b>D9（prod 允许从 Admin 导入组件）现在定不定？</b>
+      <div class="ch"><span>现在定</span><span>以后再说，prod 先把组件烘进镜像发布</span></div>
+      <div class="why">要把「打包导入 Admin」当标准上线方式，就要先定 D9。</div>
+    </div>
+  </div>
+  <div class="next" aria-label="下一步">
+    <span>你定这 4 件事</span><i>→</i><span>我写 D15 和技术方案</span><i>→</i><span>你确认</span><i>→</i><span>开始写代码</span>
+  </div>
+</section>
+
+</div>
