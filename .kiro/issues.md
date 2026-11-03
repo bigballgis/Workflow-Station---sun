@@ -5,6 +5,8 @@
 
 ## 统计 (截至 2026-11-03)
 
+2026-11-03：#1738修复普通Form Design与Batch Form事件空模板/脚本混算、X关闭自动应用及重复OK写入。30项专项、原FU50125与新克隆50135四组合真实页面通过；外层保存后GET确认组件及表单脚本保留，原FU未变。DW全量1265通过并保留同2处locale解析失败，类型164无新增，总审查CONDITIONAL。Open仍53、Wontfix仍2。见docs/verification/2026-11-03-designer-event-editor.md。
+
 2026-11-03 扩大验收：#1731的八个表单事件、七个hook、DW/Portal组合、BU/Role→人员→同Role及MCY email已通过真实页面验证，额外问题均补红→绿。DW109/Portal252专项、Common6/Portal302后端专项通过；独立regression:batch-events整组PASS。Portal全量2741通过/1原代码基线失败、类型164/381基线保留；补附件后MI250+6入口通过，总审查CONDITIONAL。另记录范围外模板克隆失败#1737，Open **53**、Wontfix **2**。见docs/verification/2026-11-03-batch-form-events-expanded.md。
 
 2026-11-03：在 #1731 续记 Batch 事件能力扩展，共用普通Form解析/API并保留逐行草稿。MCY合成副本50128的DW保存、Assign即时email回填、Cancel、Apply、刷新及查库通过；Portal101/DW107/Common6专项通过，构建与容器已更新。MI250单测通过，附件截图缺样本，全量类型保留基线错误，总审查CONDITIONAL。Open仍52、Wontfix仍2。见 docs/verification/2026-11-03-batch-form-events.md。

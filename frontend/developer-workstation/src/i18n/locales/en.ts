@@ -674,6 +674,13 @@ export default {
   },
   form: {
     title: 'Form Designer',
+    eventEditor: {
+      configured: 'Configured scripts',
+      available: 'Unconfigured events',
+      drafts: 'New event drafts',
+      add: 'Add event',
+      empty: 'No scripts configured. Use Add event to choose an event or hook.',
+    },
     eventGuideLinkAria: 'Open form event guidelines',
     formName: 'Form Name',
     formType: 'Form Type',

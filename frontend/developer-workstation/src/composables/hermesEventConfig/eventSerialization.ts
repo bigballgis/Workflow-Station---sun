@@ -3,8 +3,7 @@
  *
  * 从 HermesEventConfig.vue 抽出的无状态数据转换逻辑：把 rule 上的
  * _on / _hook（FNX 字符串、函数、$GLOBAL: 引用）与编辑器侧的字符串数组
- * 互相转换。行为零变化——逻辑与原 SFC 的 loadFN / parseFN 逐字一致，
- * 仅把对 this.modelValue / this.activeRule 的访问改为显式入参。
+ * 互相转换。空模板不属于已配置脚本，由编辑器的添加事件入口提供。
  */
 import is from '@form-create/utils/lib/type';
 import deepExtend from '@form-create/utils/lib/deepextend';
@@ -78,8 +77,8 @@ function pushEditorBody(data: string[], raw: unknown): void {
  * 把 rule 的事件 / hook 配置反序列化为编辑器侧的 { [name]: string[] } 结构。
  * 对应原 loadFN()，modelValue / activeRule 由调用方传入。
  *
- * Empty `$FNX:` stubs stay in the list as `['']` so Event → Edit shows
- * `change` / hooks to click; Save still drops blank bodies via parseEventData.
+ * Only configured bodies enter the draft. Empty templates remain available
+ * through the editor's Add event menu and never inflate the configured count.
  */
 export function loadEventData(modelValue: any, activeRule: any): Record<string, string[]> {
     const fromModel = (modelValue && typeof modelValue === 'object')
@@ -113,11 +112,11 @@ export function loadEventData(modelValue: any, activeRule: any): Record<string, 
             e[k].forEach((v: any) => {
                 pushEditorBody(data, v);
             });
-            val[k] = data.length > 0 ? data : [''];
+            if (data.length) val[k] = data;
         } else {
             const data: string[] = [];
             pushEditorBody(data, e[k]);
-            val[k] = data.length > 0 ? data : [''];
+            if (data.length) val[k] = data;
         }
     });
     return val;

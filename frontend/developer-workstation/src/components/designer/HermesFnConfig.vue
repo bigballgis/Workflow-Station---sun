@@ -29,15 +29,17 @@
                             <el-menu
                                 :default-active="defActive"
                                 v-model="activeData">
-                                <template v-for="(item, name) in event">
+                                <el-menu-item-group v-for="group in eventGroups" :key="group.key" :title="editorText(group.key)">
+                                <template v-for="(item, name) in group.events">
                                     <el-menu-item :index="name">
                                         <div class="_fd-fn-list-method" @click.stop="edit(item)">
                                             <span>function<span>{{ name }}</span></span>
                                             <span class="_fd-label" v-if="eventInfo[name]">{{ eventInfo[name] }}</span>
-                                            <span class="_fd-dot" v-if="item.fn"></span>
+                                            <span class="_fd-dot" v-if="hasScript(item.fn)"></span>
                                         </div>
                                     </el-menu-item>
                                 </template>
+                                </el-menu-item-group>
                             </el-menu>
                         </el-main>
                     </el-container>
@@ -81,6 +83,7 @@ import {defineComponent} from 'vue';
 import FnEditor from '@form-create/designer/src/components/FnEditor.vue';
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue';
 import i18n from '@/i18n';
+import {normalizeEventEditorBody} from '@/utils/formCreateDefaultEvents';
 
 const PREFIX = '[[FORM-CREATE-PREFIX-';
 const SUFFIX = '-FORM-CREATE-SUFFIX]]';
@@ -125,13 +128,14 @@ export default defineComponent({
             return i18n.global.t('form.eventGuideLinkAria');
         },
         eventNum() {
-            let num = 0;
-            Object.keys(this.modelValue || {}).forEach(k => {
-                if (this.modelValue[k]) {
-                    num++;
-                }
-            });
-            return num;
+            return Object.values(this.modelValue || {}).filter(fn => this.hasScript(fn)).length;
+        },
+        eventGroups() {
+            return ['configured', 'available'].map(key => ({
+                key,
+                events: Object.fromEntries(Object.entries(this.event).filter(([, item]) =>
+                    this.hasScript(item.fn) === (key === 'configured'))),
+            })).filter(group => Object.keys(group.events).length);
         },
     },
     watch: {
@@ -143,6 +147,12 @@ export default defineComponent({
         },
     },
     methods: {
+        editorText(key) {
+            return i18n.global.t('form.eventEditor.' + key);
+        },
+        hasScript(fn) {
+            return !!normalizeEventEditorBody(typeof fn === 'function' ? String(fn) : fn);
+        },
         getArgs(item) {
             return item.args.join(', ');
         },
@@ -160,7 +170,7 @@ export default defineComponent({
         parseFN(e) {
             const on = {};
             Object.keys(e).forEach(k => {
-                if (e[k].fn) {
+                if (this.hasScript(e[k].fn)) {
                     on[k] = e[k].fn;
                 }
             });

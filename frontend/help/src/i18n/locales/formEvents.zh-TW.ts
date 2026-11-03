@@ -32,7 +32,7 @@ export default {
     openFigure: '採購申請 Title。Edit 對話框：左側 Create 列出每個函數及灰色觸發說明；右側是指令碼編輯器。',
     openTitle: '開啟對話框',
     openBody:
-      '寫控制項：在畫布上選取後點 Edit。寫整張表：Form 頁籤 → Form event → Edit。Create 先選內建事件，再是 hooks，最後是 Custom。Save 寫入目前函數；Ok 把清單留下。頁尾 Cancel 會捨棄這次對話框裡的改動。',
+      'Form Design 和 Batch Form 的 Event 角標只統計有內容的腳本。元件 Event 預設展示「已配置腳本」；透過「新增事件」選擇內建事件、Hook 或 Custom。新增空事件顯示在「新建事件草稿」，儲存腳本後歸入已配置清單。Form event 將「已配置腳本」和「未配置事件」分組展示。Save 將目前函數寫入彈窗草稿；Ok 將草稿套用至設計器。右上角 X、Esc 和頁尾 Cancel 均捨棄本次彈窗的全部改動，包括在彈窗中 Save 過的函數。最後儲存表單才會持久化配置。',
     whenTitle: '每種事件何時觸發',
     whenBody:
       'Create 先列出本控制項事件，再是 hooks，最後是 Custom。清單裡的灰色文字就是觸發時機。只寫 Create 裡出現的名字。removeTag、calendarChange 這類額外名字寫在該控制項自己的頁面。整表事件見 Form event。',

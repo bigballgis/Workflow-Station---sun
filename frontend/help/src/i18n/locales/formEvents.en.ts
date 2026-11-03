@@ -33,7 +33,7 @@ export default {
       'Purchase Request Title. Edit dialog: Create on the left lists each function with grey trigger text; the script editor is on the right.',
     openTitle: 'Open the dialog',
     openBody:
-      'For a control: select it on the canvas, then Edit. For the whole form: Form tab → Form event → Edit. Create picks a built-in event, then hooks, then Custom. Save writes the function; Ok keeps the list. Footer Cancel discards dialog edits.',
+      'In Form Design and Batch Form, the Event badge counts scripts with content. Component Event opens Configured scripts; Add event provides built-in events, hooks and Custom. An empty new event appears under New event drafts until its script is saved. Form event separates Configured scripts from Unconfigured events. Save keeps the current function in the dialog draft; Ok applies the draft to the designer. X, Esc and footer Cancel discard all dialog edits, including functions saved within the dialog. Then save the form to persist the configuration.',
     whenTitle: 'When each event runs',
     whenBody:
       'Create lists this control’s events, then hooks, then Custom. Grey text in that list is the trigger. Only write a name that appears there. Extra names such as removeTag or calendarChange are on that control’s page. Whole-form names are on Form event.',

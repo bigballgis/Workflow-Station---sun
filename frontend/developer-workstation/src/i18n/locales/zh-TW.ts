@@ -724,6 +724,13 @@ export default {
   },
   form: {
     title: '表單設計器',
+    eventEditor: {
+      configured: '已配置腳本',
+      available: '未配置事件',
+      drafts: '新建事件草稿',
+      add: '新增事件',
+      empty: '尚未配置腳本。點擊「新增事件」選擇事件或 Hook。',
+    },
     eventGuideLinkAria: '開啟表單事件指南',
     formName: '表單名稱',
     formType: '表單類型',

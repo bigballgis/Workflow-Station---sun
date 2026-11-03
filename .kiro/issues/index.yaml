@@ -5814,3 +5814,19 @@
     2026-11-03扩展Batch事件验收时，源FU50084与50005的真实clone接口均返回
     Action form reference is not present in the Function Unit package，未产生可用副本。
     与本次事件运行时无直接关系，未修改打包/克隆逻辑；验收改用明确命名的既有合成MI fixture。
+
+- id: "1738"
+  status: fixed
+  fixed_at: "2026-11-03"
+  severity: major
+  category: bug
+  summary: "Form Design与Batch Form空事件模板计数跳变及关闭事件弹窗自动应用"
+  detail: |
+    FU50125的Batch Assignee首次Event角标10，X关闭后1，重选组件恢复10。
+    空模板与真实脚本混在一起；关闭watcher清空模板并自动应用，重选再次补齐。
+    最终组件编辑器分离已配置脚本与新增草稿，添加入口保留事件模板，角标只计实际脚本；
+    Form event分离已配置/未配置，空包装函数不计数。仅OK应用，X/Esc/Cancel丢弃，
+    添加新事件前保留当前编辑器内容到弹窗草稿。三语帮助与文案同改。
+    30项专项通过；原FU50125及新克隆50135两种设计入口真实页面新增/删除/取消/保存查配置通过，
+    原FU配置未变，浏览器无运行错误。DW全量1265通过并保留同2处locale解析基线失败，类型164无新增。
+    详见docs/verification/2026-11-03-designer-event-editor.md；总体审查CONDITIONAL。
