@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    batchTitle: 'Batch Assign: fill another field',
+    batchBody: 'In a Sub-Table Batch Form, use Form event → onChange or the Lookup field’s change event to fill another declared field. Each selected record has its own draft: scripts read that record’s values, and the preview selector lets you inspect each result. Apply validates all selected records before applying them together; Cancel discards the drafts. Field permissions still apply. A target outside the Assign area must also be editable through Batch Edit. Focus and other control interaction events run when you operate that control. Fetch hooks run only when the renderer actually performs a remote fetch.',
+    batchSample: 'Form onChange sample. Replace requester_lookup and requester_email with your configured field names, and include email in the Lookup data.',
     pageTitle: 'Form events',
     crumb: 'Developer Workstation · Function Units · Form Design · Controls',
     intro:

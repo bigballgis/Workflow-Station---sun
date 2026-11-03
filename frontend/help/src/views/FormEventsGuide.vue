@@ -76,6 +76,12 @@ const sections: GuideSection[] = [
     ],
   },
   {
+    anchor: 'batch',
+    titleKey: 'formEventsGuide.batchTitle',
+    bodyKey: 'formEventsGuide.batchBody',
+    samples: [{ code: 'if (field === "requester_lookup" && value) {\n  api.setValue("requester_email", value.email);\n}', hintKey: 'formEventsGuide.batchSample' }],
+  },
+  {
     anchor: 'when',
     titleKey: 'formEventsGuide.whenTitle',
     bodyKey: 'formEventsGuide.whenBody',

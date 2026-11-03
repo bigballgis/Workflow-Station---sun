@@ -9,10 +9,16 @@ export function isEmptyBatchEvent(value: unknown): boolean {
     || source === '$FNX:\nfor(var s=a.getInjectData(n,r),u=arguments.length,c=new Array(u),d=0;d<u;d++)c[d]=arguments[d];return s.args=[].concat(c),c.unshift(s),o.apply(this,c)'
 }
 
+function validBatchHandler(value: unknown): boolean {
+  if (isEmptyBatchEvent(value)) return true
+  if (Array.isArray(value)) return value.every(validBatchHandler)
+  return typeof value === 'string' && (value.startsWith('$FNX:') || value.startsWith('[[FORM-CREATE-PREFIX-'))
+}
+
 export function batchFormOptionsIssue(options: unknown): string | null {
   if (!options || typeof options !== 'object') return null
   return ['onChange', 'onCreated', 'onMounted', 'onReload', 'beforeSubmit', 'onSubmit', 'onReset', 'beforeFetch']
-    .find(key => !isEmptyBatchEvent((options as Record<string, unknown>)[key])) ?? null
+    .find(key => !validBatchHandler((options as Record<string, unknown>)[key])) ?? null
 }
 
 /** Returns the precise field/event for the design save error. */
@@ -28,8 +34,7 @@ export function batchControlIssue(rules: Array<Record<string, unknown>>): string
       if (typeof events !== 'object' || Array.isArray(events)) return `${field} (${kind})`
       for (const [event, script] of Object.entries(events)) {
         if (isEmptyBatchEvent(script)) continue
-        if (!['on', '_on'].includes(kind) || event !== 'change' || typeof script !== 'string'
-          || !(script.startsWith('$FNX:') || script.startsWith('[[FORM-CREATE-PREFIX-'))) return `${field} (${event})`
+        if (!validBatchHandler(script)) return `${field} (${event})`
       }
     }
     const child = batchControlIssue(batchRuleChildren(rule))

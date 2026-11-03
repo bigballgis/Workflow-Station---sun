@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    batchTitle: 'Batch Assign：同时回填其他字段',
+    batchBody: '在子表的 Batch Form 中，可在 Form event → onChange 或 Lookup 字段的 change 事件中回填另一个已声明字段。每条选中记录都有独立草稿，脚本读取该记录自己的值；通过预览记录选择器检查各行结果。Apply 会校验所有选中记录后一起应用；Cancel 丢弃草稿。字段权限仍然生效，Assign 区域外的回填目标还须允许 Batch Edit。焦点等控件交互事件在操作该控件时触发；取数 Hook 仅在渲染器实际发起远程取数时触发。',
+    batchSample: 'Form onChange 样例。将 requester_lookup 和 requester_email 替换为配置的字段名，并让 Lookup 返回 email。',
     pageTitle: '表单事件',
     crumb: '开发工作站 · 功能单元 · 表单设计 · Controls',
     intro:

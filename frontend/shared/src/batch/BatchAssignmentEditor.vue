@@ -2,9 +2,9 @@
   <section class="batch-assignment-editor">
     <el-alert v-if="directory.error.value" :title="directory.error.value" type="error" :closable="false" />
     <BatchAssignmentModeFrame :config="config" :mode="uniform.mode" :disabled="assignmentLocked" @select="selectMode">
-      <BatchDesignedForm :rules="designedRules" :options="options" :readonly-field="assignmentReadonly" :adapted-fields="ownedFields" @change="recordValue">
-        <template #field="{ rule: fieldRule, update }">
-          <BatchAssignmentInput :rule="fieldRule" :config="config" :uniform="uniform" :disabled="assignmentReadonly(fieldRule.field)"
+      <BatchDesignedForm :rules="designedRules" :options="options" :event-context="eventContext" :readonly-field="assignmentReadonly" :adapted-fields="ownedFields" @change="recordValue">
+        <template #field="{ rule: fieldRule, update, events }">
+          <BatchAssignmentInput :rule="fieldRule" :events="events" :config="config" :uniform="uniform" :disabled="assignmentReadonly(fieldRule.field)"
             :lookup-value="designedValues[fieldRule.field]"
             :directory="directory" :user-options="userOptionsFor('uniform', uniform.assigneeId)" :user-loading="userLoading.uniform === true"
             :role-options="uniformRoleOptions" :role-loading="uniformRoleLoading" @search="query => searchUsers('uniform', query)"
@@ -27,8 +27,9 @@ import BatchDesignedForm from './BatchDesignedForm.vue'
 import BatchAssignmentInput from './BatchAssignmentInput.vue'
 import { batchRuleChildren } from './batchFormRules'
 import { assignmentControlRules } from './assignmentControlRules'
+import type { BatchEventContext } from './eventContext'
 import { batchPersonIdentity } from './personIdentity'
-const props = defineProps<{ rule?: Record<string, any>; options?: Record<string, any>; disabled?: boolean; rows: Array<Record<string, unknown>>; capability: BatchAssignmentCapability; fieldWriteModes?: Record<string, 'EDITABLE' | 'READONLY'>; rowIdentity: (row: Record<string, unknown>) => string | null; rowScopeKey: (row: Record<string, unknown>) => Record<string, unknown> | null; createDirectory: (t: (key: string) => string) => BatchAssignmentDirectory }>()
+const props = defineProps<{ eventContext?: BatchEventContext; rule?: Record<string, any>; options?: Record<string, any>; disabled?: boolean; rows: Array<Record<string, unknown>>; capability: BatchAssignmentCapability; fieldWriteModes?: Record<string, 'EDITABLE' | 'READONLY'>; rowIdentity: (row: Record<string, unknown>) => string | null; rowScopeKey: (row: Record<string, unknown>) => Record<string, unknown> | null; createDirectory: (t: (key: string) => string) => BatchAssignmentDirectory }>()
 const { t } = useI18n()
 const config = props.capability.assignmentConfig!
 const uniform = reactive<BatchUniformAssignmentState>({ mode: 'none', assigneeId: '', businessUnitId: '', businessUnitCode: '', roleCode: '' })
@@ -45,7 +46,7 @@ const designedRules = computed(() => {
     for (const rule of items) {
       const active = uniform.mode === 'person' ? rule.field === config.assigneeField
         : uniform.mode === 'role' && (rule.field === config.buField || rule.field === config.roleField)
-      if (ownedFields.includes(rule.field) && !active) rule.hidden = true
+      if (ownedFields.includes(rule.field) && !active) { rule.hidden = true; rule._batchModeHidden = true }
       visit(batchRuleChildren(rule))
     }
   }
@@ -58,6 +59,7 @@ function assignmentReadonly(field: string) {
 }
 function selectMode(mode: 'person' | 'role') {
   if (assignmentLocked.value || (mode === 'person' ? !config.allowUser : !config.allowRole)) return
+  if (props.eventContext && !props.eventContext.clearAssignment()) return
   uniform.mode = uniform.mode === mode ? 'none' : mode
   clearUniformInactive()
 }

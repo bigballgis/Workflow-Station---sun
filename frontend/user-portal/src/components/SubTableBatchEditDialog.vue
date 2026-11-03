@@ -6,7 +6,7 @@
     :default-value-for-field="defaultValueForField" :format-error="formatError"
     :allow-edit="allowEdit" :show-assign="showAssign && mode !== 'add'"
     :parent-selection="parentSelection" :prepare-rows="prepareRows"
-    :run-row-events="runRowEvents"
+    :run-row-events="runRowEvents" :assignment-config="assignmentCapability?.assignmentConfig"
     :collect-assignment="collectAssignment" :assignment-has-changes="assignmentHasChanges"
     @update:visible="emit('update:visible', $event)"
     @apply="(next, changes) => emit('apply', next, changes)"
@@ -15,10 +15,10 @@
     <template #help>
       <DesignerHelpLink path="/form-ctl-sub-table#batch" :ariaLabel="t('subTable.batchGuideLinkAria')" test-id="batch-workspace-guide-link" />
     </template>
-    <template #assignment="{ rows: assignmentRows, disabled, rule }">
+    <template #assignment="{ rows: assignmentRows, disabled, rule, eventContext }">
       <SubTableBatchAssignmentEditor
         v-if="visible && showAssign && assignmentCapability && rowScopeKey" ref="assignmentEditor"
-        :rule="rule" :options="capability.batchForm.options" :disabled="disabled" :rows="assignmentRows" :capability="assignmentCapability" :row-identity="rowIdentity" :row-scope-key="rowScopeKey"
+        :rule="rule" :event-context="eventContext" :options="capability.batchForm.options" :disabled="disabled" :rows="assignmentRows" :capability="assignmentCapability" :row-identity="rowIdentity" :row-scope-key="rowScopeKey"
       />
     </template>
   </BatchWorkspace>
@@ -43,9 +43,9 @@ import SubTableBatchAssignmentEditor from './SubTableBatchAssignmentEditor.vue'
 import BatchLookupField from './lookup/BatchLookupField.vue'
 import { batchLookupComponentKey } from '@platform-shared/batch/lookupComponent'
 import { createBatchRowEventRunner, BatchRowEventError } from '@platform-shared/batch/rowEvents'
-import { parseFormCreateEventHandler, createPortalFormApi } from '@/utils/formCreateEventRuntime'
+import { parseFormCreateEventHandler } from '@/utils/formCreateEventRuntime'
 provide(batchLookupComponentKey, BatchLookupField)
-const runRowEvents = createBatchRowEventRunner(parseFormCreateEventHandler, createPortalFormApi)
+const runRowEvents = createBatchRowEventRunner(parseFormCreateEventHandler)
 
 const props = withDefaults(defineProps<{
   selectedRowIds?: string[]

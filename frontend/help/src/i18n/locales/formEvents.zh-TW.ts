@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    batchTitle: 'Batch Assign：同時回填其他欄位',
+    batchBody: '在子表的 Batch Form 中，可在 Form event → onChange 或 Lookup 欄位的 change 事件中回填另一個已宣告欄位。每條選中記錄都有獨立草稿，腳本讀取該記錄自己的值；透過預覽記錄選擇器檢查各列結果。Apply 會驗證所有選中記錄後一起套用；Cancel 捨棄草稿。欄位權限仍然生效，Assign 區域外的回填目標還須允許 Batch Edit。焦點等控制項互動事件在操作該控制項時觸發；取數 Hook 僅在轉譯器實際發起遠端取數時觸發。',
+    batchSample: 'Form onChange 範例。將 requester_lookup 和 requester_email 替換為設定的欄位名稱，並讓 Lookup 傳回 email。',
     pageTitle: '表單事件',
     crumb: '開發工作站 · 功能單元 · 表單設計 · Controls',
     intro:

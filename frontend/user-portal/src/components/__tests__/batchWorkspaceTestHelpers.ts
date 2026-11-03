@@ -14,19 +14,20 @@ export const rows = [
   { key: 'three', caption: 'C', amount: 3, active: true, hidden: 'keep' },
 ]
 const passthrough = { template: '<div><slot name="header"/><slot/><slot name="footer"/></div>' }
-export function workspace(extra: Record<string, any> = {}) {
-  return mount(Workspace, { props: {
+export function workspace(extra: Record<string, any> = {}, slots: Record<string, any> = {}, provide: Record<symbol, unknown> = {}, controlStubs: Record<string, any> = {}, attachTo?: HTMLElement) {
+  return mount(Workspace, { attachTo, props: {
     visible: true, rows: structuredClone(rows), fields, selectedRowIds: ['one', 'two'],
     rules: fields.map(field => ({ type: field.type, field: field.field, title: field.label, props: { min: field.min, max: field.max, maxlength: field.maxlength } })),
     rowIdentity: (row: Record<string, unknown>) => String(row.key), defaultValueForField: () => null, formatError: String,
     ...extra,
-  }, global: { stubs: {
-    ElSelect: true, ElOption: true, ElDatePicker: true,
+  }, slots, global: { provide, stubs: {
+    ElSelect: true, ElOption: true, ElDatePicker: true, ElCascader: true,
     ElAlert: true, ElDialog: passthrough, ElForm: passthrough, ElFormItem: { ...passthrough, methods: { validate: () => Promise.resolve(), clearValidate: () => {} } }, ElRow: passthrough, ElCol: passthrough, ElCard: passthrough,
     ElButton: { template: '<button><slot/></button>' },
     ElInputNumber: defineComponent({ name: 'ElInputNumber', props: ['modelValue', 'min', 'max'], emits: ['update:modelValue'], template: '<input/>' }),
-    ElInput: defineComponent({ name: 'ElInput', props: ['modelValue', 'maxlength'], emits: ['update:modelValue'], template: '<input/>' }),
+    ElInput: defineComponent({ name: 'ElInput', props: ['modelValue', 'maxlength'], emits: ['update:modelValue'], template: '<input :value="modelValue"/>' }),
     ElSwitch: defineComponent({ name: 'ElSwitch', props: ['modelValue'], emits: ['update:modelValue'], template: '<input/>' }),
+    ...controlStubs,
   } } })
 }
 export function state(wrapper: ReturnType<typeof workspace>) {
