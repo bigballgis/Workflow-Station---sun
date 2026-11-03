@@ -22,13 +22,20 @@
 |------|------|---------|---------|
 | ADVISORY | 阶段内普通对话 | 只有文本，**不带数据块** | 对话气泡 |
 | PROPOSE | 某个阶段点 "Propose change" | 文本 + **该阶段 scope 的切片** | 提案卡 → 预览 → Apply |
-| ONE_CLICK | Build with AI 一键生成 | 文本 + **6 个核心切片全量** | 作业完成后自动 Apply |
+| 一键生成 | Build with AI 一键生成 | **CO 不单独支持**：由 DW 依次发 PROPOSE | 每个阶段的结果自动 Apply 后，再发下一个阶段 |
 
 `VALIDATION` 阶段没有 scope，只支持 ADVISORY。
 
+**CO 的委派语义决定了上面的分工**：CO 的 SUPERVISOR 委派是 `transfer_to_agent`，主管把控制权整个交给一个专家，
+专家的回复就是最终输出，主管拿不回控制权（2026-11-03 首次验收在 Workbench Debug → Events 里确认）。因此：
+
+- 主管只按 PHASE 路由，每次请求只有**一个**专家回答，输出外壳（第 2 节）由专家自己负责；
+- CO 里没法串联多个专家，所以一键生成由 DW 按 流程 → 表 → 表单 → 决策 → 动作 的顺序逐个发 PROPOSE。每一步 Apply 之后再发下一步，这样下一步拿到的 CURRENT DESIGN 里已经有上游的结果。
+  DW 现有的一键生成走的是单次 `scope=ALL` 生成，切到 CO 时要改成这种逐阶段的编排。
+
 ## 2. 输出信封（硬约束）
 
-CO 主管的**最终输出**必须是下面的形状。DW 用 `AiResponseParser` 解析，不需要改代码：
+回答请求的那个 CO 专家，其**最终输出**必须是下面的形状。DW 用 `AiResponseParser` 解析，不需要改代码：
 
 ```text
 <给用户看的说明文字，用用户的语言>
@@ -39,7 +46,7 @@ CO 主管的**最终输出**必须是下面的形状。DW 用 `AiResponseParser`
 ```
 
 - 解析顺序：先找标记块，找不到再找 ```` ```json ```` 围栏，再退到首尾大括号。**请始终用标记块**，后两种只是兜底。
-- 说明文字 = 整段输出去掉标记块之后剩下的部分，原样显示在提案卡上。主管现有的「需求摘要 / 调用了哪些 Agent / 结论 / 假设与人工步骤」写在这里。
+- 说明文字 = 整段输出去掉标记块之后剩下的部分，原样显示在提案卡上。「理解了什么 / 改动摘要 / 假设与人工步骤 / 其他阶段的后续步骤」写在这里。
 - JSON 必须严格：不能有注释、尾逗号、省略号、占位符，XML 不能缩写或 Base64。
 - ADVISORY 形态不输出标记块。PROPOSE 形态如果判断无法产出合法数据（例如缺少依赖），也**不输出**标记块，在说明文字里讲清缺什么。DW 对「既没数据也没文字」的结果会显式报错（`AI_STUDIO_PROPOSAL_EMPTY`）。
 - `---PHASE_COMPLETE---` 可加可不加，AI Studio 不依赖它。
@@ -66,7 +73,7 @@ CO 主管的**最终输出**必须是下面的形状。DW 用 `AiResponseParser`
 1. **整体替换型 scope 必须输出完整切片**：包括没改动的条目，名称和 ID 原样保留。漏掉一条，就等于删掉这一条。
 2. **upsert 型 scope 只列新增和修改的条目**：没列出的保持不变；这条路径删不掉任何东西。
 3. **一次 PROPOSE 只能有一个 scope 的数据**：多出来的切片会被 DW 静默裁掉（提案返回前和 Apply 前各裁一次）。改动波及其他阶段时（例如改表之后表单要跟着改），只能在说明文字里列为「下一步去 X 阶段」，**不能**把别的切片塞进数据块。
-4. **一键生成不含视图、邮件三阶段和 service task 绑定**：连接需要用户手工补凭证，监控依赖连接，绑定依赖已发布的 Automation flow，带上它们整份结果过不了引用校验。CO 主管里「完整 FU 按依赖顺序调用」的清单，在 ONE_CLICK 形态下要收窄到上面 6 个切片。
+4. **一键生成不含视图、邮件三阶段和 service task 绑定**：连接需要用户手工补凭证，监控依赖连接，绑定依赖已发布的 Automation flow，带上它们整份结果过不了引用校验。切到 CO 后，DW 逐阶段编排一键生成时也只走这 6 个切片对应的 5 个阶段（表和表关系同属 TABLES）。
 
 不论什么形态，数据块里都不要放 `name`、`description`（FU 级别）和 `icon`。
 
@@ -95,18 +102,17 @@ CO 的 12 个 Agent 目前都没有工具，所以 DW 调用 CO 时必须把以�
 - 结构校验 + 自动修复重试：`callAiModel` 里的 `AiStructureValidator` 检查字段名、枚举、类型、引用完整性。
 - 提案卡预校验：`AiStudioProposalPreviewer` 给出新增 / 更新 / 替换清单，以及 `REFERENCE_NOT_FOUND` 等问题。有 ERROR 时禁用 Apply。
 
-所以在 PROPOSE / ONE_CLICK 形态下，CO 的 `validation_agent` 只是自查，权威结论来自 DW 的 dry-run。两种取舍：给 CO 接上 dry-run 工具，让修正循环跑在真实校验上；或者在这两种形态下跳过 validation_agent，省掉一轮延迟。
+由于每次请求只有一个专家回答（第 1 节），CO 内部不存在「生成后交给 validation_agent 自查」的循环：PROPOSE 结果的唯一校验就是 DW 的预览 / dry-run。`validation_agent` 只在 VALIDATION 阶段回答，做整份设计的只读审查。如果以后想让 CO 自己修正，前提是 CO 有「把 Agent 当工具调用」、调用后控制权回到主管的模式，或者给专家接上 dry-run 工具。
 
 ## 6. CO 现有 Instruction 与契约的冲突（按 Agent 列）
 
 基于 2026-11-02 读取的 CO dev 配置（`content-organizer-dev.hk.hsbc` → Use case management → `dw_function_unit_orchestrator`）。
 按这些冲突改好的 12 段 Instruction，可直接粘贴的版本见 [developer-workstation-ai-studio-co-agent-instructions.md](./developer-workstation-ai-studio-co-agent-instructions.md)。
 
-**dw_function_unit_orchestrator（主管）**
-- 补上第 1 节的形态判断，以及第 2 节的输出信封；「Final response must include」那 5 节改为写进说明文字。
-- 「targeted change 时调用受影响的 Agent 及其依赖」→ 依赖方只能在说明文字里写成后续步骤（第 3 节规则 3）。
-- 完整 FU 的调用顺序在 ONE_CLICK 下收窄到 6 个切片；`decisions` 要排在 `actions` 之前（见下面 decision 条）。
-- 语言规则不用改：DW 的标识符和展示名一律英文，说明文字跟随用户语言。
+**dw_function_unit_orchestrator（主管）**（v2：改为纯路由，见第 1 节的委派语义）
+- 按 PHASE 把请求交给唯一一个专家；自己不产数据、不合并、不跑自查循环。
+- 原 Instruction 里的「Final response must include」五节、「targeted change 时调用受影响的 Agent 及其依赖」、完整 FU 的调用顺序，都因 `transfer_to_agent` 无法实现而删掉：说明文字和后续步骤由专家写，一键生成由 DW 编排（decisions 排在 actions 之前）。
+- 语言规则不变：数据块一律英文，说明文字跟随用户语言（现在写在每个专家的 OUTPUT 段里）。
 
 **process_design_agent**：只输出 `processDefinition.bpmnXml`。必须满足 generation.txt 第 239–262 行，尤其是：
 - `assigneeType` 以 `custom:values` 的形式写在扩展属性里；
