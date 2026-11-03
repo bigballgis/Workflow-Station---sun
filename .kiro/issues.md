@@ -3,7 +3,13 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-11-01)
+## 统计 (截至 2026-11-03)
+
+2026-11-03：#1738修复普通Form Design与Batch Form事件空模板/脚本混算、X关闭自动应用及重复OK写入。30项专项、原FU50125与新克隆50135四组合真实页面通过；外层保存后GET确认组件及表单脚本保留，原FU未变。DW全量1265通过并保留同2处locale解析失败，类型164无新增，总审查CONDITIONAL。Open仍53、Wontfix仍2。见docs/verification/2026-11-03-designer-event-editor.md。
+
+2026-11-03 扩大验收：#1731的八个表单事件、七个hook、DW/Portal组合、BU/Role→人员→同Role及MCY email已通过真实页面验证，额外问题均补红→绿。DW109/Portal252专项、Common6/Portal302后端专项通过；独立regression:batch-events整组PASS。Portal全量2741通过/1原代码基线失败、类型164/381基线保留；补附件后MI250+6入口通过，总审查CONDITIONAL。另记录范围外模板克隆失败#1737，Open **53**、Wontfix **2**。见docs/verification/2026-11-03-batch-form-events-expanded.md。
+
+2026-11-03：在 #1731 续记 Batch 事件能力扩展，共用普通Form解析/API并保留逐行草稿。MCY合成副本50128的DW保存、Assign即时email回填、Cancel、Apply、刷新及查库通过；Portal101/DW107/Common6专项通过，构建与容器已更新。MI250单测通过，附件截图缺样本，全量类型保留基线错误，总审查CONDITIONAL。Open仍52、Wontfix仍2。见 docs/verification/2026-11-03-batch-form-events.md。
 
 2026-11-01 运行中节点追修：#1736补入REJECT已办历史，原任务Investigation灰→绿且当前Mark Completed仍橙；两入口10项回归先红后绿。全量2623通过/同1基线失败、类型381及lint9无新增，MI250+6通过；六组新单34办理页面/28个MI中途颜色断言，FU48/50126各完整Batch混合路径通过。Open仍52、Wontfix仍2。见docs/verification/2026-11-01-live-mi-node-completion.md。
 
@@ -27,7 +33,7 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **52** | `index.yaml`（按当前条目重新计数） |
+| 🔓 Open | **53** | `index.yaml`（按当前条目重新计数） |
 | ⏸️ Wontfix | **2** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521–#1530、#1532–#1539、#1541–#1636、#1639–#1650、#1653–#1656、#1658、#1663–#1665、#1667–#1669 等） |
 

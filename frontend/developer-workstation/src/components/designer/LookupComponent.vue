@@ -1,6 +1,6 @@
 <template>
   <div class="lookup-component">
-    <LookupPreview
+    <LookupPreview :key="reloadNonce ?? 0"
       v-model="lookupValue"
       :label="''"
       :placeholder="placeholder || previewConfig.placeholder"
@@ -36,6 +36,7 @@ import {
 
 const props = defineProps<{
   modelValue?: any
+  reloadNonce?: number
   placeholder?: string
   lookupConfig?: string
   disabled?: boolean

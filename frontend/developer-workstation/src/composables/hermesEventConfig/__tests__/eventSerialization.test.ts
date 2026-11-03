@@ -10,7 +10,15 @@ import {
 } from '@/utils/formCreateDefaultEvents'
 
 describe('hermesEventConfig eventSerialization', () => {
-  it('loadEventData keeps change body and lists empty $FNX stubs so Event Edit is not blank', () => {
+  it('does not count empty entries in arrays or hooks, and retains global and multiple handlers', () => {
+    const compiled = Object.assign(() => {}, { __json: '$FNX:api.setValue("a", 1)' })
+    const loaded = loadEventData({ change: ['$FNX:', compiled, '$GLOBAL:fillEmail'] }, {
+      _hook: { mounted: '$FNX: ', load: ['$FNX:', '$FNX:api.setValue("b", 2)'] },
+    })
+    expect(loaded).toEqual({ change: ['api.setValue("a", 1)', '$GLOBAL:fillEmail'], hook_load: ['api.setValue("b", 2)'] })
+    expect(parseEventData(loaded)).toEqual({ on: { change: ['$FNX:api.setValue("a", 1)', '$GLOBAL:fillEmail'] }, hooks: { load: '$FNX:api.setValue("b", 2)' } })
+  })
+  it('loadEventData keeps configured bodies and excludes empty templates', () => {
     const loaded = loadEventData(
       {
         change: '$FNX:\napi.hidden(true, "__subTable_1")',
@@ -19,7 +27,7 @@ describe('hermesEventConfig eventSerialization', () => {
       null,
     )
     expect(loaded.change).toEqual(['api.hidden(true, "__subTable_1")'])
-    expect(loaded.blur).toEqual([''])
+    expect(loaded.blur).toBeUndefined()
   })
 
   it('loadEventData falls back to rule.on when _on/modelValue is empty', () => {

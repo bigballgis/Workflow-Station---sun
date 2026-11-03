@@ -8,13 +8,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SubTableBatchDefinitionTest {
     @Test
-    void rejectsUnsupportedBatchControlsAndHooksBeforePublicationOrImport() {
+    void validatesControlsAndAcceptsOrdinaryFormEventsBeforePublicationOrImport() {
         assertThatThrownBy(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
                 "rule", List.of(Map.of("type", "upload", "field", "documents"))), false))
                 .hasMessageContaining("documents");
+        assertThatCode(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
+                "rule", List.of(Map.of("type", "input", "field", "email", "hook", Map.of("mounted", "$FNX:api.required(true, 'email')"))),
+                "options", Map.of("onChange", "$FNX:api.setValue('email', 'test@example.invalid')")), false))
+                .doesNotThrowAnyException();
         assertThatThrownBy(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
-                "rule", List.of(Map.of("type", "input", "field", "email", "hook", Map.of("mounted", "$FNX:bad()")))), false))
-                .hasMessageContaining("email").hasMessageContaining("mounted");
+                "rule", List.of(Map.of("type", "input", "field", "email", "on", Map.of("change", "unmarked script")))), false))
+                .hasMessageContaining("email");
         assertThatCode(() -> SubTableBatchDefinition.validateForm(Map.of("schemaVersion", 1,
                 "rule", List.of(Map.of("type", "lookup", "field", "person", "on", Map.of("change", "$FNX:api.setValue('email', value.email)")))), false))
                 .doesNotThrowAnyException();
