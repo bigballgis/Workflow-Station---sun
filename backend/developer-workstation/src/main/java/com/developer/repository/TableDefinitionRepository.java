@@ -29,6 +29,9 @@ public interface TableDefinitionRepository extends JpaRepository<TableDefinition
     Optional<TableDefinition> findByFunctionUnitIdAndTableName(Long functionUnitId, String tableName);
 
     Optional<TableDefinition> findByTableName(String tableName);
+
+    @Query("SELECT t FROM TableDefinition t WHERE t.functionUnit.code=:code AND t.tableName=:name")
+    Optional<TableDefinition> findByFunctionUnitCodeAndTableName(@Param("code") String code,@Param("name") String name);
     
     boolean existsByTableName(String tableName);
 

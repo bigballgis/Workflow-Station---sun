@@ -2,18 +2,15 @@ package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.list.ListColumnMeta;
-import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewInvolvementScope;
 import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.MainTableViewSubRowQueryComponent;
-import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewFieldColumn;
 import com.portal.dto.MainTableViewQueryRequest;
 import com.portal.entity.ProcessInstance;
-import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.UserDisplayNameResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,11 +20,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -60,80 +55,36 @@ class PortalMainTableViewSelectDisplayTest {
     @Mock
     private MainTableViewRowQueryComponent rowQueryComponent;
 
+    private final com.portal.client.PortalBiClient client = org.mockito.Mockito.mock(com.portal.client.PortalBiClient.class);
     private PortalMainTableViewServiceImpl service;
 
     @BeforeEach
     void setUp() throws Exception {
         service = new PortalMainTableViewServiceImpl(
-                jdbcTemplate,
+                client,
                 new ObjectMapper(),
-                functionUnitAccessComponent,
-                accessResolver,
                 mock(MainTableViewInvolvementScope.class),
                 rowQueryComponent,
                 mock(MainTableViewSubRowQueryComponent.class),
-                mock(ProcessInstanceRepository.class),
-                mock(ProcessComponent.class),
-                mock(ComputedFieldRecalculator.class),
                 mock(UserDisplayNameResolver.class));
 
-        Map<String, Object> viewRow = new HashMap<>();
-        viewRow.put("id", VIEW_ID);
-        viewRow.put("view_name", "Merchants");
-        viewRow.put("sort_config", null);
-        viewRow.put("filter_config", null);
-        viewRow.put("fu_code", "fu-merchant");
-        viewRow.put("main_table_id", TABLE_ID);
-        viewRow.put("table_type", "MAIN");
-        viewRow.put("restrict_to_involved_users", Boolean.FALSE);
-        when(jdbcTemplate.queryForList(contains("dw_main_table_view_configs"), eq(VIEW_ID)))
-                .thenReturn(List.of(viewRow));
-        when(jdbcTemplate.queryForList(contains("dw_main_table_view_access"), eq(VIEW_ID)))
-                .thenReturn(List.of());
-        when(jdbcTemplate.query(contains("dw_main_table_view_fields"), any(RowMapper.class), eq(VIEW_ID)))
-                .thenAnswer(inv -> {
-                    RowMapper<Object> mapper = inv.getArgument(1);
-                    return List.of(
-                            mapper.mapRow(fieldRow("merchant_credit", "Merchant Credit", 0, "label"), 0),
-                            mapper.mapRow(fieldRow("channel", "Channel", 1, "value"), 1));
-                });
-        // The form's PRIMARY binding on this table contributes its top-level rules.
-        Map<String, Object> primaryBinding = new HashMap<>();
-        primaryBinding.put("binding_id", 521L);
-        primaryBinding.put("binding_type", "PRIMARY");
-        primaryBinding.put("cfg", """
+        var fixture=new PublishedViewFixture();fixture.id=VIEW_ID;fixture.tableId=TABLE_ID;fixture.code="fu-merchant";
+        var credit=PublishedViewFixture.field("merchant_credit",0);credit.put("displayLabel","Merchant Credit");credit.put("selectDisplay","label");
+        var channel=PublishedViewFixture.field("channel",1);channel.put("displayLabel","Channel");
+        fixture.definition.put("fields",List.of(credit,channel));
+        fixture.forms.add(Map.of("configJson", """
                 {"rule":[
                   {"type":"select","field":"merchant_credit","options":[{"label":"Y","value":"1"},{"label":"N","value":"2"}]},
                   {"type":"select","field":"channel","options":[{"label":"Web","value":"W"}]}
                 ]}
-                """);
-        when(jdbcTemplate.queryForList(contains("b.binding_type"), eq(TABLE_ID)))
-                .thenReturn(List.of(primaryBinding));
-        when(accessResolver.parseAccessRules(any())).thenReturn(List.of());
-        when(accessResolver.canUserSeeView(any(), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAccessFunctionUnit(any(), any())).thenReturn(true);
-        when(functionUnitAccessComponent.isFunctionUnitEnabled(any())).thenReturn(true);
-        when(functionUnitAccessComponent.isSystemAdministrator(any())).thenReturn(true);
+                """, "tableBindings",List.of(Map.of("bindingId",521L,"bindingType","PRIMARY","tableName",fixture.tableName))));
+        when(client.getDataView(USER_ID,VIEW_ID)).thenAnswer(call -> fixture.build());
         when(rowQueryComponent.query(any())).thenReturn(new MainTableViewRowQueryComponent.Page(
                 List.of(ProcessInstance.builder()
                         .id("pi-1")
                         .variables(Map.of("merchant_credit", "1", "channel", "W"))
                         .build()),
                 1L));
-    }
-
-    private static ResultSet fieldRow(String fieldName, String label, int sortOrder, String selectDisplay)
-            throws Exception {
-        ResultSet rs = mock(ResultSet.class);
-        when(rs.getString("field_name")).thenReturn(fieldName);
-        when(rs.getString("display_label")).thenReturn(label);
-        when(rs.getObject("column_width")).thenReturn(null);
-        when(rs.getInt("sort_order")).thenReturn(sortOrder);
-        when(rs.getBoolean("visible")).thenReturn(true);
-        when(rs.getBoolean("is_system_field")).thenReturn(false);
-        when(rs.getString("column_type")).thenReturn("field");
-        when(rs.getString("select_display")).thenReturn(selectDisplay);
-        return rs;
     }
 
     private static MainTableViewQueryRequest firstPage() {

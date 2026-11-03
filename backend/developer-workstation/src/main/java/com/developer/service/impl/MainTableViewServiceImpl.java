@@ -36,7 +36,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -733,6 +732,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     private Map<String, Object> toSnapshotMap(MainTableViewConfig config) {
         Map<String, Object> snap = new LinkedHashMap<>();
         snap.put("id", config.getId());
+        snap.put("viewKey", config.getViewKey());
         snap.put("mainTableId", config.getMainTableId());
         snap.put("viewName", config.getViewName());
         snap.put("isDefault", config.getIsDefault());

@@ -16,7 +16,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
 - /help/table-design — Tables, fields, PK and FK (Function Unit Table Design; formulas stay on /help/computed-fields; SLA Due Date field mapping #sla-due-date)
 - /help/table-bindings — Manage Table Bindings (Form Design toolbar; attach MAIN/SUB/ACTION/RELATION; Filter foreign key; Foreign-key fill source). Sub-Table grid is /help/form-ctl-sub-table
-- /help/view-design — View Design lists and Access control (Business Units + Roles; empty = System Administrator only; #access)
+- /help/view-design — View Design lists and Access control (Business Units + Roles; independent of Request in User Portal access; empty = System Administrator only; #access)
 - /help/fu-documents — Requirements and Function Unit Design documents (Function Unit Settings; Edit / Preview / Import .md .markdown .txt up to 200 KB / Download / Version History / Save; import only loads the editor until Save; versions vMajor.Minor with source labels; Compare with current, Restore; documents travel with Export, Clone and Version Management rollback; #editor #import #history #travel)
 - /help/ai-studio — Build with AI dialog and AI Studio entry (Start a new AI design, Continue AI draft, One-click generate #one-click: requirements box up to 4000 characters, optional when a Requirements document exists; Replace the current design? confirmation every time; writes process, tables, forms, actions, decisions; not views, connections, email templates, email monitors, automation bindings; result card Applied / Apply / Let AI fix it #result; no Undo, roll back in Version Management)
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task; field catalog for every control)
@@ -120,4 +120,4 @@ Unsaved design changes: /help/fu-documents#unsaved — Save, discard, continue e
 
 ## BI assignments
 - /help/bi-audience-assignment — Home-page audiences, paged user search, User/Role/current Business Unit, enabled grants and presentation.
-- /help/bi-data-view-assignment — Concrete published Table View bindings, Records/Dashboard mode, named Dashboard tabs, independent enablement, one-time legacy expansion. View filters are not Superset row filters.
+- /help/bi-data-view-assignment — Admin active-release View directory, stable bindings across edits and redeployment, View-authorized Dashboard access, Records/Dashboard mode and independent enablement. New or cloned Views do not inherit bindings. View filters are not Superset row filters.

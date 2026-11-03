@@ -95,6 +95,39 @@ public class PortalBiClient {
         }
     }
 
+    public boolean isDataViewAdministrator(String userId) {
+        try {
+            var response = restTemplate.exchange(adminCenterUrl + "/api/v1/admin/internal/data-views/administrator",
+                    HttpMethod.GET, new HttpEntity<>(headers(userId)),
+                    new ParameterizedTypeReference<com.platform.common.dto.ApiResponse<Boolean>>() { });
+            if (response.getBody() == null || !response.getBody().isSuccess() || response.getBody().getData() == null) {
+                throw new IllegalStateException("Admin returned an empty runtime administrator response");
+            }
+            return response.getBody().getData();
+        } catch (RestClientException ex) { throw translateDataView(ex); }
+    }
+
+    public List<com.platform.common.dataview.RuntimeDataView> getDataViews(String userId) {
+        try {
+            var response = restTemplate.exchange(adminCenterUrl + "/api/v1/admin/internal/data-views",
+                    HttpMethod.GET, new HttpEntity<>(headers(userId)),
+                    new ParameterizedTypeReference<List<com.platform.common.dataview.RuntimeDataView>>() { });
+            if (response.getBody() == null) throw new IllegalStateException("Admin returned an empty View directory response");
+            return response.getBody();
+        } catch (RestClientException ex) { throw translateDataView(ex); }
+    }
+
+    public com.platform.common.dataview.RuntimeDataView getDataView(String userId, Long viewId) {
+        if (viewId == null || viewId <= 0) throw new IllegalArgumentException("View ID must be positive");
+        try {
+            var response = restTemplate.exchange(adminCenterUrl + "/api/v1/admin/internal/data-views/" + viewId,
+                    HttpMethod.GET, new HttpEntity<>(headers(userId)), com.platform.common.dataview.RuntimeDataView.class);
+            if (response.getBody() == null) throw new IllegalStateException("Admin returned an empty View definition response");
+            if (!viewId.equals(response.getBody().id())) throw new IllegalStateException("Admin returned a different View identity");
+            return response.getBody();
+        } catch (RestClientException ex) { throw translateDataView(ex); }
+    }
+
     private HttpHeaders headers(String userId) {
         if (serviceInternalToken == null || serviceInternalToken.isBlank()) {
             throw new PortalBiUpstreamException(
@@ -106,6 +139,20 @@ public class PortalBiClient {
         headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
         headers.set(PlatformConstants.HEADER_USER_ID, userId);
         return headers;
+    }
+
+    private RuntimeException translateDataView(RestClientException ex) {
+        if (ex instanceof HttpClientErrorException.Unauthorized) {
+            return new AuthenticationCredentialsNotFoundException("Admin Center rejected runtime View authentication",ex);
+        }
+        if (ex instanceof HttpClientErrorException.Forbidden) {
+            return new AccessDeniedException("Data view access denied",ex);
+        }
+        if (ex instanceof HttpClientErrorException.NotFound) {
+            return new PortalBiUpstreamException(HttpStatus.NOT_FOUND,"DATA_VIEW_NOT_FOUND","Published View was not found",ex);
+        }
+        return new PortalBiUpstreamException(HttpStatus.BAD_GATEWAY,"DATA_VIEW_UPSTREAM_UNAVAILABLE",
+                "Admin Center View service is temporarily unavailable",ex);
     }
 
     private RuntimeException translate(RestClientException ex) {

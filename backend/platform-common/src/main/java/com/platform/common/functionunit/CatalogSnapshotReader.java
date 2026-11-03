@@ -127,6 +127,14 @@ public class CatalogSnapshotReader {
                 definition.put("pkGeneration", pk);
                 if (field.get("refTableName") != null) {
                     var parents = parentsOf(tables, field);
+                    if(field.get("refFunctionUnitCode") instanceof String refCode) {
+                        parents=jdbc.queryForList("SELECT definition::text FROM ac_external_table_snapshots "
+                                + "WHERE catalog_id=? AND function_unit_code=? AND table_name=?",String.class,
+                                catalogId,refCode,field.get("refTableName")).stream().map(this::parse).toList();
+                        if (parents.size()!=1) throw invalid(catalogId);
+                        definition.put("refFunctionUnitCode",refCode);
+                        definition.put("refTableName",field.get("refTableName"));
+                    }
                     if (parents.isEmpty() && !legacyConsulted) {
                         legacyConsulted = true;
                         addLegacyRelationTables(catalogId, tables);
@@ -407,16 +415,39 @@ public class CatalogSnapshotReader {
     }
 
     public Map<String, Object> detailFormForView(String catalogId, String viewName) {
-        var views = contents(catalogId, "MAIN_TABLE_VIEW").stream()
-                .flatMap(content -> objects(content.get("views")).stream())
-                .filter(view -> viewName.equals(view.get("viewName"))).toList();
-        if (views.size() != 1) throw invalid(catalogId);
-        Object name = views.get(0).get("detailFormName");
-        if (name == null) return Map.of(); // The published view explicitly has no DETAIL form.
-        var forms = contents(catalogId, "FORM").stream()
-                .filter(form -> "DETAIL".equals(form.get("formType")) && name.equals(form.get("formName"))).toList();
-        if (forms.size() != 1) throw invalid(catalogId);
-        return form(catalogId, String.valueOf(forms.get(0).get("formId")));
+        return detailFormForView(catalogId, null, null, viewName);
+    }
+
+    /** Stable identity selects the View on the row's pinned release, including after rename. */
+    public Map<String, Object> detailFormForView(String catalogId, String viewKey, String tableName, String viewName) {
+        var definition=detailFormDefinitionForView(catalogId,viewKey,tableName,viewName);
+        return definition.isEmpty() ? Map.of() : form(catalogId,String.valueOf(definition.get("formId")));
+    }
+
+    public boolean hasDetailFormForView(String catalogId, String viewKey, String tableName, String viewName) {
+        return !detailFormDefinitionForView(catalogId,viewKey,tableName,viewName).isEmpty();
+    }
+
+    private Map<String,Object> detailFormDefinitionForView(String catalogId,String viewKey,String tableName,String viewName) {
+        var definitions = contents(catalogId,"MAIN_TABLE_VIEW").stream()
+                .flatMap(content -> objects(content.get("views")).stream()).toList();
+        boolean keyed = definitions.stream().anyMatch(view -> view.get("viewKey") != null);
+        var views = definitions.stream().filter(view -> {
+            if (viewKey != null && keyed) return viewKey.equals(view.get("viewKey"));
+            // FALLBACK(migration): legacy snapshots have no viewKey; use their explicitly declared
+            // table + View references, reject ambiguity. Remove after legacy releases are retired.
+            return viewName.equals(view.get("viewName"))
+                    && (tableName == null || tableName.equals(view.get("mainTableName")));
+        }).toList();
+        // A later View legitimately has no definition in an older request's release.
+        if (views.isEmpty()) return Map.of();
+        if (views.size()!=1) throw invalid(catalogId);
+        Object name=views.get(0).get("detailFormName");
+        if (name==null) return Map.of();
+        var forms=contents(catalogId,"FORM").stream().filter(form -> "DETAIL".equals(form.get("formType"))
+                && name.equals(form.get("formName"))).toList();
+        if (forms.size()!=1) throw invalid(catalogId);
+        return forms.get(0);
     }
 
     public Map<String, Object> parse(String json) {

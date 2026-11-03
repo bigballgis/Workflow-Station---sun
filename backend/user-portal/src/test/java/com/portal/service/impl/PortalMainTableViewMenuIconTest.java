@@ -1,111 +1,34 @@
 package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portal.component.ComputedFieldRecalculator;
-import com.portal.component.FunctionUnitAccessComponent;
-import com.portal.component.MainTableViewAccessResolver;
-import com.portal.component.MainTableViewInvolvementScope;
-import com.portal.component.MainTableViewRowQueryComponent;
-import com.portal.component.MainTableViewSubRowQueryComponent;
-import com.portal.component.ProcessComponent;
-import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
-import com.portal.repository.ProcessInstanceRepository;
+import com.portal.client.PortalBiClient;
+import com.portal.component.*;
 import com.portal.service.UserDisplayNameResolver;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.*;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-@ExtendWith(MockitoExtension.class)
 class PortalMainTableViewMenuIconTest {
-
-    private static final String USER_ID = "user-dev";
-    private static final String FU_CODE = "fu-atm";
-
-    @Mock
-    private JdbcTemplate jdbcTemplate;
-    @Mock
-    private FunctionUnitAccessComponent functionUnitAccessComponent;
-    @Mock
-    private MainTableViewAccessResolver accessResolver;
-
-    private PortalMainTableViewServiceImpl service;
-
-    @BeforeEach
-    void setUp() {
-        service = new PortalMainTableViewServiceImpl(
-                jdbcTemplate,
-                new ObjectMapper(),
-                functionUnitAccessComponent,
-                accessResolver,
-                org.mockito.Mockito.mock(MainTableViewInvolvementScope.class),
-                org.mockito.Mockito.mock(MainTableViewRowQueryComponent.class),
-                org.mockito.Mockito.mock(MainTableViewSubRowQueryComponent.class),
-                org.mockito.Mockito.mock(ProcessInstanceRepository.class),
-                org.mockito.Mockito.mock(ProcessComponent.class),
-                org.mockito.Mockito.mock(ComputedFieldRecalculator.class),
-                org.mockito.Mockito.mock(UserDisplayNameResolver.class));
+    private final PortalBiClient client=mock(PortalBiClient.class);
+    private final PortalMainTableViewServiceImpl service=new PortalMainTableViewServiceImpl(client,new ObjectMapper(),
+            mock(MainTableViewInvolvementScope.class),mock(MainTableViewRowQueryComponent.class),
+            mock(MainTableViewSubRowQueryComponent.class),mock(UserDisplayNameResolver.class));
+    @Test void noAccessibleAdminViewsMeansNoMenu() {
+        when(client.getDataViews("user")).thenReturn(List.of());
+        assertThat(service.listAccessibleFunctionUnits("user")).isEmpty();
     }
-
-    @Test
-    void shouldNotQueryIcons_whenNoPublishedViews() {
-        when(jdbcTemplate.queryForList(contains("v.status = 'PUBLISHED'"))).thenReturn(List.of());
-
-        assertThat(service.listAccessibleFunctionUnits(USER_ID)).isEmpty();
-        verify(jdbcTemplate, never()).queryForList(contains("ic.svg_content"), any(Object.class));
+    @Test void menuUsesOnlyAdminPublishedMetadataIncludingIcon() {
+        var fixture=new PublishedViewFixture();fixture.code="fu-atm";
+        when(client.getDataViews("user")).thenReturn(List.of(fixture.build()));
+        var result=service.listAccessibleFunctionUnits("user");
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).functionUnitCode()).isEqualTo("fu-atm");
+        assertThat(result.get(0).iconSvg()).isEqualTo("<svg></svg>");
+        assertThat(result.get(0).viewCount()).isEqualTo(1);
     }
-
-    @Test
-    void shouldAttachIconSvg_whenIconRowPresent() {
-        stubPublishedFuAndAccess();
-        when(jdbcTemplate.queryForList(contains("ic.svg_content"), eq(FU_CODE)))
-                .thenReturn(List.of(Map.of("fu_code", FU_CODE, "icon_svg", "<svg></svg>")));
-
-        List<FunctionUnitViewMenuItem> items = service.listAccessibleFunctionUnits(USER_ID);
-
-        assertThat(items).hasSize(1);
-        assertThat(items.get(0).functionUnitCode()).isEqualTo(FU_CODE);
-        assertThat(items.get(0).iconSvg()).isEqualTo("<svg></svg>");
-    }
-
-    @Test
-    void shouldOmitIconSvg_whenIconQueryFails() {
-        stubPublishedFuAndAccess();
-        when(jdbcTemplate.queryForList(contains("ic.svg_content"), eq(FU_CODE)))
-                .thenThrow(new DataAccessResourceFailureException("icons down"));
-
-        List<FunctionUnitViewMenuItem> items = service.listAccessibleFunctionUnits(USER_ID);
-
-        assertThat(items).hasSize(1);
-        assertThat(items.get(0).functionUnitCode()).isEqualTo(FU_CODE);
-        assertThat(items.get(0).iconSvg()).isNull();
-    }
-
-    private void stubPublishedFuAndAccess() {
-        Map<String, Object> row = new HashMap<>();
-        row.put("fu_id", 1L);
-        row.put("fu_code", FU_CODE);
-        row.put("fu_name", "ATM");
-        row.put("view_id", 10L);
-        when(jdbcTemplate.queryForList(contains("v.status = 'PUBLISHED'"))).thenReturn(List.of(row));
-        when(functionUnitAccessComponent.canAccessFunctionUnit(USER_ID, FU_CODE)).thenReturn(true);
-        when(functionUnitAccessComponent.isFunctionUnitEnabled(FU_CODE)).thenReturn(true);
-        when(accessResolver.canUserSeeView(eq(USER_ID), anyList())).thenReturn(true);
+    @Test void failedAdminDirectoryCannotBecomeAnEmptyOrDesignerMenu() {
+        when(client.getDataViews("user")).thenThrow(new IllegalStateException("Admin unavailable"));
+        assertThatThrownBy(() -> service.listAccessibleFunctionUnits("user")).hasMessage("Admin unavailable");
     }
 }

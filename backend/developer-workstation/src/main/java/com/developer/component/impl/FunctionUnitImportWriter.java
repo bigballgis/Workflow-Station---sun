@@ -237,6 +237,10 @@ public class FunctionUnitImportWriter {
                     continue;
                 }
                 Long refTableId = importedTableNameToId.get(refTableName);
+                if(fieldData.get("refFunctionUnitCode") instanceof String refCode) {
+                    refTableId=tableDefinitionRepository.findByFunctionUnitCodeAndTableName(refCode,refTableName)
+                            .orElseThrow(() -> new DeveloperBusinessException("VIEW_FK_IMPORT_INVALID","Referenced Function Unit table is missing")).getId();
+                }
                 FieldDefinition field = fieldByName.get((String) fieldData.get("fieldName"));
                 if (refTableId == null || field == null) {
                     log.warn("Skipping field ref metadata for {}.{} -> {} (missing field/table)",

@@ -1053,7 +1053,7 @@ export default {
       dashboardListTruncated: 'More active dashboards exist than were loaded; the list may be incomplete.'
     },
     dataViewAssignment: {
-      guidance: 'Assign Dashboards to one published Table View. Other Views of the same table are unaffected. Users must also have access to the View and the Dashboard.',
+      guidance: 'Choose a View from the currently deployed and enabled Function Unit in Admin Center. Users with access to the View can open its active Dashboards when the binding is enabled.',
       formView: 'Table View',
       ruleView: 'Select a published Table View',
       viewHint: 'Only published Views of the selected table are available. Dashboard data and filters are configured in Superset; Records filters are not automatically applied.',

@@ -81,13 +81,8 @@ public class MainTableViewSubRowQueryComponent {
 
     public Page query(Query query) {
         List<Object> params = new ArrayList<>();
-        String inner = expandedRows(query, params);
-
-        StringBuilder where = new StringBuilder(" WHERE TRUE");
-        where.append(query.designerFilter().sql());
-        params.addAll(query.designerFilter().params());
-        where.append(query.sql().searchClause(query.search(), query.searchable(), params));
-        where.append(query.sql().whereClause(query.filters(), params));
+        String inner = expandedRows(query, params, null);
+        String where = where(query, params);
 
         Long total = queryOne("SELECT COUNT(*) FROM " + inner + " pi" + where,
                 params, rs -> rs.next() ? rs.getLong(1) : 0L);
@@ -104,6 +99,24 @@ public class MainTableViewSubRowQueryComponent {
         return new Page(rows, total != null ? total : 0L);
     }
 
+    /** Only a matching child row of this request can grant owning-request detail access. */
+    public boolean exists(Query query, String processInstanceId) {
+        List<Object> params = new ArrayList<>();
+        String inner = expandedRows(query, params, processInstanceId);
+        String where = where(query, params);
+        return Boolean.TRUE.equals(queryOne("SELECT EXISTS(SELECT 1 FROM " + inner + " pi" + where + ")",
+                params, rs -> rs.next() && rs.getBoolean(1)));
+    }
+
+    private String where(Query query, List<Object> params) {
+        StringBuilder where = new StringBuilder(" WHERE TRUE");
+        where.append(query.designerFilter().sql());
+        params.addAll(query.designerFilter().params());
+        where.append(query.sql().searchClause(query.search(), query.searchable(), params));
+        where.append(query.sql().whereClause(query.filters(), params));
+        return where.toString();
+    }
+
     /**
      * The inner layer: every sub-table row of every instance of this function unit, once.
      *
@@ -117,7 +130,7 @@ public class MainTableViewSubRowQueryComponent {
      * the other case, where the slice holds something that is not an array at all; that is broken
      * data and should fail loudly.
      */
-    private String expandedRows(Query query, List<Object> outParams) {
+    private String expandedRows(Query query, List<Object> outParams, String processInstanceId) {
         if (query.storeKey() == null || query.storeKey().isBlank()) {
             throw new IllegalArgumentException("A sub-table view must resolve to a __subTables__ key");
         }
@@ -129,6 +142,10 @@ public class MainTableViewSubRowQueryComponent {
         outParams.add(query.functionUnitCode());
 
         StringBuilder visible = new StringBuilder();
+        if (processInstanceId != null) {
+            visible.append(" AND pi.id = ?");
+            outParams.add(processInstanceId);
+        }
         if (query.involvement() != null) {
             visible.append(query.involvement().sql());
             outParams.addAll(query.involvement().params());

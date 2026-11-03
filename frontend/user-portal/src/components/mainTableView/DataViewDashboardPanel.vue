@@ -1,7 +1,5 @@
 <template>
   <div v-loading="loading" class="data-view-dashboard-panel">
-    <div class="dashboard-help"><DesignerHelpLink path="/bi-data-view-assignment" :ariaLabel="t('mainTableView.dashboardScopeHint')" /></div>
-    <el-alert :title="t('mainTableView.dashboardScopeHint')" type="info" :closable="false" show-icon />
     <el-tabs v-if="dashboards.length > 1" v-model="activeDashboardId" class="dashboard-tabs">
       <el-tab-pane v-for="dashboard in dashboards" :key="dashboard.dashboardId"
         :label="dashboard.dashboardTitle" :name="dashboard.dashboardId" />
@@ -18,7 +16,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import DesignerHelpLink from '@/components/DesignerHelpLink.vue'
 import { biDashboardApi, type DataViewDashboardResponse } from '@/api/biDashboard'
 
 const props = defineProps<{ viewId: number; dashboards: DataViewDashboardResponse[] }>()
@@ -91,10 +88,10 @@ onBeforeUnmount(cleanup)
 </script>
 
 <style scoped lang="scss">
-.data-view-dashboard-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
-.dashboard-title { margin: 0; font-size: 16px; }
+.data-view-dashboard-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+.dashboard-title { flex: 0 0 auto; margin: 0; font-size: 16px; }
 .dashboard-tabs { flex: 0 0 auto; }
-.superset-container { flex: 1 1 auto; width: 100%; min-height: 520px; height: 100%; }
-.superset-container :deep(iframe) { width: 100%; height: 100%; min-height: 520px; border: none; }
+.superset-container { flex: 1 0 520px; width: 100%; min-height: 520px; }
+.superset-container :deep(iframe) { display: block; width: 100%; height: 100%; min-height: 520px; border: none; }
 .dashboard-error { padding: 40px; text-align: center; color: var(--el-text-color-secondary); }
 </style>

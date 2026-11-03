@@ -2,7 +2,6 @@ package com.portal.controller;
 
 import com.portal.exception.PortalException;
 import com.platform.common.dto.ApiResponse;
-import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
@@ -16,7 +15,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -82,23 +80,4 @@ public class PortalMainTableViewController {
                 .body(csv);
     }
 
-    @PostMapping(value = "/{viewId}/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Import view data from CSV (updates by processInstanceId, creates new rows when blank)")
-    public ResponseEntity<ApiResponse<MainTableViewImportResult>> importCsv(
-            @CurrentUserId String userId,
-            @PathVariable Long viewId,
-            @RequestParam("file") MultipartFile file) {
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("403", "User context required");
-        }
-        try {
-            MainTableViewImportResult result = portalMainTableViewService.importViewCsv(
-                    userId, viewId, file.getBytes());
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (IllegalArgumentException ex) {
-            throw new PortalException("400", ex.getMessage());
-        } catch (java.io.IOException ex) {
-            throw new PortalException("400", "Failed to read uploaded file", ex);
-        }
-    }
 }

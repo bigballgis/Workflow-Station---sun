@@ -33,7 +33,7 @@ public final class BiDataViewAssignmentColumnSpec {
             case "dashboardTitle" -> "d.dashboard_title";
             case "functionUnitName" -> "fu.name";
             case "tableDisplayName" -> "COALESCE(NULLIF(t.table_display_name, ''), t.table_name)";
-            case "viewName" -> "v.view_name";
+            case "viewName" -> "COALESCE(v.view_name,a.legacy_target->>'viewName')";
             case "enabled" -> "a.enabled::text";
             default -> throw new IllegalArgumentException("Unknown Data View Assignment column: " + field);
         };

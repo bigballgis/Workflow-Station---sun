@@ -35,10 +35,10 @@ public class BiDataViewAssignmentListQueryComponent {
         StringBuilder where = new StringBuilder("""
                  FROM bi_data_view_assignment a
                  JOIN bi_dashboard_registry d ON d.id = a.dashboard_id
-                 JOIN dw_function_units fu ON fu.id = a.function_unit_id
-                 LEFT JOIN dw_table_definitions t ON t.id = a.table_id AND t.function_unit_id = a.function_unit_id
-                 LEFT JOIN dw_main_table_view_configs v ON v.id = a.view_id
-                   AND v.function_unit_id = a.function_unit_id AND v.main_table_id = a.table_id
+                 LEFT JOIN ac_current_data_views v ON a.runtime_target=TRUE AND v.view_id=a.view_id
+                 LEFT JOIN LATERAL (SELECT COALESCE(v.function_unit_name,a.legacy_target->>'functionUnitName') AS name) fu ON TRUE
+                 LEFT JOIN LATERAL (SELECT COALESCE(v.table_name,a.legacy_target->>'tableName') AS table_name,
+                     COALESCE(v.table_display_name,a.legacy_target->>'tableDisplayName') AS table_display_name) t ON TRUE
                  WHERE 1=1
                 """);
         if (request.dashboardTitle() != null && !request.dashboardTitle().isBlank()) {
@@ -46,7 +46,7 @@ public class BiDataViewAssignmentListQueryComponent {
             params.add("%" + ListFilterSql.escapeLike(request.dashboardTitle().trim()) + "%");
         }
         if (request.functionUnitId() != null) {
-            where.append(" AND a.function_unit_id = ?");
+            where.append(" AND a.runtime_target=TRUE AND a.function_unit_id = ?");
             params.add(request.functionUnitId());
         }
         where.append(filterSql.whereClause(request.filters(), params));

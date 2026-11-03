@@ -22,6 +22,11 @@
       </div>
 
       <el-empty
+        v-else-if="detailNotInRelease"
+        :description="t('mainTableView.detailNotInRelease')"
+      />
+
+      <el-empty
         v-else-if="!detailFormId"
         :description="t('mainTableView.noDetailForm')"
       />
@@ -69,6 +74,7 @@ const router = useRouter()
 
 const loading = ref(true)
 const rowFound = ref(false)
+const detailNotInRelease = ref(false)
 const viewName = ref('')
 const detailFormId = ref<number | null>(null)
 const formFields = ref<FormField[]>([])
@@ -86,6 +92,7 @@ function goBack() {
 async function load() {
   loading.value = true
   rowFound.value = false
+  detailNotInRelease.value = false
   formFields.value = []
   subTableBindings.value = []
   try {
@@ -105,6 +112,7 @@ async function load() {
     const row = rows.find((r: any) => matchesRowKey(r)) || (rows.length === 1 ? rows[0] : null)
     if (!row) return
     rowValues.value = row.values || {}
+    detailNotInRelease.value = row.detailAvailable === false
 
     // The authorized row query returns its release's DETAIL form and binding metadata.
     // Loading by current FU code would substitute a newer design for a historical row.

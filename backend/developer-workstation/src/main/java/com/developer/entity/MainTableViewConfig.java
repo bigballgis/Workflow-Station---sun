@@ -29,6 +29,11 @@ public class MainTableViewConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Portable logical identity, independent of database IDs and release versions. */
+    @Column(name = "view_key", nullable = false, length = 36)
+    @Builder.Default
+    private String viewKey = java.util.UUID.randomUUID().toString();
+
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "function_unit_id", nullable = false)

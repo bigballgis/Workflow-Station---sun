@@ -65,7 +65,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
         }
 
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-        int allocated = enrichSubTableMap(subTables, sliceKeyToTableId, autoPkByTable);
+        int allocated = enrichSubTableMap(subTables, sliceKeyToTableId, autoPkByTable, "dw_pk_sequences");
         if (allocated > 0) {
             log.info("Allocated {} missing sub-table PK value(s) for functionUnit={}", allocated, functionUnitIdOrCode);
         }
@@ -90,7 +90,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
             }
             fields.put(Long.valueOf(String.valueOf(table.get("tableId"))), auto);
         }
-        enrichSubTableMap(slices, aliases, fields);
+        enrichSubTableMap(slices, aliases, fields, "ac_runtime_pk_sequences");
     }
 
     private Long resolveFunctionUnitIdOrNull(String functionUnitIdOrCode) {
@@ -108,7 +108,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
      */
     private int enrichSubTableMap(Map<String, Object> subTables,
                                   Map<String, Long> sliceKeyToTableId,
-                                  Map<Long, List<AutoPkField>> autoPkByTable) {
+                                  Map<Long, List<AutoPkField>> autoPkByTable, String sequenceTable) {
         int allocated = 0;
         for (Map.Entry<String, Object> entry : subTables.entrySet()) {
             Long tableId = sliceKeyToTableId.get(entry.getKey());
@@ -123,7 +123,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
             // A mapped slice with no auto PK of its own is still walked — its rows may host
             // nested slices that do have one.
             List<AutoPkField> fields = autoPkByTable.get(tableId);
-            allocated += enrichRows(entry.getValue(), tableId, fields, sliceKeyToTableId, autoPkByTable);
+            allocated += enrichRows(entry.getValue(), tableId, fields, sliceKeyToTableId, autoPkByTable, sequenceTable);
         }
         return allocated;
     }
@@ -133,7 +133,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
                            Long tableId,
                            List<AutoPkField> fields,
                            Map<String, Long> sliceKeyToTableId,
-                           Map<Long, List<AutoPkField>> autoPkByTable) {
+                           Map<Long, List<AutoPkField>> autoPkByTable, String sequenceTable) {
         if (!(rowsObj instanceof List<?> list)) {
             return 0;
         }
@@ -149,7 +149,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
                         continue;
                     }
                     List<String> values = primaryKeyAllocationService.allocate(
-                            tableId, pk.fieldName(), pk.config(), 1, "", "dw_pk_sequences");
+                            tableId, pk.fieldName(), pk.config(), 1, "", sequenceTable);
                     if (values != null && !values.isEmpty()) {
                         row.put(pk.fieldName(), values.get(0));
                         allocated++;
@@ -158,7 +158,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
             }
             if (row.get(NESTED_SUB_TABLES_KEY) instanceof Map<?, ?> nested) {
                 allocated += enrichSubTableMap(
-                        (Map<String, Object>) nested, sliceKeyToTableId, autoPkByTable);
+                        (Map<String, Object>) nested, sliceKeyToTableId, autoPkByTable, sequenceTable);
             }
         }
         return allocated;

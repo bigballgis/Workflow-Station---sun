@@ -6,8 +6,6 @@ import com.portal.dto.ProcessInstanceInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.util.ProcessVariableClearMarks;
-import com.portal.component.MainTableViewAccessResolver.AccessRule;
-import com.portal.exception.PortalException;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.service.UserDisplayNameResolver;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +50,9 @@ public class ProcessApplicationQueryComponent {
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final JdbcTemplate jdbcTemplate;
     private final MiOuterStepResolver miOuterStepResolver;
+    @Autowired private com.portal.client.PortalBiClient dataViewClient;
+    @org.springframework.context.annotation.Lazy
+    @Autowired private com.portal.service.PortalMainTableViewService viewService;
 
     /** 聚合扇出线程池（引擎 HTTP，不碰 DB），移出共享 commonPool。见 {@link com.portal.config.PortalAsyncConfig}。 */
     @Autowired
@@ -635,8 +636,8 @@ public class ProcessApplicationQueryComponent {
 
     /**
      * Whether a portal user may open process detail/history. Aligns with Main Table View list rules:
-     * participants first; otherwise a published view the user can see (all rows when
-     * {@code restrict_to_involved_users=false}, or involved-only when restricted).
+     * participants first; otherwise the request must have a matching row in a visible published
+     * view, including its designed filter and involvement restriction.
      */
     public boolean canAccessProcessDetail(String userId, ProcessInstanceInfo detail) {
         if (detail == null || userId == null || userId.isBlank()) {
@@ -687,47 +688,12 @@ public class ProcessApplicationQueryComponent {
 
     private boolean canAccessViaPublishedMainTableViews(
             String userId, String functionUnitCode, String processInstanceId) {
-        List<Map<String, Object>> views = jdbcTemplate.queryForList("""
-                SELECT v.id, v.restrict_to_involved_users
-                FROM dw_main_table_view_configs v
-                INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
-                WHERE fu.code = ? AND v.status = 'PUBLISHED'
-                """, functionUnitCode);
-        if (views.isEmpty()) {
-            return false;
-        }
-        ProcessInstance instance = processInstanceRepository.findById(processInstanceId).orElse(null);
-        for (Map<String, Object> view : views) {
-            Long viewId = ((Number) view.get("id")).longValue();
-            boolean restrictToInvolved = Boolean.TRUE.equals(view.get("restrict_to_involved_users"));
-            List<AccessRule> rules = loadMainTableViewAccessRules(viewId);
-            if (!mainTableViewAccessResolver.canUserSeeView(userId, rules)) {
-                continue;
-            }
-            if (!restrictToInvolved) {
-                return true;
-            }
-            if (instance != null && mainTableViewInvolvementChecker.isUserInvolved(userId, instance)) {
-                return true;
-            }
+        var views = dataViewClient.getDataViews(userId).stream()
+                .filter(view -> functionUnitCode.equals(view.functionUnitCode())).toList();
+        for (var view : views) {
+            if (viewService.containsProcess(userId, view.id(), processInstanceId)) return true;
         }
         return false;
-    }
-
-    private List<AccessRule> loadMainTableViewAccessRules(Long viewId) {
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                    SELECT target_type, target_id
-                    FROM dw_main_table_view_access
-                    WHERE view_config_id = ?
-                    """, viewId);
-            return mainTableViewAccessResolver.parseAccessRules(rows);
-        } catch (PortalException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to load view access rules for {}", viewId, e);
-            throw new PortalException("500", "Failed to load process detail access rules", e);
-        }
     }
 
     /**

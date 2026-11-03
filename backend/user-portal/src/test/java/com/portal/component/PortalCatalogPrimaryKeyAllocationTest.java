@@ -22,7 +22,7 @@ class PortalCatalogPrimaryKeyAllocationTest {
         var allocator = mock(PrimaryKeyAllocationService.class);
         when(jdbc.queryForList(anyString(), eq(String.class), eq("catalog"), eq("DATA_TABLE")))
                 .thenReturn(List.of("{\"tableId\":42,\"fields\":[{\"fieldName\":\"case_key\",\"isPrimaryKey\":true,\"pkGenerationJson\":" + json + "}]}"));
-        when(allocator.allocate(eq(42L), eq("case_key"), any(), eq(1), eq(""), eq("dw_pk_sequences")))
+        when(allocator.allocate(eq(42L), eq("case_key"), any(), eq(1), eq(""), eq("ac_runtime_pk_sequences")))
                 .thenReturn(List.of("allocated"));
         var component = new PortalPrimaryKeyAllocationComponent(jdbc, allocator, new ObjectMapper(),
                 mock(FunctionUnitAccessComponent.class));
@@ -31,7 +31,7 @@ class PortalCatalogPrimaryKeyAllocationTest {
         request.setFieldName("case_key");
         assertEquals(List.of("allocated"), component.allocateCatalog("catalog", request).getValues());
         var config = ArgumentCaptor.forClass(PkGenerationConfig.class);
-        verify(allocator).allocate(eq(42L), eq("case_key"), config.capture(), eq(1), eq(""), eq("dw_pk_sequences"));
+        verify(allocator).allocate(eq(42L), eq("case_key"), config.capture(), eq(1), eq(""), eq("ac_runtime_pk_sequences"));
         String expected = json.equals("null") || json.equals("{}") ? "uuid"
                 : json.contains("prefixedSequence") ? "prefixedSequence" : "manual";
         assertEquals(expected, config.getValue().getStrategy());

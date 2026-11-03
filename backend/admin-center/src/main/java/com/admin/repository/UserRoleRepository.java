@@ -96,6 +96,24 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
         """)
     List<String> findAllRoleIdsByUserId(@Param("userId") String userId);
 
+    /** Current grants for runtime View authorization; direct grants honor both validity boundaries. */
+    @Query("""
+        SELECT DISTINCT r.id FROM Role r
+        WHERE r.id IN (
+            SELECT ur.roleId FROM UserRole ur WHERE ur.userId = :userId
+              AND (ur.validFrom IS NULL OR ur.validFrom <= CURRENT_TIMESTAMP)
+              AND (ur.validTo IS NULL OR ur.validTo >= CURRENT_TIMESTAMP)
+            UNION
+            SELECT vgr.roleId FROM VirtualGroupRole vgr
+            WHERE vgr.virtualGroupId IN (
+                SELECT vgm.groupId FROM VirtualGroupMember vgm WHERE vgm.userId = :userId
+            )
+            UNION
+            SELECT ubur.roleId FROM UserBusinessUnitRole ubur WHERE ubur.userId = :userId
+        )
+        """)
+    List<String> findEffectiveViewRoleIdsByUserId(@Param("userId") String userId);
+
     /**
      * Global role grants only: direct user roles plus virtual-group roles whose
      * type is not BU_BOUNDED. BU-bounded eligibility may come from a virtual

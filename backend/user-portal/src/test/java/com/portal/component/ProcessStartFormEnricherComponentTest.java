@@ -282,4 +282,23 @@ class ProcessStartFormEnricherComponentTest {
         when(rs.next()).thenReturn(false);
         return rs;
     }
+    @Test
+    void externalReferenceIsNotAnAutomaticStructuralForeignKey() {
+        var snapshots=mock(com.platform.common.functionunit.CatalogSnapshotReader.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(enricher,"catalogSnapshots",snapshots);
+        var design=mock(SubTableWriteDesign.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(enricher,"subTableWriteDesign",design);
+        when(design.resolve("release",null)).thenReturn(Map.of());
+        var field=Map.<String,Object>of("fieldName","customer_ref","isForeignKey",true,
+                "refFunctionUnitCode","customers","refTableName","customers","refPrimaryKeyFields",List.of("customer_key"));
+        when(snapshots.contents("release","DATA_TABLE")).thenReturn(List.of(Map.of(
+                "tableName","orders","tableId",100,"tableType","MAIN","fields",List.of(field))));
+        when(snapshots.processForm("release",false)).thenReturn(Map.of("tableBindings",List.of(
+                Map.of("bindingType","PRIMARY","tableId",100))));
+        when(snapshots.tableAliases("release")).thenReturn(Map.of());
+        Map<String,Object> values=new LinkedHashMap<>(Map.of("functionUnitId","release","customer_ref","Customer-42"));
+        enricher.enrichOnInsert("orders","system",values);
+        assertThat(values.get("customer_ref")).isEqualTo("Customer-42");
+        verify(computedFieldRecalculator).recalculate("orders",values);
+    }
 }

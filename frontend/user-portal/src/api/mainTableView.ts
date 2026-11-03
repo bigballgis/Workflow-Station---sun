@@ -1,16 +1,12 @@
-import type { AxiosRequestConfig } from 'axios'
 import type { ListColumnFilterRequest, ListColumnKind } from '@platform-shared/list/columnMeta'
 import { request } from './request'
-
-export type ImportProgressPhase = 'upload' | 'process'
-export type ImportProgressCallback = (percent: number, phase: ImportProgressPhase) => void
 
 export interface FunctionUnitViewMenuItem {
   functionUnitId: string
   functionUnitCode: string
   functionUnitName: string
   viewCount: number
-  /** Inline SVG markup from DW icon library; null/absent when none. */
+  /** Inline SVG markup from the Admin deployed release; null/absent when none. */
   iconSvg?: string | null
 }
 
@@ -23,7 +19,6 @@ export interface MainTableViewSummary {
   /** Owning table type; 'MAIN' means a row is a request and opens the request detail page. */
   tableType?: string | null
   enableExport?: boolean
-  enableImport?: boolean
   /** DETAIL form opened when a row is clicked; null = rows are not clickable. */
   detailFormId?: number | null
 }
@@ -50,7 +45,7 @@ export interface MainTableViewFieldColumn {
   lookupDisplayField?: string | null
   lookupSelectedDisplayField?: string | null
   lookupSearchFields?: string[] | null
-  /** For fk_display: DW table id of the FK target (e.g. Case table). */
+  /** For fk_display: Published table reference of the FK target (e.g. Case table). */
   fkRefTableId?: number | null
   // What the header may offer on this column. Declared by the backend, which is the only side
   // that knows whether the query can answer that question — never inferred here.
@@ -86,6 +81,8 @@ export interface MainTableViewDataRow {
    */
   rowKey: string
   processInstanceId: string
+  /** Whether this SUB row has a DETAIL definition in its pinned release. */
+  detailAvailable?: boolean | null
   detailForm?: Record<string, unknown> | null
   functionUnitVersionLabel?: string | null
   values: Record<string, unknown>
@@ -97,14 +94,6 @@ export interface MainTableViewDataPage {
   total: number
   page: number
   size: number
-}
-
-export interface MainTableViewImportResult {
-  createdCount: number
-  updatedCount: number
-  skippedCount: number
-  errorCount: number
-  errors: string[]
 }
 
 export const mainTableViewApi = {
@@ -126,31 +115,4 @@ export const mainTableViewApi = {
       responseType: 'blob',
     }),
 
-  importCsv: (viewId: number, file: File, onProgress?: ImportProgressCallback) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    let uploadFinished = false
-    return request.post<{ data: MainTableViewImportResult }>(
-      `/main-table-views/${viewId}/import`,
-      formData,
-      {
-        headers: { 'Content-Type': undefined },
-        skipGlobalErrorHandler: true,
-        onUploadProgress: progressEvent => {
-          if (!onProgress) return
-          const total = progressEvent.total ?? 0
-          if (total > 0) {
-            const ratio = progressEvent.loaded / total
-            onProgress(Math.min(50, Math.round(ratio * 50)), 'upload')
-            if (progressEvent.loaded >= total && !uploadFinished) {
-              uploadFinished = true
-              onProgress(52, 'process')
-            }
-          } else if (!uploadFinished) {
-            onProgress(15, 'upload')
-          }
-        },
-      } as AxiosRequestConfig & { skipGlobalErrorHandler?: boolean },
-    )
-  },
 }

@@ -120,10 +120,12 @@ public final class MainTableViewPortalDtos {
             String processInstanceId,
             Map<String, Object> values,
             Map<String, Object> detailForm,
-            String functionUnitVersionLabel
+            String functionUnitVersionLabel,
+            /** SUB row has a DETAIL definition in its own release; null for MAIN rows. */
+            Boolean detailAvailable
     ) {
         public MainTableViewDataRow(String rowKey, String processInstanceId, Map<String, Object> values) {
-            this(rowKey, processInstanceId, values, null, null);
+            this(rowKey, processInstanceId, values, null, null, null);
         }
     }
 
