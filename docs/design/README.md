@@ -57,6 +57,8 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 | 文档 | 覆盖 |
 |------|------|
 | [developer-workstation-workspace-rbac.md](./developer-workstation-workspace-rbac.md) | 功能单元工作区隔离：Technical Lead / Team Lead / Developer 可见性与操作权限 |
+| [developer-workstation-ai-studio-co-output-contract.md](./developer-workstation-ai-studio-co-output-contract.md) | AI Studio 接入 Content Organizer 时 Agent 的输出契约：信封格式、阶段→scope→切片、替换/upsert 语义、CO 现有 Instruction 冲突清单、dry-run 验收 |
+| [developer-workstation-ai-studio-co-agent-instructions.md](./developer-workstation-ai-studio-co-agent-instructions.md) | 按上述契约改写好的 12 个 CO Agent 英文 Instruction（主管 + 11 个专家），可直接粘贴 |
 
 > 与 [portal-bu-rbac.md](./portal-bu-rbac.md) 互补：这里是**设计器**工作区，那里是**终端用户**门户。
 
