@@ -9,7 +9,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 
 - /help/assignment-exclusion — Process Design → User task → Assignment exclusions: exclude original initiator, earlier handlers or selected nodes; optional BU+Role or specified-user backup, business-unit sources, required selections, empty pools, delegated responsibility and reopened rounds
 
-- /help/up-new — User Portal → Request → New Requests: search, workflow cards, add/remove Favorites with the star button, versions, and access empty states
+- /help/up-new — User Portal → Request → New Requests: All Requests first and selected by default, Favourites tab, shared search, star actions, versions, and empty states
 
 - /help/table-data — Admin Relation Tables → Table Data: Function Unit/table navigation, Common, search, selection links, permissions, column menus, export and import
 

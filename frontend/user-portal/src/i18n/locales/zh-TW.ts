@@ -581,6 +581,10 @@ export default {
     userOptionFormat: '{name}（{username}）',
   },
   process: {
+    allRequests: '全部流程',
+    noFavorites: '暫無收藏的流程',
+    favoritesHint: '點擊全部流程中卡片上的星標，即可收藏到這裡。',
+    viewAllRequests: '查看全部流程',
     addFavorite: '收藏{name}',
     removeFavorite: '取消收藏{name}',
     favoriteFailed: '未能更新收藏，請重新整理頁面確認儲存狀態。',
