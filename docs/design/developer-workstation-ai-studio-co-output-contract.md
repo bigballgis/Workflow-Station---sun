@@ -1,7 +1,9 @@
 # AI Studio ↔ Content Organizer（CO）Agent 输出契约
 
-> 状态：草案（2026-11-02）。AI Studio 尚未接入 CO；本文定义接入时 CO 的 Agent 必须产出什么，
-> 让 DW 现有的解析、预览、Apply、撤销链路**原样复用**，不为 CO 另写一套。
+> 状态：2026-11-03 起 DW 已按本契约接入（`ai-generation.ai-studio.provider=AUTOMATION`，默认）：顾问对话与
+> Propose change 经 Automation flow `ai-studio-co-agent` → content-organizer 1.0.4 `agent_chat` → CO；
+> 一键生成仍走网关（第 1 节）。DW 侧实现与配置见 [examples/ai-studio](../guides/examples/ai-studio/README.md)。
+> 本文定义 CO 的 Agent 必须产出什么，让 DW 现有的解析、预览、Apply、撤销链路**原样复用**，不为 CO 另写一套。
 
 ## 0. 真源与适用范围
 
@@ -31,7 +33,7 @@
 
 - 主管只按 PHASE 路由，每次请求只有**一个**专家回答，输出外壳（第 2 节）由专家自己负责；
 - CO 里没法串联多个专家，所以一键生成由 DW 按 流程 → 表 → 表单 → 决策 → 动作 的顺序逐个发 PROPOSE。每一步 Apply 之后再发下一步，这样下一步拿到的 CURRENT DESIGN 里已经有上游的结果。
-  DW 现有的一键生成走的是单次 `scope=ALL` 生成，切到 CO 时要改成这种逐阶段的编排。
+  DW 现有的一键生成走的是单次 `scope=ALL` 生成，**尚未**改成逐阶段编排，所以目前一键生成仍走网关。
 
 ## 2. 输出信封（硬约束）
 

@@ -88,6 +88,38 @@ export async function uploadFile(
  * configured prompt setting; `variableValue` fills its one variable (the field list).
  */
 export async function complete(session: ContentOrganizerSession, question: string, variableValue: string): Promise<string> {
+  const { config } = session;
+  return chatCompletion(session, question, {
+    promptSetting: {
+      id: config.promptSettingId,
+      promptVars: [{ name: config.promptVariableId, value: [variableValue] }],
+      settingType: 'PROMPT',
+    },
+  }, 240_000);
+}
+
+/**
+ * #1 Chat completion against an agent setting (a multi-agent use case such as AI Studio's
+ * "Function Unit"). Same endpoint and parameter block; the Content Organizer Test Workbench sends the
+ * setting's version ID as both agentSetting.id and promptSetting.id, with empty variable lists, and
+ * the question once more as parameter.message (read from its debug payload, 2026-11-03). A
+ * multi-agent run hands over to one specialist and can take minutes, hence the longer timeout.
+ */
+export async function completeWithAgent(session: ContentOrganizerSession, message: string): Promise<string> {
+  const id = session.config.promptSettingId;
+  return chatCompletion(session, message, {
+    promptSetting: { id, promptVars: [] },
+    agentSetting: { id, agentVars: [] },
+    message,
+  }, 300_000);
+}
+
+async function chatCompletion(
+  session: ContentOrganizerSession,
+  question: string,
+  setting: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<string> {
   const { config, sessionId, userId } = session;
   const body = await callWithFreshToken(session, (token) => session.fetchImpl(
     `${config.baseUrl}/api/management-service/chat/completion`,
@@ -114,17 +146,13 @@ export async function complete(session: ContentOrganizerSession, question: strin
           referDocumentList: [],
           referDocumentbaseList: [],
           messages: [{ role: 'user', content: question }],
-          promptSetting: {
-            id: config.promptSettingId,
-            promptVars: [{ name: config.promptVariableId, value: [variableValue] }],
-            settingType: 'PROMPT',
-          },
+          ...setting,
         },
         workflow: config.workflow,
         version: config.workflowVersion,
         defaultOptions: { language: 'English', noOfOutput: 1 },
       }),
-      signal: AbortSignal.timeout(240_000),
+      signal: AbortSignal.timeout(timeoutMs),
     },
   ), 'Chat completion');
   const content = (body['data'] as { message?: Array<{ content?: unknown }> } | undefined)?.message?.[0]?.content;

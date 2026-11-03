@@ -246,6 +246,15 @@ ai-generation:
       webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://localhost:8086}
       # 须短于前端 HM 请求的 120s 超时,让 DW 先给出可读的超时。
       timeout-seconds: ${HERMES_MASTER_TIMEOUT_SECONDS:110}
+  # AI Studio Copilot 的模型链路(见 AiStudioChatServiceImpl):AUTOMATION = Automation flow(业务键 ai-studio-co-agent)
+  # → Content Organizer 的 agent setting「Function Unit」;GAIP = 直连上面的 AI gateway。一键生成暂时总走 GAIP。
+  ai-studio:
+    provider: ${AI_STUDIO_PROVIDER:AUTOMATION}
+    automation:
+      flow-key: ${AI_STUDIO_FLOW_KEY:ai-studio-co-agent}
+      webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://localhost:8086}
+      # 提案是后台作业;略长于 AP sync webhook 的 300s(AP_WEBHOOK_TIMEOUT_SECONDS),让 AP 的超时先说话。
+      timeout-seconds: ${AI_STUDIO_TIMEOUT_SECONDS:310}
   # AI Studio Copilot 改动提案的后台作业(见 AiStudioProposalJobServiceImpl):一轮 GENERATION 实测 7 分钟上下,
   # 同步 HTTP 会被 Kong 300s 读超时掐断,所以提交即返回 jobId、前端轮询。进程内注册表,重启即丢。
   studio:

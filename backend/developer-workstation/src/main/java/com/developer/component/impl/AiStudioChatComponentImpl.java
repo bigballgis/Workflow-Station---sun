@@ -99,7 +99,7 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
         log.info("AI Studio copilot chat: functionUnitId={}, phase={}, userId={}",
                 request.getFunctionUnitId(), request.getPhase(), userId);
         useSharedHistory(request);
-        AiStudioChatService.StudioChatResult result = aiStudioChatService.chat(request, amToken);
+        AiStudioChatService.StudioChatResult result = aiStudioChatService.chat(request, userId, amToken);
         // 对话轮成功才落库：失败的轮次只在发起人本地留一个错误气泡
         recordThread(request, () -> {
             threadService.appendUserMessage(request.getFunctionUnitId(), request.getPhase(), request.getMessage(), author);
@@ -149,7 +149,7 @@ public class AiStudioChatComponentImpl implements AiStudioChatComponent {
                 request.getFunctionUnitId(), request.getPhase(), userId);
         useSharedHistory(request);
         // 第一步必须留在请求线程：阶段不支持要立刻 4xx，且上下文序列化依赖请求事务里的 JPA 懒加载
-        AiStudioChatService.ProposalDraft draft = aiStudioChatService.prepareProposal(request);
+        AiStudioChatService.ProposalDraft draft = aiStudioChatService.prepareProposal(request, userId);
         // 指纹 = 阶段 + 本轮消息：刷新/双击的重复提交复用作业，改了主意的新请求替换旧作业
         // 分隔符用换行：阶段名里不会出现，且指纹会落库（PostgreSQL 文本不接受 NUL）
         String requestKey = request.getPhase() + "\n" + (request.getMessage() != null ? request.getMessage().trim() : "");

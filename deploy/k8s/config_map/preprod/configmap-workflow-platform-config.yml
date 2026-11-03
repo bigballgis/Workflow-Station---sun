@@ -221,5 +221,9 @@ data:
   # 本环境 CO 不共享时(completion 报 Prompt setting not found)在本环境 CO 重建后换成新 ID。
   CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID: "01a186d0-b0ed-77c1-8645-0cde09e69286"
   CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID: "01a186e9-29f4-7791-a045-6127433642a1"
+  # AI Studio 的 agent setting「Function Unit」(content-organizer 的 Agent Chat 动作;DW 的 AI Studio 经
+  # Automation flow ai-studio-co-agent 调用)。填 Agent Settings Workbench 里状态为 ACTIVE 那一行的 id:每个版本
+  # 各有一行、各有 id,换激活版本就要换这里。取自 CO dev(2026-11-03,ACTIVE)。
+  CONTENT_ORGANIZER_AGENT_SETTING_ID: "61371b5b-c7aa-430a-99d7-71aa2a562e3d"
   # Pause durable Record Note notification delivery; keep pending intents.
   PORTAL_RECORD_NOTE_DELIVERY_PAUSED: "false"

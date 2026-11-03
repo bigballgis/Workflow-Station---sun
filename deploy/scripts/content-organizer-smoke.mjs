@@ -8,9 +8,13 @@
  *   kubectl -n <ns> cp <a-labelled.pdf> <activepieces-pod>:/tmp/sample.pdf          # optional
  *   kubectl -n <ns> exec <activepieces-pod> -- node /tmp/smoke.mjs [/tmp/sample.pdf] [staffId]
  *   kubectl -n <ns> exec <activepieces-pod> -- node /tmp/smoke.mjs --chat <staffId>    # Hermes Master chat
+ *   kubectl -n <ns> exec <activepieces-pod> -- node /tmp/smoke.mjs --agent <staffId>   # AI Studio agent setting
  *
  * Without a PDF it stops after the iB2B token. `--chat` skips the upload and runs one completion with
- * the Hermes Master prompt setting (CONTENT_ORGANIZER_CHAT_PROMPT_*), as the piece's Chat action does. It runs as plain node, i.e. OUTSIDE the engine
+ * the Hermes Master prompt setting (CONTENT_ORGANIZER_CHAT_PROMPT_*), as the piece's Chat action does.
+ * `--agent` runs one AI Studio TABLE_DESIGN proposal against the agent setting
+ * (CONTENT_ORGANIZER_AGENT_SETTING_ID), as the piece's Agent Chat action does, and reports whether the
+ * reply carries the GENERATED_DATA block. It runs as plain node, i.e. OUTSIDE the engine
  * sandbox: it proves network / TLS / credentials, not AP_SSRF_ALLOW_LIST or
  * AP_SANDBOX_PROPAGATED_ENV_VARS (the guide checks those separately).
  * Guide: docs/guides/content-organizer-ocr-guide.md §12.
@@ -21,7 +25,8 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 const chatMode = process.argv[2] === '--chat';
-const [pdfPath, staffIdArg] = chatMode ? [undefined, process.argv[3]] : process.argv.slice(2);
+const agentMode = process.argv[2] === '--agent';
+const [pdfPath, staffIdArg] = chatMode || agentMode ? [undefined, process.argv[3]] : process.argv.slice(2);
 const env = (n) => (process.env[n] ?? '').trim();
 let failed = false;
 
@@ -36,9 +41,9 @@ function describeError(e) {
   return [e?.name, e?.message, c?.code, c?.message].filter(Boolean).join(' | ');
 }
 
-async function post(url, init) {
+async function post(url, init, timeoutMs = 60_000) {
   try {
-    const res = await fetch(url, { method: 'POST', ...init, signal: AbortSignal.timeout(60_000) });
+    const res = await fetch(url, { method: 'POST', ...init, signal: AbortSignal.timeout(timeoutMs) });
     return { res, text: await res.text() };
   } catch (e) {
     return { error: describeError(e) };
@@ -47,12 +52,14 @@ async function post(url, init) {
 
 const preview = (t) => (t.length > 300 ? `${t.slice(0, 297)}...` : t);
 
-// 1. environment — each mode needs its own prompt setting pair
+// 1. environment — each mode needs its own setting
 const names = [
   'IB2B_TOKEN_URL', 'IB2B_USERNAME', 'IB2B_SECRET', 'CONTENT_ORGANIZER_BASE_URL', 'CONTENT_ORGANIZER_APPLICATION_ID',
   ...(chatMode
     ? ['CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID']
-    : ['CONTENT_ORGANIZER_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID']),
+    : agentMode
+      ? ['CONTENT_ORGANIZER_AGENT_SETTING_ID']
+      : ['CONTENT_ORGANIZER_PROMPT_SETTING_ID', 'CONTENT_ORGANIZER_PROMPT_VARIABLE_ID']),
 ];
 for (const n of names) {
   const v = env(n);
@@ -102,20 +109,20 @@ if (ib2b.error) {
     }
   }
 }
-if (!token || (!pdfPath && !chatMode)) {
+if (!token || (!pdfPath && !chatMode && !agentMode)) {
   if (!pdfPath && token) console.log('INFO  no PDF given — stopping after the token. Pass a labelled PDF to test upload + completion.');
   process.exit(failed ? 1 : 0);
 }
 
 const staffId = staffIdArg || env('SMOKE_STAFF_ID');
-if (!step('staff id given', Boolean(staffId), chatMode ? 'argument after --chat or SMOKE_STAFF_ID' : 'second argument or SMOKE_STAFF_ID')) process.exit(1);
+if (!step('staff id given', Boolean(staffId), chatMode || agentMode ? `argument after ${process.argv[2]} or SMOKE_STAFF_ID` : 'second argument or SMOKE_STAFF_ID')) process.exit(1);
 const sessionId = `hermes-smoke-${randomUUID()}`;
 const workflow = env('CONTENT_ORGANIZER_WORKFLOW') || 'default';
 const workflowVersion = env('CONTENT_ORGANIZER_WORKFLOW_VERSION') || '1.0';
 
-/** CO #1 completion with the same body the piece sends; one prompt setting variable. */
-async function completion(name, { message, settingId, variableId, value }) {
-  console.log(`INFO  prompt setting=${settingId} workflow=${workflow} version=${workflowVersion}`);
+/** CO #1 completion with the same body the piece sends; `setting` is its promptSetting / agentSetting part. */
+async function completion(name, { message, setting, timeoutMs }) {
+  console.log(`INFO  setting=${setting.promptSetting.id} workflow=${workflow} version=${workflowVersion}`);
   const done = await post(`${base}/api/management-service/chat/completion`, {
     headers: { 'Content-Type': 'application/json', 'X-HSBC-E2E-Trust-Token': token },
     body: JSON.stringify({
@@ -136,32 +143,56 @@ async function completion(name, { message, settingId, variableId, value }) {
         referDocumentList: [],
         referDocumentbaseList: [],
         messages: [{ role: 'user', content: message }],
-        promptSetting: { id: settingId, promptVars: [{ name: variableId, value: [value] }], settingType: 'PROMPT' },
+        ...setting,
       },
       workflow,
       version: workflowVersion,
       defaultOptions: { language: 'English', noOfOutput: 1 },
     }),
-  });
+  }, timeoutMs);
   if (done.error) {
     step(name, false, done.error);
-    return;
+    return undefined;
   }
   let content;
   try { content = JSON.parse(done.text)?.data?.message?.[0]?.content; } catch { /* reported below */ }
   step(name, done.res.ok && typeof content === 'string',
     `HTTP ${done.res.status} ${preview(typeof content === 'string' ? content : done.text)}`);
+  return content;
 }
+
+const promptSetting = (id, variableId, value) => ({
+  promptSetting: { id, promptVars: [{ name: variableId, value: [value] }], settingType: 'PROMPT' },
+});
 
 if (chatMode) {
   // 4'. Hermes Master: no upload, the context travels in the prompt setting's variable
   const question = 'How do I create a Function Unit?';
   await completion('CO chat completion (Hermes Master)', {
     message: question,
-    settingId: env('CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID'),
-    variableId: env('CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID'),
-    value: `## Where the user is\nDW page: FunctionUnits\n\nUser: ${question}`,
+    setting: promptSetting(env('CONTENT_ORGANIZER_CHAT_PROMPT_SETTING_ID'), env('CONTENT_ORGANIZER_CHAT_PROMPT_VARIABLE_ID'),
+      `## Where the user is\nDW page: FunctionUnits\n\nUser: ${question}`),
   });
+  process.exit(failed ? 1 : 0);
+}
+
+if (agentMode) {
+  // 4''. AI Studio: no upload, no variable — the sectioned request is the message (same id twice, as CO's UI sends)
+  const message = [
+    '## MODE: PROPOSE', '## PHASE: TABLE_DESIGN', '## SCOPE: TABLES', '## CURRENT DESIGN',
+    '{"functionUnitId":0,"name":"Smoke Test","tableDefinitions":[],"tableRelations":[]}',
+    '## USER REQUEST', 'Design one main table for a leave request with employee, start date and end date.',
+  ].join('\n');
+  const id = env('CONTENT_ORGANIZER_AGENT_SETTING_ID');
+  const content = await completion('CO agent completion (AI Studio)', {
+    message,
+    setting: { promptSetting: { id, promptVars: [] }, agentSetting: { id, agentVars: [] }, message },
+    timeoutMs: 300_000,
+  });
+  if (typeof content === 'string') {
+    step('reply carries the GENERATED_DATA block',
+      content.includes('---GENERATED_DATA_START---') && content.includes('---GENERATED_DATA_END---'));
+  }
   process.exit(failed ? 1 : 0);
 }
 
@@ -181,8 +212,7 @@ if (up.error || !step('CO upload (#9)', up.res.ok, `HTTP ${up.res.status} ${prev
 // 5. CO #1 completion (same sessionId + applicationId + userId), same body as the piece sends
 await completion('CO completion (#1)', {
   message: 'Extract the fields from the uploaded document.',
-  settingId: env('CONTENT_ORGANIZER_PROMPT_SETTING_ID'),
-  variableId: env('CONTENT_ORGANIZER_PROMPT_VARIABLE_ID'),
-  value: '- title: "Title" (text) - the document title',
+  setting: promptSetting(env('CONTENT_ORGANIZER_PROMPT_SETTING_ID'), env('CONTENT_ORGANIZER_PROMPT_VARIABLE_ID'),
+    '- title: "Title" (text) - the document title'),
 });
 process.exit(failed ? 1 : 0);

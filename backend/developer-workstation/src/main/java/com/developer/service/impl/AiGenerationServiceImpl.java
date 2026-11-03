@@ -626,7 +626,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
      * 平台语义校验拒绝产物时用的错误码集合——都是"模型可以照着改"的结构性违规，
      * 与传输层失败(超时/连不上)和纯模型侧失败(4xx/空回答)区分开。
      */
-    private static final Set<String> REPAIRABLE_ERROR_CODES = Set.of(
+    static final Set<String> REPAIRABLE_ERROR_CODES = Set.of(
             "AI_DESIGN_STAGE_BINDING_INVALID", "AI_DESIGN_SELF_LOOP", "AI_DESIGN_DUPLICATE_FLOW",
             "AI_BPMN_NO_TASK_NODES", "AI_BPMN_DISCONNECTED_NODES", "AI_BPMN_MISSING_DI",
             "AI_BPMN_INVALID_XML", "AI_TASK_ASSIGNEE_INVALID",
@@ -662,7 +662,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
      * 87 号功能单元那次就是设计文档本身违规（把提交动作挂在 startEvent 上、给校验失败画了自环），
      * 模型每轮都在"照做非法设计"和"遵守平台约束"之间换一种折中，所以错误一直在变。
      */
-    private String buildRepairMessage(String originalMessage, AiGenerationException failure) {
+    static String buildRepairMessage(String originalMessage, AiGenerationException failure) {
         return originalMessage + "\n\n"
                 + "========== AUTOMATIC CORRECTION REQUEST (system-generated, highest priority) ==========\n"
                 + "Your previous answer was rejected by the platform validator and was NOT saved.\n"

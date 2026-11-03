@@ -5,7 +5,9 @@ import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
 import com.developer.exception.AiGenerationException;
+import com.developer.repository.UserRepository;
 import com.developer.service.AiGenerationService;
+import com.developer.service.AiPromptTemplateService;
 import com.developer.service.AiStudioChatService;
 import com.developer.service.AiStudioChatService.StudioChatResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,13 +47,27 @@ class AiStudioChatServiceImplTest {
     @Mock
     private FunctionUnitDocumentService documentService;
 
+    @Mock
+    private AiStudioAutomationClient automationClient;
+
+    @Mock
+    private AiPromptTemplateService promptTemplateService;
+
+    @Mock
+    private UserRepository userRepository;
+
     private AiStudioChatServiceImpl service;
 
     @BeforeEach
     void setUp() {
         // 摘要器是纯函数，用真实实现：顺带覆盖"设计现状进 prompt"这条链路
-        service = new AiStudioChatServiceImpl(aiGatewayClient, aiResponseParser, aiGenerationService,
-                new AiStudioContextDigest(), documentService);
+        service = service(AiStudioChatServiceImpl.Provider.GAIP);
+    }
+
+    private AiStudioChatServiceImpl service(AiStudioChatServiceImpl.Provider provider) {
+        return new AiStudioChatServiceImpl(aiGatewayClient, aiResponseParser, aiGenerationService,
+                new AiStudioContextDigest(), documentService, automationClient, promptTemplateService,
+                userRepository, provider);
     }
 
     private AiStudioChatRequest request(String phase, String message,
@@ -78,7 +94,7 @@ class AiStudioChatServiceImplTest {
         when(aiResponseParser.parse(httpResult)).thenReturn(Map.of("reply", "  add a foreign key  "));
 
         StudioChatResult result = service.chat(request("TABLE_DESIGN", "How do I link the sub table?",
-                List.of(historyMessage("USER", "hi"), historyMessage("ASSISTANT", "hello"))), "am-token");
+                List.of(historyMessage("USER", "hi"), historyMessage("ASSISTANT", "hello"))), "u1", "am-token");
 
         assertEquals("add a foreign key", result.reply());
         assertNull(result.proposal());
@@ -108,7 +124,7 @@ class AiStudioChatServiceImplTest {
                 "## Process Design\nApprove node.\n\n## Table Design\nTable orders.\n\n## Form Design\nOrder form.");
         when(documentService.latestContents(1L)).thenReturn(docs);
 
-        service.chat(request("TABLE_DESIGN", "What precision?", null), "tok");
+        service.chat(request("TABLE_DESIGN", "What precision?", null), "u1", "tok");
 
         ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt =
                 ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
@@ -129,7 +145,7 @@ class AiStudioChatServiceImplTest {
         when(documentService.latestContents(1L)).thenReturn(
                 Map.of(com.developer.enums.AiDocumentType.DESIGN, "# Old design\nFree text."));
 
-        service.chat(request("TABLE_DESIGN", "hi", null), "tok");
+        service.chat(request("TABLE_DESIGN", "hi", null), "u1", "tok");
 
         ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt =
                 ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
@@ -145,7 +161,7 @@ class AiStudioChatServiceImplTest {
         when(documentService.latestContents(1L)).thenReturn(
                 Map.of(com.developer.enums.AiDocumentType.REQUIREMENTS, "Amounts keep 4 decimals."));
 
-        AiStudioChatService.ProposalDraft draft = service.prepareProposal(req);
+        AiStudioChatService.ProposalDraft draft = service.prepareProposal(req, "u1");
 
         assertEquals(List.of(Map.of("documentType", "REQUIREMENTS", "content", "Amounts keep 4 decimals.")),
                 draft.documents());
@@ -166,7 +182,7 @@ class AiStudioChatServiceImplTest {
         when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("ok", true));
         when(aiResponseParser.parse(any())).thenReturn(Map.of("reply", "looks fine"));
 
-        service.chat(request("TABLE_DESIGN", "what is wrong with my tables?", null), "t");
+        service.chat(request("TABLE_DESIGN", "what is wrong with my tables?", null), "u1", "t");
 
         ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt = ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
         verify(aiGatewayClient).chat(prompt.capture(), any());
@@ -186,7 +202,7 @@ class AiStudioChatServiceImplTest {
         when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("ok", true));
         when(aiResponseParser.parse(any())).thenReturn(Map.of("reply", "still answering"));
 
-        StudioChatResult result = service.chat(request("TABLE_DESIGN", "hello", null), "t");
+        StudioChatResult result = service.chat(request("TABLE_DESIGN", "hello", null), "u1", "t");
 
         assertEquals("still answering", result.reply());
         ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt = ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
@@ -208,7 +224,7 @@ class AiStudioChatServiceImplTest {
         when(aiResponseParser.parse(any())).thenReturn(Map.of("reply", "sure"));
 
         service.chat(request("EMAIL_TEMPLATES", "change its subject",
-                List.of(historyMessage("USER", "add a template"), proposed)), "t");
+                List.of(historyMessage("USER", "add a template"), proposed)), "u1", "t");
 
         ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt = ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
         verify(aiGatewayClient).chat(prompt.capture(), any());
@@ -226,7 +242,7 @@ class AiStudioChatServiceImplTest {
         when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of());
         when(aiResponseParser.parse(any())).thenReturn(Map.of("reply", "ok"));
 
-        service.chat(request("PROCESS_DESIGN", "explain gateways", null), "t");
+        service.chat(request("PROCESS_DESIGN", "explain gateways", null), "u1", "t");
 
         ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt =
                 ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
@@ -240,14 +256,14 @@ class AiStudioChatServiceImplTest {
         when(aiResponseParser.parse(any())).thenReturn(Map.of("reply", "   "));
 
         AiGenerationException ex = assertThrows(AiGenerationException.class,
-                () -> service.chat(request("VALIDATION", "ready?", null), "t"));
+                () -> service.chat(request("VALIDATION", "ready?", null), "u1", "t"));
         assertEquals("AI_GATEWAY_EMPTY_RESPONSE", ex.getErrorCode());
     }
 
     @Test
     void unknownPhaseFailsExplicitly() {
         AiGenerationException ex = assertThrows(AiGenerationException.class,
-                () -> service.chat(request("NOT_A_PHASE", "hi", null), "t"));
+                () -> service.chat(request("NOT_A_PHASE", "hi", null), "u1", "t"));
         assertEquals("AI_STUDIO_UNKNOWN_PHASE", ex.getErrorCode());
     }
 
@@ -272,7 +288,7 @@ class AiStudioChatServiceImplTest {
                 eq("TABLES"), eq("tok")))
                 .thenReturn(Map.of("reply", "Added an audit sub table.", "generatedData", generated));
 
-        StudioChatResult result = service.chat(req, "tok");
+        StudioChatResult result = service.chat(req, "u1", "tok");
 
         assertEquals("Added an audit sub table.", result.reply());
         assertEquals(Map.of("tableDefinitions", tables), result.proposal());
@@ -333,7 +349,7 @@ class AiStudioChatServiceImplTest {
                 eq("EMAIL_TEMPLATES"), eq("tok")))
                 .thenReturn(Map.of("reply", "Added a template.", "generatedData", generated));
 
-        StudioChatResult result = service.chat(req, "tok");
+        StudioChatResult result = service.chat(req, "u1", "tok");
 
         assertEquals(Map.of("emailTemplates", templates), result.proposal());
         assertEquals("EMAIL_TEMPLATES", result.proposalScope());
@@ -357,7 +373,7 @@ class AiStudioChatServiceImplTest {
         AiStudioChatRequest req = request("VALIDATION", "change something", null);
         req.setPropose(true);
 
-        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> service.chat(req, "t"));
+        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> service.chat(req, "u1", "t"));
         assertEquals("AI_STUDIO_PROPOSAL_UNSUPPORTED_PHASE", ex.getErrorCode());
     }
 
@@ -371,7 +387,101 @@ class AiStudioChatServiceImplTest {
         when(aiGenerationService.callAiModel(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Map.of());
 
-        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> service.chat(req, "t"));
+        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> service.chat(req, "u1", "t"));
         assertEquals("AI_STUDIO_PROPOSAL_EMPTY", ex.getErrorCode());
+    }
+
+    // ==================== Content Organizer (provider AUTOMATION) ====================
+
+    private void employee(String employeeId) {
+        when(userRepository.findById("u1")).thenReturn(java.util.Optional.of(
+                com.developer.entity.User.builder().id("u1").employeeId(employeeId).build()));
+    }
+
+    @Test
+    void agentProposalSendsTheSectionedRequestAndTrimsToTheScope() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatRequest req = request("TABLE_DESIGN", "add amount",
+                List.of(historyMessage("USER", "earlier question")));
+        req.setPropose(true);
+        employee(" 45349679 ");
+        when(aiGenerationService.serializeFunctionUnitContext(1L)).thenReturn(new FunctionUnitContextDTO());
+        when(aiGenerationService.getSchemaMetadata()).thenReturn(Map.of("tableTypes", List.of("MAIN")));
+        when(promptTemplateService.resolve("GENERATION")).thenReturn("FIELD SPEC");
+        when(documentService.latestContents(1L)).thenReturn(Map.of());
+
+        AiStudioChatService.ProposalDraft draft = co.prepareProposal(req, "u1");
+
+        assertEquals("45349679", draft.staffId());
+        assertTrue(draft.message().startsWith("## MODE: PROPOSE\n## PHASE: TABLE_DESIGN\n## SCOPE: TABLES\n"));
+        assertTrue(draft.message().contains("## FORMAT SPECIFICATION\n"));
+        assertTrue(draft.message().contains("FIELD SPEC"));
+        assertTrue(draft.message().contains("## CONVERSATION\nUser: earlier question"));
+        assertTrue(draft.message().endsWith("## USER REQUEST\nadd amount"));
+
+        when(automationClient.chat(draft.message(), "45349679")).thenReturn("reply with block");
+        when(aiResponseParser.parseText("reply with block")).thenReturn(new java.util.HashMap<>(Map.of(
+                "reply", "Tables designed.",
+                "generatedData", Map.of("tableDefinitions", List.of(Map.of("tableName", "t")),
+                        "processDefinition", Map.of("bpmnXml", "<x/>")))));
+
+        StudioChatResult result = co.runProposal(draft, "tok");
+
+        assertEquals("TABLES", result.proposalScope());
+        assertEquals(java.util.Set.of("tableDefinitions"), result.proposal().keySet());
+        assertEquals("Tables designed.", result.reply());
+        verifyNoInteractions(aiGatewayClient);
+        verify(aiGenerationService, never()).callAiModel(any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void agentProposalRepairsARepairableViolationOnce() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
+                1L, "PROCESS_DESIGN", "PROCESS", "## MODE: PROPOSE", null, AiMode.NEW, List.of(), "45349679");
+        when(automationClient.chat("## MODE: PROPOSE", "45349679")).thenReturn("bad");
+        when(aiResponseParser.parseText("bad")).thenThrow(
+                new AiGenerationException("AI_BPMN_MISSING_DI", "Task_1 has no shape"));
+        ArgumentCaptor<String> repair = ArgumentCaptor.forClass(String.class);
+        when(automationClient.chat(org.mockito.ArgumentMatchers.startsWith("## MODE: PROPOSE\n\n"), eq("45349679")))
+                .thenReturn("good");
+        when(aiResponseParser.parseText("good")).thenReturn(new java.util.HashMap<>(Map.of(
+                "reply", "fixed", "generatedData", Map.of("processDefinition", Map.of("bpmnXml", "<x/>")))));
+
+        StudioChatResult result = co.runProposal(draft, "tok");
+
+        assertEquals("PROCESS", result.proposalScope());
+        verify(automationClient, org.mockito.Mockito.times(2)).chat(repair.capture(), eq("45349679"));
+        assertTrue(repair.getAllValues().get(1).contains("Violation code: AI_BPMN_MISSING_DI"));
+    }
+
+    @Test
+    void agentPathWithoutAnEmployeeIdFailsBeforeCallingAnything() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        employee(" ");
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> co.chat(request("TABLE_DESIGN", "hi", null), "u1", "t"));
+
+        assertEquals("AI_STUDIO_NO_EMPLOYEE_ID", ex.getErrorCode());
+        verifyNoInteractions(automationClient, aiGatewayClient);
+    }
+
+    @Test
+    void agentAdvisoryChatAsksTheAgentSettingWithoutTheFormatSpecification() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        employee("45349679");
+        when(aiGenerationService.serializeFunctionUnitContext(1L)).thenReturn(new FunctionUnitContextDTO());
+        when(aiGenerationService.getSchemaMetadata()).thenReturn(Map.of());
+        when(documentService.latestContents(1L)).thenReturn(Map.of());
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        when(automationClient.chat(message.capture(), eq("45349679"))).thenReturn("  Use a SUB table.  ");
+
+        StudioChatResult result = co.chat(request("VALIDATION", "ready?", null), "u1", "t");
+
+        assertEquals("Use a SUB table.", result.reply());
+        assertTrue(message.getValue().startsWith("## MODE: ADVISORY\n## PHASE: VALIDATION\n## SCOPE: NONE\n"));
+        assertFalse(message.getValue().contains("## FORMAT SPECIFICATION"));
+        verifyNoInteractions(aiGatewayClient, promptTemplateService);
     }
 }

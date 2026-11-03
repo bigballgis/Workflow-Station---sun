@@ -105,8 +105,14 @@ public class AiResponseParser {
      * @return DW 内部契约 map（value 可为 null，故用 LinkedHashMap）
      */
     public Map<String, Object> parse(Map<String, Object> httpResult) {
-        String reply = extractAssistantText(httpResult);
+        return parseText(extractAssistantText(httpResult));
+    }
 
+    /**
+     * 同 {@link #parse}，但输入已经是助手回复原文——给不走 gateway 信封的链路用（AI Studio 经 Automation 调 CO）。
+     * 标记块解析、归一化与语义校验完全一样。
+     */
+    public Map<String, Object> parseText(String reply) {
         String document = null;
         String documentType = null;
 

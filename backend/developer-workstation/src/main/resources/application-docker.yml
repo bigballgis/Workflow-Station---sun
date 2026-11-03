@@ -113,8 +113,11 @@ email:
 ssrf:
   allowed-hosts: ${SSRF_ALLOWED_HOSTS:activepieces}
 
-# Hermes Master 经 Automation 时的 AP sync webhook 基址(与引擎 service-task.webhook-base-url 同源)。
+# Hermes Master / AI Studio 经 Automation 时的 AP sync webhook 基址(与引擎 service-task.webhook-base-url 同源)。
 ai-generation:
   hermes-master:
+    automation:
+      webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://activepieces:80}
+  ai-studio:
     automation:
       webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://activepieces:80}
