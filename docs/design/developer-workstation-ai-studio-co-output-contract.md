@@ -1,7 +1,7 @@
 # AI Studio ↔ Content Organizer（CO）Agent 输出契约
 
 > 状态：2026-11-03 起 DW 已按本契约接入（`ai-generation.ai-studio.provider=AUTOMATION`，默认）：顾问对话与
-> Propose change 经 Automation flow `ai-studio-co-agent` → content-organizer 1.0.4 `agent_chat` → CO；
+> Propose change 经 Automation flow `ai-studio-co-agent` → content-organizer 1.0.5 `agent_chat` → CO；
 > 一键生成仍走网关（第 1 节）。DW 侧实现与配置见 [examples/ai-studio](../guides/examples/ai-studio/README.md)。
 > 本文定义 CO 的 Agent 必须产出什么，让 DW 现有的解析、预览、Apply、撤销链路**原样复用**，不为 CO 另写一套。
 

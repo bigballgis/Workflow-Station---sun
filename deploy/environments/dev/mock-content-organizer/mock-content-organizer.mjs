@@ -11,7 +11,10 @@
  *   POST /co/v1/api/management-service/chat/completion                                                (#1)
  *        {"sessionId","userId","parameter":{"applicationId","applicationName","model","messages":[...],
  *         "promptSetting":{"id","promptVars":[{"name":<variable id>,"value":[...]}]}}}
- *        or, for the agent setting: "agentSetting":{"id","agentVars":[]}, "message" (no variable)
+ *   POST /co/v1/api/management-service/agents/run-sse                                                 (agents)
+ *        {"sessionId","parameter":{"applicationId","message","agentSetting":{"id","agentVars":[]}},"user_id"}
+ *        (CO API Request Examples #12); answers data: events status / chunk / full / done / error
+ *        ("SSE API Design"). #1 rejects agent settings ("Prompt setting not found").
  *
  * Two prompt settings, as in the real use case: field extraction (needs an uploaded file) and Hermes Master chat
  * (no file — the conversation travels in its variable). Plus one agent setting, AI Studio's multi-agent
@@ -52,6 +55,7 @@ const MAX_FILES_PER_SESSION = 3;
 
 const UPLOAD_PATH = /^\/co\/v1\/api\/management-service\/api\/applications\/([^/]+)\/sessions\/([^/]+)\/files$/;
 const COMPLETION_PATH = '/co/v1/api/management-service/chat/completion';
+const AGENT_RUN_PATH = '/co/v1/api/management-service/agents/run-sse';
 
 /** Copy of the CO prompt setting template; `{fields}` is its one variable. */
 const TEMPLATE = [
@@ -249,7 +253,6 @@ async function completion(req, res) {
       detail: missingFields.map((f) => ({ type: 'missing', loc: ['body', 'parameter', f], msg: 'Field required' })),
     });
   }
-  if (body?.parameter?.agentSetting) return agentCompletion(res, body.parameter);
   const setting = body?.parameter?.promptSetting;
   const config = Object.hasOwn(SETTINGS, setting?.id ?? '') ? SETTINGS[setting.id] : undefined;
   if (!config) return send(res, 400, { detail: 'Prompt setting not found' });
@@ -279,21 +282,34 @@ async function completion(req, res) {
   });
 }
 
-async function agentCompletion(res, parameter) {
-  if (parameter.agentSetting.id !== AGENT_SETTING_ID) return send(res, 400, { detail: 'Agent setting not found' });
-  const question = parameter.message ?? parameter.messages?.at(-1)?.content;
-  if (typeof question !== 'string' || !question.trim()) return send(res, 400, { detail: 'Chat completion error' });
-  let answer;
+async function agentRun(req, res) {
+  if (!authorized(req, res)) return;
+  let body;
   try {
-    answer = await askLlm(AGENT_TEMPLATE, question);
-  } catch (e) {
-    return send(res, 400, { detail: `Chat completion error: ${e.message}` });
+    body = JSON.parse((await readBody(req)).toString());
+  } catch {
+    return send(res, 400, { detail: 'invalid request' });
   }
-  send(res, 200, {
-    msg: 'success to trigger the API',
-    code: '00000',
-    data: { userMessageId: randomUUID(), message: [{ messageId: randomUUID(), content: answer }] },
-  });
+  const parameter = body?.parameter ?? {};
+  // the documented 400 for an unknown application (API Request Examples #12)
+  if (parameter.applicationId !== APPLICATION_ID) return send(res, 400, { detail: 'Application not found' });
+  if (!body.user_id) return send(res, 400, { detail: 'user_id is required when calling with an iB2B token' });
+  if (parameter.agentSetting?.id !== AGENT_SETTING_ID) return send(res, 400, { detail: 'Agent setting not found' });
+  const question = parameter.message;
+  if (typeof question !== 'string' || !question.trim()) return send(res, 400, { detail: 'Chat completion error' });
+  res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8' });
+  const event = (e) => res.write(`data: ${JSON.stringify(e)}\n\n`);
+  event({ type: 'status', content: '[thinking]**Analyzing your request**' });
+  try {
+    const answer = await askLlm(AGENT_TEMPLATE, question);
+    event({ type: 'chunk', content: answer, author: 'mock_specialist' });
+    event({ type: 'full', content: answer, author: 'mock_specialist' });
+    event({ type: 'done', status: 'success', usage: {} });
+  } catch (e) {
+    event({ type: 'error', code: 'SYSTEM_ERROR', message: `Agent run error: ${e.message}` });
+    event({ type: 'done', status: 'failed' });
+  }
+  res.end();
 }
 
 createServer(async (req, res) => {
@@ -306,6 +322,7 @@ createServer(async (req, res) => {
     const m = UPLOAD_PATH.exec(path);
     if (m) return await upload(req, res, m[1], m[2]);
     if (path === COMPLETION_PATH) return await completion(req, res);
+    if (path === AGENT_RUN_PATH) return await agentRun(req, res);
     send(res, 404, { detail: 'not found' });
   } catch (e) {
     console.error('[mock-co] error', e);

@@ -85,7 +85,7 @@ OCR 失败**不阻断提交**：用户照样进入核对节点，表单上显示
 输出 `{ "reply": "<Markdown 回答>", "sessionId": "hermes-<uuid>" }`。每次调用一个新 session，CO 侧不留对话状态。
 flow 样例与 DW 侧开关见 [examples/hermes-master/README.md](examples/hermes-master/README.md)。
 
-### 4.1c 动作 `agent_chat`（Agent Chat / 智能体对话，1.0.4 起）
+### 4.1c 动作 `agent_chat`（Agent Chat / 智能体对话，1.0.5 起）
 
 给 DW 的 AI Studio 用：调 CO 的 **agent setting**（Agent Settings Workbench 里的多智能体配置「Function Unit」），
 不上传文件、没有变量，整段请求就是消息。
@@ -95,8 +95,20 @@ flow 样例与 DW 侧开关见 [examples/hermes-master/README.md](examples/herme
 | Message | 是 | DW 按契约拼好的整段分节请求（MODE / PHASE / SCOPE / CURRENT DESIGN / …），`{{trigger.output.body.message}}` |
 | Staff ID | 是 | 工号，`{{trigger.output.body.staffId}}` |
 
-请求体与 `chat` 相同，只是 `parameter` 里换成 `agentSetting: {id, agentVars: []}` + `promptSetting: {id, promptVars: []}`
-（同一个 id）并多带一份 `parameter.message`——这是 CO 页面 Test Workbench 的调试面板里看到的请求形状。
+调的是 **`POST {CONTENT_ORGANIZER_BASE_URL}/api/management-service/agents/run-sse`**，不是 `chat/completion`：
+后者只认 prompt setting，传 agent setting 的 id 一律回 400 `Prompt setting not found`（UAT 2026-11-03 实测，
+连同 workflow 换成 `ReasearchChatCompletion` / 加 `settingType: AGENT` 都一样）。接口与格式以 CO 的 Confluence 为准：
+「HASE Content Organizer API Request Examples」#12 与「SSE API Design」（HCOSPACE）。
+
+- **请求体**（#12 原样）：`{"sessionId", "parameter": {"applicationId", "message", "agentSetting": {"id", "agentVars": []}}, "user_id"}`。
+  工号是 **`user_id`**（下划线，仅 iB2B 调用需要）；`Accept: text/event-stream`；iB2B 令牌仍放 `X-HSBC-E2E-Trust-Token`。
+  文档说 `message` 只放用户的问题、agent 按 session 自带记忆；本动作每次调用开新 session，把对话转写放在 message 里，
+  所以请求之间不会串记忆。
+- **响应**是 `data: <JSON>` 事件流，逐类型显式处理（SSE API Design 要求）：`status` / `chunk` 只是进度；每个 `full`
+  是一段完整回答，可能有多段（例如主管一段、专家一段），按顺序用空行拼起来作为回答；`error`（`code` 为
+  `SYSTEM_ERROR` 或 `FORBIDDEN_CONTENT`，后者意为撤回全部输出）直接失败并丢弃已收到的内容；`done.status` 不是
+  `success`、没有 `done`、没有任何 `full`、或出现文档外的事件类型，都算失败，不会拿零散 `chunk` 拼答案。
+1.0.4 的 `agent_chat` 调的是 `chat/completion`，对真实 CO 必然失败，已从白名单换成 1.0.5。
 id 取环境变量 `CONTENT_ORGANIZER_AGENT_SETTING_ID`，填 **状态为 ACTIVE 那一行**的 id：每个版本各有一行、各有 id，
 在 CO 里换激活版本就要换这个值。超时 300 秒（多智能体一轮要转给专家再生成，比单次 completion 慢）。
 
@@ -353,7 +365,7 @@ prompt setting 的两个 ID 见 §6.4。
 
 | 半边 | 文件 |
 |---|---|
-| 运行时 | `automation/hermes/tarballs/activepieces-piece-content-organizer-1.0.4.tgz`（`automation/hermes/pieces.json` 已登记） |
+| 运行时 | `automation/hermes/tarballs/activepieces-piece-content-organizer-1.0.5.tgz`（`automation/hermes/pieces.json` 已登记） |
 | 元数据 | `deploy/pieces/metadata/piece-content-organizer.json` → 已汇入 `deploy/pieces/metadata/pieces-seed.sql` |
 | 图标 | `automation/packages/web/public/ap-cdn/pieces/hermes/content-organizer.svg` |
 
@@ -364,9 +376,9 @@ prompt setting 的两个 ID 见 §6.4。
    **不一定是平台的 schema**：preprod 的平台在 `hmhkdev` 库的 `hmwfst` schema，Automation 在同库的默认 schema。
 4. **重启 Automation**：`kubectl -n <ns> rollout restart deployment/activepieces`（不重启则设计器单查组件 404）。
 
-> **版本**：当前是 **1.0.4**（新增 `Agent Chat`，见 §4.1c；其余两个动作与 1.0.3 行为一致）。1.0.0 不带 `promptSetting`；1.0.1 带了但缺 `parameter.model` / `applicationName`（UAT 返回 422）——
+> **版本**：当前是 **1.0.5**（`Agent Chat` 见 §4.1c；其余两个动作与 1.0.3 行为一致）。1.0.0 不带 `promptSetting`；1.0.1 带了但缺 `parameter.model` / `applicationName`（UAT 返回 422）——
 > 两者对真实 CO 都必然失败，已从白名单移除。1.0.3 新增 `Chat` 动作（Hermes Master 用，见 §6.5），`Extract Fields` 与 1.0.2 行为一致，
-> 但 1.0.2 已从白名单移除。白名单一次只放一个版本，**1.0.4 上线时已有的 OCR 和 Hermes Master flow 都要随新镜像一起换到 1.0.4**（见下一段）。
+> 但 1.0.2 已从白名单移除。白名单一次只放一个版本，**1.0.5 上线时已有的 OCR 和 Hermes Master flow 都要随新镜像一起换到 1.0.4**（见下一段）。
 > Automation 的 flow 步骤**精确锁定组件版本**（不支持 `~` / `^` 范围），所以升级组件后，引用旧版本的 flow 要在设计器里把该步骤
 > 换到新版本（或重新导入已改好版本号的 flow）再发布，否则运行时找不到旧版本（`PieceNotFound`）。
 
@@ -477,12 +489,12 @@ select name, version from piece_metadata where name = '@activepieces/piece-conte
 ```
 
 ```bash
-kubectl -n <ns> exec <ap-pod> -- ls /usr/src/app/cache/v13/common/pieces/@activepieces/piece-content-organizer-1.0.4/ready
+kubectl -n <ns> exec <ap-pod> -- ls /usr/src/app/cache/v13/common/pieces/@activepieces/piece-content-organizer-1.0.5/ready
 ```
 
-期望：表里有 `1.0.4`；`ready` 文件存在。
+期望：表里有 `1.0.5`；`ready` 文件存在。
 不对：表里没有 → 跑 `pieces-seed.sql` 并重启；`ready` 不存在 → 镜像不是含该组件的新版本（运行时报 `PieceNotFound`）。
-另查 flow 步骤引用的版本：设计器里打开 `Extract fields (OCR)` 步骤，版本应为 1.0.4（§8.2 的版本说明）。
+另查 flow 步骤引用的版本：设计器里打开 `Extract fields (OCR)` 步骤，版本应为 1.0.5（§8.2 的版本说明）。
 
 **L3 出网白名单（仅看配置，冒烟脚本测不到这一层）**
 

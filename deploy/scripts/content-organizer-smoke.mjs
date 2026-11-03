@@ -13,8 +13,8 @@
  * Without a PDF it stops after the iB2B token. `--chat` skips the upload and runs one completion with
  * the Hermes Master prompt setting (CONTENT_ORGANIZER_CHAT_PROMPT_*), as the piece's Chat action does.
  * `--agent` runs one AI Studio TABLE_DESIGN proposal against the agent setting
- * (CONTENT_ORGANIZER_AGENT_SETTING_ID), as the piece's Agent Chat action does, and reports whether the
- * reply carries the GENERATED_DATA block. It runs as plain node, i.e. OUTSIDE the engine
+ * (CONTENT_ORGANIZER_AGENT_SETTING_ID) on agents/run-sse, as the piece's Agent Chat action does, and
+ * reports whether the answer carries the GENERATED_DATA block. It runs as plain node, i.e. OUTSIDE the engine
  * sandbox: it proves network / TLS / credentials, not AP_SSRF_ALLOW_LIST or
  * AP_SANDBOX_PROPAGATED_ENV_VARS (the guide checks those separately).
  * Guide: docs/guides/content-organizer-ocr-guide.md §12.
@@ -177,21 +177,45 @@ if (chatMode) {
 }
 
 if (agentMode) {
-  // 4''. AI Studio: no upload, no variable — the sectioned request is the message (same id twice, as CO's UI sends)
+  // 4''. AI Studio: agents/run-sse with the body documented in the CO API Request Examples (#12):
+  // parameter.{applicationId, message, agentSetting} + user_id; the answer streams as data: events
+  // ("SSE API Design"), every `full` is one complete segment. chat/completion rejects agent settings.
   const message = [
     '## MODE: PROPOSE', '## PHASE: TABLE_DESIGN', '## SCOPE: TABLES', '## CURRENT DESIGN',
     '{"functionUnitId":0,"name":"Smoke Test","tableDefinitions":[],"tableRelations":[]}',
     '## USER REQUEST', 'Design one main table for a leave request with employee, start date and end date.',
   ].join('\n');
   const id = env('CONTENT_ORGANIZER_AGENT_SETTING_ID');
-  const content = await completion('CO agent completion (AI Studio)', {
-    message,
-    setting: { promptSetting: { id, promptVars: [] }, agentSetting: { id, agentVars: [] }, message },
-    timeoutMs: 300_000,
-  });
-  if (typeof content === 'string') {
+  console.log(`INFO  agent setting=${id}`);
+  const run = await post(`${base}/api/management-service/agents/run-sse`, {
+    headers: {
+      'Content-Type': 'application/json', Accept: 'text/event-stream', 'Cache-Control': 'no-cache',
+      'X-HSBC-E2E-Trust-Token': token,
+    },
+    body: JSON.stringify({
+      sessionId,
+      parameter: { applicationId: appId, message, agentSetting: { id, agentVars: [] } },
+      user_id: staffId,
+    }),
+  }, 300_000);
+  if (run.error) {
+    step('CO agent run (AI Studio)', false, run.error);
+    process.exit(1);
+  }
+  const events = run.text.split(/\r?\n/).filter((l) => l.startsWith('data:'))
+    .map((l) => { try { return JSON.parse(l.slice(5).trim()); } catch { return undefined; } }).filter(Boolean);
+  const fulls = events.filter((e) => e.type === 'full' && typeof e.content === 'string').map((e) => e.content);
+  const full = fulls.length ? fulls.join('\n\n') : undefined;
+  const done = events.find((e) => e.type === 'done');
+  const error = events.find((e) => e.type === 'error');
+  if (error) console.log(`INFO  error event code=${error.code} message=${preview(String(error.message ?? ''))}`);
+  const authors = [...new Set(events.map((e) => e.author).filter(Boolean))];
+  console.log(`INFO  ${events.length} events, types=${[...new Set(events.map((e) => e.type))].join(',')}, authors=${authors.join(',') || '(none)'}`);
+  step('CO agent run (AI Studio)', run.res.ok && !error && done?.status === 'success' && typeof full === 'string',
+    `HTTP ${run.res.status} ${preview(typeof full === 'string' ? full : run.text)}`);
+  if (typeof full === 'string') {
     step('reply carries the GENERATED_DATA block',
-      content.includes('---GENERATED_DATA_START---') && content.includes('---GENERATED_DATA_END---'));
+      full.includes('---GENERATED_DATA_START---') && full.includes('---GENERATED_DATA_END---'));
   }
   process.exit(failed ? 1 : 0);
 }

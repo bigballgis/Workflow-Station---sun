@@ -8,7 +8,7 @@ answer comes back as the reply.
 ```
 DW  AI Studio Copilot (advisory turn, or proposal job)
  └─ AiStudioAutomationClient ── POST <AP>/api/v1/webhooks/<flowId>/sync  {message, staffId}
-     └─ flow ai-studio-co-agent: Catch Webhook → Content Organizer · Agent Chat 1.0.4 → Return Response {reply, error}
+     └─ flow ai-studio-co-agent: Catch Webhook → Content Organizer · Agent Chat 1.0.5 → Return Response {reply, error}
          └─ Content Organizer completion (agent setting "Function Unit": orchestrator → one specialist)
 ```
 
@@ -18,7 +18,7 @@ DW  AI Studio Copilot (advisory turn, or proposal job)
 
 ## Prerequisites
 
-- content-organizer piece **1.0.4** (adds the `agent_chat` action) and the Content Organizer configuration of the
+- content-organizer piece **1.0.5** (`agent_chat` on `agents/run-sse`; 1.0.4 called the wrong endpoint) and the Content Organizer configuration of the
   [OCR guide](../../content-organizer-ocr-guide.md) §8, plus `CONTENT_ORGANIZER_AGENT_SETTING_ID` (§4.1c): the id of the
   **ACTIVE** row of the agent setting in CO → Use case management → Agent Settings Workbench. Every version is its own
   row with its own id, so activating another version means changing this value.
