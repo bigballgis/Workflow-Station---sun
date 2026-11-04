@@ -21,13 +21,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * AI Studio 按功能单元共享的线程与进度。
@@ -119,8 +124,47 @@ public class AiStudioThreadService {
      */
     @Transactional(readOnly = true)
     public List<AiStudioChatRequest.HistoryMessage> recentHistory(Long functionUnitId, String phase) {
+        return toHistory(latest(functionUnitId, phase, HISTORY_WINDOW));
+    }
+
+    /**
+     * 全新一键生成（不是"让 AI 修正"轮）用的历史：{@link #recentHistory} 去掉上一轮一键生成留下的东西——
+     * 没应用的 ALL 结果卡和它的提问，以及没有任何回复落库的提问（失败/取消的作业只留下提问）。
+     * 否则专家会把新需求当成"修改上一份"。已应用的 ALL 卡保留：它就是当前设计的来历。
+     */
+    @Transactional(readOnly = true)
+    public List<AiStudioChatRequest.HistoryMessage> recentHistoryForFreshOneClick(Long functionUnitId, String phase) {
+        return toHistory(withoutStaleOneClickRounds(latest(functionUnitId, phase, HISTORY_WINDOW)));
+    }
+
+    /**
+     * 问答配对只看落库状态：每条助手回复配给同一作者此前最近一条还没配上的提问（提问在提交时写、回复在作业落定时写，
+     * 中间可能插进别人的消息或同一人的普通对话轮——后者整轮在回复后才一起写，配对不会串）。文档同步消息不是回复，不参与配对。
+     */
+    static List<AiStudioMessage> withoutStaleOneClickRounds(List<AiStudioMessage> thread) {
+        Map<String, Deque<AiStudioMessage>> unanswered = new HashMap<>();
+        Set<AiStudioMessage> drop = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (AiStudioMessage m : thread) {
+            if (AiStudioMessage.ROLE_USER.equals(m.getRole())) {
+                unanswered.computeIfAbsent(m.getAuthorUserId(), k -> new ArrayDeque<>()).push(m);
+                continue;
+            }
+            if (m.getProposal() != null && m.getProposal().containsKey(DOC_SYNC_KEY)) continue;
+            Deque<AiStudioMessage> open = unanswered.get(m.getAuthorUserId());
+            AiStudioMessage prompt = open == null ? null : open.poll();
+            if (m.getAppliedBy() == null && m.getProposal() != null
+                    && AiStudioChatServiceImpl.SCOPE_ALL.equals(m.getProposal().get("scope"))) {
+                drop.add(m);
+                if (prompt != null) drop.add(prompt);
+            }
+        }
+        unanswered.values().forEach(drop::addAll);
+        return thread.stream().filter(m -> !drop.contains(m)).toList();
+    }
+
+    private List<AiStudioChatRequest.HistoryMessage> toHistory(List<AiStudioMessage> messages) {
         List<AiStudioChatRequest.HistoryMessage> history = new ArrayList<>();
-        for (AiStudioMessage m : latest(functionUnitId, phase, HISTORY_WINDOW)) {
+        for (AiStudioMessage m : messages) {
             AiStudioChatRequest.HistoryMessage h = new AiStudioChatRequest.HistoryMessage();
             h.setRole(m.getRole());
             h.setContent(m.getContent());

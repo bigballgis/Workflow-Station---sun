@@ -56,6 +56,8 @@ final class AiStudioOneClickOrchestrator {
     private final Agent agent;
     /** 跨切片校验（{@link AiResponseParser#checkCrossSlices}）：就地修改并返回修复记录，修不了的抛出 */
     private final Function<Map<String, Object>, List<String>> crossSliceCheck;
+    /** 表步的表名占用检查（{@link AiTableNameAvailability#requireAvailable}）：占用即抛可修违规，表专家带原话重做这一步 */
+    private final Consumer<Map<String, Object>> tableNameCheck;
     private final Duration budget;
     private final Duration callTimeout;
     private final Clock clock;
@@ -65,9 +67,11 @@ final class AiStudioOneClickOrchestrator {
      * @param callTimeout 单次 CO 调用的上限：剩余时间不够一次调用就不再发下一步
      */
     AiStudioOneClickOrchestrator(Agent agent, Function<Map<String, Object>, List<String>> crossSliceCheck,
+                                 Consumer<Map<String, Object>> tableNameCheck,
                                  Duration budget, Duration callTimeout, Clock clock) {
         this.agent = agent;
         this.crossSliceCheck = crossSliceCheck;
+        this.tableNameCheck = tableNameCheck;
         this.budget = budget;
         this.callTimeout = callTimeout;
         this.clock = clock;
@@ -144,6 +148,10 @@ final class AiStudioOneClickOrchestrator {
     }
 
     private Map<String, Object> checked(AiStudioPhase phase, Map<String, Object> merged) {
+        if (phase == AiStudioPhase.TABLE_DESIGN) {
+            // 表名全平台唯一：在表这一步就让专家改名，后面的表单、动作直接用新名字
+            tableNameCheck.accept(merged);
+        }
         if (phase == AiStudioPhase.FORM_DESIGN || phase == AiStudioPhase.ACTION_DESIGN) {
             for (String repair : crossSliceCheck.apply(merged)) {
                 log.warn("AI Studio one-click: platform process rule repaired before saving: {}", repair);

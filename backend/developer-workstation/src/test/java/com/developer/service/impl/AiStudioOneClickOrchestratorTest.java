@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -64,12 +65,15 @@ class AiStudioOneClickOrchestratorTest {
                         "formDefinitions", List.of(Map.of("formName", "stray")))),
                 answer("Tables done.", Map.of("tableDefinitions", TABLES, "tableRelations", List.of())),
                 answer("Forms done.", Map.of("formDefinitions", FORMS)),
-                // 没有决策表：专家不出数据块
-                answer("No decision table is needed.", null),
+                // 没有决策表：空数组
+                answer("No decision table is needed.", Map.of("decisionDefinitions", List.of())),
                 answer("Actions done.", Map.of("actionDefinitions", ACTIONS))));
     }
 
-    /** 假 CO：按顺序给出回答，记下每条请求；accept 抛出可修违规时取下一条回答重试一次（与 askAgent 同一语义）。 */
+    /**
+     * 假 CO：按顺序给出回答，记下每条请求；回答没有数据块、或 accept 抛出可修违规时取下一条回答重试一次，
+     * 合计只重试一次（与 askAgent 同一语义）。
+     */
     private static class FakeAgent implements AiStudioOneClickOrchestrator.Agent {
         final Deque<Map<String, Object>> answers;
         final List<String> messages = new ArrayList<>();
@@ -83,8 +87,13 @@ class AiStudioOneClickOrchestratorTest {
         public Map<String, Object> ask(String message, UnaryOperator<Map<String, Object>> accept) {
             messages.add(message);
             onAsk.run();
-            try {
+            Map<String, Object> first = answers.removeFirst();
+            if (first.get("generatedData") == null) {
+                messages.add("REPAIR:NO_DATA_BLOCK");
                 return accept.apply(answers.removeFirst());
+            }
+            try {
+                return accept.apply(first);
             } catch (AiGenerationException e) {
                 if (!AiGenerationServiceImpl.REPAIRABLE_ERROR_CODES.contains(e.getErrorCode())) throw e;
                 messages.add("REPAIR:" + e.getErrorCode());
@@ -115,7 +124,15 @@ class AiStudioOneClickOrchestratorTest {
     private static AiStudioOneClickOrchestrator orchestrator(FakeAgent agent,
                                                             Function<Map<String, Object>, List<String>> check,
                                                             Clock clock) {
-        return new AiStudioOneClickOrchestrator(agent, check, Duration.ofMinutes(30), Duration.ofSeconds(310), clock);
+        return orchestrator(agent, check, design -> { }, clock);
+    }
+
+    private static AiStudioOneClickOrchestrator orchestrator(FakeAgent agent,
+                                                            Function<Map<String, Object>, List<String>> check,
+                                                            Consumer<Map<String, Object>> tableNameCheck,
+                                                            Clock clock) {
+        return new AiStudioOneClickOrchestrator(agent, check, tableNameCheck, Duration.ofMinutes(30),
+                Duration.ofSeconds(310), clock);
     }
 
     private static AiStudioOneClickOrchestrator orchestrator(FakeAgent agent) {
@@ -243,19 +260,62 @@ class AiStudioOneClickOrchestratorTest {
         assertTrue(result.reply().contains("Forms v2."));
     }
 
+    /** 表名全平台唯一：表步产出被占用的表名时，表专家带原话重做这一步，后面的步骤看到的是改过名的表 */
+    @Test
+    void aTakenTableNameIsRaisedAtTheTableStepSoTheTableExpertRenamesItBeforeLaterSteps() throws Exception {
+        List<Map<String, Object>> list = new ArrayList<>(happyAnswers());
+        List<Map<String, Object>> renamed = List.of(Map.of("tableName", "hr_leave_request"));
+        list.add(2, answer("Tables renamed.", Map.of("tableDefinitions", renamed, "tableRelations", List.of())));
+        List<Object> checkedTables = new ArrayList<>();
+        Consumer<Map<String, Object>> tableNameCheck = design -> {
+            checkedTables.add(design.get("tableDefinitions"));
+            if (String.valueOf(design.get("tableDefinitions")).contains("=leave_request")) {
+                throw new AiGenerationException(AiTableNameAvailability.TABLE_NAME_TAKEN,
+                        AiTableNameAvailability.describe(List.of("leave_request")));
+            }
+        };
+        FakeAgent agent = new FakeAgent(new ArrayDeque<>(list));
+
+        StudioChatResult result = orchestrator(agent, data -> List.of(), tableNameCheck, Clock.systemUTC())
+                .run(draft(), p -> { });
+
+        assertEquals("REPAIR:" + AiTableNameAvailability.TABLE_NAME_TAKEN, agent.messages.get(2));
+        // 只在表步检查：原名一次、改名后一次
+        assertEquals(List.of(TABLES, renamed), checkedTables);
+        assertEquals(renamed, result.proposal().get("tableDefinitions"));
+        // 表单步的 CURRENT DESIGN 已是改过名的表
+        assertEquals(renamed, currentDesign(agent.messages.get(3)).get("tableDefinitions"));
+    }
+
     @Test
     void aStepWithoutDataFailsTheRunWithItsStepNumberAndStopsAsking() {
         List<Map<String, Object>> list = new ArrayList<>(happyAnswers());
-        list.set(1, answer("I need the process first.", null));
+        list.set(1, answer("Tables:\n```json\n{}\n```", null));
+        list.add(2, answer("I need the process first.", null));
         FakeAgent agent = new FakeAgent(new ArrayDeque<>(list));
 
         AiGenerationException e = assertThrows(AiGenerationException.class,
                 () -> orchestrator(agent).run(draft(), p -> { }));
 
         assertEquals(AiStudioOneClickOrchestrator.STEP_NO_DATA, e.getErrorCode());
-        assertTrue(e.getMessage().startsWith("Step 2/5 (Table Design): "));
-        assertTrue(e.getMessage().contains("I need the process first."));
-        assertEquals(2, agent.messages.size());
+        assertEquals("Step 2/5 (Table Design): Content Organizer returned no data: I need the process first.",
+                e.getMessage());
+        assertEquals("REPAIR:NO_DATA_BLOCK", agent.messages.get(2));
+        assertEquals(3, agent.messages.size());
+    }
+
+    @Test
+    void aDecisionStepWithoutADataBlockEvenAfterTheRepairMeansNoDecisionTables() {
+        List<Map<String, Object>> list = new ArrayList<>(happyAnswers());
+        list.set(3, answer("No decision table is needed.", null));
+        list.add(4, answer("Still no decision table.", null));
+        FakeAgent agent = new FakeAgent(new ArrayDeque<>(list));
+
+        StudioChatResult result = orchestrator(agent).run(draft(), p -> { });
+
+        assertEquals("REPAIR:NO_DATA_BLOCK", agent.messages.get(4));
+        assertEquals(List.of(), result.proposal().get("decisionDefinitions"));
+        assertEquals(ACTIONS, result.proposal().get("actionDefinitions"));
     }
 
     @Test

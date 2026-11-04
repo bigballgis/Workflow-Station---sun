@@ -48,7 +48,7 @@ class AiGenerationComponentImplPropertyTest {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
-                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
+                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper(), org.mockito.Mockito.mock(com.developer.service.impl.AiTableNameAvailability.class));
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -98,7 +98,7 @@ class AiGenerationComponentImplPropertyTest {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
-                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
+                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper(), org.mockito.Mockito.mock(com.developer.service.impl.AiTableNameAvailability.class));
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -151,7 +151,7 @@ class AiGenerationComponentImplPropertyTest {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
-                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
+                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper(), org.mockito.Mockito.mock(com.developer.service.impl.AiTableNameAvailability.class));
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()

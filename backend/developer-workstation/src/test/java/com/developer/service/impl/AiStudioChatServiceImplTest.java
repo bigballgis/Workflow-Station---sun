@@ -56,6 +56,9 @@ class AiStudioChatServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private AiTableNameAvailability tableNameAvailability;
+
     private AiStudioChatServiceImpl service;
 
     @BeforeEach
@@ -67,7 +70,7 @@ class AiStudioChatServiceImplTest {
     private AiStudioChatServiceImpl service(AiStudioChatServiceImpl.Provider provider) {
         return new AiStudioChatServiceImpl(aiGatewayClient, aiResponseParser, aiGenerationService,
                 new AiStudioContextDigest(), documentService, automationClient, promptTemplateService,
-                userRepository, provider);
+                userRepository, tableNameAvailability, provider);
     }
 
     private AiStudioChatRequest request(String phase, String message,
@@ -453,6 +456,201 @@ class AiStudioChatServiceImplTest {
         assertEquals("PROCESS", result.proposalScope());
         verify(automationClient, org.mockito.Mockito.times(2)).chat(repair.capture(), eq("45349679"));
         assertTrue(repair.getAllValues().get(1).contains("Violation code: AI_BPMN_MISSING_DI"));
+    }
+
+    /** 表名全平台唯一：TABLES 提案里被别的 FU 占用的表名作为可修违规，带原话重问 CO 一次 */
+    @Test
+    void agentTablesProposalWithATakenTableNameIsAskedOnceMoreWithTheViolation() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
+                1L, "TABLE_DESIGN", "TABLES", "## MODE: PROPOSE", null, AiMode.NEW, List.of(), "45349679");
+        Map<String, Object> taken = Map.of("tableDefinitions", List.of(Map.of("tableName", "leave_request")));
+        Map<String, Object> renamed = Map.of("tableDefinitions", List.of(Map.of("tableName", "hr_leave_request")));
+        when(automationClient.chat("## MODE: PROPOSE", "45349679")).thenReturn("taken");
+        when(aiResponseParser.parseText("taken")).thenReturn(new java.util.HashMap<>(Map.of(
+                "reply", "v1", "generatedData", taken)));
+        org.mockito.Mockito.doThrow(new AiGenerationException(AiTableNameAvailability.TABLE_NAME_TAKEN,
+                        AiTableNameAvailability.describe(List.of("leave_request"))))
+                .when(tableNameAvailability).requireAvailable(1L, taken);
+        when(automationClient.chat(org.mockito.ArgumentMatchers.startsWith("## MODE: PROPOSE\n\n"), eq("45349679")))
+                .thenReturn("renamed");
+        when(aiResponseParser.parseText("renamed")).thenReturn(new java.util.HashMap<>(Map.of(
+                "reply", "v2", "generatedData", renamed)));
+        ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
+
+        StudioChatResult result = co.runProposal(draft, "tok");
+
+        verify(automationClient, org.mockito.Mockito.times(2)).chat(sent.capture(), eq("45349679"));
+        assertTrue(sent.getAllValues().get(1).contains("Violation code: " + AiTableNameAvailability.TABLE_NAME_TAKEN));
+        assertTrue(sent.getAllValues().get(1).contains("[leave_request]"));
+        verify(tableNameAvailability).requireAvailable(1L, renamed);
+        assertEquals(renamed.get("tableDefinitions"), result.proposal().get("tableDefinitions"));
+    }
+
+    /** 不写表的 scope 不查表名：表切片会被裁掉，查了只会白白重问 */
+    @Test
+    void agentProposalOutsideTheTableScopesDoesNotCheckTableNames() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
+                1L, "FORM_DESIGN", "FORMS", "## MODE: PROPOSE", null, AiMode.NEW, List.of(), "45349679");
+        when(automationClient.chat("## MODE: PROPOSE", "45349679")).thenReturn("forms");
+        when(aiResponseParser.parseText("forms")).thenReturn(new java.util.HashMap<>(Map.of(
+                "reply", "ok", "generatedData", Map.of(
+                        "formDefinitions", List.of(Map.of("formName", "f")),
+                        "tableDefinitions", List.of(Map.of("tableName", "leave_request"))))));
+
+        StudioChatResult result = co.runProposal(draft, "tok");
+
+        verifyNoInteractions(tableNameAvailability);
+        assertEquals(java.util.Set.of("formDefinitions"), result.proposal().keySet());
+    }
+
+    /** parseText 对没有标记块的回答：generatedData 为 null，说明文字原样保留（含模型误用的代码块）。 */
+    private static Map<String, Object> parsedWithoutBlock(String reply) {
+        Map<String, Object> parsed = new java.util.HashMap<>();
+        parsed.put("reply", reply);
+        parsed.put("generatedData", null);
+        return parsed;
+    }
+
+    private static final String CODE_BLOCK_REPLY = "Process drawn.\n```json\n{\"processDefinition\":{}}\n```";
+
+    @Test
+    void agentProposalWithoutADataBlockIsAskedOnceMoreForTheMarkerBlock() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
+                1L, "PROCESS_DESIGN", "PROCESS", "## MODE: PROPOSE", null, AiMode.NEW, List.of(), "45349679");
+        when(automationClient.chat("## MODE: PROPOSE", "45349679")).thenReturn("code block");
+        when(aiResponseParser.parseText("code block")).thenReturn(parsedWithoutBlock(CODE_BLOCK_REPLY));
+        when(automationClient.chat(org.mockito.ArgumentMatchers.startsWith("## MODE: PROPOSE\n\n"), eq("45349679")))
+                .thenReturn("marker block");
+        when(aiResponseParser.parseText("marker block")).thenReturn(new java.util.HashMap<>(Map.of(
+                "reply", "Process drawn.", "generatedData", Map.of("processDefinition", Map.of("bpmnXml", "<x/>")))));
+        ArgumentCaptor<String> sent = ArgumentCaptor.forClass(String.class);
+
+        StudioChatResult result = co.runProposal(draft, "tok");
+
+        assertEquals("PROCESS", result.proposalScope());
+        assertEquals(Map.of("processDefinition", Map.of("bpmnXml", "<x/>")), result.proposal());
+        verify(automationClient, org.mockito.Mockito.times(2)).chat(sent.capture(), eq("45349679"));
+        String repair = sent.getAllValues().get(1);
+        assertTrue(repair.contains("---GENERATED_DATA_START---"));
+        assertTrue(repair.contains("not inside a code block"));
+        assertTrue(!repair.contains("Violation code:"), "no validator violation to feed back");
+    }
+
+    @Test
+    void agentProposalStillWithoutADataBlockAfterTheRepairKeepsTheReplyOnlyResult() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
+                1L, "PROCESS_DESIGN", "PROCESS", "## MODE: PROPOSE", null, AiMode.NEW, List.of(), "45349679");
+        when(automationClient.chat(org.mockito.ArgumentMatchers.anyString(), eq("45349679"))).thenReturn("code block");
+        when(aiResponseParser.parseText("code block")).thenReturn(parsedWithoutBlock(CODE_BLOCK_REPLY));
+
+        StudioChatResult result = co.runProposal(draft, "tok");
+
+        assertEquals(null, result.proposal());
+        assertEquals(null, result.proposalScope());
+        assertEquals(CODE_BLOCK_REPLY, result.reply());
+        verify(automationClient, org.mockito.Mockito.times(2)).chat(any(), eq("45349679"));
+    }
+
+    @Test
+    void agentOneClickStepStillWithoutADataBlockAfterTheRepairFailsWithTheOriginalError() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.AgentOneClickDraft draft = new AiStudioChatService.AgentOneClickDraft(
+                1L, Map.of(), "{}", "FIELD SPEC", List.of(), "", "leave request", "45349679");
+        when(automationClient.chat(org.mockito.ArgumentMatchers.anyString(), eq("45349679"))).thenReturn("code block");
+        when(aiResponseParser.parseText("code block")).thenReturn(parsedWithoutBlock(CODE_BLOCK_REPLY));
+        List<com.developer.dto.AiStudioProposalJobResponse.Progress> progress = new java.util.ArrayList<>();
+
+        AiGenerationException e = assertThrows(AiGenerationException.class,
+                () -> co.runAgentOneClick(draft, progress::add));
+
+        assertEquals(AiStudioOneClickOrchestrator.STEP_NO_DATA, e.getErrorCode());
+        assertEquals("Step 1/5 (Process Design): Content Organizer returned no data: " + CODE_BLOCK_REPLY,
+                e.getMessage());
+        verify(automationClient, org.mockito.Mockito.times(2)).chat(any(), eq("45349679"));
+        assertEquals(1, progress.size());
+    }
+
+    @Test
+    void agentOneClickReasksAStepWithoutADataBlockWithoutExtraProgressAndCarriesOn() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.AgentOneClickDraft draft = new AiStudioChatService.AgentOneClickDraft(
+                1L, Map.of(), "{}", "FIELD SPEC", List.of(), "", "leave request", "45349679");
+        ArgumentCaptor<String> messages = ArgumentCaptor.forClass(String.class);
+        when(automationClient.chat(messages.capture(), eq("45349679"))).thenAnswer(invocation -> {
+            String message = invocation.getArgument(0);
+            if (message.contains("AUTOMATIC CORRECTION REQUEST")) return "t2";
+            String phase = message.substring("## MODE: PROPOSE\n## PHASE: ".length(), message.indexOf("\n## SCOPE"));
+            return phase;
+        });
+        when(aiResponseParser.parseText(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> {
+            String reply = invocation.getArgument(0);
+            Map<String, Object> data = switch (reply) {
+                case "PROCESS_DESIGN" -> Map.of("processDefinition", Map.of("bpmnXml", "<x/>"));
+                case "TABLE_DESIGN" -> null;
+                case "t2" -> Map.of("tableDefinitions", List.of(Map.of("tableName", "t")), "tableRelations", List.of());
+                case "FORM_DESIGN" -> Map.of("formDefinitions", List.of());
+                case "DECISION_DESIGN" -> Map.of("decisionDefinitions", List.of());
+                default -> Map.of("actionDefinitions", List.of());
+            };
+            Map<String, Object> parsed = parsedWithoutBlock("ok " + reply);
+            parsed.put("generatedData", data);
+            return parsed;
+        });
+        when(aiResponseParser.checkCrossSlices(any())).thenReturn(List.of());
+        List<com.developer.dto.AiStudioProposalJobResponse.Progress> progress = new java.util.ArrayList<>();
+
+        StudioChatResult result = co.runAgentOneClick(draft, progress::add);
+
+        assertEquals(List.of(Map.of("tableName", "t")), result.proposal().get("tableDefinitions"));
+        assertEquals(6, messages.getAllValues().size());
+        assertTrue(messages.getAllValues().get(2).contains("## PHASE: TABLE_DESIGN"));
+        assertTrue(messages.getAllValues().get(2).contains("not inside a code block"));
+        assertEquals(List.of(1, 2, 3, 4, 5), progress.stream()
+                .map(com.developer.dto.AiStudioProposalJobResponse.Progress::step).toList());
+    }
+
+    @Test
+    void agentOneClickStoppedDuringAStepWithoutADataBlockDoesNotAskAgain() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.AgentOneClickDraft draft = new AiStudioChatService.AgentOneClickDraft(
+                1L, Map.of(), "{}", "FIELD SPEC", List.of(), "", "leave request", "45349679");
+        when(automationClient.chat(org.mockito.ArgumentMatchers.anyString(), eq("45349679"))).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt(); // Stop 在 CO 调用期间到达
+            return "code block";
+        });
+        when(aiResponseParser.parseText("code block")).thenReturn(parsedWithoutBlock(CODE_BLOCK_REPLY));
+        try {
+            AiGenerationException e = assertThrows(AiGenerationException.class,
+                    () -> co.runAgentOneClick(draft, p -> { }));
+
+            assertEquals("AI_STUDIO_PROPOSAL_CANCELLED", e.getErrorCode());
+            assertTrue(e.getMessage().startsWith("Step 1/5 (Process Design): "));
+            verify(automationClient, org.mockito.Mockito.times(1)).chat(any(), eq("45349679"));
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void agentAdvisoryReplyWithACodeBlockIsReturnedAsIsWithoutAskingAgain() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        employee("45349679");
+        when(aiGenerationService.serializeFunctionUnitContext(1L)).thenReturn(new FunctionUnitContextDTO());
+        when(aiGenerationService.getSchemaMetadata()).thenReturn(Map.of());
+        when(documentService.latestContents(1L)).thenReturn(Map.of());
+        when(automationClient.chat(org.mockito.ArgumentMatchers.anyString(), eq("45349679")))
+                .thenReturn(CODE_BLOCK_REPLY);
+
+        StudioChatResult result = co.chat(request("PROCESS_DESIGN", "what would the JSON look like?", null), "u1", "t");
+
+        assertEquals(CODE_BLOCK_REPLY, result.reply());
+        assertEquals(null, result.proposal());
+        verify(automationClient, org.mockito.Mockito.times(1)).chat(any(), eq("45349679"));
+        verifyNoInteractions(aiResponseParser);
     }
 
     @Test

@@ -205,6 +205,7 @@ Generate data with the following JSON structure, wrapped in the markers:
 - DECIMAL fields must set precision > 0 and scale > 0
 - Every table must have at least one field with isPrimaryKey: true
 - Use stable English snake_case identifiers for tableName, fieldName, formName, actionName and decisionKey; use human-readable English for display names and descriptions
+- tableName is unique across the whole platform (all function units share one namespace, case-insensitive), not just within this function unit. Keep the tableName of a table that already exists in this function unit; for a new table choose a name specific to this function unit's business rather than a generic one another function unit is likely to use already
 - configJson must be either null or a JSON object, never an encoded JSON string. visibilityCondition must use the object structure and operators from schemaMetadata
 - actionType must be one of the currently supported values listed in schemaMetadata.actionTypes; never restore a legacy integration type that is absent from that list
 - Every action must contain a non-empty stageIds array, and every stageIds entry must exactly match an existing bpmn:userTask id

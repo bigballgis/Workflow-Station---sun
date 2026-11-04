@@ -47,24 +47,28 @@ public class AiStudioProposalReferenceValidator {
     private final AiOrgCatalogReader orgCatalogReader;
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final AiAutomationFlowCatalogReader automationFlowCatalogReader;
+    private final AiTableNameAvailability tableNameAvailability;
 
     public AiStudioProposalReferenceValidator(EmailConnectionRepository emailConnectionRepository,
                                               FormDefinitionRepository formDefinitionRepository,
                                               TableDefinitionRepository tableDefinitionRepository,
                                               AiOrgCatalogReader orgCatalogReader,
                                               ProcessDefinitionRepository processDefinitionRepository,
-                                              AiAutomationFlowCatalogReader automationFlowCatalogReader) {
+                                              AiAutomationFlowCatalogReader automationFlowCatalogReader,
+                                              AiTableNameAvailability tableNameAvailability) {
         this.emailConnectionRepository = emailConnectionRepository;
         this.formDefinitionRepository = formDefinitionRepository;
         this.tableDefinitionRepository = tableDefinitionRepository;
         this.orgCatalogReader = orgCatalogReader;
         this.processDefinitionRepository = processDefinitionRepository;
         this.automationFlowCatalogReader = automationFlowCatalogReader;
+        this.tableNameAvailability = tableNameAvailability;
     }
 
     public AiValidationResult validate(Long functionUnitId, AiGeneratedData data) {
         AiValidationResult result = AiValidationResult.builder().build();
         if (data == null) return result;
+        validateTableNamesAvailable(functionUnitId, data, result);
         boolean hasMonitors = data.getEmailMonitorRules() != null && !data.getEmailMonitorRules().isEmpty();
         boolean hasTemplates = data.getEmailTemplates() != null && !data.getEmailTemplates().isEmpty();
         boolean hasViews = data.getMainTableViews() != null && !data.getMainTableViews().isEmpty();
@@ -127,6 +131,24 @@ public class AiStudioProposalReferenceValidator {
             if (!flow.published()) {
                 result.addWarning("REFERENCE_INVALID", path + ".flowKey",
                         "Flow '" + flowKey + "' is not published yet; deploying the process will fail until it is");
+            }
+        }
+    }
+
+    /**
+     * 表名全平台唯一：被别的 FU 或 Relation Table 占用的名字写库时撞唯一索引。提前报 ERROR，卡片就走"让 AI 修正"
+     * 而不是 Apply 时才抛 SQL 错误。
+     */
+    private void validateTableNamesAvailable(Long functionUnitId, AiGeneratedData data, AiValidationResult result) {
+        List<Map<String, Object>> tables = data.getTableDefinitions();
+        if (tables == null || tables.isEmpty()) return;
+        List<String> taken = tableNameAvailability.takenNames(functionUnitId, tables);
+        if (taken.isEmpty()) return;
+        for (int i = 0; i < tables.size(); i++) {
+            Object name = tables.get(i) == null ? null : tables.get(i).get("tableName");
+            if (name instanceof String n && taken.contains(n.trim())) {
+                result.addError(AiTableNameAvailability.TABLE_NAME_TAKEN, "tableDefinitions[" + i + "].tableName",
+                        AiTableNameAvailability.describe(List.of(n.trim())));
             }
         }
     }

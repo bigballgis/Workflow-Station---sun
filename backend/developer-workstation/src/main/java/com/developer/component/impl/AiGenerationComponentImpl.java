@@ -16,6 +16,7 @@ import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
 import com.developer.service.AiWriteService;
+import com.developer.service.impl.AiTableNameAvailability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final Executor taskExecutor;
     private final ObjectMapper objectMapper;
+    private final AiTableNameAvailability tableNameAvailability;
 
     /** Undo snapshot cache: key = functionUnitId → serialized AiGeneratedData JSON */
     private final ConcurrentHashMap<Long, String> undoSnapshots = new ConcurrentHashMap<>();
@@ -85,7 +87,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                                      AiWriteService aiWriteService,
                                      FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
                                      Executor taskExecutor,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     AiTableNameAvailability tableNameAvailability) {
         this.aiGenerationService = aiGenerationService;
         this.aiLockService = aiLockService;
         this.aiValidationService = aiValidationService;
@@ -93,6 +96,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
         this.taskExecutor = taskExecutor;
         this.objectMapper = objectMapper;
+        this.tableNameAvailability = tableNameAvailability;
     }
 
     @Override
@@ -369,6 +373,15 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 normalizeCrossFieldRules(request.getGeneratedData().getFormDefinitions());
             }
             AiValidationResult validationResult = aiValidationService.validate(request.getGeneratedData());
+            // 表名全平台唯一：被别的 FU 占用的名字在写库时撞唯一索引，这里先按校验错误报出来
+            if (request.getGeneratedData() != null) {
+                List<String> taken = tableNameAvailability.takenNames(functionUnitId,
+                        request.getGeneratedData().getTableDefinitions());
+                if (!taken.isEmpty()) {
+                    validationResult.addError(AiTableNameAvailability.TABLE_NAME_TAKEN, "tableDefinitions",
+                            AiTableNameAvailability.describe(taken));
+                }
+            }
 
             // 3. Throw exception if validation fails
             if (!validationResult.isValid()) {

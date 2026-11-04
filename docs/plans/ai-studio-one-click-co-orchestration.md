@@ -288,6 +288,16 @@ USER REQUEST = 用户需求原文 + 一段系统行：一键生成第 k/5 步、
   - 失败路径（真实发生）：模型在表步用了标记块外的 ```` ```json ```` 围栏 → `Step 2/5 (Table Design): Content Organizer returned no data: …`，库不变。
   - 既有约束撞上：`dw_table_definitions` 表名**全平台唯一**（`uk_dw_table_name`），首跑生成的 `leave_request` 与 FU 50143 冲突 →
     自动 Apply 失败、卡片带 WARNING（与网关路径同样会撞）；预览不查跨 FU 表名，模型也看不到别的 FU。
+    **已修（2026-11-04，方案 B）**：`AiTableNameAvailability`（别的 FU 的 dw 表 + 任何 rt 表，大小写不敏感，本 FU 自己的不算）
+    ① 预览 / dry-run / Apply 共用的 `AiStudioProposalReferenceValidator` 报 ERROR `AI_TABLE_NAME_TAKEN`，网关 Apply 同样；
+    ② 生成期作为可修违规重问一次：一键生成在表这一步、Propose change 的 TABLES/ALL、网关 `doCallAi`（不看 scope：AI Generate 的 scope 是逗号多选，Apply 照写回传的表）；
+    ③ `generation.txt` 加一条「tableName 全平台唯一、新表起本 FU 专属名」。dev 证据（FU 50153，占用方 FU 50143 在另一工作区）：
+    修前 dry-run `issues=[]`、Apply HTTP 500 `uk_dw_table_name`；修后 dry-run ERROR `AI_TABLE_NAME_TAKEN`（大写 `LEAVE_REQUEST` 同样）、
+    Apply HTTP 400 带可读说明、空闲名无问题；一键生成五步后自动 Apply 成功，表名 `oc_co_182247_leave_request`（提示词生效，未触发重问）；
+    Copilot TABLES 提案明确要求 `leave_request` → 日志 `rejected by platform validation (AI_TABLE_NAME_TAKEN), asking once more` →
+    第二次回答改用本 FU 专属名、预览无问题。残留风险：一键生成流程步排在表步前，若多实例节点已引用某子表名而表步因撞名改了它，
+    BPMN 会对不上（dev 未遇到）。预览**不会**报出：没有任何校验比对 BPMN 的 `subTableName` 与表切片，
+    写入时 `AiBpmnMiSubTableWriter` 只记 warn、`subTableId` 留空——这是流程先于表生成的既有缺口，撞名重问只是多了一个触发点。
   - 未在 dev 验证：无工号 / GAIP 分支（单测覆盖）；UAT 真实 CO。
-- **后续候选（未做）**：「无数据块」也按可修违规重问一次；预览加跨 FU 表名冲突检查；新的一键生成（非 follow-up）不带上一轮未应用卡片的 CONVERSATION。
+- **后续候选（未做）**：「无数据块」也按可修违规重问一次；新的一键生成（非 follow-up）不带上一轮未应用卡片的 CONVERSATION。
 

@@ -37,7 +37,8 @@
   （USER REQUEST 末尾有一段「One-click generation」系统说明告诉专家这一点）。五步都成功后，合并结果走一次 `scope=ALL`
   的预览与 Apply——流程与动作必须在同一次写入里，BPMN 才拿得到动作 id；中途失败或 Stop 时库里不变。
   表单步、动作步并入后会对累计结果再做一次跨切片校验（stage 绑定对得上本轮流程的 userTask），可修的违规带原话重问那一步一次。
-  决策步允许没有数据块（视为没有决策表）；其余步骤没有数据块即整体失败（`AI_STUDIO_ONE_CLICK_STEP_NO_DATA`）。
+  某一步没有数据块时也先重问那一步一次（第 2 节「失败与修复」）；重问后决策步仍没有数据块视为没有决策表，
+  其余步骤仍没有即整体失败（`AI_STUDIO_ONE_CLICK_STEP_NO_DATA`）。重问不另报进度（仍显示该步），Stop 在两次调用之间生效。
   `provider=GAIP` 时一键生成仍是网关的单次 `scope=ALL` 生成。
 
 ## 2. 输出信封（硬约束）
@@ -52,11 +53,32 @@
 ---GENERATED_DATA_END---
 ```
 
-- **必须有标记块**：`AiResponseParser#parseText` 只认 `---GENERATED_DATA_START---`（缺 END 时取到结尾）；块内容再按 ```` ```json ```` 围栏 → 首尾大括号兜底解析。**标记块外**的 ```` ```json ```` 围栏不会被当成数据——提案卡只剩说明文字，一键生成的那一步以 `AI_STUDIO_ONE_CLICK_STEP_NO_DATA` 失败（2026-11-03 dev 实测出现过）。
+- **必须有标记块**：`AiResponseParser#parseText` 只认 `---GENERATED_DATA_START---`（缺 END 时取到结尾）；块内容再按 ```` ```json ```` 围栏 → 首尾大括号兜底解析。**标记块外**的 ```` ```json ```` 围栏不会被当成数据（2026-11-03 dev 实测出现过模型这样输出），DW 也不会去猜代码块，而是重问一次（见下方「失败与修复」）。
 - 说明文字 = 整段输出去掉标记块之后剩下的部分，原样显示在提案卡上。「理解了什么 / 改动摘要 / 假设与人工步骤 / 其他阶段的后续步骤」写在这里。
 - JSON 必须严格：不能有注释、尾逗号、省略号、占位符，XML 不能缩写或 Base64。
 - ADVISORY 形态不输出标记块。PROPOSE 形态如果判断无法产出合法数据（例如缺少依赖），也**不输出**标记块，在说明文字里讲清缺什么。DW 对「既没数据也没文字」的结果会显式报错（`AI_STUDIO_PROPOSAL_EMPTY`）。
 - `---PHASE_COMPLETE---` 可加可不加，AI Studio 不依赖它。
+
+### 失败与修复（PROPOSE 与一键生成的每一步）
+
+真源：`AiStudioChatServiceImpl#askAgent`。每次 PROPOSE 最多问 CO **两次**——第一次的回答有以下两类问题之一时，
+带着原请求加一段 `AUTOMATIC CORRECTION REQUEST` 再问一次，第二次的结果就是最终结果，不会再修：
+
+| 第一次的问题 | 重问时附带的修复指令 | 第二次仍有问题 |
+|--------------|----------------------|----------------|
+| 校验拒绝，错误码在 `AiGenerationServiceImpl#REPAIRABLE_ERROR_CODES` 里（BPMN 结构、stage 绑定、决策值、表名被占用等） | `buildRepairMessage`：违规码 + 校验器原话 + 常见平台规则 | 报这次的校验错误 |
+| 回答里没有标记块（例如 JSON 放进了 ```` ```json ```` 代码块） | `buildMissingDataBlockRepairMessage`：只认标记块，代码块与裸 JSON 一律忽略；确实无法产出时只回说明文字 | 与原来一样：Propose change 只出说明文字（无提案卡）；一键生成那一步报 `AI_STUDIO_ONE_CLICK_STEP_NO_DATA`（决策步视为没有决策表） |
+
+- **表名全平台唯一**（`ux_dw_table_name_lower`，大小写不敏感，Relation Table 同一命名空间）：会写表的 PROPOSE（scope `TABLES` / `ALL`）
+  与一键生成的表这一步，回答里被**别的 FU** 占用的表名按 `AI_TABLE_NAME_TAKEN` 重问一次（本 FU 自己的旧表名不算：写入前先清掉）。
+  重问后仍撞名时，提案卡预览 / dry-run 与 Apply 都报 ERROR `AI_TABLE_NAME_TAKEN`（`AiStudioProposalReferenceValidator`），
+  一键生成因此不自动 Apply、卡片走「让 AI 修正」。报错只列名字，不说被哪个 FU 占用（可能在别的工作区）。网关链路同一套检查
+  （`AiGenerationServiceImpl#doCallAi`、`AiGenerationComponentImpl#applyGeneratedData`）。
+- 其他错误（传输失败、不在可修列表里的错误码、`AI_STUDIO_PROPOSAL_EMPTY` 等）不重问，直接失败。
+- 一键生成任一步最终失败，整轮失败，库里不变。
+- ADVISORY 不解析数据块，也不重问。
+- 代价：PROPOSE 判断无法产出、按约定只回说明文字时，也会被重问一次（指令里允许它再次只回说明文字）。
+- 第一次调用期间用户点了 Stop 或被新请求替换时，不再发第二次（`AI_STUDIO_PROPOSAL_CANCELLED`）。
 
 ## 3. 阶段 → scope → 切片 → 写入语义
 

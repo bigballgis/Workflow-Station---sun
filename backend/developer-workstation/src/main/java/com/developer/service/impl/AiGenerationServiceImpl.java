@@ -94,6 +94,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Autowired(required = false)
     private AiAutomationFlowCatalogReader automationFlowCatalogReader;
 
+    /** 生成期表名占用检查：被别的 FU 占用的表名作为可修违规回灌模型（见 {@link #doCallAi}）。 */
+    @Autowired
+    private AiTableNameAvailability tableNameAvailability;
+
     /** 文档落库与版本编号的唯一入口（v{major}.{minor} 在这里算）。 */
     @Autowired
     private FunctionUnitDocumentService documentService;
@@ -631,7 +635,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             "AI_BPMN_NO_TASK_NODES", "AI_BPMN_DISCONNECTED_NODES", "AI_BPMN_MISSING_DI",
             "AI_BPMN_INVALID_XML", "AI_TASK_ASSIGNEE_INVALID",
             "AI_FORM_STAGE_BINDING_INVALID", "AI_ACTION_STAGE_BINDING_INVALID",
-            "AI_BPMN_DECISION_VALUE_INVALID");
+            "AI_BPMN_DECISION_VALUE_INVALID", AiTableNameAvailability.TABLE_NAME_TAKEN);
 
     /**
      * 带着校验器原话再生成一次。只修一次:单次调用上限就是 {@code aiCallTimeoutSeconds},
@@ -688,11 +692,20 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 + "========== End of correction request ==========";
     }
 
-    /** Build prompt → POST chat/completions → parse response，对应原 AP flow 的中间三步。 */
+    /**
+     * Build prompt → POST chat/completions → parse response，对应原 AP flow 的中间三步。
+     * 产物带表定义时再查表名是否已被别的 FU 占用：占用即抛可修违规，由 {@link #doCallAiWithRetry} 带原话重问一次。
+     * 不按 regenerateScope 放行：AI Generate 的 scope 是逗号拼接的多选（如 {@code TABLES,FORMS}），其 Apply 会把回传的
+     * 表定义照写；本 FU 自己的表名不算占用，所以模型回显已有表不会误触发。
+     */
     private Map<String, Object> doCallAi(Map<String, Object> requestBody, String amToken) {
         AiPromptBuilder.RenderedPrompt prompt = aiPromptBuilder.build(requestBody);
         Map<String, Object> httpResult = aiGatewayClient.chat(prompt, amToken);
-        return aiResponseParser.parse(httpResult);
+        Map<String, Object> parsed = aiResponseParser.parse(httpResult);
+        if (requestBody.get("functionUnitId") instanceof Long functionUnitId) {
+            tableNameAvailability.requireAvailable(functionUnitId, parsed.get("generatedData"));
+        }
+        return parsed;
     }
 
     // ==================== SSE Emitter Management ====================

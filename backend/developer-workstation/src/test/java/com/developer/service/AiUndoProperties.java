@@ -56,7 +56,7 @@ class AiUndoProperties {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                workspaceAccessService, taskExecutor, objectMapper);
+                workspaceAccessService, taskExecutor, objectMapper, org.mockito.Mockito.mock(com.developer.service.impl.AiTableNameAvailability.class));
 
         // Build a valid context DTO that serializeFunctionUnitContext would return
         FunctionUnitContextDTO contextDTO = FunctionUnitContextDTO.builder()
@@ -124,7 +124,7 @@ class AiUndoProperties {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                workspaceAccessService, taskExecutor, objectMapper);
+                workspaceAccessService, taskExecutor, objectMapper, org.mockito.Mockito.mock(com.developer.service.impl.AiTableNameAvailability.class));
 
         // Build context for snapshot
         FunctionUnitContextDTO contextDTO = FunctionUnitContextDTO.builder()

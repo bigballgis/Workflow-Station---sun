@@ -51,6 +51,7 @@ class AiGenerationComponentImplTest {
     @Mock private AiValidationService aiValidationService;
     @Mock private AiWriteService aiWriteService;
     @Mock private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    @Mock private com.developer.service.impl.AiTableNameAvailability tableNameAvailability;
 
     private AiGenerationComponentImpl component;
     private UUID sessionUuid;
@@ -61,7 +62,7 @@ class AiGenerationComponentImplTest {
         // Use synchronous executor to make SSE orchestration deterministic in unit tests.
         Executor executor = Runnable::run;
         component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                functionUnitWorkspaceAccessService, executor, new com.fasterxml.jackson.databind.ObjectMapper());
+                functionUnitWorkspaceAccessService, executor, new com.fasterxml.jackson.databind.ObjectMapper(), tableNameAvailability);
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid).functionUnitId(1L).userId("user1")
@@ -409,5 +410,25 @@ class AiGenerationComponentImplTest {
         assertEquals("a", explicitTarget.get("targetField"));
         // Null list is a no-op (no exception)
         AiGenerationComponentImpl.normalizeCrossFieldRules(null);
+    }
+
+    /** 表名全平台唯一：被别的 FU 占用的表名在写库前按校验错误报出，不再在 flush 时撞唯一索引 */
+    @Test
+    void applyWithATableNameHeldByAnotherFunctionUnitFailsValidationWithoutWriting() {
+        com.developer.dto.AiGeneratedData data = new com.developer.dto.AiGeneratedData();
+        data.setTableDefinitions(List.of(new java.util.HashMap<>(Map.of("tableName", "leave_request"))));
+        com.developer.dto.ApplyGeneratedDataRequest request = new com.developer.dto.ApplyGeneratedDataRequest();
+        request.setSessionId(sessionUuid.toString());
+        request.setGeneratedData(data);
+        when(aiValidationService.validate(data)).thenReturn(com.developer.dto.AiValidationResult.builder().build());
+        when(tableNameAvailability.takenNames(1L, data.getTableDefinitions())).thenReturn(List.of("leave_request"));
+
+        com.developer.exception.AiValidationFailedException e = assertThrows(
+                com.developer.exception.AiValidationFailedException.class,
+                () -> component.applyGeneratedData(1L, request, "user1"));
+
+        assertEquals(com.developer.service.impl.AiTableNameAvailability.TABLE_NAME_TAKEN,
+                e.getErrors().get(0).getErrorType());
+        verify(aiWriteService, never()).applyGeneratedData(any(), any(), any());
     }
 }

@@ -101,8 +101,11 @@ public class AiStudioOneClickComponentImpl implements AiStudioOneClickComponent 
         chatRequest.setMessage(requirements.isEmpty() ? DEFAULT_MESSAGE : requirements);
         chatRequest.setPropose(true);
         try {
-            // "让 AI 修正"会带着上一轮的结果再来一次：线程历史里有那张卡
-            chatRequest.setHistory(threadService.recentHistory(functionUnitId, THREAD_PHASE));
+            // "让 AI 修正"要带着上一轮的结果再来一次：线程历史里有那张卡。全新生成则不带上一轮没应用的结果，
+            // 否则专家会把新需求当成"修改上一份"。CO 与网关两条链路都从这份历史出 CONVERSATION
+            chatRequest.setHistory(request.isFollowUp()
+                    ? threadService.recentHistory(functionUnitId, THREAD_PHASE)
+                    : threadService.recentHistoryForFreshOneClick(functionUnitId, THREAD_PHASE));
         } catch (RuntimeException e) {
             log.warn("AI Studio one-click: shared history unavailable (functionUnitId={}): {}",
                     functionUnitId, e.getMessage());

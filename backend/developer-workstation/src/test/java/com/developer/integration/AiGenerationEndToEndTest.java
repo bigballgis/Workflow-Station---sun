@@ -65,7 +65,7 @@ class AiGenerationEndToEndTest {
         objectMapper = new ObjectMapper();
         component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                functionUnitWorkspaceAccessService, executor, objectMapper);
+                functionUnitWorkspaceAccessService, executor, objectMapper, org.mockito.Mockito.mock(com.developer.service.impl.AiTableNameAvailability.class));
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid)

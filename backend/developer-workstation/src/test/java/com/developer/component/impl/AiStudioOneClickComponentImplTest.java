@@ -189,6 +189,42 @@ class AiStudioOneClickComponentImplTest {
         assertTrue(content.getValue().endsWith("\n\nalso add a cancel action\n"));
     }
 
+    private static AiStudioChatRequest.HistoryMessage history(String content) {
+        AiStudioChatRequest.HistoryMessage m = new AiStudioChatRequest.HistoryMessage();
+        m.setRole("USER");
+        m.setContent(content);
+        return m;
+    }
+
+    /** 全新生成：历史取去掉上一轮未应用结果的那一份，原样交给 CO 草稿（CONVERSATION 由它出）。 */
+    @Test
+    void aFreshGenerationDoesNotCarryThePreviousRoundsUnappliedResult() {
+        when(threadService.recentHistoryForFreshOneClick(7L, "PROCESS_DESIGN")).thenReturn(List.of(history("kept")));
+        when(chatService.prepareAgentOneClick(any(), eq("u1"))).thenReturn(Optional.of(
+                new AiStudioChatService.AgentOneClickDraft(7L, Map.of(), "{}", "F", List.of(), "", "x", "s")));
+        submitted(request("expense claim"), p -> { });
+
+        ArgumentCaptor<AiStudioChatRequest> sent = ArgumentCaptor.forClass(AiStudioChatRequest.class);
+        verify(chatService).prepareAgentOneClick(sent.capture(), eq("u1"));
+        assertEquals(List.of("kept"), sent.getValue().getHistory().stream()
+                .map(AiStudioChatRequest.HistoryMessage::getContent).toList());
+        verify(threadService, never()).recentHistory(anyLong(), anyString());
+    }
+
+    /** 修正轮：要修的正是上一轮那张卡，历史照旧全带（网关链路同理，草稿从同一份请求历史出）。 */
+    @Test
+    void aFollowUpRoundKeepsThePreviousResultInItsHistory() {
+        when(threadService.recentHistory(7L, "PROCESS_DESIGN")).thenReturn(List.of(history("the card to fix")));
+        AiStudioOneClickRequest followUp = request("Fix these problems");
+        followUp.setFollowUp(true);
+        start(followUp);
+
+        ArgumentCaptor<AiStudioChatRequest> sent = ArgumentCaptor.forClass(AiStudioChatRequest.class);
+        verify(chatService).prepareOneClick(sent.capture());
+        assertEquals("the card to fix", sent.getValue().getHistory().get(0).getContent());
+        verify(threadService, never()).recentHistoryForFreshOneClick(anyLong(), anyString());
+    }
+
     @Test
     void aFollowUpRoundAppliesButKeepsItsFixInstructionsOutOfTheRequirementsDocument() {
         AiStudioOneClickRequest followUp = request("Fix these problems: forms[0] binds an unknown table");

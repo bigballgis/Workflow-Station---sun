@@ -44,6 +44,8 @@ class AiStudioProposalReferenceValidatorTest {
     private com.developer.repository.ProcessDefinitionRepository processDefinitionRepository;
     @Mock
     private AiAutomationFlowCatalogReader automationFlowCatalogReader;
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private AiStudioProposalReferenceValidator validator;
 
@@ -51,7 +53,8 @@ class AiStudioProposalReferenceValidatorTest {
     void setUp() {
         validator = new AiStudioProposalReferenceValidator(
                 emailConnectionRepository, formDefinitionRepository, tableDefinitionRepository, orgCatalogReader,
-                processDefinitionRepository, automationFlowCatalogReader);
+                processDefinitionRepository, automationFlowCatalogReader,
+                new AiTableNameAvailability(tableDefinitionRepository, jdbcTemplate));
         // 组织目录：BU sales 绑定 role approver；BU hr 无角色；role auditor 只绑在 finance 上
         lenient().when(orgCatalogReader.readActive()).thenReturn(List.of(
                 new AiOrgCatalogReader.BusinessUnitEntry("bu-sales", "SALES", "Sales",
@@ -414,5 +417,59 @@ class AiStudioProposalReferenceValidatorTest {
 
         assertTrue(result.isValid());
         assertTrue(result.getWarnings().isEmpty());
+    }
+
+    // ---- 表名全平台唯一 ----
+
+    private static AiGeneratedData tables(String... names) {
+        AiGeneratedData data = new AiGeneratedData();
+        data.setTableDefinitions(java.util.Arrays.stream(names)
+                .map(n -> (Map<String, Object>) new HashMap<String, Object>(Map.of("tableName", n))).toList());
+        return data;
+    }
+
+    private void relationTablesNamed(String... names) {
+        lenient().when(jdbcTemplate.queryForObject(org.mockito.ArgumentMatchers.contains("rt_table_definitions"),
+                org.mockito.ArgumentMatchers.eq(Integer.class), org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(inv -> List.of(names).contains(((String) inv.getArgument(2)).toLowerCase()) ? 1 : 0);
+    }
+
+    @Test
+    void aTableNameHeldByAnotherFunctionUnitIsAnErrorOnThatTable() {
+        relationTablesNamed();
+        when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndFunctionUnitIdNot("Leave_Request", 9L))
+                .thenReturn(true);
+        when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndFunctionUnitIdNot("leave_line", 9L))
+                .thenReturn(false);
+
+        AiValidationResult result = validator.validate(9L, tables("leave_line", "Leave_Request"));
+
+        assertFalse(result.isValid());
+        assertEquals(1, result.getErrors().size());
+        assertEquals(AiTableNameAvailability.TABLE_NAME_TAKEN, result.getErrors().get(0).getErrorType());
+        assertEquals("tableDefinitions[1].tableName", result.getErrors().get(0).getFieldPath());
+        assertTrue(result.getErrors().get(0).getDescription().contains("[Leave_Request]"));
+    }
+
+    @Test
+    void aTableNameHeldByARelationTableIsAnError() {
+        relationTablesNamed("customer_master");
+        when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndFunctionUnitIdNot("customer_master", 9L))
+                .thenReturn(false);
+
+        AiValidationResult result = validator.validate(9L, tables("customer_master"));
+
+        assertEquals(List.of("tableDefinitions[0].tableName"),
+                result.getErrors().stream().map(e -> e.getFieldPath()).toList());
+    }
+
+    /** 本 FU 自己的旧表名不算占用（写入前会先清掉）：查询本身就按"别的 FU"过滤 */
+    @Test
+    void tableNamesFreeOutsideThisFunctionUnitPass() {
+        relationTablesNamed();
+        when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndFunctionUnitIdNot("leave_request", 9L))
+                .thenReturn(false);
+
+        assertTrue(validator.validate(9L, tables("leave_request")).isValid());
     }
 }

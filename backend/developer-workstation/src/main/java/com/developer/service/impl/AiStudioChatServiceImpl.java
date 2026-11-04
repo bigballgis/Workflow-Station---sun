@@ -129,6 +129,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
     private final AiStudioAutomationClient automationClient;
     private final AiPromptTemplateService promptTemplateService;
     private final UserRepository userRepository;
+    private final AiTableNameAvailability tableNameAvailability;
     private final Provider provider;
 
     /** 一键生成逐阶段编排的总时限：与提案作业的最长运行时间同一个配置，作业超时前编排先停下 */
@@ -146,6 +147,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                                    AiStudioAutomationClient automationClient,
                                    AiPromptTemplateService promptTemplateService,
                                    UserRepository userRepository,
+                                   AiTableNameAvailability tableNameAvailability,
                                    @Value("${ai-generation.ai-studio.provider:AUTOMATION}") Provider provider) {
         this.aiGatewayClient = aiGatewayClient;
         this.aiResponseParser = aiResponseParser;
@@ -155,6 +157,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
         this.automationClient = automationClient;
         this.promptTemplateService = promptTemplateService;
         this.userRepository = userRepository;
+        this.tableNameAvailability = tableNameAvailability;
         this.provider = provider;
     }
 
@@ -241,6 +244,7 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
         StudioChatResult result = new AiStudioOneClickOrchestrator(
                 (message, accept) -> askAgent(message, draft.staffId(), accept),
                 aiResponseParser::checkCrossSlices,
+                design -> tableNameAvailability.requireAvailable(draft.functionUnitId(), design),
                 java.time.Duration.ofMinutes(oneClickBudgetMinutes),
                 java.time.Duration.ofSeconds(agentCallTimeoutSeconds), java.time.Clock.systemUTC())
                 .run(draft, progress);
@@ -335,27 +339,67 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
      * 语义校验完全一样；可修的结构违规照网关链路的做法带着校验原话再问一次，只修一次。
      */
     private Map<String, Object> agentProposal(ProposalDraft draft) {
-        return askAgent(draft.message(), draft.staffId(), java.util.function.UnaryOperator.identity());
+        // 只有这两个 scope 写表定义：其余 scope 的表切片在 runProposal 里按 allowedSlices 裁掉，查了只会白白重问
+        if (!SCOPE_ALL.equals(draft.scope()) && !"TABLES".equals(draft.scope())) {
+            return askAgent(draft.message(), draft.staffId(), java.util.function.UnaryOperator.identity());
+        }
+        // 被别的 FU 占用的表名作为可修违规回灌，与网关链路 doCallAi 同一道检查
+        return askAgent(draft.message(), draft.staffId(), parsed -> {
+            tableNameAvailability.requireAvailable(draft.functionUnitId(), parsed.get("generatedData"));
+            return parsed;
+        });
     }
 
     /**
-     * 问 CO 一次：解析回答后交给 {@code accept}（一键生成在这里并入并校验跨切片引用）；解析或 {@code accept}
-     * 抛出可修违规时带着校验原话再问一次，只修一次。
+     * 问 CO 一次 PROPOSE：解析回答后交给 {@code accept}（一键生成在这里并入并校验跨切片引用）。两类问题带着原话再问一次，
+     * 合计只修一次：解析或 {@code accept} 抛出可修违规；回答里没有 GENERATED_DATA 标记块（模型偶尔把 JSON 放进
+     * ```json 代码块——parser 只认标记块，不去猜代码块）。重问后仍没有标记块就把那次结果照常交给 {@code accept}，
+     * 行为与原来一致：一键生成报 {@code AI_STUDIO_ONE_CLICK_STEP_NO_DATA}，Propose change 只出说明文字。
      */
     private Map<String, Object> askAgent(String message, String staffId,
                                          java.util.function.UnaryOperator<Map<String, Object>> accept) {
         String reply = automationClient.chat(message, staffId);
+        String repairMessage;
         try {
-            return accept.apply(aiResponseParser.parseText(reply));
+            Map<String, Object> parsed = aiResponseParser.parseText(reply);
+            if (parsed.get("generatedData") != null) {
+                return accept.apply(parsed);
+            }
+            log.warn("AI Studio agent proposal has no GENERATED_DATA block, asking once more for the marker block "
+                    + "(replyChars={})", reply == null ? 0 : reply.length());
+            repairMessage = buildMissingDataBlockRepairMessage(message);
         } catch (AiGenerationException e) {
             if (!AiGenerationServiceImpl.REPAIRABLE_ERROR_CODES.contains(e.getErrorCode())) {
                 throw e;
             }
             log.warn("AI Studio agent proposal rejected by platform validation ({}), asking once more with the "
                     + "violation fed back: {}", e.getErrorCode(), e.getMessage());
-            String repaired = automationClient.chat(AiGenerationServiceImpl.buildRepairMessage(message, e), staffId);
-            return accept.apply(aiResponseParser.parseText(repaired));
+            repairMessage = AiGenerationServiceImpl.buildRepairMessage(message, e);
         }
+        if (Thread.currentThread().isInterrupted()) {
+            // Stop / 被新请求替换发生在上一次 CO 调用期间：作业已丢弃结果，别再多烧一次 CO
+            throw new AiGenerationException("AI_STUDIO_PROPOSAL_CANCELLED", "cancelled before asking again");
+        }
+        String repaired = automationClient.chat(repairMessage, staffId);
+        return accept.apply(aiResponseParser.parseText(repaired));
+    }
+
+    /** 缺标记块时的重问指令：只认标记块，代码块与裸 JSON 一律不读；确实无法产出时允许只回说明文字（契约第 2 节）。 */
+    static String buildMissingDataBlockRepairMessage(String originalMessage) {
+        return originalMessage + "\n\n"
+                + "========== AUTOMATIC CORRECTION REQUEST (system-generated, highest priority) ==========\n"
+                + "Your previous answer had no ---GENERATED_DATA_START--- / ---GENERATED_DATA_END--- block, so the "
+                + "platform found no data and saved nothing.\n"
+                + "The platform reads data ONLY from between these two markers. JSON in a ```json code block or "
+                + "anywhere else in the answer is ignored.\n"
+                + "Answer again in exactly this shape: your explanation, then the COMPLETE data for this request as "
+                + "strict JSON between the markers, not inside a code block:\n"
+                + "---GENERATED_DATA_START---\n"
+                + "{ ... }\n"
+                + "---GENERATED_DATA_END---\n"
+                + "If you deliberately produced no data because the request cannot be fulfilled (for example a "
+                + "dependency is missing), answer with the explanation only, with no markers and no JSON.\n"
+                + "========== End of correction request ==========";
     }
 
     /**

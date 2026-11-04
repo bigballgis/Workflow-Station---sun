@@ -317,4 +317,48 @@ class AiStudioThreadServiceTest {
         m.setProposal(proposal);
         return m;
     }
+
+    /**
+     * 一键生成的结果卡与提问都落在 PROCESS_DESIGN 线程。同一份线程：全新一键生成看不到上一轮没应用的 ALL 卡、
+     * 它的提问和失败重试留下的孤立提问；普通 Propose change（{@link AiStudioThreadService#recentHistory}）照旧全带。
+     */
+    @Test
+    void freshOneClickHistoryDropsTheLastRoundsUnappliedResultButProposeChangeKeepsIt() {
+        String phase = "PROCESS_DESIGN";
+        Map<String, Object> design = Map.of("tableDefinitions", List.of(Map.of("tableName", "leave_request")));
+        // 上一次一键生成：已应用，当前设计的来历
+        service.appendUserMessage(1L, phase, "build a purchase app", ALICE);
+        AiStudioMessage appliedCard = service.appendAssistantMessage(1L, phase, "### applied", "ALL", design, null, ALICE);
+        service.markApplied(1L, appliedCard.getId(), true, ALICE);
+        // 上一轮一键生成：作业跑着时 Alice 自己聊了一轮、Bob 也问了一句，结果卡没应用
+        service.appendUserMessage(1L, phase, "leave request", ALICE);
+        service.appendUserMessage(1L, phase, "what does the gateway do?", ALICE);
+        service.appendAssistantMessage(1L, phase, "It routes on decision.", null, null, null, ALICE);
+        service.appendUserMessage(1L, phase, "bob asks", BOB);
+        service.appendAssistantMessage(1L, phase, "bob answer", null, null, null, BOB);
+        service.appendDocSyncMessage(1L, phase, "docs synced", Map.of("status", "OK"), ALICE);
+        service.appendAssistantMessage(1L, phase, "### 5/5 Action Design", "ALL", design, null, ALICE);
+        // 失败的重试：只留下提问
+        service.appendUserMessage(1L, phase, "leave request again", ALICE);
+
+        List<String> fresh = service.recentHistoryForFreshOneClick(1L, phase).stream()
+                .map(AiStudioChatRequest.HistoryMessage::getContent).toList();
+        assertEquals(List.of("build a purchase app", "### applied", "what does the gateway do?",
+                "It routes on decision.", "bob asks", "bob answer", "docs synced"), fresh);
+
+        List<AiStudioChatRequest.HistoryMessage> all = service.recentHistory(1L, phase);
+        assertEquals(10, all.size());
+        assertEquals("ALL", all.get(8).getProposalScope(), "Propose change still sees the unapplied card");
+        assertEquals(design, all.get(8).getProposal());
+    }
+
+    @Test
+    void anUnappliedCardWhoseQuestionFellOutOfTheWindowIsStillDropped() {
+        service.appendAssistantMessage(1L, "PROCESS_DESIGN", "### result", "ALL", Map.of("forms", List.of()), null, ALICE);
+        service.appendUserMessage(1L, "PROCESS_DESIGN", "unrelated", BOB);
+        service.appendAssistantMessage(1L, "PROCESS_DESIGN", "answer", null, null, null, BOB);
+
+        assertEquals(List.of("unrelated", "answer"), service.recentHistoryForFreshOneClick(1L, "PROCESS_DESIGN")
+                .stream().map(AiStudioChatRequest.HistoryMessage::getContent).toList());
+    }
 }

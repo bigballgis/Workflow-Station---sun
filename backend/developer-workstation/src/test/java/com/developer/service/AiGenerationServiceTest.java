@@ -60,6 +60,9 @@ class AiGenerationServiceTest {
     @Mock
     private AiResponseParser aiResponseParser;
 
+    @Mock
+    private com.developer.service.impl.AiTableNameAvailability tableNameAvailability;
+
     private ObjectMapper objectMapper;
 
     private AiGenerationServiceImpl generationService;
@@ -79,6 +82,7 @@ class AiGenerationServiceTest {
                 102400 // 100KB max context size
         );
         ReflectionTestUtils.setField(generationService, "aiCallTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "tableNameAvailability", tableNameAvailability);
     }
 
     // ==================== Session Management ====================
@@ -217,5 +221,40 @@ class AiGenerationServiceTest {
 
         assertEquals("AI_GATEWAY_EMPTY_RESPONSE", ex.getErrorCode());
         verify(aiPromptBuilder, times(1)).build(any());
+    }
+
+    /** 表名全平台唯一：会写表的范围里被别的 FU 占用的表名，同样带原话定向重生成一次 */
+    @Test
+    void callAiModel_whenATableNameIsTakenByAnotherFunctionUnit_regeneratesOnceWithTheViolation() {
+        Map<String, Object> taken = Map.of("tableDefinitions", List.of(Map.of("tableName", "leave_request")));
+        Map<String, Object> renamed = Map.of("tableDefinitions", List.of(Map.of("tableName", "hr_leave_request")));
+        when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("status", 200));
+        when(aiResponseParser.parse(any()))
+                .thenReturn(Map.of("reply", "v1", "generatedData", taken))
+                .thenReturn(Map.of("reply", "v2", "generatedData", renamed));
+        doThrow(new AiGenerationException("AI_TABLE_NAME_TAKEN", "Table name(s) [leave_request] are already used"))
+                .when(tableNameAvailability).requireAvailable(87L, taken);
+
+        Map<String, Object> result = callGeneration("Generate it");
+
+        assertEquals("v2", result.get("reply"));
+        ArgumentCaptor<Map<String, Object>> bodies = ArgumentCaptor.forClass(Map.class);
+        verify(aiPromptBuilder, times(2)).build(bodies.capture());
+        String repairMessage = (String) bodies.getAllValues().get(1).get("message");
+        assertTrue(repairMessage.contains("Violation code: AI_TABLE_NAME_TAKEN"), repairMessage);
+        assertTrue(repairMessage.contains("[leave_request]"), repairMessage);
+    }
+
+    /** AI Generate 的多选 scope 是逗号拼接（如 TABLES,FORMS），其 Apply 照写回传的表定义：同样要查 */
+    @Test
+    void callAiModel_withACommaJoinedScope_stillChecksTableNames() {
+        Map<String, Object> data = Map.of("tableDefinitions", List.of(Map.of("tableName", "leave_request")));
+        when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("status", 200));
+        when(aiResponseParser.parse(any())).thenReturn(Map.of("reply", "ok", "generatedData", data));
+
+        generationService.callAiModel(UUID.randomUUID(), "m", AiPhase.GENERATION, AiMode.MODIFY,
+                null, 87L, List.of(), "TABLES,FORMS", "token");
+
+        verify(tableNameAvailability).requireAvailable(87L, data);
     }
 }

@@ -15,6 +15,10 @@
  *        {"sessionId","parameter":{"applicationId","message","agentSetting":{"id","agentVars":[]}},"user_id"}
  *        (CO API Request Examples #12); answers data: events status / chunk / full / done / error
  *        ("SSE API Design"). #1 rejects agent settings ("Prompt setting not found").
+ *   POST /mock/faults   {"proposeCodeBlock": n, "phase"?: "TABLE_DESIGN"}   (dev fault injection, no auth)
+ *        the next n agent answers to a PROPOSE request (of that PHASE, when given) carry their JSON in a ```json
+ *        code block instead of the GENERATED_DATA markers — a slip the real model made on 2026-11-03 — so DW's
+ *        "missing data block -> ask once more" path can be exercised. Answers {"proposeCodeBlock", "phase"} left.
  *
  * Two prompt settings, as in the real use case: field extraction (needs an uploaded file) and Hermes Master chat
  * (no file — the conversation travels in its variable). Plus one agent setting, AI Studio's multi-agent
@@ -56,6 +60,12 @@ const MAX_FILES_PER_SESSION = 3;
 const UPLOAD_PATH = /^\/co\/v1\/api\/management-service\/api\/applications\/([^/]+)\/sessions\/([^/]+)\/files$/;
 const COMPLETION_PATH = '/co/v1/api/management-service/chat/completion';
 const AGENT_RUN_PATH = '/co/v1/api/management-service/agents/run-sse';
+const FAULTS_PATH = '/mock/faults';
+const DATA_START = '---GENERATED_DATA_START---';
+const DATA_END = '---GENERATED_DATA_END---';
+
+/** dev fault injection, see POST /mock/faults */
+const faults = { proposeCodeBlock: 0, phase: null };
 
 /** Copy of the CO prompt setting template; `{fields}` is its one variable. */
 const TEMPLATE = [
@@ -282,6 +292,19 @@ async function completion(req, res) {
   });
 }
 
+async function setFaults(req, res) {
+  let body;
+  try {
+    body = JSON.parse((await readBody(req)).toString() || '{}');
+  } catch {
+    return send(res, 400, { detail: 'invalid request' });
+  }
+  faults.proposeCodeBlock = Math.max(0, Number(body.proposeCodeBlock) || 0);
+  faults.phase = typeof body.phase === 'string' && body.phase ? body.phase : null;
+  console.log(`[mock-co] faults set: ${JSON.stringify(faults)}`);
+  send(res, 200, faults);
+}
+
 async function agentRun(req, res) {
   if (!authorized(req, res)) return;
   let body;
@@ -301,7 +324,14 @@ async function agentRun(req, res) {
   const event = (e) => res.write(`data: ${JSON.stringify(e)}\n\n`);
   event({ type: 'status', content: '[thinking]**Analyzing your request**' });
   try {
-    const answer = await askLlm(AGENT_TEMPLATE, question);
+    let answer = await askLlm(AGENT_TEMPLATE, question);
+    const phase = /^## PHASE: (\S+)$/m.exec(question)?.[1] ?? null;
+    if (faults.proposeCodeBlock > 0 && question.startsWith('## MODE: PROPOSE') && answer.includes(DATA_START)
+        && (!faults.phase || faults.phase === phase)) {
+      faults.proposeCodeBlock -= 1;
+      answer = answer.replace(DATA_START, '```json').replace(DATA_END, '```');
+      console.log(`[mock-co] fault: PROPOSE answer (phase=${phase}) rewritten to a json code block, ${faults.proposeCodeBlock} left`);
+    }
     event({ type: 'chunk', content: answer, author: 'mock_specialist' });
     event({ type: 'full', content: answer, author: 'mock_specialist' });
     event({ type: 'done', status: 'success', usage: {} });
@@ -323,6 +353,7 @@ createServer(async (req, res) => {
     if (m) return await upload(req, res, m[1], m[2]);
     if (path === COMPLETION_PATH) return await completion(req, res);
     if (path === AGENT_RUN_PATH) return await agentRun(req, res);
+    if (path === FAULTS_PATH) return await setFaults(req, res);
     send(res, 404, { detail: 'not found' });
   } catch (e) {
     console.error('[mock-co] error', e);

@@ -44,6 +44,9 @@ public interface TableDefinitionRepository extends JpaRepository<TableDefinition
     boolean existsByTableNameIgnoreCase(String tableName);
 
     boolean existsByTableNameIgnoreCaseAndIdNot(String tableName, Long id);
+
+    /** 别的功能单元是否已占用此表名（大小写不敏感）：AI 写入会先清掉本 FU 的表，所以本 FU 自己的不算。 */
+    boolean existsByTableNameIgnoreCaseAndFunctionUnitIdNot(String tableName, Long functionUnitId);
     
     /**
      * 获取表定义，同时加载字段定义
