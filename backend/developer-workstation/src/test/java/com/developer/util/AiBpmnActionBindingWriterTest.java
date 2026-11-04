@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AiBpmnActionBindingWriterTest {
 
     @Test
-    void bindStageActions_shouldResolvePersistedIdsAndPreserveGeneratedOrder() {
+    void rebind_shouldResolvePersistedIdsAndPreserveGeneratedOrder() {
         ActionDefinition approve = ActionDefinition.builder()
                 .id(47L)
                 .actionName("approve_request")
@@ -44,8 +44,8 @@ class AiBpmnActionBindingWriterTest {
                 Map.of("actionName", "reject_request", "stageIds", List.of("Task_Review")),
                 Map.of("actionName", "approve_request", "stageIds", List.of("Task_Review")));
 
-        String result = AiBpmnActionBindingWriter.bindStageActions(
-                xml, List.of(approve, reject), generated);
+        String result = AiBpmnActionBindingWriter.rebind(
+                xml, AiBpmnActionBindingWriter.Snapshot.EMPTY, List.of(approve, reject), generated);
                 
         assertThat(result)
                 .contains("name=\"actionIds\" value=\"[48,47]\"")
@@ -56,21 +56,21 @@ class AiBpmnActionBindingWriterTest {
     }
 
     @Test
-    void bindStageActions_shouldKeepXmlWhenIdsAreNotAssigned() {
+    void rebind_shouldKeepXmlWhenIdsAreNotAssigned() {
         ActionDefinition action = ActionDefinition.builder()
                 .actionName("approve_request")
                 .actionType(ActionType.APPROVE)
                 .build();
         String xml = "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"/>";
         
-        assertThat(AiBpmnActionBindingWriter.bindStageActions(xml, List.of(action),
+        assertThat(AiBpmnActionBindingWriter.rebind(xml, AiBpmnActionBindingWriter.Snapshot.EMPTY, List.of(action),
                 List.of(Map.of("actionName", "approve_request", "stageIds", List.of("Task_Review")))))
                 .isEqualTo(xml);
     }
 
     /** 同 AiBpmnFormBindingWriter：camunda:properties 不是设计器认得的容器，不能往里塞 actionIds。 */
     @Test
-    void bindStageActions_shouldNotWriteIntoAForeignNamespaceContainer() {
+    void rebind_shouldNotWriteIntoAForeignNamespaceContainer() {
         ActionDefinition approve = ActionDefinition.builder()
                 .id(7L)
                 .actionName("approve")
@@ -92,7 +92,7 @@ class AiBpmnActionBindingWriterTest {
                 </bpmn:definitions>
                 """;
 
-        String result = AiBpmnActionBindingWriter.bindStageActions(xml, List.of(approve),
+        String result = AiBpmnActionBindingWriter.rebind(xml, AiBpmnActionBindingWriter.Snapshot.EMPTY, List.of(approve),
                 List.of(Map.of("actionName", "approve", "stageIds", List.of("Task_Approve"))));
 
         assertThat(result).contains("name=\"actionIds\" value=\"[7]\"");
@@ -101,5 +101,136 @@ class AiBpmnActionBindingWriterTest {
         assertThat(camundaContainer).doesNotContain("actionIds");
         assertThat(camundaContainer).contains("assigneeType");
         assertThat(result).contains("<custom:properties");
+    }
+
+    private static final String TWO_TASKS = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                              xmlns:custom="http://custom.bpmn.io/schema">
+              <bpmn:process id="Process_1">
+                %s
+                <bpmn:userTask id="Task_Submit" name="Submit">%s</bpmn:userTask>
+                <bpmn:userTask id="Task_Review" name="Review">%s</bpmn:userTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+    private static String bound(String idsKey, String ids, String names) {
+        return "<bpmn:extensionElements><custom:properties>"
+                + "<custom:property name=\"" + idsKey + "\" value=\"" + ids + "\"/>"
+                + "<custom:property name=\"" + idsKey.replace("Ids", "Names") + "\" value=\"" + names.replace("\"", "&quot;") + "\"/>"
+                + "</custom:properties></bpmn:extensionElements>";
+    }
+
+    private static ActionDefinition action(long id, String name) {
+        return ActionDefinition.builder().id(id).actionName(name).build();
+    }
+
+    private static Map<String, List<String>> placement(String xml, List<ActionDefinition> actions) {
+        return AiBpmnActionBindingWriter.capture(xml, actions).byTask();
+    }
+
+    /** Scope ACTIONS: actions are rebuilt under new ids while the stored BPMN stays. */
+    @Test
+    void rebind_rebuiltActions_declaredStagesWinUndeclaredFollowByNameAndDeadIdsGo() {
+        String stored = TWO_TASKS.formatted("",
+                bound("actionIds", "[10,11]", "[\"submit\",\"save_draft\"]"),
+                bound("actionIds", "[12]", "[\"approve\"]"));
+        var before = AiBpmnActionBindingWriter.capture(stored,
+                List.of(action(10, "submit"), action(11, "save_draft"), action(12, "approve")));
+        // save_draft was removed; approve now declares Task_Submit only; submit declares nothing
+        List<ActionDefinition> rebuilt = List.of(action(20, "submit"), action(22, "approve"));
+        List<Map<String, Object>> generated = List.of(
+                Map.of("actionName", "submit"),
+                Map.of("actionName", "approve", "stageIds", List.of("Task_Submit")));
+
+        String result = AiBpmnActionBindingWriter.rebind(stored, before, rebuilt, generated);
+
+        assertThat(placement(result, rebuilt))
+                .containsEntry("Task_Submit", List.of("approve", "submit"))
+                .doesNotContainKey("Task_Review");
+        assertThat(result).contains("value=\"[22,20]\"").doesNotContain("[10").doesNotContain("[12]")
+                .doesNotContain("save_draft");
+    }
+
+    /** Scope PROCESS: the model's new XML has no ids; bindings follow the user-task id. */
+    @Test
+    void rebind_replacedProcess_carriesBindingsByTaskIdIncludingGlobal() {
+        String stored = TWO_TASKS.formatted(bound("globalActionIds", "[9]", "[\"withdraw\"]"),
+                bound("actionIds", "[7]", "[\"submit\"]"),
+                bound("actionIds", "[8]", "[\"approve\"]"));
+        List<ActionDefinition> actions = List.of(action(7, "submit"), action(8, "approve"), action(9, "withdraw"));
+        var before = AiBpmnActionBindingWriter.capture(stored, actions);
+        String fresh = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="Process_1">
+                    <bpmn:userTask id="Task_Submit" name="Submit"/>
+                    <bpmn:userTask id="Task_Approve" name="Review"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        String result = AiBpmnActionBindingWriter.rebind(fresh, before, actions, null);
+
+        var after = AiBpmnActionBindingWriter.capture(result, actions);
+        assertThat(after.byTask()).containsEntry("Task_Submit", List.of("submit"))
+                .doesNotContainKey("Task_Approve");
+        assertThat(after.global()).containsExactly("withdraw");
+    }
+
+    /**
+     * AI Generate undo replays the pre-apply snapshot over the post-apply design: the snapshot's ids were
+     * deleted since (paired names still resolve), and a task that had no buttons in the snapshot must not
+     * inherit the ones the undone apply gave it.
+     */
+    @Test
+    void rebind_undoSnapshotIsRestoredExactly() {
+        String snapshot = TWO_TASKS.formatted("", bound("actionIds", "[1]", "[\"submit\"]"), "");
+        String postApply = TWO_TASKS.formatted("",
+                bound("actionIds", "[50]", "[\"submit\"]"), bound("actionIds", "[51]", "[\"approve\"]"));
+        var before = AiBpmnActionBindingWriter.capture(postApply, List.of(action(50, "submit"), action(51, "approve")));
+        List<ActionDefinition> replayed = List.of(action(60, "submit"), action(61, "approve"));
+
+        String result = AiBpmnActionBindingWriter.rebind(snapshot, before, replayed,
+                List.of(Map.of("actionName", "submit"), Map.of("actionName", "approve")));
+
+        assertThat(placement(result, replayed)).containsEntry("Task_Submit", List.of("submit"))
+                .doesNotContainKey("Task_Review");
+        assertThat(result).contains("value=\"[60]\"").doesNotContain("value=\"[1]\"");
+    }
+
+    @Test
+    void rebind_actionDeclaringStageIdsLeavesTheProcessLevelList() {
+        String stored = TWO_TASKS.formatted(bound("globalActionIds", "[9]", "[\"withdraw\"]"), "", "");
+        List<ActionDefinition> actions = List.of(action(19, "withdraw"));
+        var before = AiBpmnActionBindingWriter.capture(stored, List.of(action(9, "withdraw")));
+
+        String result = AiBpmnActionBindingWriter.rebind(stored, before, actions,
+                List.of(Map.of("actionName", "withdraw", "stageIds", List.of("Task_Submit"))));
+
+        var after = AiBpmnActionBindingWriter.capture(result, actions);
+        assertThat(after.byTask()).containsEntry("Task_Submit", List.of("withdraw"));
+        assertThat(after.global()).isNull();
+    }
+
+    @Test
+    void rebind_returnsInputUntouchedWhenNothingChanges() {
+        String stored = TWO_TASKS.formatted("", bound("actionIds", "[7]", "[\"submit\"]"), "");
+        List<ActionDefinition> actions = List.of(action(7, "submit"));
+        var before = AiBpmnActionBindingWriter.capture(stored, actions);
+
+        assertThat(AiBpmnActionBindingWriter.rebind(stored, before, actions, null)).isSameAs(stored);
+    }
+
+    @Test
+    void plan_reportsEveryUserTaskByName() {
+        String stored = TWO_TASKS.formatted("", "", "");
+        var plan = AiBpmnActionBindingWriter.plan(stored, AiBpmnActionBindingWriter.capture(stored, List.of()),
+                List.of("submit", "approve"),
+                List.of(Map.of("actionName", "submit", "stageIds", List.of("Task_Submit", "Task_Missing"))));
+
+        assertThat(plan.byTask()).containsEntry("Task_Submit", List.of("submit"))
+                .containsEntry("Task_Review", List.of());
+        assertThat(plan.global()).isNull();
     }
 }

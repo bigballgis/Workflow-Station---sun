@@ -1,13 +1,17 @@
 package com.developer.service;
 
 import com.developer.dto.AiGeneratedData;
+import com.developer.entity.ActionDefinition;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.Icon;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.ActionType;
 import com.developer.enums.BindingType;
+import com.developer.enums.FormType;
 import com.developer.enums.IconCategory;
 import com.developer.enums.TableType;
 import com.developer.exception.AiGenerationException;
@@ -15,6 +19,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
 import com.developer.service.impl.AiEmailProposalWriter;
 import com.developer.service.impl.AiWriteServiceImpl;
+import com.developer.util.AiBpmnActionBindingWriter;
 import com.developer.util.XmlEncodingUtil;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -480,5 +485,194 @@ class AiWriteServiceTest {
         AiGenerationException ex = assertThrows(AiGenerationException.class,
                 () -> writeService.applyGeneratedData(1L, data, "CONNECTIONS"));
         assertEquals("AI_WRITE_EMAIL_WRITER_UNAVAILABLE", ex.getErrorCode());
+    }
+
+
+    // ==================== scoped apply keeps BPMN bindings ====================
+
+    private static final String STORED_TWO_TASKS = """
+            <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                              xmlns:custom="http://custom.bpmn.io/schema">
+              <bpmn:process id="Process_1">
+                <bpmn:userTask id="Task_Submit" name="Submit">%s</bpmn:userTask>
+                <bpmn:userTask id="Task_Review" name="Review">%s</bpmn:userTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+    private static String actionBinding(long id, String name) {
+        return "<bpmn:extensionElements><custom:properties>"
+                + "<custom:property name=\"actionIds\" value=\"[" + id + "]\"/>"
+                + "<custom:property name=\"actionNames\" value=\"[&quot;" + name + "&quot;]\"/>"
+                + "</custom:properties></bpmn:extensionElements>";
+    }
+
+    /** The designer stores BPMN Base64-encoded; the AI write must read and patch it in place. */
+    private void givenStoredProcess(String bpmnXml) {
+        functionUnit.setProcessDefinition(ProcessDefinition.builder().id(900L).functionUnit(functionUnit)
+                .bpmnXml(XmlEncodingUtil.encode(bpmnXml)).build());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    /** Simulate the database assigning ids to new actions / forms at flush time. */
+    private void assignIdsOnFlush(long firstId) {
+        AtomicLong sequence = new AtomicLong(firstId);
+        doAnswer(inv -> {
+            functionUnit.getActionDefinitions().stream().filter(a -> a.getId() == null)
+                    .forEach(a -> a.setId(sequence.incrementAndGet()));
+            functionUnit.getFormDefinitions().stream().filter(f -> f.getId() == null)
+                    .forEach(f -> f.setId(sequence.incrementAndGet()));
+            return null;
+        }).when(entityManager).flush();
+    }
+
+    private Map<String, List<String>> boundActionsByTask() {
+        String xml = XmlEncodingUtil.smartDecode(functionUnit.getProcessDefinition().getBpmnXml());
+        return AiBpmnActionBindingWriter.capture(xml, functionUnit.getActionDefinitions()).byTask();
+    }
+
+    @Test
+    void actionsScope_writesStageIdsIntoTheStoredProcess() {
+        functionUnit.getActionDefinitions().add(ActionDefinition.builder().id(5L).functionUnit(functionUnit)
+                .actionName("old_action").actionType(ActionType.APPROVE).build());
+        givenStoredProcess(STORED_TWO_TASKS.formatted("", actionBinding(5, "old_action")));
+        assignIdsOnFlush(100);
+
+        AiGeneratedData data = AiGeneratedData.builder().actionDefinitions(List.of(
+                Map.of("actionName", "submit", "actionType", "PROCESS_SUBMIT", "stageIds", List.of("Task_Submit")),
+                Map.of("actionName", "approve", "actionType", "APPROVE", "stageIds", List.of("Task_Review"))))
+                .build();
+
+        writeService.applyGeneratedData(1L, data, "ACTIONS");
+
+        assertEquals(Map.of("Task_Submit", List.of("submit"), "Task_Review", List.of("approve")), boundActionsByTask());
+        assertFalse(XmlEncodingUtil.smartDecode(functionUnit.getProcessDefinition().getBpmnXml()).contains("[5]"),
+                "the rebuilt actions must not leave the deleted id behind");
+    }
+
+    @Test
+    void processScope_keepsTheExistingActionBindingsOfSurvivingUserTasks() {
+        functionUnit.getActionDefinitions().add(ActionDefinition.builder().id(7L).functionUnit(functionUnit)
+                .actionName("submit").actionType(ActionType.PROCESS_SUBMIT).build());
+        functionUnit.getActionDefinitions().add(ActionDefinition.builder().id(8L).functionUnit(functionUnit)
+                .actionName("approve").actionType(ActionType.APPROVE).build());
+        givenStoredProcess(STORED_TWO_TASKS.formatted(actionBinding(7, "submit"), actionBinding(8, "approve")));
+
+        String fresh = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="Process_1">
+                    <bpmn:startEvent id="Start"/>
+                    <bpmn:userTask id="Task_Submit" name="Submit"/>
+                    <bpmn:userTask id="Task_Review" name="Review again"/>
+                    <bpmn:endEvent id="End"/>
+                    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Task_Submit"/>
+                    <bpmn:sequenceFlow id="F2" sourceRef="Task_Submit" targetRef="Task_Review"/>
+                    <bpmn:sequenceFlow id="F3" sourceRef="Task_Review" targetRef="End"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+        AiGeneratedData data = AiGeneratedData.builder().processDefinition(Map.of("bpmnXml", fresh)).build();
+
+        writeService.applyGeneratedData(1L, data, "PROCESS");
+
+        assertEquals(Map.of("Task_Submit", List.of("submit"), "Task_Review", List.of("approve")), boundActionsByTask());
+        assertTrue(functionUnit.getProcessDefinition().getBpmnXml().contains("Review again"));
+    }
+
+    @Test
+    void formsScope_writesFormIdsIntoTheStoredProcessAndDropsDeadOnes() {
+        FormDefinition old = FormDefinition.builder().id(30L).functionUnit(functionUnit).formName("old_form")
+                .formType(FormType.PROCESS).build();
+        functionUnit.getFormDefinitions().add(old);
+        givenStoredProcess(STORED_TWO_TASKS.formatted(
+                "<bpmn:extensionElements><custom:properties><custom:property name=\"formId\" value=\"30\"/>"
+                        + "<custom:property name=\"formName\" value=\"old_form\"/></custom:properties></bpmn:extensionElements>",
+                ""));
+        assignIdsOnFlush(200);
+
+        AiGeneratedData data = AiGeneratedData.builder().formDefinitions(List.of(Map.of(
+                "formName", "review_form",
+                "formType", "TASK",
+                "configJson", new java.util.HashMap<>(),
+                "stageBindings", List.of(Map.of("stageId", "Task_Review", "stageName", "Review", "readOnly", true)))))
+                .build();
+
+        writeService.applyGeneratedData(1L, data, "FORMS");
+
+        String xml = XmlEncodingUtil.smartDecode(functionUnit.getProcessDefinition().getBpmnXml());
+        Long reviewFormId = functionUnit.getFormDefinitions().get(0).getId();
+        assertTrue(xml.contains("name=\"formId\" value=\"" + reviewFormId + "\""), xml);
+        assertTrue(xml.contains("name=\"formReadOnly\" value=\"true\""), xml);
+        assertFalse(xml.contains("old_form"), "the deleted form's binding must be dropped: " + xml);
+    }
+
+    @Test
+    void unreadableStoredProcess_failsAScopedActionsApplyButNotAFullReplacement() {
+        functionUnit.setProcessDefinition(ProcessDefinition.builder().id(900L).functionUnit(functionUnit)
+                .bpmnXml("<bpmn:definitions").build());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        AiGeneratedData data = AiGeneratedData.builder().actionDefinitions(List.of(
+                Map.of("actionName", "submit", "actionType", "PROCESS_SUBMIT", "stageIds", List.of("Task_Submit"))))
+                .build();
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> writeService.applyGeneratedData(1L, data, "ACTIONS"));
+        assertEquals("AI_EXISTING_BPMN_INVALID", ex.getErrorCode());
+
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+        writeService.applyGeneratedData(1L, data, null);
+        assertNull(functionUnit.getProcessDefinition(), "ALL clears the unreadable process instead of failing on it");
+    }
+
+    // ==================== scoped writes reference the tables the FU already has ====================
+
+    private TableDefinition existingTable(long id, String name, TableType type) {
+        TableDefinition table = TableDefinition.builder().id(id).functionUnit(functionUnit)
+                .tableName(name).tableType(type).fieldDefinitions(new ArrayList<>()).build();
+        functionUnit.getTableDefinitions().add(table);
+        return table;
+    }
+
+    /** A FORMS proposal carries no tables: its bindings must resolve to the tables the FU already has. */
+    @Test
+    void formsScope_bindsFormsToTheExistingTables() {
+        TableDefinition orders = existingTable(10L, "orders", TableType.MAIN);
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AiGeneratedData data = AiGeneratedData.builder().formDefinitions(List.of(Map.of(
+                "formName", "order_form", "formType", "TASK", "configJson", new java.util.HashMap<>(),
+                "tableBindings", List.of(Map.of("tableName", "orders", "bindingType", "PRIMARY")))))
+                .build();
+
+        writeService.applyGeneratedData(1L, data, "FORMS");
+
+        // ids, not assertSame: entity toString() recurses FunctionUnit <-> TableDefinition on a failure message
+        FormDefinition form = functionUnit.getFormDefinitions().get(0);
+        TableDefinition bound = form.getTableBindings().get(0).getTable();
+        assertEquals(10L, bound == null ? null : bound.getId());
+        assertEquals(10L, form.getBoundTable() == null ? null : form.getBoundTable().getId());
+        assertTrue(functionUnit.getTableDefinitions().get(0) == orders, "a FORMS write must not touch the tables");
+    }
+
+    /** Same for TABLE_RELATIONS: before, every relation was skipped and the scope just deleted them all. */
+    @Test
+    void tableRelationsScope_linksTheExistingTables() {
+        existingTable(10L, "orders", TableType.MAIN);
+        existingTable(11L, "customers", TableType.MAIN);
+        functionUnit.setTableRelations(new ArrayList<>());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AiGeneratedData data = AiGeneratedData.builder().tableRelations(List.of(Map.of(
+                "sourceTableName", "orders", "sourceFieldName", "customer_id", "relationType", "MANY_TO_ONE",
+                "targetTableName", "customers", "targetFieldName", "id"))).build();
+
+        writeService.applyGeneratedData(1L, data, "TABLE_RELATIONS");
+
+        assertEquals(1, functionUnit.getTableRelations().size());
+        assertEquals(10L, functionUnit.getTableRelations().get(0).getSourceTableId());
+        assertEquals(11L, functionUnit.getTableRelations().get(0).getTargetTableId());
     }
 }

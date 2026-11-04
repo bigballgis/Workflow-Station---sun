@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -227,5 +228,76 @@ class AiStudioProposalPreviewerTest {
                 previewer.existingTableFieldsFor(7L, AiGeneratedData.builder().formDefinitions(List.of()).build()));
         assertEquals(Map.of(),
                 previewer.existingTableFieldsFor(7L, AiGeneratedData.builder().tableDefinitions(List.of(Map.of("tableName", "x"))).build()));
+    }
+
+
+    // ---- action ↔ user-task binding warnings ----
+
+    private static final String STORED = """
+            <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                              xmlns:custom="http://custom.bpmn.io/schema">
+              <bpmn:process id="P">
+                <bpmn:userTask id="Task_Submit"><bpmn:extensionElements><custom:properties>
+                  <custom:property name="actionIds" value="[7]"/>
+                  <custom:property name="actionNames" value="[&quot;submit&quot;]"/>
+                </custom:properties></bpmn:extensionElements></bpmn:userTask>
+                <bpmn:userTask id="Task_Review"><bpmn:extensionElements><custom:properties>
+                  <custom:property name="actionIds" value="[8]"/>
+                  <custom:property name="actionNames" value="[&quot;approve&quot;]"/>
+                </custom:properties></bpmn:extensionElements></bpmn:userTask>
+              </bpmn:process>
+            </bpmn:definitions>
+            """;
+
+    private void givenStoredBindings() {
+        when(processDefinitionRepository.findByFunctionUnitId(7L)).thenReturn(Optional.of(
+                com.developer.entity.ProcessDefinition.builder().bpmnXml(com.developer.util.XmlEncodingUtil.encode(STORED)).build()));
+        when(actionDefinitionRepository.findByFunctionUnitId(7L)).thenReturn(List.of(
+                com.developer.entity.ActionDefinition.builder().id(7L).actionName("submit").build(),
+                com.developer.entity.ActionDefinition.builder().id(8L).actionName("approve").build()));
+    }
+
+    private static List<String> warningTypes(AiStudioProposalPreview p) {
+        return p.getIssues().stream().filter(i -> i.getSeverity() == AiStudioProposalPreview.Severity.WARNING)
+                .map(AiStudioProposalPreview.Issue::getErrorType).toList();
+    }
+
+    @Test
+    void actionsProposalWarnsAboutUnknownStagesAndTasksLeftWithoutButtons() {
+        givenStoredBindings();
+        AiGeneratedData data = AiGeneratedData.builder().actionDefinitions(List.of(
+                Map.of("actionName", "submit", "stageIds", List.of("Task_Submit")),
+                Map.of("actionName", "approve", "stageIds", List.of("Task_Approve")))).build();
+
+        AiStudioProposalPreview p = previewer.preview(7L, "ACTIONS", data);
+
+        assertThat(warningTypes(p)).containsExactlyInAnyOrder("ACTION_BINDING_UNKNOWN_STAGE", "ACTION_BINDING_EMPTY_TASK");
+        assertThat(p.getIssues()).anyMatch(i -> i.getDescription().contains("Task_Approve"));
+    }
+
+    @Test
+    void processProposalWarnsWhenARenamedUserTaskLosesItsActions() {
+        givenStoredBindings();
+        String fresh = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+                  <bpmn:process id="P"><bpmn:userTask id="Task_Submit"/><bpmn:userTask id="Task_Approve"/></bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        AiStudioProposalPreview p = previewer.preview(7L, "PROCESS",
+                AiGeneratedData.builder().processDefinition(Map.of("bpmnXml", fresh)).build());
+
+        assertThat(warningTypes(p)).containsExactly("ACTION_BINDING_LOST");
+        assertThat(p.getIssues()).anyMatch(i -> i.getDescription().contains("[approve]"));
+    }
+
+    @Test
+    void processProposalKeepingTaskIdsRaisesNoBindingWarning() {
+        givenStoredBindings();
+
+        AiStudioProposalPreview p = previewer.preview(7L, "PROCESS",
+                AiGeneratedData.builder().processDefinition(Map.of("bpmnXml", STORED)).build());
+
+        assertThat(warningTypes(p)).isEmpty();
     }
 }

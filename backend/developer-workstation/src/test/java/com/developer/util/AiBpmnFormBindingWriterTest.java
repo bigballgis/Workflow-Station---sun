@@ -119,4 +119,75 @@ class AiBpmnFormBindingWriterTest {
         // 模型原有的 assigneeType 不能被动到。
         assertThat(camundaContainer).contains("assigneeType");
     }
+
+    @Test
+    void dropStaleForms_dropsDeadTaskFormAndRepointsRequestFormByName() {
+        FormDefinition live = FormDefinition.builder().id(70L).formName("request_view").formType(FormType.TASK).build();
+        String xml = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:custom="http://custom.bpmn.io/schema">
+                  <bpmn:process id="Process_1">
+                    <bpmn:userTask id="Task_A">
+                      <bpmn:extensionElements><custom:properties>
+                        <custom:property name="formId" value="5"/>
+                        <custom:property name="formName" value="old_form"/>
+                        <custom:property name="formReadOnly" value="true"/>
+                        <custom:property name="requestFormId" value="6"/>
+                        <custom:property name="requestFormName" value="request_view"/>
+                        <custom:property name="assigneeType" value="PROCESS_INITIATOR"/>
+                      </custom:properties></bpmn:extensionElements>
+                    </bpmn:userTask>
+                    <bpmn:userTask id="Task_B">
+                      <bpmn:extensionElements><custom:properties>
+                        <custom:property name="formId" value="70"/>
+                        <custom:property name="requestFormId" value="8"/>
+                        <custom:property name="requestFormName" value="gone"/>
+                      </custom:properties></bpmn:extensionElements>
+                    </bpmn:userTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        String result = AiBpmnFormBindingWriter.dropStaleForms(xml, List.of(live));
+
+        assertThat(result)
+                .doesNotContain("old_form").doesNotContain("formReadOnly")
+                .doesNotContain("value=\"5\"").doesNotContain("value=\"6\"")
+                .contains("name=\"requestFormId\" value=\"70\"")
+                .contains("name=\"formId\" value=\"70\"")
+                .doesNotContain("value=\"8\"").doesNotContain("\"gone\"")
+                .contains("assigneeType");
+    }
+
+    @Test
+    void dropStaleForms_returnsInputWhenEveryFormIsLive() {
+        FormDefinition live = FormDefinition.builder().id(70L).formName("f").formType(FormType.TASK).build();
+        String xml = "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" "
+                + "xmlns:custom=\"http://custom.bpmn.io/schema\"><bpmn:process id=\"P\"><bpmn:userTask id=\"T\">"
+                + "<bpmn:extensionElements><custom:properties><custom:property name=\"formId\" value=\"70\"/>"
+                + "</custom:properties></bpmn:extensionElements></bpmn:userTask></bpmn:process></bpmn:definitions>";
+
+        assertThat(AiBpmnFormBindingWriter.dropStaleForms(xml, List.of(live))).isSameAs(xml);
+    }
+
+    /** The designer can hold copies in both custom namespaces; a dead copy must not drag the live one out. */
+    @Test
+    void dropStaleForms_onlyTouchesTheContainerHoldingTheDeadCopy() {
+        FormDefinition live = FormDefinition.builder().id(200L).formName("f").formType(FormType.TASK).build();
+        String xml = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:custom="http://workflow.platform/schema/custom"
+                                  xmlns:custom_1="http://custom.bpmn.io/schema">
+                  <bpmn:process id="P"><bpmn:userTask id="T"><bpmn:extensionElements>
+                    <custom:properties><custom:property name="formId" value="200"/><custom:property name="formName" value="f"/></custom:properties>
+                    <custom_1:properties><custom_1:property name="formId" value="30"/><custom_1:property name="formName" value="old"/></custom_1:properties>
+                  </bpmn:extensionElements></bpmn:userTask></bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        String result = AiBpmnFormBindingWriter.dropStaleForms(xml, List.of(live));
+
+        assertThat(result).contains("value=\"200\"").contains("value=\"f\"")
+                .doesNotContain("value=\"30\"").doesNotContain("value=\"old\"");
+    }
 }

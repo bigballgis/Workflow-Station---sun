@@ -28,7 +28,9 @@ import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.service.AiValidationService;
+import com.developer.util.AiBpmnActionBindingWriter;
 import com.developer.util.BpmnServiceTaskScanner;
+import com.developer.util.XmlEncodingUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -131,6 +133,7 @@ public class AiStudioProposalPreviewer {
         }
         try {
             summarizeItems(functionUnitId, data, preview);
+            addActionBindingWarnings(functionUnitId, data, preview);
 
             AiValidationResult structure = aiValidationService.validate(data, existingTableFieldsFor(functionUnitId, data));
             addIssues(preview, structure);
@@ -246,6 +249,87 @@ public class AiStudioProposalPreviewer {
             preview.getItems().add(Item.builder().slice(slice).name(name.apply(m))
                     .action(exists.test(m) ? Action.UPDATE : Action.NEW).build());
         }
+    }
+
+    /**
+     * 动作 ↔ 用户任务绑定会怎样落地（与 Apply 同一套 {@link AiBpmnActionBindingWriter#plan} 规则），把
+     * 需要人补一步的情况提前说出来。一律 WARNING：结果可用，只是某些任务上不会有按钮。
+     * 自身失败只记 warn、不连累整张预览（BPMN 本身坏了会由结构校验报 ERROR）。
+     */
+    private void addActionBindingWarnings(Long functionUnitId, AiGeneratedData data, AiStudioProposalPreview preview) {
+        boolean actionsWritten = data.getActionDefinitions() != null;
+        boolean processWritten = data.getProcessDefinition() != null
+                && data.getProcessDefinition().get("bpmnXml") instanceof String x && !x.isBlank();
+        if (!actionsWritten && !processWritten) {
+            return;
+        }
+        try {
+            String stored = processDefinitionRepository.findByFunctionUnitId(functionUnitId)
+                    .map(ProcessDefinition::getBpmnXml).filter(xml -> !xml.isBlank())
+                    .map(XmlEncodingUtil::smartDecode).orElse(null);
+            String after = processWritten ? (String) data.getProcessDefinition().get("bpmnXml") : stored;
+            Map<String, List<String>> declared = AiBpmnActionBindingWriter.declaredStages(data.getActionDefinitions());
+            if (after == null) {
+                if (!declared.isEmpty()) {
+                    warn(preview, "ACTION_BINDING_NO_PROCESS", "actionDefinitions",
+                            "This function unit has no process yet, so stageIds cannot be written to any user task; "
+                                    + "bind the actions after the process exists");
+                }
+                return;
+            }
+
+            var current = actionDefinitionRepository.findByFunctionUnitId(functionUnitId);
+            var before = AiBpmnActionBindingWriter.capture(stored, current);
+            List<String> available = new ArrayList<>();
+            if (actionsWritten) {
+                data.getActionDefinitions().forEach(a -> { if (a != null && a.get("actionName") instanceof String n) available.add(n); });
+            } else {
+                current.forEach(a -> { if (a.getActionName() != null) available.add(a.getActionName()); });
+            }
+            var plan = AiBpmnActionBindingWriter.plan(after, before, available, data.getActionDefinitions());
+            Set<String> taskIds = plan.byTask().keySet();
+
+            declared.forEach((name, stageIds) -> {
+                List<String> unknown = stageIds.stream().filter(id -> !taskIds.contains(id)).toList();
+                if (!unknown.isEmpty()) {
+                    warn(preview, "ACTION_BINDING_UNKNOWN_STAGE", "actionDefinitions[" + name + "].stageIds",
+                            "Action '" + name + "' references user tasks the process does not have: " + unknown);
+                }
+            });
+
+            if (processWritten) {
+                Set<String> placed = new HashSet<>();
+                plan.byTask().values().forEach(placed::addAll);
+                before.byTask().forEach((taskId, names) -> {
+                    if (taskIds.contains(taskId)) return;
+                    List<String> lost = names.stream().filter(n -> !placed.contains(n)).toList();
+                    if (!lost.isEmpty()) {
+                        warn(preview, "ACTION_BINDING_LOST", "processDefinition",
+                                "User task '" + taskId + "' is not in the new process, so actions " + lost
+                                        + " will not be bound to any user task; apply an Action Design proposal "
+                                        + "or bind them in the process designer");
+                    }
+                });
+            }
+
+            // Only where this proposal is what leaves the task bare: it places actions, or the task had some before.
+            if (!available.isEmpty()) {
+                plan.byTask().forEach((taskId, names) -> {
+                    if (names.isEmpty() && (!declared.isEmpty()
+                            || !before.byTask().getOrDefault(taskId, List.of()).isEmpty())) {
+                        warn(preview, "ACTION_BINDING_EMPTY_TASK", "processDefinition",
+                                "User task '" + taskId + "' will have no action buttons");
+                    }
+                });
+            }
+        } catch (RuntimeException e) {
+            log.warn("AI Studio action binding preview failed for functionUnitId={}: {}", functionUnitId, e.getMessage());
+        }
+    }
+
+    private static void warn(AiStudioProposalPreview preview, String errorType, String fieldPath, String description) {
+        preview.getIssues().add(Issue.builder().severity(Severity.WARNING).errorType(errorType)
+                .fieldPath(fieldPath).description(description).build());
     }
 
     private static String str(Object o) {
