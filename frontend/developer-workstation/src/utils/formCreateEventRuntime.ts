@@ -7,6 +7,7 @@ import { readFormEventCurrentUser } from './formCreateEventUser'
 import { createFormEventOptionsBridge, type PortalFormApi } from '@platform-shared/formEvents/api'
 import { isEmptyFormCreateHandler } from '@platform-shared/formEvents/script'
 import { createFormEventParser } from '@platform-shared/formEvents/parser'
+import { runNativeFormEvent } from '@platform-shared/formEvents/native'
 export * from '@platform-shared/formEvents/api'
 export { containsDangerousFormScript, isEmptyFormCreateHandler } from '@platform-shared/formEvents/script'
 export const parseFormCreateEventHandler = createFormEventParser(readFormEventCurrentUser)
@@ -29,7 +30,7 @@ export function wrapFormLevelOnChangeForFormCreate(raw: unknown): unknown {
       return
     }
     const options = createFormEventOptionsBridge(fcApi, bag.rule)
-    runFormOnChangeHandler(stored, field, value, options, bag.rule ?? {})
+    return runNativeFormEvent(fcApi, stored, { field, value, api: options, rule: bag.rule ?? {}, args: [field, value, { api: fcApi, rule: bag.rule }] }, parseFormCreateEventHandler)
   }
   ;(fn as FormLevelOnChangeWrapper).__hermesFormEventSource = stored
   return fn
@@ -45,12 +46,10 @@ export function runFormOnChangeHandler(
   value: unknown,
   portalApi: PortalFormApi,
   rule: Record<string, unknown> = {},
-): void {
+  args: unknown[] = [field, value, { api: portalApi, rule }],
+): unknown {
   const handler = parseFormCreateEventHandler(rawHandler)
-  if (!handler || isEmptyFormCreateHandler(rawHandler)) return
-  try {
-    handler({ field, value, api: portalApi, rule })
-  } catch (err) {
-    console.warn('[formCreateEventRuntime] onChange execution error:', err)
-  }
+  if (isEmptyFormCreateHandler(rawHandler)) return
+  if (!handler) throw new Error('Invalid form event script')
+  return handler({ field, value, api: portalApi, rule, args })
 }

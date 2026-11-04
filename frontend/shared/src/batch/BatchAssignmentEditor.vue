@@ -3,9 +3,9 @@
     <el-alert v-if="directory.error.value" :title="directory.error.value" type="error" :closable="false" />
     <BatchAssignmentModeFrame :config="config" :mode="uniform.mode" :disabled="assignmentLocked" @select="selectMode">
       <BatchDesignedForm :rules="designedRules" :options="options" :event-context="eventContext" :readonly-field="assignmentReadonly" :adapted-fields="ownedFields" @change="recordValue">
-        <template #field="{ rule: fieldRule, update, events }">
+        <template #field="{ rule: fieldRule, value, update, events }">
           <BatchAssignmentInput :rule="fieldRule" :events="events" :config="config" :uniform="uniform" :disabled="assignmentReadonly(fieldRule.field)"
-            :lookup-value="designedValues[fieldRule.field]"
+            :lookup-value="value"
             :directory="directory" :user-options="userOptionsFor('uniform', uniform.assigneeId)" :user-loading="userLoading.uniform === true"
             :role-options="uniformRoleOptions" :role-loading="uniformRoleLoading" @search="query => searchUsers('uniform', query)"
             @change="update" @business-unit="value => updateDesignedBusinessUnit(value, update)" />
@@ -29,6 +29,7 @@ import { batchRuleChildren } from './batchFormRules'
 import { assignmentControlRules } from './assignmentControlRules'
 import type { BatchEventContext } from './eventContext'
 import { batchPersonIdentity } from './personIdentity'
+import { afterEvent } from '../formEvents/async'
 const props = defineProps<{ eventContext?: BatchEventContext; rule?: Record<string, any>; options?: Record<string, any>; disabled?: boolean; rows: Array<Record<string, unknown>>; capability: BatchAssignmentCapability; fieldWriteModes?: Record<string, 'EDITABLE' | 'READONLY'>; rowIdentity: (row: Record<string, unknown>) => string | null; rowScopeKey: (row: Record<string, unknown>) => Record<string, unknown> | null; createDirectory: (t: (key: string) => string) => BatchAssignmentDirectory }>()
 const { t } = useI18n()
 const config = props.capability.assignmentConfig!
@@ -38,6 +39,14 @@ function recordValue(field: string, value: unknown) {
   if (assignmentReadonly(field)) return
   designedValues[field] = value
   if (field === config.assigneeField) uniform.assigneeId = batchPersonIdentity(value)
+  if (field === config.roleField) uniform.roleCode = String(value ?? '')
+  if (field === config.buField && pendingBusinessUnit && pendingBusinessUnit.code === value) {
+    uniform.businessUnitId = pendingBusinessUnit.id
+    uniform.businessUnitCode = pendingBusinessUnit.code
+    uniform.roleCode = ''
+    uniformRoleOptions.value = pendingBusinessUnit.roles
+    pendingBusinessUnit = undefined
+  }
 }
 const ownedFields = [config.assigneeField, config.buField, config.roleField].filter((field): field is string => !!field)
 const designedRules = computed(() => {
@@ -59,37 +68,42 @@ function assignmentReadonly(field: string) {
 }
 function selectMode(mode: 'person' | 'role') {
   if (assignmentLocked.value || (mode === 'person' ? !config.allowUser : !config.allowRole)) return
-  if (props.eventContext && !props.eventContext.clearAssignment()) return
-  uniform.mode = uniform.mode === mode ? 'none' : mode
-  clearUniformInactive()
+  return afterEvent(props.eventContext ? props.eventContext.clearAssignment() : true, accepted => {
+    if (!accepted) return
+    uniform.mode = uniform.mode === mode ? 'none' : mode
+    clearUniformInactive()
+  })
 }
 const directory = props.createDirectory(t)
 const { userLoading, searchUsers } = directory
 const uniformRoleOptions = ref<Array<{ label: string; value: string }>>([])
 const uniformRoleLoading = ref(false)
 let uniformGeneration = 0
+let pendingBusinessUnit: { id: string; code: string; roles: Array<{ label: string; value: string }> } | undefined
 function clearUniformInactive() {
   for (const field of ownedFields) delete designedValues[field]
   uniformGeneration++
+  pendingBusinessUnit = undefined
   uniformRoleLoading.value = false
   uniform.assigneeId = ''; uniform.businessUnitId = ''; uniform.businessUnitCode = ''; uniform.roleCode = ''
   if (config.buField) uniformRoleOptions.value = []
 }
 async function selectUniformBusinessUnit(value: string) {
   const generation = ++uniformGeneration
-  uniform.businessUnitId = value || ''; uniform.businessUnitCode = ''; uniform.roleCode = ''; uniformRoleOptions.value = []
-  if (!value) { uniformRoleLoading.value = false; return }
+  pendingBusinessUnit = undefined
   uniformRoleLoading.value = true
   try {
-    uniform.businessUnitCode = directory.requireBusinessUnitCode(String(value))
-    const options = await directory.loadRoles(String(value))
-    if (uniformGeneration === generation) uniformRoleOptions.value = options
+    const code = value ? directory.requireBusinessUnitCode(String(value)) : ''
+    const roles = value ? await directory.loadRoles(String(value)) : []
+    if (uniformGeneration !== generation) return
+    pendingBusinessUnit = { id: value, code, roles }
+    return code
   } catch (error) { if (uniformGeneration === generation) directory.report(error) }
   finally { if (uniformGeneration === generation) uniformRoleLoading.value = false }
 }
 async function updateDesignedBusinessUnit(value: string, update: (value: unknown) => void) {
-  await selectUniformBusinessUnit(value)
-  update(uniform.businessUnitCode)
+  const code = await selectUniformBusinessUnit(value)
+  if (code !== undefined) update(code)
 }
 const { userOptionsFor } = useSelectedAssignmentUsers(directory, computed(() => [uniform.assigneeId]))
 async function loadDirectory() {
@@ -103,6 +117,7 @@ void loadDirectory()
 function hasChanges() { return !assignmentLocked.value && (uniform.mode !== 'none' || Object.keys(designedValues).length > 0) }
 function collect(rows: Array<Record<string, unknown>>) {
   if (assignmentLocked.value) return { rows }
+  if (uniformRoleLoading.value) throw new Error(t('subTable.batchEventPending'))
   if (hasChanges() && directory.error.value) throw new Error(directory.error.value)
   const states = Object.fromEntries(rows.map(row => [props.rowIdentity(row)!, initialBatchAssignment(row, config)]))
   const result = collectBatchAssignments(rows, states, states, uniform, new Set(props.rows.map(row => props.rowIdentity(row)!)), props.capability, props.rowIdentity, props.rowScopeKey)

@@ -594,8 +594,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       }
     }
     previewData.value = { ...previewData.value }
-    applyPreviewDefaultsToItemRules(previewItems.value, previewData)
     materializePreviewItemsEvents(previewItems.value, previewData)
+    applyPreviewDefaultsToItemRules(previewItems.value, previewData)
     // Guard: the base form-create preview instance can't run designer `$FNX:` handler strings.
     // Any non-function left on rule.on/rule.hook would throw "w is not a function" every render
     // tick and freeze the preview. Strip those first; then stamp upload httpRequest/onChange
@@ -609,9 +609,6 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       },
       t('common.validate'),
     )
-    previewOpt.onSubmit = () => {
-      /* Preview-only: submit button triggers form-create validation; no data action. */
-    }
     const savedOnChange = config.options?.onChange
     if (!isEmptyFormCreateHandler(savedOnChange)) {
       previewOpt.onChange = wrapFormLevelOnChangeForFormCreate(savedOnChange)

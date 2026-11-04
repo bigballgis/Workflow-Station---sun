@@ -17,11 +17,15 @@ import {
   createPortalFormApi,
   isEmptyFormCreateHandler,
   parseFormCreateEventHandler,
+  runFormOnChangeHandler,
   type PortalFormApi,
   type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
 import type { PortalFormApiOverlays } from '@/utils/formCreateEventOverlays'
+import { bindPreviewEventExecution, runPreviewFieldExecution } from './previewEventExecution'
+import { eventSequence } from '@platform-shared/formEvents/async'
+import { runNativeFormEvent } from '@platform-shared/formEvents/native'
 import { REQUEST_ID_FIELD } from '@/utils/formFieldMeta'
 import {
   mergeRuleHookHandlers,
@@ -35,8 +39,6 @@ export {
   sanitizePreviewItemsHandlers,
   sanitizePreviewRuleHandlers,
 } from '@/utils/formCreatePreviewDefaults'
-
-const PREVIEW_DOM_ON_EVENTS = ['blur', 'change', 'focus'] as const
 
 function bucketHasHandlers(bucket: Record<string, unknown>): boolean {
   return Object.values(bucket).some((v) => !isEmptyFormCreateHandler(v))
@@ -97,9 +99,9 @@ export function preserveSerializedHandlersInShadowBuckets(rules: unknown[]): voi
       let changed = false
       for (const [name, raw] of Object.entries(live)) {
         const stored = unwrapHermesHandlerSource(normalizeHandler(raw))
-        if (typeof stored !== 'string' || isEmptyFormCreateHandler(stored)) continue
+        if ((typeof stored !== 'string' && !Array.isArray(stored)) || isEmptyFormCreateHandler(stored)) continue
         const existing = unwrapHermesHandlerSource(normalizeHandler(shadow[name]))
-        if (typeof existing === 'string' && !isEmptyFormCreateHandler(existing)) continue
+        if ((typeof existing === 'string' || Array.isArray(existing)) && !isEmptyFormCreateHandler(existing)) continue
         shadow[name] = stored
         changed = true
       }
@@ -109,7 +111,7 @@ export function preserveSerializedHandlersInShadowBuckets(rules: unknown[]): voi
 }
 
 /** fc-designer toolbar Preview reads `on`/`hook` as real functions (not `$FNX:` strings). */
-export function syncDesignerComponentEventsForFcPreview(rules: unknown[]): void {
+export function syncDesignerComponentEventsForFcPreview(rules: unknown[], hooks?: Parameters<typeof runNativeFormEvent>[4]): void {
   if (!Array.isArray(rules) || rules.length === 0) return
 
   walkFormCreateRules(rules, (rule) => {
@@ -125,19 +127,19 @@ export function syncDesignerComponentEventsForFcPreview(rules: unknown[]): void 
 
     const onOut: Record<string, unknown> = {}
     for (const [name, raw] of Object.entries(onSources)) {
-      const wrapped = compileFcPreviewInjectHandler(rule, field, raw)
+      const wrapped = compileFcPreviewInjectHandler(rule, field, raw, hooks, true)
       if (wrapped) onOut[name] = wrapped
     }
     // Select-like: designer often only fills on.blur; native Select fires change more reliably.
     if (shouldMirrorBlurOnChange(rule) && onSources.blur && isEmptyFormCreateHandler(onSources.change)) {
-      const blurWrapped = compileFcPreviewInjectHandler(rule, field, onSources.blur)
+      const blurWrapped = compileFcPreviewInjectHandler(rule, field, onSources.blur, hooks, true)
       if (blurWrapped) onOut.change = blurWrapped
     }
     if (Object.keys(onOut).length) rule.on = onOut
 
     const hookOut: Record<string, unknown> = {}
     for (const [name, raw] of Object.entries(hookSources)) {
-      const wrapped = compileFcPreviewInjectHandler(rule, field, raw)
+      const wrapped = compileFcPreviewInjectHandler(rule, field, raw, hooks)
       if (wrapped) hookOut[name] = wrapped
     }
     if (Object.keys(hookOut).length) rule.hook = hookOut
@@ -178,7 +180,7 @@ function unwrapHermesHandlerSource(raw: unknown): unknown {
   if (typeof raw === 'function') {
     const tagged = raw as { __hermesFormEventSource?: unknown; __json?: unknown }
     if (tagged.__hermesFormEventSource != null) return tagged.__hermesFormEventSource
-    if (typeof tagged.__json === 'string') return tagged.__json
+    if (typeof tagged.__json === 'string' || Array.isArray(tagged.__json)) return tagged.__json
   }
   return raw
 }
@@ -202,7 +204,7 @@ function tagFcPreviewHandlerForJsonRoundtrip(
   // fc-designer openPreview does getJson→parseJson. Without __json, toJson stringifies the
   // closure (`[[FORM-CREATE-PREFIX-function…]]`) and parseFn rebuilds a broken function that
   // no longer closes over api/field — Case Type (and other) events then appear to "do nothing".
-  if (typeof source === 'string' && !isEmptyFormCreateHandler(source)) {
+  if ((typeof source === 'string' || Array.isArray(source)) && !isEmptyFormCreateHandler(source)) {
     handler.__json = source
     handler.__inject = true
   }
@@ -213,6 +215,8 @@ function compileFcPreviewInjectHandler(
   rule: Record<string, unknown>,
   field: string,
   raw: unknown,
+  hooks?: Parameters<typeof runNativeFormEvent>[4],
+  controlEvent = false,
 ): ((...args: unknown[]) => void) | undefined {
   const stored = unwrapHermesHandlerSource(normalizeHandler(raw))
   if (stored == null || isEmptyFormCreateHandler(stored)) return undefined
@@ -243,19 +247,20 @@ function compileFcPreviewInjectHandler(
     }
 
     const api = createFormEventOptionsBridge(fcApi, rule)
-    fn({
+    return runNativeFormEvent(fcApi, stored, {
       field,
+      formEvent: controlEvent ? '__control__' : undefined,
       value: resolveFcPreviewHandlerValue(args, api, field),
       api,
       rule,
       args: Array.isArray(inject?.args) ? inject.args as unknown[] : args,
-    })
+    }, parseFormCreateEventHandler, hooks ?? { changed: (pending, error) => activePreviewVisibilityBridge?.executionChanged?.(pending, error),
+      register: host => activePreviewVisibilityBridge?.registerExecution?.(host) })
   }
   return tagFcPreviewHandlerForJsonRoundtrip(wrapped, stored)
 }
 
 function normalizeHandler(raw: unknown): unknown {
-  if (Array.isArray(raw)) return raw[0]
   return raw
 }
 
@@ -287,30 +292,25 @@ function bindDomOnEvent(
 ): void {
   const stored = normalizeHandler(raw)
   if (stored == null || isEmptyFormCreateHandler(stored)) return
-  const fn = parseFormCreateEventHandler(stored)
+  const source = unwrapHermesHandlerSource(stored)
+  if (typeof source === 'function') return // Native parser handler, not a persisted user script.
+  const fn = parseFormCreateEventHandler(source)
   if (!fn) return
   const field = String(rule.field)
   const on = (rule.on && typeof rule.on === 'object'
     ? { ...(rule.on as Record<string, unknown>) }
     : {}) as Record<string, unknown>
   rule.on = on
-  const previous = on[eventName]
   const wrapped = (...args: unknown[]) => {
-    if (typeof previous === 'function') {
-      try {
-        ;(previous as (...a: unknown[]) => void)(...args)
-      } catch {
-        // FALLBACK(ux): keep form-create / Element Plus handlers (e.g. blur validation)
-      }
-    }
-    fn({
+    return fn({
       field,
       value: resolveFcPreviewHandlerValue(args, api, field),
       api,
       rule,
+      args,
     })
   }
-  ;(wrapped as { __hermesFormEventSource?: unknown }).__hermesFormEventSource = stored
+  ;(wrapped as { __hermesFormEventSource?: unknown }).__hermesFormEventSource = source
   on[eventName] = wrapped
 }
 
@@ -318,6 +318,14 @@ type PreviewDataBox = { value: Record<string, unknown> }
 
 /** Optional bridge so Preview `api.hidden` / `api.display` can hide subTables (parity with Portal). */
 export interface PreviewVisibilityBridge {
+  readonlyField?: (field: string) => boolean
+  assertWritable?: (field: string) => void
+  readonly scopeKey?: object
+  fieldErrors?: { setFieldError(field: string, message: string): void; clearFieldError(field: string): void }
+  snapshot?: () => unknown
+  restore?: (saved: unknown) => void
+  executionChanged?: (pending: boolean, error: unknown) => void
+  registerExecution?: (host: { cancel(): void; wait(): Promise<boolean> }) => void
   state: PortalFormVisibilityState
   notify: () => void
   getAllFieldKeys: () => string[]
@@ -343,6 +351,13 @@ export function unregisterPreviewVisibilityBridge(bridge: PreviewVisibilityBridg
 /** Deferred bridge for APIs created at preview-build time (state resolves after mount). */
 export function createDeferredPreviewVisibilityBridge(): PreviewVisibilityBridge {
   return {
+    get scopeKey() { return activePreviewVisibilityBridge ?? undefined },
+    assertWritable: field => activePreviewVisibilityBridge?.assertWritable?.(field),
+    readonlyField: field => activePreviewVisibilityBridge?.readonlyField?.(field) ?? false,
+    snapshot: () => activePreviewVisibilityBridge?.snapshot?.(),
+    restore: saved => activePreviewVisibilityBridge?.restore?.(saved),
+    executionChanged: (pending, error) => activePreviewVisibilityBridge?.executionChanged?.(pending, error),
+    registerExecution: host => activePreviewVisibilityBridge?.registerExecution?.(host),
     get state() {
       return activePreviewVisibilityBridge?.state as PortalFormVisibilityState
     },
@@ -359,11 +374,13 @@ export function createDeferredPreviewVisibilityBridge(): PreviewVisibilityBridge
     get overlays() {
       return activePreviewVisibilityBridge?.overlays
     },
+    get fieldErrors() { return activePreviewVisibilityBridge?.fieldErrors },
   }
 }
 
 function deferredOverlayBags(): PortalFormApiOverlays {
   return {
+    get info() { return activePreviewVisibilityBridge?.overlays?.info },
     get disabled() {
       return activePreviewVisibilityBridge?.overlays?.disabled
     },
@@ -417,6 +434,8 @@ function requiredBagFromVisibility(
 }
 
 export interface PreviewFieldChangeOptions {
+  formOnChange?: unknown
+  programmatic?: boolean
   requestIdConfig?: { fieldNames?: string[]; separator?: string } | null
   requestIdRecompute?: (model: Record<string, unknown>) => string | undefined
   visibility?: PreviewVisibilityBridge
@@ -429,7 +448,7 @@ export function dispatchPreviewFieldValueChange(
   value: unknown,
   previewData: PreviewDataBox,
   options?: PreviewFieldChangeOptions,
-): void {
+): unknown {
   if (!field) return
   const patch: Record<string, unknown> = { [field]: value }
   const nextModel = { ...previewData.value, ...patch }
@@ -437,32 +456,36 @@ export function dispatchPreviewFieldValueChange(
   if (fieldNames?.includes(field) && options?.requestIdRecompute) {
     patch[REQUEST_ID_FIELD] = options.requestIdRecompute(nextModel)
   }
-  previewData.value = { ...previewData.value, ...patch }
   const api = createPortalFormApi(
     () => previewData.value,
     (p) => {
+      Object.keys(p).forEach(field => options?.visibility?.assertWritable?.(field))
       previewData.value = { ...previewData.value, ...p }
     },
     undefined,
     options?.visibility,
-    undefined,
+    options?.visibility?.fieldErrors,
     requiredBagFromVisibility(options?.visibility),
     options?.visibility?.overlays,
   )
   const ev = collectFieldComponentEventsFromRules(segmentRules).get(field)
-  runComponentFieldEventsOnValueChange(ev, {
+  return runPreviewFieldExecution(previewData, api, { get: () => previewData.value, set: data => { previewData.value = data } }, options?.visibility, field, value, scoped => {
+  previewData.value = { ...previewData.value, ...patch }
+  return eventSequence([() => runComponentFieldEventsOnValueChange(ev, {
     field,
     value,
-    api,
+    api: scoped,
     onEvent: 'change',
     hookEvent: 'value',
     fieldType: ev?.rule?.type != null ? String(ev.rule.type) : undefined,
-  })
+  }), () => runFormOnChangeHandler(options?.formOnChange, field, value, scoped, ev?.rule ?? {})])
+  }, options?.programmatic)
 }
 
 export function materializePreviewComponentEvents(
   rules: unknown[],
   previewData: Ref<Record<string, unknown>>,
+  changeOwner: 'native' | 'host' = 'native',
 ): void {
   if (!Array.isArray(rules) || rules.length === 0) return
   const eventMap = collectFieldComponentEventsFromRules(rules)
@@ -470,23 +493,47 @@ export function materializePreviewComponentEvents(
   const api = createPortalFormApi(
     () => previewData.value,
     (patch) => {
+      Object.keys(patch).forEach(field => activePreviewVisibilityBridge?.assertWritable?.(field))
       previewData.value = { ...previewData.value, ...patch }
     },
     undefined,
     createDeferredPreviewVisibilityBridge(),
-    undefined,
+    { setFieldError: (field, message) => activePreviewVisibilityBridge?.fieldErrors?.setFieldError(field, message),
+      clearFieldError: field => activePreviewVisibilityBridge?.fieldErrors?.clearFieldError(field) },
     deferredRequiredBag(),
     deferredOverlayBags(),
   )
+  bindPreviewEventExecution(previewData, api, { get: () => previewData.value, set: data => { previewData.value = data } }, createDeferredPreviewVisibilityBridge(), true)
 
   function walk(items: unknown[]) {
     walkFormCreateRules(items, (rule) => {
       const field = resolveComponentEventFieldKey(rule)
       const ev = field ? eventMap.get(field) : undefined
       if (ev) {
-        for (const name of PREVIEW_DOM_ON_EVENTS) {
+        rule._on = { ...(rule._on as Record<string, unknown>), ...Object.fromEntries(Object.entries(ev.on).map(([name, raw]) => [name, unwrapHermesHandlerSource(raw)])) }
+        for (const name of Object.keys(ev.on)) {
+          if (name === 'change' && changeOwner === 'host') {
+            const deferred = () => undefined
+            Object.assign(deferred, { __hermesFormEventSource: ev.on.change })
+            rule.on = { ...(rule.on as Record<string, unknown>), change: deferred }
+            continue
+          }
           bindDomOnEvent(rule, name, ev.on[name], api)
         }
+        rule._hook = { ...(rule._hook as Record<string, unknown>), ...ev.hook }
+        const hooks: Record<string, unknown> = {}
+        for (const [name, raw] of Object.entries(ev.hook)) {
+          const source = unwrapHermesHandlerSource(raw)
+          // Preserve native designer/parser hooks with their native injection signature.
+          if (typeof source === 'function') { hooks[name] = source; continue }
+          const handler = parseFormCreateEventHandler(source)
+          if (!handler) continue
+          const wrapped = (...args: unknown[]) => name === 'value' && changeOwner === 'host' ? undefined
+            : handler({ field, value: api.getValue(field), api, rule, args })
+          Object.assign(wrapped, { __hermesFormEventSource: source })
+          hooks[name] = wrapped
+        }
+        rule.hook = hooks
       }
     })
   }
@@ -499,7 +546,7 @@ export function materializePreviewItemsEvents(
 ): void {
   for (const item of items) {
     if (item.kind === 'fields') {
-      materializePreviewComponentEvents(item.rule, previewData)
+      materializePreviewComponentEvents(item.rule, previewData, 'host')
     } else if (item.kind === 'card') {
       materializePreviewItemsEvents(item.items, previewData)
     }

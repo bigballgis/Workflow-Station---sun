@@ -72,9 +72,10 @@ export function isEmptyFormCreateHandler(raw: unknown): boolean {
 }
 
 export function normalizeHandlerValue(raw: unknown): unknown {
-  if (Array.isArray(raw)) return raw[0]
   return raw
 }
+
+export type SerializedEventHandler = string | SerializedEventHandler[]
 
 export function pickMergedHandler(primary: unknown, secondary: unknown): unknown {
   const p = normalizeHandlerValue(primary)

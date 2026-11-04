@@ -1,5 +1,7 @@
 <template>
   <div class="form-renderer">
+    <el-alert v-if="eventsApi.eventPending.value" :title="t('subTable.batchEventPending')" type="info" :closable="false" />
+    <el-alert v-if="eventsApi.eventExecutionError.value" :title="eventsApi.eventExecutionError.value" type="error" :closable="false" />
     <el-alert
       v-for="item in formNotifications"
       :key="item.uniqueId"
@@ -19,7 +21,7 @@
       :label-position="labelPosition"
       :hide-required-asterisk="hideRequiredAsterisk"
       :show-message="showValidationMessage"
-      :disabled="readonly"
+      :disabled="readonly || eventSubmitting"
       :size="size"
       :validate-on-rule-change="false"
     >
@@ -409,10 +411,13 @@ const eventsApi = useFormCreateEvents({
   fieldComponentEvents,
   formCreateRulesResolved,
   formOptionsOnChange: () => props.formOptions?.onChange,
+  formOptions: () => props.formOptions ?? undefined,
   fields: () => props.fields,
   tabs: () => props.tabs,
   fieldsAfterTabs: () => props.fieldsAfterTabs,
   readonly: () => props.readonly,
+  isFieldReadonly: key => { const field = allFields.value.find(item => item.key === key); return !field || isFieldReadonly(field) },
+  preserveOnRestore: () => ['__subTables__', ...(props.primaryTableBinding?.primaryKeyFields ?? []), ...(primaryFieldDefinitions.value ?? []).filter(field => field.isPrimaryKey || field.isForeignKey).map(field => field.fieldName)],
   engineVisibility,
   emitModelValue: (value) => emit('update:modelValue', value),
 })
@@ -433,6 +438,7 @@ const {
   lookupRefreshNonce,
   scriptOptionsFor,
   scriptLabelFor,
+  scriptInfoFor,
   scriptLookupFiltersFor,
   hasScriptLookupFilter,
   clearScriptFieldError,
@@ -530,7 +536,7 @@ const formDataApi = useFormData({
   getInternalUpdate: () => isInternalUpdate,
   setInternalUpdate,
   emitChange: (key, value) => emit('change', key, value),
-  emitModelValue: (value) => emit('update:modelValue', value),
+  emitModelValue: (value) => { if (!eventsApi.eventPending.value) emit('update:modelValue', value) },
   emitSubTableData: (bindingId, rows) => emit('update:subTableData', bindingId, rows),
   runComponentEventsOnFieldChange,
   formOptionsOnChange: () => props.formOptions?.onChange,
@@ -673,13 +679,25 @@ const fieldErrors = computed<Record<string, string>>(() => {
   return merged
 })
 
-const { validate } = useFormValidation({
+const { validate: validateFields } = useFormValidation({
   formRef,
   formData,
   config: () => businessLogicConfig.value,
   engine,
   scriptFieldErrors: fieldErrors,
 })
+async function validate(): Promise<boolean> {
+  if (eventSubmitting.value) return false
+  eventSubmitting.value = true
+  try {
+  if (!await eventsApi.waitForEvents()) return false
+  if (await eventsApi.runLifecycle('beforeSubmit') === false || eventsApi.eventExecutionError.value) return false
+  if (!await validateFields()) return false
+  if (await eventsApi.runLifecycle('onSubmit') === false || eventsApi.eventExecutionError.value) return false
+  return validateFields()
+  } finally { eventSubmitting.value = false }
+}
+const eventSubmitting = ref(false)
 
 // ---------------------------------------------------------------------------
 // Composable — auto-save to localStorage (Task 7.5)
@@ -690,7 +708,7 @@ const { clearAutoSave, startAutoSave, stopAutoSave, checkAutoSaveRestore } = use
   readonly: () => props.readonly,
   formData,
   setInternalUpdate,
-  emitModelValue: (value) => emit('update:modelValue', value),
+  emitModelValue: (value) => { if (!eventsApi.eventPending.value) emit('update:modelValue', value) },
   onRestored: (data) => {
     // Trigger engine re-evaluation for all restored fields (Req 12.1, 12.2)
     if (businessLogicConfig.value) {
@@ -710,7 +728,7 @@ const { clearAutoSave, startAutoSave, stopAutoSave, checkAutoSaveRestore } = use
 watchThrottled(
   formData,
   (newVal) => {
-    if (!isInternalUpdate && !props.readonly) {
+    if (!isInternalUpdate && !props.readonly && !eventsApi.eventPending.value) {
       emit('update:modelValue', { ...newVal })
     }
   },
@@ -727,7 +745,7 @@ watch(() => props.modelValue, (newVal) => {
   const fp = JSON.stringify(rest)
   if (fp !== _modelValueFingerprint) {
     _modelValueFingerprint = fp
-    initFormData()
+    eventsApi.replaceExternalState(initFormData)
   }
 })
 
@@ -735,7 +753,7 @@ watch(allFields, (newFields, oldFields) => {
   const hasChanged = newFields.length !== oldFields.length ||
     newFields.some((f, i) => f.key !== oldFields[i]?.key)
   if (hasChanged) {
-    initFormData()
+    eventsApi.replaceExternalState(initFormData)
   }
 })
 
@@ -817,6 +835,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   isFieldRequired,
   isFieldDisabled,
   fieldLabel,
+  fieldInfo: (field: FormField) => scriptInfoFor(field.key),
   fieldOptions,
   engineFieldStates,
   engineOptions,
@@ -896,7 +915,10 @@ onBeforeUnmount(() => {
 // ---------------------------------------------------------------------------
 defineExpose({
   validate,
-  resetForm,
+  resetForm: async () => {
+    eventsApi.cancelEvents()
+    if (await eventsApi.runLifecycle('onReset') !== false && !eventsApi.eventExecutionError.value) resetForm()
+  },
   getFormData,
   setFieldValue,
   clearAutoSave,

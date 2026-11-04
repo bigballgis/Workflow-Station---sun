@@ -1,4 +1,7 @@
-import { ref, shallowReactive, type ComputedRef, type Ref } from 'vue'
+import { ref, shallowReactive, onBeforeUnmount, nextTick, type ComputedRef, type Ref } from 'vue'
+import { FormEventHost } from '@platform-shared/formEvents/host'
+import { FormEventOperation } from '@platform-shared/formEvents/operation'
+import { eventSequence } from '@platform-shared/formEvents/async'
 import type { FormInstance } from 'element-plus'
 import type { FormField } from '../../components/formRendererHelpers'
 import {
@@ -32,10 +35,13 @@ interface FormCreateEventsDeps {
   fieldComponentEvents: ComputedRef<Map<string, FieldComponentEvents>>
   formCreateRulesResolved: ComputedRef<unknown[]>
   formOptionsOnChange: () => unknown
+  formOptions?: () => Record<string, unknown> | undefined
   fields: () => FormField[]
   tabs: () => FormTab[] | undefined
   fieldsAfterTabs: () => FormField[] | undefined
   readonly: () => boolean
+  isFieldReadonly?: (key: string) => boolean
+  preserveOnRestore?: () => string[]
   engineVisibility: Ref<Map<string, boolean>>
   emitModelValue: (value: Record<string, any>) => void
 }
@@ -100,7 +106,7 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
       if (fromLeaf != null) return fromLeaf
       return fieldKey
     },
-    focusField: (fieldKey) => focusFormField(deps.formRef, fieldKey),
+    focusField: (fieldKey) => { void nextTick(() => focusFormField(deps.formRef, fieldKey)) },
   })
 
   function notifyEventVisibilityChange() {
@@ -123,6 +129,27 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
 
   /** Errors from Form/Component event scripts (`api.setFieldError`). */
   const scriptFieldErrors = ref<Record<string, string>>({})
+  const eventPending = ref(false)
+  const eventExecutionError = ref('')
+  let externalUpdate = false
+  const execution = new FormEventHost({
+    snapshot: () => ({ data: JSON.parse(JSON.stringify(deps.formData.value)) as Record<string, unknown>,
+      hidden: [...eventVisibilityState.hidden], display: [...eventVisibilityState.display], required: [...eventRequiredState.flags],
+      errors: { ...scriptFieldErrors.value }, overlays: overlaysApi.snapshotOverlays() }),
+    restore: saved => {
+      const preserved = Object.fromEntries((deps.preserveOnRestore?.() ?? ['__subTables__']).filter(key => key in deps.formData.value).map(key => [key, deps.formData.value[key]]))
+      deps.formData.value = { ...saved.data, ...preserved }
+      eventVisibilityState.hidden = new Map(saved.hidden); eventVisibilityState.display = new Map(saved.display)
+      eventRequiredState.flags = new Map(saved.required); scriptFieldErrors.value = saved.errors
+      overlaysApi.restoreOverlays(saved.overlays); eventVisibilityTick.value++; eventRequiredTick.value++
+    },
+    notify: () => {
+      eventPending.value = execution.pending
+      eventExecutionError.value = execution.error instanceof Error ? execution.error.message : execution.error == null ? '' : String(execution.error)
+      if (!externalUpdate && !execution.pending && !deps.readonly()) deps.emitModelValue({ ...deps.formData.value })
+    },
+  })
+  onBeforeUnmount(() => execution.cancel())
 
   function setScriptFieldError(fieldKey: string, message: string) {
     scriptFieldErrors.value = { ...scriptFieldErrors.value, [fieldKey]: message }
@@ -151,11 +178,14 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
     }
   }
 
-  function createFormEventApi() {
+  function createFormEventApi(operation?: FormEventOperation) {
     const resolveFieldKey = createFieldKeyResolver(() => deps.allFields.value)
-    return createPortalFormApi(
+    const api = createPortalFormApi(
       () => deps.formData.value,
       (patch) => {
+        for (const key of Object.keys(patch)) {
+          if (!getAllEventFieldKeys().includes(key) || deps.readonly() || deps.isFieldReadonly?.(key)) throw new Error(`Event field write denied: ${key}`)
+        }
         deps.formData.value = { ...deps.formData.value, ...patch }
       },
       resolveFieldKey,
@@ -171,47 +201,42 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
       requiredBag(),
       overlaysApi.buildOverlays(),
     )
+    return operation ? operation.bindApi(api) : api
   }
 
   function runFormOptionsOnChange(field: string, value: unknown) {
     const onChangeHandler = deps.formOptionsOnChange()
     if (!onChangeHandler) return
-    const api = createFormEventApi()
     const rule = deps.fieldComponentEvents.value.get(field)?.rule ?? {}
-    runFormOnChangeHandler(onChangeHandler, field, value, api, rule)
+    return execution.run(field, operation => runFormOnChangeHandler(onChangeHandler, field, value, createFormEventApi(operation), rule), true)
   }
 
-  function runComponentEventsOnFieldChange(key: string, value: unknown) {
-    const api = createFormEventApi()
+  function runComponentEventsOnFieldChange(key: string, value: unknown, afterScripts?: () => void) {
+    execution.cancel()
+    deps.formData.value = { ...deps.formData.value, [key]: value }
     const ev = deps.fieldComponentEvents.value.get(key)
     const fieldType = deps.allFields.value.find(f => f.key === key)?.type
-    runComponentFieldEventsOnValueChange(ev, {
+    return execution.run(key, operation => eventSequence([() => runComponentFieldEventsOnValueChange(ev, {
       field: key,
       value,
-      api,
+      api: createFormEventApi(operation),
       onEvent: 'change',
       hookEvent: 'value',
       fieldType,
-    })
+    }), () => runFormOnChangeHandler(deps.formOptionsOnChange(), key, value, createFormEventApi(operation), ev?.rule ?? {}),
+    () => afterScripts?.()]))
   }
 
   /** Component `on.blur` — runs when focus leaves input/textarea (not on each keystroke). */
   function handleFieldBlur(key: string) {
     const value = deps.formData.value[key]
-    const api = createFormEventApi()
     const ev = deps.fieldComponentEvents.value.get(key)
-    runComponentFieldEvents(ev, {
+    execution.run(key, operation => runComponentFieldEvents(ev, {
       field: key,
       value,
-      api,
+      api: createFormEventApi(operation),
       onEvent: 'blur',
-    })
-    const onChangeHandler = deps.formOptionsOnChange()
-    if (onChangeHandler || deps.fieldComponentEvents.value.has(key)) {
-      if (!deps.readonly()) {
-        deps.emitModelValue({ ...deps.formData.value })
-      }
-    }
+    }), true)
     if (!deps.readonly()) {
       void deps.formRef.value?.validateField(key).catch(() => {
         // Expected when validation fails; Element Plus surfaces the field error.
@@ -226,36 +251,43 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
   }
 
   function bootstrapFormOptionsOnChange() {
+    if (lifecycleStarted) return
     if (!deps.formOptionsOnChange()) return
     runFormOptionsOnChange('__bootstrap__', null)
   }
 
+  let lifecycleStarted = false
   function bootstrapComponentHookEvents() {
-    if (!deps.formCreateRulesResolved.value.length) return
-    const overlays = overlaysApi.buildOverlays()
-    runAllComponentHookEvents(
-      deps.formCreateRulesResolved.value,
-      'load',
-      () => deps.formData.value,
-      (patch) => { deps.formData.value = { ...deps.formData.value, ...patch } },
-      createFieldKeyResolver(() => deps.allFields.value),
-      visibilityBag(),
-      requiredBag(),
-      overlays,
-    )
-    runAllComponentHookEvents(
-      deps.formCreateRulesResolved.value,
-      'mounted',
-      () => deps.formData.value,
-      (patch) => { deps.formData.value = { ...deps.formData.value, ...patch } },
-      createFieldKeyResolver(() => deps.allFields.value),
-      visibilityBag(),
-      requiredBag(),
-      overlays,
-    )
+    lifecycleStarted = true
+    const options = deps.formOptions?.() ?? {}
+    return execution.run('__bootstrap__', operation => {
+      const api = createFormEventApi(operation)
+      const form = (raw: unknown, field: string) => raw == null ? undefined : runFormOnChangeHandler(raw, field, null, api)
+      const hooks = (name: string) => runAllComponentHookEvents(deps.formCreateRulesResolved.value, name,
+        () => deps.formData.value, patch => { deps.formData.value = { ...deps.formData.value, ...patch } },
+        createFieldKeyResolver(() => deps.allFields.value), visibilityBag(), requiredBag(), overlaysApi.buildOverlays(), api)
+      return eventSequence([
+        () => form(options.onCreated, '__form__'), () => hooks('load'),
+        () => form(deps.formOptionsOnChange(), '__bootstrap__'), () => hooks('mounted'),
+        () => form(options.onMounted, '__form__'),
+      ])
+    })
+  }
+  function runLifecycle(name: string) {
+    const raw = deps.formOptions?.()?.[name]
+    if (raw == null) return
+    return execution.run(name, operation => runFormOnChangeHandler(raw, '__form__', deps.formData.value, createFormEventApi(operation)))
   }
 
   return {
+    replaceExternalState: (initialize: () => void) => {
+      externalUpdate = true
+      try { execution.reset(); initialize(); execution.acceptCurrent() } finally { externalUpdate = false }
+    },
+    eventPending, eventExecutionError,
+    waitForEvents: () => execution.wait(),
+    cancelEvents: () => execution.cancel(),
+    runLifecycle,
     eventVisibilityState,
     eventVisibilityTick,
     notifyEventVisibilityChange,
@@ -278,6 +310,7 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
     lookupRefreshNonce: overlaysApi.lookupRefreshNonce,
     scriptOptionsFor: overlaysApi.scriptOptionsFor,
     scriptLabelFor: overlaysApi.scriptLabelFor,
+    scriptInfoFor: overlaysApi.scriptInfoFor,
     scriptLookupFiltersFor: overlaysApi.scriptLookupFiltersFor,
     hasScriptLookupFilter: overlaysApi.hasScriptLookupFilter,
   }

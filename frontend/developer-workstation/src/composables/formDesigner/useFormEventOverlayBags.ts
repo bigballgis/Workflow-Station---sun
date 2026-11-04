@@ -17,6 +17,7 @@ export function useFormEventOverlayBags(deps: {
   getDesignerLabel: (fieldKey: string) => string
   focusField?: (fieldKey: string) => void
 }) {
+  const eventInfoState = shallowReactive({ map: new Map<string, string>() })
   const overlayTick = ref(0)
   const eventDisabledState = shallowReactive<PortalFormDisabledState>({
     flags: new Map<string, boolean>(),
@@ -76,6 +77,7 @@ export function useFormEventOverlayBags(deps: {
 
   function buildOverlays(): PortalFormApiOverlays {
     return {
+      info: { get state() { return eventInfoState.map }, getAllFieldKeys: deps.getAllFieldKeys, notify: notifyOverlayChange },
       disabled: {
         state: eventDisabledState,
         notify: notifyDisabledChange,
@@ -116,6 +118,7 @@ export function useFormEventOverlayBags(deps: {
   }
 
   function resetOverlays() {
+    eventInfoState.map = new Map()
     eventDisabledState.flags = new Map()
     eventOptionsState.map = new Map()
     eventLabelState.map = new Map()
@@ -150,7 +153,25 @@ export function useFormEventOverlayBags(deps: {
     return scriptLookupFiltersFor(fieldKey).length > 0
   }
 
+  function snapshotOverlays() {
+    const saved = { disabled: [...eventDisabledState.flags], options: [...eventOptionsState.map],
+      labels: [...eventLabelState.map], info: [...eventInfoState.map], filters: [...lookupFilterState.map],
+      notifications: formNotifications.value.map(item => ({ ...item })), refreshes: { ...lookupRefreshNonce.value } }
+    return JSON.parse(JSON.stringify(saved)) as typeof saved
+  }
+  function restoreOverlays(saved: ReturnType<typeof snapshotOverlays>) {
+    eventDisabledState.flags = new Map(saved.disabled); eventOptionsState.map = new Map(saved.options)
+    eventLabelState.map = new Map(saved.labels); eventInfoState.map = new Map(saved.info)
+    lookupFilterState.map = new Map(saved.filters); formNotifications.value = saved.notifications
+    lookupRefreshNonce.value = saved.refreshes; overlayTick.value++
+  }
+  function scriptInfoFor(field: string): string | undefined {
+    void overlayTick.value
+    return eventInfoState.map.get(field)
+  }
+
   return {
+    scriptInfoFor, snapshotOverlays, restoreOverlays,
     overlayTick,
     eventDisabledState,
     formNotifications,

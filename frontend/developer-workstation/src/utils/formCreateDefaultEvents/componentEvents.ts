@@ -67,13 +67,14 @@ export function flattenComponentEventsForPersist(rules: unknown[]): void {
  * Persist component handlers as EventConfig `$FNX:` strings.
  * Designer / preview runtime may hold function handlers — JSON drops them.
  */
-export function serializeComponentEventHandlerForPersist(raw: unknown): string {
+export function serializeComponentEventHandlerForPersist(raw: unknown): import('./handlerBody').SerializedEventHandler {
+  if (Array.isArray(raw)) return raw.map(serializeComponentEventHandlerForPersist)
   const seen = new Set<unknown>()
   while (typeof raw === 'function') {
     if (seen.has(raw)) throw new Error('Cyclic form-create event origin')
     seen.add(raw)
     const handler = raw as { __origin?: unknown; __hermesFormEventSource?: unknown }
-    if (handler.__hermesFormEventSource != null) return normalizeComponentEventHandler(handler.__hermesFormEventSource)
+    if (handler.__hermesFormEventSource != null) return serializeComponentEventHandlerForPersist(handler.__hermesFormEventSource)
     if (handler.__origin == null) break
     raw = handler.__origin
   }

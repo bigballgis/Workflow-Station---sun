@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    asyncTitle: '等待查詢完成後回填欄位',
+    asyncBody: '事件腳本須 return 完整的 Promise。普通 Form 與 Batch Form 等待執行完成後才允許 Save 或 Apply；重新選擇、Cancel 會使舊腳本失效。Batch 的所有選取列一起接受，任一列拋錯則恢復上一次接受的草稿。一次操作總逾時 15 秒，最多並行四個不同 GET。fetch 僅接受同源 /api/ 下的 GET 並沿用目前工作階段；不支援外部位址、寫入請求或覆寫身分憑證。updateRule 的 info 屬性 只更新暫存文字說明，空字串清除說明，其他規則屬性暫不支援。說明不能代替驗證：業務失敗時呼叫 setFieldError 或繼續拋錯，恢復成功後 clearFieldError。catch 如果只寫 info，腳本仍會正常結束。',
+    asyncSample: '元件 change 範例。先在表單中宣告 selected_user 與 contact_email，按現有使用者介面調整回應解析，必須傳回完整查詢鏈。',
     batchTitle: 'Batch Assign：同時回填其他欄位',
     batchBody: '在子表的 Batch Form 中，可在 Form event → onChange 或 Lookup 欄位的 change 事件中回填另一個已宣告欄位。每條選中記錄都有獨立草稿，腳本讀取該記錄自己的值；透過預覽記錄選擇器檢查各列結果。Apply 會驗證所有選中記錄後一起套用；Cancel 捨棄草稿。欄位權限仍然生效，Assign 區域外的回填目標還須允許 Batch Edit。焦點等控制項互動事件在操作該控制項時觸發；取數 Hook 僅在轉譯器實際發起遠端取數時觸發。',
     batchSample: 'Form onChange 範例。將 requester_lookup 和 requester_email 替換為設定的欄位名稱，並讓 Lookup 傳回 email。',

@@ -105,6 +105,10 @@ export function overlayEventRequiredOnFormRules<T extends Record<string, unknown
 /** Map designer script field names to bound keys (e.g. label "test2" → key "tes2"). */
 export type FieldKeyResolver = (name: string) => string
 
+function copyFormValue<T>(value: T): T {
+  return value != null && typeof value === 'object' ? JSON.parse(JSON.stringify(value)) as T : value
+}
+
 export function createFieldKeyResolver(
   getFields: () => Array<{ key: string; label?: string }>,
 ): FieldKeyResolver {
@@ -130,6 +134,8 @@ export interface FormCreateEventContext {
   args?: unknown
   config?: unknown
   data?: unknown
+  /** Internal native adapter phase; never supplied by persisted script text. */
+  formEvent?: string
 }
 
 function resolveFieldTargets(
@@ -225,22 +231,22 @@ export function createPortalFormApi(
 
   return {
     get form() {
-      return getFormData()
+      return copyFormValue(getFormData())
     },
     getValue(field: string) {
-      return getFormData()[resolve(field)]
+      return copyFormValue(getFormData()[resolve(field)])
     },
     setValue(fieldOrData: string | Record<string, unknown>, value?: unknown) {
       if (typeof fieldOrData === 'object' && fieldOrData !== null && !Array.isArray(fieldOrData)) {
         const resolved: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(fieldOrData as Record<string, unknown>)) {
-          resolved[resolve(k)] = v
+          resolved[resolve(k)] = copyFormValue(v)
         }
         applyPatch(resolved)
         return
       }
       if (typeof fieldOrData === 'string') {
-        applyPatch({ [resolve(fieldOrData)]: value })
+        applyPatch({ [resolve(fieldOrData)]: copyFormValue(value) })
       }
     },
     hidden(status: boolean, field?: string | string[]) {

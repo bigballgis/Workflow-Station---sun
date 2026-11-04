@@ -21,6 +21,8 @@ type State = {
   uniform: BatchUniformAssignmentState
   collect(rows: Array<Record<string, unknown>>): { rows: Array<Record<string, unknown>>; change?: unknown }
   hasChanges(): boolean; selectUniformBusinessUnit(value: string): Promise<void>
+  updateDesignedBusinessUnit(value: string, accepted: (code: unknown) => void): Promise<void>
+  recordValue(field: string, value: unknown): void
   userOptionsFor(key: string, selectedId: string): Array<{ id: string; name: string }>
 }
 function editor(rows: Array<Record<string, unknown>>) {
@@ -84,11 +86,13 @@ describe('embedded assignment editor', () => {
     vi.mocked(permissionApi.getBusinessUnitRoles).mockImplementationOnce(() => new Promise(resolve => { resolveFirst = value => resolve(value as never) }))
     vi.mocked(permissionApi.getBusinessUnitRoles).mockResolvedValueOnce({ data: [{ code: 'B-pool' }] } as never)
     vi.mocked(permissionApi.getBusinessUnitRoles).mockResolvedValueOnce({ data: [{ code: 'latest-A' }] } as never)
-    const first = state.selectUniformBusinessUnit('A')
-    await state.selectUniformBusinessUnit('B')
-    await state.selectUniformBusinessUnit('A')
+    const accepted = (code: unknown) => state.recordValue('org', code)
+    const first = state.updateDesignedBusinessUnit('A', accepted)
+    await state.updateDesignedBusinessUnit('B', accepted)
+    await state.updateDesignedBusinessUnit('A', accepted)
     resolveFirst({ data: [{ code: 'obsolete-A' }] }); await first
     expect(state.uniformRoleOptions.map(role => role.value)).toEqual(['latest-A'])
+    expect(state.uniform.businessUnitCode).toBe('org-A')
     wrapper.unmount()
   })
 })

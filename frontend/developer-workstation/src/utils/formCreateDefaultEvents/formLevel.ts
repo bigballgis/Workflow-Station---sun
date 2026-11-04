@@ -16,10 +16,17 @@ import {
  * Fixes legacy anonymous `function (params){}` wrappers produced by earlier seeds.
  */
 export function normalizeFormLevelEventHandler(
+  eventName: string, params: string, raw: string,
+): string
+export function normalizeFormLevelEventHandler(
+  eventName: string, params: string, raw: unknown,
+): import('./handlerBody').SerializedEventHandler
+export function normalizeFormLevelEventHandler(
   eventName: string,
   params: string,
   raw: unknown,
-): string {
+): import('./handlerBody').SerializedEventHandler {
+  if (Array.isArray(raw)) return raw.map(item => normalizeFormLevelEventHandler(eventName, params, item))
   if (raw == null || raw === '' || typeof raw !== 'string') {
     return emptyFormLevelEventFunction(eventName, params)
   }
@@ -67,7 +74,8 @@ export function serializeFormLevelEventHandlerForPersist(
   eventName: string,
   params: string,
   raw: unknown,
-): string {
+): import('./handlerBody').SerializedEventHandler {
+  if (Array.isArray(raw)) return raw.map(item => serializeFormLevelEventHandlerForPersist(eventName, params, item))
   if (typeof raw === 'function') {
     const source = (raw as { __hermesFormEventSource?: unknown }).__hermesFormEventSource
     if (source != null) {

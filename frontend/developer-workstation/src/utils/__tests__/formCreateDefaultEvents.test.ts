@@ -52,6 +52,19 @@ function fnEditorBody(raw: string): string {
 
 
 describe('formCreateDefaultEvents', () => {
+  it('preserves complete component and form handler arrays through default seeding and persistence', () => {
+    const scripts = ['$FNX:return Promise.resolve(true)', '$FNX:api.setValue("result", "second")']
+    const rules: Record<string, unknown>[] = [{ field: 'source', _on: { change: scripts }, _hook: { value: scripts } }]
+    prepareFormCreateRulesForPersist(rules)
+    expect((rules[0]!.on as Record<string, unknown>).change).toEqual(scripts)
+    expect((rules[0]!.hook as Record<string, unknown>).value).toEqual(scripts)
+    inflateComponentEventsForDesigner(rules)
+    prepareFormCreateRulesForPersist(rules)
+    expect((rules[0]!.on as Record<string, unknown>).change).toEqual(scripts)
+    const options = serializeFormCreateOptionsForPersist(ensureEmptyFormOptionsEvents({ beforeSubmit: scripts }))
+    expect(options.beforeSubmit).toHaveLength(2)
+    expect((options.beforeSubmit as string[])[1]).toContain('"second"')
+  })
 
   it('builds form-level handler matching FnConfig named-function template', () => {
 

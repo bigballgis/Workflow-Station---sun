@@ -51,6 +51,7 @@ const props = withDefaults(
     visible: boolean
     title?: string
     width?: string
+    beforeClose?: () => boolean | Promise<boolean>
   }>(),
   { width: 'min(700px, calc(100vw - 48px))' },
 )
@@ -85,7 +86,8 @@ watch(
   },
 )
 
-function requestClose() {
+async function requestClose() {
+  if (props.beforeClose && !await props.beforeClose()) return
   emit('update:visible', false)
   emit('closed')
 }

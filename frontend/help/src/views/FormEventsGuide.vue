@@ -29,6 +29,7 @@ const flowKeys = [
 ]
 
 const jumpLinks: GuideJump[] = [
+  { anchor: 'async', titleKey: 'formEventsGuide.asyncTitle' },
   { anchor: 'when', titleKey: 'formEventsGuide.jumpWhen' },
   { anchor: 'values', titleKey: 'formEventsGuide.jumpValues' },
   { anchor: 'set-shapes', titleKey: 'formEventsGuide.jumpSetShapes' },
@@ -61,6 +62,13 @@ const howTo = {
 }
 
 const sections: GuideSection[] = [
+  {
+    anchor: 'async',
+    ...howTo,
+    titleKey: 'formEventsGuide.asyncTitle',
+    bodyKey: 'formEventsGuide.asyncBody',
+    samples: [{ code: 'var target = "contact_email";\napi.clearFieldError(target);\napi.setValue(target, "");\napi.updateRule(target, { info: "Loading email" });\nreturn fetch("/api/v1/admin/users/" + encodeURIComponent(value))\n  .then(function (response) { return response.json(); })\n  .then(function (user) {\n    if (!user.email) throw new Error("No email configured");\n    api.setValue(target, user.email);\n    api.updateRule(target, { info: "" });\n  })\n  .catch(function (error) {\n    api.updateRule(target, { info: "" });\n    api.setFieldError(target, error.message);\n  });', hintKey: 'formEventsGuide.asyncSample' }],
+  },
   {
     titleKey: 'formEventsGuide.whatTitle',
     bodyKey: 'formEventsGuide.whatBody',

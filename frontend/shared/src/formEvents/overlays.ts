@@ -33,6 +33,11 @@ export function isEffectivelyDisabled(
 }
 
 export interface PortalFormApiOverlays {
+  info?: {
+    state: Map<string, string>
+    getAllFieldKeys: () => string[]
+    notify: () => void
+  }
   disabled?: {
     state: PortalFormDisabledState
     notify: () => void
@@ -61,6 +66,7 @@ export interface PortalFormApiOverlays {
 }
 
 export interface PortalFormApiOverlayMethods {
+  updateRule: (field: string, patch: { info: string }) => void
   disabled: (status: boolean, field?: string | string[]) => void
   disabledStatus: (field: string) => boolean
   setOptions: (field: string, options: FormEventChoiceOption[]) => void
@@ -95,6 +101,7 @@ function buildLockAndChoiceMethods(
   overlays?: PortalFormApiOverlays,
 ): Pick<
   PortalFormApiOverlayMethods,
+  | 'updateRule'
   | 'disabled'
   | 'disabledStatus'
   | 'setOptions'
@@ -104,6 +111,15 @@ function buildLockAndChoiceMethods(
   | 'resetOptions'
 > {
   return {
+    updateRule(field, patch) {
+      assertInfoPatch(patch)
+      const bag = overlays?.info
+      const key = resolve(field)
+      if (!bag || !bag.getAllFieldKeys().includes(key)) throw new Error(`Unknown event rule field: ${field}`)
+        if (bag.state.has(key) && bag.state.get(key) === patch.info) return
+      bag.state.set(key, patch.info)
+      bag.notify()
+    },
     disabled(status, field) {
       const bag = overlays?.disabled
       if (!bag?.state) return
@@ -153,6 +169,7 @@ function buildNoticeAndChromeMethods(
   overlays?: PortalFormApiOverlays,
 ): Omit<
   PortalFormApiOverlayMethods,
+  | 'updateRule'
   | 'disabled'
   | 'disabledStatus'
   | 'setOptions'
@@ -233,6 +250,7 @@ export function forwardOverlayMethods(
   api: PortalFormApiOverlayMethods,
 ): PortalFormApiOverlayMethods {
   return {
+    updateRule: (field, patch) => { assertInfoPatch(patch); api.updateRule(field, patch) },
     disabled: (status, field) => api.disabled(status, field),
     disabledStatus: (field) => api.disabledStatus(field),
     setOptions: (field, options) => api.setOptions(field, options),
@@ -250,5 +268,12 @@ export function forwardOverlayMethods(
     setLabel: (field, text) => api.setLabel(field, text),
     getLabel: (field) => api.getLabel(field),
     resetLabel: (field) => api.resetLabel(field),
+  }
+}
+
+export function assertInfoPatch(patch: unknown): asserts patch is { info: string } {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)
+      || Reflect.ownKeys(patch).length !== 1 || Reflect.ownKeys(patch)[0] !== 'info' || typeof (patch as { info?: unknown }).info !== 'string') {
+    throw new Error('Event updateRule supports only { info: string }')
   }
 }

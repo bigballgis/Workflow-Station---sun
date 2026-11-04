@@ -5830,3 +5830,40 @@
     30项专项通过；原FU50125及新克隆50135两种设计入口真实页面新增/删除/取消/保存查配置通过，
     原FU配置未变，浏览器无运行错误。DW全量1265通过并保留同2处locale解析基线失败，类型164无新增。
     详见docs/verification/2026-11-03-designer-event-editor.md；总体审查CONDITIONAL。
+
+- id: "1739"
+  status: fixed
+  fixed_at: "2026-11-04"
+  severity: major
+  category: bug
+  summary: "Batch脚本缺失updateRule且拒绝返回Promise，普通Form与Batch异步执行契约不一致"
+  detail: |
+    2026-11-04，MCY冻结change脚本先在updateRule(info)报错，补方法后仍受同步事务限制。
+    共享文本info、作用域API/GET、等待/取消/快照恢复、逐行隔离及提交门禁；保留正式ASSIGN与后端写入守卫。
+    同时修复重复change取消input/clear、BU/Role收集、普通Form blur提前发半成品、DW原生事件被投影跳过与数组脚本丢失。
+    DW119/Portal271专项及完整Batch浏览器组合通过，原文1299字脚本校验SHA并在普通/Batch实际DOM验证；
+    失败/无email/逆序/取消/模式切换/实际15秒超时/两行异常整批恢复、保存刷新与查库均通过。
+    全量DW1275通过/保留同2处locale失败，Portal2760通过/同1Lookup基线失败；类型162/380均无新增。
+    固定样本完整MI250单测+6组截图通过。本地Docker构建部署，DEV与源业务FU未写入；证据docs/verification/2026-11-04-batch-form-async-events.md，总审查CONDITIONAL。
+
+- id: "1740"
+  status: open
+  severity: minor
+  category: bug
+  summary: "共享脚本body提取器将字符串及注释中的大括号计入函数边界"
+  detail: |
+    frontend/shared/src/formEvents/script.ts的extractFunctionBody/isEmptyFormCreateHandler逐字符计数括号，
+    未跳过字符串、模板字面量和注释。例如$FNX:api.setValue("message", "}");会提前截断函数体。
+    该既有问题同时影响普通Form和Batch，独立于本次updateRule与Promise事务修复；本轮未修改脚本语法解析器。
+
+- id: "1741"
+  status: fixed
+  fixed_at: "2026-11-04"
+  severity: minor
+  category: quality
+  summary: "MI浏览器回归辅助脚本把表格选择列当成行身份，错误判定collection为空"
+  detail: |
+    本轮最终回归中，真实API与DOM均有2行，pinned任务41281eac的辅助脚本仍报告collection不存在。
+    listMiCollectionTables/countSubTableRows/clickSubTaskDetails读取首个td，启用Batch选择列时读到空checkbox单元格。
+    改为跳过Element Plus明确标识的selection列；同一任务同一浏览器断言由失败变为2行通过，保存截图。
+    未修改产品数据、表格布局、权限或MI运行时。默认自动选择可能落入新造的非MI测试任务，正式复验显式固定TASK_ID/APP_ID。

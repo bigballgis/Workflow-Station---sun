@@ -1,5 +1,8 @@
 export default {
   formEventsGuide: {
+    asyncTitle: '等待查询完成后回填字段',
+    asyncBody: '事件脚本须 return 完整的 Promise。普通 Form 和 Batch Form 等待执行完成后才允许 Save 或 Apply；重新选择、Cancel 会使旧脚本失效。Batch 的所有选中行一起接受，任一行抛错则恢复上一次接受的草稿。一次操作总超时 15 秒，最多并发四个不同 GET。fetch 仅接受同源 /api/ 下的 GET 并沿用当前会话；不支持外部地址、写请求或覆盖身份凭证。updateRule 的 info 属性 只更新临时文本说明，空字符串清除说明，其他规则属性暂不支持。说明不能代替校验：业务失败时调用 setFieldError 或继续抛错，恢复成功后 clearFieldError。catch 如果只写 info，脚本仍会正常结束。',
+    asyncSample: '组件 change 示例。先在表单中声明 selected_user 和 contact_email，按现有用户接口调整响应解析，必须返回完整查询链。',
     batchTitle: 'Batch Assign：同时回填其他字段',
     batchBody: '在子表的 Batch Form 中，可在 Form event → onChange 或 Lookup 字段的 change 事件中回填另一个已声明字段。每条选中记录都有独立草稿，脚本读取该记录自己的值；通过预览记录选择器检查各行结果。Apply 会校验所有选中记录后一起应用；Cancel 丢弃草稿。字段权限仍然生效，Assign 区域外的回填目标还须允许 Batch Edit。焦点等控件交互事件在操作该控件时触发；取数 Hook 仅在渲染器实际发起远程取数时触发。',
     batchSample: 'Form onChange 样例。将 requester_lookup 和 requester_email 替换为配置的字段名，并让 Lookup 返回 email。',

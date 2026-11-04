@@ -3,6 +3,7 @@ import {
   createPortalFormApi,
   isEmptyFormCreateHandler,
   runFormOnChangeHandler,
+  parseFormCreateEventHandler,
   type PortalFormRequiredState,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
@@ -12,6 +13,21 @@ import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 import { isTableAuditField } from '@/utils/tableAuditFields'
 import type { PortalFormApiOverlays, PortalFormDisabledState, FormEventChoiceOption, FormEventLookupFilter, FormEventNotification } from '@/utils/formCreateEventOverlays'
+import { bindPreviewEventExecution } from '@/utils/previewEventExecution'
+
+export function runPreviewFormEvent(raw: unknown, field: string, value: unknown, deps: {
+  getFormData(): Record<string, unknown>; applyPatch(patch: Record<string, unknown>): void; getVisibility(): PreviewVisibilityBridge
+}, extra: { config?: unknown; data?: unknown } = {}) {
+  if (isEmptyFormCreateHandler(raw)) return
+  const vis = deps.getVisibility()
+  const apply = (patch: Record<string, unknown>) => { Object.keys(patch).forEach(field => vis.assertWritable?.(field)); deps.applyPatch(patch) }
+  const api = createPortalFormApi(deps.getFormData, apply, undefined, vis, vis.fieldErrors,
+    vis.requiredState ? { state: vis.requiredState, notify: vis.notifyRequired ?? vis.notify, getAllFieldKeys: vis.getAllFieldKeys } : undefined, vis.overlays)
+  bindPreviewEventExecution(vis, api, { get: deps.getFormData, set: deps.applyPatch }, vis)
+  const handler = parseFormCreateEventHandler(raw)
+  if (!handler) throw new Error('Invalid form event script')
+  return handler({ field, value, api, rule: {}, args: [api], ...extra })
+}
 
 export {
   registerPreviewVisibilityBridge,
@@ -38,10 +54,10 @@ export function withPreviewVisibilityFormOnChange(
       const vis = deps.getVisibility()
       const api = createPortalFormApi(
         deps.getFormData,
-        deps.applyPatch,
+        patch => { Object.keys(patch).forEach(field => vis.assertWritable?.(field)); deps.applyPatch(patch) },
         undefined,
         vis,
-        undefined,
+        vis.fieldErrors,
         vis.requiredState
           ? {
               state: vis.requiredState,
@@ -51,11 +67,12 @@ export function withPreviewVisibilityFormOnChange(
           : undefined,
         vis.overlays,
       )
+      bindPreviewEventExecution(vis, api, { get: deps.getFormData, set: deps.applyPatch }, vis)
       const tagged = typeof raw === 'function'
         ? (raw as { __hermesFormEventSource?: unknown }).__hermesFormEventSource
         : undefined
       const source = tagged != null ? tagged : raw
-      runFormOnChangeHandler(source, field, value, api, {})
+      return runFormOnChangeHandler(source, field, value, api, {})
     },
   }
 }
@@ -234,6 +251,8 @@ export interface PreviewOverlayApply {
   isDisabled: (fieldKey: string, designerDisabled: boolean) => boolean
   optionsFor: (fieldKey: string) => FormEventChoiceOption[] | undefined
   labelFor: (fieldKey: string) => string | undefined
+  infoFor?: (fieldKey: string) => string | undefined
+  errorFor?: (fieldKey: string) => string | undefined
 }
 
 /** Apply script disabled / options / label overlays onto form-create preview rules. */
@@ -263,6 +282,10 @@ export function applyPreviewOverlayToRules(
       if (options) rule.options = options
       const label = overlay.labelFor(fieldKey)
       if (label != null) rule.title = label
+      const info = overlay.infoFor?.(fieldKey)
+      if (info !== undefined) rule.info = { info, show: !!info }
+      const error = overlay.errorFor?.(fieldKey)
+      rule.wrap = { ...(rule.wrap as Record<string, unknown>), error }
       return rule
     })
   return apply(rules)
