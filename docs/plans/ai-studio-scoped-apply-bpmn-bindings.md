@@ -101,12 +101,12 @@ dw（`backend/developer-workstation`）。前端只多显示后端给的 WARNING
    | 情况 | 该动作挂在哪些 userTask |
    |---|---|
    | 这次写入带了这个动作，且有非空 `stageIds` | 以 `stageIds` 为准（**逐动作权威**：提到了就全听它的，包括从旧任务上撤下） |
-   | 这次写入带了这个动作，但没有 `stageIds` | 沿用旧快照里挂这个名字的 task |
+   | 这次写入带了这个动作，但没有 `stageIds` | 沿用旧位置：写入的 BPMN 自己带绑定时以它为准（设计器存的、撤销快照）；一个绑定都不带（模型新出的流程）才按 task id 继承写前 BPMN |
    | 这次没写动作（scope=PROCESS） | 沿用旧快照：同一个 task id 原来挂的名字 → 现在的 id |
    | 旧快照里的名字现在找不到对应动作 | 从该任务上删掉（不留失效 id） |
 
    - 任务内顺序：先按本次提案里动作的顺序，再接沿用下来的、按旧顺序。
-   - `globalActionIds`：按名字沿用；名字找不到的删掉。
+   - `globalActionIds`：同样的来源规则按名字沿用；名字找不到的删掉；这次带了 `stageIds` 的动作从流程级列表移除（逐动作权威）。
    - 表单：本次写了表单（FORMS / ALL）而流程是存量时，调用现有 `AiBpmnFormBindingWriter.bindStageForms`；然后删掉指向
      已不存在表单的 `formId/formName/formReadOnly`（含 REQUEST 场景的 `requestFormId/requestFormName`）。
      本次写了流程时，`bindStageForms` 已经在 `writeProcessDefinition` 里跑过，不重复。
@@ -199,7 +199,7 @@ Portal 已经明确不回退到流程全部动作；按名字兜底会把审批�
   3. 已绑定的 FU 再次单独 Apply ACTIONS（改了一个动作名、删了一个动作）→ 没出现在提案里的旧 id 全部消失，不残留失效 id；提到的按 `stageIds`。
   4. 反例 3 的同样操作 → BPMN 上 `formId` 指向新表单 id；再打开设计器保存，`dw_form_stage_bindings` 不变。
   5. AI Generate：Apply 后 30s 内撤销 → 任务按钮恢复为 Apply 前的绑定（今天会丢）。
-  6. 一键生成 / AI Generate 的 `ALL` 写入：结果与今天一致（对照 50143 / 50144 的结构）。
+  6. 一键生成 / AI Generate 的 `ALL` 写入：带 `stageIds` 的动作结果与今天一致（对照 50143 / 50144）；不带的按 task id 沿用写前位置（今天会落空）——这是有意的行为变化，与撤销共用一条规则。
 - FU：dev 50036（存量坏数据，修复后重新 Apply 一次 ACTIONS 提案即为正例 1 的现场）；另建一个新 FU 跑正例 2–5。
 
 ## 【验证】（实现后最低命令）
@@ -228,3 +228,16 @@ Portal 已经明确不回退到流程全部动作；按名字兜底会把审批�
 
 ---
 请确认以上设计 Plan。确认后若要开始实现，请回复 **按 playbook 执行**（或补充/修正项）。
+
+---
+
+## 实现记录（2026-11-04）
+
+- 提交：`79665428d`（Plan）→ `9550819b6`（实现）→ 审查修正（见下）。分支 `claude/happy-banach-3ac58a`，基于 `common_0731_SELF_AP@4c7556adb`，未合入。
+- 独立审查发现并已修：表单多容器时把刚写的活 `formId` 一并删掉（改为按容器处理）；撤销重放会让原本没按钮的任务继承按钮（改为「写入 BPMN 自带绑定就视为完整」）；
+  流程级动作不受逐动作权威约束；ALL 写入在存量 BPMN 读不了时误报（ALL 会清掉它，改为 warn）；`ACTION_BINDING_EMPTY_TASK` 只在本提案放置动作或该任务原来有按钮时才报。
+- 已知取舍：同一任务里，带 `stageIds` 的动作排在沿用下来的前面，设计器里手排的顺序在混合情况下不保留。
+- dev 验证（DW 侧，热替 4 个类）：scratch FU 50152 先在旧代码上复现（ACTIONS 后无 `actionIds`；FORMS 后无 `formId`，原样设计器保存一次 stage 绑定被删光），
+  新代码下 FORMS / 设计器保存 / ACTIONS / PROCESS（同 id）全部正确，dry-run 三种 WARNING 符合预期。FU 50036 用原提案 #144 / #152 重新 Apply 后两个任务都有表单与按钮。
+- **未验证**：Portal 打开任务看按钮——DW 一键部署在 admin-center 导入时失败，dev 库缺 `96-function-unit-runtime-versioning.sql`（`content_checksum` 列），与本改动无关。
+- 全量 DW 测试 1544 个，仅 `ExportImportComponentImplTest.importFunctionUnit_rewritesBpmnIdsAfterImport` 报错，干净基线上同样报错。

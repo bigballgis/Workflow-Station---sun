@@ -178,16 +178,39 @@ class AiBpmnActionBindingWriterTest {
         assertThat(after.global()).containsExactly("withdraw");
     }
 
-    /** AI Generate undo replays a snapshot BPMN whose ids were deleted since; the paired names still resolve. */
+    /**
+     * AI Generate undo replays the pre-apply snapshot over the post-apply design: the snapshot's ids were
+     * deleted since (paired names still resolve), and a task that had no buttons in the snapshot must not
+     * inherit the ones the undone apply gave it.
+     */
     @Test
-    void rebind_staleIdsInWrittenBpmnResolveThroughPairedNames() {
+    void rebind_undoSnapshotIsRestoredExactly() {
         String snapshot = TWO_TASKS.formatted("", bound("actionIds", "[1]", "[\"submit\"]"), "");
-        var before = AiBpmnActionBindingWriter.capture(snapshot, List.of(action(50, "submit")));
-        List<ActionDefinition> replayed = List.of(action(60, "submit"));
+        String postApply = TWO_TASKS.formatted("",
+                bound("actionIds", "[50]", "[\"submit\"]"), bound("actionIds", "[51]", "[\"approve\"]"));
+        var before = AiBpmnActionBindingWriter.capture(postApply, List.of(action(50, "submit"), action(51, "approve")));
+        List<ActionDefinition> replayed = List.of(action(60, "submit"), action(61, "approve"));
 
-        String result = AiBpmnActionBindingWriter.rebind(snapshot, before, replayed, List.of(Map.of("actionName", "submit")));
+        String result = AiBpmnActionBindingWriter.rebind(snapshot, before, replayed,
+                List.of(Map.of("actionName", "submit"), Map.of("actionName", "approve")));
 
+        assertThat(placement(result, replayed)).containsEntry("Task_Submit", List.of("submit"))
+                .doesNotContainKey("Task_Review");
         assertThat(result).contains("value=\"[60]\"").doesNotContain("value=\"[1]\"");
+    }
+
+    @Test
+    void rebind_actionDeclaringStageIdsLeavesTheProcessLevelList() {
+        String stored = TWO_TASKS.formatted(bound("globalActionIds", "[9]", "[\"withdraw\"]"), "", "");
+        List<ActionDefinition> actions = List.of(action(19, "withdraw"));
+        var before = AiBpmnActionBindingWriter.capture(stored, List.of(action(9, "withdraw")));
+
+        String result = AiBpmnActionBindingWriter.rebind(stored, before, actions,
+                List.of(Map.of("actionName", "withdraw", "stageIds", List.of("Task_Submit"))));
+
+        var after = AiBpmnActionBindingWriter.capture(result, actions);
+        assertThat(after.byTask()).containsEntry("Task_Submit", List.of("withdraw"));
+        assertThat(after.global()).isNull();
     }
 
     @Test

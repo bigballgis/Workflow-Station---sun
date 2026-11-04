@@ -22,6 +22,7 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -125,23 +126,27 @@ public final class AiBpmnFormBindingWriter {
                 if (!TASK_NAMES.contains(localName(task))) {
                     continue;
                 }
-                Map<String, List<Element>> properties = formProperties(task);
-                if (isDead(properties.get("formId"), liveIds)) {
-                    removeAll(properties, FORM_PROPERTY_NAMES);
-                    changed = true;
-                    log.info("AI write dropped dead formId from BPMN task '{}'", task.getAttribute("id"));
-                }
-                if (isDead(properties.get("requestFormId"), liveIds)) {
-                    FormDefinition renamed = properties.containsKey("requestFormName")
-                            ? byName.get(properties.get("requestFormName").get(0).getAttribute("value")) : null;
-                    if (renamed != null) {
-                        properties.get("requestFormId").forEach(p -> p.setAttribute("value", String.valueOf(renamed.getId())));
-                    } else {
-                        removeAll(properties, REQUEST_FORM_PROPERTY_NAMES);
+                // Per container: the designer can carry copies in both custom namespaces, and bindStageForms
+                // only rewrites the first one — a dead copy elsewhere must not take the live one with it.
+                for (Map<String, List<Element>> properties : formPropertiesByContainer(task)) {
+                    if (isDead(properties.get("formId"), liveIds)) {
+                        removeAll(properties, FORM_PROPERTY_NAMES);
+                        changed = true;
+                        log.info("AI write dropped dead formId from BPMN task '{}'", task.getAttribute("id"));
                     }
-                    changed = true;
-                    log.info("AI write {} dead requestFormId on BPMN task '{}'",
-                            renamed != null ? "re-pointed by name" : "dropped", task.getAttribute("id"));
+                    if (isDead(properties.get("requestFormId"), liveIds)) {
+                        List<Element> names = properties.get("requestFormName");
+                        FormDefinition renamed = names != null
+                                ? byName.get(names.get(names.size() - 1).getAttribute("value")) : null;
+                        if (renamed != null) {
+                            properties.get("requestFormId").forEach(p -> p.setAttribute("value", String.valueOf(renamed.getId())));
+                        } else {
+                            removeAll(properties, REQUEST_FORM_PROPERTY_NAMES);
+                        }
+                        changed = true;
+                        log.info("AI write {} dead requestFormId on BPMN task '{}'",
+                                renamed != null ? "re-pointed by name" : "dropped", task.getAttribute("id"));
+                    }
                 }
             }
             return changed ? serialize(document) : bpmnXml;
@@ -160,11 +165,12 @@ public final class AiBpmnFormBindingWriter {
         return value != null && !value.isBlank() && !liveIds.contains(value.trim());
     }
 
-    private static Map<String, List<Element>> formProperties(Element task) {
-        Map<String, List<Element>> result = new HashMap<>();
+    /** Form properties of one task, grouped by their containing element (one map per container). */
+    private static List<Map<String, List<Element>>> formPropertiesByContainer(Element task) {
+        Map<Node, Map<String, List<Element>>> byContainer = new LinkedHashMap<>();
         Element extensionElements = directChild(task, "extensionElements");
         if (extensionElements == null) {
-            return result;
+            return List.of();
         }
         NodeList descendants = extensionElements.getElementsByTagNameNS("*", "*");
         for (int i = 0; i < descendants.getLength(); i++) {
@@ -172,10 +178,11 @@ public final class AiBpmnFormBindingWriter {
                     && ("property".equals(localName(property)) || "values".equals(localName(property)))
                     && (FORM_PROPERTY_NAMES.contains(property.getAttribute("name"))
                         || REQUEST_FORM_PROPERTY_NAMES.contains(property.getAttribute("name")))) {
-                result.computeIfAbsent(property.getAttribute("name"), k -> new ArrayList<>()).add(property);
+                byContainer.computeIfAbsent(property.getParentNode(), k -> new HashMap<>())
+                        .computeIfAbsent(property.getAttribute("name"), k -> new ArrayList<>()).add(property);
             }
         }
-        return result;
+        return new ArrayList<>(byContainer.values());
     }
 
     private static void removeAll(Map<String, List<Element>> properties, Set<String> names) {

@@ -169,4 +169,25 @@ class AiBpmnFormBindingWriterTest {
 
         assertThat(AiBpmnFormBindingWriter.dropStaleForms(xml, List.of(live))).isSameAs(xml);
     }
+
+    /** The designer can hold copies in both custom namespaces; a dead copy must not drag the live one out. */
+    @Test
+    void dropStaleForms_onlyTouchesTheContainerHoldingTheDeadCopy() {
+        FormDefinition live = FormDefinition.builder().id(200L).formName("f").formType(FormType.TASK).build();
+        String xml = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:custom="http://workflow.platform/schema/custom"
+                                  xmlns:custom_1="http://custom.bpmn.io/schema">
+                  <bpmn:process id="P"><bpmn:userTask id="T"><bpmn:extensionElements>
+                    <custom:properties><custom:property name="formId" value="200"/><custom:property name="formName" value="f"/></custom:properties>
+                    <custom_1:properties><custom_1:property name="formId" value="30"/><custom_1:property name="formName" value="old"/></custom_1:properties>
+                  </bpmn:extensionElements></bpmn:userTask></bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        String result = AiBpmnFormBindingWriter.dropStaleForms(xml, List.of(live));
+
+        assertThat(result).contains("value=\"200\"").contains("value=\"f\"")
+                .doesNotContain("value=\"30\"").doesNotContain("value=\"old\"");
+    }
 }

@@ -74,7 +74,7 @@ public class AiWriteServiceImpl implements AiWriteService {
         enforceProcessSemantics(generatedData);
 
         // 动作 ↔ 任务的关系只存在 BPMN 上：清空前按动作名记下，写完再对齐（见 alignProcessBindings）
-        AiBpmnActionBindingWriter.Snapshot actionBindingsBefore = captureActionBindings(functionUnit, generatedData);
+        AiBpmnActionBindingWriter.Snapshot actionBindingsBefore = captureActionBindings(functionUnit, generatedData, regenerateScope);
 
         // Determine mode: if FunctionUnit has existing component data, it's MODIFY mode
         boolean isModifyMode = hasExistingData(functionUnit);
@@ -877,12 +877,14 @@ public class AiWriteServiceImpl implements AiWriteService {
     /**
      * 写入前的动作绑定快照。只有本轮会重建动作或替换流程时才需要。
      *
-     * <p>存量 BPMN 读不了时：本轮要替换流程就只是带不过去旧绑定（warn 留痕，新流程照写）；
-     * 不替换流程则后面的对齐必然也读不了，在这里就以 {@code AI_EXISTING_BPMN_INVALID} 指向存量数据。</p>
+     * <p>存量 BPMN 读不了时：本轮会替换或清掉流程（带了新流程，或 ALL 全量清空）就只是带不过去旧绑定
+     * （warn 留痕）；流程会留下来则后面的对齐必然也读不了，在这里就以 {@code AI_EXISTING_BPMN_INVALID} 指向存量数据。</p>
      */
     private AiBpmnActionBindingWriter.Snapshot captureActionBindings(FunctionUnit functionUnit,
-                                                                   AiGeneratedData generatedData) {
+                                                                   AiGeneratedData generatedData,
+                                                                   String regenerateScope) {
         boolean replacesProcess = carriesProcess(generatedData);
+        boolean clearsProcess = regenerateScope == null || "ALL".equalsIgnoreCase(regenerateScope);
         if (generatedData.getActionDefinitions() == null && !replacesProcess) {
             return AiBpmnActionBindingWriter.Snapshot.EMPTY;
         }
@@ -892,11 +894,11 @@ public class AiWriteServiceImpl implements AiWriteService {
         try {
             return AiBpmnActionBindingWriter.capture(storedXml, functionUnit.getActionDefinitions());
         } catch (AiGenerationException e) {
-            if (!replacesProcess) {
+            if (!replacesProcess && !clearsProcess) {
                 throw existingBpmnInvalid(functionUnit, processDefinition, e);
             }
-            log.warn("Stored BPMN of function unit {} is unreadable; its action bindings cannot be carried "
-                    + "over to the new process: {}", functionUnit.getId(), e.getMessage());
+            log.warn("Stored BPMN of function unit {} is unreadable and is being replaced; its action bindings "
+                    + "cannot be carried over: {}", functionUnit.getId(), e.getMessage());
             return AiBpmnActionBindingWriter.capture(null, functionUnit.getActionDefinitions());
         }
     }

@@ -606,4 +606,22 @@ class AiWriteServiceTest {
         assertTrue(xml.contains("name=\"formReadOnly\" value=\"true\""), xml);
         assertFalse(xml.contains("old_form"), "the deleted form's binding must be dropped: " + xml);
     }
+
+    @Test
+    void unreadableStoredProcess_failsAScopedActionsApplyButNotAFullReplacement() {
+        functionUnit.setProcessDefinition(ProcessDefinition.builder().id(900L).functionUnit(functionUnit)
+                .bpmnXml("<bpmn:definitions").build());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        AiGeneratedData data = AiGeneratedData.builder().actionDefinitions(List.of(
+                Map.of("actionName", "submit", "actionType", "PROCESS_SUBMIT", "stageIds", List.of("Task_Submit"))))
+                .build();
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> writeService.applyGeneratedData(1L, data, "ACTIONS"));
+        assertEquals("AI_EXISTING_BPMN_INVALID", ex.getErrorCode());
+
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+        writeService.applyGeneratedData(1L, data, null);
+        assertNull(functionUnit.getProcessDefinition(), "ALL clears the unreadable process instead of failing on it");
+    }
 }

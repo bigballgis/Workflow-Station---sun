@@ -312,9 +312,11 @@ public class AiStudioProposalPreviewer {
                 });
             }
 
+            // Only where this proposal is what leaves the task bare: it places actions, or the task had some before.
             if (!available.isEmpty()) {
                 plan.byTask().forEach((taskId, names) -> {
-                    if (names.isEmpty()) {
+                    if (names.isEmpty() && (!declared.isEmpty()
+                            || !before.byTask().getOrDefault(taskId, List.of()).isEmpty())) {
                         warn(preview, "ACTION_BINDING_EMPTY_TASK", "processDefinition",
                                 "User task '" + taskId + "' will have no action buttons");
                     }

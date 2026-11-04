@@ -287,7 +287,7 @@ class AiStudioProposalPreviewerTest {
         AiStudioProposalPreview p = previewer.preview(7L, "PROCESS",
                 AiGeneratedData.builder().processDefinition(Map.of("bpmnXml", fresh)).build());
 
-        assertThat(warningTypes(p)).containsExactlyInAnyOrder("ACTION_BINDING_LOST", "ACTION_BINDING_EMPTY_TASK");
+        assertThat(warningTypes(p)).containsExactly("ACTION_BINDING_LOST");
         assertThat(p.getIssues()).anyMatch(i -> i.getDescription().contains("[approve]"));
     }
 

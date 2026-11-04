@@ -41,8 +41,9 @@ import java.util.Set;
  * <ul>
  *   <li>declared in this write with non-empty {@code stageIds} → exactly those user tasks (the proposal
  *       is authoritative for that action, including removing it from tasks it no longer lists);</li>
- *   <li>otherwise → wherever it was before: the binding the written BPMN itself carries on that task,
- *       else the pre-write BPMN's binding on the same user-task id;</li>
+ *   <li>otherwise → wherever it was before: the bindings the written BPMN itself carries, or — when it
+ *       carries none at all (fresh model output) — the pre-write BPMN's binding on the same user-task id
+ *       and at process level;</li>
  *   <li>names with no surviving action are dropped — no stale id is ever written back.</li>
  * </ul>
  * <p>User tasks are matched by id only, never by task name.</p>
@@ -126,11 +127,6 @@ public final class AiBpmnActionBindingWriter {
         return declared;
     }
 
-    /** User-task ids of a decoded BPMN, in document order. */
-    public static List<String> userTaskIds(String bpmnXml) {
-        return userTasks(parseOrFail(bpmnXml)).stream().map(task -> task.getAttribute("id")).toList();
-    }
-
     /**
      * Rewrites the action bindings of {@code bpmnXml} (decoded) to the {@link #plan} against the persisted actions.
      * Returns the input unchanged when nothing differs.
@@ -176,6 +172,10 @@ public final class AiBpmnActionBindingWriter {
     private static Plan plan(Document document, Snapshot before, Set<String> available,
                              List<Map<String, Object>> generatedActions) {
         Snapshot written = readBindings(document, before.namesById());
+        // A BPMN that carries any binding of its own (designer-saved, an undo snapshot) is taken as complete;
+        // only one that carries none at all (fresh model output, which may not contain ids) inherits the
+        // pre-write bindings by user-task id.
+        Snapshot inherited = written.byTask().isEmpty() && written.global() == null ? before : written;
         Map<String, List<String>> declared = declaredStages(generatedActions);
         declared.keySet().retainAll(available);
 
@@ -186,8 +186,7 @@ public final class AiBpmnActionBindingWriter {
             declared.forEach((name, stageIds) -> {
                 if (stageIds.contains(taskId)) names.add(name);
             });
-            List<String> carried = written.byTask().containsKey(taskId)
-                    ? written.byTask().get(taskId) : before.byTask().get(taskId);
+            List<String> carried = inherited.byTask().get(taskId);
             if (carried != null) {
                 for (String name : carried) {
                     if (!declared.containsKey(name) && available.contains(name) && !names.contains(name)) {
@@ -198,9 +197,9 @@ public final class AiBpmnActionBindingWriter {
             byTask.put(taskId, List.copyOf(names));
         }
 
-        List<String> carriedGlobal = written.global() != null ? written.global() : before.global();
-        List<String> global = carriedGlobal == null ? null
-                : carriedGlobal.stream().filter(available::contains).distinct().toList();
+        List<String> carriedGlobal = inherited.global();
+        List<String> global = carriedGlobal == null ? null : carriedGlobal.stream()
+                .filter(name -> available.contains(name) && !declared.containsKey(name)).distinct().toList();
         return new Plan(byTask, global);
     }
 
