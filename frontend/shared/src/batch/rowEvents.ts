@@ -3,11 +3,14 @@ import { isEmptyBatchEvent } from './controlContract'
 import { createPortalFormApi, type PortalFormApi, type PortalFormApiOverlays } from '../formEvents/api'
 import { firstBatchFieldError } from './validation'
 import type { BatchEditableField } from './fields'
+import { afterEvent, eventSequence, isEventPromise } from '../formEvents/async'
+import { FormEventOperation } from '../formEvents/operation'
+import { bindFormEventArgs } from '../formEvents/args'
 
 export type BatchRule = Record<string, any>
 export type BatchEventParser = (raw: unknown) => ((context: { field: string; value: unknown; rule: Record<string, unknown>; api: PortalFormApi; args?: unknown; config?: unknown; data?: unknown }) => unknown) | null
 export interface BatchRowEventRunner {
-  (row: Record<string, unknown>, rules: BatchRule[], changedFields: string[], readonly: (field: string) => boolean): Record<string, unknown>
+  (row: Record<string, unknown>, rules: BatchRule[], changedFields: string[], readonly: (field: string) => boolean): Record<string, unknown> | Promise<Record<string, unknown>>
   createSession(row: Record<string, unknown>, rules: BatchRule[], readonly: (field: string) => boolean, options?: BatchRule): BatchEventSession
 }
 export class BatchRowEventError extends Error {
@@ -24,6 +27,7 @@ export class BatchEventSession {
   readonly required = new Map<string, boolean>()
   readonly disabled = new Map<string, boolean>()
   readonly labels = new Map<string, string>()
+  readonly infos = new Map<string, string>()
   readonly choices = new Map<string, Array<{ label: string; value: string | number }>>()
   readonly errors = new Map<string, string>()
   readonly notifications = new Map<string, { uniqueId: string; message: string; level: 'ERROR' | 'WARNING' | 'INFO' }>()
@@ -35,8 +39,10 @@ export class BatchEventSession {
   private readonly pending = new Set<string>()
   private dispatching = false
   private bootstrapped = false
+  private operation?: FormEventOperation
+  notify: () => void = () => {}
 
-  constructor(row: Record<string, unknown>, rules: BatchRule[], private readonly readonlyField: (field: string) => boolean,
+  constructor(row: Record<string, unknown>, private readonly rules: BatchRule[], private readonly readonlyField: (field: string) => boolean,
     private readonly parse: BatchEventParser, private readonly options: BatchRule = {}) {
     this.data = copy(row)
     const visit = (items: BatchRule[]) => items.forEach(rule => {
@@ -52,8 +58,9 @@ export class BatchEventSession {
     })
     visit(rules)
     const keys = () => [...this.fields.keys()]
-    const notify = () => {}
+    const notify = () => this.notify()
     const overlays: PortalFormApiOverlays = {
+      info: { state: this.infos, getAllFieldKeys: keys, notify },
       disabled: { state: { flags: this.disabled }, notify, getAllFieldKeys: keys },
       labels: { state: this.labels, notify, getDesignerLabel: field => String(this.fields.get(field)?.title ?? field) },
       options: { state: this.choices, notify, getDesignerOptions: field => this.fields.get(field)?.options ?? this.fields.get(field)?.props?.options ?? [] },
@@ -68,6 +75,15 @@ export class BatchEventSession {
     { state: { flags: this.required }, notify, getAllFieldKeys: keys }, overlays)
   }
 
+  /** Isolated working state: a cancelled action can never restore or mutate its successor. */
+  fork(operation: FormEventOperation) {
+    const next = new BatchEventSession(this.data, this.rules, this.readonlyField, this.parse, this.options)
+    next.restore(this.snapshot())
+    next.bootstrapped = this.bootstrapped
+    next.operation = operation
+    return next
+  }
+
   private patch(patch: Record<string, unknown>, userInput = false) {
     for (const field of Object.keys(patch)) {
       const rule = this.fields.get(field)
@@ -80,16 +96,16 @@ export class BatchEventSession {
       this.data[field] = copy(value)
       this.pending.add(field)
     }
-    this.flush()
+    return this.flush()
   }
   private run(raw: unknown, field: string, rule: BatchRule = {}, args: unknown[] = [], value: unknown = this.data[field], extra: { config?: unknown; data?: unknown } = {}): unknown {
-    if (Array.isArray(raw)) { let result: unknown; for (const handler of raw) { result = this.run(handler, field, rule, args, value, extra); if (result === false) return false } return result }
+    if (Array.isArray(raw)) return eventSequence(raw.map(handler => () => this.run(handler, field, rule, args, value, extra)))
     if (isEmptyBatchEvent(raw)) return
     const handler = this.parse(raw)
     if (!handler) throw new BatchRowEventError('subTable.batchEventInvalid', field)
-    const result = handler({ field, value: copy(value), rule: copy(rule), api: this.api, args, ...extra })
-    if (result && typeof (result as PromiseLike<unknown>).then === 'function') throw new BatchRowEventError('subTable.batchEventInvalid', field)
-    return result
+    const api = this.operation ? this.operation.bindApi(this.api) : this.api
+    const scriptArgs = bindFormEventArgs(args, api, copy(rule))
+    return handler({ field, value: copy(value), rule: copy(rule), api, args: scriptArgs, ...extra })
   }
   private handler(rule: BatchRule, kind: 'on' | 'hook', event: string): unknown {
     const primary = rule[kind]?.[event]
@@ -97,66 +113,96 @@ export class BatchEventSession {
   }
   private flush() {
     if (this.dispatching) return
-    this.dispatching = true
     let count = 0
-    try {
+    return this.dispatch(() => {
+      const drain = (): unknown => {
       while (this.pending.size) {
         if (++count > 1000) throw new BatchRowEventError('subTable.batchEventInvalid', 'change cycle')
         const field = this.pending.values().next().value!
         this.pending.delete(field)
         const rule = this.fields.get(field)!
-        this.run(this.handler(rule, 'on', 'change'), field, rule, [copy(this.data[field])])
-        this.run(this.handler(rule, 'hook', 'value'), field, rule, [copy(this.data[field])])
-        this.run(this.options.onChange, field, rule, [field, copy(this.data[field]), { api: this.api, rule }])
+        const result = eventSequence([
+          () => this.run(this.handler(rule, 'on', 'change'), field, rule, [copy(this.data[field])]),
+          () => this.run(this.handler(rule, 'hook', 'value'), field, rule, [copy(this.data[field])]),
+          () => this.run(this.options.onChange, field, rule, [field, copy(this.data[field]), { api: this.api, rule }]),
+        ])
+        if (isEventPromise(result)) return Promise.resolve(result).then(drain)
       }
-    } finally { this.dispatching = false; this.pending.clear() }
+      }
+      return drain()
+    }, false)
+  }
+  private dispatch(action: () => unknown, flush = true): unknown {
+    if (this.dispatching) return action()
+    this.dispatching = true
+    const finish = () => { this.dispatching = false; this.pending.clear(); this.notify() }
+    try {
+      const result = afterEvent(action(), value => {
+        this.dispatching = false
+        return flush ? afterEvent(this.flush(), () => value) : value
+      })
+      if (isEventPromise(result)) return Promise.resolve(result).finally(finish)
+      finish()
+      return result
+    } catch (error) { finish(); throw error }
   }
   snapshot() {
     return { data: copy(this.data), maps: [this.hidden, this.display, this.required, this.disabled, this.labels, this.choices,
-      this.errors, this.notifications, this.lookupFilters, this.refreshes].map(map => [...map.entries()]), focus: this.focusField }
+      this.errors, this.notifications, this.lookupFilters, this.refreshes, this.infos].map(map => [...map.entries()]), focus: this.focusField }
   }
   restore(snapshot: ReturnType<BatchEventSession['snapshot']>) {
     this.data = copy(snapshot.data)
     const maps: Map<string, any>[] = [this.hidden, this.display, this.required, this.disabled, this.labels, this.choices,
-      this.errors, this.notifications, this.lookupFilters, this.refreshes]
+      this.errors, this.notifications, this.lookupFilters, this.refreshes, this.infos]
     maps.forEach((map, index) => { map.clear(); for (const [key, value] of snapshot.maps[index]!) map.set(key, value) })
     this.focusField = snapshot.focus
   }
-  changeValues(values: Record<string, unknown>) { this.patch(values, true) }
-  change(field: string, value: unknown) { this.changeValues({ [field]: value }) }
+  changeValues(values: Record<string, unknown>) { return this.patch(values, true) }
+  change(field: string, value: unknown) { return this.changeValues({ [field]: value }) }
+  execute(raw: unknown, field: string, args: unknown[] = [], rule: BatchRule = {}, value: unknown = this.data[field], extra: { config?: unknown; data?: unknown } = {}) {
+    return this.dispatch(() => this.run(raw, field, rule, args.length ? args : [value], value, extra))
+  }
   event(field: string, name: string, args: unknown[] = []) {
     const rule = this.fields.get(field)
-    if (rule) this.run(this.handler(rule, 'on', name), field, rule, args)
+    if (rule) return this.dispatch(() => this.run(this.handler(rule, 'on', name), field, rule, args))
   }
-  ruleEvent(rule: BatchRule, name: string, args: unknown[] = [], kind: 'on' | 'hook' = 'on') { this.run(this.handler(rule, kind, name), String(rule.field ?? rule.type), rule, args) }
+  ruleEvent(rule: BatchRule, name: string, args: unknown[] = [], kind: 'on' | 'hook' = 'on') { return this.dispatch(() => this.run(this.handler(rule, kind, name), String(rule.field ?? rule.type), rule, args)) }
   bootstrap() {
     if (this.bootstrapped) return
     this.bootstrapped = true
-    this.run(this.options.onCreated, '__form__')
-    for (const rule of this.allRules) this.run(this.handler(rule, 'hook', 'load'), String(rule.field ?? rule.type), rule)
-    this.run(this.options.onChange, '__bootstrap__')
-    for (const rule of this.allRules) this.run(this.handler(rule, 'hook', 'mounted'), String(rule.field ?? rule.type), rule)
-    this.run(this.options.onMounted, '__form__')
+    return eventSequence([
+      () => this.dispatch(() => this.run(this.options.onCreated, '__form__', {}, [this.api])),
+      ...this.allRules.map(rule => () => this.ruleEvent(rule, 'load', [], 'hook')),
+      () => this.dispatch(() => this.run(this.options.onChange, '__bootstrap__')),
+      ...this.allRules.map(rule => () => this.ruleEvent(rule, 'mounted', [], 'hook')),
+      () => this.dispatch(() => this.run(this.options.onMounted, '__form__', {}, [this.api])),
+    ])
   }
   beforeFetch(config: unknown, data: unknown) {
-    return this.run(this.options.beforeFetch, '__fetch__', {}, [], undefined, { config, data })
+    return this.dispatch(() => this.run(this.options.beforeFetch, '__fetch__', {}, [], undefined, { config, data }))
   }
-  reload() { this.run(this.options.onReload, '__form__') }
-  reset() { this.run(this.options.onReset, '__form__') }
+  reload() { return this.dispatch(() => this.run(this.options.onReload, '__form__', {}, [this.api])) }
+  reset() { return this.dispatch(() => this.run(this.options.onReset, '__form__', {}, [this.api])) }
   validate(fields: BatchEditableField[]) {
     if (this.errors.size) throw new BatchRowEventError('subTable.batchEventValidation', [...this.errors.values()][0]!)
     const error = firstBatchFieldError([this.data], fields.map(field => ({ ...field,
       required: this.required.get(field.field) ?? field.required,
       options: this.choices.get(field.field) ?? field.options,
+      hidden: this.hidden.get(field.field) === true,
+      display: this.display.get(field.field) !== false,
     })))
-    if (error) throw new BatchRowEventError('subTable.batchEventValidation', error.label)
+    if (error) throw new BatchRowEventError('subTable.batchEventValidation', error.message ?? error.label)
   }
   submit(fields: BatchEditableField[] = []) {
-    if (this.run(this.options.beforeSubmit, '__submit__', {}, [], this.data) === false) throw new BatchRowEventError('subTable.batchEventSubmitRejected', 'beforeSubmit')
+    return afterEvent(this.dispatch(() => this.run(this.options.beforeSubmit, '__submit__', {}, [copy(this.data), this.api], this.data)), result => {
+    if (result === false) throw new BatchRowEventError('subTable.batchEventSubmitRejected', 'beforeSubmit')
     if (this.errors.size) throw new BatchRowEventError('subTable.batchEventValidation', [...this.errors.values()][0]!)
     this.validate(fields)
-    this.run(this.options.onSubmit, '__submit__', {}, [], this.data)
-    this.validate(fields)
+    return afterEvent(this.dispatch(() => this.run(this.options.onSubmit, '__submit__', {}, [copy(this.data), this.api], this.data)), submitted => {
+      if (submitted === false) throw new BatchRowEventError('subTable.batchEventSubmitRejected', 'onSubmit')
+      return this.validate(fields)
+    })
+    })
   }
 }
 
@@ -165,8 +211,7 @@ export function createBatchRowEventRunner(parse: BatchEventParser): BatchRowEven
   return Object.assign((row: Record<string, unknown>, rules: BatchRule[], changed: string[], readonly: (field: string) => boolean) => {
     const session = new BatchEventSession(row, rules, readonly, parse)
     // The caller has already applied the direct edits; dispatch each changed field once.
-    for (const field of changed) session.event(field, 'change')
-    return session.data
+    return afterEvent(eventSequence(changed.map(field => () => session.event(field, 'change'))), () => session.data)
   }, { createSession: (row: Record<string, unknown>, rules: BatchRule[], readonly: (field: string) => boolean, options?: BatchRule) =>
     new BatchEventSession(row, rules, readonly, parse, options) })
 }

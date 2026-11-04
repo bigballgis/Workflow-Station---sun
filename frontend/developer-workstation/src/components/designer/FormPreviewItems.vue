@@ -19,12 +19,12 @@
     >
       <form-create
         v-if="visiblePreviewRules(item.rule).length"
-        :key="'preview-form-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-v' + previewVisibilityRenderTick"
+        :key="'preview-form-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed')"
         v-model="previewModel"
         locale="en"
         :rule="visiblePreviewRules(item.rule)"
         :option="effectivePreviewOption"
-        @change="(field: string, value: unknown) => onPreviewFieldChange(item.rule, field, value)"
+        @change="(field: string, value: unknown, _rule: unknown, _api: unknown, setFlag: boolean, added: boolean) => !added && onPreviewFieldChange(item.rule, field, value, setFlag)"
       />
     </div>
 
@@ -60,7 +60,7 @@
         <template #default="{ rule: inlineRule }">
           <form-create
             v-if="inlineRule.length"
-            :key="'preview-inline-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-v' + previewVisibilityRenderTick + '-m' + inlineAssignModeKey(inlineRule)"
+            :key="'preview-inline-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-m' + inlineAssignModeKey(inlineRule)"
             :model-value="inlineSubFormModel(item.binding.bindingId)"
             locale="en"
             :rule="inlineRule"
@@ -241,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, provide, reactive } from 'vue'
+import { computed, inject, provide, reactive, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   PREVIEW_MY_REQUESTS_ACTIVE_KEY,
@@ -295,9 +295,11 @@ const previewMyRequestsGlobal = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined
 
 const isMyRequestsPreview = computed(() => previewMyRequestsGlobal?.value === true)
 
+const previewShadow = shallowRef(props.previewData)
+watch(() => props.previewData, value => { previewShadow.value = value })
 const previewModel = computed({
-  get: () => props.previewData,
-  set: (value: Record<string, any>) => emit('update:previewData', value),
+  get: () => previewShadow.value,
+  set: (value: Record<string, any>) => { previewShadow.value = value; emit('update:previewData', value) },
 })
 
 /**
@@ -383,7 +385,6 @@ const lookupSelectedRows =
   parentCascade?.lookupSelectedRows ?? reactive<Record<string, Record<string, unknown>>>({})
 
 const {
-  previewVisibilityRenderTick,
   visiblePreviewRules,
   isPreviewFieldVisible,
   isPreviewSubTableVisible,
@@ -398,7 +399,7 @@ const {
   previewOption: () => props.previewOption,
   previewModel,
   isMyRequestsPreview,
-  emitPreviewData: (value) => emit('update:previewData', value),
+  emitPreviewData: (value) => { previewModel.value = value },
 })
 
 function collectLookupPreviewItems(nodes: FormPreviewItem[]): Extract<FormPreviewItem, { kind: 'lookup' }>[] {
@@ -503,6 +504,7 @@ function updateTableRows(
     requestIdConfig: props.requestIdConfig,
     requestIdRecompute: recomputeRequestId,
     visibility: previewVisibilityBridge(),
+    formOnChange: props.previewOption?.onChange,
   })
 }
 
@@ -519,12 +521,14 @@ function recomputeRequestId(model: Record<string, any>): string | undefined {
   return parts.length ? parts.join(cfg.separator ?? '') : ''
 }
 
-function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unknown) {
+function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unknown, programmatic = false) {
   if (!field || isMyRequestsPreview.value) return
   dispatchPreviewFieldValueChange(segmentRules, field, value, previewModel, {
     requestIdConfig: props.requestIdConfig,
     requestIdRecompute: recomputeRequestId,
     visibility: previewVisibilityBridge(),
+    formOnChange: props.previewOption?.onChange,
+    programmatic,
   })
 }
 
@@ -558,7 +562,7 @@ function onLookupPreviewClear(item: Extract<FormPreviewItem, { kind: 'lookup' }>
 }
 
 function mergePrimaryFormData(patch: Record<string, unknown>) {
-  emit('update:previewData', { ...props.previewData, ...patch })
+  previewModel.value = { ...previewModel.value, ...patch }
 }
 </script>
 

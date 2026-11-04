@@ -4,6 +4,7 @@
     <template #header><div class="batch-edit-dialog__title"><span class="el-dialog__title">{{ t(mode === 'add' ? 'subTable.batchAdd' : 'subTable.batchEdit') }}</span><slot name="help" /></div></template>
     <el-alert v-if="unsupportedControl" :title="t('subTable.batchUnsupportedControl', { type: unsupportedControl })" type="error" :closable="false" />
     <el-alert v-if="eventError || initializationError" :title="initializationError || eventError" type="error" :closable="false" />
+    <el-alert v-if="eventPending || queuedPending" :title="t('subTable.batchEventPending')" type="info" :closable="false" />
     <template v-if="!unsupportedControl">
     <el-form v-if="mode === 'add'" label-width="auto">
       <template v-if="mode === 'add'">
@@ -18,15 +19,15 @@
     </el-select>
     <el-alert v-for="notice in currentNotices" :key="notice.uniqueId" :title="notice.message" :type="notice.level === 'ERROR' ? 'error' : notice.level === 'WARNING' ? 'warning' : 'info'" :closable="false" />
     <BatchDesignedForm v-if="visible" :rules="rules" :options="options" :readonly-field="readonly" :event-context="sharedEventContext"
-      :initial-values="mode === 'add' ? initialValues : undefined" @change="setValue">
+      :initial-values="mode === 'add' ? initialValues : undefined">
       <template #assignment="{ rule }"><slot v-if="showAssign" name="assignment" :rule="rule" :rows="assignmentRows" :event-context="sharedEventContext" :disabled="options?.form?.disabled === true || rule.props?.disabled === true || rule.props?.readonly === true" /></template>
     </BatchDesignedForm>
     </template>
-    <template #footer><el-button @click="close">{{ t('common.cancel') }}</el-button><el-button type="primary" :loading="applying" :disabled="!!unsupportedControl || (mode !== 'add' && !targetIds.length)" @click="apply">{{ t('subTable.batchApply') }}</el-button></template>
+    <template #footer><el-button @click="close">{{ t('common.cancel') }}</el-button><el-button type="primary" :loading="applying" :disabled="eventPending || queuedPending || !!unsupportedControl || (mode !== 'add' && !targetIds.length)" @click="apply">{{ t('subTable.batchApply') }}</el-button></template>
   </el-dialog>
 </template>
 <script setup lang="ts">
-import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, reactive, ref, shallowRef, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { BindingParentSelection } from '../tableFkRuntime'
@@ -36,9 +37,11 @@ import type { BatchEditableField } from './fields'
 import { applyBatchDraft, type BatchDraftChangeSet, type BatchFieldIntent } from './draft'
 import { batchRuleChildren, unsupportedBatchControl } from './batchFormRules'
 import BatchDesignedForm from './BatchDesignedForm.vue'
-import type { BatchEventSession, BatchRowEventRunner } from './rowEvents'
+import { BatchRowEventError, type BatchEventSession, type BatchRowEventRunner } from './rowEvents'
 import { assignmentControlRules } from './assignmentControlRules'
 import type { BatchAssignmentConfig } from './workspaceTypes'
+import { afterEvent, isEventPromise } from '../formEvents/async'
+import { FormEventOperation } from '../formEvents/operation'
 const props = withDefaults(defineProps<{
   visible: boolean; rows: Array<Record<string, unknown>>; fields: BatchEditableField[]
   rules: Array<Record<string, any>>; options?: Record<string, any>; selectedRowIds?: string[]; mode?: 'edit' | 'add'
@@ -66,6 +69,13 @@ const selectedParentValue = ref('')
 const addCount = ref(1)
 const applying = ref(false)
 const eventSessions = shallowRef<BatchEventSession[]>([])
+let acceptedSessions: BatchEventSession[] = []
+let eventOperation: FormEventOperation | undefined
+let eventCompletion: Promise<boolean> | undefined
+let queuedEvents: Promise<boolean> | undefined
+let inputGeneration = 0
+const queuedPending = ref(false)
+const eventPending = ref(false)
 const eventTick = ref(0)
 const eventError = ref('')
 const initializationError = ref('')
@@ -81,42 +91,122 @@ const eventRules = computed(() => {
   }
   return visit(props.rules)
 })
-const currentNotices = computed(() => { void eventTick.value; return [...(activeSession.value?.notifications.values() ?? [])] })
-watch(previewIndex, () => executeEvents(session => { if (session === activeSession.value) session.reload() }))
+const currentNotices = computed(() => { void eventTick.value; return [...(acceptedSessions[previewIndex.value]?.notifications.values() ?? [])] })
+watch(previewIndex, () => { cancelEvents(); return executeEvents(session => { if (session === activeSession.value) return session.reload() }) })
 function eventReadonly(field: string) {
   return assignmentFields.value.includes(field) ? props.options?.form?.disabled === true || props.fieldWriteModes?.[field] === 'READONLY'
     || ruleMap.value.get(field)?.props?.disabled === true || ruleMap.value.get(field)?.props?.readonly === true : readonly(field)
 }
-function executeEvents(action: (session: BatchEventSession) => void) {
-  const snapshots = eventSessions.value.map(session => session.snapshot())
-  let failed = false
-  try {
-    for (const session of eventSessions.value) action(session)
-    eventError.value = ''
-  } catch (error) {
-    eventSessions.value.forEach((session, index) => session.restore(snapshots[index]!))
-    failed = true
-    eventError.value = props.formatError(error)
+function cancelEvents(invalidate = true) {
+  if (invalidate) { inputGeneration++; queuedEvents = undefined; queuedPending.value = false }
+  eventOperation?.cancel()
+  eventOperation?.finish()
+  eventOperation = undefined
+  eventCompletion = undefined
+  eventPending.value = false
+  eventSessions.value = acceptedSessions
+  eventTick.value++
+}
+onBeforeUnmount(cancelEvents)
+function executeEvents(action: (session: BatchEventSession) => unknown): boolean | Promise<boolean> {
+  cancelEvents(false)
+  const operation = new FormEventOperation()
+  eventOperation = operation
+  const working = acceptedSessions.map(session => session.fork(operation))
+  working.forEach(session => { session.notify = () => { if (eventOperation === operation) eventTick.value++ } })
+  eventSessions.value = working
+  const finish = (error?: unknown) => {
+    if (eventOperation !== operation) return false
+    if (error == null) {
+      operation.assertActive()
+      try { operation.finish() } catch (failure) { return finish(failure) }
+      acceptedSessions = working
+      eventError.value = ''
+    } else {
+      operation.cancel(error)
+      if (error instanceof BatchRowEventError && error.message === 'subTable.batchEventValidation') {
+        working.forEach((session, index) => {
+          const errors = acceptedSessions[index]!.errors
+          for (const [field, message] of session.errors) errors.set(field, message)
+        })
+      }
+      eventError.value = props.formatError(error)
+    }
+    eventSessions.value = acceptedSessions
+    eventOperation = undefined
+    eventCompletion = undefined
+    eventPending.value = false
+    operation.finish()
+    eventTick.value++
+    return error == null
   }
-  if (failed || eventSessions.value.some((session, index) => JSON.stringify(session.snapshot()) !== JSON.stringify(snapshots[index]))) eventTick.value++
+  try {
+    const pending: PromiseLike<unknown>[] = []
+    for (const session of working) {
+      const result = action(session)
+      if (isEventPromise(result)) {
+        const promise = Promise.resolve(result)
+        // A later row can fail synchronously; the transaction still reports that error.
+        void promise.catch(() => {})
+        pending.push(promise)
+      }
+    }
+    if (pending.length) {
+      eventPending.value = true
+      eventCompletion = operation.wait(Promise.all(pending)).then(() => finish(), error => finish(error))
+      return eventCompletion
+    }
+    return finish()
+  } catch (error) {
+    return finish(error)
+  }
+}
+function enqueueEvents(action: (session: BatchEventSession) => unknown): boolean | Promise<boolean> {
+  const previous = queuedEvents ?? eventCompletion
+  if (!previous) return executeEvents(action)
+  const generation = inputGeneration
+  const next = previous.then(accepted => accepted && inputGeneration === generation && props.visible ? executeEvents(action) : false)
+  queuedEvents = next
+  queuedPending.value = true
+  void next.finally(() => { if (queuedEvents === next) { queuedEvents = undefined; queuedPending.value = false } }).catch(() => {})
+  return next
 }
 const sharedEventContext = {
   version: () => eventTick.value,
   session: () => activeSession.value,
+  pending: () => eventPending.value || queuedPending.value,
   change: setValue,
   clearAssignment: () => {
-    if (initializationError.value) return false
+    if (applying.value || initializationError.value) return false
+    cancelEvents()
     const fields = assignmentFields.value.filter(field => ruleMap.value.has(field))
-    executeEvents(session => session.changeValues(Object.fromEntries(fields.filter(field => session.data[field] != null && session.data[field] !== '').map(field => [field, null]))))
-    return !eventError.value
+    return executeEvents(session => session.changeValues(Object.fromEntries(fields.filter(field => session.data[field] != null && session.data[field] !== '').map(field => [field, null]))))
   },
   beforeFetch: (config: unknown, data: unknown) => {
     let result: unknown
-    executeEvents(session => { if (session === activeSession.value) result = session.beforeFetch(config, data) })
-    if (eventError.value) throw new Error(eventError.value)
-    return result
+    const run = () => afterEvent(enqueueEvents(session => {
+      if (session !== activeSession.value) return
+      return afterEvent(session.beforeFetch(config, data), value => { result = value })
+    }), accepted => {
+      if (!accepted) throw new Error(eventError.value)
+      return result
+    })
+    return run()
   },
-  event: (rule: Record<string, any>, name: string, args: unknown[], kind?: 'on' | 'hook') => executeEvents(session => session.ruleEvent(rule, name, args, kind)),
+  event: (rule: Record<string, any>, name: string, args: unknown[], kind?: 'on' | 'hook') => {
+    if (!props.visible || applying.value) return
+    if (name === 'input' && kind !== 'hook' && typeof rule.field === 'string') {
+      if (eventSessions.value.every(session => JSON.stringify(session.data[rule.field]) === JSON.stringify(args[0]))) {
+        return enqueueEvents(session => session.ruleEvent(rule, name, args, kind))
+      }
+      cancelEvents()
+      return afterEvent(executeEvents(session => afterEvent(session.change(rule.field, args[0]), () => session.ruleEvent(rule, name, args, kind))), accepted => {
+        if (accepted) recordFieldIntent(rule.field, args[0])
+        return accepted
+      })
+    }
+    return enqueueEvents(session => session.ruleEvent(rule, name, args, kind))
+  },
 }
 const fieldMap = computed(() => new Map(props.fields.map(field => [field.field, field])))
 const unsupportedControl = computed(() => unsupportedBatchControl(props.rules, new Set(fieldMap.value.keys())))
@@ -145,14 +235,20 @@ function readonly(name: string): boolean {
     || !!def?.isComputed || !!def?.isForeignKey || !!(def?.isPrimaryKey && (props.mode === 'edit' || def.requiresAllocation))
 }
 function setValue(name: string, value: unknown) {
-  if (eventReadonly(name) || initializationError.value) return false
-  executeEvents(session => session.change(name, value))
-  if (eventError.value) return false
+  if (applying.value || eventReadonly(name) || initializationError.value) return false
+  cancelEvents()
+  return afterEvent(executeEvents(session => session.change(name, value)), accepted => {
+  if (!accepted) return false
+  recordFieldIntent(name, value)
+  return true
+  })
+}
+function recordFieldIntent(name: string, value: unknown) {
   values[name] = value
   intents[name] = value == null || value === '' ? { kind: 'clear' } : { kind: 'set', value }
-  return true
 }
 watch(() => props.visible, visible => {
+  cancelEvents()
   if (!visible) return
   baselineRows.value = JSON.parse(JSON.stringify(props.rows))
   targetIds.value = [...new Set(props.selectedRowIds ?? [])]
@@ -166,24 +262,37 @@ watch(() => props.visible, visible => {
   initializeSessions()
 }, { immediate: true })
 function initializeSessions() {
+  cancelEvents()
   initializationError.value = ''
   if (!props.runRowEvents) return
   const drafts = props.mode === 'add' ? Array.from({ length: addCount.value }, () => ({ ...initialValues.value })) : assignmentRows.value
   eventSessions.value = drafts.map(row => props.runRowEvents!.createSession(row, eventRules.value, eventReadonly, props.options))
-  executeEvents(session => {
-    session.bootstrap()
-    if (props.mode === 'add') for (const [field, intent] of Object.entries(intents)) session.change(field, intent.kind === 'clear' ? null : intent.value)
-  })
-  initializationError.value = eventError.value
+  acceptedSessions = eventSessions.value
+  const result = executeEvents(session => afterEvent(session.bootstrap(), () => {
+    if (props.mode === 'add') return session.changeValues(Object.fromEntries(Object.entries(intents).map(([field, intent]) => [field, intent.kind === 'clear' ? null : intent.value])))
+  }))
+  void afterEvent(result, accepted => { if (!accepted) initializationError.value = eventError.value })
 }
 watch(addCount, () => { if (props.visible && props.mode === 'add') initializeSessions() })
+watch(() => [props.rows, props.selectedRowIds], () => {
+  if (!props.visible) return
+  const selected = [...new Set(props.selectedRowIds ?? [])]
+  const current = new Map(props.rows.map(row => [props.rowIdentity(row), row]))
+  if (JSON.stringify(selected) === JSON.stringify(targetIds.value)
+    && assignmentRows.value.every(row => JSON.stringify(current.get(props.rowIdentity(row))) === JSON.stringify(row))) return
+  cancelEvents()
+  eventError.value = t('subTable.batchStaleDraft')
+}, { flush: 'sync' })
 async function close() {
   if (applying.value) return false
-  if (Object.keys(intents).length || props.assignmentHasChanges?.()) {
+  const wasPending = eventPending.value || queuedPending.value
+  cancelEvents()
+  if (wasPending || Object.keys(intents).length || props.assignmentHasChanges?.()) {
     try { await ElMessageBox.confirm(t('subTable.batchDiscardConfirm'), t('common.cancel'), { type: 'warning' }) } catch { return false }
   }
-  executeEvents(session => session.reset())
-  if (eventError.value) return false
+  if (!await executeEvents(session => afterEvent(session.reset(), result => {
+    if (result === false) throw new BatchRowEventError('subTable.batchEventSubmitRejected', 'onReset')
+  }))) return false
   emit('update:visible', false)
   return true
 }
@@ -194,7 +303,7 @@ function assertFresh() {
   if (targetIds.value.length !== assignmentRows.value.length) throw new Error(t('subTable.batchStaleDraft'))
 }
 async function apply() {
-  if (applying.value) return
+  if (applying.value || eventPending.value || queuedPending.value) return
   applying.value = true
   try {
     if (unsupportedControl.value) throw new Error(t('subTable.batchUnsupportedControl', { type: unsupportedControl.value }))
@@ -208,8 +317,7 @@ async function apply() {
     let next = applyBatchDraft(props.rows, row => props.rowIdentity(row)!, changes)
     const touched = new Set(Object.keys(patch))
     if (eventSessions.value.length) {
-      executeEvents(session => { session.submit(fields) })
-      if (eventError.value) throw new Error(eventError.value)
+      if (!await executeEvents(session => session.submit(fields))) throw new Error(eventError.value)
       const drafts = new Map(eventSessions.value.map((session, index) => [targetIds.value[index], session.data]))
       if (props.mode === 'edit') next = next.map(row => {
         const draft = drafts.get(props.rowIdentity(row)!)
@@ -259,8 +367,12 @@ function collectEventPatches(rows: Array<Record<string, unknown>>, changes: Batc
 async function prepareAdded(fields: BatchEditableField[]): Promise<PreparedBatchRows> {
   const row = Object.fromEntries(fields.map(field => [field.field, intents[field.field]?.kind === 'clear' ? null : values[field.field]]))
   const fresh = eventSessions.value.length ? eventSessions.value.map(session => session.data) : Array.from({ length: addCount.value }, () => JSON.parse(JSON.stringify(row)))
-  const error = firstBatchFieldError(fresh, fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false })))
-  if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+  const requiredFields = fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false }))
+  if (eventSessions.value.length) eventSessions.value.forEach(session => session.validate(requiredFields))
+  else {
+    const error = firstBatchFieldError(fresh, requiredFields)
+    if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+  }
   if (!props.prepareRows) throw new Error(t('common.operationFailed'))
   const prepared = await props.prepareRows(fresh, selectedParentValue.value)
   const known = new Set(props.rows.map(props.rowIdentity))

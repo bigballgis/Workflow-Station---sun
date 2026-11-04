@@ -3,9 +3,12 @@
     :visible="visible"
     :title="title || (mode === 'edit' ? t('common.edit') : t('common.add'))"
     width="min(700px, calc(100vw - 48px))"
+    :before-close="beforeClose"
     @update:visible="emit('update:visible', $event)"
     @closed="handleClosed"
   >
+    <el-alert v-if="events.pending.value" :title="t('subTable.batchEventPending')" type="info" :closable="false" />
+    <el-alert v-if="events.error.value" :title="events.error.value" type="error" :closable="false" />
     <el-form
       v-if="mode === 'add' && parentSelection && parentSelection.options.length > 1"
       label-width="auto"
@@ -45,6 +48,7 @@
         locale="en"
         :rule="formRule"
         :option="formOption"
+        @mounted="events.mounted"
       />
       <div
         v-else
@@ -67,11 +71,12 @@
       v-if="!hideFooter"
       #footer
     >
-      <el-button @click="emit('update:visible', false)">
+      <el-button @click="closeDialog">
         {{ t('common.cancel') }}
       </el-button>
       <el-button
         type="primary"
+        :disabled="events.pending.value || saving"
         @click="handleSave"
       >
         {{ t('common.save') }}
@@ -88,6 +93,7 @@ import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { cloneFormRules, collectUploadRulesFromTree, injectPreviewUploadHandlers } from '@/utils/formDesigner'
 import { normalizeSubTablePreviewLayout } from '@/utils/normalizeSubTablePreviewLayout'
 import { syncDesignerComponentEventsForFcPreview } from '@/utils/formCreatePreviewEvents'
+import { useNativePreviewEvents } from '@/composables/formDesigner/useNativePreviewEvents'
 import { isFormCreateRuleHidden, mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import {
   alignUploadFieldsToColumns,
@@ -151,6 +157,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const formData = ref<Record<string, any>>({})
+const events = useNativePreviewEvents(() => props.option ?? {}, () => props.readOnly === true)
+const saving = ref(false)
 const selectedParentValue = ref('')
 const parentSelectionError = ref('')
 const formCreateMounted = ref(false)
@@ -178,7 +186,7 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
   const { title: _dropTitle, form: optionForm, ...rest } = option || {}
   return {
     ...defaultFormOption,
-    ...rest,
+    ...events.bindOption(rest),
     resetBtn: false,
     submitBtn: false,
     // Same as Form-mode Preview: component on.blur/change receive inject.api.
@@ -264,9 +272,11 @@ watch(
   ] as const,
   ([open, data, mode, rule, option]) => {
     if (!open) {
+      events.cancel()
       formCreateMounted.value = false
       return
     }
+    events.cancel()
     formCreateMounted.value = false
     uploadSession.value = {}
     selectedParentValue.value = ''
@@ -426,13 +436,15 @@ function rebuildFormRule() {
   formRule.value = filtered
   // Parent Preview may have sanitized $FNX strings off `on`/`hook` (crash guard).
   // Recompile from `_on`/`_hook` so sub-form component events run like Form-mode Preview.
-  syncDesignerComponentEventsForFcPreview(formRule.value)
+  syncDesignerComponentEventsForFcPreview(formRule.value, events.hooks)
   injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
   // Recompute from rawRule (all modes), so the floor does not depend on the active one.
   syncAssignmentLabelMinWidth()
 }
 
 function onAssignmentModeChange(value: unknown) {
+  if (saving.value) return
+  events.cancel()
   if (value !== 'person' && value !== 'role') return
   const config = props.assignmentConfig
   // Defense in depth: the widget already prevents clicking the locked card, but
@@ -447,6 +459,7 @@ function onAssignmentModeChange(value: unknown) {
 }
 
 function handleClosed() {
+  events.cancel()
   formCreateMounted.value = false
   formData.value = {}
   seedRow.value = {}
@@ -454,6 +467,10 @@ function handleClosed() {
 }
 
 async function handleSave() {
+  if (saving.value || events.pending.value) return
+  saving.value = true
+  try {
+  if (!await events.validate()) return
   if (props.mode === 'add' && props.parentSelection && !selectedParentValue.value) {
     parentSelectionError.value = t('subTable.parentSelectionRequired')
     return
@@ -482,7 +499,13 @@ async function handleSave() {
     emit('save', row, selectedParentValue.value || undefined)
   }
   emit('update:visible', false)
+  } finally { saving.value = false }
 }
+
+async function closeDialog() {
+  if (await beforeClose()) emit('update:visible', false)
+}
+async function beforeClose() { return !saving.value && await events.reset() }
 </script>
 
 <style scoped>

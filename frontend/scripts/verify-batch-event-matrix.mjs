@@ -10,6 +10,13 @@ const origin = 'http://localhost:3000'
 const statePath = new URL('../../.codex-batch-matrix-state.json', import.meta.url)
 const state = JSON.parse(readFileSync(statePath, 'utf8'))
 const mode = process.argv[2]
+const asynchronous = process.env.BATCH_EVENT_ASYNC === '1'
+function asyncScripts(value) {
+ if (typeof value === 'string' && value.startsWith('$FNX:')) return '$FNX:return Promise.resolve().then(function () {' + value.slice(5) + '\n});'
+ if (Array.isArray(value)) return value.map(asyncScripts)
+ if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, asyncScripts(item)]))
+ return value
+}
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } })
 const fetchRequests=[]; page.on('request',request=>{if(request.headers()['x-batch-event-test'])fetchRequests.push({url:new URL(request.url()).pathname+new URL(request.url()).search,marker:request.headers()['x-batch-event-test']})});
@@ -49,11 +56,11 @@ try {
    ]
    const options = {beforeFetch:record('native-fetch')+'config.headers["X-Batch-Event-Test"] = "verified"; if(config.action.includes("batchEventCancelled")) { api.setValue("event_trace",api.getValue("event_trace")+"|fetch-cancelled"); return false; }',form:{labelPosition:'left',labelWidth:'auto'},onCreated:'$FNX:api.setValue("event_trace","created");api.hidden(false,"event_date");api.display(false,"event_flag");',onMounted:record('form-mounted'),onReload:record('form-reload'),
      onChange:'$FNX:if(field === "item_label") api.setValue("event_trace",(api.getValue("event_trace")||"")+"|form-change");',
-     onReset:'$FNX:if(api.getValue("item_label") === "reset-block") throw new Error("Synthetic reset guard");',
+     onReset:'$FNX:if(api.getValue("item_label") === "reset-block") throw new Error("Synthetic reset guard"); if(api.getValue("item_label") === "reset-false") return false;',
      beforeSubmit:record('before-submit')+'if(api.getValue("item_label") === "reject") return false;',
      onSubmit:record('form-submit')+'api.setValue("event_output","submitted:"+api.getValue("item_label"));',
    }
-   form.configJson.batchForms[binding.id]={schemaVersion:1,rule:rules,options}
+   form.configJson.batchForms[binding.id]=asynchronous ? asyncScripts({schemaVersion:1,rule:rules,options}) : {schemaVersion:1,rule:rules,options}
    form.fieldPermissions={...form.fieldPermissions,[`${binding.id}:event_conditional`]:'EDITABLE',...Object.fromEntries(rules.map(r=>[`${binding.id}:${r.field}`,'EDITABLE']))}
    await api('PUT',`/function-units/${state.unitId}/forms/${form.id}`,form)
   }
@@ -115,10 +122,13 @@ try {
   await source.fill('reset-block');await source.press('Tab');await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
   const confirm=page.locator('.el-message-box:visible');if(await confirm.count())await confirm.getByRole('button',{name:/OK|Confirm/}).click()
   await dialog.getByText('Synthetic reset guard',{exact:true}).waitFor()
+  await source.fill('reset-false');await source.press('Tab');await dialog.getByRole('button',{name:'Cancel',exact:true}).click()
+  const resetConfirm=page.locator('.el-message-box:visible');if(await resetConfirm.count())await resetConfirm.getByRole('button',{name:/OK|Confirm/}).click()
+  assert.equal(await dialog.isVisible(),true)
   await source.fill('conditional');await source.press('Tab');await field('Conditional field').waitFor();await source.fill('accepted');await source.press('Tab');await field('Conditional field').waitFor({state:'detached'});await seen('hook-deleted')
   assert.ok((await trace.inputValue()).includes('form-change'))
   const folder=new URL(`../${mode==='dw'?'developer-workstation':'user-portal'}/verification-screenshots/`,import.meta.url);mkdirSync(folder,{recursive:true})
-  await dialog.screenshot({path:fileURLToPath(new URL(`2026-11-03-batch-event-matrix-${mode}.png`,folder))})
+  await dialog.screenshot({path:fileURLToPath(new URL(`2026-11-03-batch-event-matrix-${mode}${asynchronous?'-async':''}.png`,folder))})
   const saved=mode==='portal'?page.waitForResponse(r=>r.url().endsWith(`/tasks/${state.taskId}/submit`)&&r.request().method()==='POST'):undefined
   await dialog.getByRole('button',{name:/Apply/}).click();await dialog.waitFor({state:'hidden'})
   if(saved)assert.equal((await(await saved).json()).success,true)

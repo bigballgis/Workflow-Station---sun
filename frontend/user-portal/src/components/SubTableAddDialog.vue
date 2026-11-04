@@ -20,14 +20,16 @@
     :z-index="dialogZIndex"
     :data-sub-table-dialog="dialogInstanceId"
     append-to-body
-    @update:model-value="handleClose"
-    @close="handleClose"
+    :before-close="async () => { await handleClose() }"
   >
+    <el-alert v-if="eventPending" :title="t('subTable.batchEventPending')" type="info" :closable="false" />
+    <el-alert v-if="eventExecutionError" :title="eventExecutionError" type="error" :closable="false" />
     <el-form
       :key="dialogKey"
       ref="formRef"
       class="form-readonly-surface"
       :model="formData"
+      :disabled="saving"
       :rules="formRules"
       :label-width="stableLabelWidth"
       :label-position="designedLabelPosition"
@@ -602,6 +604,7 @@
                     :clearable="!isColDisabled(col)"
                   />
                 </template>
+                <div v-if="scriptInfoFor(item.column.field) !== undefined" class="form-event-info" :data-info-field="item.column.field">{{ scriptInfoFor(item.column.field) }}</div>
               </el-form-item>
             </template>
         </template>
@@ -681,6 +684,7 @@
       <el-button
         type="primary"
         :loading="saving"
+        :disabled="eventPending"
         @click="saveDialogRow"
       >
         {{ t('common.save') }}
@@ -885,11 +889,13 @@ const {
   runFormOnSubmit,
   runFormOnReset,
   scriptFieldErrors,
+  eventPending, eventExecutionError, waitForEvents, scriptInfoFor,
   isDialogFieldDisabled,
 } = useSubTableDialogComponentEvents(
   formData,
   () => props.columns,
   () => props.formOptions,
+  field => { const col = props.columns.find(column => column.field === field); return !col || isColReadonly(col) },
 )
 
 // Stable identity of the row being edited — RECORD-scope note anchor. Resolution
@@ -1372,6 +1378,7 @@ const {
   dialogKey,
   formRules,
   isColDisabled,
+  isColReadonly,
   columnErrors,
   computedFieldErrors,
   handleClose,
@@ -1389,6 +1396,7 @@ const {
   runFormBeforeSubmit: () => runFormBeforeSubmit(props.formOptions),
   runFormOnSubmit: () => runFormOnSubmit(props.formOptions),
   runFormOnReset: () => runFormOnReset(props.formOptions),
+  waitForEvents,
   eventRequiredFlags: computed(() => {
     void eventRequiredTick.value
     return eventRequiredState.flags

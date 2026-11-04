@@ -74,7 +74,8 @@ class SubTableBatchFormRulesTest {
     void rejectsOutOfBoundsAndInvalidOptions() {
         Map<String, Object> form = Map.of("rule", List.of(
                 Map.of("type", "inputNumber", "field", "quantity", "props", Map.of("min", 1, "max", 5)),
-                Map.of("type", "select", "field", "category", "options", List.of(Map.of("value", "approved")))));
+                Map.of("type", "select", "field", "category", "options", List.of(Map.of("value", "approved")),
+                        "validate", List.of(Map.of("type", "enum", "enum", List.of("approved"))))));
         assertThatThrownBy(() -> SubTableBatchFormRules.validateRow(form, Map.of("quantity", 6, "category", "approved")))
                 .hasMessageContaining("maximum");
         assertThatThrownBy(() -> SubTableBatchFormRules.validateRow(form, Map.of("quantity", 2, "category", "other")))

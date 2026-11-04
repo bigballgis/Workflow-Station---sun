@@ -20,6 +20,39 @@ public final class ComputedValues {
     private ComputedValues() {
     }
 
+    /** Declared text columns are identifiers/text, even when every character is a digit. */
+    public static ComputedValue fromRowValue(Object raw, String dataType) {
+        if (raw != null && dataType != null && java.util.Set.of("VARCHAR", "TEXT", "CHAR")
+                .contains(dataType.toUpperCase(java.util.Locale.ROOT))) {
+            if (raw instanceof String text) return text.trim().isEmpty() ? ComputedValue.BLANK : ComputedValue.of(text);
+            if (raw instanceof java.lang.Number) return ComputedValue.of(String.valueOf(raw));
+        }
+        return fromRowValue(raw);
+    }
+
+    /** The target column is an explicit conversion boundary; arithmetic keeps its existing rules. */
+    public static EvalOutcome forField(ComputedValue value, String dataType) {
+        if (value.isBlank() || dataType == null) return EvalOutcome.ok(value);
+        String type = dataType.toUpperCase(java.util.Locale.ROOT);
+        if (java.util.Set.of("VARCHAR", "TEXT", "CHAR").contains(type)) return EvalOutcome.ok(ComputedValue.of(toText(value)));
+        if (java.util.Set.of("INTEGER", "INT", "BIGINT", "SMALLINT", "TINYINT", "DECIMAL", "NUMERIC", "DOUBLE", "FLOAT", "REAL").contains(type)) {
+            BigDecimal number = value instanceof ComputedValue.Number numeric ? numeric.value()
+                    : value instanceof ComputedValue.Text text ? ComputedFieldDecimals.parse(text.value().trim()) : null;
+            if (number != null) {
+                if (java.util.Set.of("INTEGER", "INT", "BIGINT", "SMALLINT", "TINYINT").contains(type)
+                        && number.stripTrailingZeros().scale() > 0) {
+                    return EvalOutcome.error(ComputedFieldErrorCode.TYPE_MISMATCH, "Computed result must be an integer for " + type);
+                }
+                return EvalOutcome.ok(ComputedValue.of(number));
+            }
+            return EvalOutcome.error(ComputedFieldErrorCode.TYPE_MISMATCH, "Computed result must be numeric for " + type);
+        }
+        if ("BOOLEAN".equals(type) && !(value instanceof ComputedValue.Bool)) {
+            return EvalOutcome.error(ComputedFieldErrorCode.TYPE_MISMATCH, "Computed result must be boolean");
+        }
+        return EvalOutcome.ok(value);
+    }
+
     /**
      * Normalizes a raw JSON row value into a {@link ComputedValue}.
      *

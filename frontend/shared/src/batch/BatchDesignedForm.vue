@@ -5,6 +5,7 @@
 </template>
 <script setup lang="ts">
 import { computed, reactive, defineComponent, h, inject, provide, ref, shallowRef, watch, nextTick, type InjectionKey, type VNodeChild } from 'vue'
+import { afterEvent } from '../formEvents/async'
 import formCreate from '@form-create/element-ui'
 import '@form-create/element-ui/src/style/index.css'
 import DesignedFormTitle from './DesignedFormTitle.vue'
@@ -12,6 +13,7 @@ import { batchRuleChildren, batchLayoutAliases } from './batchFormRules'
 import { isEmptyBatchEvent } from './controlContract'
 import type { BatchEventContext } from './eventContext'
 import { batchLookupComponentKey } from './lookupComponent'
+import { formDateValueFormat } from '../formEvents/fieldValue'
 
 const props = defineProps<{
   rules: Array<Record<string, any>>
@@ -27,8 +29,9 @@ const ready = ref(false)
 const nativeApi = shallowRef<{ setValue(values: Record<string, unknown>): void; mergeRule(field: string, rule: Record<string, unknown>): void; fields(): string[]; el(field: string): HTMLElement | { focus?: () => void; $el?: HTMLElement } | undefined }>()
 const eventContext = props.eventContext
 let syncing = false
+let syncGeneration = 0
 const renderedState = new Map<string, string>()
-watch(() => [eventContext?.version(), eventContext?.session()], syncSession, { flush: 'post' })
+watch(() => [eventContext?.version(), eventContext?.session(), eventContext?.pending?.()], syncSession, { flush: 'post' })
 function mounted(api: NonNullable<typeof nativeApi.value>) { nativeApi.value = api; ready.value = true; syncSession() }
 watch(() => props.rules, () => { renderedState.clear(); void nextTick(syncSession) })
 function syncSession() {
@@ -36,6 +39,7 @@ function syncSession() {
   const api = nativeApi.value
   if (!ready.value || !api || !session) return
   const ownFields = new Set(api.fields())
+  const generation = ++syncGeneration
   syncing = true
   try {
     api.setValue(Object.fromEntries([...ownFields].map(field => [field, session.data[field]])))
@@ -53,6 +57,7 @@ function syncSession() {
             hidden: rule._batchModeHidden === true || session!.hidden.get(rule.field) === true,
             display: session!.display.get(rule.field) !== false,
             title: session!.labels.get(rule.field) ?? rule.title,
+            info: session!.infos.has(rule.field) ? { info: session!.infos.get(rule.field), show: !!session!.infos.get(rule.field) } : rule.info,
           }
           patch.options = session!.choices.get(rule.field) ?? rule.options ?? rule.props?.options ?? []
           if (session!.required.has(rule.field)) {
@@ -71,8 +76,11 @@ function syncSession() {
       }
     }
     visit(props.rules)
-  } finally { syncing = false }
-  if (session.focusField && ownFields.has(session.focusField)) {
+  } finally {
+    // form-create emits value changes from queued watchers, after setValue returns.
+    void nextTick(() => { if (generation === syncGeneration) syncing = false })
+  }
+  if (!eventContext?.pending?.() && session.focusField && ownFields.has(session.focusField)) {
     const field = session.focusField
     session.focusField = ''
     void nextTick(() => {
@@ -128,7 +136,7 @@ const runtimeOptions = computed(() => ({
   ...Object.fromEntries(Object.entries(props.options ?? {}).filter(([key]) => !key.startsWith('on') && !key.startsWith('before'))),
   form: { ...props.options?.form, labelWidth: props.options?.form?.labelWidth ?? 'auto' },
   beforeFetch: async (config: unknown, data: unknown) => {
-    const result = eventContext?.beforeFetch(config, data)
+    const result = await eventContext?.beforeFetch(config, data)
     // The native global hook cancels only rejected promises, not a bare false.
     return result === false ? Promise.reject(false) : result
   },
@@ -142,7 +150,7 @@ const runtimeRules = computed(() => {
       const names = new Set([...Object.keys(rule.on ?? {}), ...Object.keys(rule._on ?? {})])
       delete rule.on; delete rule._on; delete rule.hook; delete rule._hook
       if (eventContext) rule.hook = Object.fromEntries(['hidden', 'deleted', 'titleClick', 'watch'].filter(name => !isEmptyBatchEvent(original.hook?.[name]) || !isEmptyBatchEvent(original._hook?.[name])).map(name => [name,
-        (...args: unknown[]) => eventContext.event(original, name, args, 'hook')]))
+        (...args: unknown[]) => name === 'deleted' ? nextTick(() => eventContext.event(original, name, args, 'hook')) : eventContext.event(original, name, args, 'hook')]))
       if (eventContext) rule.on = Object.fromEntries([...names].filter(name => name !== 'change').map(name => [name,
         (...args: unknown[]) => eventContext.event(original, name, args)]))
       const locked = inheritedReadonly || rule.disabled === true || rule.readonly === true || rule.props?.disabled === true || rule.props?.readonly === true
@@ -164,6 +172,7 @@ const runtimeRules = computed(() => {
           if (rule.type === 'date' || rule.type === 'datetime') {
             rule.props = { type: rule.type, ...rule.props }; rule.type = 'datePicker'
           }
+          if (rule.type === 'datePicker') rule.props = { ...rule.props, valueFormat: rule.props?.valueFormat ?? formDateValueFormat(rule.props?.type ?? 'date') }
           if (locked || props.readonlyField(rule.field)) rule.props = { ...rule.props, disabled: true }
           if (props.adaptedFields?.includes(rule.field)) {
             rule._batchOriginal = { ...rule }; rule.type = 'batchField'
@@ -186,7 +195,9 @@ function changed(name: string, value: unknown, _rule: unknown, _api: unknown, _s
   if (!ready.value || syncing || added || props.readonlyField(name)) return
   if (eventContext) {
     if (JSON.stringify(eventContext.session()?.data[name]) === JSON.stringify(value)) return
-    if (!eventContext.change(name, value)) return
+    const result = eventContext.change(name, value)
+    void afterEvent(result, accepted => { if (accepted) emit('change', name, value) })
+    return
   }
   emit('change', name, value)
 }

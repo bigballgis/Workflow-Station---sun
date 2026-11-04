@@ -55,7 +55,7 @@ export function parseFormCreateFunction(raw: unknown): FormCreateChangeHandler |
   const handler = parseFormCreateEventHandler(raw)
   if (!handler) return null
   return (field, value, portalApi) => {
-    handler({ field, value, api: portalApi, rule: {} })
+    return handler({ field, value, api: portalApi, rule: {} })
   }
 }
 
@@ -74,7 +74,7 @@ export function wrapFormLevelOnChangeForFormCreate(raw: unknown): unknown {
     const fcApi = bag.api && typeof bag.api.getValue === 'function' ? bag.api : null
     if (!fcApi) return
     const options = createFormEventOptionsBridge(fcApi, bag.rule)
-    runFormOnChangeHandler(stored, field, value, options, bag.rule ?? {})
+    return runFormOnChangeHandler(stored, field, value, options, bag.rule ?? {})
   }
 }
 
@@ -84,13 +84,10 @@ export function runFormOnChangeHandler(
   value: unknown,
   portalApi: PortalFormApi,
   rule: Record<string, unknown> = {},
+  args: unknown[] = [field, value, { api: portalApi, rule }],
 ): unknown {
   const handler = parseFormCreateEventHandler(rawHandler)
-  if (!handler || isEmptyFormCreateHandler(rawHandler)) return undefined
-  try {
-    return handler({ field, value, api: portalApi, rule })
-  } catch (err) {
-    console.warn('[formCreateEventRuntime] onChange execution error:', err)
-    return undefined
-  }
+  if (isEmptyFormCreateHandler(rawHandler)) return undefined
+  if (!handler) throw new Error('Invalid form event script')
+  return handler({ field, value, api: portalApi, rule, args })
 }

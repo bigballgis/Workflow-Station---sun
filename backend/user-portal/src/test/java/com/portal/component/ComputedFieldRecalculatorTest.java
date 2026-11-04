@@ -141,6 +141,21 @@ class ComputedFieldRecalculatorTest {
     @DisplayName("recomputes")
     class Recomputes {
 
+        @Test void computedFlagWithMissingDefinitionStillFailsInsteadOfBeingTreatedAsPlain() {
+            fieldRows.add(new Object[]{MAIN_TABLE_ID, "purchase_request", "MAIN", "broken_text", null, "VARCHAR", true});
+            assertThatThrownBy(() -> recalculator.recalculate(FU, new HashMap<>(Map.of("broken_text", "old"))))
+                    .isInstanceOf(PortalException.class);
+        }
+
+        @Test void liveMetadataPreservesDeclaredTextWithDifferentColumnNames() {
+            fieldRows.add(new Object[]{MAIN_TABLE_ID, "purchase_request", "MAIN", "identifier_text", null, "VARCHAR"});
+            fieldRows.add(new Object[]{MAIN_TABLE_ID, "purchase_request", "MAIN", "derived_text",
+                    definition(field("identifier_text"), "fail"), "VARCHAR"});
+            Map<String, Object> variables = new HashMap<>(Map.of("identifier_text", "00098765432109876543210"));
+            recalculator.recalculate(FU, variables);
+            assertThat(variables.get("derived_text")).isEqualTo("00098765432109876543210");
+        }
+
         @Test
         @DisplayName("a row formula on the main table")
         void rowFormula() {
@@ -455,6 +470,8 @@ class ComputedFieldRecalculatorTest {
         when(rs.getString("table_name")).thenReturn((String) row[1]);
         when(rs.getString("table_type")).thenReturn((String) row[2]);
         when(rs.getString("field_name")).thenReturn((String) row[3]);
+        when(rs.getString("data_type")).thenReturn(row.length > 5 ? (String) row[5] : null);
+        when(rs.getBoolean("is_computed")).thenReturn(row.length > 6 ? (Boolean) row[6] : row[4] != null);
         when(rs.getString("json")).thenReturn((String) row[4]);
         return rs;
     }

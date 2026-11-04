@@ -120,7 +120,7 @@ public class ComputedFieldRecalculator {
         Map<String, List<Map<String, Object>>> subTables =
                 recalculateSubTableRows(variables, metadata);
         ComputedFieldRowEvaluation.applyFields(metadata.mainFields(), variables,
-                new ComputedFieldContext(variables, subTables));
+                new ComputedFieldContext(variables, subTables, Map.of(), metadata.typesFor(metadata.mainTableName()), metadata.tableFieldTypes()));
     }
 
     /**
@@ -177,7 +177,8 @@ public class ComputedFieldRecalculator {
                     if (row instanceof Map<?, ?> rowMap) {
                         Map<String, Object> typed = (Map<String, Object>) rowMap;
                         ComputedFieldRowEvaluation.applyFields(
-                                fields, typed, ComputedFieldContext.ofRow(typed, metadata.parentRows(variables)));
+                                fields, typed, new ComputedFieldContext(typed, Map.of(), metadata.parentRows(variables),
+                                        metadata.typesFor(identity.tableName()), metadata.tableFieldTypes()));
                     }
                 }
             }
@@ -207,6 +208,7 @@ public class ComputedFieldRecalculator {
         List<FieldMeta> main = new ArrayList<>();
         Map<Long, List<FieldMeta>> sub = new LinkedHashMap<>();
         Map<String, SliceIdentity> aliases = new HashMap<>();
+        Map<String, Map<String, String>> tableTypes = new LinkedHashMap<>();
         String mainName = null;
         for (Map<String, Object> table : tables) {
             if ("RELATION".equals(table.get("tableType"))) continue;
@@ -218,13 +220,16 @@ public class ComputedFieldRecalculator {
             aliases.put(name.toLowerCase(Locale.ROOT), identity);
             aliases.put("dw:" + name.toLowerCase(Locale.ROOT), identity);
             List<FieldMeta> fields = new ArrayList<>();
+            Map<String, String> types = new LinkedHashMap<>();
+            tableTypes.put(name.toLowerCase(Locale.ROOT), types);
             for (Map<String, Object> field : com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields"))) {
+                if (field.get("dataType") instanceof String type) types.put(String.valueOf(field.get("fieldName")), type);
                 if (!Boolean.TRUE.equals(field.get("isComputed"))) continue;
                 if (!(field.get("computedField") instanceof Map<?, ?> formula)) {
                     throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
                 }
                 @SuppressWarnings("unchecked") Map<String, Object> typed = (Map<String, Object>) formula;
-                fields.add(ComputedFieldRowEvaluation.toMeta(String.valueOf(field.get("fieldName")), typed));
+                fields.add(ComputedFieldRowEvaluation.toMeta(String.valueOf(field.get("fieldName")), (String) field.get("dataType"), typed));
             }
             fields = ComputedFieldRowEvaluation.orderByDependency(fields);
             if ("MAIN".equals(table.get("tableType"))) {
@@ -240,7 +245,7 @@ public class ComputedFieldRecalculator {
                 }
             }
         }
-        return new FuComputedFields(mainName, main, sub, aliases);
+        return new FuComputedFields(mainName, main, sub, aliases, tableTypes);
     }
 
     private FuComputedFields metadataFor(Long functionUnitId) {
@@ -257,10 +262,10 @@ public class ComputedFieldRecalculator {
         List<RawField> raw = jdbcTemplate.query(
                 """
                 SELECT td.id AS table_id, td.table_name, td.table_type,
-                       fd.field_name, fd.computed_field_json::text AS json
+                       fd.field_name, fd.data_type, fd.is_computed, fd.computed_field_json::text AS json
                 FROM dw_field_definitions fd
                 INNER JOIN dw_table_definitions td ON td.id = fd.table_id
-                WHERE td.function_unit_id = ? AND fd.is_computed = true
+                WHERE td.function_unit_id = ?
                 ORDER BY fd.sort_order, fd.id
                 """,
                 (rs, rowNum) -> new RawField(
@@ -268,6 +273,8 @@ public class ComputedFieldRecalculator {
                         rs.getString("table_name"),
                         rs.getString("table_type"),
                         rs.getString("field_name"),
+                        rs.getString("data_type"),
+                        rs.getBoolean("is_computed"),
                         rs.getString("json")),
                 functionUnitId);
         if (raw.isEmpty()) {
@@ -277,11 +284,15 @@ public class ComputedFieldRecalculator {
         String mainTableName = null;
         List<FieldMeta> main = new ArrayList<>();
         Map<Long, List<FieldMeta>> subByTable = new LinkedHashMap<>();
+        Map<String, Map<String, String>> tableTypes = new LinkedHashMap<>();
         for (RawField field : raw) {
             if ("MAIN".equalsIgnoreCase(field.tableType()) && mainTableName == null) {
                 mainTableName = field.tableName();
             }
-            FieldMeta meta = ComputedFieldRowEvaluation.toMeta(field.fieldName(),
+            if (field.dataType() != null) tableTypes.computeIfAbsent(field.tableName().toLowerCase(Locale.ROOT), k -> new LinkedHashMap<>())
+                    .put(field.fieldName(), field.dataType());
+            if (!field.computed()) continue;
+            FieldMeta meta = ComputedFieldRowEvaluation.toMeta(field.fieldName(), field.dataType(),
                     ComputedFieldRowEvaluation.parseJsonMap(objectMapper, field.json(), field.fieldName()));
             if ("MAIN".equalsIgnoreCase(field.tableType())) {
                 main.add(meta);
@@ -294,7 +305,7 @@ public class ComputedFieldRecalculator {
         }
         main = ComputedFieldRowEvaluation.orderByDependency(main);
         subByTable.replaceAll((tableId, fields) -> ComputedFieldRowEvaluation.orderByDependency(fields));
-        return new FuComputedFields(mainTableName, main, subByTable, loadSliceIdentities(functionUnitId));
+        return new FuComputedFields(mainTableName, main, subByTable, loadSliceIdentities(functionUnitId), tableTypes);
     }
 
     /**
@@ -361,6 +372,8 @@ public class ComputedFieldRecalculator {
                             String tableName,
                             String tableType,
                             String fieldName,
+                            String dataType,
+                            boolean computed,
                             String json) {
     }
 
@@ -368,10 +381,15 @@ public class ComputedFieldRecalculator {
     private record FuComputedFields(String mainTableName,
                                     List<FieldMeta> mainFields,
                                     Map<Long, List<FieldMeta>> subFieldsByTableId,
-                                    Map<String, SliceIdentity> sliceIdentities) {
+                                    Map<String, SliceIdentity> sliceIdentities,
+                                    Map<String, Map<String, String>> tableFieldTypes) {
 
         static final FuComputedFields EMPTY =
-                new FuComputedFields(null, List.of(), Map.of(), Map.of());
+                new FuComputedFields(null, List.of(), Map.of(), Map.of(), Map.of());
+
+        Map<String, String> typesFor(String table) {
+            return table == null ? Map.of() : tableFieldTypes.getOrDefault(table.toLowerCase(Locale.ROOT), Map.of());
+        }
 
         boolean isEmpty() {
             return mainFields.isEmpty() && subFieldsByTableId.isEmpty();

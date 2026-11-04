@@ -602,6 +602,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
             @upload:remove="(file: any, key: string) => ctx.handleUploadRemove(file, key)"
             @search:users="ctx.handleUserSearch"
           />
+          <div v-if="ctx.fieldInfo?.(field) !== undefined" class="form-event-info" :data-info-field="field.key">{{ ctx.fieldInfo?.(field) }}</div>
           <div
             v-if="ctx.scriptFieldErrors[field.key]"
             class="el-form-item__error script-field-error"
@@ -637,6 +638,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | number | Array
             @upload:remove="(file: any, key: string) => ctx.handleUploadRemove(file, key)"
             @search:users="ctx.handleUserSearch"
           />
+          <div v-if="ctx.fieldInfo?.(field) !== undefined" class="form-event-info" :data-info-field="field.key">{{ ctx.fieldInfo?.(field) }}</div>
           <div
             v-if="ctx.scriptFieldErrors[field.key]"
             class="el-form-item__error script-field-error"

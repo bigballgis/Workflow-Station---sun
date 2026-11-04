@@ -115,8 +115,10 @@ final class SubTableBatchAddedRowGuard {
         } catch (ArithmeticException error) { throw invalid("Batch field requires an in-range integer: " + name); }
         if (List.of("DECIMAL", "NUMERIC").contains(type) && field.get("precision") instanceof Number precision
                 && field.get("scale") instanceof Number scale) {
-            if (Math.max(decimal.scale(), 0) > scale.intValue()
-                    || decimal.precision() - decimal.scale() > precision.intValue() - scale.intValue()) {
+            BigDecimal exact = decimal.stripTrailingZeros();
+            int integerDigits = exact.signum() == 0 ? 0 : Math.max(exact.precision() - exact.scale(), 0);
+            if (Math.max(exact.scale(), 0) > scale.intValue()
+                    || integerDigits > precision.intValue() - scale.intValue()) {
                 fail("Batch decimal exceeds its configured precision: " + name);
             }
         }

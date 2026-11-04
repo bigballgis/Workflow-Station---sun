@@ -12,6 +12,8 @@ import {
   type PortalFormApi,
 } from '@/utils/formCreateEventRuntime'
 import { hasMeaningfulFormValue } from '@/utils/formCreateRuleDefaults'
+import { eventSequence } from '@platform-shared/formEvents/async'
+import { runNativeFormEvent } from '@platform-shared/formEvents/native'
 
 /**
  * Strip any non-function entry from `on` / `hook` on preview rules.
@@ -92,11 +94,7 @@ export function injectPreviewFieldLoadDefaults(
         const f = inject?.rule?.field != null ? String(inject.rule.field) : field
         api.setValue(f, initial)
         if (typeof prevLoad === 'function') {
-          try {
-            (prevLoad as (arg: unknown) => void)(inject)
-          } catch {
-            /* ignore chained load errors */
-          }
+          return (prevLoad as (arg: unknown) => unknown)(inject)
         }
       }
       rule.hook = hook
@@ -111,11 +109,8 @@ export function attachPreviewMountedDefaultSync(
 ): Record<string, unknown> {
   const merged = { ...option }
   const prevRaw = merged.onMounted
-  const prevFn = typeof prevRaw === 'function'
-    ? (prevRaw as (api: PortalFormApi) => void)
-    : (prevRaw ? parseFormCreateEventHandler(prevRaw) : null)
 
-  merged.onMounted = (rawApi: unknown) => {
+  const mounted = (rawApi: unknown) => {
     const portalApi = previewApiFromRef(previewData)
     const api = (rawApi && typeof (rawApi as PortalFormApi).setValue === 'function'
       ? (rawApi as PortalFormApi)
@@ -125,21 +120,12 @@ export function attachPreviewMountedDefaultSync(
       api.setValue(field, val)
     }
     const onChangeFn = merged.onChange
-    if (typeof onChangeFn === 'function') {
-      try {
-        onChangeFn('__bootstrap__', null, { api })
-      } catch {
-        /* ignore bootstrap onChange errors */
-      }
-    }
-    if (prevFn) {
-      try {
-        prevFn((rawApi ?? portalApi) as PortalFormApi)
-      } catch {
-        /* ignore chained onMounted errors */
-      }
-    }
+    return eventSequence([
+      () => typeof onChangeFn === 'function' ? onChangeFn('__bootstrap__', null, { api }) : undefined,
+      () => typeof prevRaw === 'function' ? prevRaw(api) : prevRaw ? runNativeFormEvent(api, prevRaw, { field: '__form__', value: null, api, rule: {}, args: [api] }, parseFormCreateEventHandler) : undefined,
+    ])
   }
+  merged.onMounted = Object.assign(mounted, { __hermesPreviewMountedSource: prevRaw })
   return merged
 }
 

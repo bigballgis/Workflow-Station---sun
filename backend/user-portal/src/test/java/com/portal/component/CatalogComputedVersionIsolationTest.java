@@ -13,6 +13,27 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class CatalogComputedVersionIsolationTest {
+    @Test void varcharParentReferencePreservesLeadingZerosAndRepairsLegacyNumericOutput() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        var reader = mock(CatalogSnapshotReader.class);
+        var calculator = new ComputedFieldRecalculator(jdbc, new ObjectMapper(), mock(PortalPrimaryKeyAllocationComponent.class));
+        ReflectionTestUtils.setField(calculator, "enabled", true);
+        ReflectionTestUtils.setField(calculator, "catalogSnapshots", reader);
+        when(reader.contents("text-release", "DATA_TABLE")).thenReturn(List.of(
+                Map.of("tableId", 1, "tableName", "parent_case", "tableType", "MAIN", "fields",
+                        List.of(Map.of("fieldName", "reference", "dataType", "VARCHAR"))),
+                Map.of("tableId", 2, "tableName", "child_rows", "tableType", "SUB", "fields",
+                        List.of(Map.of("fieldName", "copied_reference", "dataType", "VARCHAR", "isComputed", true,
+                                "computedField", Map.of("ast", Map.of("type", "field", "table", "parent_case", "name", "reference"), "onError", "fail"))))));
+        when(reader.contents("text-release", "FORM")).thenReturn(List.of());
+        Map<String, Object> row = new HashMap<>(Map.of("copied_reference", new BigDecimal("12345678901234567890")));
+        Map<String, Object> values = new HashMap<>(Map.of("functionUnitId", "text-release", "reference", "0012345678901234567890",
+                "__subTables__", new HashMap<>(Map.of("dw:child_rows", List.of(row)))));
+        calculator.recalculate("unused", values);
+        assertThat(row.get("copied_reference")).isEqualTo("0012345678901234567890");
+        SubTableBatchAddedRowGuard.validateField(Map.of("fieldName", "copied_reference", "dataType", "VARCHAR", "nullable", true), row);
+        verifyNoInteractions(jdbc);
+    }
     @Test void twoFunctionUnitsAndTwoReleasesUseTheirOwnRulesOnColdAndWarmReads() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         var keys = mock(PortalPrimaryKeyAllocationComponent.class);

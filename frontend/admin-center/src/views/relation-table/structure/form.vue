@@ -252,6 +252,8 @@
               v-if="canBeComputed(row)"
               :is-computed="row.isComputed"
               :computed-field="row.computedField"
+              :data-type="row.dataType"
+              :field-types="Object.fromEntries(form.fieldDefinitions.map(field => [field.fieldName, field.dataType]))"
               @update:is-computed="row.isComputed = $event"
               @update:computed-field="row.computedField = $event"
             />

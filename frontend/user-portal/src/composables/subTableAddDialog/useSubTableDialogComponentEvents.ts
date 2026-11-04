@@ -10,7 +10,11 @@
  * beforeSubmit / onSubmit / onReset. Re-init while open runs onReload.
  * beforeFetch: N/A — dialog has no form-create remote-fetch pipeline.
  */
-import { nextTick, ref, shallowReactive, type Ref } from 'vue'
+import { ref, shallowReactive, onBeforeUnmount, nextTick, type Ref } from 'vue'
+import { FormEventHost } from '@platform-shared/formEvents/host'
+import { registerEventApiHost } from '@platform-shared/formEvents/operation'
+import { eventSequence } from '@platform-shared/formEvents/async'
+import type { FormEventOperation } from '@platform-shared/formEvents/operation'
 import {
   collectFieldComponentEventsFromRules,
   runAllComponentHookEvents,
@@ -43,6 +47,7 @@ export function useSubTableDialogComponentEvents(
   formData: Ref<Record<string, unknown>>,
   getColumns: () => DialogColumnWithEvents[],
   getFormOptions: () => Record<string, unknown> | null | undefined = () => null,
+  isFieldReadonly: (field: string) => boolean = () => false,
 ) {
   const eventVisibilityState = shallowReactive<PortalFormVisibilityState>({
     hidden: new Map<string, boolean>(),
@@ -54,6 +59,8 @@ export function useSubTableDialogComponentEvents(
   })
   const eventRequiredTick = ref(0)
   const scriptFieldErrors = ref<Record<string, string>>({})
+  const eventPending = ref(false)
+  const eventExecutionError = ref('')
   const overlaysApi = useFormEventOverlayBags({
     getAllFieldKeys: () => getColumns().map((c) => c.field),
     getDesignerOptions: (fieldKey) => {
@@ -63,6 +70,17 @@ export function useSubTableDialogComponentEvents(
     },
     getDesignerLabel: (fieldKey) => getColumns().find((c) => c.field === fieldKey)?.label ?? fieldKey,
   })
+  const execution = new FormEventHost({
+    snapshot: () => ({ data: JSON.parse(JSON.stringify(formData.value)) as Record<string, unknown>, hidden: [...eventVisibilityState.hidden],
+      display: [...eventVisibilityState.display], required: [...eventRequiredState.flags], errors: { ...scriptFieldErrors.value }, overlays: overlaysApi.snapshotOverlays() }),
+    restore: saved => {
+      formData.value = saved.data; eventVisibilityState.hidden = new Map(saved.hidden); eventVisibilityState.display = new Map(saved.display)
+      eventRequiredState.flags = new Map(saved.required); scriptFieldErrors.value = saved.errors
+      overlaysApi.restoreOverlays(saved.overlays); eventVisibilityTick.value++; eventRequiredTick.value++
+    },
+    notify: () => { eventPending.value = execution.pending; eventExecutionError.value = execution.error == null ? '' : execution.error instanceof Error ? execution.error.message : String(execution.error) },
+  })
+  onBeforeUnmount(() => execution.cancel())
 
   function notifyEventVisibilityChange() {
     eventVisibilityState.hidden = new Map(eventVisibilityState.hidden)
@@ -83,6 +101,7 @@ export function useSubTableDialogComponentEvents(
   }
 
   function resetDialogEventVisibility() {
+    execution.reset()
     eventVisibilityState.hidden = new Map()
     eventVisibilityState.display = new Map()
     eventVisibilityTick.value++
@@ -92,10 +111,13 @@ export function useSubTableDialogComponentEvents(
     overlaysApi.resetOverlays()
   }
 
-  function createApi() {
-    return createPortalFormApi(
+  function createApi(operation?: FormEventOperation) {
+    const api = createPortalFormApi(
       () => formData.value,
       (patch) => {
+        for (const key of Object.keys(patch)) {
+          if (!getColumns().some(column => column.field === key) || isFieldReadonly(key)) throw new Error(`Event field write denied: ${key}`)
+        }
         formData.value = { ...formData.value, ...patch }
       },
       createFieldKeyResolver(() =>
@@ -124,6 +146,8 @@ export function useSubTableDialogComponentEvents(
       },
       overlaysApi.buildOverlays(),
     )
+    registerEventApiHost(api, (field, value, action) => execution.run(field.startsWith('__') ? '__lifecycle__' : JSON.stringify([field, value]), action, true))
+    return operation ? operation.bindApi(api) : api
   }
 
   function resolveFormOptions(
@@ -134,15 +158,9 @@ export function useSubTableDialogComponentEvents(
     return opts && typeof opts === 'object' ? opts : null
   }
 
-  function runDialogFormHandler(raw: unknown, field: string, value: unknown = null): unknown {
+  function runDialogFormHandler(raw: unknown, field: string, value: unknown = null, api = createApi()): unknown {
     if (raw == null || isEmptyFormCreateHandler(raw)) return undefined
-    return runFormOnChangeHandler(raw, field, value, createApi())
-  }
-
-  function runFormOptionsOnChange(field: string, value: unknown) {
-    const options = resolveFormOptions()
-    if (!options) return
-    runDialogFormHandler(options.onChange, field, value)
+    return runFormOnChangeHandler(raw, field, value, api)
   }
 
   function resolveEvents(field: string) {
@@ -159,29 +177,35 @@ export function useSubTableDialogComponentEvents(
    * when the column has no sourceRule — v-model may already own the value.
    */
   function onDialogFieldChange(field: string, value?: unknown) {
+    const input = value !== undefined ? value : formData.value[field]
+    execution.cancel()
+    value = input
     if (value !== undefined) {
       formData.value = { ...formData.value, [field]: value }
     }
     const v = value !== undefined ? value : formData.value[field]
     const found = resolveEvents(field)
-    if (found) {
-      runComponentFieldEventsOnValueChange(found.ev, {
+    return execution.run(JSON.stringify([field, v]), operation => {
+      const api = createApi(operation)
+      return eventSequence([
+      () => runComponentFieldEventsOnValueChange(found?.ev, {
         field,
         value: v,
-        api: createApi(),
+        api,
         onEvent: 'change',
         hookEvent: 'value',
-        fieldType: found.col.type,
-      })
-    }
-    runFormOptionsOnChange(field, v)
+        fieldType: found?.col.type,
+      }),
+      () => runFormOnChangeHandler(resolveFormOptions()?.onChange, field, v, api),
+      ])
+    })
   }
 
   /** Text / textarea focus leave — component on.blur only (FormRenderer parity). */
   function onDialogFieldBlur(field: string) {
     const found = resolveEvents(field)
     if (!found) return
-    runComponentFieldEvents(found.ev, {
+    return runComponentFieldEvents(found.ev, {
       field,
       value: formData.value[field],
       api: createApi(),
@@ -202,12 +226,12 @@ export function useSubTableDialogComponentEvents(
   }
 
   /** Component-level `_hook` phases — the dialog's equivalent of bootstrapComponentHookEvents. */
-  function runDialogComponentHooks(hookName: 'load' | 'mounted') {
+  function runDialogComponentHooks(hookName: 'load' | 'mounted', api = createApi()) {
     const rules = getColumns()
       .map((c) => c.sourceRule)
       .filter((r): r is Record<string, unknown> => r != null)
     if (!rules.length) return
-    runAllComponentHookEvents(
+    return runAllComponentHookEvents(
       rules,
       hookName,
       () => formData.value,
@@ -228,6 +252,7 @@ export function useSubTableDialogComponentEvents(
         getAllFieldKeys: () => getColumns().map((c) => c.field),
       },
       overlaysApi.buildOverlays(),
+      api,
     )
   }
 
@@ -239,20 +264,25 @@ export function useSubTableDialogComponentEvents(
   function bootstrapDialogFormLifecycle(formOptions?: Record<string, unknown> | null) {
     seedDialogStaticHiddenVisibility()
     const options = resolveFormOptions(formOptions)
-    if (options) runDialogFormHandler(options.onCreated, '__form__')
-    runDialogComponentHooks('load')
-    if (options) runDialogFormHandler(options.onChange, '__bootstrap__')
-    void nextTick(() => {
-      runDialogComponentHooks('mounted')
-      if (options) runDialogFormHandler(options.onMounted, '__form__')
-    })
+    return execution.run('__lifecycle__', operation => {
+    const api = createApi(operation)
+    return eventSequence([
+      () => options ? runDialogFormHandler(options.onCreated, '__form__', null, api) : undefined,
+      () => runDialogComponentHooks('load', api),
+      () => options ? runDialogFormHandler(options.onChange, '__bootstrap__', null, api) : undefined,
+      () => nextTick().then(() => eventSequence([
+        () => runDialogComponentHooks('mounted', api),
+        () => options ? runDialogFormHandler(options.onMounted, '__form__', null, api) : undefined,
+      ])),
+    ])
+    }, true)
   }
 
   /** Form onReload — when dialog re-inits while still open (mode/initialData swap). */
   function runFormOnReload(formOptions?: Record<string, unknown> | null) {
     const options = resolveFormOptions(formOptions)
     if (!options) return
-    runDialogFormHandler(options.onReload, '__form__')
+    return runDialogFormHandler(options.onReload, '__form__')
   }
 
   /**
@@ -261,7 +291,7 @@ export function useSubTableDialogComponentEvents(
    * Parse failure or thrown error → abort (fail-closed); do not reuse
    * runFormOnChangeHandler which swallows exceptions for UX scripts.
    */
-  function runFormBeforeSubmit(formOptions?: Record<string, unknown> | null): boolean {
+  function runFormBeforeSubmit(formOptions?: Record<string, unknown> | null): unknown {
     const options = resolveFormOptions(formOptions)
     if (!options || isEmptyFormCreateHandler(options.beforeSubmit)) return true
     try {
@@ -276,7 +306,7 @@ export function useSubTableDialogComponentEvents(
         api: createApi(),
         rule: {},
       })
-      return result !== false
+      return result
     } catch (err) {
       console.warn('[useSubTableDialogComponentEvents] beforeSubmit error; aborting save:', err)
       return false
@@ -287,17 +317,21 @@ export function useSubTableDialogComponentEvents(
   function runFormOnSubmit(formOptions?: Record<string, unknown> | null) {
     const options = resolveFormOptions(formOptions)
     if (!options) return
-    runDialogFormHandler(options.onSubmit, '__submit__', formData.value)
+    return runDialogFormHandler(options.onSubmit, '__submit__', formData.value)
   }
 
   /** Form onReset — when dialog closes / model cleared. */
   function runFormOnReset(formOptions?: Record<string, unknown> | null) {
+    execution.cancel()
     const options = resolveFormOptions(formOptions)
     if (!options) return
-    runDialogFormHandler(options.onReset, '__form__')
+    return runDialogFormHandler(options.onReset, '__form__')
   }
 
   return {
+    eventPending, eventExecutionError,
+    waitForEvents: () => execution.wait(),
+    scriptInfoFor: overlaysApi.scriptInfoFor,
     onDialogFieldChange,
     onDialogFieldBlur,
     isDialogFieldVisible,

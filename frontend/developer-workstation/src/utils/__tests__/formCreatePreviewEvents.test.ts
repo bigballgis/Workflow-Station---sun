@@ -5,6 +5,7 @@ import {
   dispatchPreviewFieldValueChange,
   injectPreviewFieldLoadDefaults,
   materializePreviewComponentEvents,
+  materializePreviewItemsEvents,
   mergeComponentEventsFromSavedRules,
   preserveSerializedHandlersInShadowBuckets,
   registerPreviewVisibilityBridge,
@@ -20,6 +21,36 @@ type FcTaggedHandler = ((inject: unknown) => void) & {
 }
 
 describe('formCreatePreviewEvents', () => {
+  it('retains ordered event arrays through native function injection metadata', async () => {
+    const source = ['$FNX:return Promise.resolve().then(() => api.setValue("trace", "first;"))', '$FNX:api.setValue("trace", api.getValue("trace") + "second;")']
+    const rules: Record<string, unknown>[] = [{ type: 'input', field: 'source', _on: { change: source } }]
+    syncDesignerComponentEventsForFcPreview(rules)
+    const change = (rules[0]!.on as Record<string, FcTaggedHandler>).change!
+    expect(change.__json).toEqual(source)
+    const model = ref<Record<string, unknown>>({ trace: '' })
+    const api = { getValue: (field: string) => model.value[field], setValue: (field: string, value: unknown) => { model.value[field] = value }, get form() { return model.value } }
+    await change({ api, args: ['selected'] })
+    expect(model.value.trace).toBe('first;second;')
+  })
+  it('keeps persisted arrays in shadow buckets before native handler sanitizing', () => {
+    const source = ['$FNX:return Promise.resolve(true)', '$FNX:return false']
+    const rules: Record<string, unknown>[] = [{ field: 'source', on: { change: source }, hook: { value: source } }]
+    preserveSerializedHandlersInShadowBuckets(rules)
+    sanitizePreviewRuleHandlers(rules)
+    expect((rules[0]!._on as Record<string, unknown>).change).toEqual(source)
+    expect((rules[0]!._hook as Record<string, unknown>).value).toEqual(source)
+  })
+  it('runs root Preview change and form onChange once in a single ordered operation', async () => {
+    const model = ref<Record<string, unknown>>({ source: '', trace: '' })
+    const rules = [{ type: 'input', field: 'source', on: { change: [ '$FNX:return Promise.resolve().then(function(){ $inject.api.setValue("trace", $inject.api.getValue("trace") + "component;") })', '$FNX:api.setValue("trace", api.getValue("trace") + "second;")' ] } }]
+    materializePreviewItemsEvents([{ kind: 'fields', modelKey: 'root', rule: rules }], model)
+    await (rules[0].on.change as unknown as () => unknown)()
+    expect(model.value.trace).toBe('')
+    // Native inject wrapping mutates the shared on bucket and drops source tags.
+    rules[0].on.change = (() => undefined) as unknown as string[]
+    await dispatchPreviewFieldValueChange(rules, 'source', 'chosen', model, { formOnChange: '$FNX:$inject.api.setValue("trace", $inject.api.getValue("trace") + "form;")' })
+    expect(model.value.trace).toBe('component;second;form;')
+  })
   it('binds blur handler so preview can toggle legal_hold on exact match', () => {
     const previewData = ref<Record<string, unknown>>({
       case_number: '',

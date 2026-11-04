@@ -18,6 +18,7 @@ import {
 import type { BindingFieldDefinition } from '../../utils/subTableRowRuntime'
 
 interface AggregateSourceBinding {
+  fieldDefinitions?: BindingFieldDefinition[]
   bindingId?: number
   tableName?: string
   designerTableName?: string
@@ -88,6 +89,11 @@ export function useComputedFields(deps: ComputedFieldsDeps) {
       computedColumns.value,
       deps.formData.value,
       loadedSubTableRows(),
+      undefined,
+      Object.fromEntries((deps.subTableBindings() ?? []).map(binding => [
+        (binding.designerTableName ?? binding.tableName ?? '').toLowerCase(),
+        Object.fromEntries((binding.fieldDefinitions ?? []).filter(field => field.dataType).map(field => [field.fieldName, field.dataType!])),
+      ])),
     )
     for (const [fieldName, value] of Object.entries(preview.values)) {
       deps.formData.value[fieldName] = value

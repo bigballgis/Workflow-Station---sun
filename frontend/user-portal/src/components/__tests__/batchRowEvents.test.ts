@@ -11,11 +11,11 @@ const rules = [{ type: 'miAssignment', children: [
 ] }]
 
 describe('Batch row change events', () => {
-  it('keeps Lookup objects and evaluates against each selected row independently', () => {
+  it('keeps Lookup objects and evaluates against each selected row independently', async () => {
     const person = { id: 'one', email: 'test@example.invalid' }
     const rows = reactive([{ handler: person, email: 'old-a', suffix: '-a' },
       { handler: person, email: 'old-b', suffix: '-b' }, { handler: person, email: 'untouched', suffix: '-c' }])
-    const next = rows.map((row, i) => i < 2 ? run(row, rules, ['handler'], () => false) : row)
+    const next = await Promise.all(rows.map((row, i) => i < 2 ? run(row, rules, ['handler'], () => false) : row))
     expect(next.map(row => row.email)).toEqual(['test@example.invalid-a', 'test@example.invalid-b', 'untouched'])
     expect(rows.map(row => row.email)).toEqual(['old-a', 'old-b', 'untouched'])
     expect(next[0]!.handler).toEqual(person)

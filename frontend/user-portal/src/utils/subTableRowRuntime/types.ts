@@ -14,6 +14,7 @@ export { buildRowAddContext }
 
 export interface BindingFieldDefinition {
   fieldName: string
+  dataType?: string
   isPrimaryKey?: boolean
   isForeignKey?: boolean
   refTableId?: number

@@ -33,6 +33,8 @@ interface FormProps {
   fieldDefinitions?: BindingFieldDefinition[]
   /** MAIN form values so a SUB-table formula can preview {@code table.column}. */
   hostPrimaryFormData?: Record<string, unknown>
+  hostPrimaryTableId?: number | null
+  hostParentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   columnValidationRules?: Record<string, ValidationRule[]>
   saveRow?: (row: Record<string, unknown>, selectedParentValue?: string) => void | Promise<void>
   /** This dialog's own hosting binding id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
@@ -58,15 +60,16 @@ interface FormDeps {
   /** Clear api.hidden / api.display state from prior dialog open. */
   resetDialogEventVisibility?: () => void
   /** Run Form-level onCreated → onMounted after row model is ready. */
-  bootstrapDialogFormLifecycle?: () => void
+  bootstrapDialogFormLifecycle?: () => unknown
   /** Form onReload when dialog re-inits while still visible. */
-  runFormOnReload?: () => void
+  runFormOnReload?: () => unknown
   /** Form beforeSubmit — return false to abort save. */
-  runFormBeforeSubmit?: () => boolean
+  runFormBeforeSubmit?: () => unknown
   /** Form onSubmit after validation, before persist. */
-  runFormOnSubmit?: () => void
+  runFormOnSubmit?: () => unknown
   /** Form onReset when dialog closes. */
-  runFormOnReset?: () => void
+  runFormOnReset?: () => unknown
+  waitForEvents?: () => Promise<boolean>
   /** Script `api.required` overlay for dialog validation + asterisk. */
   eventRequiredFlags?: Ref<Map<string, boolean>>
   /** Script `api.setFieldError` bag — nonempty blocks save. */
@@ -95,6 +98,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     runFormBeforeSubmit,
     runFormOnSubmit,
     runFormOnReset,
+    waitForEvents,
     eventRequiredFlags,
     scriptFieldErrors,
     isDialogFieldDisabled,
@@ -151,11 +155,16 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
   }
 
   function isColDisabled(col: DialogColumn): boolean {
-    const fallback = col.readonly === true
+    const fallback = isColReadonly(col)
+    return isDialogFieldDisabled?.(col.field, fallback) ?? fallback
+  }
+
+  function isColReadonly(col: DialogColumn): boolean {
+    return col.readonly === true
       || calculatedColumns.value.has(col.field)
+      || computedColumns.value.some(column => column.fieldName === col.field)
       || isAuditField(col.field)
       || isFieldPermissionReadonly(col)
-    return isDialogFieldDisabled?.(col.field, fallback) ?? fallback
   }
 
   // Watch dependent column values and recompute target columns.
@@ -216,6 +225,10 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
       formData.value,
       {},
       parentRowsForPreview(),
+      Object.fromEntries(Object.keys(parentRowsForPreview()).map(name => [name, Object.fromEntries(
+        (props.hostPrimaryTableId == null ? [] : props.hostParentTablesById?.[props.hostPrimaryTableId]?.fieldDefinitions ?? [])
+          .filter(field => field.dataType).map(field => [field.fieldName, field.dataType!]),
+      )])),
     )
     for (const [fieldName, value] of Object.entries(preview.values)) {
       formData.value[fieldName] = value
@@ -324,10 +337,11 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     { deep: false }
   )
 
-  function handleClose() {
-    destroyEditors()
+  async function handleClose() {
+    if (saving.value) return false
     // Form onReset while model still holds current values (form-create parity).
-    runFormOnReset?.()
+    if (await runFormOnReset?.() === false) return false
+    destroyEditors()
     // Avoid resetFields(): it resets to the first-mounted "initial model" snapshot and
     // can leak previous values between different row edits. We explicitly reset our model.
     resetUploadNames()
@@ -337,10 +351,14 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     formData.value = buildInitialRow(props.columns)
     formRef.value?.clearValidate()
     emit('update:visible', false)
+    return true
   }
 
   async function handleSave() {
     if (!formRef.value || saving.value) return
+    saving.value = true
+    try {
+    if (waitForEvents && !await waitForEvents()) return
     const valid = await formRef.value.validate().catch(() => false)
     if (!valid) return
     // Run column validation rules (Task 8.7)
@@ -349,7 +367,10 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     // is already on the offending field, so stop here instead of round-tripping to a rejection.
     if (Object.keys(computedFieldErrors.value).length > 0) return
     if (scriptFieldErrors && Object.keys(scriptFieldErrors.value).length > 0) return
-    if (runFormBeforeSubmit && runFormBeforeSubmit() === false) return
+    if (runFormBeforeSubmit && await runFormBeforeSubmit() === false) return
+    if (await runFormOnSubmit?.() === false) return
+    if (scriptFieldErrors && Object.keys(scriptFieldErrors.value).length > 0) return
+    if (!validateColumns() || !await formRef.value.validate().catch(() => false)) return
     const seed = props.mode === 'add' ? props.initialData : undefined
     const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
     // Audit fields are generated at real save time (never when the dialog opens):
@@ -364,9 +385,6 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     } else {
       applyEditAuditDefaults(row, auditColumns)
     }
-    runFormOnSubmit?.()
-    saving.value = true
-    try {
       if (props.saveRow) {
         await props.saveRow(row, selectedParentValue?.value)
       } else {
@@ -389,6 +407,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     formRules,
     calculatedColumns,
     isColDisabled,
+    isColReadonly,
     columnErrors,
     computedFieldErrors,
     validateColumns,

@@ -24,7 +24,7 @@ export async function countSubTableRows(page, titleMatch) {
     )
     if (!block) return { found: false, count: -1 }
     const rows = [...block.querySelectorAll('.el-table__body-wrapper tbody tr.el-table__row')].filter(tr =>
-      (tr.querySelector('td')?.textContent?.trim() ?? '').length > 0,
+      (tr.querySelector('td:not(.el-table-column--selection)')?.textContent?.trim() ?? '').length > 0,
     )
     return { found: true, count: rows.length }
   }, titleMatch)
@@ -169,7 +169,7 @@ export async function listMiCollectionTables(page) {
       const title = el.querySelector('.title, .sub-table-header')?.textContent?.trim() ?? ''
       const rows = [...el.querySelectorAll('.el-table__body-wrapper tbody tr.el-table__row')]
         .map((tr) => {
-          const rowId = tr.querySelector('td')?.textContent?.trim() ?? ''
+          const rowId = tr.querySelector('td:not(.el-table-column--selection)')?.textContent?.trim() ?? ''
           const hasDetails = [...tr.querySelectorAll('a, .el-link, button, span')].some((a) =>
             /details|detail|详情/i.test(a.textContent || ''),
           )
@@ -194,7 +194,7 @@ export function pickMiCollectionTable(tables) {
 export async function clickSubTaskDetails(page, rowId) {
   return page.evaluate((pid) => {
     const rows = [...document.querySelectorAll('.sub-table-field .el-table__body tr.el-table__row')]
-    const targetRow = rows.find((tr) => (tr.querySelector('td')?.textContent?.trim() ?? '') === pid)
+    const targetRow = rows.find((tr) => (tr.querySelector('td:not(.el-table-column--selection)')?.textContent?.trim() ?? '') === pid)
     if (!targetRow) return null
     const detail = [...targetRow.querySelectorAll('a, .el-link, button, span')].find((el) =>
       /details|detail|详情/i.test(el.textContent || ''),

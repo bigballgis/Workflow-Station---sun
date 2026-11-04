@@ -1,15 +1,15 @@
 <template>
   <component :is="lookupComponent" v-if="rule.type === 'lookup' && lookupComponent" v-bind="rule.props" v-on="events ?? {}" :model-value="lookupValue" :style="rule.style"
     :disabled="disabled || rule.props?.disabled || rule.props?.readonly" @update:model-value="(value: unknown) => emit('change', value)" />
-  <el-select v-else-if="rule.field === config.assigneeField" v-bind="rule.props" v-on="events ?? {}" v-model="uniform.assigneeId" @update:model-value="(value: unknown) => emit('change', value)" :style="rule.style"
+  <el-select v-else-if="rule.field === config.assigneeField" v-bind="rule.props" v-on="events ?? {}" :model-value="lookupValue" @update:model-value="(value: unknown) => emit('change', value)" :style="rule.style"
     :disabled="disabled || rule.props?.disabled || rule.props?.readonly" filterable remote :remote-method="(query: string) => emit('search', query)" :loading="userLoading">
     <el-option v-for="user in userOptions" :key="user.id" :label="user.name" :value="user.id" />
   </el-select>
-  <el-cascader v-else-if="rule.field === config.buField" v-bind="rule.props" v-on="events ?? {}" :style="rule.style" v-model="uniform.businessUnitId"
+  <el-cascader v-else-if="rule.field === config.buField" v-bind="rule.props" v-on="Object.fromEntries(Object.entries(events ?? {}).filter(([name]) => name !== 'change'))" :style="rule.style" :model-value="uniform.businessUnitId"
     :disabled="disabled || rule.props?.disabled || rule.props?.readonly" :options="directory.businessUnits.value"
     :props="{ value: 'id', label: 'name', children: 'children', checkStrictly: true, emitPath: false }"
     @change="(value: unknown) => emit('business-unit', String(value ?? ''))" />
-  <el-select v-else-if="rule.field === config.roleField" v-bind="rule.props" v-on="events ?? {}" :style="rule.style" v-model="uniform.roleCode" @update:model-value="(value: unknown) => emit('change', value)"
+  <el-select v-else-if="rule.field === config.roleField" v-bind="rule.props" v-on="events ?? {}" :style="rule.style" :model-value="lookupValue" @update:model-value="(value: unknown) => emit('change', value)"
     :disabled="disabled || rule.props?.disabled || rule.props?.readonly || (!!config.buField && !uniform.businessUnitId)" :loading="roleLoading">
     <el-option v-for="role in roleOptions" :key="role.value" :label="role.label" :value="role.value" />
   </el-select>

@@ -25,6 +25,7 @@ export interface FormRendererFieldsContext {
   isFieldDisabled: (field: FormField) => boolean
   /** Script `api.setLabel` overlay, else designer label. */
   fieldLabel: (field: FormField) => string
+  fieldInfo?: (field: FormField) => string | undefined
   /** Script `api.setOptions` overlay, else engine filtered options. */
   fieldOptions: (field: FormField) => unknown
   engineFieldStates: Ref<Map<string, { disabled?: boolean; required?: boolean }>>

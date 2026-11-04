@@ -1,4 +1,5 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
+import { afterEvent } from '@platform-shared/formEvents/async'
 import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 import { materializeFormCreateValidationRules } from '../../utils/formCreateValidateRules'
@@ -69,7 +70,7 @@ interface FormDataDeps {
   emitModelValue: (value: Record<string, any>) => void
   emitSubTableData: (bindingId: number, rows: any[]) => void
   // wired-in cross-composable behavior (broken via closures to avoid TDZ cycles)
-  runComponentEventsOnFieldChange: (key: string, value: unknown) => void
+  runComponentEventsOnFieldChange: (key: string, value: unknown, afterScripts?: () => void) => unknown
   formOptionsOnChange: () => unknown
   fieldComponentEventsHas: (key: string) => boolean
   runFormOptionsOnChange: (field: string, value: unknown) => void
@@ -305,7 +306,14 @@ export function useFormData(deps: FormDataDeps) {
   // ---------------------------------------------------------------------------
   function handleFieldChange(key: string, value: any) {
     formData.value[key] = value
-
+    return afterEvent(deps.runComponentEventsOnFieldChange(key, value, () => completeFieldChange(key, value)), accepted => {
+      if (accepted === false) return false
+      deps.emitChange(key, value)
+      if (!deps.readonly()) deps.emitModelValue({ ...formData.value })
+      return true
+    })
+  }
+  function completeFieldChange(key: string, value: unknown) {
     // Live Request ID: recompute the readonly __request_id when a contributing field changes.
     const ridCfg = deps.requestIdConfig?.()
     if (fieldFeedsRequestId(key, ridCfg)) {
@@ -314,20 +322,6 @@ export function useFormData(deps: FormDataDeps) {
 
     // Same idea as Request ID above: readonly derived columns follow the field that feeds them.
     deps.recomputeComputedFields?.()
-
-    deps.emitChange(key, value)
-
-    deps.runComponentEventsOnFieldChange(key, value)
-
-    const onChangeHandler = deps.formOptionsOnChange()
-    if (onChangeHandler) {
-      deps.runFormOptionsOnChange(key, value)
-    }
-    if (onChangeHandler || deps.fieldComponentEventsHas(key)) {
-      if (!deps.readonly()) {
-        deps.emitModelValue({ ...formData.value })
-      }
-    }
 
     // Task 7.2: Trigger engine evaluation on field change
     if (deps.config()) {

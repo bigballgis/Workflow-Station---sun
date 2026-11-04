@@ -16,7 +16,21 @@ import java.util.Map;
  */
 public record ComputedFieldContext(Map<String, Object> row,
                                    Map<String, List<Map<String, Object>>> subTables,
-                                   Map<String, Map<String, Object>> parents) {
+                                   Map<String, Map<String, Object>> parents,
+                                   Map<String, String> fieldTypes,
+                                   Map<String, Map<String, String>> tableFieldTypes) {
+
+    /** Schema-free callers retain the legacy expression-sample contract. */
+    public ComputedFieldContext(Map<String, Object> row,
+                                Map<String, List<Map<String, Object>>> subTables,
+                                Map<String, Map<String, Object>> parents) {
+        this(row, subTables, parents, Map.of(), Map.of());
+    }
+
+    public String fieldType(String table, String field) {
+        return table == null ? fieldTypes.get(field)
+                : tableFieldTypes.getOrDefault(table.toLowerCase(Locale.ROOT), Map.of()).get(field);
+    }
 
     /**
      * Context for a row-scope formula with no sub-table or parent access.

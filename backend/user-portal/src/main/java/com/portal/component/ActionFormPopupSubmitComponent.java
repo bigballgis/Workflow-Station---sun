@@ -84,7 +84,7 @@ public class ActionFormPopupSubmitComponent {
                 data.put(name, value);
             }
             if (Boolean.TRUE.equals(field.get("isComputed"))) {
-                computed.add(ComputedFieldRowEvaluation.toMeta(name,
+                computed.add(ComputedFieldRowEvaluation.toMeta(name, (String) field.get("dataType"),
                         mapper.convertValue(field.get("computedField"), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { })));
             }
             if (Boolean.TRUE.equals(field.get("isPrimaryKey")) && data.get(name) == null) {
@@ -109,9 +109,13 @@ public class ActionFormPopupSubmitComponent {
             String name = String.valueOf(field.get("fieldName"));
             if (SystemAuditFields.CREATED_BY.equals(name) || SystemAuditFields.UPDATED_BY.equals(name)) data.put(name, actor);
         }
+        Map<String, Object> mainTable = snapshots.mainTable(catalogId);
+        String mainName = String.valueOf(mainTable.get("tableName")).toLowerCase(java.util.Locale.ROOT);
         ComputedFieldRowEvaluation.applyFields(ComputedFieldRowEvaluation.orderByDependency(computed), data,
-                com.platform.common.computedfield.ComputedFieldContext.ofRow(data,
-                        Map.of(String.valueOf(snapshots.mainTable(catalogId).get("tableName")), instance.getVariables())));
+                new com.platform.common.computedfield.ComputedFieldContext(data, Map.of(),
+                        Map.of(mainName, instance.getVariables()), ComputedFieldRowEvaluation.fieldTypes(fields),
+                        Map.of(mainName, ComputedFieldRowEvaluation.fieldTypes(
+                                com.platform.common.functionunit.CatalogSnapshotReader.objects(mainTable.get("fields"))))));
         return new ActionTableRowRef(rows.insert(catalogId, sourceId, instance.getId(), data, actor));
     }
 }

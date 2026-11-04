@@ -12,6 +12,27 @@ import { parseFormCreateEventHandler } from '@/utils/formCreateEventRuntime'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() }, ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) } }))
 describe('selected-row Batch Form', () => {
+  it('uses the ordinary form default date formats when none are configured', async () => {
+    const wrapper = workspace({ runRowEvents: createBatchRowEventRunner(parseFormCreateEventHandler), fields: ['day', 'moment'].map(field => ({ field, type: 'datePicker', label: field, required: false, options: [] })),
+      rules: [{ type: 'datePicker', field: 'day' }, { type: 'datePicker', field: 'moment', props: { type: 'datetime' } }] })
+    await flushPromises()
+    const native = wrapper.findComponent({ name: 'BatchDesignedForm' }).vm as unknown as { nativeApi: { getRule(field: string): { props: Record<string, unknown> } } }
+    expect(native.nativeApi.getRule('day').props.valueFormat).toBe('YYYY-MM-DD')
+    expect(native.nativeApi.getRule('moment').props.valueFormat).toBe('YYYY-MM-DD HH:mm:ss')
+  })
+  it('keeps runtime options when validating a Batch Add a second time', async () => {
+    const prepareRows = vi.fn(async (drafts: Array<Record<string, unknown>>) => ({ rows: drafts.map((row, index) => ({ ...row, key: 'new-' + index })) }))
+    const wrapper = workspace({ mode: 'add', rows: [], selectedRowIds: [], prepareRows,
+      fields: [{ field: 'choice', label: 'Choice', type: 'select', required: false, options: [{ label: 'Old', value: 'old' }] }],
+      rules: [{ type: 'select', field: 'choice', options: [{ label: 'Old', value: 'old' }] }],
+      options: { onCreated: '$FNX:api.setOptions("choice", [{label:"Dynamic",value:"dynamic"}]); api.setValue("choice", "dynamic");' },
+      runRowEvents: createBatchRowEventRunner(parseFormCreateEventHandler),
+    })
+    await flushPromises()
+    await state(wrapper).apply()
+    expect(prepareRows).toHaveBeenCalledWith([{ choice: 'dynamic' }], '')
+    expect(wrapper.emitted('apply-workspace')).toHaveLength(1)
+  })
   it('collects per-row event backfills in the declared patches and leaves unselected rows intact', async () => {
     const runRowEvents = createBatchRowEventRunner(parseFormCreateEventHandler)
     const wrapper = workspace({ runRowEvents, rules: [

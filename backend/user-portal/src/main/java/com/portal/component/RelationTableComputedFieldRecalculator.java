@@ -82,11 +82,12 @@ public class RelationTableComputedFieldRecalculator {
         if (!hasAnyComputedField()) {
             return;
         }
-        List<FieldMeta> fields = fieldsFor(tableId);
-        if (fields.isEmpty()) {
+        Fields fields = fieldsFor(tableId);
+        if (fields.computed().isEmpty()) {
             return;
         }
-        ComputedFieldRowEvaluation.applyFields(fields, row, ComputedFieldContext.ofRow(row));
+        ComputedFieldRowEvaluation.applyFields(fields.computed(), row,
+                new ComputedFieldContext(row, Map.of(), Map.of(), fields.types(), Map.of()));
     }
 
     /**
@@ -110,42 +111,47 @@ public class RelationTableComputedFieldRecalculator {
         return anyComputedField;
     }
 
-    private List<FieldMeta> fieldsFor(Long tableId) {
+    private Fields fieldsFor(Long tableId) {
         CachedFields cached = metadataCache.get(tableId);
         if (cached != null && !cached.isExpired()) {
             return cached.fields();
         }
-        List<FieldMeta> loaded = loadFields(tableId);
+        Fields loaded = loadFields(tableId);
         metadataCache.put(tableId, new CachedFields(loaded, System.currentTimeMillis()));
         return loaded;
     }
 
-    private List<FieldMeta> loadFields(Long tableId) {
+    private Fields loadFields(Long tableId) {
         List<RawField> raw = jdbcTemplate.query(
                 """
-                SELECT field_name, computed_field_json::text AS json
+                SELECT field_name, data_type, is_computed, computed_field_json::text AS json
                 FROM rt_field_definitions
-                WHERE table_id = ? AND is_computed = true
+                WHERE table_id = ?
                 ORDER BY sort_order, id
                 """,
-                (rs, rowNum) -> new RawField(rs.getString("field_name"), rs.getString("json")),
+                (rs, rowNum) -> new RawField(rs.getString("field_name"), rs.getString("data_type"), rs.getBoolean("is_computed"), rs.getString("json")),
                 tableId);
         if (raw.isEmpty()) {
-            return List.of();
+            return new Fields(List.of(), Map.of());
         }
         List<FieldMeta> fields = new ArrayList<>(raw.size());
+        Map<String, String> types = new LinkedHashMap<>();
         for (RawField field : raw) {
-            fields.add(ComputedFieldRowEvaluation.toMeta(field.fieldName(),
+            if (field.dataType() != null) types.put(field.fieldName(), field.dataType());
+            if (!field.computed()) continue;
+            fields.add(ComputedFieldRowEvaluation.toMeta(field.fieldName(), field.dataType(),
                     ComputedFieldRowEvaluation.parseJsonMap(objectMapper, field.json(), field.fieldName())));
         }
-        return ComputedFieldRowEvaluation.orderByDependency(fields);
+        return new Fields(ComputedFieldRowEvaluation.orderByDependency(fields), types);
     }
 
     /** A row of the metadata query, before the definition JSON is understood. */
-    private record RawField(String fieldName, String json) {
+    private record RawField(String fieldName, String dataType, boolean computed, String json) {
     }
 
-    private record CachedFields(List<FieldMeta> fields, long cachedAt) {
+    private record Fields(List<FieldMeta> computed, Map<String, String> types) { }
+
+    private record CachedFields(Fields fields, long cachedAt) {
 
         boolean isExpired() {
             return System.currentTimeMillis() - cachedAt > METADATA_TTL_MS;

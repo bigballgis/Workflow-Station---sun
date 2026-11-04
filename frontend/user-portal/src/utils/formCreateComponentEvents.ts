@@ -1,3 +1,4 @@
+import { eventSequence } from '@platform-shared/formEvents/async'
 /**
  * Portal runtime — execute per-component form-create events (rule.on / rule._hook).
  */
@@ -42,7 +43,6 @@ export function resolveComponentEventFieldKey(rule: Record<string, unknown>): st
 }
 
 function normalizeHandler(raw: unknown): unknown {
-  if (Array.isArray(raw)) return raw[0]
   return raw
 }
 
@@ -166,22 +166,18 @@ function runHandler(
     api: PortalFormApi
     rule: Record<string, unknown>
   },
-): void {
+): unknown {
   const handler = normalizeHandler(raw)
   if (handler == null || isEmptyFormCreateHandler(handler)) return
   const fn = parseFormCreateEventHandler(handler)
-  if (!fn) return
-  try {
-    fn(ctx)
-  } catch (err) {
-    console.warn('[formCreateComponentEvents] handler error:', err)
-  }
+  if (!fn) throw new Error("Invalid form event script")
+  return fn(ctx)
 }
 
 export function runComponentFieldEvents(
   events: FieldComponentEvents | undefined,
   options: RunComponentEventsOptions,
-): void {
+): unknown {
   if (!events) return
   const ctx = {
     field: options.field,
@@ -189,28 +185,22 @@ export function runComponentFieldEvents(
     api: options.api,
     rule: events.rule,
   }
-  if (options.onEvent) {
-    runHandler(events.on[options.onEvent], ctx)
-  }
-  if (options.hookEvent) {
-    runHandler(events.hook[options.hookEvent], ctx)
-  }
+  return eventSequence([
+    () => options.onEvent ? runHandler(events.on[options.onEvent], ctx) : undefined,
+    () => options.hookEvent ? runHandler(events.hook[options.hookEvent], ctx) : undefined,
+  ])
 }
 
 /** Run change/hook_value and, for select-like fields, also `on.blur` (designer often uses blur). */
 export function runComponentFieldEventsOnValueChange(
   events: FieldComponentEvents | undefined,
   options: RunComponentEventsOptions,
-): void {
-  runComponentFieldEvents(events, options)
-  if (!options.onEvent && !options.hookEvent) return
-  if (!shouldMirrorBlurOnChange(events?.rule, options.fieldType)) return
-  runComponentFieldEvents(events, {
-    field: options.field,
-    value: options.value,
-    api: options.api,
-    onEvent: 'blur',
-  })
+): unknown {
+  return eventSequence([
+    () => runComponentFieldEvents(events, options),
+    () => (options.onEvent || options.hookEvent) && shouldMirrorBlurOnChange(events?.rule, options.fieldType)
+      ? runComponentFieldEvents(events, { field: options.field, value: options.value, api: options.api, onEvent: 'blur' }) : undefined,
+  ])
 }
 
 export function runAllComponentHookEvents(
@@ -226,9 +216,10 @@ export function runAllComponentHookEvents(
   },
   required?: PortalFormRequiredBag,
   overlays?: PortalFormApiOverlays,
-): void {
+  suppliedApi?: PortalFormApi,
+): unknown {
   const map = collectFieldComponentEventsFromRules(rules)
-  const api = createPortalFormApi(
+  const api = suppliedApi ?? createPortalFormApi(
     getFormData,
     applyPatch,
     resolveFieldKey,
@@ -237,12 +228,7 @@ export function runAllComponentHookEvents(
     required,
     overlays,
   )
-  for (const [field, ev] of map) {
-    runComponentFieldEvents(ev, {
-      field,
-      value: getFormData()[field],
-      api,
-      hookEvent: hookName,
-    })
-  }
+  return eventSequence([...map].map(([field, ev]) => () => runComponentFieldEvents(ev, {
+    field, value: getFormData()[field], api, hookEvent: hookName,
+  })))
 }

@@ -9,7 +9,7 @@ import { readBatchStartContext } from './batch-start-context.mjs'
 
 const mode = process.argv[2]
 assert.ok(['prepare', 'before', 'after', 'complete'].includes(mode))
-const statePath = new URL('../../.codex-batch-lookup-fixture.json', import.meta.url)
+const statePath = process.env.LOOKUP_FIXTURE_STATE_PATH || new URL('../../.codex-batch-lookup-fixture.json', import.meta.url)
 const origin = 'http://localhost:3000'
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage()
@@ -61,7 +61,8 @@ async function readSource() {
 }
 async function createFixtureUnit(source) {
   const groups = await dw('GET', '/function-units/my-dev-groups')
-  const group = groups.groups.find(item => item.selectable)
+  const group = groups.groups.find(item => item.selectable && groups.memberGroupIds.includes(item.id))
+    ?? (groups.canSeeAllGroups && groups.publicGroupId ? { id: groups.publicGroupId } : undefined)
   assert.ok(group)
   const clone = process.env.LOOKUP_FIXTURE_UNIT_ID ? await dw('GET', `/function-units/${process.env.LOOKUP_FIXTURE_UNIT_ID}`)
     : await dw('POST', '/function-units', { name: `Batch verification Lookup ${Date.now()}`,

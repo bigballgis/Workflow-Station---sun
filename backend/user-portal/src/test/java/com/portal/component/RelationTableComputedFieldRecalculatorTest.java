@@ -48,6 +48,26 @@ class RelationTableComputedFieldRecalculatorTest {
         fieldRows.clear();
     }
 
+    @Test void relationMetadataPreservesTextAndStoresTextResultsAsText() {
+        existenceProbe(true);
+        fieldRows.add(new Object[]{"external_reference", null, "VARCHAR"});
+        computedField("copied_reference", field("external_reference"), "fail");
+        Object[] computed = fieldRows.remove(fieldRows.size() - 1);
+        fieldRows.add(new Object[]{computed[0], computed[1], "TEXT"});
+        metadataQuery();
+        Map<String, Object> row = row("external_reference", "00012345678901234567890");
+        recalculator.recalculate(TABLE_ID, row);
+        assertThat(row.get("copied_reference")).isEqualTo("00012345678901234567890");
+    }
+
+    @Test void missingComputedDefinitionRemainsAnError() {
+        existenceProbe(true);
+        fieldRows.add(new Object[]{"broken_text", null, "VARCHAR", true});
+        metadataQuery();
+        assertThatThrownBy(() -> recalculator.recalculate(TABLE_ID, row("broken_text", "old")))
+                .isInstanceOf(PortalException.class);
+    }
+
     @Nested
     @DisplayName("does nothing")
     class NoOp {
@@ -225,6 +245,8 @@ class RelationTableComputedFieldRecalculatorTest {
                         java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
                         when(rs.getString("field_name")).thenReturn((String) fieldRow[0]);
                         when(rs.getString("json")).thenReturn((String) fieldRow[1]);
+                        when(rs.getString("data_type")).thenReturn(fieldRow.length > 2 ? (String) fieldRow[2] : null);
+                        when(rs.getBoolean("is_computed")).thenReturn(fieldRow.length > 3 ? (Boolean) fieldRow[3] : fieldRow[1] != null);
                         mapped.add(mapper.mapRow(rs, mapped.size()));
                     }
                     return mapped;

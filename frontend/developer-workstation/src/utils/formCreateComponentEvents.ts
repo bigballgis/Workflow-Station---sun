@@ -1,3 +1,4 @@
+import { eventSequence } from '@platform-shared/formEvents/async'
 /**
  * Component-level form-create events (Form Preview + portal parity).
  */
@@ -38,13 +39,15 @@ export function resolveComponentEventFieldKey(rule: Record<string, unknown>): st
 }
 
 function normalizeHandler(raw: unknown): unknown {
-  if (Array.isArray(raw)) return raw[0]
   return raw
 }
 
 function pickMergedHandler(primary: unknown, secondary: unknown): unknown {
   const p = normalizeHandler(primary)
   const s = normalizeHandler(secondary)
+  // Native form-create replaces functions with injection closures and drops their
+  // source tags. The designer shadow retains the script for the shared dispatcher.
+  if (typeof p === 'function' && (typeof s === 'string' || Array.isArray(s)) && !isEmptyFormCreateHandler(s)) return s
   if (p == null && s == null) return undefined
   if (p != null && !isEmptyFormCreateHandler(p)) return p
   if (s != null && !isEmptyFormCreateHandler(s)) return s
@@ -150,22 +153,18 @@ function runHandler(
     api: PortalFormApi
     rule: Record<string, unknown>
   },
-): void {
+): unknown {
   const handler = normalizeHandler(raw)
   if (handler == null || isEmptyFormCreateHandler(handler)) return
   const fn = parseFormCreateEventHandler(handler)
-  if (!fn) return
-  try {
-    fn(ctx)
-  } catch (err) {
-    console.warn('[formCreateComponentEvents] handler error:', err)
-  }
+  if (!fn) throw new Error("Invalid form event script")
+  return fn(ctx)
 }
 
 export function runComponentFieldEvents(
   events: FieldComponentEvents | undefined,
   options: RunComponentEventsOptions,
-): void {
+): unknown {
   if (!events) return
   const ctx = {
     field: options.field,
@@ -173,27 +172,22 @@ export function runComponentFieldEvents(
     api: options.api,
     rule: events.rule,
   }
-  if (options.onEvent) {
-    runHandler(events.on[options.onEvent], ctx)
-  }
-  if (options.hookEvent) {
-    runHandler(events.hook[options.hookEvent], ctx)
-  }
+  return eventSequence([
+    () => options.onEvent ? runHandler(events.on[options.onEvent], ctx) : undefined,
+    () => options.hookEvent ? runHandler(events.hook[options.hookEvent], ctx) : undefined,
+  ])
 }
 
+/** Run change/hook_value and, for select-like fields, also `on.blur` (designer often uses blur). */
 export function runComponentFieldEventsOnValueChange(
   events: FieldComponentEvents | undefined,
   options: RunComponentEventsOptions,
-): void {
-  runComponentFieldEvents(events, options)
-  if (!options.onEvent && !options.hookEvent) return
-  if (!shouldMirrorBlurOnChange(events?.rule, options.fieldType)) return
-  runComponentFieldEvents(events, {
-    field: options.field,
-    value: options.value,
-    api: options.api,
-    onEvent: 'blur',
-  })
+): unknown {
+  return eventSequence([
+    () => runComponentFieldEvents(events, options),
+    () => (options.onEvent || options.hookEvent) && shouldMirrorBlurOnChange(events?.rule, options.fieldType)
+      ? runComponentFieldEvents(events, { field: options.field, value: options.value, api: options.api, onEvent: 'blur' }) : undefined,
+  ])
 }
 
 export { createPortalFormApi }

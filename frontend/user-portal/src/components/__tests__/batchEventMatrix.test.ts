@@ -52,10 +52,10 @@ describe('Batch supported event matrix', () => {
     a.change('source', 0); b.change('source', 0); a.change('source', 0)
     expect(a.data.target).toBe(2); expect(b.data.target).toBe(9)
   })
-  it('stops cyclic backfills and rejects asynchronous or dangerous scripts', () => {
+  it('stops cyclic backfills and rejects dangerous or invalid scripts', () => {
     const cyclic = runner.createSession({ source: 0 }, [{ ...basic[0], on: { change: '$FNX:api.setValue("source", value + 1)' } }], () => false)
     expect(() => cyclic.change('source', 1)).toThrow('batchEventInvalid')
-    for (const body of ['$FNX:return Promise.resolve(1)', '$FNX:window.location = "x"', '$FNX:const =']) {
+    for (const body of ['$FNX:window.location = "x"', '$FNX:const =']) {
       const session = runner.createSession({}, basic, () => false, { onCreated: body })
       expect(() => session.bootstrap()).toThrow('batchEventInvalid')
     }
