@@ -293,11 +293,24 @@ public class AiWriteServiceImpl implements AiWriteService {
         }
     }
 
+    /**
+     * Writes this round's tables and returns the name → table catalog the rest of the write resolves against.
+     *
+     * <p>A write without tables (scoped FORMS / TABLE_RELATIONS proposals, which reference tables by name
+     * only) leaves the FU's tables untouched, so those are the catalog. Returning an empty map here used to
+     * save every form binding with a NULL table and skip every relation — the release then fails Admin
+     * activation with {@code VERSION_SNAPSHOT_INCOMPLETE}.</p>
+     */
     @SuppressWarnings("unchecked")
     private Map<String, TableDefinition> writeTableDefinitions(FunctionUnit functionUnit, AiGeneratedData generatedData) {
         Map<String, TableDefinition> tableMap = new LinkedHashMap<>();
         List<Map<String, Object>> tableDefs = generatedData.getTableDefinitions();
-        if (tableDefs == null) return tableMap;
+        if (tableDefs == null) {
+            for (TableDefinition existing : functionUnit.getTableDefinitions()) {
+                tableMap.put(existing.getTableName(), existing);
+            }
+            return tableMap;
+        }
 
         for (Map<String, Object> tableData : tableDefs) {
             String tableTypeStr = (String) tableData.get("tableType");

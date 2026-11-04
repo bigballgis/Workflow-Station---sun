@@ -624,4 +624,55 @@ class AiWriteServiceTest {
         writeService.applyGeneratedData(1L, data, null);
         assertNull(functionUnit.getProcessDefinition(), "ALL clears the unreadable process instead of failing on it");
     }
+
+    // ==================== scoped writes reference the tables the FU already has ====================
+
+    private TableDefinition existingTable(long id, String name, TableType type) {
+        TableDefinition table = TableDefinition.builder().id(id).functionUnit(functionUnit)
+                .tableName(name).tableType(type).fieldDefinitions(new ArrayList<>()).build();
+        functionUnit.getTableDefinitions().add(table);
+        return table;
+    }
+
+    /** A FORMS proposal carries no tables: its bindings must resolve to the tables the FU already has. */
+    @Test
+    void formsScope_bindsFormsToTheExistingTables() {
+        TableDefinition orders = existingTable(10L, "orders", TableType.MAIN);
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AiGeneratedData data = AiGeneratedData.builder().formDefinitions(List.of(Map.of(
+                "formName", "order_form", "formType", "TASK", "configJson", new java.util.HashMap<>(),
+                "tableBindings", List.of(Map.of("tableName", "orders", "bindingType", "PRIMARY")))))
+                .build();
+
+        writeService.applyGeneratedData(1L, data, "FORMS");
+
+        // ids, not assertSame: entity toString() recurses FunctionUnit <-> TableDefinition on a failure message
+        FormDefinition form = functionUnit.getFormDefinitions().get(0);
+        TableDefinition bound = form.getTableBindings().get(0).getTable();
+        assertEquals(10L, bound == null ? null : bound.getId());
+        assertEquals(10L, form.getBoundTable() == null ? null : form.getBoundTable().getId());
+        assertTrue(functionUnit.getTableDefinitions().get(0) == orders, "a FORMS write must not touch the tables");
+    }
+
+    /** Same for TABLE_RELATIONS: before, every relation was skipped and the scope just deleted them all. */
+    @Test
+    void tableRelationsScope_linksTheExistingTables() {
+        existingTable(10L, "orders", TableType.MAIN);
+        existingTable(11L, "customers", TableType.MAIN);
+        functionUnit.setTableRelations(new ArrayList<>());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AiGeneratedData data = AiGeneratedData.builder().tableRelations(List.of(Map.of(
+                "sourceTableName", "orders", "sourceFieldName", "customer_id", "relationType", "MANY_TO_ONE",
+                "targetTableName", "customers", "targetFieldName", "id"))).build();
+
+        writeService.applyGeneratedData(1L, data, "TABLE_RELATIONS");
+
+        assertEquals(1, functionUnit.getTableRelations().size());
+        assertEquals(10L, functionUnit.getTableRelations().get(0).getSourceTableId());
+        assertEquals(11L, functionUnit.getTableRelations().get(0).getTargetTableId());
+    }
 }

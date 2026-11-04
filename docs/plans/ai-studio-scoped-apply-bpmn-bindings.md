@@ -249,5 +249,10 @@ Portal 已经明确不回退到流程全部动作；按名字兜底会把审批�
 - **新发现（既有缺陷，未修）**：单独 Apply FORMS 时，`writeFormDefinitions` 只按**本次写入**的表解析 `tableBindings[].tableName`，
   scoped FORMS 提案不带表 → `dw_form_table_bindings.table_id` 全为 NULL；设计器里表单失去表绑定，部署时 admin-center
   `assertReadyForActivation` 报 `VERSION_SNAPSHOT_INCOMPLETE`。FU 50036 用 #144 重 Apply 后就是这个状态（重 Apply 前表绑定为 0 行，可部署但表单无表）。
-  修法候选：无本次表定义时按 FU 现有表名解析（与预览/校验已用的 `existingTableFieldsFor` 同一目录）。
+  **已修（用户 11-04「Fix it here」）**：`writeTableDefinitions` 在本次不带表时返回 FU 现有表的名称目录（与预览/校验的
+  `existingTableFieldsFor` 同一目录）。同一缺陷也让单独 Apply TABLE_RELATIONS 把关系全部跳过（只 warn）——清空后一条不写，
+  连带 TABLE_RELATIONS 的撤销也是空操作——一并修好。单测先红后绿（`formsScope_bindsFormsToTheExistingTables`、
+  `tableRelationsScope_linksTheExistingTables`）。dev：50036 重 Apply #144 后表单绑回 `biz_order` / `biz_order_item`，
+  部署为 `1.0.3` 成功，Portal 发起页显示 `submit_car_wash_payment` 与提交表单字段
+  （`verification-screenshots/scoped-apply-bindings-03-fu50036-start-after-repair.jpg`）。50036 审批任务指派给实体经理，未在 Portal 走到审批步。
 - 全量 DW 测试 1544 个，仅 `ExportImportComponentImplTest.importFunctionUnit_rewritesBpmnIdsAfterImport` 报错，干净基线上同样报错。
