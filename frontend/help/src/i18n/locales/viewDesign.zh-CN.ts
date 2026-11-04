@@ -9,7 +9,7 @@ export default {
     flow2: '选中一个视图，或 Create view / Generate default views',
     flow3: '添加 Table columns（需要时再加 Lookup / Related columns）',
     flow4: '设 Name、Export、Detail form、Access control，再设 Sort / Filter',
-    flow5: '保存。门户只给符合访问控制的人看这个视图',
+    flow5: '保存后部署到 Admin Center 并启用版本，门户才使用新的视图及权限。',
     whatTitle: '视图设计是什么',
     whatBody:
       '功能单元页签「视图设计」。左侧：按表分组的 Views。Default 表示该表的默认视图。这不是表单设计，也不是表设计。',
@@ -32,7 +32,7 @@ export default {
     catFilter: 'Filter by。Edit filters 打开条件对话框（Equals、Contains 等）。',
     accessTitle: '访问控制',
     accessBody:
-      'Business Units 和 Roles 都空时，只有 System Administrator 能看见此视图。若配置访问控制，至少选一个 Business Unit 和一个 Role。用户必须两边都匹配。System Administrator 始终能看见全部视图和全部行。',
+      'Business Units 和 Roles 都空时，只有 System Administrator 能看见此视图。若配置访问控制，至少选一个 Business Unit 和一个 Role。用户必须两边都匹配。System Administrator 始终能看见全部视图和全部行。 查看视图不要求拥有 Request in User Portal 权限；该权限只控制发起申请，不授予或取消视图查看权限。',
     catAccess: '右侧这一段。标题下的说明写明留空和成对规则。',
     catBu: '按业务单元谁能看见。占位：Select BUs that can see this view。',
     catRoles: '在已选单元内按角色谁能看见。选项来自这些单元的准入角色，不是全局角色列表。',

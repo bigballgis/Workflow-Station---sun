@@ -21,7 +21,7 @@ description: >-
 | View **未配置任何 BU 且未配置任何 Role** | **不可见** | **可见** |
 | View **只配置了 BU 或只配置了 Role**（不完整） | **不可见** | **可见** |
 | View **同时配置了 BU 与 Role** | 须 **AND** 匹配（见下） | **可见** |
-| 已通过 FU 级门禁 | 仍受 View 规则约束 | **绕过 View 规则** |
+| 没有 FU「Request in User Portal」权限 | **仍仅按 View BU+Role 判定** | **绕过 View 规则** |
 
 **成对配置（DW Save 校验 + Portal 运行时）：**
 
@@ -47,9 +47,26 @@ description: >-
 
 1. 看见 FU 下 **全部已发布 View**（不过滤 View 菜单）。
 2. 看见 View 内 **全部行数据**——即使 View 开启 `restrictToInvolvedUsers`，也 **不** 做发起人/办理人/MI 参与者过滤。
-3. 在 Portal 能访问 **所有已启用 Function Unit** 的数据视图——FU 级 `sys_function_unit_access` 对 SYS_ADMIN **bypass**。
+3. 在 Portal 能访问 **所有已部署且启用 Function Unit** 的数据视图。
 
-非 SYS_ADMIN 仍须先通过 FU 级门禁，再受 View 可见性与数据范围约束。
+**Request 与 View 授权完全独立：** `sys_function_unit_access` 仅控制「Request in User Portal」的可发起列表、发起表单和提交申请。View 链路不读取该授权；非 SYS_ADMIN 只按 Admin 已部署且启用版本中的 View BU+Role 和数据范围判定。
+
+| FU Request 权限 | View 权限 | 发起申请 | 查看 View |
+|---|---|---|---|
+| 有 | 无 | 可以 | 不可以 |
+| 无 | 有 | 不可以 | 可以 |
+| 有 | 有 | 可以 | 可以 |
+| 无 | 无 | 不可以 | 不可以 |
+
+View 可读权限可打开其授权范围内的历史申请详情及绑定 Dashboard，但不授予发起新申请的权限。
+
+**通过 View 授权读取申请详情时**，目标申请必须在至少一个可见 View 中存在匹配行：复用列表的设计器筛选与 involvement 条件；SUB View 须存在符合条件的子行，不能仅凭 View 可见就读取该 FU 的全部申请。多个可见 View 按可读范围取并集。参与人、SYS_ADMIN 和独立审计授权仍按原入口判定；用户临时搜索/列筛选不作为权限条件。
+
+设计器筛选必须使用完整字段声明，保留隐藏字段的 `systemField` / `columnType`：隐藏系统列仍读真实流程字段，不能退化为同名表单 JSON；隐藏 Lookup/FK 展示列也不能按普通字段查询。列表、CSV 导出与详情范围共用此条件；用户临时筛选与页面列仍只使用可见字段。
+
+SUB owning FK 的所属申请导航只依赖当前 SUB View 的匹配记录，不要求 MAIN 默认 View 可见；普通跨表 FK 仍要求目标 View 可读。
+后来新增的 SUB View 若在旧申请版本中没有 DETAIL 定义，须按行返回详情不可用并明确提示，禁止套用当前表单或同名猜测历史定义。
+
 
 ### 3. 数据范围（非 SYS_ADMIN）
 
@@ -58,7 +75,15 @@ description: >-
 | `false` | FU 内该 View 对应表的全量行（现状） |
 | `true` | 仅 **发起人 + 历史/当前 assignee + MI 子表参与者** 相关行 |
 
-实现：`PortalMainTableViewServiceImpl.loadAndProjectRows` + `MainTableViewInvolvementChecker`；**SYS_ADMIN 在入口短路，跳过 involvement 过滤**。
+实现：`PortalMainTableViewServiceImpl.mainViewQuery/subViewQuery` + `MainTableViewInvolvementScope/Checker`；**SYS_ADMIN 在入口短路，跳过 involvement 过滤**。
+
+MI 人员身份只读目标申请 `function_unit_catalog_id` 对应 Admin 发布快照：BPMN 的实际 MI 子流程内 userTask 必须声明 user/both 模式、`subTableName` 和 `assigneeField`，字段须存在于同发布的 SUB 表定义中。只读该表规范 `dw:` slice 的指定字段，单人 Lookup 按 `AssignmentPersonIdentity` 读取 `id`；不递归猜任意业务 key。role-only 配置不从用户字段授予身份。同一表的多个 MI 节点可分别声明用户字段。
+
+只缓存不可变的发布声明，不跨请求缓存可变的参与人名单；待分派人员撤回后下一次读取须收回授权。发起人和真实历史 assignee 仍独立通过，不为这两个已成立的授权强行读取 MI 元数据。
+
+### 4. CSV 导入边界
+
+Data View **只支持 Export**，MAIN/SUB 均不提供导入入口、上传 SDK 或写入 API。旧 `/main-table-views/{viewId}/import` 路由须不存在，不能通过隐藏按钮代替后端删除。旧 summary 的 `enableImport` 字段只为兼容客户端保留为 `false`，忽略旧包的 toolbar 导入开关。查看、详情、CSV 导出与 BI 保留；申请表单自身的写入仍走各自权限及发布配置。
 
 ---
 
@@ -68,9 +93,7 @@ description: >-
 flowchart TD
   user[Portal 用户] --> sysAdmin{含 SYS_ADMIN?}
   sysAdmin -->|是| allViews[全部 View + 全部行数据]
-  sysAdmin -->|否| fuGate{FU 门禁}
-  fuGate -->|否| deny[不可见]
-  fuGate -->|是| rules{BU 与 Role 均未配置?}
+  sysAdmin -->|否| rules{BU 与 Role 均未配置?}
   rules -->|是| deny
   rules -->|否| paired{BU 与 Role 均已配置?}
   paired -->|否| deny
@@ -88,9 +111,9 @@ flowchart TD
 
 | 层 | 文件 | 职责 |
 |----|------|------|
-| Portal 可见性 | `backend/user-portal/.../MainTableViewAccessResolver.java` | 空规则 / 不完整规则 → 非 admin `false`；完整规则 AND |
+| Admin 运行时授权 | `backend/admin-center/.../RuntimeDataViewAccess.java` | 独立 View BU+Role；空/半配非 admin 拒绝；不依赖 FU Request 授权 |
 | Portal 列表/数据 | `backend/user-portal/.../PortalMainTableViewServiceImpl.java` | 过滤 View；SYS_ADMIN 跳过 involvement |
-| Portal FU 门禁 | `backend/user-portal/.../FunctionUnitAccessComponent.java` | SYS_ADMIN bypass；**code → catalog UUID** 后再查 access |
+| Portal Request 门禁 | `backend/user-portal/.../FunctionUnitAccessComponent.java` | 仅用于申请等既有 Request 链路；不得用于 View 授权 |
 | DW 设计态 | `MainTableViewServiceImpl.validateAccessRules` + `useMainTableViewDesigner.ts` + i18n ×3 | 成对校验；Role 按 BU 准入列表加载 |
 | Schema | `deploy/init-scripts/00-schema/51-dw-main-table-view-access.sql` | `dw_main_table_view_access` + `restrict_to_involved_users` |
 | 测试种子 | `deploy/init-scripts/91-view-access-test/01-view-access-test-users.sql` | `view_*` 账号；`view_admin` 须含 UBR 才能 FULL 门户 |
@@ -128,7 +151,7 @@ DW Role 选项（前端）：
 // Role 下拉 disabled 直到至少选一个 BU
 ```
 
-Portal FU 门禁与 SYS_ADMIN：
+Portal Request 门禁与 SYS_ADMIN（不用于 View 链路）：
 
 ```java
 // isSystemAdministrator → GET /users/{id}/roles?profileContext=ADMIN
@@ -172,7 +195,8 @@ Portal FU 门禁与 SYS_ADMIN：
 - [x] DW：`getBusinessUnitEligibleRoles` 加载 Role；Save 前端校验
 - [x] i18n：`accessControlHint` / `accessControlBuRoleRequired` / `rolesSelectBuFirst`
 - [x] `loadAndProjectRows`：SYS_ADMIN 跳过 `restrictToInvolvedUsers`
-- [x] `canAccessFunctionUnit`：SYS_ADMIN bypass；**FU code 先 resolve 再查 access**
+- [x] Request 的 `canAccessFunctionUnit`：SYS_ADMIN bypass；**FU code 先 resolve 再查 access**
+- [x] Admin `RuntimeDataViewAccess`：View 授权不读取 `sys_function_unit_access`，仅匹配 View BU+Role
 - [x] `isSystemAdministrator`：`profileContext=ADMIN`（非 PORTAL）
 - [x] 测试种子：`view_admin` 含 UBR + 虚拟组
 - [x] Export/Import/Clone：`MainTableViewPortability` JDBC 导出 access + 成对校验（见 `function-unit-portability` skill）

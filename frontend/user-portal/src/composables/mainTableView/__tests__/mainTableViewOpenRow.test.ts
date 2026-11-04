@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMainTableView, resolveFkOpenTarget, resolveRowOpenTarget } from '../mainTableViewNav'
+import { hasFkNavigation, isMainTableView, resolveFkOpenTarget, resolveRowOpenTarget } from '../mainTableViewNav'
 
 /**
  * `isMainTableView` is the branch that decides where a row click lands: MAIN views open the
@@ -99,5 +99,23 @@ describe('resolveFkOpenTarget', () => {
   it('drills down as before when the row has no instance to open', () => {
     expect(resolveFkOpenTarget(OWNING, { processInstanceId: null }, 'X'))
       .toEqual({ kind: 'list', functionUnitCode: 'atm', viewId: 50292, fk: 'X' })
+  })
+})
+
+describe('historical detail availability and independent owning links', () => {
+  it('explains why an older request has no detail definition in a later SUB view', () => {
+    expect(resolveRowOpenTarget({ tableType: 'SUB', detailFormId: 77 }, 1,
+      { processInstanceId: 'old', detailAvailable: false }, 'old|platformRowUuid=line'))
+      .toEqual({ kind: 'refuse', messageKey: 'detailNotInRelease' })
+  })
+  it('keeps the detail route for a row with a definition in its own release', () => {
+    expect(resolveRowOpenTarget({ tableType: 'SUB', detailFormId: 77 }, 1,
+      { processInstanceId: 'old', detailAvailable: true }, 'old|platformRowUuid=line'))
+      .toEqual({ kind: 'detail', viewId: 1, rowKey: 'old|platformRowUuid=line' })
+  })
+  it('offers owning-request navigation without granting the MAIN view', () => {
+    expect(hasFkNavigation({ isForeignKey: true, refOwningRequest: true }, { processInstanceId: 'old' })).toBe(true)
+    expect(hasFkNavigation({ isForeignKey: true, refOwningRequest: false }, { processInstanceId: 'old' })).toBe(false)
+    expect(hasFkNavigation({ isForeignKey: false, refOwningRequest: true }, { processInstanceId: 'old' })).toBe(false)
   })
 })

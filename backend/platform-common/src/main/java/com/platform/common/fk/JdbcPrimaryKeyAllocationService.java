@@ -275,7 +275,8 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
     }
 
     private String resolveSequenceTable(Long tableId, String override) {
-        if ("dw_pk_sequences".equals(override) || "rt_pk_sequences".equals(override)) {
+        if ("dw_pk_sequences".equals(override) || "rt_pk_sequences".equals(override)
+                || "ac_runtime_pk_sequences".equals(override)) {
             return override;
         }
         Integer dw = jdbcTemplate.queryForObject(

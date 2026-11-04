@@ -60,6 +60,7 @@ public class FunctionUnitImportComponent {
     private final EmailMonitorSyncComponent emailMonitorSyncComponent;
     private final ImportBpmnStructureValidator importBpmnStructureValidator;
     private final ImportViewAccessValidator importViewAccessValidator;
+    private final com.admin.dataview.RuntimeDataViewIndex dataViewIndex;
 
     @Transactional
     public ImportResult importFunctionPackage(FunctionUnitImportRequest request, String importerId) {
@@ -106,6 +107,7 @@ public class FunctionUnitImportComponent {
                     throw new com.platform.common.functionunit.FunctionUnitVersionException(
                             "VERSION_IMPORT_CONFLICT", published.getId());
                 }
+                dataViewIndex.index(published.getId());
                 restoreActionSourceIds(published, parsed.getActions());
                 return ImportResult.success(FunctionUnitInfo.fromEntity(published), true);
             }
@@ -142,11 +144,15 @@ public class FunctionUnitImportComponent {
             table.put("relationTableId", relationIds.get(Long.valueOf(String.valueOf(sourceId))));
             content.setContentData(objectMapper.writeValueAsString(table));
         }
+        ImportRelationTableReferences.remap(packageContent.getContents(),relationIds,objectMapper);
+        ImportRelationTableReferences.remap(parsed.getForms(),relationIds,objectMapper);
         saveDependencies(functionUnit, packageContent.getDependencies());
         saveContents(functionUnit, packageContent.getContents());
         if (parsed.getForms() != null) {
             saveContents(functionUnit, parsed.getForms());
         }
+        contentRepository.flush();
+        dataViewIndex.index(functionUnit.getId());
         saveImportedActions(functionUnit.getId(), parsed.getActions());
         emailConnectionSyncComponent.syncConnections(functionUnit.getId(), parsed.getConnections());
         emailMonitorSyncComponent.syncMonitorRules(functionUnit.getId(), parsed.getEmailMonitors());

@@ -73,7 +73,7 @@ class MainTableViewPortabilityTest {
         List<Map<String, Object>> exported = portability.export(1L, Map.of(20L, "HMDC_Case"));
 
         assertThat(exported).hasSize(1);
-        assertThat(exported.get(0)).doesNotContainKey("viewId");
+        assertThat(exported.get(0)).doesNotContainKey("viewId").containsEntry("viewKey",view.getViewKey());
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rules = (List<Map<String, Object>>) exported.get(0).get("accessRules");
         assertThat(rules).hasSize(2);
@@ -105,6 +105,8 @@ class MainTableViewPortabilityTest {
         Map<String, Object> viewPayload = new LinkedHashMap<>();
         viewPayload.put("mainTableName", "HMDC_Case");
         viewPayload.put("viewName", "HMDC Case");
+        String logicalKey=java.util.UUID.randomUUID().toString();
+        viewPayload.put("viewKey",logicalKey);
         viewPayload.put("viewId", 12345L); // Compare metadata must never be reused as the restored entity ID.
         viewPayload.put("isDefault", false);
         viewPayload.put("status", "DRAFT");
@@ -123,6 +125,7 @@ class MainTableViewPortabilityTest {
         ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
         verify(mainTableViewConfigRepository).save(captor.capture());
         assertThat(captor.getValue().getId()).isNull();
+        assertThat(captor.getValue().getViewKey()).isEqualTo(logicalKey);
         assertThat(captor.getValue().getViewFields()).extracting(MainTableViewField::getSelectDisplay)
                 .containsExactly("label", "value");
     }
@@ -219,5 +222,25 @@ class MainTableViewPortabilityTest {
                 .isInstanceOf(DeveloperBusinessException.class)
                 .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
                 .isEqualTo(MainTableViewAccessRulesValidator.PAIR_ERROR_CODE);
+    }
+    @Test
+    void crossEnvironmentImportAndReexportPreserveViewKeyWhenDatabaseIdsChange() {
+        var source=MainTableViewConfig.builder().id(10L).mainTableId(20L).viewName("Cases")
+                .status(MainTableViewStatus.PUBLISHED).viewFields(List.of()).build();
+        when(mainTableViewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(source));
+        var payload=portability.export(1L,Map.of(20L,"cases"));
+        when(mainTableViewConfigRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        var targetFu=FunctionUnit.builder().id(200L).build();
+        portability.importAll(payload,targetFu,Map.of("cases",900L));
+        var captured=ArgumentCaptor.forClass(MainTableViewConfig.class);
+        verify(mainTableViewConfigRepository).save(captured.capture());
+        var target=captured.getValue();
+        assertThat(target.getMainTableId()).isEqualTo(900L);
+        assertThat(target.getViewKey()).isEqualTo(source.getViewKey());
+        target.setId(1000L);
+        when(mainTableViewConfigRepository.findByFunctionUnitIdWithFields(200L)).thenReturn(List.of(target));
+        assertThat(portability.export(200L,Map.of(900L,"cases")).get(0))
+                .containsEntry("viewKey",source.getViewKey()).containsEntry("mainTableName","cases")
+                .doesNotContainKey("viewId");
     }
 }

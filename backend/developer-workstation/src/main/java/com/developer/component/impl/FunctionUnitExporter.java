@@ -544,8 +544,12 @@ public class FunctionUnitExporter {
         if (table.getSlaConfig() != null) {
             map.put("slaConfig", table.getSlaConfig());
         }
+        var externalIds=table.getFieldDefinitions().stream().map(FieldDefinition::getRefTableId)
+                .filter(java.util.Objects::nonNull).filter(id -> !tableIdToName.containsKey(id)).distinct().toList();
+        Map<Long,TableDefinition> externalTables=tableDefinitionRepository.findAllById(externalIds).stream()
+                .collect(Collectors.toMap(TableDefinition::getId,t -> t));
         map.put("fields", table.getFieldDefinitions().stream()
-                .map(field -> serializeField(field, tableIdToName))
+                .map(field -> serializeField(field, tableIdToName, externalTables))
                 .toList());
         if (table.getForeignKeys() != null && !table.getForeignKeys().isEmpty()) {
             map.put("foreignKeys", table.getForeignKeys().stream()
@@ -577,7 +581,8 @@ public class FunctionUnitExporter {
         return map;
     }
 
-    private Map<String, Object> serializeField(FieldDefinition field, Map<Long, String> tableIdToName) {
+    private Map<String, Object> serializeField(FieldDefinition field, Map<Long, String> tableIdToName,
+                                                Map<Long,TableDefinition> externalTables) {
         Map<String, Object> map = new HashMap<>();
         map.put("fieldName", field.getFieldName());
         map.put("dataType", field.getDataType().name());
@@ -593,6 +598,12 @@ public class FunctionUnitExporter {
         // FK/PK runtime metadata — refTableId exported by name so it survives id remap on import
         map.put("isForeignKey", field.getIsForeignKey());
         map.put("refTableName", field.getRefTableId() != null ? tableIdToName.get(field.getRefTableId()) : null);
+        if (field.getRefTableId()!=null && !tableIdToName.containsKey(field.getRefTableId())) {
+            TableDefinition parent=externalTables.get(field.getRefTableId());
+            if(parent==null) throw new DeveloperBusinessException("VIEW_FK_EXPORT_INVALID","Referenced table is missing");
+            map.put("refTableName",parent.getTableName());
+            map.put("refFunctionUnitCode",parent.getFunctionUnit().getCode());
+        }
         map.put("refPrimaryKeyFields", field.getRefPrimaryKeyFields());
         map.put("pkGenerationJson", field.getPkGenerationJson());
         map.put("fkDisplayMode", field.getFkDisplayMode());

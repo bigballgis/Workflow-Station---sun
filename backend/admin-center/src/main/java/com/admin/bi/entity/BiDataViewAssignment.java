@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 /** Dashboard binding for one concrete User Portal Table View. */
 @Entity
 @Table(name = "bi_data_view_assignment",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"dashboard_id", "view_id"}),
+        uniqueConstraints = @UniqueConstraint(columnNames = {"dashboard_id", "view_id", "runtime_target"}),
         indexes = {
                 @Index(name = "idx_bi_data_view_assignment_fu", columnList = "function_unit_id"),
                 @Index(name = "idx_bi_data_view_assignment_table", columnList = "table_id"),
@@ -56,6 +56,13 @@ public class BiDataViewAssignment {
 
     @Column(name = "view_id")
     private Long viewId;
+
+    @Column(name = "runtime_target", nullable = false)
+    private boolean runtimeTarget;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "legacy_target", columnDefinition = "jsonb")
+    private java.util.Map<String, Object> targetSnapshot;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -1,7 +1,5 @@
 package com.admin.bi.service;
 
-import com.admin.bi.component.DashboardRoleGate;
-import com.admin.bi.config.BiProperties;
 import com.admin.bi.dto.response.DataViewDashboardResponse;
 import com.admin.bi.entity.BiDashboardRegistry;
 import com.admin.bi.entity.BiDataViewAssignment;
@@ -33,9 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * The Data -> Views path (dashboards bound to a request/sub table) must apply the same
- * RBAC-mapping role gate as the landing page: a dashboard carrying Superset roles is listed and
- * guest-token-eligible only when the user's mapped Superset roles cover it.
+ * A View grant authorizes every active, enabled bound dashboard without a second role grant.
  */
 class BiDataViewAssignmentRoleGateTest {
 
@@ -94,21 +90,22 @@ class BiDataViewAssignmentRoleGateTest {
         when(assignmentRepository.existsByDashboardIdAndViewIdAndEnabledTrue(restricted.getId(), VIEW_ID)).thenReturn(true);
         when(assignmentRepository.existsByDashboardIdAndViewIdAndEnabledTrue(open.getId(), VIEW_ID)).thenReturn(true);
 
-        service = new BiDataViewAssignmentServiceImpl(assignmentRepository, dashboardRepository, jdbcTemplate,
-                userRoleRepository, roleRepository, userBusinessUnitService,
-                new DashboardRoleGate(rbacMappingService, new BiProperties(), userRoleRepository),
-                mock(jakarta.persistence.EntityManager.class),
-                mock(com.admin.bi.repository.BiDataViewMetadataRepository.class));
+        var catalog=mock(com.admin.dataview.RuntimeDataViewCatalog.class);
+        when(catalog.require(anyString(),any())).thenAnswer(call -> new com.platform.common.dataview.RuntimeDataView(
+                call.getArgument(1),1L,TABLE_ID,"key","release","FU","FU","1.0",null,"main","Main","MAIN",
+                java.util.Map.of(),List.of(),List.of(),List.of(),false));
+        service = new BiDataViewAssignmentServiceImpl(assignmentRepository,dashboardRepository,jdbcTemplate,
+                mock(jakarta.persistence.EntityManager.class),mock(com.admin.bi.repository.BiDataViewMetadataRepository.class),catalog);
     }
 
     @Test
-    void withoutMatchingMappingOnlyUnrestrictedDashboardsAreListedOrGrantable() {
+    void viewAccessGrantsEveryActiveBoundDashboardWithoutRoleMapping() {
         when(rbacMappingService.getEffectiveSupersetRoles(SYS_ROLES)).thenReturn(List.of(supersetRole(4, "Gamma")));
 
         assertThat(service.getDashboardsForView(USER, VIEW_ID))
                 .extracting(DataViewDashboardResponse::dashboardId)
-                .containsExactly(open.getId());
-        assertThat(service.canAccessDashboardForView(USER, restricted.getId(), VIEW_ID)).isFalse();
+                .containsExactly(restricted.getId(), open.getId());
+        assertThat(service.canAccessDashboardForView(USER, restricted.getId(), VIEW_ID)).isTrue();
         assertThat(service.canAccessDashboardForView(USER, open.getId(), VIEW_ID)).isTrue();
     }
 

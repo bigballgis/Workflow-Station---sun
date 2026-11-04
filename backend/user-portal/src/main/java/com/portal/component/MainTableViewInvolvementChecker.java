@@ -1,160 +1,76 @@
 package com.portal.component;
 
+import com.platform.common.functionunit.CatalogSnapshotReader;
+import com.platform.common.subtable.SubTableStoreKeys;
 import com.portal.entity.ProcessInstance;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-
-import java.util.Collection;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
-/**
- * Determines whether a user is involved in a process instance for view data scoping:
- * initiator, task assignee (historic), or MI sub-table participant fields.
- */
+/** View involvement: initiator, actual historic assignee, or a person declared by the pinned MI design. */
 @Component
 @RequiredArgsConstructor
 public class MainTableViewInvolvementChecker {
-
-    /**
-     * Column names a participant reference may appear under.
-     *
-     * <p><b>Known gap: this is a hardcoded list where the answer is configuration.</b> A Function
-     * Unit names its participant column in Sub-Task Config ({@code assigneeField}); every FU in dev
-     * happens to use {@code assignee_user_id}, which is why the list currently works. An FU that
-     * names it anything else — {@code handler_id}, {@code owner} — matches nothing here.
-     *
-     * <p><b>Why it has not simply been replaced.</b> Not because the configuration is out of reach —
-     * an earlier version of this note claimed that, and it was wrong. {@code assigneeField} sits in
-     * {@code dw_process_definitions.bpmn_xml}, which this module already queries by function unit
-     * ({@link ChangeHistoryBpmnFormResolver}), and both callers have the function unit in hand
-     * ({@code ProcessInstance.functionUnitCode}; {@code MainTableViewInvolvementScope} already
-     * filters its candidate SQL by it). Resolving the real column here is a tractable change.
-     *
-     * <p>What actually holds it back is the invariant documented on {@link #isMiParticipant}: the
-     * SQL pre-filter is a substring match over the {@code __subTables__} JSON and must stay a
-     * SUPERSET of what this method accepts. Widening the accepted key set without re-deriving that
-     * filter could start dropping rows it never passed through — turning a conservative visibility
-     * gap into missing data. So the replacement is gated on re-verifying the pre-filter together
-     * with the accepted keys, not on finding the configuration.
-     *
-     * <p>Meanwhile the failure here is fail-closed: an unlisted column means a genuine participant
-     * is denied their own rows, never that a stranger is shown someone else's. A visibility bug,
-     * not a leak.
-     *
-     * <p>Until then the list stays and this comment is the record: do not read it as "these are the
-     * participant columns", read it as "these are the ones we happen to recognise".
-     */
-    private static final Set<String> MI_PARTICIPANT_KEY_HINTS = Set.of(
-            "assignee", "assignee_user_id", "participant_id", "participant", "id_idw");
-
     private final JdbcTemplate jdbcTemplate;
-
-    public boolean isUserInvolved(String userId, ProcessInstance processInstance) {
-        if (userId == null || userId.isBlank() || processInstance == null) {
-            return false;
-        }
-        if (userId.equals(processInstance.getStartUserId())) {
-            return true;
-        }
-        if (hasHistoricAssigneeTask(userId, processInstance.getId())) {
-            return true;
-        }
-        return isMiParticipant(userId, processInstance.getVariables());
-    }
-
-    /**
-     * The MI-participant branch on its own, for callers that have already settled the initiator
-     * and historic-assignee branches in SQL and only need this one rechecked. Exposed rather than
-     * reimplemented so pushed-down row scoping and per-instance checking cannot drift apart.
-     *
-     * <p>Note the invariant this guarantees to a SQL pre-filter: a true answer requires some
-     * participant-hint key whose value equals {@code userId} exactly, so {@code userId} is
-     * necessarily present in the JSON text of {@code __subTables__}. A substring pre-filter over
-     * that text therefore returns a superset of what this method accepts — never a subset.
-     */
-    public boolean isMiParticipant(String userId, Map<String, Object> variables) {
-        if (userId == null || userId.isBlank()) {
-            return false;
-        }
-        return isMiParticipantInVariables(userId, variables);
-    }
-
-    private boolean hasHistoricAssigneeTask(String userId, String processInstanceId) {
-        if (processInstanceId == null || processInstanceId.isBlank()) {
-            return false;
-        }
-        try {
-            Integer count = jdbcTemplate.queryForObject(
-                    """
-                            SELECT COUNT(*) FROM ACT_HI_TASKINST
-                            WHERE PROC_INST_ID_ = ? AND ASSIGNEE_ = ?
-                            """,
-                    Integer.class,
-                    processInstanceId,
-                    userId);
-            return count != null && count > 0;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean isMiParticipantInVariables(String userId, Map<String, Object> variables) {
-        if (variables == null || variables.isEmpty()) {
-            return false;
-        }
-        Object subTablesObj = variables.get("__subTables__");
-        if (!(subTablesObj instanceof Map<?, ?> subTables)) {
-            return false;
-        }
-        for (Object sliceObj : subTables.values()) {
-            if (!(sliceObj instanceof Collection<?> slice)) {
-                continue;
-            }
-            for (Object rowObj : slice) {
-                if (rowObj instanceof Map<?, ?> rowMap && rowReferencesUser(userId, (Map<String, Object>) rowMap)) {
-                    return true;
+    private record PersonField(String storeKey, String fieldName) { }
+    private final Map<String,List<PersonField>> declarations = Collections.synchronizedMap(
+            new LinkedHashMap<>(16,0.75f,true) {
+                @Override protected boolean removeEldestEntry(Map.Entry<String,List<PersonField>> entry) {
+                    return size() > 128;
                 }
+            });
+
+    public boolean isUserInvolved(String userId, ProcessInstance instance) {
+        if (userId == null || userId.isBlank() || instance == null) return false;
+        if (userId.equals(instance.getStartUserId())) return true;
+        if (hasHistoricAssigneeTask(userId,instance.getId())) return true;
+        return isMiParticipant(userId,instance.getFunctionUnitCatalogId(),instance.getVariables());
+    }
+
+    /** Exact configured canonical slice and field only; ordinary JSON names cannot create a grant. */
+    public boolean isMiParticipant(String userId, String catalogId, Map<String,Object> variables) {
+        if (userId == null || userId.isBlank() || variables == null
+                || !(variables.get("__subTables__") instanceof Map<?,?> tables) || tables.isEmpty()) return false;
+        if (catalogId == null || catalogId.isBlank()) throw CatalogSnapshotReader.invalid(catalogId);
+        for (PersonField field : declarations.computeIfAbsent(catalogId,this::loadDeclarations)) {
+            Object raw = tables.get(field.storeKey());
+            if (raw == null) continue; // This request has no rows in this configured MI table.
+            if (!(raw instanceof List<?> rows)) throw CatalogSnapshotReader.invalid(catalogId);
+            for (Object row : rows) {
+                if (!(row instanceof Map<?,?> values)) throw CatalogSnapshotReader.invalid(catalogId);
+                if (userId.equals(AssignmentPersonIdentity.optional(values.get(field.fieldName())))) return true;
             }
         }
         return false;
     }
 
-    private boolean rowReferencesUser(String userId, Map<String, Object> row) {
-        for (Map.Entry<String, Object> entry : row.entrySet()) {
-            String key = entry.getKey();
-            if (key == null) {
-                continue;
-            }
-            String lowerKey = key.toLowerCase(Locale.ROOT);
-            if (MI_PARTICIPANT_KEY_HINTS.stream().anyMatch(lowerKey::contains)
-                    && valueMatchesUser(userId, entry.getValue())) {
-                return true;
-            }
-            if (entry.getValue() instanceof Map<?, ?> nested
-                    && rowReferencesUser(userId, (Map<String, Object>) nested)) {
-                return true;
-            }
-            if (entry.getValue() instanceof Collection<?> nestedList) {
-                for (Object item : nestedList) {
-                    if (item instanceof Map<?, ?> nestedMap
-                            && rowReferencesUser(userId, (Map<String, Object>) nestedMap)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+    private List<PersonField> loadDeclarations(String catalogId) {
+        var processes = jdbcTemplate.queryForList("SELECT content_data FROM sys_function_unit_contents "
+                + "WHERE function_unit_id=? AND content_type='PROCESS'",String.class,catalogId);
+        if (processes.size()!=1) throw CatalogSnapshotReader.invalid(catalogId);
+        var fields = BpmnMiXmlSupport.miUserFields(ChangeHistoryBpmnFormResolver.decodeBpmnXml(processes.get(0)));
+        if (fields.isEmpty()) return List.of();
+        var declared = jdbcTemplate.queryForList("SELECT c.content_data::jsonb->>'tableName' AS table_name, "
+                + "f->>'fieldName' AS field_name FROM sys_function_unit_contents c "
+                + "CROSS JOIN LATERAL jsonb_array_elements(c.content_data::jsonb->'fields') f "
+                + "WHERE c.function_unit_id=? AND c.content_type='DATA_TABLE' "
+                + "AND c.content_data::jsonb->>'tableType'='SUB'",catalogId);
+        return fields.stream().map(field -> {
+            long count = declared.stream().filter(row -> field.tableName().equals(row.get("table_name"))
+                    && field.fieldName().equals(row.get("field_name"))).count();
+            if (count!=1) throw CatalogSnapshotReader.invalid(catalogId);
+            return new PersonField(SubTableStoreKeys.dwKey(field.tableName()),field.fieldName());
+        }).distinct().toList();
     }
 
-    private boolean valueMatchesUser(String userId, Object value) {
-        if (value == null) {
-            return false;
-        }
-        return Objects.equals(userId, String.valueOf(value).trim());
+    private boolean hasHistoricAssigneeTask(String userId, String instanceId) {
+        if (instanceId == null || instanceId.isBlank()) return false;
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM ACT_HI_TASKINST "
+                + "WHERE PROC_INST_ID_ = ? AND ASSIGNEE_ = ?",Integer.class,instanceId,userId);
+        return count != null && count > 0;
     }
 }

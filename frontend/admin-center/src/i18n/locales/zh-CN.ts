@@ -1048,7 +1048,7 @@ export default {
       dashboardListTruncated: '活跃看板数量超过当前已加载条数，列表可能不完整。请联系管理员或缩小筛选范围。'
     },
     dataViewAssignment: {
-      guidance: '将 Dashboard 分配到指定的已发布 Table View，同表的其他 View 不受影响。用户还需具备该 View 与 Dashboard 的访问权限。',
+      guidance: '从 Admin Center 当前已部署并启用的功能单元中选择 View。拥有该 View 查看权限的用户，即可查看其已启用绑定的可用 Dashboard。',
       formView: '表视图',
       ruleView: '请选择已发布的表视图',
       viewHint: '只列出当前表下已发布的 View。图表数据范围和筛选由 Superset 配置，不会自动继承 Records 的筛选条件。',

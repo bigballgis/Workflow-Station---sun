@@ -53,3 +53,28 @@ FU 或 Dashboard 整体删除的现有外键规则不变。已经在升级前被
 新库由 `00-init-all.sh` 自动执行。脚本可重复执行，只新增可空的 `batch_id`、`batch_time`，
 不回填旧记录、不改原明细时间。回退旧应用时可以保留这两列，旧应用仍能读写原明细。
 批次用于关联一次实际操作；页面还会按五分钟连续编辑规则合并展示，不改变原审计事务。
+
+
+## Admin 发布态 Data View 与稳定身份（109–110）
+
+已有库停写并备份后，依次执行 `00-schema/109-admin-runtime-data-views.sql`、`00-schema/110-bi-runtime-target-independence.sql`，再部署并重启四个后端服务。110 移除 BI 绑定指向 DW 的外键，保留原绑定和 Dashboard 外键。
+迁移期间停止运行时写入，保留数据库备份。脚本补齐 DW `view_key`，增加 Admin 运行时索引，
+保留旧 BI 绑定及其准确来源；仅按已记录的 FU code + viewKey 迁移，不按同名猜测。
+新格式包中的 viewKey 在跨环境导出、导入及重部署中保持不变，环境内数字 ID 可以不同。
+
+发布态主键流水改用 `ac_runtime_pk_sequences`，首次复制旧计数，重放不重置计数。
+旧包没有 viewKey 时仅获得版本内身份；需从升级后的源 DW 重新导出并部署才能建立后续版本连续性。
+未能确定身份的旧绑定保留为不可用，由管理员明确重选。详见
+[最终验收记录与验证边界](verification/2026-11-03-view-change-final-review/code-review.md)。
+
+
+## 跨 FU 外键运行快照（111）
+
+先备份并执行 `00-schema/111-external-table-snapshots.sql`，再部署四个后端。新导入（含 ZIP 与 JSON 两条路径）
+把明确声明的 `refFunctionUnitCode + refTableName` 对应 Admin 当前启用表定义复制到消费方 catalog；同一发布重复导入不会换引用。
+运行时只读 `ac_external_table_snapshots`，父 FU 后续升级、停用或删除不会改写历史表定义；包仍携带可移植的 code/name，环境 ID 由目标 Admin 捕获。
+
+首次升级会为当前启用或已有申请的旧发布，固定升级时正在使用的 Admin 外部表定义。这是对升级时行为的一次性固化，
+不能据此声称恢复了过去未记录的依赖版本。升级时须保留相应父 FU 的启用元数据；缺失或不唯一会显式拒绝，不能猜选同名历史表。
+未使用且停用的旧发布不在启动时补依赖，使用前需显式重新导入原包捕获依赖。回退旧二进制前须评估其会重新跟随当前父版本；
+保留新表及备份，不删除运行数据以适配旧代码。

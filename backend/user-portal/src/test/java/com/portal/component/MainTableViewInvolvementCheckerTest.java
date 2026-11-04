@@ -3,6 +3,7 @@ package com.portal.component;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -48,16 +49,21 @@ class MainTableViewInvolvementCheckerTest {
 
     @Test
     void miParticipantFieldInSubTablesIsInvolved() {
-        Map<String, Object> subRow = Map.of("assignee", "user-c", "name", "Test-000001");
-        Map<String, Object> subTables = Map.of("30", List.of(subRow));
+        Map<String, Object> subRow = Map.of("handler", "user-c", "name", "Test-000001");
+        Map<String, Object> subTables = Map.of("dw:lines", List.of(subRow));
         Map<String, Object> vars = Map.of("__subTables__", subTables);
         ProcessInstance pi = ProcessInstance.builder()
                 .id("pi-3")
                 .startUserId("user-a")
+                .functionUnitCatalogId("release")
                 .variables(vars)
                 .build();
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq("pi-3"), eq("user-c")))
                 .thenReturn(0);
+        when(jdbcTemplate.queryForList(contains("content_type='PROCESS'"),eq(String.class),eq("release")))
+                .thenReturn(List.of(MainTableViewInvolvementSupersetTest.BPMN));
+        when(jdbcTemplate.queryForList(contains("jsonb_array_elements"),eq("release")))
+                .thenReturn(List.of(Map.of("table_name","lines","field_name","handler")));
         assertThat(checker.isUserInvolved("user-c", pi)).isTrue();
     }
 }

@@ -62,16 +62,7 @@ public class MainTableViewRowQueryComponent {
 
     public Page query(Query query) {
         List<Object> params = new ArrayList<>();
-        params.add(query.functionUnitCode());
-        StringBuilder where = new StringBuilder(" WHERE pi.function_unit_code = ?");
-        where.append(query.designerFilter().sql());
-        params.addAll(query.designerFilter().params());
-        if (query.involvement() != null) {
-            where.append(query.involvement().sql());
-            params.addAll(query.involvement().params());
-        }
-        where.append(query.sql().searchClause(query.search(), query.searchable(), params));
-        where.append(query.sql().whereClause(query.filters(), params));
+        String where = where(query, params);
 
         Long total = queryOne("SELECT COUNT(*) FROM up_process_instance pi" + where,
                 params, rs -> rs.next() ? rs.getLong(1) : 0L);
@@ -109,6 +100,30 @@ public class MainTableViewRowQueryComponent {
         });
 
         return new Page(instances, total != null ? total : 0L);
+    }
+
+    /** Checks a single request without loading rows, applying exactly the list predicate. */
+    public boolean exists(Query query, String processInstanceId) {
+        List<Object> params = new ArrayList<>();
+        String where = where(query, params) + " AND pi.id = ?";
+        params.add(processInstanceId);
+        return Boolean.TRUE.equals(queryOne("SELECT EXISTS(SELECT 1 FROM up_process_instance pi" + where + ")",
+                params, rs -> rs.next() && rs.getBoolean(1)));
+    }
+
+    private String where(Query query, List<Object> params) {
+        params.add(query.functionUnitCode());
+        StringBuilder where = new StringBuilder(" WHERE pi.function_unit_code = ?");
+        where.append(query.designerFilter().sql());
+        params.addAll(query.designerFilter().params());
+        if (query.involvement() != null) {
+            where.append(query.involvement().sql());
+            params.addAll(query.involvement().params());
+        }
+        where.append(query.sql().searchClause(query.search(), query.searchable(), params));
+        where.append(query.sql().whereClause(query.filters(), params));
+
+        return where.toString();
     }
 
     /**

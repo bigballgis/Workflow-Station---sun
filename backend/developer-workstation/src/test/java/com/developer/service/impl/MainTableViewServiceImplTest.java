@@ -335,7 +335,9 @@ class MainTableViewServiceImplTest {
         when(viewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(view));
         when(viewConfigRepository.saveAll(any())).thenReturn(List.of(view));
 
+        String stableKey=view.getViewKey();
         service.publishViewsForFunctionUnit(1L);
+        assertThat(view.getViewKey()).isEqualTo(stableKey);
 
         assertThat(view.getStatus()).isEqualTo(MainTableViewStatus.PUBLISHED);
     }
@@ -362,6 +364,7 @@ class MainTableViewServiceImplTest {
         // formIdMapping: source form id 500 -> cloned form id 900 (as built by FunctionUnitCloner).
         service.cloneViewsForFunctionUnit(1L, targetFu, Map.of(), Map.of(500L, 900L));
 
+        assertThat(captor.getValue().getViewKey()).isNotEqualTo(source.getViewKey());
         assertThat(captor.getValue().getDetailFormId())
                 .as("cloned view must point its 'Views' detail form at the CLONED form id, not the source's")
                 .isEqualTo(900L);

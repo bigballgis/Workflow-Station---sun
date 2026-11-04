@@ -9,7 +9,7 @@ export default {
     flow2: '選取一個檢視，或 Create view / Generate default views',
     flow3: '新增 Table columns（需要時再加 Lookup / Related columns）',
     flow4: '設 Name、Export、Detail form、Access control，再設 Sort / Filter',
-    flow5: '儲存。入口只給符合存取控制的人看這個檢視',
+    flow5: '儲存後部署至 Admin Center 並啟用版本，入口網站才使用新的檢視及權限。',
     whatTitle: '檢視設計是什麼',
     whatBody:
       '功能單元頁簽「檢視設計」。左側：按表分組的 Views。Default 表示該表的預設檢視。這不是表單設計，也不是表設計。',
@@ -32,7 +32,7 @@ export default {
     catFilter: 'Filter by。Edit filters 開啟條件對話框（Equals、Contains 等）。',
     accessTitle: '存取控制',
     accessBody:
-      'Business Units 和 Roles 都空時，只有 System Administrator 能看見此檢視。若設定存取控制，至少選一個 Business Unit 和一個 Role。使用者必須兩邊都符合。System Administrator 始終能看見全部檢視和全部列。',
+      'Business Units 和 Roles 都空時，只有 System Administrator 能看見此檢視。若設定存取控制，至少選一個 Business Unit 和一個 Role。使用者必須兩邊都符合。System Administrator 始終能看見全部檢視和全部列。 查看檢視不要求擁有 Request in User Portal 權限；該權限只控制發起申請，不授予或取消檢視查看權限。',
     catAccess: '右側這一段。標題下的說明寫明留空和成對規則。',
     catBu: '按業務單元誰能看見。占位：Select BUs that can see this view。',
     catRoles: '在已選單元內按角色誰能看見。選項來自這些單元的准入角色，不是全域角色清單。',

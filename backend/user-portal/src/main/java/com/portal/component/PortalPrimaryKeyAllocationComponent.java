@@ -56,7 +56,7 @@ public class PortalPrimaryKeyAllocationComponent {
         int count = request.getCount() == null ? 1 : request.getCount();
         if (count < 1 || count > 1000) throw new IllegalArgumentException("Invalid allocation count");
         return AllocatePrimaryKeyResponse.builder().values(primaryKeyAllocationService.allocate(
-                request.getTableId(), request.getFieldName(), config, count, "", "dw_pk_sequences")).build();
+                request.getTableId(), request.getFieldName(), config, count, "", "ac_runtime_pk_sequences")).build();
     }
 
     /**

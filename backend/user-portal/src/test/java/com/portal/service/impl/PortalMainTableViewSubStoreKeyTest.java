@@ -1,15 +1,12 @@
 package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewInvolvementScope;
 import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.MainTableViewSubRowQueryComponent;
-import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewQueryRequest;
-import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.UserDisplayNameResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,9 +18,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -57,47 +52,25 @@ class PortalMainTableViewSubStoreKeyTest {
     @Mock
     private MainTableViewSubRowQueryComponent subRowQueryComponent;
 
+    private final com.portal.client.PortalBiClient client = org.mockito.Mockito.mock(com.portal.client.PortalBiClient.class);
     private PortalMainTableViewServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PortalMainTableViewServiceImpl(
-                jdbcTemplate,
+                client,
                 new ObjectMapper(),
-                functionUnitAccessComponent,
-                accessResolver,
                 mock(MainTableViewInvolvementScope.class),
                 mock(MainTableViewRowQueryComponent.class),
                 subRowQueryComponent,
-                mock(ProcessInstanceRepository.class),
-                mock(ProcessComponent.class),
-                mock(ComputedFieldRecalculator.class),
                 mock(UserDisplayNameResolver.class));
     }
 
     /** A published SUB view row as {@code loadPublishedView} selects it. */
     private void givenSubView(String tableName) {
-        Map<String, Object> row = new HashMap<>();
-        row.put("id", VIEW_ID);
-        row.put("view_name", "Participants");
-        row.put("sort_config", null);
-        row.put("filter_config", null);
-        row.put("fu_code", "fu-mi-demo");
-        row.put("main_table_id", 50331L);
-        row.put("table_type", "SUB");
-        row.put("table_name", tableName);
-        row.put("restrict_to_involved_users", Boolean.FALSE);
-
-        when(jdbcTemplate.queryForList(contains("dw_main_table_view_configs"), eq(VIEW_ID)))
-                .thenReturn(List.of(row));
-        when(jdbcTemplate.query(contains("dw_main_table_view_fields"), any(org.springframework.jdbc.core.RowMapper.class), eq(VIEW_ID)))
-                .thenReturn(List.of());
-        when(jdbcTemplate.queryForList(contains("dw_main_table_view_access"), eq(VIEW_ID)))
-                .thenReturn(List.of());
-        when(accessResolver.parseAccessRules(any())).thenReturn(List.of());
-        when(accessResolver.canUserSeeView(any(), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAccessFunctionUnit(any(), any())).thenReturn(true);
-        when(functionUnitAccessComponent.isFunctionUnitEnabled(any())).thenReturn(true);
+        var fixture=new PublishedViewFixture(); fixture.id=VIEW_ID;fixture.tableName=tableName;
+        fixture.tableType="SUB";fixture.code="fu-mi-demo";fixture.tableId=50331;
+        when(client.getDataView("user-dev",VIEW_ID)).thenAnswer(call -> fixture.build());
         when(subRowQueryComponent.query(any()))
                 .thenReturn(new MainTableViewSubRowQueryComponent.Page(List.of(), 0L));
     }

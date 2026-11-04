@@ -1,5 +1,13 @@
 # View 访问管控 — 手测指南
 
+> 当前运行时读取 Admin 已部署且启用版本。下方历史种子脚本只准备 DW 配置；执行后必须从 DW Deploy 到 Admin 并启用，再运行权限场景。Request 与 View 独立授权，最新双 FU 实测见 [验证记录](verification/2026-11-03-view-request-isolation/README.md)。
+
+详情范围回归：为可见 View 配置设计器筛选（例如仅 Open），普通非参与用户应只能通过 View 读取符合条件的申请详情、表单、历史和 FU 内容；直接访问 Closed 的历史链接也应拒绝。SUB View 没有匹配子行时不得授予整个申请的读取权限，有匹配子行时仍可打开所属申请。参与人、管理员、独立审计授权保留，多 View 范围取并集；Request 发起和 BI 绑定仍独立检查。证据见 [详情范围修复](verification/2026-11-03-view-detail-scope/README.md)。
+
+隐藏列回归：使用导入包或 Save API 保留 `visible=false` 的系统列及其筛选，分别检查流程状态、发起时间、发起人、当前步骤。隐藏前后列表、CSV、详情范围应一致，并忽略表单 JSON 的同名伪值；`systemField=false` 的同名业务字段仍读业务值。MAIN/SUB 均应验证，隐藏 Lookup/FK 展示列筛选应明确拒绝。证据见 [隐藏系统列修复](verification/2026-11-03-view-hidden-filter-fix/README.md)。
+
+参与人及只读导出回归：同一 FU 的两个发布分别使用不同的 MI 用户字段，旧申请只认自己的发布。普通 `participant_notes` / `id_idw` 相似字段、其他表、其他版本字段、role-only 映射均不得授予参与身份。分别验证 MAIN/SUB 列表、导出与申请详情，并撤回待分派人员后立即重查。Data View 只支持 Export：MAIN/SUB 的旧 CSV update/create 地址均返回404且数据库无变化；实际点击页面 Export 能下载且不包含越权记录。参见 [参与范围及导出修复](verification/2026-11-03-view-involvement-import-fix/README.md)。
+
 适用环境：本地 Docker Dev（`http://localhost:3000`）  
 功能单元：**MCY Debit Card**（`fu-20260505-thwmut`）  
 规则说明：见 `.cursor/skills/view-access-control/SKILL.md`
@@ -31,13 +39,13 @@ Portal 登录入口：`http://localhost:3000/login/`（统一 SSO）
 
 **统一密码：`password`**
 
-| 用户名 | 场景 ID | BU | Portal 业务角色 | SYS_ADMIN | MCY FU 门禁 | 用途 |
+| 用户名 | 场景 ID | BU | Portal 业务角色 | SYS_ADMIN | MCY Request 权限 | 用途 |
 |--------|---------|-----|-----------------|-----------|-------------|------|
 | `view_admin` | T1/T7 | 共享财务中心 | Manager + **SYS_ADMIN**（虚拟组） | **是** | 绕过 | 完整门户 + 全部 View |
 | `view_allowed` | T3/T5/T6 | 共享财务中心 `bu-e2e-finance` | Department Manager | 否 | 通过（MANAGER） | BU+Role 匹配 |
 | `view_wrong_bu` | T4 | 数字化部 `bu-e2e-it` | Department Manager | 否 | 通过 | BU 与 View 不匹配 |
-| `view_wrong_role` | T4 | 共享财务中心 | Developer（非 Manager） | 否 | **不通过** | 无 FU 或 View 不可见 |
-| `view_nofu` | — | 共享财务中心 | Auditor | 否 | **不通过** | 验证 FU 级门禁 |
+| `view_wrong_role` | T4 | 共享财务中心 | Developer（非 Manager） | 否 | **不通过** | View Role 不匹配；Request 独立判定 |
+| `view_nofu` | — | 共享财务中心 | Auditor | 否 | **不通过** | 验证 Request 与 View 独立授权 |
 | `developer` | 对照 | 共享财务中心 | Manager + **SYS_ADMIN** | **是** | 绕过 | 开发调试（非业务验收账号） |
 | `admin` | 对照 | — | System Admin | **是** | 绕过 | 平台管理员 |
 
@@ -104,14 +112,15 @@ Portal 登录入口：`http://localhost:3000/login/`（统一 SSO）
 
 ---
 
-### 场景 T4 — Role 不匹配 / 无 FU 门禁
+### 场景 T4 — View Role 不匹配 / Request 与 View 独立
 
 | 步骤 | 操作 | 期望 |
 |------|------|------|
-| 1 | **`view_wrong_role`** 登录 | MCY **不在** Views 菜单（FU 门禁：无 MANAGER） |
-| 2 | **`view_nofu`** 登录 | 同上，无 MCY |
+| 1 | **`view_wrong_role`** 登录 | MCY **不在** Views 菜单（View BU+Role 不匹配） |
+| 2 | **`view_nofu`** 登录，先确认 View 配置 | 若 View BU+Role 不匹配则不可见；不能仅因没有 Request 权限断言不可见 |
+| 3 | 给该用户配置匹配的 View BU+Role，保留无 Request 权限，部署并启用版本 | View 可见，可查数据；New Requests 无该 FU，直接发起申请被拒绝 |
 
-**Pass：** 无 FU 权限用户进不了 MCY View 菜单。
+**Pass：** View 由自身 BU+Role 决定；FU「Request in User Portal」只控制发起申请，两种授权互不授予或撤销对方权限。
 
 ---
 
@@ -164,7 +173,7 @@ Portal 登录入口：`http://localhost:3000/login/`（统一 SSO）
 ## 5. 恢复 / 重置
 
 重新执行 `01-view-access-test-users.sql` 可重置 MCY 三条 View 的 access 规则。  
-若在 DW 手工改过 View，Save 会覆盖 `dw_main_table_view_access` 并置为 DRAFT，需 **Publish FU** 后 Portal 才读 PUBLISHED 快照（若你们环境以 status 为准，Publish 后再测）。
+若在 DW 手工改过 View，Save 只修改设计态并置为 DRAFT；须 **Deploy 到 Admin Center 并启用该版本**，Portal 才会读取新版本中的视图和权限。仅修改 DW 表或 Publish 状态不会改变 Portal 当前目录。
 
 ---
 
@@ -172,12 +181,20 @@ Portal 登录入口：`http://localhost:3000/login/`（统一 SSO）
 
 | 现象 | 排查 |
 |------|------|
-| 所有 View 都看不到 | FU 未 Publish / `sys_function_unit_access` 无 MANAGER / 用户无 UBR |
+| 所有 View 都看不到 | Admin 没有已部署且启用的版本 / View BU+Role 不匹配 / 用户无 UBR |
 | admin 也看不到 Attachment | 未用 `view_admin` 或 `developer`；检查 SYS_ADMIN 虚拟组 |
 | `view_admin` 权限自助 / access_denied | 无 UBR → 重新执行 SQL 并 **退出重登**；勿用旧 JWT |
-| Views 菜单为空 | 重建 user-portal（见下）；FU 门禁按 **catalog UUID** 查 access，code 须 resolve |
+| Views 菜单为空 | 检查 Admin 当前发布目录与 View BU+Role；没有 Request 授权不能成为隐藏 View 的原因 |
 | 重建 user-portal | 在**仓库根目录**执行：`mvn -pl backend/user-portal -am package -DskipTests`，再 `docker compose ... up -d --build user-portal` |
-| 改 DW 后 Portal 不变 | View config 仍为 DRAFT；Publish FU 或确认 status=PUBLISHED |
+| 改 DW 后 Portal 不变 | DW 修改只在设计态；部署至 Admin 并启用版本后 Portal 才读取新配置 |
 | Role 下拉 No data | 须先选 BU；选项来自该 BU 准入角色 API，非全局 `/roles` |
 | Save 提示 BU/Role 成对 | 只填一侧时不允许保存；两者均空表示仅 SYS_ADMIN |
 | 登录失败 | `developer-workstation` / `user-portal` 容器是否 healthy |
+
+
+### 历史详情与所属申请入口
+
+- 新增 SUB View 可以查询已有子行；若旧申请版本没有该 View 的 DETAIL 定义，行会返回 `detailAvailable=false`，点击或直接链接明确提示该版本没有详情表单。
+- 同一个 View key 在历史版本有 DETAIL 定义时，继续渲染该历史定义，不替换为当前表单。
+- SUB 声明的 owning FK 可直接打开匹配行的所属申请，不要求用户另有 MAIN 默认 View 权限；普通跨表 FK 仍要求目标 View 可读。
+- 跨 FU 表定义在 Admin 导入时复制到消费方发布快照；测试父 FU 升级、停用后历史表单仍可读，缺失快照不得借用本 FU 同名表。

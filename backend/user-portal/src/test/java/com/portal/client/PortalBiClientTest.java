@@ -18,6 +18,34 @@ import static org.springframework.http.HttpMethod.POST;
 
 class PortalBiClientTest {
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void runtimeAdministratorUsesAuthoritativeDelegatedIdentity(boolean administrator) {
+        var transport=new RestTemplate();
+        var server=MockRestServiceServer.bindTo(transport).build();
+        String token=java.util.UUID.randomUUID().toString();
+        var client=new PortalBiClient(transport,"http://admin-center:8090",token);
+        server.expect(requestTo("http://admin-center:8090/api/v1/admin/internal/data-views/administrator"))
+                .andExpect(header(PlatformConstants.HEADER_SERVICE_TOKEN,token))
+                .andExpect(header(PlatformConstants.HEADER_USER_ID,"reader"))
+                .andRespond(withSuccess("{\"success\":true,\"data\":"+administrator+"}",MediaType.APPLICATION_JSON));
+        assertThat(client.isDataViewAdministrator("reader")).isEqualTo(administrator);
+        server.verify();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"{}", "{\"success\":false,\"data\":true}"})
+    void missingOrUnsuccessfulAdministratorResponseNeverGrantsAccess(String response) {
+        var transport=new RestTemplate();
+        var server=MockRestServiceServer.bindTo(transport).build();
+        var client=new PortalBiClient(transport,"http://admin-center:8090",java.util.UUID.randomUUID().toString());
+        server.expect(requestTo("http://admin-center:8090/api/v1/admin/internal/data-views/administrator"))
+                .andRespond(withSuccess(response,MediaType.APPLICATION_JSON));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.isDataViewAdministrator("reader"))
+                .isInstanceOf(IllegalStateException.class);
+        server.verify();
+    }
+
     @Test
     void guestTokenCallUsesOnlyServiceIdentityAndDelegatedPortalUser() {
         RestTemplate restTemplate = new RestTemplate();
@@ -40,6 +68,21 @@ class PortalBiClientTest {
         assertThat(client.getGuestToken(
                 "portal-user",
                 new PortalGuestTokenRequest("dashboard-1", null, "bu-finance"))).isNotNull();
+        server.verify();
+    }
+    @Test
+    void viewDirectoryUsesServiceAuthenticationAndNeverFallsBackToDesigner() {
+        RestTemplate transport=new RestTemplate();
+        var server=MockRestServiceServer.bindTo(transport).build();
+        String token=java.util.UUID.randomUUID().toString();
+        var client=new PortalBiClient(transport,"http://admin-center:8090",token);
+        server.expect(requestTo("http://admin-center:8090/api/v1/admin/internal/data-views"))
+                .andExpect(method(org.springframework.http.HttpMethod.GET))
+                .andExpect(header(PlatformConstants.HEADER_SERVICE_TOKEN,token))
+                .andExpect(header(PlatformConstants.HEADER_USER_ID,"reader"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withServerError());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.getDataViews("reader"))
+                .isInstanceOf(com.portal.exception.PortalBiUpstreamException.class);
         server.verify();
     }
 }

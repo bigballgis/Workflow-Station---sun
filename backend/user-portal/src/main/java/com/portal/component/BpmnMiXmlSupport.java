@@ -415,6 +415,37 @@ final class BpmnMiXmlSupport {
                 normalizedProperty(task, "buField")).toPayload();
     }
 
+    record MiUserField(String tableName, String fieldName) { }
+
+    /** Each configured person field grants involvement, including multiple tasks on one table. */
+    static List<MiUserField> miUserFields(String bpmnXml) {
+        try {
+            Document document = parseBpmnSecurely(bpmnXml);
+            List<MiUserField> result = new ArrayList<>();
+            NodeList tasks = document.getElementsByTagNameNS("*", "userTask");
+            for (int i = 0; i < tasks.getLength(); i++) {
+                Element task = (Element) tasks.item(i);
+                boolean inMi = false;
+                for (Node parent = task.getParentNode(); parent instanceof Element element; parent = parent.getParentNode()) {
+                    if ("subProcess".equals(element.getLocalName())
+                            && firstDirectChild(element,"multiInstanceLoopCharacteristics") != null) inMi = true;
+                }
+                if (!inMi) continue;
+                String mode = normalizedProperty(task,"assigneeMode");
+                if ("role".equalsIgnoreCase(mode)) continue;
+                String table = normalizedProperty(task,"subTableName");
+                String field = normalizedProperty(task,"assigneeField");
+                if (mode == null && table == null && field == null) continue;
+                if (!("user".equalsIgnoreCase(mode) || "both".equalsIgnoreCase(mode)) || table == null || field == null) {
+                    throw new MiAssignmentConfigurationException("MI person assignment is missing its mode, table or field");
+                }
+                result.add(new MiUserField(table,field));
+            }
+            return result.stream().distinct().toList();
+        } catch (MiAssignmentConfigurationException ex) { throw ex; }
+        catch (Exception ex) { throw new MiAssignmentConfigurationException("Failed to parse pinned MI person assignments",ex); }
+    }
+
     private static void collectMiAssignmentContracts(
             Element subProcess, Map<String, MiAssignmentContract> contracts) {
         NodeList tasks = subProcess.getElementsByTagNameNS("*", "userTask");

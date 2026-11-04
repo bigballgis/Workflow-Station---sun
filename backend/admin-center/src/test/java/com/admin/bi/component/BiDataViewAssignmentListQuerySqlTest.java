@@ -56,8 +56,8 @@ class BiDataViewAssignmentListQuerySqlTest {
         assertThat(sql).hasSize(2);
         String countWhere = sql.get(0).substring("SELECT COUNT(*)".length());
         assertThat(sql.get(1)).startsWith("SELECT a.id" + countWhere);
-        assertThat(countWhere).contains("LEFT JOIN dw_table_definitions", "LEFT JOIN dw_main_table_view_configs",
-                "a.function_unit_id = ?", "v.view_name", "a.enabled::text").doesNotContain(probe, "QA_%");
+        assertThat(countWhere).contains("LEFT JOIN ac_current_data_views", "a.runtime_target=TRUE",
+                "a.runtime_target=TRUE AND a.function_unit_id = ?", "v.view_name", "a.enabled::text").doesNotContain(probe, "QA_%");
         assertThat(sql.get(1)).contains("ORDER BY fu.name DESC NULLS LAST, a.id LIMIT ? OFFSET ?");
         assertThat(bound).contains("%O'Brien\\_\\%%", "%QA\\_\\%%", "false", 50029L, 20, 40);
         assertThat(result.columns()).hasSize(5).allSatisfy(c -> {

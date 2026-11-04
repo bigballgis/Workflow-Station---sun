@@ -1025,7 +1025,7 @@ export default {
       dashboardListTruncated: '作用中儀表板數量超過目前已載入筆數，清單可能不完整。請聯絡管理員或縮小篩選範圍。'
     },
     dataViewAssignment: {
-      guidance: '將 Dashboard 指派到指定的已發佈 Table View，同表的其他 View 不受影響。使用者仍需具備該 View 與 Dashboard 的存取權限。',
+      guidance: '從 Admin Center 目前已部署並啟用的功能單元中選擇 View。擁有該 View 檢視權限的使用者，即可檢視其已啟用綁定的可用 Dashboard。',
       formView: '資料表檢視',
       ruleView: '請選擇已發佈的資料表檢視',
       viewHint: '僅列出目前資料表下已發佈的 View。圖表資料範圍及篩選由 Superset 設定，不會自動繼承 Records 的篩選條件。',

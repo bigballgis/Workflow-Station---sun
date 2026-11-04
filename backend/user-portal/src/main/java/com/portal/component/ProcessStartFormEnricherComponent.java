@@ -117,7 +117,7 @@ public class ProcessStartFormEnricherComponent {
                 if (!Boolean.TRUE.equals(field.get("isPrimaryKey")) || !isBlank(variables.get(name)) || field.get("pkGenerationJson") == null) continue;
                 PkGenerationConfig config = objectMapper.convertValue(field.get("pkGenerationJson"), PkGenerationConfig.class);
                 if ("manual".equalsIgnoreCase(config.getStrategy())) continue;
-                var values = primaryKeyAllocationService.allocate(id, name, config, 1, "", "dw_pk_sequences");
+                var values = primaryKeyAllocationService.allocate(id, name, config, 1, "", "ac_runtime_pk_sequences");
                 if (values.size() != 1) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
                 variables.put(name, values.get(0));
             }
@@ -128,6 +128,8 @@ public class ProcessStartFormEnricherComponent {
         for (var table : tables) {
             for (var field : com.platform.common.functionunit.CatalogSnapshotReader.objects(table.get("fields"))) {
                 if (!Boolean.TRUE.equals(field.get("isForeignKey"))) continue;
+                // Only internal structural links are auto-filled; a cross-FU FK retains its supplied value.
+                if (field.get("refFunctionUnitCode") instanceof String refCode && !code.equals(refCode)) continue;
                 var parent = byName.get(String.valueOf(field.get("refTableName")));
                 if (parent == null || !(field.get("refPrimaryKeyFields") instanceof List<?> keys)) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
                 fks.add(new FkMeta(Long.valueOf(String.valueOf(table.get("tableId"))), String.valueOf(field.get("fieldName")),

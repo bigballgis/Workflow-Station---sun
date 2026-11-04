@@ -1,8 +1,6 @@
 package com.portal.component;
 
-import com.portal.component.MainTableViewAccessResolver.AccessRule;
 import com.portal.dto.ProcessInstanceInfo;
-import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.UserDisplayNameResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,9 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-import com.portal.exception.PortalException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,6 +49,8 @@ class ProcessApplicationQueryComponentDetailAccessTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private FunctionUnitAccessComponent functionUnitAccessComponent;
 
+    @Mock private com.portal.client.PortalBiClient dataViewClient;
+    @Mock private com.portal.service.PortalMainTableViewService viewService;
     private ProcessApplicationQueryComponent component;
 
     @BeforeEach
@@ -70,6 +68,8 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 jdbcTemplate,
                 org.mockito.Mockito.mock(MiOuterStepResolver.class));
         org.springframework.test.util.ReflectionTestUtils.setField(component, "taskPresentation", org.mockito.Mockito.mock(ApplicationTaskPresentation.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(component,"dataViewClient",dataViewClient);
+        org.springframework.test.util.ReflectionTestUtils.setField(component,"viewService",viewService);
         lenient().when(workflowEngineClient.isAvailable()).thenReturn(false);
     }
 
@@ -90,13 +90,8 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 .startUserId("system")
                 .functionUnitCode("test-20260803-xc0jmo")
                 .build();
-        when(jdbcTemplate.queryForList(anyString(), eq("test-20260803-xc0jmo")))
-                .thenReturn(List.of(Map.of("id", 50325L, "restrict_to_involved_users", false)));
-        when(jdbcTemplate.queryForList(anyString(), eq(50325L)))
-                .thenReturn(List.of(Map.of("target_type", "BUSINESS_UNIT", "target_id", "bu-1")));
-        when(mainTableViewAccessResolver.parseAccessRules(anyList()))
-                .thenReturn(List.of(new AccessRule("BUSINESS_UNIT", "bu-1")));
-        when(mainTableViewAccessResolver.canUserSeeView(eq("user-dev"), anyList())).thenReturn(true);
+        when(dataViewClient.getDataViews("user-dev")).thenReturn(List.of(releasedView(false)));
+        when(viewService.containsProcess("user-dev",1L,"pi-email")).thenReturn(true);
 
         assertThat(component.canAccessProcessDetail("user-dev", detail)).isTrue();
     }
@@ -108,18 +103,8 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 .startUserId("system")
                 .functionUnitCode("test-20260803-xc0jmo")
                 .build();
-        ProcessInstance entity = new ProcessInstance();
-        entity.setId("pi-email");
-        entity.setStartUserId("system");
-        when(jdbcTemplate.queryForList(anyString(), eq("test-20260803-xc0jmo")))
-                .thenReturn(List.of(Map.of("id", 50325L, "restrict_to_involved_users", true)));
-        when(jdbcTemplate.queryForList(anyString(), eq(50325L)))
-                .thenReturn(List.of(Map.of("target_type", "BUSINESS_UNIT", "target_id", "bu-1")));
-        when(mainTableViewAccessResolver.parseAccessRules(anyList()))
-                .thenReturn(List.of(new AccessRule("BUSINESS_UNIT", "bu-1")));
-        when(mainTableViewAccessResolver.canUserSeeView(eq("user-dev"), anyList())).thenReturn(true);
-        when(processInstanceRepository.findById("pi-email")).thenReturn(Optional.of(entity));
-        when(mainTableViewInvolvementChecker.isUserInvolved("user-dev", entity)).thenReturn(false);
+        when(dataViewClient.getDataViews("user-dev")).thenReturn(List.of(releasedView(true)));
+        when(viewService.containsProcess("user-dev",1L,"pi-email")).thenReturn(false);
 
         assertThat(component.canAccessProcessDetail("user-dev", detail)).isFalse();
     }
@@ -131,13 +116,13 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 .startUserId("system")
                 .functionUnitCode("test-20260803-xc0jmo")
                 .build();
-        when(jdbcTemplate.queryForList(anyString(), eq("test-20260803-xc0jmo")))
-                .thenReturn(List.of(Map.of("id", 50325L, "restrict_to_involved_users", false)));
-        when(jdbcTemplate.queryForList(anyString(), eq(50325L)))
-                .thenThrow(new RuntimeException("db down"));
-
+        when(dataViewClient.getDataViews("user-dev")).thenThrow(new IllegalStateException("Admin down"));
         assertThatThrownBy(() -> component.canAccessProcessDetail("user-dev", detail))
-                .isInstanceOf(PortalException.class)
-                .hasMessageContaining("Failed to load process detail access rules");
+                .isInstanceOf(IllegalStateException.class).hasMessage("Admin down");
+    }
+    private com.platform.common.dataview.RuntimeDataView releasedView(boolean restricted) {
+        return new com.platform.common.dataview.RuntimeDataView(1L,1L,1L,"key","release","test-20260803-xc0jmo",
+                "Test","1.0",null,"main","Main","MAIN",Map.of("restrictToInvolvedUsers",restricted),
+                List.of(),List.of(),List.of(),false);
     }
 }

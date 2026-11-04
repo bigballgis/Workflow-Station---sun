@@ -14,8 +14,6 @@ const {
   contentMode, dataViewDashboards, dataViewDashboardsLoading,
   currentPage, pageSize, gridRuntime, filterDialogVisible, filterDialogField,
   filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows,
-  importProgressVisible, importProgressPercent, importProgressFileName,
-  importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
   selectedFuCode, showExportButton, selectedFu, displayColumns,
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
   MTV_SELECTION_COL_WIDTH, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
@@ -417,95 +415,6 @@ const {
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="importProgressVisible"
-      :title="t('mainTableView.importProgressTitle')"
-      width="440px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-      :show-close="false"
-      align-center
-    >
-      <p
-        v-if="importProgressFileName"
-        class="import-progress-file"
-      >
-        {{ importProgressFileName }}
-      </p>
-      <p class="import-progress-label">
-        {{ importProgressLabel }}
-      </p>
-      <el-progress
-        :percentage="importProgressPercent"
-        :stroke-width="14"
-        striped
-        striped-flow
-      />
-    </el-dialog>
-
-    <el-dialog
-      v-model="importResultVisible"
-      :title="t('mainTableView.importResultTitle')"
-      width="540px"
-      destroy-on-close
-      align-center
-    >
-      <el-result
-        :icon="importResultStatus"
-        :title="importResultHeadline"
-        :sub-title="importProgressFileName"
-      />
-      <div
-        v-if="importResult"
-        class="import-result-stats"
-      >
-        <div class="import-stat import-stat--created">
-          <span class="import-stat-value">{{ importResult.createdCount }}</span>
-          <span class="import-stat-label">{{ t('mainTableView.importResultCreated') }}</span>
-        </div>
-        <div class="import-stat import-stat--updated">
-          <span class="import-stat-value">{{ importResult.updatedCount }}</span>
-          <span class="import-stat-label">{{ t('mainTableView.importResultUpdated') }}</span>
-        </div>
-        <div class="import-stat import-stat--skipped">
-          <span class="import-stat-value">{{ importResult.skippedCount }}</span>
-          <span class="import-stat-label">{{ t('mainTableView.importResultSkipped') }}</span>
-        </div>
-        <div
-          class="import-stat import-stat--errors"
-          :class="{ 'import-stat--has-errors': importResult.errorCount > 0 }"
-        >
-          <span class="import-stat-value">{{ importResult.errorCount }}</span>
-          <span class="import-stat-label">{{ t('mainTableView.importResultErrors') }}</span>
-        </div>
-      </div>
-      <div
-        v-if="importResult?.errors?.length"
-        class="import-error-section"
-      >
-        <div class="import-error-title">
-          {{ t('mainTableView.importErrorList') }}
-        </div>
-        <el-scrollbar max-height="220px">
-          <ul class="import-error-list">
-            <li
-              v-for="(err, idx) in importResult.errors"
-              :key="idx"
-            >
-              {{ err }}
-            </li>
-          </ul>
-        </el-scrollbar>
-      </div>
-      <template #footer>
-        <el-button
-          type="primary"
-          @click="importResultVisible = false"
-        >
-          {{ t('common.confirm') }}
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -705,9 +614,6 @@ const {
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
-.hidden-import-input {
-  display: none;
-}
 .pagination-wrap {
   margin-top: 16px;
   display: flex;
@@ -815,90 +721,6 @@ const {
   cursor: pointer;
 
   &:hover { text-decoration: underline; }
-}
-
-.import-progress-file {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  word-break: break-all;
-}
-
-.import-progress-label {
-  margin: 0 0 12px;
-  font-size: 14px;
-  color: var(--el-text-color-primary);
-}
-
-.import-result-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.import-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 12px 8px;
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
-}
-
-.import-stat-value {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.import-stat-label {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.import-stat--created .import-stat-value {
-  color: var(--el-color-success);
-}
-
-.import-stat--updated .import-stat-value {
-  color: var(--el-color-primary);
-}
-
-.import-stat--skipped .import-stat-value {
-  color: var(--el-text-color-regular);
-}
-
-.import-stat--errors .import-stat-value {
-  color: var(--el-text-color-placeholder);
-}
-
-.import-stat--has-errors .import-stat-value {
-  color: var(--el-color-danger);
-}
-
-.import-error-section {
-  margin-top: 16px;
-}
-
-.import-error-title {
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--el-color-danger);
-}
-
-.import-error-list {
-  margin: 0;
-  padding: 0 0 0 18px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-regular);
-}
-
-:deep(.el-result) {
-  padding: 12px 0 8px;
 }
 
 .mtv-view-option-name {

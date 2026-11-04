@@ -9,7 +9,7 @@ export default {
     flow2: 'Select a view, or Create view / Generate default views',
     flow3: 'Add Table columns (and Lookup / Related columns if needed)',
     flow4: 'Set Name, Export, Detail form, Access control, then Sort / Filter',
-    flow5: 'Save. Portal shows the view only to people who match Access control',
+    flow5: 'Save, deploy to Admin Center and enable the release. The Portal then uses its published Views and permissions.',
     whatTitle: 'What View Design is',
     whatBody:
       'Function Unit tab View Design. Left: Views grouped by table. Default marks the default view for that table. This is not Form Design and not Table Design.',
@@ -32,7 +32,7 @@ export default {
     catFilter: 'Filter by. Edit filters opens the condition dialog (Equals, Contains, …).',
     accessTitle: 'Access control',
     accessBody:
-      'When Business Units and Roles are both empty, only System Administrator sees this view. If you configure access, pick at least one Business Unit and at least one Role. A user must match both. System Administrator always sees every view and every row.',
+      'When Business Units and Roles are both empty, only System Administrator sees this view. If you configure access, pick at least one Business Unit and at least one Role. A user must match both. System Administrator always sees every view and every row. Viewing a View does not require Request in User Portal access. Request access controls starting a new application; it neither grants nor removes View access.',
     catAccess: 'Section on the right. Hint under the heading states the empty and paired rules.',
     catBu: 'Who may see the view, by business unit. Placeholder: Select BUs that can see this view.',
     catRoles: 'Who may see the view, by role inside the selected units. Options load from those units, not the global role list.',

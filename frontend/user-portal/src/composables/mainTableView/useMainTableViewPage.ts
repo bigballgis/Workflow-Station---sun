@@ -1,14 +1,13 @@
-import { ref, computed, watch, onMounted, onBeforeUnmount, reactive, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, reactive, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { TableInstance } from 'element-plus'
-import { Search, Download, Refresh, Upload } from '@element-plus/icons-vue'
+import { Search, Download, Refresh } from '@element-plus/icons-vue'
 import {
   mainTableViewApi,
   type FunctionUnitViewMenuItem, type MainTableViewSummary, type MainTableViewDataPage,
   type MainTableViewFieldColumn, type MainTableViewDataRow,
-  type MainTableViewImportResult, type ImportProgressPhase,
 } from '@/api/mainTableView'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 import {
@@ -30,6 +29,7 @@ import { useMainTableViewRowTasks } from '@/composables/mainTableView/useMainTab
 import {
   filterTableGroups,
   groupViewsByTable,
+  hasFkNavigation,
   isMainTableView,
   pickDefaultView,
   resolveFkOpenTarget,
@@ -86,34 +86,6 @@ const widthDraft = ref(120)
 
 const tableRef = ref<TableInstance>()
 const selectedTableRows = ref<MainTableViewDataRow[]>([])
-const importing = ref(false)
-const importInputRef = ref<HTMLInputElement | null>(null)
-const importProgressVisible = ref(false)
-const importProgressPercent = ref(0)
-const importProgressPhase = ref<ImportProgressPhase>('upload')
-const importProgressFileName = ref('')
-let importProcessTimer: ReturnType<typeof setInterval> | null = null
-
-const importResultVisible = ref(false)
-const importResult = ref<MainTableViewImportResult | null>(null)
-
-const importProgressLabel = computed(() =>
-  importProgressPhase.value === 'upload'
-    ? t('mainTableView.importProgressUpload')
-    : t('mainTableView.importProgressProcess'),
-)
-
-const importResultStatus = computed(() =>
-  importResult.value && importResult.value.errorCount > 0 ? 'warning' : 'success',
-)
-
-const importResultHeadline = computed(() => {
-  if (!importResult.value) return ''
-  return importResult.value.errorCount > 0
-    ? t('mainTableView.importResultHasErrors')
-    : t('mainTableView.importResultAllSuccess')
-})
-
 const selectedFuCode = computed(() => String(route.params.functionUnitCode || ''))
 
 const selectedViewMeta = computed(() =>
@@ -125,7 +97,6 @@ const selectedViewMeta = computed(() =>
 const showRowTaskColumn = computed(() => isMainTableView(selectedViewMeta.value))
 
 const showExportButton = computed(() => selectedViewMeta.value?.enableExport !== false)
-const showImportButton = computed(() => selectedViewMeta.value?.enableImport !== false)
 
 const selectedFu = computed(() =>
   functionUnits.value.find(f => f.functionUnitCode === selectedFuCode.value),
@@ -546,7 +517,7 @@ function isFileLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boo
 // A cell renders as a FK drill-down link when the column is a resolvable FK and the cell has a value.
 function isFkLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boolean {
   if (isFileLinkCell(col, row)) return false
-  if (!col.isForeignKey || !col.refViewId || !col.refFunctionUnitCode) return false
+  if (!hasFkNavigation(col, row)) return false
   const value = row.values?.[col.fieldName]
   return value !== null && value !== undefined && String(value) !== ''
 }
@@ -676,81 +647,6 @@ function handleColumnResizeEnd() {
   nextTick(() => tableRef.value?.doLayout?.())
 }
 
-function triggerImport() {
-  importInputRef.value?.click()
-}
-
-function stopImportProcessProgress() {
-  if (importProcessTimer != null) {
-    clearInterval(importProcessTimer)
-    importProcessTimer = null
-  }
-}
-
-function startImportProcessProgress() {
-  stopImportProcessProgress()
-  importProgressPhase.value = 'process'
-  importProgressPercent.value = Math.max(importProgressPercent.value, 52)
-  importProcessTimer = setInterval(() => {
-    if (importProgressPercent.value < 92) {
-      importProgressPercent.value += 1
-    }
-  }, 180)
-}
-
-function handleImportProgress(percent: number, phase: ImportProgressPhase) {
-  importProgressPercent.value = percent
-  if (phase === 'process') {
-    startImportProcessProgress()
-  }
-}
-
-function openImportResult(result: MainTableViewImportResult) {
-  importResult.value = result
-  importResultVisible.value = true
-}
-
-async function handleImportFile(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file || !selectedViewId.value) return
-
-  importing.value = true
-  importProgressVisible.value = true
-  importProgressPercent.value = 0
-  importProgressPhase.value = 'upload'
-  importProgressFileName.value = file.name
-
-  const progressFallbackTimer = window.setTimeout(() => {
-    if (importing.value && importProgressPhase.value === 'upload' && importProgressPercent.value < 52) {
-      handleImportProgress(52, 'process')
-    }
-  }, 400)
-
-  try {
-    const res = await mainTableViewApi.importCsv(
-      selectedViewId.value,
-      file,
-      handleImportProgress,
-    )
-    window.clearTimeout(progressFallbackTimer)
-    stopImportProcessProgress()
-    importProgressPercent.value = 100
-    await new Promise(resolve => setTimeout(resolve, 350))
-    importProgressVisible.value = false
-    openImportResult(res.data)
-    await loadData()
-  } catch (e: unknown) {
-    window.clearTimeout(progressFallbackTimer)
-    stopImportProcessProgress()
-    importProgressVisible.value = false
-    ElMessage.error((e instanceof Error ? e.message : undefined) || t('mainTableView.importFailed'))
-  } finally {
-    importing.value = false
-  }
-}
-
 function mtvHeaderCellClassName({
   column,
 }: {
@@ -763,10 +659,6 @@ function mtvHeaderCellClassName({
 // Re-run the table's internal layout when the fit mode flips so columns stretch/shrink immediately.
 watch(gridFits, () => {
   nextTick(() => tableRef.value?.doLayout?.())
-})
-
-onBeforeUnmount(() => {
-  stopImportProcessProgress()
 })
 
 onMounted(async () => {
@@ -784,13 +676,11 @@ onMounted(async () => {
   }
 })
   return {
-    t, Search, Download, Refresh, Upload, dataLoading, functionUnits, views, selectedViewId, searchKeyword,
+    t, Search, Download, Refresh, dataLoading, functionUnits, views, selectedViewId, searchKeyword,
     contentMode, dataViewDashboards, dataViewDashboardsLoading,
     gridColumns, allRows, dataTotal, currentPage, pageSize, gridRuntime, filterDialogVisible, filterDialogField,
-    filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows, importing,
-    importInputRef, importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
-    importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
-    selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
+    filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows,
+    selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
     MTV_SELECTION_COL_WIDTH, MTV_TASK_COL_WIDTH, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
     pagedRows, displayTotal, toListColumnMeta,
@@ -800,7 +690,7 @@ onMounted(async () => {
     handleSortChange, handleClearSort, openFilterDialog, openWidthDialog, handleMoveColumn,
     applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
     handleColumnResize, handleColumnResizeEnd, displayWidthOf,
-    handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName,
+    handleExport, mtvHeaderCellClassName,
     loadData, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
   }
 }

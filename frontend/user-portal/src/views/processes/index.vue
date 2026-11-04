@@ -23,26 +23,41 @@
       </el-input>
     </div>
 
-    <section
-      v-if="favoriteProcesses.length > 0"
-      class="favorites-section"
-      aria-labelledby="favorites-heading"
+    <div
+      class="catalog-tabs"
+      role="tablist"
+      :aria-label="t('process.title')"
     >
-      <h2 id="favorites-heading">
-        {{ t('process.favorites') }}
-      </h2>
-      <div class="process-grid">
-        <ProcessCatalogCard
-          v-for="process in favoriteProcesses"
-          :key="process.key"
-          :process="process"
-          :favorite-pending="pendingFavoriteKeys.has(process.key)"
-          @toggle-favorite="toggleFavorite"
-        />
-      </div>
-    </section>
+      <button
+        v-for="(tab, index) in catalogTabs"
+        :id="`request-tab-${tab.name}`"
+        :key="tab.name"
+        type="button"
+        role="tab"
+        class="catalog-tab"
+        :aria-selected="activeTab === tab.name"
+        :tabindex="activeTab === tab.name ? 0 : -1"
+        aria-controls="request-catalog-panel"
+        @click="activeTab = tab.name"
+        @keydown="handleTabKeydown($event, index)"
+      >
+        <el-icon
+          v-if="tab.name === 'favorites'"
+          aria-hidden="true"
+        >
+          <StarFilled />
+        </el-icon>
+        <span>{{ tab.label }}</span>
+        <span class="tab-count">{{ tab.count }}</span>
+      </button>
+    </div>
 
-    <section :aria-label="t('process.title')">
+    <section
+      id="request-catalog-panel"
+      ref="catalogPanel"
+      role="tabpanel"
+      :aria-labelledby="`request-tab-${activeTab}`"
+    >
       <div
         v-if="loading && allProcesses.length === 0"
         class="process-list-loading"
@@ -57,34 +72,47 @@
         <span>{{ t('common.loading') }}</span>
       </div>
       <div
-        v-else-if="allProcesses.length === 0"
+        v-else-if="displayedProcesses.length === 0"
         class="empty-state"
       >
-        <el-empty :description="searchKeyword ? t('process.noSearchResults') : t('process.noAccessibleProcesses')">
+        <el-empty :description="emptyDescription">
           <template #image>
             <el-icon
               :size="60"
               color="var(--ws-text-muted)"
             >
-              <Lock />
+              <component :is="searchKeyword ? Search : activeTab === 'favorites' ? Star : Lock" />
             </el-icon>
           </template>
           <el-text
-            v-if="!searchKeyword"
+            v-if="!searchKeyword && activeTab === 'all'"
             type="info"
             size="small"
           >
             {{ t('process.contactAdminForAccess') }}
           </el-text>
+          <template v-if="activeTab === 'favorites'">
+            <p
+              v-if="!searchKeyword"
+              class="empty-hint"
+            >
+              {{ t('process.favoritesHint') }}
+            </p>
+            <el-button
+              class="view-all-button"
+              @click="showAllRequests"
+            >
+              {{ t('process.viewAllRequests') }}
+            </el-button>
+          </template>
         </el-empty>
       </div>
       <div
         v-else
-        ref="mainProcessGrid"
         class="process-grid"
       >
         <ProcessCatalogCard
-          v-for="process in allProcesses"
+          v-for="process in displayedProcesses"
           :key="process.key"
           :process="process"
           :favorite-pending="pendingFavoriteKeys.has(process.key)"
@@ -99,7 +127,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Search, Lock, Loading } from '@element-plus/icons-vue'
+import { Search, Lock, Loading, Star, StarFilled } from '@element-plus/icons-vue'
 import { processApi, type ProcessDefinition } from '@/api/process'
 import PortalHelpLink from '@/components/PortalHelpLink.vue'
 import ProcessCatalogCard from '@/components/ProcessCatalogCard.vue'
@@ -109,9 +137,35 @@ const searchKeyword = ref('')
 const loading = ref(true)
 const allProcesses = ref<ProcessDefinition[]>([])
 const favoriteProcesses = computed(() => allProcesses.value.filter(process => process.isFavorite))
+const activeTab = ref<'all' | 'favorites'>('all')
+const displayedProcesses = computed(() => activeTab.value === 'all' ? allProcesses.value : favoriteProcesses.value)
+const catalogTabs = computed(() => [
+  { name: 'all' as const, label: t('process.allRequests'), count: allProcesses.value.length },
+  { name: 'favorites' as const, label: t('process.favorites'), count: favoriteProcesses.value.length },
+])
+const emptyDescription = computed(() => {
+  if (searchKeyword.value) return t('process.noSearchResults')
+  return t(activeTab.value === 'favorites' ? 'process.noFavorites' : 'process.noAccessibleProcesses')
+})
+const handleTabKeydown = (event: KeyboardEvent, index: number): void => {
+  const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
+  if (!keys.includes(event.key)) return
+  event.preventDefault()
+  const last = catalogTabs.value.length - 1
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? last
+    : (index + (event.key === 'ArrowRight' ? 1 : last)) % catalogTabs.value.length
+  activeTab.value = catalogTabs.value[next].name
+  const tabs = (event.currentTarget as HTMLButtonElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  tabs?.[next]?.focus()
+}
 
 const pendingFavoriteKeys = ref(new Set<string>())
-const mainProcessGrid = ref<HTMLElement | null>(null)
+const catalogPanel = ref<HTMLElement | null>(null)
+const showAllRequests = async (): Promise<void> => {
+  activeTab.value = 'all'
+  await nextTick()
+  document.getElementById('request-tab-all')?.focus()
+}
 let favoriteRevision = 0
 const confirmedFavorites = new Map<string, { revision: number; value: boolean }>()
 
@@ -138,9 +192,8 @@ const toggleFavorite = async (key: string, event: MouseEvent) => {
     if (hadFocus && (document.activeElement === document.body || document.activeElement === trigger)) {
       if (trigger.isConnected) {
         trigger.focus()
-      } else if (mainProcessGrid.value) {
-        const buttons = mainProcessGrid.value.querySelectorAll<HTMLButtonElement>('.favorite-button')
-        Array.from(buttons).find(button => button.dataset.processKey === key)?.focus()
+      } else if (catalogPanel.value) {
+        catalogPanel.value.querySelector<HTMLButtonElement>('.favorite-button, .view-all-button')?.focus()
       }
     }
   }
@@ -240,15 +293,46 @@ onMounted(() => {
     color: var(--ws-text);
   }
 
-  h2 {
-    margin: 0 0 16px;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--ws-text);
+  .process-search { width: 300px; max-width: 100%; }
+
+  .catalog-tabs {
+    display: flex;
+    gap: 28px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--ws-card-border);
   }
 
-  .process-search { width: 300px; max-width: 100%; }
-  .favorites-section { margin-bottom: 28px; }
+  .catalog-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 2px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: var(--ws-text-secondary);
+    font: inherit;
+    cursor: pointer;
+
+    &[aria-selected='true'] {
+      border-bottom-color: var(--hsbc-red);
+      color: var(--hsbc-red);
+      font-weight: 600;
+    }
+
+    &:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 3px; }
+  }
+
+  .tab-count {
+    min-width: 24px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--ws-card-bg);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
 
   .process-grid {
     display: grid;
@@ -268,10 +352,13 @@ onMounted(() => {
   }
 
   .empty-state { padding: 40px 0; }
+  .empty-hint { margin: 0 0 16px; color: var(--ws-text-secondary); }
 
   @media (max-width: 600px) {
     .page-header { align-items: flex-start; flex-direction: column; }
     .process-search { width: 100%; }
+    .catalog-tabs { gap: 16px; }
+    .catalog-tab { gap: 6px; }
     .process-grid { gap: 16px; }
   }
 }

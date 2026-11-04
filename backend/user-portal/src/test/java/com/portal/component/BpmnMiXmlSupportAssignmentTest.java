@@ -49,6 +49,34 @@ class BpmnMiXmlSupportAssignmentTest {
                 .hasMessageContaining("participants");
     }
 
+    @Test void readInvolvementKeepsEachUserFieldAcrossTasksOnTheSameTable() {
+        String xml = definitions(miSubProcess("one","task-one","lines","user","handler_old",null,null)
+                + miSubProcess("two","task-two","lines","both","handler_new","role",null)
+                + miSubProcess("three","task-three","roles","role","ignored_user","role",null));
+        assertThat(BpmnMiXmlSupport.miUserFields(xml)).containsExactly(
+                new BpmnMiXmlSupport.MiUserField("lines","handler_old"),
+                new BpmnMiXmlSupport.MiUserField("lines","handler_new"));
+    }
+
+    @Test void ordinarySiblingTaskOutsideNestedMiCannotGrantInvolvement() {
+        String ordinary = """
+            <bpmn:userTask id="ordinary"><bpmn:extensionElements><custom:properties>
+             <custom:property name="subTableName" value="outside"/>
+             <custom:property name="assigneeMode" value="user"/>
+             <custom:property name="assigneeField" value="forged"/>
+            </custom:properties></bpmn:extensionElements></bpmn:userTask>
+            """;
+        String xml = definitions("<bpmn:subProcess id=\"wrapper\">"+ordinary
+                +miSubProcess("inner","review","lines","user","handler",null,null)+"</bpmn:subProcess>");
+        assertThat(BpmnMiXmlSupport.miUserFields(xml)).containsExactly(new BpmnMiXmlSupport.MiUserField("lines","handler"));
+    }
+
+    @Test void missingConfiguredUserFieldIsAnExplicitError() {
+        assertThatThrownBy(() -> BpmnMiXmlSupport.miUserFields(definitions(
+                miSubProcess("mi","review","lines","user",null,null,null))))
+                .isInstanceOf(BpmnMiXmlSupport.MiAssignmentConfigurationException.class);
+    }
+
     private static String definitions(String body) {
         return """
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"

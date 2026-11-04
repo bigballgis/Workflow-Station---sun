@@ -40,13 +40,15 @@ class ImportViewAccessValidatorTest {
         when(businessUnitRepository.findByCode("HQ")).thenReturn(Optional.of(bu));
 
         String json = """
-                [{"viewName":"All","accessRules":[
+                [{"viewKey":"019252f1-a579-4b56-aa08-4d7576b4c8e0","viewName":"All","accessRules":[
                   {"targetType":"BUSINESS_UNIT","targetCode":"HQ"},
                   {"targetType":"ROLE","targetCode":"REVIEWER"}
                 ]}]
                 """;
         String remapped = validator.remapAndValidate(json);
         assertThat(remapped).contains("bu-local").contains("role-local");
+        assertThat(new ObjectMapper().readTree(remapped).get(0).path("viewKey").asText())
+                .isEqualTo("019252f1-a579-4b56-aa08-4d7576b4c8e0");
     }
 
     @Test

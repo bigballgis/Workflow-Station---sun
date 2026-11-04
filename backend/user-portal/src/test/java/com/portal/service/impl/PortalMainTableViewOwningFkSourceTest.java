@@ -1,16 +1,13 @@
 package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewInvolvementScope;
 import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.MainTableViewSubRowQueryComponent;
-import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewFieldColumn;
 import com.portal.dto.MainTableViewQueryRequest;
-import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.UserDisplayNameResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,10 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -58,88 +53,37 @@ class PortalMainTableViewOwningFkSourceTest {
     @Mock
     private MainTableViewSubRowQueryComponent subRowQueryComponent;
 
+    private final com.portal.client.PortalBiClient client = org.mockito.Mockito.mock(com.portal.client.PortalBiClient.class);
+    private final PublishedViewFixture fixture=new PublishedViewFixture();
     private PortalMainTableViewServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new PortalMainTableViewServiceImpl(
-                jdbcTemplate,
+                client,
                 new ObjectMapper(),
-                functionUnitAccessComponent,
-                accessResolver,
                 mock(MainTableViewInvolvementScope.class),
                 mock(MainTableViewRowQueryComponent.class),
                 subRowQueryComponent,
-                mock(ProcessInstanceRepository.class),
-                mock(ProcessComponent.class),
-                mock(ComputedFieldRecalculator.class),
                 mock(UserDisplayNameResolver.class));
 
-        Map<String, Object> view = new HashMap<>();
-        view.put("id", VIEW_ID);
-        view.put("view_name", "ATM Transaction");
-        view.put("sort_config", null);
-        view.put("filter_config", null);
-        view.put("fu_code", "atm");
-        view.put("main_table_id", SUB_TABLE_ID);
-        view.put("table_type", "SUB");
-        view.put("table_name", "ATM_Transaction");
-        view.put("restrict_to_involved_users", Boolean.FALSE);
-        when(jdbcTemplate.queryForList(contains("dw_main_table_view_configs"), eq(VIEW_ID)))
-                .thenReturn(List.of(view));
-        when(jdbcTemplate.queryForList(contains("dw_main_table_view_access"), eq(VIEW_ID)))
-                .thenReturn(List.of());
-
-        // Field-level FKs of ATM_Transaction: only case_row_id is declared (row_id is its own PK).
-        Map<String, Object> caseFk = new HashMap<>();
-        caseFk.put("field_name", "case_row_id");
-        caseFk.put("ref_pk_fields", "[\"case_number\"]");
-        caseFk.put("ref_view_id", CASE_VIEW_ID);
-        caseFk.put("ref_fu_code", "atm");
-        when(jdbcTemplate.queryForList(contains("fd.ref_primary_key_fields"), eq(VIEW_ID)))
-                .thenReturn(List.of(caseFk));
-        // The stale binding cache, answered to any query that still reads it.
-        Map<String, Object> staleBinding = new HashMap<>();
-        staleBinding.put("fk_field", "row_id");
-        staleBinding.put("ref_view_id", CASE_VIEW_ID);
-        staleBinding.put("ref_fu_code", "atm");
-        when(jdbcTemplate.queryForList(contains("foreign_key_field"), eq(SUB_TABLE_ID)))
-                .thenReturn(List.of(staleBinding));
-
-        when(accessResolver.parseAccessRules(any())).thenReturn(List.of());
-        when(accessResolver.canUserSeeView(any(), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAccessFunctionUnit(any(), any())).thenReturn(true);
-        when(functionUnitAccessComponent.isFunctionUnitEnabled(any())).thenReturn(true);
+        fixture.id=VIEW_ID;fixture.tableId=SUB_TABLE_ID;fixture.tableName="ATM_Transaction";fixture.tableType="SUB";fixture.code="atm";
+        fixture.parent("Case",1L);fixture.bindings("Case",fixture.tableName);
+        fixture.references.add(new com.platform.common.dataview.RuntimeDataView.Reference(CASE_VIEW_ID,"atm","Case",true));
+        when(client.getDataView("user-dev",VIEW_ID)).thenAnswer(call -> fixture.build());
         when(subRowQueryComponent.query(any()))
                 .thenReturn(new MainTableViewSubRowQueryComponent.Page(List.of(), 0L));
     }
 
     private void viewShows(String... fieldNames) {
-        when(jdbcTemplate.query(contains("dw_main_table_view_fields"), any(RowMapper.class), eq(VIEW_ID)))
-                .thenAnswer(inv -> {
-                    RowMapper<Object> mapper = inv.getArgument(1);
-                    List<Object> rows = new java.util.ArrayList<>();
-                    for (int i = 0; i < fieldNames.length; i++) {
-                        rows.add(mapper.mapRow(fieldRow(fieldNames[i], i), i));
-                    }
-                    return rows;
-                });
+        var fields=new java.util.ArrayList<Map<String,Object>>();
+        for(int i=0;i<fieldNames.length;i++) fields.add(PublishedViewFixture.field(fieldNames[i],i));
+        fixture.definition.put("fields",fields);
     }
 
     private void declaredOwningFks(String... fieldNames) {
-        when(jdbcTemplate.queryForList(contains("filter_fk_field_id"), eq(String.class), eq(SUB_TABLE_ID)))
-                .thenReturn(List.of(fieldNames));
-    }
-
-    private static ResultSet fieldRow(String fieldName, int sortOrder) throws Exception {
-        ResultSet rs = mock(ResultSet.class);
-        when(rs.getString("field_name")).thenReturn(fieldName);
-        when(rs.getString("display_label")).thenReturn(fieldName);
-        when(rs.getInt("sort_order")).thenReturn(sortOrder);
-        when(rs.getBoolean("visible")).thenReturn(true);
-        when(rs.getString("column_type")).thenReturn("field");
-        when(rs.getString("select_display")).thenReturn("value");
-        return rs;
+        fixture.table.put("fields",java.util.Arrays.stream(fieldNames)
+                .map(name -> PublishedViewFixture.fk(name,"Case","case_number")).toList());
     }
 
     private Map<String, MainTableViewFieldColumn> columns() {

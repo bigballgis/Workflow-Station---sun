@@ -6,7 +6,6 @@ import com.developer.entity.MainTableViewConfig;
 import com.developer.entity.MainTableViewField;
 import com.developer.enums.MainTableViewAccessTargetType;
 import com.developer.enums.MainTableViewStatus;
-import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.service.impl.MainTableViewServiceImpl;
 import com.developer.util.MainTableViewAccessRulesValidator;
@@ -73,6 +72,7 @@ public class MainTableViewPortability {
         for (MainTableViewConfig view : views) {
             Map<String, Object> m = new LinkedHashMap<>();
             if (savedIdentity) m.put("viewId", view.getId());
+            m.put("viewKey", view.getViewKey());
             m.put("mainTableName", view.getMainTableId() != null ? tableIdToName.get(view.getMainTableId()) : null);
             m.put("detailFormName",
                     view.getDetailFormId() != null ? formIdToName.get(view.getDetailFormId()) : null);
@@ -169,6 +169,7 @@ public class MainTableViewPortability {
             MainTableViewStatus status = parseStatus(v.get("status"));
             MainTableViewConfig config = MainTableViewConfig.builder()
                     .functionUnit(functionUnit)
+                    .viewKey(portableViewKey(v))
                     .mainTableId(mainTableId)
                     .detailFormId(detailFormId)
                     .viewName(viewName)
@@ -217,6 +218,13 @@ public class MainTableViewPortability {
                     .build());
             order++;
         }
+    }
+
+    private String portableViewKey(Map<String, Object> view) {
+        Object key = view.get("viewKey");
+        // FALLBACK(migration): legacy ZIPs have no logical identity; assign a new one, never infer by name.
+        return key == null ? java.util.UUID.randomUUID().toString()
+                : java.util.UUID.fromString(String.valueOf(key)).toString();
     }
 
     private MainTableViewStatus parseStatus(Object v) {

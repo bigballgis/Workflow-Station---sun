@@ -59,7 +59,7 @@ public final class FunctionUnitManagerTestFactory {
                 Mockito.mock(EmailConnectionSyncComponent.class),
                 Mockito.mock(EmailMonitorSyncComponent.class),
                 Mockito.mock(ImportBpmnStructureValidator.class),
-                viewValidator);
+                viewValidator, Mockito.mock(com.admin.dataview.RuntimeDataViewIndex.class));
         FormTableBindingLoader bindingLoader = new FormTableBindingLoader(jdbcTemplate, objectMapper);
         FunctionUnitContentComponent contentComponent = new FunctionUnitContentComponent(
                 contentRepository, jdbcTemplate, lookup, bindingLoader, objectMapper);

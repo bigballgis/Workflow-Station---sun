@@ -69,12 +69,12 @@ export function isMainTableView(view: { tableType?: string | null } | null | und
 export type RowOpenTarget =
   | { kind: 'request'; processInstanceId: string }
   | { kind: 'detail'; viewId: number; rowKey: string }
-  | { kind: 'refuse'; messageKey: 'noDetailPage' | 'noDetailForm' | 'rowNotAddressable' }
+  | { kind: 'refuse'; messageKey: 'noDetailPage' | 'noDetailForm' | 'detailNotInRelease' | 'rowNotAddressable' }
 
 export function resolveRowOpenTarget(
   view: { tableType?: string | null; detailFormId?: number | null } | null | undefined,
   viewId: number | null | undefined,
-  row: { processInstanceId?: string | null },
+  row: { processInstanceId?: string | null; detailAvailable?: boolean | null },
   rowKey: string | null,
 ): RowOpenTarget {
   if (isMainTableView(view)) {
@@ -85,6 +85,7 @@ export function resolveRowOpenTarget(
       : { kind: 'refuse', messageKey: 'noDetailPage' }
   }
   if (!view?.detailFormId || !viewId) return { kind: 'refuse', messageKey: 'noDetailForm' }
+  if (row.detailAvailable === false) return { kind: 'refuse', messageKey: 'detailNotInRelease' }
   if (!rowKey) return { kind: 'refuse', messageKey: 'rowNotAddressable' }
   return { kind: 'detail', viewId, rowKey }
 }
@@ -97,6 +98,14 @@ export function resolveRowOpenTarget(
 export type FkOpenTarget =
   | { kind: 'request'; processInstanceId: string }
   | { kind: 'list'; functionUnitCode: string; viewId: number; fk: string }
+
+export function hasFkNavigation(
+  col: { isForeignKey?: boolean; refOwningRequest?: boolean; refViewId?: number | null; refFunctionUnitCode?: string | null },
+  row: { processInstanceId?: string | null },
+): boolean {
+  return !!col.isForeignKey && !!((col.refOwningRequest && row.processInstanceId)
+    || (col.refViewId && col.refFunctionUnitCode))
+}
 
 export function resolveFkOpenTarget(
   col: { refOwningRequest?: boolean; refViewId?: number | null; refFunctionUnitCode?: string | null },
