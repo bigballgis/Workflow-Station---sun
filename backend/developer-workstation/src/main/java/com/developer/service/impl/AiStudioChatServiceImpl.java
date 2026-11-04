@@ -32,8 +32,9 @@ import java.util.UUID;
  * <p>两条模型链路，由 {@code ai-generation.ai-studio.provider} 选：{@code AUTOMATION}（默认）经
  * {@link AiStudioAutomationClient} 调 Content Organizer 的 agent setting「Function Unit」，请求按
  * docs/design/developer-workstation-ai-studio-co-output-contract.md 分节拼成一条消息，回答仍交
- * {@link AiResponseParser} 解析与校验；{@code GAIP} 是原来的直连集团 AI gateway。一键生成暂时总走 GAIP——
- * CO 每次只有一个专家回答，整套生成要由 DW 逐阶段编排，尚未实现。</p>
+ * {@link AiResponseParser} 解析与校验；{@code GAIP} 是原来的直连集团 AI gateway。一键生成在 {@code AUTOMATION}
+ * 下由 {@link AiStudioOneClickOrchestrator} 逐阶段编排（CO 每次只有一个专家回答），{@code GAIP} 下仍是单次
+ * {@code scope=ALL} 生成。</p>
  */
 @Slf4j
 @Service
@@ -130,6 +131,14 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
     private final UserRepository userRepository;
     private final Provider provider;
 
+    /** 一键生成逐阶段编排的总时限：与提案作业的最长运行时间同一个配置，作业超时前编排先停下 */
+    @Value("${ai-generation.studio.proposal-max-runtime-minutes:30}")
+    private long oneClickBudgetMinutes = 30;
+
+    /** 单次 CO 调用的上限（与 {@link AiStudioAutomationClient} 同一个配置）：剩余时间不够就不再发下一步 */
+    @Value("${ai-generation.ai-studio.automation.timeout-seconds:310}")
+    private long agentCallTimeoutSeconds = 310;
+
     public AiStudioChatServiceImpl(AiGatewayClient aiGatewayClient, AiResponseParser aiResponseParser,
                                    AiGenerationService aiGenerationService,
                                    AiStudioContextDigest contextDigest,
@@ -204,6 +213,41 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
                 .toList();
         return new ProposalDraft(request.getFunctionUnitId(), request.getPhase(), SCOPE_ALL,
                 buildOneClickMessage(request), context, mode, documents, null);
+    }
+
+    @Override
+    public java.util.Optional<AgentOneClickDraft> prepareAgentOneClick(AiStudioChatRequest request, String userId) {
+        if (provider != Provider.AUTOMATION) {
+            return java.util.Optional.empty();
+        }
+        // 工号先查：没有工号直接 4xx，不必先做一次全量上下文序列化
+        String staffId = staffId(userId);
+        Map<String, Object> design = AGENT_JSON.convertValue(
+                aiGenerationService.serializeFunctionUnitContext(request.getFunctionUnitId()),
+                new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Object>>() {
+                });
+        List<Map<String, String>> documents = documentService.latestContents(request.getFunctionUnitId())
+                .entrySet().stream()
+                .map(e -> Map.of("documentType", e.getKey().name(), "content", e.getValue()))
+                .toList();
+        return java.util.Optional.of(new AgentOneClickDraft(request.getFunctionUnitId(), design,
+                toJson(aiGenerationService.getSchemaMetadata()), promptTemplateService.resolve("GENERATION"),
+                documents, historyTranscript(request), request.getMessage(), staffId));
+    }
+
+    @Override
+    public StudioChatResult runAgentOneClick(AgentOneClickDraft draft,
+                                             java.util.function.Consumer<com.developer.dto.AiStudioProposalJobResponse.Progress> progress) {
+        StudioChatResult result = new AiStudioOneClickOrchestrator(
+                (message, accept) -> askAgent(message, draft.staffId(), accept),
+                aiResponseParser::checkCrossSlices,
+                java.time.Duration.ofMinutes(oneClickBudgetMinutes),
+                java.time.Duration.ofSeconds(agentCallTimeoutSeconds), java.time.Clock.systemUTC())
+                .run(draft, progress);
+        log.info("AI Studio one-click via Content Organizer: functionUnitId={}, slices={}, replyChars={}",
+                draft.functionUnitId(), result.proposal().keySet(),
+                result.reply() == null ? 0 : result.reply().length());
+        return result;
     }
 
     /**
@@ -291,18 +335,26 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
      * 语义校验完全一样；可修的结构违规照网关链路的做法带着校验原话再问一次，只修一次。
      */
     private Map<String, Object> agentProposal(ProposalDraft draft) {
-        String reply = automationClient.chat(draft.message(), draft.staffId());
+        return askAgent(draft.message(), draft.staffId(), java.util.function.UnaryOperator.identity());
+    }
+
+    /**
+     * 问 CO 一次：解析回答后交给 {@code accept}（一键生成在这里并入并校验跨切片引用）；解析或 {@code accept}
+     * 抛出可修违规时带着校验原话再问一次，只修一次。
+     */
+    private Map<String, Object> askAgent(String message, String staffId,
+                                         java.util.function.UnaryOperator<Map<String, Object>> accept) {
+        String reply = automationClient.chat(message, staffId);
         try {
-            return aiResponseParser.parseText(reply);
+            return accept.apply(aiResponseParser.parseText(reply));
         } catch (AiGenerationException e) {
             if (!AiGenerationServiceImpl.REPAIRABLE_ERROR_CODES.contains(e.getErrorCode())) {
                 throw e;
             }
             log.warn("AI Studio agent proposal rejected by platform validation ({}), asking once more with the "
                     + "violation fed back: {}", e.getErrorCode(), e.getMessage());
-            String repaired = automationClient.chat(
-                    AiGenerationServiceImpl.buildRepairMessage(draft.message(), e), draft.staffId());
-            return aiResponseParser.parseText(repaired);
+            String repaired = automationClient.chat(AiGenerationServiceImpl.buildRepairMessage(message, e), staffId);
+            return accept.apply(aiResponseParser.parseText(repaired));
         }
     }
 

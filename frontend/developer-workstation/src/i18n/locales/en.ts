@@ -2897,7 +2897,7 @@ export default {
         noteDocsPresent: 'The existing Requirements and Function Unit Design documents are used as input too, so the description can be left empty.',
         noteDocsAbsent: 'For longer requirements, import a document under Settings → Requirements; it is used as input too.',
         noteScope: 'Views, email and automation bindings are not generated. Finish them in the guided phases afterwards.',
-        noteDuration: 'Generation usually takes 7–15 minutes. You can leave the page; the result waits for you in AI Studio.',
+        noteDuration: 'Generation usually takes 3–15 minutes. You can leave the page; the result waits for you in AI Studio.',
         button: 'Generate',
         confirmTitle: 'Replace the current design?',
         confirmMsg: 'One-click generation replaces the whole design of this function unit (process, tables, forms, actions and decisions) as soon as the result passes validation, and resets the AI Studio phase progress. This cannot be undone here; use Version Management to go back. Continue?'
@@ -2980,6 +2980,7 @@ export default {
         stopped: 'Stopped by you. Send a new message to continue.',
         stopFailed: 'Could not stop the job on the server: {reason}',
         proposalWorking: 'Generating the proposal — this usually takes a few minutes. You can keep designing on the left; the result will appear here and survives a page refresh.',
+        proposalStep: 'Step {step} of {total}: {phase}',
         proposalLost: 'The proposal job is no longer available (expired or the server restarted). Please propose again.',
         proposalPollFailed: 'Polling the proposal job kept failing: {reason}',
         proposalTitle: 'Proposed change',

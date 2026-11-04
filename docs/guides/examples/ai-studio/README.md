@@ -36,8 +36,12 @@ DW  AI Studio Copilot (advisory turn, or proposal job)
 | `ACTIVEPIECES_WEBHOOK_BASE_URL` | `http://localhost:8086` (docker profile: `http://activepieces:80`) | Same variable as the engine's service tasks |
 | `AI_STUDIO_TIMEOUT_SECONDS` | `310` | Slightly above Automation's own sync-webhook wait (`AP_WEBHOOK_TIMEOUT_SECONDS=300`) |
 
-**One-click generation (Build with AI) still uses the AI gateway.** Content Organizer answers every request with a
-single specialist, so a whole design has to be orchestrated by DW phase by phase — not built yet.
+**One-click generation (Build with AI)** goes through the same flow. Content Organizer answers every request with a
+single specialist, so DW (`AiStudioOneClickOrchestrator`) asks five PROPOSE requests in turn — Process → Tables → Forms →
+Decisions → Actions — feeding each step's output into the next step's CURRENT DESIGN, and applies the merged design once
+(`scope=ALL`) at the end. The job reports the current step (`progress` on `GET /proposals/{jobId}`); a failed step or Stop
+leaves the design untouched. Nothing extra is needed in Content Organizer or Automation. With `AI_STUDIO_PROVIDER=GAIP`
+one-click generation is the single gateway call it was before.
 
 ## Contract
 

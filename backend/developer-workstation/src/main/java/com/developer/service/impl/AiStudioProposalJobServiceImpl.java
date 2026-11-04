@@ -1,6 +1,7 @@
 package com.developer.service.impl;
 
 import com.developer.dto.AiStudioProposalJobResponse;
+import com.developer.dto.AiStudioProposalJobResponse.Progress;
 import com.developer.dto.AiStudioProposalJobResponse.Status;
 import com.developer.dto.AiStudioThreadEvent;
 import com.developer.exception.AiGenerationException;
@@ -28,7 +29,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -105,10 +106,10 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
     }
 
     @Override
-    public AiStudioProposalJobResponse submit(JobRequest request,
-                                              Supplier<StudioChatResult> work,
-                                              UnaryOperator<StudioChatResult> commit,
-                                              Consumer<StudioChatResult> onSucceeded) {
+    public AiStudioProposalJobResponse submitWithProgress(JobRequest request,
+                                                          Function<Consumer<Progress>, StudioChatResult> work,
+                                                          UnaryOperator<StudioChatResult> commit,
+                                                          Consumer<StudioChatResult> onSucceeded) {
         sweep();
         Long functionUnitId = request.functionUnitId();
         String userId = request.userId();
@@ -154,8 +155,8 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
         return job.snapshot();
     }
 
-    private void run(Job job, Supplier<StudioChatResult> work, UnaryOperator<StudioChatResult> commit,
-                     Consumer<StudioChatResult> onSucceeded) {
+    private void run(Job job, Function<Consumer<Progress>, StudioChatResult> work,
+                     UnaryOperator<StudioChatResult> commit, Consumer<StudioChatResult> onSucceeded) {
         synchronized (job) {
             if (job.isTerminal()) return; // 已被判超时/清理
             job.status = Status.RUNNING;
@@ -163,7 +164,7 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
         }
         persist(job);
         try {
-            StudioChatResult result = work.get();
+            StudioChatResult result = work.apply(job::report);
             synchronized (job) {
                 if (job.isTerminal()) return;
                 // commit 在作业锁内执行：cancelJob 也要这把锁，所以"已取消"与"已写入"不会同时成立
@@ -382,6 +383,8 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
         StudioChatResult result;
         String errorCode;
         String errorMessage;
+        /** 多步作业的当前步；落定后冻结，见 {@link #report} */
+        Progress progress;
         Future<?> future;
 
         Job(String jobId, JobRequest request) {
@@ -392,6 +395,11 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
             this.authorName = request.authorName();
             this.requestKey = request.requestKey();
             this.message = request.message();
+        }
+
+        /** 已落定（含被取消、超时）的作业不再接受进度：快照停在落定那一刻。 */
+        synchronized void report(Progress next) {
+            if (!isTerminal()) progress = next;
         }
 
         boolean isTerminal() {
@@ -409,6 +417,7 @@ public class AiStudioProposalJobServiceImpl implements AiStudioProposalJobServic
                     .submittedAt(submittedAt)
                     .startedAt(startedAt)
                     .finishedAt(finishedAt)
+                    .progress(progress)
                     .reply(result != null ? result.reply() : null)
                     .proposal(result != null ? result.proposal() : null)
                     .proposalScope(result != null ? result.proposalScope() : null)

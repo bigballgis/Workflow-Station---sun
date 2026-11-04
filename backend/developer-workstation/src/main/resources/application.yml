@@ -247,7 +247,7 @@ ai-generation:
       # 须短于前端 HM 请求的 120s 超时,让 DW 先给出可读的超时。
       timeout-seconds: ${HERMES_MASTER_TIMEOUT_SECONDS:110}
   # AI Studio Copilot 的模型链路(见 AiStudioChatServiceImpl):AUTOMATION = Automation flow(业务键 ai-studio-co-agent)
-  # → Content Organizer 的 agent setting「Function Unit」;GAIP = 直连上面的 AI gateway。一键生成暂时总走 GAIP。
+  # → Content Organizer 的 agent setting「Function Unit」;GAIP = 直连上面的 AI gateway。一键生成随之切换(AUTOMATION 下逐阶段问 CO,见 AiStudioOneClickOrchestrator)。
   ai-studio:
     provider: ${AI_STUDIO_PROVIDER:AUTOMATION}
     automation:

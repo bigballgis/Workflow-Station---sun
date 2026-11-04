@@ -2,7 +2,7 @@
 
 > 状态：2026-11-03 起 DW 已按本契约接入（`ai-generation.ai-studio.provider=AUTOMATION`，默认）：顾问对话与
 > Propose change 经 Automation flow `ai-studio-co-agent` → content-organizer 1.0.5 `agent_chat` → CO；
-> 一键生成仍走网关（第 1 节）。DW 侧实现与配置见 [examples/ai-studio](../guides/examples/ai-studio/README.md)。
+> 一键生成由 DW 逐阶段编排后同样经 CO（第 1 节）。DW 侧实现与配置见 [examples/ai-studio](../guides/examples/ai-studio/README.md)。
 > 本文定义 CO 的 Agent 必须产出什么，让 DW 现有的解析、预览、Apply、撤销链路**原样复用**，不为 CO 另写一套。
 
 ## 0. 真源与适用范围
@@ -32,8 +32,13 @@
 专家的回复就是最终输出，主管拿不回控制权（2026-11-03 首次验收在 Workbench Debug → Events 里确认）。因此：
 
 - 主管只按 PHASE 路由，每次请求只有**一个**专家回答，输出外壳（第 2 节）由专家自己负责；
-- CO 里没法串联多个专家，所以一键生成由 DW 按 流程 → 表 → 表单 → 决策 → 动作 的顺序逐个发 PROPOSE。每一步 Apply 之后再发下一步，这样下一步拿到的 CURRENT DESIGN 里已经有上游的结果。
-  DW 现有的一键生成走的是单次 `scope=ALL` 生成，**尚未**改成逐阶段编排，所以目前一键生成仍走网关。
+- CO 里没法串联多个专家，所以一键生成由 DW（`AiStudioOneClickOrchestrator`）按 流程 → 表 → 表单 → 决策 → 动作 的顺序逐个发 PROPOSE。
+  每一步只解析不写库，产出并入下一步的 CURRENT DESIGN：上游切片是本轮产出、本步切片保留旧值、下游切片清空
+  （USER REQUEST 末尾有一段「One-click generation」系统说明告诉专家这一点）。五步都成功后，合并结果走一次 `scope=ALL`
+  的预览与 Apply——流程与动作必须在同一次写入里，BPMN 才拿得到动作 id；中途失败或 Stop 时库里不变。
+  表单步、动作步并入后会对累计结果再做一次跨切片校验（stage 绑定对得上本轮流程的 userTask），可修的违规带原话重问那一步一次。
+  决策步允许没有数据块（视为没有决策表）；其余步骤没有数据块即整体失败（`AI_STUDIO_ONE_CLICK_STEP_NO_DATA`）。
+  `provider=GAIP` 时一键生成仍是网关的单次 `scope=ALL` 生成。
 
 ## 2. 输出信封（硬约束）
 
@@ -47,7 +52,7 @@
 ---GENERATED_DATA_END---
 ```
 
-- 解析顺序：先找标记块，找不到再找 ```` ```json ```` 围栏，再退到首尾大括号。**请始终用标记块**，后两种只是兜底。
+- **必须有标记块**：`AiResponseParser#parseText` 只认 `---GENERATED_DATA_START---`（缺 END 时取到结尾）；块内容再按 ```` ```json ```` 围栏 → 首尾大括号兜底解析。**标记块外**的 ```` ```json ```` 围栏不会被当成数据——提案卡只剩说明文字，一键生成的那一步以 `AI_STUDIO_ONE_CLICK_STEP_NO_DATA` 失败（2026-11-03 dev 实测出现过）。
 - 说明文字 = 整段输出去掉标记块之后剩下的部分，原样显示在提案卡上。「理解了什么 / 改动摘要 / 假设与人工步骤 / 其他阶段的后续步骤」写在这里。
 - JSON 必须严格：不能有注释、尾逗号、省略号、占位符，XML 不能缩写或 Base64。
 - ADVISORY 形态不输出标记块。PROPOSE 形态如果判断无法产出合法数据（例如缺少依赖），也**不输出**标记块，在说明文字里讲清缺什么。DW 对「既没数据也没文字」的结果会显式报错（`AI_STUDIO_PROPOSAL_EMPTY`）。

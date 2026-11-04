@@ -600,4 +600,31 @@ class AiResponseParserTest {
         assertNotNull(repairs);
         assertTrue(repairs.size() >= 3, "gateway insertion, condition rewrites and the submit action: " + repairs);
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void checkCrossSlices_catchesAStageBindingThatSeparateParsesOfEachSliceLetThrough() {
+        String xml = validBpmn().replace("<bpmn:userTask id=\"t\">", "<bpmn:userTask id=\"t\" name=\"Review\">");
+        Map<String, Object> process = (Map<String, Object>) parser.parseText("---GENERATED_DATA_START---"
+                + "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}"
+                + "---GENERATED_DATA_END---").get("generatedData");
+        String formJson = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"%s\",\"stageName\":\"Review\",\"readOnly\":false}]}]}";
+        // 只有表单、没有流程：parseText 无从校验 stage 绑定，指向不存在的 userTask 也照样通过
+        Map<String, Object> wrongForms = (Map<String, Object>) parser.parseText("---GENERATED_DATA_START---"
+                + formJson.formatted("Task_Missing") + "---GENERATED_DATA_END---").get("generatedData");
+        Map<String, Object> rightForms = (Map<String, Object>) parser.parseText("---GENERATED_DATA_START---"
+                + formJson.formatted("t") + "---GENERATED_DATA_END---").get("generatedData");
+
+        Map<String, Object> wrong = new java.util.LinkedHashMap<>(process);
+        wrong.putAll(wrongForms);
+        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> parser.checkCrossSlices(wrong));
+        assertEquals("AI_FORM_STAGE_BINDING_INVALID", ex.getErrorCode());
+
+        Map<String, Object> right = new java.util.LinkedHashMap<>(process);
+        right.putAll(rightForms);
+        assertEquals(List.of(), parser.checkCrossSlices(right));
+        // 动作还没生成时守门规则不碰动作（R3/R4 只在有 actionDefinitions 时生效），表单步校验不会凭空多出动作
+        assertTrue(!right.containsKey("actionDefinitions"));
+    }
 }
