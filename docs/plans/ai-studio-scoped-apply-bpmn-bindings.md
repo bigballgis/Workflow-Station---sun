@@ -241,5 +241,13 @@ Portal 已经明确不回退到流程全部动作；按名字兜底会把审批�
 - 复审：`a23ab6318` 独立复审 PASS。
 - dev 验证（DW 侧，热替 4 个类）：scratch FU 50152 先在旧代码上复现（ACTIONS 后无 `actionIds`；FORMS 后无 `formId`，原样设计器保存一次 stage 绑定被删光），
   新代码下 FORMS / 设计器保存 / ACTIONS / PROCESS（同 id）全部正确，dry-run 三种 WARNING 符合预期。FU 50036 用原提案 #144 / #152 重新 Apply 后两个任务都有表单与按钮。
-- **未验证**：Portal 打开任务看按钮——DW 一键部署在 admin-center 导入时失败，dev 库缺 `96-function-unit-runtime-versioning.sql`（`content_checksum` 列），与本改动无关。
+- **Portal 已验证（2026-11-04，用户批准后给 dev 库灌了 96 号脚本）**：scratch FU 50155 先一次 ALL 写表/表单/流程（不含动作），
+  再**单独** Apply ACTIONS、两次**单独** Apply PROCESS（同 task id，第二次给两个任务加了 `assigneeType=PROCESS_INITIATOR`），绑定始终保持；
+  部署为 `1.0.2` 后在 Portal 发起一单：发起页显示 `submit_request`，提交后待办「Review Request (v2)」显示 `approve_request` / `reject_request`，
+  任务表单 `scoped_portal_review_form` 正常渲染。截图：`verification-screenshots/scoped-apply-bindings-01-start-submit-button.jpg`、
+  `verification-screenshots/scoped-apply-bindings-02-review-task-approve-reject.jpg`（未提交进仓库）。
+- **新发现（既有缺陷，未修）**：单独 Apply FORMS 时，`writeFormDefinitions` 只按**本次写入**的表解析 `tableBindings[].tableName`，
+  scoped FORMS 提案不带表 → `dw_form_table_bindings.table_id` 全为 NULL；设计器里表单失去表绑定，部署时 admin-center
+  `assertReadyForActivation` 报 `VERSION_SNAPSHOT_INCOMPLETE`。FU 50036 用 #144 重 Apply 后就是这个状态（重 Apply 前表绑定为 0 行，可部署但表单无表）。
+  修法候选：无本次表定义时按 FU 现有表名解析（与预览/校验已用的 `existingTableFieldsFor` 同一目录）。
 - 全量 DW 测试 1544 个，仅 `ExportImportComponentImplTest.importFunctionUnit_rewritesBpmnIdsAfterImport` 报错，干净基线上同样报错。
