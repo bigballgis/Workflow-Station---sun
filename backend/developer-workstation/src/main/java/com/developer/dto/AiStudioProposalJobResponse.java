@@ -22,6 +22,15 @@ public class AiStudioProposalJobResponse {
 
     public enum Status { PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED }
 
+    /**
+     * 多步作业（经 Content Organizer 的一键生成）正在跑第几步；单步作业为空。只在进程内，不落库：
+     * DW 重启后没跑完的作业一律判为已中断，进度没有意义。
+     *
+     * @param phase 这一步所属的 AI Studio 阶段 key
+     */
+    public record Progress(int step, int totalSteps, String phase) {
+    }
+
     private String jobId;
 
     private Long functionUnitId;
@@ -41,6 +50,8 @@ public class AiStudioProposalJobResponse {
     private Instant startedAt;
 
     private Instant finishedAt;
+
+    private Progress progress;
 
     /** 以下三项仅 SUCCEEDED 时有值，语义同 {@link AiStudioChatResponse}。 */
     private String reply;

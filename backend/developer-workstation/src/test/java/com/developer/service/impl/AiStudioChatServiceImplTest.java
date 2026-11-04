@@ -484,4 +484,92 @@ class AiStudioChatServiceImplTest {
         assertFalse(message.getValue().contains("## FORMAT SPECIFICATION"));
         verifyNoInteractions(aiGatewayClient, promptTemplateService);
     }
+
+    @Test
+    void agentOneClickIsPreparedOnTheRequestThreadWithTheEmployeeIdAndTheWholeDesign() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatRequest req = request("PROCESS_DESIGN", "leave request",
+                List.of(historyMessage("USER", "earlier question")));
+        employee(" 45349679 ");
+        FunctionUnitContextDTO context = new FunctionUnitContextDTO();
+        context.setFunctionUnitId(1L);
+        context.setTableDefinitions(List.of(Map.of("tableName", "old_table")));
+        when(aiGenerationService.serializeFunctionUnitContext(1L)).thenReturn(context);
+        when(aiGenerationService.getSchemaMetadata()).thenReturn(Map.of("tableTypes", List.of("MAIN")));
+        when(promptTemplateService.resolve("GENERATION")).thenReturn("FIELD SPEC");
+        when(documentService.latestContents(1L)).thenReturn(Map.of());
+
+        AiStudioChatService.AgentOneClickDraft draft = co.prepareAgentOneClick(req, "u1").orElseThrow();
+
+        assertEquals("45349679", draft.staffId());
+        assertEquals(List.of(Map.of("tableName", "old_table")), draft.design().get("tableDefinitions"));
+        assertEquals("{\"tableTypes\":[\"MAIN\"]}", draft.schemaMetadata());
+        assertEquals("FIELD SPEC", draft.formatSpec());
+        assertEquals("User: earlier question", draft.conversation());
+        assertEquals("leave request", draft.userRequest());
+        verifyNoInteractions(automationClient, aiGatewayClient);
+    }
+
+    @Test
+    void gatewayProviderKeepsTheSingleCallOneClick() {
+        assertTrue(service.prepareAgentOneClick(request("PROCESS_DESIGN", "x", null), "u1").isEmpty());
+        verifyNoInteractions(userRepository, aiGenerationService, automationClient);
+    }
+
+    @Test
+    void agentOneClickWithoutAnEmployeeIdFailsBeforeSerializingTheDesign() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        employee(" ");
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> co.prepareAgentOneClick(request("PROCESS_DESIGN", "x", null), "u1"));
+
+        assertEquals("AI_STUDIO_NO_EMPLOYEE_ID", ex.getErrorCode());
+        verifyNoInteractions(aiGenerationService, automationClient);
+    }
+
+    @Test
+    void agentOneClickAsksContentOrganizerOncePerPhaseAndRepairsACrossSliceViolationOnTheFailingStep() {
+        AiStudioChatServiceImpl co = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        AiStudioChatService.AgentOneClickDraft draft = new AiStudioChatService.AgentOneClickDraft(
+                1L, Map.of(), "{}", "FIELD SPEC", List.of(), "", "leave request", "45349679");
+        ArgumentCaptor<String> messages = ArgumentCaptor.forClass(String.class);
+        java.util.Map<String, String> replyByPhase = Map.of("PROCESS_DESIGN", "p", "TABLE_DESIGN", "t",
+                "FORM_DESIGN", "f", "DECISION_DESIGN", "d", "ACTION_DESIGN", "a");
+        when(automationClient.chat(messages.capture(), eq("45349679"))).thenAnswer(invocation -> {
+            String message = invocation.getArgument(0);
+            if (message.contains("AUTOMATIC CORRECTION REQUEST")) return "f2";
+            String phase = message.substring("## MODE: PROPOSE\n## PHASE: ".length(), message.indexOf("\n## SCOPE"));
+            return replyByPhase.get(phase);
+        });
+        when(aiResponseParser.parseText(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> {
+            String reply = invocation.getArgument(0);
+            Map<String, Object> data = switch (reply) {
+                case "p" -> Map.of("processDefinition", Map.of("bpmnXml", "<x/>"));
+                case "t" -> Map.of("tableDefinitions", List.of(), "tableRelations", List.of());
+                case "f" -> Map.of("formDefinitions", List.of(Map.of("formName", "bad")));
+                case "f2" -> Map.of("formDefinitions", List.of(Map.of("formName", "good")));
+                case "d" -> Map.of("decisionDefinitions", List.of());
+                default -> Map.of("actionDefinitions", List.of(Map.of("actionName", "submit")));
+            };
+            return new java.util.HashMap<>(Map.of("reply", "ok " + reply, "generatedData", data));
+        });
+        when(aiResponseParser.checkCrossSlices(any())).thenAnswer(invocation -> {
+            Map<String, Object> data = invocation.getArgument(0);
+            if (String.valueOf(data.get("formDefinitions")).contains("bad")) {
+                throw new AiGenerationException("AI_FORM_STAGE_BINDING_INVALID", "unbound bpmn:userTask nodes");
+            }
+            return List.of();
+        });
+        List<com.developer.dto.AiStudioProposalJobResponse.Progress> progress = new java.util.ArrayList<>();
+
+        StudioChatResult result = co.runAgentOneClick(draft, progress::add);
+
+        assertEquals("ALL", result.proposalScope());
+        assertEquals(List.of(Map.of("formName", "good")), result.proposal().get("formDefinitions"));
+        assertEquals(6, messages.getAllValues().size());
+        assertTrue(messages.getAllValues().get(3).contains("Violation code: AI_FORM_STAGE_BINDING_INVALID"));
+        assertEquals(5, progress.size());
+        verifyNoInteractions(aiGatewayClient);
+    }
 }

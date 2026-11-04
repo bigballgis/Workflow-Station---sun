@@ -2891,7 +2891,7 @@ export default {
         noteDocsPresent: '已有的 Requirements 與 Function Unit Design 文件也會作為輸入，因此描述可以留空。',
         noteDocsAbsent: '需求較長時，可先在「設定 → Requirements」匯入文件，文件同樣會作為輸入。',
         noteScope: '不會產生檢視、郵件和自動化綁定，請在之後的引導階段中補齊。',
-        noteDuration: '產生通常需要 7–15 分鐘。可以離開頁面，結果會保留在 AI Studio 中。',
+        noteDuration: '產生通常需要 3–15 分鐘。可以離開頁面，結果會保留在 AI Studio 中。',
         button: '產生',
         confirmTitle: '取代目前設計？',
         confirmMsg: '一鍵產生的結果通過驗證後會立即取代該功能單元的整套設計（流程、資料表、表單、動作和決策），並重設 AI Studio 的階段進度。此處無法復原，如需回退請使用版本管理。是否繼續？'
@@ -2974,6 +2974,7 @@ export default {
         stopped: '已停止。發送新訊息可繼續。',
         stopFailed: '未能在伺服器端停止作業：{reason}',
         proposalWorking: '正在生成修改提案，通常需要幾分鐘。期間可以繼續在左側設計，結果會出現在這裡；重新整理頁面也不會丟。',
+        proposalStep: '第 {step}/{total} 步：{phase}',
         proposalLost: '提案作業已不存在（可能已過期或服務重啟），請重新發起。',
         proposalPollFailed: '查詢提案進度連續失敗：{reason}',
         proposalTitle: '修改提案',

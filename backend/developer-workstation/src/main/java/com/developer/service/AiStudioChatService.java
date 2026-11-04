@@ -77,4 +77,34 @@ public interface AiStudioChatService {
      * 哪个阶段线程，不限定范围。第二步直接用 {@link #runProposal}。
      */
     ProposalDraft prepareOneClick(AiStudioChatRequest request);
+
+    /**
+     * 一键生成经 Content Organizer 时的输入，全部在请求线程上定下（作业线程不碰 JPA、没有当前用户）。
+     *
+     * @param design         功能单元当前设计（FunctionUnitContextDTO 转成的 Map），各步的 CURRENT DESIGN 由它派生
+     * @param schemaMetadata 枚举与结构元数据的 JSON
+     * @param formatSpec     GENERATION 提示词全文
+     * @param conversation   CONVERSATION 分节（线程历史转写），可空
+     * @param userRequest    需求描述或修正指令
+     * @param staffId        发起人工号（CO 按它审计）
+     */
+    record AgentOneClickDraft(Long functionUnitId, Map<String, Object> design, String schemaMetadata,
+                              String formatSpec, List<Map<String, String>> documents, String conversation,
+                              String userRequest, String staffId) {
+    }
+
+    /**
+     * 一键生成第一步（请求线程），模型链路是 Content Organizer 时用：返回逐阶段编排的输入；链路是网关时返回空，
+     * 调用方走 {@link #prepareOneClick} + {@link #runProposal}。没有工号以 {@code AI_STUDIO_NO_EMPLOYEE_ID} 失败。
+     */
+    java.util.Optional<AgentOneClickDraft> prepareAgentOneClick(AiStudioChatRequest request, String userId);
+
+    /**
+     * 一键生成第二步（后台线程）：按 流程 → 表 → 表单 → 决策 → 动作 逐阶段各问一次 CO，每步的 CURRENT DESIGN
+     * 带上本轮上游的产出，结果合并成 scope {@code ALL} 的提案；不写库。某一步失败即整体失败。
+     *
+     * @param progress 每开始一步回调一次
+     */
+    StudioChatResult runAgentOneClick(AgentOneClickDraft draft,
+                                      java.util.function.Consumer<com.developer.dto.AiStudioProposalJobResponse.Progress> progress);
 }

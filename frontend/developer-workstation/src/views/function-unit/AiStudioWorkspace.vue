@@ -550,6 +550,16 @@
           >
             {{ t('ai.studio.workspace.proposalWorking') }}
           </div>
+          <div
+            v-if="copilotProposalJobId && copilotProposalProgress"
+            class="copilot-msg__working"
+          >
+            {{ t('ai.studio.workspace.proposalStep', {
+              step: copilotProposalProgress.step,
+              total: copilotProposalProgress.totalSteps,
+              phase: aiStudioPhaseLabel(t, copilotProposalProgress.phase as AiStudioPhase)
+            }) }}
+          </div>
         </div>
       </div>
       <div
@@ -649,7 +659,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, MagicStick, Check, Close, Promotion, UploadFilled, Loading, CircleClose, Warning, Document } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ValidationResult } from '@/api/functionUnit'
-import { aiGenerationApi, type AiStudioProposalJob } from '@/api/aiGeneration'
+import { aiGenerationApi, type AiStudioProposalJob, type AiStudioProposalJobProgress } from '@/api/aiGeneration'
 import { isAmTokenReauthCode, refreshAmToken } from '@/utils/amToken'
 import { aiStudioThreadApi, type AiStudioThreadEventData, type AiStudioThreadEventType } from '@/api/aiStudioThread'
 import { functionUnitDocumentApi } from '@/api/functionUnitDocument'
@@ -1130,6 +1140,8 @@ const copilotReplying = ref(false)
 const copilotReplyingPhase = ref<AiStudioPhase | null>(null)
 /** 正在轮询的提案作业 id；非空时打字指示下方补一行"要等几分钟"的说明 */
 const copilotProposalJobId = ref<string | null>(null)
+/** 正在轮询的作业是多步作业（经 Content Organizer 的一键生成）时，当前在第几步 */
+const copilotProposalProgress = ref<AiStudioProposalJobProgress | null>(null)
 const copilotBodyRef = ref<HTMLElement>()
 const copilotThreads = ref<AiStudioChatThreads>({})
 
@@ -1286,6 +1298,7 @@ function endCopilotWait(phase: AiStudioPhase) {
   copilotReplying.value = false
   copilotReplyingPhase.value = null
   copilotProposalJobId.value = null
+  copilotProposalProgress.value = null
   if (currentPhase.value === phase) scrollCopilotToBottom()
 }
 
@@ -1348,6 +1361,7 @@ async function pollProposal(jobId: string): Promise<AiStudioProposalJob | null> 
       const { data: job } = await aiGenerationApi.studioGetProposal(jobId)
       failures = 0
       if (cancelledJobIds.has(jobId)) return null
+      if (jobId === copilotProposalJobId.value) copilotProposalProgress.value = job.progress ?? null
       if (job.status === 'SUCCEEDED' || job.status === 'FAILED' || job.status === 'CANCELLED') {
         clearAiStudioPendingProposal(fuId.value)
         return job

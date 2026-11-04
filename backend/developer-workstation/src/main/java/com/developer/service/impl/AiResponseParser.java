@@ -476,6 +476,16 @@ public class AiResponseParser {
     // ==================== BPMN ====================
 
     /**
+     * 对拼合后的 generatedData 再跑一遍 BPMN 语义守门与阶段绑定校验（就地修改，返回自动修复记录）。
+     *
+     * <p>{@link #parseText} 只在同一份数据里同时有流程时才校验表单 / 动作的 stage 绑定；AI Studio 一键生成经
+     * Content Organizer 时每个切片来自单独一次回答，拼起来之后要在这里补上同样的检查。没有流程时是空操作。</p>
+     */
+    public List<String> checkCrossSlices(Map<String, Object> generatedData) {
+        return normalizeBpmn(generatedData);
+    }
+
+    /**
      * 平台校验器要的是裸 BPMN XML。模型偶尔给 Base64 或伪 BPMN：能解就解，
      * 结构不合法就换成确定性的 Start→End 骨架；但骨架没有任务节点，最后一步会显式拒绝——
      * 宁可让这一轮生成失败重来，也不要写进去一条跑不动的流程。

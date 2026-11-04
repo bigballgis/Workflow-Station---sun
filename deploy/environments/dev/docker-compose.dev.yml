@@ -626,7 +626,7 @@ services:
       HERMES_MASTER_PROVIDER: ${HERMES_MASTER_PROVIDER:-AUTOMATION}
       HERMES_MASTER_FLOW_KEY: ${HERMES_MASTER_FLOW_KEY:-hermes-master-chat}
       # AI Studio Copilot 同理:AUTOMATION = flow ai-studio-co-agent → CO agent setting「Function Unit」
-      # (dev 是 mock-content-organizer 扮演专家);GAIP = 直连 AI gateway。一键生成暂时总走 GAIP。
+      # (dev 是 mock-content-organizer 扮演专家);GAIP = 直连 AI gateway。一键生成随之切换(AUTOMATION 下逐阶段问 CO)。
       AI_STUDIO_PROVIDER: ${AI_STUDIO_PROVIDER:-AUTOMATION}
       AI_STUDIO_FLOW_KEY: ${AI_STUDIO_FLOW_KEY:-ai-studio-co-agent}
       # SMTP/IMAP connection test + AI gateway: allow hostnames that resolve to private IPs on corp VPN.

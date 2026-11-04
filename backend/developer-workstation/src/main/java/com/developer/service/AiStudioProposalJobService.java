@@ -5,6 +5,7 @@ import com.developer.dto.AiStudioProposalJobResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -51,10 +52,22 @@ public interface AiStudioProposalJobService {
      *               （此时作业已是 SUCCEEDED，取消幂等返回）——不会出现"用户点了 Stop、设计却被改掉"。
      *               抛出的异常与 {@code work} 同样记为作业失败。可空
      */
-    AiStudioProposalJobResponse submit(JobRequest request,
-                                       Supplier<AiStudioChatService.StudioChatResult> work,
-                                       UnaryOperator<AiStudioChatService.StudioChatResult> commit,
-                                       Consumer<AiStudioChatService.StudioChatResult> onSucceeded);
+    default AiStudioProposalJobResponse submit(JobRequest request,
+                                               Supplier<AiStudioChatService.StudioChatResult> work,
+                                               UnaryOperator<AiStudioChatService.StudioChatResult> commit,
+                                               Consumer<AiStudioChatService.StudioChatResult> onSucceeded) {
+        return submitWithProgress(request, progress -> work.get(), commit, onSucceeded);
+    }
+
+    /**
+     * 多步作业：{@code work} 拿到一个进度回调，每进一步报一次，快照的 {@code progress} 随之更新
+     * （作业落定后不再变化）。其余语义同 {@link #submit(JobRequest, Supplier, UnaryOperator, Consumer)}。
+     */
+    AiStudioProposalJobResponse submitWithProgress(
+            JobRequest request,
+            Function<Consumer<AiStudioProposalJobResponse.Progress>, AiStudioChatService.StudioChatResult> work,
+            UnaryOperator<AiStudioChatService.StudioChatResult> commit,
+            Consumer<AiStudioChatService.StudioChatResult> onSucceeded);
 
     /** 无原始消息、无完成回调的提交。 */
     default AiStudioProposalJobResponse submit(Long functionUnitId, String phase, String userId, String requestKey,

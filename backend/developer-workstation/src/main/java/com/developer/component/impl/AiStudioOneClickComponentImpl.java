@@ -107,17 +107,23 @@ public class AiStudioOneClickComponentImpl implements AiStudioOneClickComponent 
             log.warn("AI Studio one-click: shared history unavailable (functionUnitId={}): {}",
                     functionUnitId, e.getMessage());
         }
-        // 上下文序列化依赖请求事务里的 JPA 懒加载，留在请求线程
-        AiStudioChatService.ProposalDraft draft = chatService.prepareOneClick(chatRequest);
-        log.info("AI Studio one-click generation requested: functionUnitId={}, userId={}, requirementChars={}, mode={}",
-                functionUnitId, userId, requirements.length(), draft.mode());
+        // 上下文序列化依赖请求事务里的 JPA 懒加载，留在请求线程。模型链路是 Content Organizer 时由 DW 逐阶段编排，
+        // 否则是网关的单次 scope=ALL 生成
+        Optional<AiStudioChatService.AgentOneClickDraft> agentDraft =
+                chatService.prepareAgentOneClick(chatRequest, userId);
+        AiStudioChatService.ProposalDraft draft = agentDraft.isPresent() ? null : chatService.prepareOneClick(chatRequest);
+        log.info("AI Studio one-click generation requested: functionUnitId={}, userId={}, requirementChars={}, via={}",
+                functionUnitId, userId, requirements.length(),
+                agentDraft.isPresent() ? "CONTENT_ORGANIZER" : "GAIP/" + draft.mode());
 
         AtomicBoolean applied = new AtomicBoolean();
-        AiStudioProposalJobResponse job = jobService.submit(
+        AiStudioProposalJobResponse job = jobService.submitWithProgress(
                 new AiStudioProposalJobService.JobRequest(functionUnitId, THREAD_PHASE, userId, author.name(),
                         "ONE_CLICK\n" + requirements, chatRequest.getMessage()),
-                () -> {
-                    StudioChatResult result = chatService.runProposal(draft, amToken);
+                progress -> {
+                    StudioChatResult result = agentDraft.isPresent()
+                            ? chatService.runAgentOneClick(agentDraft.get(), progress)
+                            : chatService.runProposal(draft, amToken);
                     if (result.proposal() == null) return result;
                     return result.withPreview(previewer.preview(functionUnitId, result.proposalScope(),
                             AiStudioChatComponentImpl.normalizedData(objectMapper, result.proposal())));

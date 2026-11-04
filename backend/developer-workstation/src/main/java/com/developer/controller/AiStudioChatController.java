@@ -87,8 +87,8 @@ public class AiStudioChatController extends BaseController {
     }
 
     @PostMapping("/one-click")
-    @Operation(summary = "Generate the whole core design in one model call and apply it when it validates "
-            + "(async; poll GET /proposals/{jobId})")
+    @Operation(summary = "Generate the whole core design (one gateway call, or phase by phase via Content Organizer) "
+            + "and apply it when it validates (async; poll GET /proposals/{jobId}, which reports the current step)")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<AiStudioProposalJobResponse>> startOneClick(
             @Valid @RequestBody AiStudioOneClickRequest request, HttpServletRequest httpRequest) {

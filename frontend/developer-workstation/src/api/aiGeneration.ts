@@ -171,6 +171,13 @@ export interface AiStudioChatResult {
   preview?: AiStudioProposalPreview | null
 }
 
+export interface AiStudioProposalJobProgress {
+  step: number
+  totalSteps: number
+  /** 这一步所属的 AI Studio 阶段 key */
+  phase: string
+}
+
 export type AiStudioProposalJobStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
 
 export interface AiStudioProposalJob extends AiStudioChatResult {
@@ -185,6 +192,8 @@ export interface AiStudioProposalJob extends AiStudioChatResult {
   submittedAt: string
   startedAt?: string | null
   finishedAt: string | null
+  /** 多步作业（经 Content Organizer 的一键生成）当前在第几步；单步作业为空 */
+  progress?: AiStudioProposalJobProgress | null
   errorCode: string | null
   errorMessage: string | null
 }

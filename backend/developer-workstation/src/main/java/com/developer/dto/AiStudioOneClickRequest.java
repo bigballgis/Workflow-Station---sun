@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * AI Studio 一键生成请求：一次模型调用产出整套核心设计，校验通过后由后端直接写入。
+ * AI Studio 一键生成请求：产出整套核心设计（网关一次生成，或经 Content Organizer 逐阶段生成），校验通过后由后端一次写入。
  */
 @Data
 public class AiStudioOneClickRequest {

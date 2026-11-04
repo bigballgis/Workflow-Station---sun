@@ -2890,7 +2890,7 @@ export default {
         noteDocsPresent: '已有的 Requirements 与 Function Unit Design 文档也会作为输入，因此描述可以留空。',
         noteDocsAbsent: '需求较长时，可先在「设置 → Requirements」导入文档，文档同样会作为输入。',
         noteScope: '不会生成视图、邮件和自动化绑定，请在之后的引导阶段中补全。',
-        noteDuration: '生成通常需要 7–15 分钟。可以离开页面，结果会保留在 AI Studio 中。',
+        noteDuration: '生成通常需要 3–15 分钟。可以离开页面，结果会保留在 AI Studio 中。',
         button: '生成',
         confirmTitle: '替换当前设计？',
         confirmMsg: '一键生成的结果通过校验后会立即替换该功能单元的整套设计（流程、表、表单、动作和决策），并重置 AI Studio 的阶段进度。此处无法撤销，如需回退请使用版本管理。是否继续？'
@@ -2973,6 +2973,7 @@ export default {
         stopped: '已停止。发送新消息可继续。',
         stopFailed: '未能在服务端停止作业：{reason}',
         proposalWorking: '正在生成修改提案，通常需要几分钟。期间可以继续在左侧设计，结果会出现在这里；刷新页面也不会丢。',
+        proposalStep: '第 {step}/{total} 步：{phase}',
         proposalLost: '提案作业已不存在（可能已过期或服务重启），请重新发起。',
         proposalPollFailed: '查询提案进度连续失败：{reason}',
         proposalTitle: '修改提案',

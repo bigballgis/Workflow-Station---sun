@@ -338,4 +338,37 @@ class AiStudioProposalJobServiceImplTest {
         Thread.sleep(20);
         assertEquals(Status.FAILED, strict.get(submitted.getJobId(), "u1").getStatus());
     }
+
+    @Test
+    void progressReportedByAMultiStepJobShowsInItsSnapshotAndFreezesOnceItIsCancelled() throws Exception {
+        CountDownLatch reported = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<AiStudioProposalJobResponse.Progress>>
+                sink = new java.util.concurrent.atomic.AtomicReference<>();
+        AiStudioProposalJobResponse submitted = service.submitWithProgress(
+                new com.developer.service.AiStudioProposalJobService.JobRequest(1L, "PROCESS_DESIGN", "u1", "Ann", "k", "m"),
+                progress -> {
+                    sink.set(progress);
+                    progress.accept(new AiStudioProposalJobResponse.Progress(2, 5, "TABLE_DESIGN"));
+                    reported.countDown();
+                    try {
+                        release.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return new StudioChatResult("late", null, null);
+                }, null, null);
+        assertTrue(reported.await(5, TimeUnit.SECONDS));
+
+        assertEquals(new AiStudioProposalJobResponse.Progress(2, 5, "TABLE_DESIGN"),
+                service.get(submitted.getJobId(), "u1").getProgress());
+
+        service.cancel(submitted.getJobId(), "u1");
+        sink.get().accept(new AiStudioProposalJobResponse.Progress(3, 5, "FORM_DESIGN"));
+        release.countDown();
+
+        AiStudioProposalJobResponse done = awaitTerminal(submitted.getJobId(), "u1");
+        assertEquals(Status.CANCELLED, done.getStatus());
+        assertEquals(new AiStudioProposalJobResponse.Progress(2, 5, "TABLE_DESIGN"), done.getProgress());
+    }
 }

@@ -5,6 +5,7 @@ import com.developer.dto.AiStudioApplyRequest;
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.AiStudioOneClickRequest;
 import com.developer.dto.AiStudioProposalJobResponse;
+import com.developer.dto.AiStudioProposalJobResponse.Progress;
 import com.developer.dto.AiStudioProposalPreview;
 import com.developer.entity.AiDocument;
 import com.developer.entity.AiStudioMessage;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -102,17 +104,24 @@ class AiStudioOneClickComponentImplTest {
         AiStudioChatService.ProposalDraft draft = new AiStudioChatService.ProposalDraft(
                 7L, "PROCESS_DESIGN", "ALL", "msg", null, AiMode.NEW, List.of(), null);
         when(chatService.prepareOneClick(any())).thenReturn(draft);
-        when(jobService.submit(any(AiStudioProposalJobService.JobRequest.class), any(Supplier.class),
+        return submitted(request, progress -> { });
+    }
+
+    /** 提交并截获作业的三个步骤；{@code progress} 是作业服务交给 work 的进度回调。 */
+    @SuppressWarnings("unchecked")
+    private Steps submitted(AiStudioOneClickRequest request, Consumer<Progress> progress) {
+        when(jobService.submitWithProgress(any(AiStudioProposalJobService.JobRequest.class), any(Function.class),
                 any(UnaryOperator.class), any(Consumer.class))).thenReturn(new AiStudioProposalJobResponse());
 
         component.start(request, "u1", "tok");
 
-        ArgumentCaptor<Supplier<StudioChatResult>> work = ArgumentCaptor.forClass(Supplier.class);
+        ArgumentCaptor<Function<Consumer<Progress>, StudioChatResult>> work = ArgumentCaptor.forClass(Function.class);
         ArgumentCaptor<UnaryOperator<StudioChatResult>> commit = ArgumentCaptor.forClass(UnaryOperator.class);
         ArgumentCaptor<Consumer<StudioChatResult>> hook = ArgumentCaptor.forClass(Consumer.class);
-        verify(jobService).submit(any(AiStudioProposalJobService.JobRequest.class), work.capture(),
+        verify(jobService).submitWithProgress(any(AiStudioProposalJobService.JobRequest.class), work.capture(),
                 commit.capture(), hook.capture());
-        return new Steps(work.getValue(), commit.getValue(), hook.getValue());
+        Function<Consumer<Progress>, StudioChatResult> fn = work.getValue();
+        return new Steps(() -> fn.apply(progress), commit.getValue(), hook.getValue());
     }
 
     private static AiStudioMessage message(long id) {
@@ -230,5 +239,47 @@ class AiStudioOneClickComponentImplTest {
         assertTrue(issue.getDescription().contains("locked by bob"));
         verify(documentService, never()).append(anyLong(), any(), anyString(), anyInt(), anyString(), anyString());
         verify(threadService, never()).markApplied(anyLong(), anyLong(), eq(true), any());
+    }
+
+    @Test
+    void viaContentOrganizerTheDesignIsOrchestratedPhaseByPhaseAndAppliedThroughTheSameCommit() {
+        AiStudioChatService.AgentOneClickDraft agentDraft = new AiStudioChatService.AgentOneClickDraft(
+                7L, Map.of(), "{}", "FORMAT", List.of(), "", "leave request", "45349679");
+        when(chatService.prepareAgentOneClick(any(), eq("u1"))).thenReturn(Optional.of(agentDraft));
+        List<Progress> reported = new java.util.ArrayList<>();
+        Progress step = new Progress(1, 5, "PROCESS_DESIGN");
+        when(chatService.runAgentOneClick(eq(agentDraft), any())).thenAnswer(invocation -> {
+            Consumer<Progress> progress = invocation.getArgument(1);
+            progress.accept(step);
+            return new StudioChatResult("### 1/5 Process Design", PROPOSAL, "ALL");
+        });
+        when(previewer.preview(eq(7L), eq("ALL"), any())).thenReturn(preview());
+        when(documentService.latest(7L, AiDocumentType.REQUIREMENTS)).thenReturn(Optional.empty());
+        Steps steps = submitted(request("leave request"), reported::add);
+
+        steps.commit().apply(steps.work().get());
+
+        assertEquals(List.of(step), reported);
+        verify(chatService, never()).prepareOneClick(any());
+        verify(chatService, never()).runProposal(any(), any());
+        ArgumentCaptor<AiStudioApplyRequest> apply = ArgumentCaptor.forClass(AiStudioApplyRequest.class);
+        verify(chatComponent).applyProposal(apply.capture(), eq("u1"));
+        assertEquals("ALL", apply.getValue().getScope());
+        assertEquals(PROPOSAL, apply.getValue().getGeneratedData());
+    }
+
+    @Test
+    void aFailedPhaseFailsTheJobWithoutApplyingAnything() {
+        AiStudioChatService.AgentOneClickDraft agentDraft = new AiStudioChatService.AgentOneClickDraft(
+                7L, Map.of(), "{}", "FORMAT", List.of(), "", "leave request", "45349679");
+        when(chatService.prepareAgentOneClick(any(), eq("u1"))).thenReturn(Optional.of(agentDraft));
+        when(chatService.runAgentOneClick(eq(agentDraft), any()))
+                .thenThrow(new AiGenerationException("AI_STUDIO_AGENT_FAILED", "Step 3/5 (Form Design): boom"));
+        Steps steps = submitted(request("leave request"), p -> { });
+
+        AiGenerationException e = assertThrows(AiGenerationException.class, () -> steps.work().get());
+
+        assertEquals("AI_STUDIO_AGENT_FAILED", e.getErrorCode());
+        verifyNoInteractions(chatComponent, previewer);
     }
 }
