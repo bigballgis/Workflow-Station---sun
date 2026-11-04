@@ -14,7 +14,27 @@
  *    through ISBLANK, so the author can always branch on emptiness explicitly.
  */
 import { compare as compareDecimal, parseDecimal, toDecimalString, ZERO } from './decimal'
-import { type ComputedValue, type Decimal, evalErr, type EvalResult } from './types'
+import { type ComputedValue, type Decimal, evalErr, evalOk, type EvalResult } from './types'
+
+/** Explicit output-column conversion, mirrored by ComputedValues.forField. */
+export function forField(value: ComputedValue, dataType?: string): EvalResult {
+  if (value.kind === 'blank' || !dataType) return evalOk(value)
+  const type = dataType.toUpperCase()
+  if (['VARCHAR', 'TEXT', 'CHAR'].includes(type)) return evalOk({ kind: 'text', value: toText(value) })
+  if (['INTEGER', 'INT', 'BIGINT', 'SMALLINT', 'TINYINT', 'DECIMAL', 'NUMERIC', 'DOUBLE', 'FLOAT', 'REAL'].includes(type)) {
+    const number = value.kind === 'number' ? value.value : value.kind === 'text' ? parseDecimal(value.value.trim()) : null
+    if (number) {
+      if (['INTEGER', 'INT', 'BIGINT', 'SMALLINT', 'TINYINT'].includes(type)
+          && number.scale > 0 && number.unscaled % (10n ** BigInt(number.scale)) !== 0n) {
+        return evalErr('TYPE_MISMATCH', `Computed result must be an integer for ${type}`)
+      }
+      return evalOk({ kind: 'number', value: number })
+    }
+    return evalErr('TYPE_MISMATCH', `Computed result must be numeric for ${type}`)
+  }
+  if (type === 'BOOLEAN' && value.kind !== 'boolean') return evalErr('TYPE_MISMATCH', 'Computed result must be boolean')
+  return evalOk(value)
+}
 
 export function isBlank(value: ComputedValue): boolean {
   return value.kind === 'blank'
@@ -31,8 +51,12 @@ export function isBlank(value: ComputedValue): boolean {
  *
  * Empty / whitespace-only string counts as blank: JSON rows routinely carry "" for untouched inputs.
  */
-export function fromRowValue(raw: unknown): ComputedValue {
+export function fromRowValue(raw: unknown, dataType?: string): ComputedValue {
   if (raw === null || raw === undefined) return { kind: 'blank' }
+  if (dataType && ['VARCHAR', 'TEXT', 'CHAR'].includes(dataType.toUpperCase())) {
+    if (typeof raw === 'string') return raw.trim() === '' ? { kind: 'blank' } : { kind: 'text', value: raw }
+    if (typeof raw === 'number' || typeof raw === 'bigint') return { kind: 'text', value: String(raw) }
+  }
   if (typeof raw === 'boolean') return { kind: 'boolean', value: raw }
   if (typeof raw === 'number') {
     if (!Number.isFinite(raw)) return { kind: 'blank' }

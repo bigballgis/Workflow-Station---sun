@@ -29,7 +29,7 @@ export default defineConfig({
     // frontend/shared is not a package: bare imports inside its SFCs (vue-i18n, element-plus
     // icons, ElementPlusResolver's `element-plus/es`) cannot node-resolve upward from there.
     // Dedupe pins them to this app's copy (same as user-portal vite.config.ts).
-    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue']
+    dedupe: ['async-validator', 'vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue']
   },
   test: {
     environment: 'jsdom',

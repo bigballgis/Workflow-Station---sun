@@ -367,8 +367,12 @@ function collectEventPatches(rows: Array<Record<string, unknown>>, changes: Batc
 async function prepareAdded(fields: BatchEditableField[]): Promise<PreparedBatchRows> {
   const row = Object.fromEntries(fields.map(field => [field.field, intents[field.field]?.kind === 'clear' ? null : values[field.field]]))
   const fresh = eventSessions.value.length ? eventSessions.value.map(session => session.data) : Array.from({ length: addCount.value }, () => JSON.parse(JSON.stringify(row)))
-  const error = firstBatchFieldError(fresh, fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false })))
-  if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+  const requiredFields = fields.map(field => ({ ...field, required: field.required || definitions.value.get(field.field)?.nullable === false }))
+  if (eventSessions.value.length) eventSessions.value.forEach(session => session.validate(requiredFields))
+  else {
+    const error = firstBatchFieldError(fresh, requiredFields)
+    if (error) throw new Error(t('subTable.batchInvalidField', { ...error }))
+  }
   if (!props.prepareRows) throw new Error(t('common.operationFailed'))
   const prepared = await props.prepareRows(fresh, selectedParentValue.value)
   const known = new Set(props.rows.map(props.rowIdentity))

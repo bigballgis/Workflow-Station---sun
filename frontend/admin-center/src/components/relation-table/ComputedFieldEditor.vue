@@ -179,12 +179,14 @@ import {
   type ComputedFieldDefinition,
   type ComputedFieldOnError,
 } from '@/utils/computedFieldConfig'
-import { evaluateAst, toText, type EvaluationContext } from '@platform-shared/computedField'
+import { evaluateAst, forField, toText, type EvaluationContext } from '@platform-shared/computedField'
 
 const props = defineProps<{
   isComputed?: boolean
   computedField?: Record<string, unknown> | ComputedFieldDefinition | null
   disabled?: boolean
+  dataType?: string
+  fieldTypes?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -302,8 +304,9 @@ function runPreview(): void {
   for (const [key, val] of Object.entries(sampleRow)) {
     row[key] = val
   }
-  const ctx: EvaluationContext = { row, subTables: {} }
-  previewResult.value = formatOutcome(evaluateAst(built.value.ast, ctx))
+  const ctx: EvaluationContext = { row, subTables: {}, fieldTypes: props.fieldTypes }
+  const result = evaluateAst(built.value.ast, ctx)
+  previewResult.value = formatOutcome(result.ok ? forField(result.value, props.dataType) : result)
 }
 
 function confirmDialog(): void {

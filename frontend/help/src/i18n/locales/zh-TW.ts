@@ -288,7 +288,7 @@ export default {
     basicsBody:
       '勾選計算，開啟公式，寫運算式，再儲存表。結果類型必須與欄的 Data Type 一致。數字公式寫在文字欄上無法儲存，請把 Data Type 改成 INTEGER 或 DECIMAL。文字公式寫在數字欄上需要改成 VARCHAR，或改公式。',
     thisRowTitle: '本列',
-    thisRowBody: '使用同一張表上的欄位名。不帶表名前綴的名字始終表示本列。',
+    thisRowBody: '使用同一張表上的欄位名。不帶表名前綴的名字始終表示本列。VARCHAR、CHAR、TEXT 欄位參照保留文字，包括前導零與長編號；文字需要參與數值運算時使用 VALUE(text)，數值欄位繼續按數字計算。預覽與伺服器重算都依據來源及目標欄位的資料型別。',
     thisRowSample: 'help_pr_line 上的 line_total',
     relatedRowsTitle: '關聯列（僅主表）',
     relatedRowsBody: '在主表上，關聯列可以對子表求和或計數。子表公式不能使用這些函數。',

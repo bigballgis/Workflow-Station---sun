@@ -453,6 +453,9 @@
                   :computed-field="row.computedField"
                   :computed-field-json="row.computedFieldJson"
                   :table-type="selectedTable?.tableType"
+                  :data-type="row.dataType"
+                  :field-types="computedFieldTypes"
+                  :table-field-types="computedTableFieldTypes"
                   :disabled="row.isPrimaryKey || row.isForeignKey"
                   @update:is-computed="onComputedFieldChange(row, $event)"
                   @update:computed-field="row.computedField = $event"
@@ -965,6 +968,13 @@ loadTablesImpl = async () => {
  * tables of the same type stay in the sequence the author created them.
  */
 const TABLE_TYPE_ORDER: Record<string, number> = { MAIN: 0, SUB: 1, RELATION: 2, ACTION: 3 }
+const computedFieldTypes = computed(() => Object.fromEntries(
+  (selectedTable.value?.fieldDefinitions ?? []).map(field => [field.fieldName, field.dataType]),
+))
+const computedTableFieldTypes = computed(() => Object.fromEntries(store.tables.map(table => [
+  table.tableName.toLowerCase(), table.id === selectedTable.value?.id ? computedFieldTypes.value
+    : Object.fromEntries((table.fieldDefinitions ?? []).map(field => [field.fieldName, field.dataType])),
+])))
 
 const orderedTables = computed(() => {
   const rank = (t: TableDefinition) => TABLE_TYPE_ORDER[String(t.tableType)] ?? 99

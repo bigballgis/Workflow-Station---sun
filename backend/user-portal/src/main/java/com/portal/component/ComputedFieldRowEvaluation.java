@@ -35,8 +35,17 @@ final class ComputedFieldRowEvaluation {
     private ComputedFieldRowEvaluation() {
     }
 
+    static Map<String, String> fieldTypes(List<Map<String, Object>> fields) {
+        Map<String, String> types = new LinkedHashMap<>();
+        for (Map<String, Object> field : fields) if (field.get("dataType") instanceof String type) {
+            types.put(String.valueOf(field.get("fieldName")), type);
+        }
+        return types;
+    }
+
     /** One computed field, ready to evaluate. */
     record FieldMeta(String fieldName,
+                     String dataType,
                      Map<String, Object> ast,
                      Set<String> dependencies,
                      boolean failOnError) {
@@ -51,6 +60,10 @@ final class ComputedFieldRowEvaluation {
      * @throws PortalException when the definition or AST is missing
      */
     static FieldMeta toMeta(String fieldName, Map<String, Object> definition) {
+        return toMeta(fieldName, null, definition);
+    }
+
+    static FieldMeta toMeta(String fieldName, String dataType, Map<String, Object> definition) {
         if (definition == null || definition.isEmpty()) {
             throw new PortalException("COMPUTED_FIELD_DEFINITION_INVALID",
                     "Field '" + fieldName + "' is marked computed but has no definition");
@@ -66,7 +79,7 @@ final class ComputedFieldRowEvaluation {
         // so an edited row cannot make a field claim it depends on nothing and be evaluated first.
         Set<String> dependencies = ComputedFieldAstValidator.validate(ast).fieldDependencies();
         boolean failOnError = !"null".equals(String.valueOf(definition.get("onError")));
-        return new FieldMeta(fieldName, ast, dependencies, failOnError);
+        return new FieldMeta(fieldName, dataType, ast, dependencies, failOnError);
     }
 
     /** Evaluates fields in order and writes each result into the target map. */
@@ -75,6 +88,7 @@ final class ComputedFieldRowEvaluation {
                             ComputedFieldContext context) {
         for (FieldMeta field : fields) {
             EvalOutcome outcome = ComputedFieldEvaluator.evaluate(field.ast(), context);
+            if (outcome instanceof EvalOutcome.Success success) outcome = com.platform.common.computedfield.ComputedValues.forField(success.value(), field.dataType());
             if (outcome instanceof EvalOutcome.Success success) {
                 target.put(field.fieldName(), toStoredValue(success.value()));
                 continue;

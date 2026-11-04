@@ -1,3 +1,4 @@
+import { configuredSwitchValue } from '@platform-shared/formEvents/fieldValue'
 /**
  * Resolve form-create rule default values for Portal FormRenderer and Designer Preview.
  * Designer stores defaults on `rule.value` and/or `rule.props.value` (Basis → Default value).
@@ -58,12 +59,7 @@ export function coerceDefaultValueForRuleType(
     return Number.isNaN(n) ? raw : n
   }
 
-  if (ruleType === 'switch') {
-    if (typeof raw === 'boolean') return raw
-    if (raw === 'true' || raw === 1 || raw === '1') return true
-    if (raw === 'false' || raw === 0 || raw === '0') return false
-    return raw
-  }
+  if (ruleType === 'switch') return configuredSwitchValue(raw, rule.props as Record<string, unknown> | undefined)
 
   return raw
 }

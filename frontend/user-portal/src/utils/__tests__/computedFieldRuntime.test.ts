@@ -28,8 +28,41 @@ function plainField(fieldName: string): BindingFieldDefinition {
 }
 
 describe('collectComputedColumns', () => {
+  it('preserves leading zeros when copying a declared VARCHAR in the same row', () => {
+    const columns = collectComputedColumns([
+      { fieldName: 'reference', dataType: 'VARCHAR' },
+      { ...computedField('copied_reference', 'reference'), dataType: 'VARCHAR' },
+    ])
+    const preview = previewComputedRow(columns, { reference: '0012345678901234567890' })
+    expect(preview.errors).toEqual({})
+    expect(preview.values.copied_reference).toBe('0012345678901234567890')
+  })
   it('returns nothing when no field is computed', () => {
     expect(collectComputedColumns([plainField('price'), plainField('qty')])).toEqual([])
+  })
+
+  it('preserves typed parent identifiers and keeps numeric calculations numeric internally', () => {
+    const columns = collectComputedColumns([
+      { fieldName: 'units', dataType: 'DECIMAL' },
+      { ...computedField('copied', 'Parent.identifier'), dataType: 'VARCHAR' },
+      { ...computedField('doubled', 'units * 2'), dataType: 'DECIMAL' },
+    ])
+    const preview = previewComputedRow(columns, { units: '001.20' }, {}, { parent: { identifier: '00012345678901234567890' } },
+      { parent: { identifier: 'VARCHAR' } })
+    expect(preview.errors).toEqual({})
+    expect(preview.values).toEqual({ copied: '00012345678901234567890', doubled: '2.40' })
+  })
+
+  it('requires VALUE for arithmetic on declared text and preserves output error policy', () => {
+    const columns = collectComputedColumns([
+      { fieldName: 'identifier', dataType: 'VARCHAR' },
+      { ...computedField('invalid', 'identifier * 2'), dataType: 'DECIMAL' },
+      { ...computedField('explicit', 'VALUE(identifier) * 2'), dataType: 'DECIMAL' },
+      { ...computedField('invalid_integer', '1.5', 'row', 'null'), dataType: 'INTEGER' },
+    ])
+    const preview = previewComputedRow(columns, { identifier: '001.20' })
+    expect(preview.errors).toEqual({ invalid: 'TYPE_MISMATCH' })
+    expect(preview.values).toEqual({ explicit: '2.40', invalid_integer: null })
   })
 
   it('reports COMPUTED_FIELD_DEFINITION_INVALID when flagged computed without a usable formula', () => {

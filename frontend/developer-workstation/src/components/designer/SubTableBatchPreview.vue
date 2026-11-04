@@ -102,7 +102,7 @@ async function deleteSelected() {
 function defaultValueForField(field: BatchEditableField): unknown {
   const metadata = workspaceFields.value.find(item => item.fieldName === field.field)
   return coerceDefaultValueForRuleType(field.type === 'number' ? 'inputNumber' : field.type,
-    field.defaultValue ?? metadata?.defaultValue ?? null, { options: field.options })
+    field.defaultValue ?? metadata?.defaultValue ?? null, { options: field.options, props: field.props })
 }
 function formatError(error: unknown): string {
   if (error instanceof BatchRowEventError) return t(error.message, { field: error.field })

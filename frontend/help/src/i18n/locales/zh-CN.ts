@@ -288,7 +288,7 @@ export default {
     basicsBody:
       '勾选计算，打开公式，写表达式，再保存表。结果类型必须与列的 Data Type 一致。数字公式写在文本列上无法保存，请把 Data Type 改成 INTEGER 或 DECIMAL。文本公式写在数字列上需要改成 VARCHAR，或改公式。',
     thisRowTitle: '本行',
-    thisRowBody: '使用同一张表上的字段名。不带表名前缀的名字始终表示本行。',
+    thisRowBody: '使用同一张表上的字段名。不带表名前缀的名字始终表示本行。VARCHAR、CHAR、TEXT 字段引用保留文本，包括前导零和长编号；文本需要参与数值运算时使用 VALUE(text)，数值字段继续按数字计算。预览与服务端重算都依据来源及目标字段的数据类型。',
     thisRowSample: 'help_pr_line 上的 line_total',
     relatedRowsTitle: '关联行（仅主表）',
     relatedRowsBody: '在主表上，关联行可以对子表求和或计数。子表公式不能使用这些函数。',

@@ -103,14 +103,14 @@ public final class ComputedFieldEvaluator {
         String name = node.path("name").asText("");
         String table = node.path("table").asText("");
         if (table.isBlank()) {
-            return EvalOutcome.ok(ComputedValues.fromRowValue(context.fieldValue(name)));
+            return EvalOutcome.ok(ComputedValues.fromRowValue(context.fieldValue(name), context.fieldType(null, name)));
         }
         Map<String, Object> parent = context.parentRow(table);
         if (parent == null) {
             return EvalOutcome.error(ComputedFieldErrorCode.UNKNOWN_TABLE,
                     "Parent table '" + table + "' is not present on this record");
         }
-        return EvalOutcome.ok(ComputedValues.fromRowValue(parent.get(name)));
+        return EvalOutcome.ok(ComputedValues.fromRowValue(parent.get(name), context.fieldType(table, name)));
     }
 
     private static EvalOutcome aggregate(JsonNode node, ComputedFieldContext context) {
@@ -132,7 +132,7 @@ public final class ComputedFieldEvaluator {
         List<BigDecimal> numbers = new ArrayList<>();
         int nonBlank = 0;
         for (Map<String, Object> row : rows) {
-            ComputedValue cell = ComputedValues.fromRowValue(row.get(column));
+            ComputedValue cell = ComputedValues.fromRowValue(row.get(column), context.fieldType(table, column));
             if (cell.isBlank()) {
                 continue;
             }

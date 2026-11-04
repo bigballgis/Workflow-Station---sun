@@ -8,7 +8,7 @@
 export * from './types'
 export { DIVISION_SCALE, parseDecimal, toDecimalString, roundTo } from './decimal'
 export { parseFormula, collectDependencies, MAX_AST_NODES, MAX_SOURCE_LENGTH } from './parser'
-export { fromRowValue, toText, isBlank } from './coerce'
+export { fromRowValue, toText, isBlank, forField } from './coerce'
 export {
   evaluateAst,
   normalizeSubTables,

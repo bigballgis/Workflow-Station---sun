@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ElDatePicker, ElTimePicker } from 'element-plus'
+import { formDateValueFormat } from '@platform-shared/formEvents/fieldValue'
 
 const props = defineProps<{
   kind: 'date' | 'datetime' | 'daterange' | 'datetimerange' | 'time' | 'timerange'
@@ -15,8 +16,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: unknown]; change: [value: unknown] }>()
 const isTime = computed(() => props.kind === 'time' || props.kind === 'timerange')
-const valueFormat = computed(() => props.valueFormat ?? (isTime.value ? 'HH:mm:ss'
-  : props.kind === 'datetime' || props.kind === 'datetimerange' ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD'))
+const valueFormat = computed(() => props.valueFormat ?? formDateValueFormat(props.kind))
 </script>
 
 <template>

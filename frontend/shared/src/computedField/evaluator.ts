@@ -72,6 +72,9 @@ export function knownFunctionNames(): string[] {
  * looking entirely plausible. See normalizeSubTables below.
  */
 export interface EvaluationContext {
+  /** Declared column types; absent only for schema-free expression samples. */
+  fieldTypes?: Record<string, string>
+  tableFieldTypes?: Record<string, Record<string, string>>
   /** Same-row field values, already raw (JSON) — normalized through fromRowValue on read. */
   row: Record<string, unknown>
   /** Canonical table name (lower-cased) -> rows. */
@@ -147,13 +150,13 @@ function evaluateField(
   context: EvaluationContext,
 ): EvalResult {
   if (!node.table) {
-    return evalOk(fromRowValue(context.row[node.name]))
+    return evalOk(fromRowValue(context.row[node.name], context.fieldTypes?.[node.name]))
   }
   const parent = lookupParentRow(context, node.table)
   if (!parent) {
     return evalErr('UNKNOWN_TABLE', `Parent table '${node.table}' is not present on this record`)
   }
-  return evalOk(fromRowValue(parent[node.name]))
+  return evalOk(fromRowValue(parent[node.name], context.tableFieldTypes?.[node.table.toLowerCase()]?.[node.name]))
 }
 
 function evaluateAggregate(node: AggregateNode, context: EvaluationContext): EvalResult {
@@ -168,7 +171,7 @@ function evaluateAggregate(node: AggregateNode, context: EvaluationContext): Eva
   const numbers: Decimal[] = []
   let nonBlankCount = 0
   for (const row of rows) {
-    const value = fromRowValue(row[column])
+    const value = fromRowValue(row[column], context.tableFieldTypes?.[node.table.toLowerCase()]?.[column])
     if (value.kind === 'blank') continue
     nonBlankCount++
     if (node.fn === 'COUNT') continue

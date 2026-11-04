@@ -188,8 +188,10 @@ export class BatchEventSession {
     const error = firstBatchFieldError([this.data], fields.map(field => ({ ...field,
       required: this.required.get(field.field) ?? field.required,
       options: this.choices.get(field.field) ?? field.options,
+      hidden: this.hidden.get(field.field) === true,
+      display: this.display.get(field.field) !== false,
     })))
-    if (error) throw new BatchRowEventError('subTable.batchEventValidation', error.label)
+    if (error) throw new BatchRowEventError('subTable.batchEventValidation', error.message ?? error.label)
   }
   submit(fields: BatchEditableField[] = []) {
     return afterEvent(this.dispatch(() => this.run(this.options.beforeSubmit, '__submit__', {}, [copy(this.data), this.api], this.data)), result => {

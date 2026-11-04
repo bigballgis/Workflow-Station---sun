@@ -18,7 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@platform-shared/*": ["../shared/src/*"]
+      "@platform-shared/*": ["../shared/src/*"],
+      "async-validator": ["node_modules/async-validator"]
     },
     "types": ["vite/client", "node"]
   },

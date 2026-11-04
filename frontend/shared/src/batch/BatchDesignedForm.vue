@@ -13,6 +13,7 @@ import { batchRuleChildren, batchLayoutAliases } from './batchFormRules'
 import { isEmptyBatchEvent } from './controlContract'
 import type { BatchEventContext } from './eventContext'
 import { batchLookupComponentKey } from './lookupComponent'
+import { formDateValueFormat } from '../formEvents/fieldValue'
 
 const props = defineProps<{
   rules: Array<Record<string, any>>
@@ -171,6 +172,7 @@ const runtimeRules = computed(() => {
           if (rule.type === 'date' || rule.type === 'datetime') {
             rule.props = { type: rule.type, ...rule.props }; rule.type = 'datePicker'
           }
+          if (rule.type === 'datePicker') rule.props = { ...rule.props, valueFormat: rule.props?.valueFormat ?? formDateValueFormat(rule.props?.type ?? 'date') }
           if (locked || props.readonlyField(rule.field)) rule.props = { ...rule.props, disabled: true }
           if (props.adaptedFields?.includes(rule.field)) {
             rule._batchOriginal = { ...rule }; rule.type = 'batchField'

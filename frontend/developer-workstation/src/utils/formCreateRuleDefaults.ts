@@ -1,3 +1,4 @@
+import { configuredSwitchValue } from '@platform-shared/formEvents/fieldValue'
 /**
 
  * Resolve form-create rule default values for Designer Preview.
@@ -59,6 +60,12 @@ export function coerceDefaultValueForRuleType(
 ): unknown {
 
   if (raw === undefined || raw === null || raw === '') return raw
+  const props = rule.props as Record<string, unknown> | undefined
+  if (ruleType === 'select' && props?.multiple === true) {
+    const values = Array.isArray(raw) ? raw : [raw]
+    const single = { ...rule, props: { ...props, multiple: false } }
+    return values.map(value => coerceDefaultValueForRuleType(ruleType, value, single))
+  }
 
 
 
@@ -102,19 +109,7 @@ export function coerceDefaultValueForRuleType(
 
 
 
-  if (ruleType === 'switch') {
-
-    if (typeof raw === 'boolean') return raw
-
-    if (raw === 'true' || raw === 1 || raw === '1') return true
-
-    if (raw === 'false' || raw === 0 || raw === '0') return false
-
-    return raw
-
-  }
-
-
+  if (ruleType === 'switch') return configuredSwitchValue(raw, rule.props as Record<string, unknown> | undefined)
 
   return raw
 

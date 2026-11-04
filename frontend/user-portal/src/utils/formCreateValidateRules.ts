@@ -1,3 +1,4 @@
+import { isFormFieldRequired, formFieldMaxLength } from '@platform-shared/formEvents/fieldValue'
 import type { FormField } from '@/components/formRendererHelpers'
 import {
   bindFormCreateValidatorForElementPlus,
@@ -20,38 +21,11 @@ const FORM_CREATE_PHONE_REGEX = /^(?:(?:\+|00)86)?1[3-9]\d{9}$/
 
 /** form-create designer stores "Is it required" on `$required`, not always in validate[]. */
 
-function isTruthyRequiredFlag(value: unknown): boolean {
-  if (value === true) return true
-  if (typeof value === 'string') return value.trim().length > 0
-  return false
-}
-
-export function isFormCreateRuleRequired(rule: Record<string, unknown>): boolean {
-  if (isTruthyRequiredFlag(rule.$required) || isTruthyRequiredFlag(rule.required)) return true
-
-  const validate = rule.validate
-  if (!Array.isArray(validate)) return false
-
-  return validate.some((item) => {
-    if (!item || typeof item !== 'object') return false
-    const entry = item as Record<string, unknown>
-    return entry.required === true || entry.mode === 'required'
-  })
-}
+export const isFormCreateRuleRequired = isFormFieldRequired
 
 function resolveRulePropsMaxLength(rule: Record<string, unknown>): number | undefined {
-  const props = rule.props
-  if (!props || typeof props !== 'object') return undefined
-  const raw = (props as Record<string, unknown>).maxlength ?? (props as Record<string, unknown>).maxLength
-  if (typeof raw === 'number' && raw > 0) return raw
-  if (typeof raw === 'string' && raw.trim() !== '') {
-    const parsed = Number(raw)
-    if (!Number.isNaN(parsed) && parsed > 0) return parsed
-  }
-  return undefined
+  return formFieldMaxLength(rule.props as Record<string, unknown> | undefined)
 }
-
-
 
 function defaultValidateTrigger(fieldType?: string): 'blur' | 'change' {
 

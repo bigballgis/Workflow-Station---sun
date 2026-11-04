@@ -1,3 +1,5 @@
+import { formFieldMaxLength, isFormFieldRequired } from '../formEvents/fieldValue'
+
 export type BatchEditableField = {
   field: string
   label: string
@@ -8,7 +10,10 @@ export type BatchEditableField = {
   min?: number
   max?: number
   maxlength?: number
-  validators?: Array<{ type?: string; min?: number; max?: number; len?: number }>
+  props?: Record<string, unknown>
+  hidden?: boolean
+  display?: boolean
+  validators?: Array<Record<string, unknown>>
 }
 
 export const supportedBatchFieldTypes = new Set(['input', 'text', 'inputNumber', 'number', 'switch', 'select', 'date', 'datePicker', 'datetime', 'lookup'])
@@ -63,12 +68,15 @@ export function extractBatchFields(rules: unknown[], assignmentFields: string[] 
         type,
         label: typeof rule.title === 'string' && rule.title.trim() ? rule.title : field,
         options: optionList(props?.options ?? rule.options),
-        required: rule.required === true || (Array.isArray(rule.validate) && rule.validate.some(item => record(item)?.required === true)),
+        props: props ?? {},
+        hidden: rule.hidden === true,
+        display: rule.display !== false,
+        required: isFormFieldRequired(rule),
         defaultValue: rule.value,
         ...(Array.isArray(rule.validate) ? { validators: rule.validate as NonNullable<BatchEditableField['validators']> } : {}),
         ...(typeof props?.min === 'number' ? { min: props.min } : {}),
         ...(typeof props?.max === 'number' ? { max: props.max } : {}),
-        ...(typeof props?.maxlength === 'number' ? { maxlength: props.maxlength } : {}),
+        maxlength: formFieldMaxLength(props ?? undefined),
       })
     }
     Object.values(rule).forEach(child => {

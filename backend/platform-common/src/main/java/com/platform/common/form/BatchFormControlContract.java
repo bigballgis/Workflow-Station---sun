@@ -8,8 +8,12 @@ import java.util.Set;
 public final class BatchFormControlContract {
     private static final Set<String> FIELDS = Set.of("input", "text", "number", "inputNumber", "switch", "select",
             "date", "datePicker", "datetime", "lookup");
-    private static final Set<String> VALIDATORS = Set.of("required", "type", "min", "max", "len", "message", "trigger");
-    private static final Set<String> VALIDATOR_TYPES = Set.of("string", "number", "integer", "boolean", "date");
+    private static final Set<String> VALIDATORS = Set.of("required", "type", "min", "max", "len", "message", "trigger",
+            "pattern", "enum", "whitespace", "mode", "maxLen", "minLen");
+    private static final Set<String> VALIDATOR_TYPES = Set.of("string", "number", "integer", "float", "boolean", "date",
+            "array", "object", "email", "url", "hex", "enum");
+    private static final Set<String> VALIDATOR_MODES = Set.of("required", "email", "url", "integer", "number", "len",
+            "maxLen", "minLen", "min", "max", "pattern", "enum");
     private BatchFormControlContract() { }
 
     /** Reject unsupported field and component-event configurations before publication. */
@@ -29,6 +33,9 @@ public final class BatchFormControlContract {
                 }
                 if (validator.get("type") != null && !VALIDATOR_TYPES.contains(validator.get("type"))) {
                     throw new IllegalArgumentException("Batch field validator type is unsupported: " + field);
+                }
+                if (validator.get("mode") != null && !VALIDATOR_MODES.contains(validator.get("mode"))) {
+                    throw new IllegalArgumentException("Batch field validator mode is unsupported: " + field);
                 }
             }
         }

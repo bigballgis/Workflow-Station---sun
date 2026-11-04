@@ -214,7 +214,7 @@ import {
   type ComputedFieldOnError,
   type ComputedFieldScope,
 } from '@/utils/computedFieldConfig'
-import { evaluateAst, toText, type AstNode, type EvaluationContext } from '@platform-shared/computedField'
+import { evaluateAst, forField, toText, type AstNode, type EvaluationContext } from '@platform-shared/computedField'
 import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 
 const props = defineProps<{
@@ -223,6 +223,9 @@ const props = defineProps<{
   computedFieldJson?: Record<string, unknown> | null
   disabled?: boolean
   tableType?: string
+  dataType?: string
+  fieldTypes?: Record<string, string>
+  tableFieldTypes?: Record<string, Record<string, string>>
 }>()
 
 const emit = defineEmits<{
@@ -350,7 +353,7 @@ function buildPreviewContext(): EvaluationContext {
       row[key] = val
     }
   }
-  return { row, subTables: {}, parents }
+  return { row, subTables: {}, parents, fieldTypes: props.fieldTypes, tableFieldTypes: props.tableFieldTypes }
 }
 
 function hasParentFieldRef(node: AstNode): boolean {
@@ -378,7 +381,8 @@ function runPreview() {
     return
   }
   parseMessage.value = ''
-  previewResult.value = formatOutcome(evaluateAst(built.value.ast, buildPreviewContext()))
+  const result = evaluateAst(built.value.ast, buildPreviewContext())
+  previewResult.value = formatOutcome(result.ok ? forField(result.value, props.dataType) : result)
 }
 
 function confirmDialog() {

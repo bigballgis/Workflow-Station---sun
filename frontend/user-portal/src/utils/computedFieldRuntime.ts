@@ -16,6 +16,7 @@
  */
 import {
   evaluateAst,
+  forField,
   toDecimalString,
   type AstNode,
   type ComputedValue,
@@ -28,6 +29,8 @@ import {
 import type { BindingFieldDefinition } from './subTableRowRuntime/types'
 
 export interface ComputedColumn {
+  dataType?: string
+  fieldTypes?: Record<string, string>
   fieldName: string
   definition: ComputedFieldDefinition | null
   /** Lower-cased names of sub-tables this formula aggregates over; empty for row scope. */
@@ -70,6 +73,7 @@ export function collectComputedColumns(
 ): ComputedColumn[] {
   if (!fields?.length) return []
   const columns: ComputedColumn[] = []
+  const fieldTypes = Object.fromEntries(fields.filter(field => !!field.dataType).map(field => [field.fieldName, field.dataType!]))
   for (const field of fields) {
     if (field.isComputed !== true) continue
     const definition = parseComputedFieldFromApi(field.computedField)
@@ -83,6 +87,8 @@ export function collectComputedColumns(
       continue
     }
     columns.push({
+      dataType: field.dataType,
+      fieldTypes,
       fieldName: field.fieldName,
       definition,
       referencedTables: collectAggregateTables(definition.ast),
@@ -164,6 +170,7 @@ export function previewComputedRow(
   row: Record<string, unknown>,
   subTables?: Record<string, Array<Record<string, unknown>>> | null,
   parents?: Record<string, Record<string, unknown>> | null,
+  tableFieldTypes?: Record<string, Record<string, string>>,
 ): ComputedPreview {
   if (!columns.length) return EMPTY_PREVIEW
 
@@ -183,8 +190,9 @@ export function previewComputedRow(
       skipped.push(column.fieldName)
       continue
     }
-    const context: EvaluationContext = { row: working, subTables: available, parents: parentRows }
-    const outcome = evaluateAst(column.definition.ast, context)
+    const context: EvaluationContext = { row: working, subTables: available, parents: parentRows, fieldTypes: column.fieldTypes, tableFieldTypes }
+    const evaluated = evaluateAst(column.definition.ast, context)
+    const outcome = evaluated.ok ? forField(evaluated.value, column.dataType) : evaluated
     if (!outcome.ok) {
       // Mirrors ComputedFieldRowEvaluation.applyFields: onError=null stores a blank and lets the
       // write through, so previewing a blank is what the record will actually hold. onError=fail

@@ -10,6 +10,13 @@ import {
 } from '../formCreateRuleDefaults'
 
 describe('formCreateRuleDefaults', () => {
+  it('preserves custom switch values from designer defaults', () => {
+    expect(resolveRuleDefaultValue({ type: 'switch', value: '0', props: { activeValue: 1, inactiveValue: 0 } })).toBe(0)
+    expect(resolveRuleDefaultValue({ type: 'switch', value: 'N', props: { activeValue: 'Y', inactiveValue: 'N' } })).toBe('N')
+  })
+  it('preserves each item in a multiple select default', () => {
+    expect(resolveRuleDefaultValue({ type: 'select', value: ['1'], props: { multiple: true }, options: [{ value: 1, label: 'One' }] })).toEqual([1])
+  })
   const selectRule = {
     type: 'select',
     field: 'select',

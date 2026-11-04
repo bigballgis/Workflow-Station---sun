@@ -294,7 +294,7 @@ export default {
     basicsBody:
       'Tick Computed, open Formula, write an expression, then save the table. The result type must match the column Data Type. A number formula on a text column will not save until you change Data Type to INTEGER or DECIMAL. A text formula on a number column needs VARCHAR, or a different formula.',
     thisRowTitle: 'This row',
-    thisRowBody: 'Use field names from the same table. Unqualified names always mean this row.',
+    thisRowBody: 'Use field names from the same table. Unqualified names always mean this row. VARCHAR, CHAR and TEXT references preserve text, including leading zeros and long identifiers. Use VALUE(text) when text must participate in arithmetic; numeric columns continue to calculate as numbers. Preview and server recalculation use the declared source and target column types.',
     thisRowSample: 'line_total on help_pr_line',
     relatedRowsTitle: 'Related rows (main table only)',
     relatedRowsBody:

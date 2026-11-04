@@ -33,6 +33,8 @@ interface FormProps {
   fieldDefinitions?: BindingFieldDefinition[]
   /** MAIN form values so a SUB-table formula can preview {@code table.column}. */
   hostPrimaryFormData?: Record<string, unknown>
+  hostPrimaryTableId?: number | null
+  hostParentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   columnValidationRules?: Record<string, ValidationRule[]>
   saveRow?: (row: Record<string, unknown>, selectedParentValue?: string) => void | Promise<void>
   /** This dialog's own hosting binding id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
@@ -223,6 +225,10 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
       formData.value,
       {},
       parentRowsForPreview(),
+      Object.fromEntries(Object.keys(parentRowsForPreview()).map(name => [name, Object.fromEntries(
+        (props.hostPrimaryTableId == null ? [] : props.hostParentTablesById?.[props.hostPrimaryTableId]?.fieldDefinitions ?? [])
+          .filter(field => field.dataType).map(field => [field.fieldName, field.dataType!]),
+      )])),
     )
     for (const [fieldName, value] of Object.entries(preview.values)) {
       formData.value[fieldName] = value

@@ -5867,3 +5867,33 @@
     listMiCollectionTables/countSubTableRows/clickSubTaskDetails读取首个td，启用Batch选择列时读到空checkbox单元格。
     改为跳过Element Plus明确标识的selection列；同一任务同一浏览器断言由失败变为2行通过，保存截图。
     未修改产品数据、表格布局、权限或MI运行时。默认自动选择可能落入新造的非MI测试任务，正式复验显式固定TASK_ID/APP_ID。
+
+- id: "1742"
+  status: fixed
+  fixed_at: "2026-11-04"
+  severity: major
+  category: bug
+  summary: "计算字段把纯数字文本转成数值，VARCHAR结果落库后阻塞Batch整行校验"
+  detail: |
+    Java/TS解释器读取现有dataType，保留文本前导零和长编号，输出按目标字段类型处理。
+    FU发布目录/旧DW/Relation Table/Action及普通表单预览同步透传类型；DW/Admin公式弹窗与三语帮助同步。
+    存量计算文本number在独立校验副本按实例发布版本重算，仍执行严格校验，保留省略子表并按配置主键索引。
+    同一隔离旧任务保存400→200，刷新与查库文本精确等于来源；新副本Save/Complete、DW/Admin预览通过。
+    Common126、Portal后端343专项、完整Batch及MI250单测+六组浏览器通过；既有类型/全量测试失败保留。
+    不修改源MCY FU或冻结配置，无schema迁移；未访问或发布UAT。详见docs/verification/2026-11-04-computed-field-text-types.md。
+
+- id: "1743"
+  status: fixed
+  fixed_at: "2026-11-04"
+  severity: major
+  category: bug
+  summary: "Batch字段校验与普通Form不一致，阻塞合法开关、多选、日期时间及脚本动态选项保存"
+  detail: |
+    普通Form与Batch共用必填/长度/开关默认值/日期格式，并复用async-validator声明式内置校验器。
+    Batch按配置处理自定义Switch、数组选择和日期范围，保留邮箱/正则错误提示及逐行隐藏状态。
+    后端区分运行时选项与显式enum约束；Batch Add重复校验读取会话状态，原权限/分派/行身份守卫保留。
+    DECIMAL无损去除尾零后校验精度，包含DECIMAL(p,p)零值；maxlength兼容数值3.0及数字字符串。
+    旧冻结任务失败→成功，缺省日期格式同一任务保存400→成功；真实DOM、刷新及查库确认未选中行不变。
+    DW/Portal/普通Form及原文/优化邮箱脚本通过；Batch后端400、完整Batch事件与MI250+六组浏览器通过。
+    三宿主依赖解析及三语Help同步；本修复不新增schema或改写冻结配置，未访问或发布DEV/UAT。
+    既有全量/类型测试失败保留，审查CONDITIONAL；详见docs/verification/2026-11-04-batch-form-field-parity.md。

@@ -1,5 +1,6 @@
 import { batchRuleChildren } from './batchFormRules'
 import { supportedBatchFieldTypes } from './fields'
+import { fieldValidatorKeys, fieldValidatorTypes, fieldValidatorModes } from '../formEvents/fieldValidation'
 
 export function isEmptyBatchEvent(value: unknown): boolean {
   if (value == null) return true
@@ -27,7 +28,9 @@ export function batchControlIssue(rules: Array<Record<string, unknown>>): string
     const field = typeof rule.field === 'string' ? rule.field : String(rule.type)
     if (rule.field && rule.type !== 'miAssignment' && !supportedBatchFieldTypes.has(String(rule.type))) return `${field} (${rule.type})`
     if (Array.isArray(rule.validate) && rule.validate.some(validator => !validator || typeof validator !== 'object'
-      || Object.keys(validator).some(key => !['required', 'type', 'min', 'max', 'len', 'message', 'trigger'].includes(key)))) return `${field} (validate)`
+      || Object.keys(validator).some(key => !fieldValidatorKeys.includes(key))
+      || (validator.type != null && !fieldValidatorTypes.includes(validator.type))
+      || (validator.mode != null && !fieldValidatorModes.includes(validator.mode)))) return `${field} (validate)`
     for (const kind of ['on', '_on', 'hook', '_hook']) {
       const events = rule[kind]
       if (events == null) continue

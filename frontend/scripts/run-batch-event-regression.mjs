@@ -15,7 +15,7 @@ function command(program,argv,cwd=frontend,env=process.env) {
 const script=(name,mode)=>command(process.execPath,[fileURLToPath(new URL(name,import.meta.url)),mode])
 if(!args.has('--ui-only')) {
  command('pnpm',['exec','vitest','run','batchNativeEventState','formCreate','batchSubTableConfig','useFormSave.batch','useNativePreviewEvents','--reporter=dot'],fileURLToPath(new URL('../developer-workstation/',import.meta.url)))
- command('pnpm',['exec','vitest','run','formCreate','batchEvent','batchRowEvents','batchAsync','assigneeEmailConfiguration','SubTableBatch','--reporter=dot'],fileURLToPath(new URL('../user-portal/',import.meta.url)))
+ command('pnpm',['exec','vitest','run','formCreate','batchFieldParity','batchEvent','batchRowEvents','batchAsync','assigneeEmailConfiguration','SubTableBatch','--reporter=dot'],fileURLToPath(new URL('../user-portal/',import.meta.url)))
 }
 if(!args.has('--unit-only')) {
  for(const name of ['.codex-batch-matrix-state.json','.codex-batch-role-event-state.json','.codex-batch-events-fixture.json','.codex-async-events-fixture.json']) {

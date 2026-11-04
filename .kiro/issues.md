@@ -5,6 +5,10 @@
 
 ## 统计 (截至 2026-11-04)
 
+2026-11-04：#1743 对齐普通 Form 与 Batch 的字段校验：自定义 Switch、多选/范围、邮箱/正则、隐藏状态、动态选项、缺省日期格式和 DECIMAL 尾零。旧冻结任务 Apply 失败→成功，缺省日期格式同一任务保存400→成功，API/查库及 DW/普通 Form 对照通过；后端 Batch400、完整 Batch 事件和 MI250+六组浏览器通过。既有全量/类型失败保留，审查CONDITIONAL；Open仍54，Wontfix仍2。见docs/verification/2026-11-04-batch-form-field-parity.md。
+
+2026-11-04：#1742 修复计算字段文本类型丢失及存量计算 number 阻塞 Batch 保存；同一旧任务浏览器400→200、查库、双副本、Save/Complete和DW/Admin预览通过。Common126 / Portal后端343专项、完整Batch与MI回归通过；既有全量/类型失败保留，审查CONDITIONAL。Open仍54，Wontfix仍2。见docs/verification/2026-11-04-computed-field-text-types.md。
+
 2026-11-04：#1739已完成本地异步脚本兼容修复，DW119/Portal271专项与完整Batch浏览器组合通过，原文脚本、异步事件矩阵、取消/失败恢复及查库均通过。全量DW1275/Portal2760通过并保留同2处/1处基线失败，类型162/380无新增；总审查CONDITIONAL。同时修复MI回归辅助脚本选择列误判 #1741；另记录既有函数体解析缺陷 #1740，Open 54、Wontfix 2。见docs/verification/2026-11-04-batch-form-async-events.md。
 
 2026-11-03：#1738修复普通Form Design与Batch Form事件空模板/脚本混算、X关闭自动应用及重复OK写入。30项专项、原FU50125与新克隆50135四组合真实页面通过；外层保存后GET确认组件及表单脚本保留，原FU未变。DW全量1265通过并保留同2处locale解析失败，类型164无新增，总审查CONDITIONAL。Open仍53、Wontfix仍2。见docs/verification/2026-11-03-designer-event-editor.md。
