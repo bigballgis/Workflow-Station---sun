@@ -73,6 +73,9 @@ public class AiWriteServiceImpl implements AiWriteService {
         // 不再经过 parser——这里是 BPMN 落库前唯一必经的位置。规则幂等，跑第二遍是空操作。
         enforceProcessSemantics(generatedData);
 
+        // 动作 ↔ 任务的关系只存在 BPMN 上：清空前按动作名记下，写完再对齐（见 alignProcessBindings）
+        AiBpmnActionBindingWriter.Snapshot actionBindingsBefore = captureActionBindings(functionUnit, generatedData);
+
         // Determine mode: if FunctionUnit has existing component data, it's MODIFY mode
         boolean isModifyMode = hasExistingData(functionUnit);
 
@@ -98,6 +101,7 @@ public class AiWriteServiceImpl implements AiWriteService {
         // Form IDs are database-generated and are required by BPMN custom formId properties.
         entityManager.flush();
         boolean processReplaced = writeProcessDefinition(functionUnit, generatedData);
+        alignProcessBindings(functionUnit, generatedData, processReplaced, actionBindingsBefore);
         // Multi-instance nodes reference two more database-generated ids the model cannot know:
         // the sub table's id in BPMN, and the sub-table binding's id that keys the sub-form
         // carrying the assignment component. Both are resolvable only after the flush above.
@@ -859,8 +863,6 @@ public class AiWriteServiceImpl implements AiWriteService {
         if (bpmnXml == null || bpmnXml.isBlank()) return false;
         bpmnXml = ensureRenderableBpmnDiagram(bpmnXml);
         bpmnXml = AiBpmnFormBindingWriter.bindStageForms(bpmnXml, functionUnit.getFormDefinitions());
-        bpmnXml = AiBpmnActionBindingWriter.bindStageActions(bpmnXml,
-                functionUnit.getActionDefinitions(), generatedData.getActionDefinitions());
 
         ProcessDefinition processDefinition = ProcessDefinition.builder()
                 .functionUnit(functionUnit)
@@ -870,6 +872,98 @@ public class AiWriteServiceImpl implements AiWriteService {
 
         functionUnit.setProcessDefinition(processDefinition);
         return true;
+    }
+
+    /**
+     * 写入前的动作绑定快照。只有本轮会重建动作或替换流程时才需要。
+     *
+     * <p>存量 BPMN 读不了时：本轮要替换流程就只是带不过去旧绑定（warn 留痕，新流程照写）；
+     * 不替换流程则后面的对齐必然也读不了，在这里就以 {@code AI_EXISTING_BPMN_INVALID} 指向存量数据。</p>
+     */
+    private AiBpmnActionBindingWriter.Snapshot captureActionBindings(FunctionUnit functionUnit,
+                                                                   AiGeneratedData generatedData) {
+        boolean replacesProcess = carriesProcess(generatedData);
+        if (generatedData.getActionDefinitions() == null && !replacesProcess) {
+            return AiBpmnActionBindingWriter.Snapshot.EMPTY;
+        }
+        ProcessDefinition processDefinition = functionUnit.getProcessDefinition();
+        String storedXml = processDefinition == null || processDefinition.getBpmnXml() == null
+                ? null : XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
+        try {
+            return AiBpmnActionBindingWriter.capture(storedXml, functionUnit.getActionDefinitions());
+        } catch (AiGenerationException e) {
+            if (!replacesProcess) {
+                throw existingBpmnInvalid(functionUnit, processDefinition, e);
+            }
+            log.warn("Stored BPMN of function unit {} is unreadable; its action bindings cannot be carried "
+                    + "over to the new process: {}", functionUnit.getId(), e.getMessage());
+            return AiBpmnActionBindingWriter.capture(null, functionUnit.getActionDefinitions());
+        }
+    }
+
+    /**
+     * 让 BPMN 上的表单 / 动作绑定与本轮写下去的实体一致。
+     *
+     * <p>scoped 写入只重建一片：ACTIONS / FORMS 换了库 id 而流程不动，PROCESS 换了 XML 而动作不动。
+     * 绑定只靠 {@code writeProcessDefinition} 时，只有"流程与动作同一次写入"才对，单独 Apply 一片就会
+     * 留下失效 id 或整片丢失——运行时只认 {@code actionIds}，任务上就没有按钮；设计器下次保存流程时
+     * 还会按 BPMN 反向删掉 {@code dw_form_stage_bindings}。规则见 {@link AiBpmnActionBindingWriter}。</p>
+     *
+     * @param processReplaced 本轮是否写入了新 process；false 时改的是存量 BPMN（以明文写回，同
+     *                        {@link #writeMultiInstanceAssignment}）
+     */
+    private void alignProcessBindings(FunctionUnit functionUnit, AiGeneratedData generatedData,
+                                      boolean processReplaced, AiBpmnActionBindingWriter.Snapshot actionBindingsBefore) {
+        ProcessDefinition processDefinition = functionUnit.getProcessDefinition();
+        boolean formsWritten = generatedData.getFormDefinitions() != null;
+        boolean actionsWritten = generatedData.getActionDefinitions() != null;
+        if (processDefinition == null || processDefinition.getBpmnXml() == null
+                || processDefinition.getBpmnXml().isBlank()
+                || !(processReplaced || formsWritten || actionsWritten)) {
+            return;
+        }
+        String original = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
+        String bpmnXml = original;
+        try {
+            if (formsWritten && !processReplaced) {
+                // 新流程在 writeProcessDefinition 里已经绑过
+                bpmnXml = AiBpmnFormBindingWriter.bindStageForms(bpmnXml, functionUnit.getFormDefinitions());
+            }
+            if (formsWritten || processReplaced) {
+                bpmnXml = AiBpmnFormBindingWriter.dropStaleForms(bpmnXml, functionUnit.getFormDefinitions());
+            }
+            if (actionsWritten || processReplaced) {
+                bpmnXml = AiBpmnActionBindingWriter.rebind(bpmnXml, actionBindingsBefore,
+                        functionUnit.getActionDefinitions(), generatedData.getActionDefinitions());
+            }
+        } catch (AiGenerationException e) {
+            if (processReplaced) {
+                throw e;
+            }
+            throw existingBpmnInvalid(functionUnit, processDefinition, e);
+        }
+        if (!bpmnXml.equals(original)) {
+            processDefinition.setBpmnXml(bpmnXml);
+        }
+    }
+
+    private static boolean carriesProcess(AiGeneratedData generatedData) {
+        return generatedData.getProcessDefinition() != null
+                && generatedData.getProcessDefinition().get("bpmnXml") instanceof String bpmnXml
+                && !bpmnXml.isBlank();
+    }
+
+    /**
+     * 失败的是 FU 既有的 process definition，而不是本次 AI 产物——用独立错误码指明数据源头，
+     * 否则 AI_BPMN_* 会把排查方向引向 AI 回传的 body。
+     */
+    private static AiGenerationException existingBpmnInvalid(FunctionUnit functionUnit,
+                                                             ProcessDefinition processDefinition, Exception cause) {
+        return new AiGenerationException("AI_EXISTING_BPMN_INVALID",
+                "Stored BPMN of function unit " + functionUnit.getId()
+                        + " (process definition id " + (processDefinition != null ? processDefinition.getId() : null)
+                        + ") could not be processed — repair or clear it in the process designer"
+                        + " before applying AI changes: " + cause.getMessage());
     }
 
     /**
@@ -911,13 +1005,7 @@ public class AiWriteServiceImpl implements AiWriteService {
             if (processReplaced) {
                 throw e;
             }
-            // 失败的是 FU 既有的 process definition，而不是本次 AI 产物——用独立错误码指明
-            // 数据源头，否则 AI_BPMN_MI_BINDING_FAILED 会把排查方向引向 AI 回传的 body。
-            throw new AiGenerationException("AI_EXISTING_BPMN_INVALID",
-                    "Stored BPMN of function unit " + functionUnit.getId()
-                            + " (process definition id " + processDefinition.getId()
-                            + ") could not be processed — repair or clear it in the process designer"
-                            + " before applying AI changes: " + e.getMessage());
+            throw existingBpmnInvalid(functionUnit, processDefinition, e);
         }
     }
 

@@ -1,6 +1,6 @@
 # 设计 Plan：AI Studio 逐阶段 Apply 后 BPMN 上的动作 / 表单绑定丢失
 
-> 状态：**待用户确认**（2026-11-03）。本文只定方案，不含实现代码。
+> 状态：**已确认并实现**（2026-11-03 用户回复「按推荐执行」：方案 A；动作 + 表单一起修；逐动作权威；task id 变了不按名字对应、只给 WARNING；只修 dev 存量；不加开关；不改上下文序列化）。
 > 关联：`docs/plans/ai-studio-one-click-co-orchestration.md`【背景】事实 1（一键生成走方案 B，只写一次 `ALL`，不在本 Plan 范围）。
 > 分支基线：`common_0731_SELF_AP` @ `4c7556adb`。
 
@@ -95,7 +95,7 @@ dw（`backend/developer-workstation`）。前端只多显示后端给的 WARNING
    `userTaskId → [actionName…]`，加上流程级 `globalActionNames`。存名字，不存 id——id 在 `ALL` / `ACTIONS` 写入里会变；
    `action_name` 在 FU 内有唯一约束（`uk_action_name_fu`），是动作在 AI 写入里本来就用的业务键（`bindStageActions` 按名字找已落库动作）。
 2. **flush 之后**（现在 `writeProcessDefinition` 之后、`writeMultiInstanceAssignment` 之前）对「当前流程」做一遍对齐。
-   当前流程可能是本次新写的，也可能是存量（需要 `XmlEncodingUtil.smartDecode`，写回时保持原来的编码，跟 `ActionBindingLifecycle.reconcile` 一致）。
+   当前流程可能是本次新写的，也可能是存量（需要 `XmlEncodingUtil.smartDecode`；有改动时以明文写回，与紧随其后的 `writeMultiInstanceAssignment` 一致——它本来就会把存量 BPMN 写成明文，读取方都用 `smartDecode`）。
    规则按动作逐个算，最后每个 userTask 的列表一次写定：
 
    | 情况 | 该动作挂在哪些 userTask |
@@ -110,14 +110,15 @@ dw（`backend/developer-workstation`）。前端只多显示后端给的 WARNING
    - 表单：本次写了表单（FORMS / ALL）而流程是存量时，调用现有 `AiBpmnFormBindingWriter.bindStageForms`；然后删掉指向
      已不存在表单的 `formId/formName/formReadOnly`（含 REQUEST 场景的 `requestFormId/requestFormName`）。
      本次写了流程时，`bindStageForms` 已经在 `writeProcessDefinition` 里跑过，不重复。
-3. 实现放在 `AiBpmnActionBindingWriter` 旁边的一个新工具类（暂名 `AiBpmnBindingCarrier`），复用 platform-common 的
-   `BpmnActionBindings`（`parse / scopes / properties / idsKey`），XML 解析沿用现有的安全配置。
-   `bindStageActions` 改成新规则里「有 `stageIds`」那一支的实现，不再单独调用，免得两套规则打架。
+3. 实现直接改在 `AiBpmnActionBindingWriter` 里（复用它的容器选择与命名空间处理）：`capture`（写前快照）→ `plan`（按名字算最终放置，
+   写入与预览共用）→ `rebind`（落到 XML）；原来的 `bindStageActions` 被 `rebind` 取代。读属性复用 platform-common 的
+   `BpmnActionBindings.properties / ids / names`。表单侧在 `AiBpmnFormBindingWriter` 加 `dropStaleForms`。
 4. **预览**（`AiStudioProposalPreviewer`，Apply 前同一套检查）：
    - ACTIONS：`stageIds` 里有存量 BPMN 不存在的 userTask id → WARNING（列出动作名和 id）。
    - PROCESS：旧 BPMN 上挂了动作、但新 BPMN 里没有同 id userTask 的 → WARNING「这些动作将不再挂在任何任务上：…，
      请随后 Apply 一次 ACTIONS 提案或在设计器里绑定」。
    - 对齐后 FU 有动作、但某个 userTask 一个都没挂 → WARNING（不阻止 Apply：有的任务本来就不需要按钮）。
+   - （实现时补的第四条）FU 还没有流程、提案里的动作却带了 `stageIds` → WARNING：这些 `stageIds` 无处可写（动作不存 stage），流程建好后要再绑一次。
    - 一律 WARNING 不是 ERROR：结果仍然可用，只是需要人补一步；描述是后端英文原文，前端提案卡原样显示。
 5. 写入时把对齐做了什么记一行 `info`（每个 task 前后的动作名），自动修复要留痕（错误处理治理红线 1）。
 
@@ -161,7 +162,7 @@ Portal 已经明确不回退到流程全部动作；按名字兜底会把审批�
 ## 【数据与契约】
 
 - 不新增字段。BPMN 上仍是 `actionIds`（JSON 数字数组）+ `actionNames`（JSON 字符串数组），一一对应；写入格式与 `AiBpmnActionBindingWriter#writeActionProperties` 相同，容器命名空间只认 `custom.bpmn.io` 与 `workflow.platform/schema/custom` 两种（同该类注释）。
-- 存量 BPMN 的编码：读用 `smartDecode`；写回时原来是 Base64 就编码回去，原来是明文就写明文。
+- 存量 BPMN 的编码：读用 `smartDecode`；有改动时写回明文（同 `writeMultiInstanceAssignment`），没改动就不碰。
 - 「ID 变化」的规则（任务要求说明的部分）：
   - **ACTIONS 再次 Apply**：所有动作 id 都会变。旧 BPMN 里的 `actionIds` 全部失效 → 按上表重算，绝不留失效 id。
   - **FORMS 再次 Apply**：所有表单 id 都会变。`dw_form_stage_bindings` 由 FORMS 片重写；BPMN 上的 `formId` 按新 `stageBindings` 重写，

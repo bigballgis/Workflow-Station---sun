@@ -19,7 +19,11 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -41,6 +45,7 @@ public final class AiBpmnFormBindingWriter {
             "sendTask", "receiveTask", "businessRuleTask");
     private static final Set<String> FORM_PROPERTY_NAMES = Set.of(
             "formId", "formName", "formReadOnly");
+    private static final Set<String> REQUEST_FORM_PROPERTY_NAMES = Set.of("requestFormId", "requestFormName");
 
     private AiBpmnFormBindingWriter() {
     }
@@ -83,6 +88,100 @@ public final class AiBpmnFormBindingWriter {
             log.error("Failed to bind AI-generated forms to BPMN task nodes", e);
             throw new AiGenerationException("AI_BPMN_BINDING_FAILED",
                     "Failed to bind AI-generated forms to BPMN task nodes: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Removes form bindings that point at forms this Function Unit no longer has.
+     *
+     * <p>FORMS / ALL writes rebuild every form under a new id, and the designer's process save
+     * ({@code ProcessBpmnFormStageBindingSync}) mirrors {@code dw_form_stage_bindings} from the BPMN — so a
+     * dead {@code formId} left behind would either misreport the node as bound or, once the node is unbound,
+     * delete the stage rows. Task-scene {@code formId} mirrors the stage bindings the write just persisted
+     * (already written by {@link #bindStageForms}), so a dead one is dropped. The My Requests
+     * {@code requestFormId} is set in the designer only; it is moved to the surviving form of the same
+     * {@code requestFormName}, else dropped.</p>
+     */
+    public static String dropStaleForms(String bpmnXml, List<FormDefinition> forms) {
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return bpmnXml;
+        }
+        Set<String> liveIds = new HashSet<>();
+        Map<String, FormDefinition> byName = new HashMap<>();
+        if (forms != null) {
+            for (FormDefinition form : forms) {
+                if (form != null && form.getId() != null) {
+                    liveIds.add(String.valueOf(form.getId()));
+                    if (form.getFormName() != null) byName.put(form.getFormName(), form);
+                }
+            }
+        }
+        try {
+            Document document = parseSecurely(bpmnXml);
+            boolean changed = false;
+            NodeList elements = document.getElementsByTagNameNS("*", "*");
+            for (int i = 0; i < elements.getLength(); i++) {
+                Element task = (Element) elements.item(i);
+                if (!TASK_NAMES.contains(localName(task))) {
+                    continue;
+                }
+                Map<String, List<Element>> properties = formProperties(task);
+                if (isDead(properties.get("formId"), liveIds)) {
+                    removeAll(properties, FORM_PROPERTY_NAMES);
+                    changed = true;
+                    log.info("AI write dropped dead formId from BPMN task '{}'", task.getAttribute("id"));
+                }
+                if (isDead(properties.get("requestFormId"), liveIds)) {
+                    FormDefinition renamed = properties.containsKey("requestFormName")
+                            ? byName.get(properties.get("requestFormName").get(0).getAttribute("value")) : null;
+                    if (renamed != null) {
+                        properties.get("requestFormId").forEach(p -> p.setAttribute("value", String.valueOf(renamed.getId())));
+                    } else {
+                        removeAll(properties, REQUEST_FORM_PROPERTY_NAMES);
+                    }
+                    changed = true;
+                    log.info("AI write {} dead requestFormId on BPMN task '{}'",
+                            renamed != null ? "re-pointed by name" : "dropped", task.getAttribute("id"));
+                }
+            }
+            return changed ? serialize(document) : bpmnXml;
+        } catch (Exception e) {
+            log.error("Failed to clean dead form bindings from BPMN task nodes", e);
+            throw new AiGenerationException("AI_BPMN_BINDING_FAILED",
+                    "Failed to clean dead form bindings from BPMN task nodes: " + e.getMessage());
+        }
+    }
+
+    private static boolean isDead(List<Element> idProperties, Set<String> liveIds) {
+        if (idProperties == null) {
+            return false;
+        }
+        String value = idProperties.get(idProperties.size() - 1).getAttribute("value");
+        return value != null && !value.isBlank() && !liveIds.contains(value.trim());
+    }
+
+    private static Map<String, List<Element>> formProperties(Element task) {
+        Map<String, List<Element>> result = new HashMap<>();
+        Element extensionElements = directChild(task, "extensionElements");
+        if (extensionElements == null) {
+            return result;
+        }
+        NodeList descendants = extensionElements.getElementsByTagNameNS("*", "*");
+        for (int i = 0; i < descendants.getLength(); i++) {
+            if (descendants.item(i) instanceof Element property
+                    && ("property".equals(localName(property)) || "values".equals(localName(property)))
+                    && (FORM_PROPERTY_NAMES.contains(property.getAttribute("name"))
+                        || REQUEST_FORM_PROPERTY_NAMES.contains(property.getAttribute("name")))) {
+                result.computeIfAbsent(property.getAttribute("name"), k -> new ArrayList<>()).add(property);
+            }
+        }
+        return result;
+    }
+
+    private static void removeAll(Map<String, List<Element>> properties, Set<String> names) {
+        for (String name : names) {
+            List<Element> matches = properties.remove(name);
+            if (matches != null) matches.forEach(p -> p.getParentNode().removeChild(p));
         }
     }
 
