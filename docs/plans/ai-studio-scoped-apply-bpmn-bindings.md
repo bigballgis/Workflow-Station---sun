@@ -237,6 +237,8 @@ Portal 已经明确不回退到流程全部动作；按名字兜底会把审批�
 - 独立审查发现并已修：表单多容器时把刚写的活 `formId` 一并删掉（改为按容器处理）；撤销重放会让原本没按钮的任务继承按钮（改为「写入 BPMN 自带绑定就视为完整」）；
   流程级动作不受逐动作权威约束；ALL 写入在存量 BPMN 读不了时误报（ALL 会清掉它，改为 warn）；`ACTION_BINDING_EMPTY_TASK` 只在本提案放置动作或该任务原来有按钮时才报。
 - 已知取舍：同一任务里，带 `stageIds` 的动作排在沿用下来的前面，设计器里手排的顺序在混合情况下不保留。
+- 已知取舍：「写入 BPMN 自带任一绑定即视为完整」是全有或全无的。PROCESS 提案若违反 Instruction 在某个任务上带了 `actionIds`，其他任务就不再继承旧绑定；预览会对原来有按钮的任务报 `ACTION_BINDING_EMPTY_TASK`。
+- 复审：`a23ab6318` 独立复审 PASS。
 - dev 验证（DW 侧，热替 4 个类）：scratch FU 50152 先在旧代码上复现（ACTIONS 后无 `actionIds`；FORMS 后无 `formId`，原样设计器保存一次 stage 绑定被删光），
   新代码下 FORMS / 设计器保存 / ACTIONS / PROCESS（同 id）全部正确，dry-run 三种 WARNING 符合预期。FU 50036 用原提案 #144 / #152 重新 Apply 后两个任务都有表单与按钮。
 - **未验证**：Portal 打开任务看按钮——DW 一键部署在 admin-center 导入时失败，dev 库缺 `96-function-unit-runtime-versioning.sql`（`content_checksum` 列），与本改动无关。
