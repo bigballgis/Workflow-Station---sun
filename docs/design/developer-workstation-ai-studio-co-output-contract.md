@@ -2,7 +2,8 @@
 
 > 状态：2026-11-03 起 DW 已按本契约接入（`ai-generation.ai-studio.provider=AUTOMATION`，默认）：顾问对话与
 > Propose change 经 Automation flow `ai-studio-co-agent` → content-organizer 1.0.5 `agent_chat` → CO；
-> 一键生成由 DW 逐阶段编排后同样经 CO（第 1 节）。DW 侧实现与配置见 [examples/ai-studio](../guides/examples/ai-studio/README.md)。
+> 一键生成由 DW 逐阶段编排后同样经 CO（第 1 节）；2026-11-05 起确认阶段后的文档同步也经 CO（`## MODE: DOC_SYNC` →
+> `document_sync_agent`，请求与输出格式见 Instruction 稿第 13 节，不走本文的 GENERATED_DATA 外壳）。DW 侧实现与配置见 [examples/ai-studio](../guides/examples/ai-studio/README.md)。
 > 本文定义 CO 的 Agent 必须产出什么，让 DW 现有的解析、预览、Apply、撤销链路**原样复用**，不为 CO 另写一套。
 
 ## 0. 真源与适用范围

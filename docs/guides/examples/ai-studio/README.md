@@ -36,6 +36,12 @@ DW  AI Studio Copilot (advisory turn, or proposal job)
 | `ACTIVEPIECES_WEBHOOK_BASE_URL` | `http://localhost:8086` (docker profile: `http://activepieces:80`) | Same variable as the engine's service tasks |
 | `AI_STUDIO_TIMEOUT_SECONDS` | `310` | Slightly above Automation's own sync-webhook wait (`AP_WEBHOOK_TIMEOUT_SECONDS=300`) |
 
+**Document sync** (after a phase is confirmed, or *Check now*) goes through the same flow too: DW sends a
+`## MODE: DOC_SYNC` request and the orchestrator hands it to the specialist `document_sync_agent`, which returns the
+updated Requirements / Function Unit Design documents in their own blocks (instructions §13). The CO agent setting must
+have that 13th agent and the orchestrator's DOC_SYNC route; without them the orchestrator refuses the request and the
+thread shows a failed documents check. `AI_STUDIO_PROVIDER=GAIP` keeps document sync on the gateway as before.
+
 **One-click generation (Build with AI)** goes through the same flow. Content Organizer answers every request with a
 single specialist, so DW (`AiStudioOneClickOrchestrator`) asks five PROPOSE requests in turn — Process → Tables → Forms →
 Decisions → Actions — feeding each step's output into the next step's CURRENT DESIGN, and applies the merged design once

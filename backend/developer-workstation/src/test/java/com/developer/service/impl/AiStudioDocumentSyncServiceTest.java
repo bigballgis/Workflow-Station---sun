@@ -3,9 +3,11 @@ package com.developer.service.impl;
 import com.developer.dto.AiStudioThreadEvent;
 import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.entity.AiDocument;
+import com.developer.entity.User;
 import com.developer.enums.AiDocumentType;
 import com.developer.exception.AiGenerationException;
 import com.developer.exception.DeveloperBusinessException;
+import com.developer.repository.UserRepository;
 import com.developer.service.AiGenerationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,8 @@ class AiStudioDocumentSyncServiceTest {
     private final AiGenerationService generation = mock(AiGenerationService.class);
     private final AiGatewayClient gateway = mock(AiGatewayClient.class);
     private final AiResponseParser parser = mock(AiResponseParser.class);
+    private final AiStudioAutomationClient automation = mock(AiStudioAutomationClient.class);
+    private final UserRepository users = mock(UserRepository.class);
     private final List<AiStudioThreadEvent> events = new ArrayList<>();
     private final ManualExecutor executor = new ManualExecutor();
     private AiStudioDocumentSyncService service;
@@ -55,8 +59,16 @@ class AiStudioDocumentSyncServiceTest {
         when(threads.recentHistory(eq(1L), anyString())).thenReturn(List.of());
         when(documents.latest(eq(1L), any())).thenReturn(Optional.empty());
         when(gateway.chat(any(), eq("tok"))).thenReturn(HTTP);
-        service = new AiStudioDocumentSyncService(documents, threads, generation, new AiStudioContextDigest(),
-                gateway, parser, e -> events.add((AiStudioThreadEvent) e), executor);
+        service = service(AiStudioChatServiceImpl.Provider.GAIP);
+    }
+
+    private AiStudioDocumentSyncService service(AiStudioChatServiceImpl.Provider provider) {
+        return new AiStudioDocumentSyncService(documents, threads, generation, new AiStudioContextDigest(),
+                gateway, parser, automation, users, provider, e -> events.add((AiStudioThreadEvent) e), executor);
+    }
+
+    private void aliceHasEmployeeId(String employeeId) {
+        when(users.findById("u-alice")).thenReturn(Optional.of(User.builder().employeeId(employeeId).build()));
     }
 
     private static AiDocument doc(AiDocumentType type, int version, String content, String by) {
@@ -220,6 +232,68 @@ class AiStudioDocumentSyncServiceTest {
         assertTrue(user.contains("### Table Design"));
         assertTrue(prompt.getValue().system().contains("Open Questions"));
         verify(threads).recentHistory(1L, "TABLE_DESIGN");
+    }
+
+    @Test
+    void automationProviderSendsADocSyncRequestToContentOrganizerInsteadOfTheGateway() {
+        service = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        aliceHasEmployeeId(" 45349679 ");
+        when(automation.chat(anyString(), eq("45349679"))).thenReturn("""
+                Checked the table phase.
+                ---REQUIREMENTS_UNCHANGED---
+                ---DESIGN_DOC_START---
+                ## Table Design
+                leave_request
+                ---DESIGN_DOC_END---
+                ---CHANGE_SUMMARY---
+                Described the tables.""");
+        when(documents.append(eq(1L), eq(AiDocumentType.DESIGN), anyString(), eq(0), anyString(), anyString()))
+                .thenReturn(doc(AiDocumentType.DESIGN, 1, "x", "u-alice"));
+
+        service.submit(1L, List.of("TABLE_DESIGN"), "TABLE_DESIGN", "tok", ALICE);
+        executor.runAll();
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(automation).chat(message.capture(), eq("45349679"));
+        verify(gateway, never()).chat(any(), any());
+        String sent = message.getValue();
+        assertTrue(sent.startsWith("## MODE: DOC_SYNC\n## DOCUMENT STRUCTURE\n"), sent);
+        assertTrue(sent.contains("Requirements headings, in order: Background & Goals, Roles,"));
+        assertTrue(sent.contains("Function Unit Design phases, in order: "));
+        assertTrue(sent.contains("Phases to check: Table Design\n"));
+        assertFalse(sent.contains("Rules:"), "the rules live in the CO agent's Instruction, not in the request");
+        verify(documents).append(1L, AiDocumentType.DESIGN, "## Table Design\nleave_request", 0,
+                "AI_SYNC:TABLE_DESIGN", "u-alice");
+        assertEquals("UPDATED", recordedDocSync().get("status"));
+    }
+
+    @Test
+    void automationProviderWithoutAnEmployeeIdRecordsAFailureAndCallsNothing() {
+        service = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        aliceHasEmployeeId(" ");
+
+        service.submit(1L, List.of("TABLE_DESIGN"), "TABLE_DESIGN", "tok", ALICE);
+
+        assertEquals("AI_STUDIO_NO_EMPLOYEE_ID", recordedDocSync().get("errorCode"));
+        assertEquals(0, executor.tasks.size());
+        verify(automation, never()).chat(anyString(), anyString());
+        verify(gateway, never()).chat(any(), any());
+    }
+
+    @Test
+    void automationFailureIsRecordedWithItsCode() {
+        service = service(AiStudioChatServiceImpl.Provider.AUTOMATION);
+        aliceHasEmployeeId("45349679");
+        when(automation.chat(anyString(), anyString())).thenThrow(
+                new AiGenerationException("AI_STUDIO_FLOW_FAILED", "Content Organizer failed: 403"));
+
+        service.submit(1L, List.of("TABLE_DESIGN"), "TABLE_DESIGN", "tok", ALICE);
+        executor.runAll();
+
+        Map<String, Object> sync = recordedDocSync();
+        assertEquals("FAILED", sync.get("status"));
+        assertEquals("AI_STUDIO_FLOW_FAILED", sync.get("errorCode"));
+        assertFalse(service.isRunning(1L));
     }
 
     @Test

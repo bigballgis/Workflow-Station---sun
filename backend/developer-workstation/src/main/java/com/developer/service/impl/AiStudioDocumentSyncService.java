@@ -8,6 +8,7 @@ import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiStudioPhase;
 import com.developer.exception.AiGenerationException;
 import com.developer.exception.DeveloperBusinessException;
+import com.developer.repository.UserRepository;
 import com.developer.service.AiGenerationService;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,11 @@ import java.util.regex.Pattern;
  *
  * <p>设计上下文、对话与作者在请求线程里准备（JPA 懒加载、SecurityContext 都绑在请求线程上）；
  * 作业线程里临时装上提交者的 SecurityContext，让 JPA 审计把版本记到提交者名下。</p>
+ *
+ * <p>模型链路跟 Copilot 一样由 {@code ai-generation.ai-studio.provider} 选：AUTOMATION 把
+ * {@code ## MODE: DOC_SYNC} 请求经 {@link AiStudioAutomationClient} 发给 CO agent setting「Function Unit」，由专家
+ * {@code document_sync_agent} 按它自己的 Instruction（即 {@link #SYSTEM_PROMPT} 的 CO 版）回答；GAIP 直连网关。
+ * 两条链路的请求正文与输出格式相同。</p>
  */
 @Slf4j
 @Service
@@ -74,6 +80,8 @@ public class AiStudioDocumentSyncService {
             AiDocumentType.REQUIREMENTS, "---REQUIREMENTS_UNCHANGED---",
             AiDocumentType.DESIGN, "---DESIGN_UNCHANGED---");
     private static final String CHANGE_SUMMARY_MARKER = "---CHANGE_SUMMARY---";
+    /** CO 主管按这一行把请求交给 document_sync_agent（docs/design/developer-workstation-ai-studio-co-agent-instructions.md） */
+    static final String AGENT_MODE_LINE = "## MODE: DOC_SYNC";
 
     private static final String SYSTEM_PROMPT = """
             You maintain two living Markdown documents for a Function Unit designed in the Workflow Station \
@@ -120,13 +128,14 @@ public class AiStudioDocumentSyncService {
     public record Request(Long functionUnitId, List<String> phases, String messagePhase,
                           FunctionUnitContextDTO context,
                           Map<String, List<AiStudioChatRequest.HistoryMessage>> conversation,
-                          String amToken, AiStudioThreadService.Author author, SecurityContext securityContext) {
+                          String amToken, String staffId, AiStudioThreadService.Author author,
+                          SecurityContext securityContext) {
 
         boolean fullCheck() {
             return phases.isEmpty();
         }
 
-        /** 不带 amToken / 上下文：record 默认的 toString 会把令牌带进日志。 */
+        /** 不带 amToken / 工号 / 上下文：record 默认的 toString 会把令牌带进日志。 */
         @Override
         public String toString() {
             return "Request[functionUnitId=" + functionUnitId + ", phases=" + phases + "]";
@@ -145,7 +154,7 @@ public class AiStudioDocumentSyncService {
             Map<String, List<AiStudioChatRequest.HistoryMessage>> conv = new LinkedHashMap<>(conversation);
             conv.putAll(newer.conversation);
             return new Request(functionUnitId, merged, newer.messagePhase, newer.context, conv,
-                    newer.amToken, newer.author, newer.securityContext);
+                    newer.amToken, newer.staffId, newer.author, newer.securityContext);
         }
     }
 
@@ -155,6 +164,9 @@ public class AiStudioDocumentSyncService {
     private final AiStudioContextDigest contextDigest;
     private final AiGatewayClient aiGatewayClient;
     private final AiResponseParser aiResponseParser;
+    private final AiStudioAutomationClient automationClient;
+    private final UserRepository userRepository;
+    private final AiStudioChatServiceImpl.Provider provider;
     private final ApplicationEventPublisher events;
     private final ExecutorService executor;
 
@@ -169,11 +181,14 @@ public class AiStudioDocumentSyncService {
             AiStudioContextDigest contextDigest,
             AiGatewayClient aiGatewayClient,
             AiResponseParser aiResponseParser,
+            AiStudioAutomationClient automationClient,
+            UserRepository userRepository,
+            @Value("${ai-generation.ai-studio.provider:AUTOMATION}") AiStudioChatServiceImpl.Provider provider,
             ApplicationEventPublisher events,
             @Value("${ai-generation.studio.doc-sync-workers:2}") int workers,
             @Value("${ai-generation.studio.doc-sync-queue-size:32}") int queueSize) {
         this(documentService, threadService, aiGenerationService, contextDigest, aiGatewayClient,
-                aiResponseParser, events,
+                aiResponseParser, automationClient, userRepository, provider, events,
                 new ThreadPoolExecutor(workers, workers, 60, TimeUnit.SECONDS,
                         new LinkedBlockingQueue<>(queueSize), r -> {
                             Thread t = new Thread(r, "ai-studio-doc-sync");
@@ -185,6 +200,8 @@ public class AiStudioDocumentSyncService {
     AiStudioDocumentSyncService(FunctionUnitDocumentService documentService, AiStudioThreadService threadService,
                                 AiGenerationService aiGenerationService, AiStudioContextDigest contextDigest,
                                 AiGatewayClient aiGatewayClient, AiResponseParser aiResponseParser,
+                                AiStudioAutomationClient automationClient, UserRepository userRepository,
+                                AiStudioChatServiceImpl.Provider provider,
                                 ApplicationEventPublisher events, ExecutorService executor) {
         this.documentService = documentService;
         this.threadService = threadService;
@@ -192,6 +209,9 @@ public class AiStudioDocumentSyncService {
         this.contextDigest = contextDigest;
         this.aiGatewayClient = aiGatewayClient;
         this.aiResponseParser = aiResponseParser;
+        this.automationClient = automationClient;
+        this.userRepository = userRepository;
+        this.provider = provider;
         this.events = events;
         this.executor = executor;
     }
@@ -208,7 +228,7 @@ public class AiStudioDocumentSyncService {
     }
 
     /**
-     * 在请求线程上准备输入并提交。准备失败（例如设计过大无法序列化）写一条 FAILED 消息后返回——
+     * 在请求线程上准备输入并提交。准备失败（例如设计过大无法序列化、走 CO 但账号没有工号）写一条 FAILED 消息后返回——
      * 文档同步失败不能让确认阶段本身失败。
      *
      * @param phases 本次新确认的阶段（按确认顺序）；空列表表示全量核对
@@ -256,11 +276,14 @@ public class AiStudioDocumentSyncService {
         for (String phase : phases.isEmpty() ? List.of(messagePhase) : phases) {
             conversation.put(phase, threadService.recentHistory(functionUnitId, phase));
         }
+        String staffId = provider == AiStudioChatServiceImpl.Provider.AUTOMATION
+                ? AiStudioStaffIds.resolve(userRepository, author.userId())
+                : null;
         // 复制一份：请求结束后原对象归还给请求线程的生命周期管理
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(SecurityContextHolder.getContext().getAuthentication());
         return new Request(functionUnitId, List.copyOf(phases), messagePhase, context, conversation, amToken,
-                author, securityContext);
+                staffId, author, securityContext);
     }
 
     private void runAll(Request first) {
@@ -323,10 +346,12 @@ public class AiStudioDocumentSyncService {
 
     /** 调一次模型；输出里两份文档既没有文档块也没有"不需要修改"标记时重试一次，仍不合格则失败。 */
     private ModelOutput callModel(Request request, Map<AiDocumentType, Optional<AiDocument>> base) {
-        AiPromptBuilder.RenderedPrompt prompt = new AiPromptBuilder.RenderedPrompt(systemPrompt(),
-                userMessage(request, base));
+        String userMessage = userMessage(request, base);
+        AiPromptBuilder.RenderedPrompt prompt = new AiPromptBuilder.RenderedPrompt(systemPrompt(), userMessage);
         for (int attempt = 1; ; attempt++) {
-            String text = aiResponseParser.assistantText(aiGatewayClient.chat(prompt, request.amToken()));
+            String text = request.staffId() != null
+                    ? automationClient.chat(agentMessage(userMessage), request.staffId())
+                    : aiResponseParser.assistantText(aiGatewayClient.chat(prompt, request.amToken()));
             Optional<ModelOutput> output = parseOutput(text);
             if (output.isPresent()) {
                 return output.get();
@@ -359,6 +384,19 @@ public class AiStudioDocumentSyncService {
     /** Design 文档二级标题 / 提示词里的阶段英文名（模型上下文，不是 UI 文案） */
     private static String phaseLabel(String phase) {
         return AiStudioPhase.fromKey(phase).map(AiStudioPhase::label).orElse(phase);
+    }
+
+    /**
+     * CO 的请求：规则在 document_sync_agent 的 Instruction 里，这里只带 MODE 行和两份结构清单
+     * （阶段、Requirements 标题都以 DW 为准，Instruction 读这一节而不是自己抄一份）。
+     */
+    static String agentMessage(String userMessage) {
+        return AGENT_MODE_LINE + "\n"
+                + "## DOCUMENT STRUCTURE\n"
+                + "Function Unit Design phases, in order: "
+                + String.join(", ", Arrays.stream(AiStudioPhase.values()).map(AiStudioPhase::label).toList()) + "\n"
+                + "Requirements headings, in order: " + String.join(", ", REQUIREMENTS_SECTIONS) + "\n\n"
+                + userMessage;
     }
 
     private static String systemPrompt() {

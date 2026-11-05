@@ -2,7 +2,6 @@ package com.developer.service.impl;
 
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.FunctionUnitContextDTO;
-import com.developer.entity.User;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
@@ -433,15 +432,8 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
         return reply;
     }
 
-    /** Content Organizer 每次调用都要工号（审计到人）；没有就明确失败，不拿别的身份顶替。 */
     private String staffId(String userId) {
-        return userRepository.findById(userId)
-                .map(User::getEmployeeId)
-                .filter(id -> !id.isBlank())
-                .map(String::trim)
-                .orElseThrow(() -> new AiGenerationException("AI_STUDIO_NO_EMPLOYEE_ID",
-                        "Your account has no employee ID, which Content Organizer requires; "
-                                + "ask an administrator to set it in Admin Center"));
+        return AiStudioStaffIds.resolve(userRepository, userId);
     }
 
     private static String toJson(Object value) {
