@@ -431,7 +431,7 @@ DW 在用户确认阶段（或点「立即检查」）后发这个请求。规�
 （`AiStudioDocumentSyncService#SYSTEM_PROMPT`），只是阶段名和 Requirements 标题改为从请求的
 DOCUMENT STRUCTURE 读——两份清单以 DW 为准，这里不抄。改规则时两处一起改。
 
-DOC_SYNC 请求（`AiStudioDocumentSyncService#agentMessage`）：
+**参考：DW 发出的 DOC_SYNC 请求长这样（不要粘贴进 CO）**（`AiStudioDocumentSyncService#agentMessage`）：
 
 ```text
 ## MODE: DOC_SYNC
@@ -453,7 +453,7 @@ Phases to check: Table Design, Form Design      (或 all phases (full check))
 USER: ...
 ```
 
-DW 按下面的块解析回答：两份文档各自必须是「文档块」或「不需要修改」标记之一，否则重问一次，再不对就记失败。
+**粘贴进 CO 的 Instruction 是下面这一段**（Description 可填：Updates the Requirements and Function Unit Design documents for MODE DOC_SYNC requests）。DW 按其中的块解析回答：两份文档各自必须是「文档块」或「不需要修改」标记之一，否则重问一次，再不对就记失败。
 标记之外的文字会被忽略，但不要依赖这一点。
 
 ```text
