@@ -687,6 +687,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 + "  only values the platform ever writes: APPROVE/PROCESS_SUBMIT sets decision=yes and\n"
                 + "  REJECT/PROCESS_REJECT sets decision=no. 'approved', 'rejected', 'APPROVE', 'REJECT', true and\n"
                 + "  false are never written, so a branch testing for them can never be taken.\n"
+                + "- A decision is binary. A third outcome such as return, send back, request changes or return for\n"
+                + "  correction is NOT a gateway branch: remove that branch and its condition, keep the gateway on\n"
+                + "  yes/no only, and state in your reply that the outcome is a ROLLBACK action (targetStep 'specific',\n"
+                + "  targetActivityId = the user task that does the correction) for the Action Design phase.\n"
                 + "If the supplied DESIGN document is what forces the violation, the platform rule wins: follow the\n"
                 + "rule, correct the design accordingly, and say in your reply which part of the design you changed.\n"
                 + "========== End of correction request ==========";
