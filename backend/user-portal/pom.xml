@@ -21,6 +21,7 @@
     <properties>
         <java.version>17</java.version>
         <jqwik.version>1.8.2</jqwik.version>
+        <testcontainers.version>2.0.2</testcontainers.version>
         <tomcat.version>10.1.55</tomcat.version>
         <poi.version>5.4.1</poi.version>
     </properties>
@@ -214,6 +215,18 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

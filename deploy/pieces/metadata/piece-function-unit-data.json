@@ -1,0 +1,260 @@
+{
+  "name": "@activepieces/piece-function-unit-data",
+  "version": "1.0.0",
+  "displayName": "Function Unit Data",
+  "logoUrl": "/ap-cdn/pieces/hermes/function-unit-data.svg",
+  "description": "读写功能单元数据。以工作区运行身份执行，步骤里不能选择操作人。",
+  "minimumSupportedRelease": "0.82.0",
+  "auth": null,
+  "actions": {
+    "query_records": {
+      "name": "query_records",
+      "displayName": "Query Records",
+      "description": "按主表字段找出记录。以工作区运行身份执行。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份执行。本步骤不能选择同事，也不能填写操作人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "functionUnitCode": {
+          "displayName": "Function Unit Code",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "filters": {
+          "displayName": "Filters",
+          "description": "至少一条，格式 field=value。字段必须属于该功能单元主表。",
+          "required": true,
+          "type": "ARRAY"
+        },
+        "size": {
+          "displayName": "Page Size",
+          "required": false,
+          "defaultValue": 50,
+          "type": "NUMBER"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "get_record": {
+      "name": "get_record",
+      "displayName": "Get Record",
+      "description": "读取一条流程实例。以工作区运行身份执行。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份执行。本步骤不能选择同事，也不能填写操作人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "processInstanceId": {
+          "displayName": "Process Instance Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "update_fields": {
+      "name": "update_fields",
+      "displayName": "Update Fields",
+      "description": "更新主表字段。以工作区运行身份执行，不能指定操作人。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份执行。本步骤不能选择同事，也不能填写操作人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "processInstanceId": {
+          "displayName": "Process Instance Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "lockVersion": {
+          "displayName": "Lock Version",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "fieldsJson": {
+          "displayName": "Fields JSON",
+          "description": "主表字段对象，例如 {\"status\":\"OPEN\"}。",
+          "required": true,
+          "type": "LONG_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "add_subtable_row": {
+      "name": "add_subtable_row",
+      "displayName": "Add Sub-table Row",
+      "description": "新增子表行。主键由服务端分配。以工作区运行身份执行。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份执行。本步骤不能选择同事，也不能填写操作人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "processInstanceId": {
+          "displayName": "Process Instance Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "bindingId": {
+          "displayName": "Sub-table Binding Id",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "lockVersion": {
+          "displayName": "Lock Version",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "fieldsJson": {
+          "displayName": "Fields JSON",
+          "required": true,
+          "type": "LONG_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "update_subtable_row": {
+      "name": "update_subtable_row",
+      "displayName": "Update Sub-table Row",
+      "description": "更新子表行。以工作区运行身份执行。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份执行。本步骤不能选择同事，也不能填写操作人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "processInstanceId": {
+          "displayName": "Process Instance Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "bindingId": {
+          "displayName": "Sub-table Binding Id",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "lockVersion": {
+          "displayName": "Lock Version",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "rowId": {
+          "displayName": "Row Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "fieldsJson": {
+          "displayName": "Fields JSON",
+          "required": true,
+          "type": "LONG_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "delete_subtable_row": {
+      "name": "delete_subtable_row",
+      "displayName": "Delete Sub-table Row",
+      "description": "删除子表行。以工作区运行身份执行。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份执行。本步骤不能选择同事，也不能填写操作人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "processInstanceId": {
+          "displayName": "Process Instance Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "bindingId": {
+          "displayName": "Sub-table Binding Id",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "lockVersion": {
+          "displayName": "Lock Version",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "rowId": {
+          "displayName": "Row Id",
+          "required": true,
+          "type": "SHORT_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    }
+  },
+  "triggers": {},
+  "categories": [
+    "CORE"
+  ],
+  "authors": [
+    "workflow-station"
+  ],
+  "i18n": null
+}

@@ -64,6 +64,12 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.emailSend.summary',
     load: () => import('@/views/EmailSendGuide.vue'),
   },
+  { id: 'automation-connection',
+    path: '/automation-connection',
+    titleKey: 'automationConnectionGuide.pageTitle',
+    summaryKey: 'automationConnectionGuide.intro',
+    load: () => import('@/views/AutomationConnectionGuide.vue'),
+  },
   {
     id: 'action-email',
     path: '/action-email',
@@ -355,7 +361,7 @@ export const NAV_TREE: NavNode[] = [
           { kind: 'leaf', id: 'dw-versions', titleKey: 'nav.versionManagement' },
         ],
       },
-      { kind: 'leaf', id: 'dw-automation', titleKey: 'nav.automation' },
+      { kind: 'leaf', id: 'dw-automation', titleKey: 'nav.automation', to: '/automation-connection' },
     ],
   },
   {

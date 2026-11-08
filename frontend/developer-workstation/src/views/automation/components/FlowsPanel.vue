@@ -146,6 +146,9 @@
                   <el-dropdown-item command="publish">
                     {{ t('automation.publish') }}
                   </el-dropdown-item>
+                  <el-dropdown-item command="identity">
+                    {{ t('automation.flowIdentity') }}
+                  </el-dropdown-item>
                   <el-dropdown-item
                     command="toggle"
                     :disabled="!row.publishedVersionId"
@@ -254,6 +257,18 @@
         </el-button>
       </template>
     </el-dialog>
+    <AutomationPublishDialog
+      :visible="publishTarget != null"
+      :flow-id="publishTarget?.id || ''"
+      :flow-name="publishTarget?.version?.displayName || publishTarget?.id || ''"
+      @close="publishTarget = null"
+      @published="confirmPublish"
+    />
+    <AutomationIdentityDialog
+      :visible="identityTarget != null"
+      :flow-id="identityTarget?.id || ''"
+      @close="identityTarget = null"
+    />
   </div>
 </template>
 
@@ -273,6 +288,8 @@ import {
   type ServiceTaskSession,
 } from '@/api/automation'
 import { formatDateTime, generateFlowKey } from '../automationUi'
+import AutomationPublishDialog from './AutomationPublishDialog.vue'
+import AutomationIdentityDialog from './AutomationIdentityDialog.vue'
 
 const props = withDefaults(
   defineProps<{ session: ServiceTaskSession; canWrite?: boolean }>(),
@@ -289,6 +306,8 @@ const loadingMore = ref(false)
 const nextCursor = ref('')
 const keyword = ref('')
 const actingId = ref('')
+const publishTarget = ref<ApFlow | null>(null)
+const identityTarget = ref<ApFlow | null>(null)
 
 const filteredFlows = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -458,12 +477,19 @@ async function handleRename() {
 /* ---- row commands ---- */
 function handleRowCommand(command: string, flow: ApFlow) {
   if (command === 'publish') void handlePublish(flow)
+  else if (command === 'identity') identityTarget.value = flow
   else if (command === 'toggle') void handleToggle(flow)
   else if (command === 'rename') openRenameDialog(flow)
   else if (command === 'delete') void handleDelete(flow)
 }
 
-async function handlePublish(flow: ApFlow) {
+function handlePublish(flow: ApFlow) {
+  publishTarget.value = flow
+}
+
+async function confirmPublish() {
+  const flow = publishTarget.value
+  if (!flow) return
   actingId.value = flow.id
   try {
     await applyAutomationFlowOperation(flow.id, props.session.token, {
@@ -471,6 +497,7 @@ async function handlePublish(flow: ApFlow) {
       request: { status: 'ENABLED' },
     })
     ElMessage.success(t('automation.published', { name: flow.version?.displayName || flow.id }))
+    publishTarget.value = null
     await reload()
   } catch (error) {
     handleApError(error, 'automation.publishFailed')

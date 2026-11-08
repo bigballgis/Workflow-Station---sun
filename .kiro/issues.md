@@ -3,7 +3,11 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-11-04)
+## 统计 (截至 2026-11-07)
+
+2026-11-08：#1744 已修。发布只接受恰好一条 enabled 目录，0 条或多条都拒绝。已发布的旧范围不改写。Open 55→54，Wontfix 仍 2。
+
+2026-11-07：记录 #1744。发布自动化 Scope 时，同一功能单元的多个目录版本被无序取第一条。实测落到 1.0.125，而不是当前 enabled 的 1.0.128。当时未改。Open 54→55，Wontfix 仍 2。
 
 2026-11-04：#1743 对齐普通 Form 与 Batch 的字段校验：自定义 Switch、多选/范围、邮箱/正则、隐藏状态、动态选项、缺省日期格式和 DECIMAL 尾零。旧冻结任务 Apply 失败→成功，缺省日期格式同一任务保存400→成功，API/查库及 DW/普通 Form 对照通过；后端 Batch400、完整 Batch 事件和 MI250+六组浏览器通过。既有全量/类型失败保留，审查CONDITIONAL；Open仍54，Wontfix仍2。见docs/verification/2026-11-04-batch-form-field-parity.md。
 

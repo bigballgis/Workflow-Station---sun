@@ -5897,3 +5897,14 @@
     DW/Portal/普通Form及原文/优化邮箱脚本通过；Batch后端400、完整Batch事件与MI250+六组浏览器通过。
     三宿主依赖解析及三语Help同步；本修复不新增schema或改写冻结配置，未访问或发布DEV/UAT。
     既有全量/类型测试失败保留，审查CONDITIONAL；详见docs/verification/2026-11-04-batch-form-field-parity.md。
+
+- id: "1744"
+  status: fixed
+  fixed_at: "2026-11-08"
+  severity: major
+  category: bug
+  summary: "发布自动化范围时，同一功能单元有多个目录版本会随机取一条 catalog"
+  file: "backend/admin-center/src/main/java/com/admin/automation/AutomationConnectionStore.java"
+  detail: |
+    发布只接受恰好一条 enabled 目录。没有或多于一条都拒绝，不再 findFirst。
+    已发布的旧范围行不改写，下次发布才用新规则。AutomationConnectionRulesTest 覆盖 0 条、1 条、2 条。

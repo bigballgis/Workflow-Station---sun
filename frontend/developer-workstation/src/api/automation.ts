@@ -237,3 +237,70 @@ export async function applyAutomationFlowOperation(
 export async function deleteAutomationFlow(flowId: string, token: string): Promise<void> {
   await apAxios.delete(`/flows/${flowId}`, { headers: authHeaders(token) })
 }
+
+export interface AutomationServiceAccount {
+  userId: string
+  displayName: string
+  platformDefault?: boolean
+  usingPlatformDefault?: boolean
+}
+
+export interface AutomationFlowScope {
+  flowId: string
+  workspaceId: string
+  functionUnitId: number
+  catalogIds: string[]
+  capabilities: string[]
+  serviceAccountUserId?: string | null
+}
+
+export async function getAutomationRuntime(workspaceId: string): Promise<AutomationServiceAccount> {
+  const res = await adminAxios.get(`/automation-runtime-connections/${encodeURIComponent(workspaceId)}`)
+  return (res.data as { data: AutomationServiceAccount }).data
+}
+
+export async function bindAutomationRuntime(workspaceId: string, serviceAccountUserId: string): Promise<AutomationServiceAccount> {
+  const res = await adminAxios.put(`/automation-runtime-connections/${encodeURIComponent(workspaceId)}`, { serviceAccountUserId })
+  return (res.data as { data: AutomationServiceAccount }).data
+}
+
+export async function unbindAutomationRuntime(workspaceId: string): Promise<AutomationServiceAccount> {
+  const res = await adminAxios.delete(`/automation-runtime-connections/${encodeURIComponent(workspaceId)}`)
+  return (res.data as { data: AutomationServiceAccount }).data
+}
+
+export async function registerAutomationServiceAccount(userId: string, displayName: string): Promise<AutomationServiceAccount> {
+  const res = await adminAxios.post('/automation-service-accounts', { userId, displayName })
+  return (res.data as { data: AutomationServiceAccount }).data
+}
+
+export async function listAutomationServiceAccounts(): Promise<AutomationServiceAccount[]> {
+  const res = await adminAxios.get('/automation-service-accounts')
+  return (res.data as { data: AutomationServiceAccount[] }).data
+}
+
+export async function getAutomationScope(flowId: string): Promise<AutomationFlowScope> {
+  const res = await adminAxios.get(`/automation/flows/${encodeURIComponent(flowId)}/scope`)
+  return (res.data as { data: AutomationFlowScope }).data
+}
+
+export async function updateFlowRuntimeIdentity(flowId: string, serviceAccountUserId: string | null): Promise<AutomationFlowScope> {
+  const res = await adminAxios.put(`/automation/flows/${encodeURIComponent(flowId)}/runtime-identity`, {
+    serviceAccountUserId,
+  })
+  return (res.data as { data: AutomationFlowScope }).data
+}
+
+export async function publishAutomationScope(
+  flowId: string,
+  functionUnitId: number,
+  capabilities: string[],
+  serviceAccountUserId: string | null,
+): Promise<AutomationFlowScope> {
+  const res = await adminAxios.put(`/automation/flows/${encodeURIComponent(flowId)}/scope`, {
+    functionUnitId,
+    capabilities,
+    serviceAccountUserId,
+  })
+  return (res.data as { data: AutomationFlowScope }).data
+}

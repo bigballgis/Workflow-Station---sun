@@ -3,7 +3,7 @@ name: Automation Connection Security
 overview: 从零定义 Automation 的两类 Connection（运行身份与外部凭证）以及发布时冻结的数据授权，避免步骤里选人、secret 外泄和跨 Function Unit 横向读写。本文件只做设计，不改代码。
 todos:
   - id: schema-runtime-scope
-    content: 追加 ac_service_accounts、runtime connection、flow scope 的幂等 init 脚本，并种入不可登录的平台默认服务账号
+    content: 追加 ac_service_accounts、runtime connection、flow scope 的幂等 init 脚本，并种入平台默认服务账号
     status: pending
   - id: admin-bind-resolve
     content: admin-center：按 Plan 的管理面与内部 API 提供服务账号登记、运行身份绑定/查询/解除、flow Scope 读写，以及给门户的运行身份与 Scope 查询
@@ -35,7 +35,7 @@ Developer Workstation 的 Automation（嵌入的 Activepieces）会在没有登�
 ## 目标
 
 - 每个 Automation 工作区绑定唯一运行身份（Runtime Connection）。Timer、Webhook、设计器 Test 都以该服务账号读写，变更历史记该账号。步骤里不能选同事，也不能填自由文本 actor。
-- 每个已发布 flow 冻结一份数据范围（Automation Scope）：允许的 Function Unit catalog、读/写/子表/Query。运行时不能由编辑者临时放大。
+- 每个已发布 flow 冻结一份数据范围（Automation Scope）：发布时显式选出的一个 Function Unit，以及读/写/子表/Query。运行时由门户内部 API 只读这份快照，编辑者不能临时放大。
 - 外部凭证（External Connection）与运行身份分离。流程只保存引用名，密码走 Vault。
 - Activepieces 不持有 admin 的 `SERVICE_INTERNAL_TOKEN`。门户 automation 通道密钥只证明「调用方是自动化引擎」，不决定操作人，也不代替数据授权。
 - 环境变量查询只返回 TEXT。不返回 VAULT 密码或 connection secret。
@@ -44,8 +44,8 @@ Developer Workstation 的 Automation（嵌入的 Activepieces）会在没有登�
 
 - 环境变量类型 CONNECTION，以及 webhook 把 secret 返回给调用方。
 - 步骤字段 Triggered by，或在步骤里选择平台用户当 actor。
-- 用流程编辑者的个人登录账号作为 Timer 默认身份。
-- 把服务账号挂到 `dw_email_connections`。邮箱连接仍是 Function Unit 级、只存 Vault 路径（现有 [EmailConnection.java](backend/admin-center/src/main/java/com/admin/entity/EmailConnection.java) 的 `passwordEnvKey`）。
+- 未绑定时，把当前流程编辑者的个人账号隐式当成 Timer 身份。工作区仍可显式绑定任意已存在的系统账号。
+- 把服务账号挂到 `dw_email_connections`。邮箱连接仍是 Function Unit 级、只存 Vault 路径（现有 [EmailConnection.java](../../backend/admin-center/src/main/java/com/admin/entity/EmailConnection.java) 的 `passwordEnvKey`）。
 - 本轮做邮件步骤的连接选择器。
 - 改 MI 子表语义，或新造一套 BU 权限模型。
 - MVP 实现短效 Run Token。
@@ -70,18 +70,25 @@ flowchart LR
   scope --> portal
 ```
 
-- Runtime Connection：工作区到服务账号。负责人或系统管理员配置。Public 工作区仅系统管理员。流程步骤只显示说明，没有输入框。
-- Automation Scope：已发布 flow 版本上的 catalog 列表和能力开关。发布时写入，运行时只读。默认等于该 Automation 所属的一个 Function Unit，可以收紧，不能在运行时放大。
+- Runtime Connection：工作区默认账号，发布单条流程时可以另选已登记账号。空则用工作区默认，再没有则用平台默认。能在该工作区发布自动化的人可以配置。Public 工作区仅系统管理员。流程步骤只显示说明，没有输入框。已写过的变更历史不改。
+- Automation Scope：已发布 flow 的快照。发布人必须显式选出恰好一个 Function Unit，且该 Function Unit 必须已分配给本 flow 所在开发组（与 Developer Workstation 工作区访问同一归属，不另造规则）。catalog 只含这一个；能力（读、Query、写主表、写子表）可以在这个 Function Unit 内收紧。仓库里 flow 与 Function Unit 是 BPMN 引用关系，一个 flow 可被多个 Function Unit 引用，没有「所属 Function Unit」列，因此不能从引用关系倒推范围。其它 Function Unit 引用同一 flow 不扩大数据范围，也不能把别的开发组的 Function Unit 选进 Scope。一个 flow 授权多个 Function Unit 不在本轮。运行时只读这份快照，不能放大。
 - External Connection：邮箱或第三方 API。流程里只有引用名。解析只发生在发信或出站 HTTP 的服务端。
+
+## 校验发生在哪里
+
+两处，查的不是同一件事。Activepieces 触发流程时不查 Scope，流程可以先跑起来；失败发生在碰到数据的那一步。
+
+- **发布时（写约束）**：发布 Automation 时调用 Scope 写入接口。接口只接受发布人选出的那一个 Function Unit 的 catalog，能力可以收紧，不能改去碰别的 Function Unit。没选出 Function Unit 则这次写入失败，不生成快照。
+- **每次数据请求（读快照）**：校验做在门户内部记录 API 里，不是做在 Activepieces 触发内核里。Function Unit Data 的每一次读、Query、写主表、写子表都打这些接口；设计器 Test、Timer、Webhook 走同一条路径。门户用请求里的 `flowId` 读已发布快照，核对目标 catalog 和本次操作。没有快照、catalog 不对或能力不够则 403，不读写。
 
 ## 运行时校验顺序
 
-每次 Function Unit 数据调用按这个顺序，缺一即拒绝，不降级成「匿名可读」：
+门户内部记录 API 每次按这个顺序，缺一即拒绝，不降级成「匿名可读」：
 
 1. 校验 automation 通道密钥（调用方是引擎，不是浏览器用户）。
 2. 用 Activepieces 项目外部 ID 解析工作区，再解析 Runtime Connection 上的服务账号。未绑定则用环境级平台默认服务账号。
 3. 用 flow 标识查出已发布 Scope，确认目标 catalog 与操作（读、Query、写主表、写子表）都在范围内。
-4. 执行读写。写操作的变更历史 `userId` 只能是第 2 步解析出的服务账号，忽略客户端传来的任何人名。
+4. 执行读写。写操作的变更历史 `userId` 只能是第 2 步解析出的服务账号，忽略客户端传来的任何人名。该账号的角色、能否登录、是否 `SYS_ADMIN` 都不参与放行。
 
 ```mermaid
 sequenceDiagram
@@ -102,17 +109,17 @@ sequenceDiagram
 - 方案 B（后续）：每次运行签发短 TTL、带 catalog 与读写声明的 Run Token。Piece 只认 Run Token。长期密钥只用于换票。
 - 方案 C（不单独采用）：只给服务账号配角色、走普通用户权限。挡不住「知道实例 ID 就读」和 Query 扫表。
 
-推荐 A。理由：改动集中在 admin-center、user-portal、发布门禁和 Function Unit Data piece，不改 Activepieces 触发内核。C-3 保持不变：AP 仍不持有 `SERVICE_INTERNAL_TOKEN`（见 [DECISIONS.md](docs/ap-integration/DECISIONS.md)）。
+推荐 A。理由：改动集中在 admin-center、user-portal、发布门禁和 Function Unit Data piece，不改 Activepieces 触发内核。C-3 保持不变：AP 仍不持有 `SERVICE_INTERNAL_TOKEN`（见 [DECISIONS.md](DECISIONS.md)）。
 
 ## 数据
 
 新增脚本只追加到 `deploy/init-scripts/00-schema/`，不改历史脚本。表前缀 `ac_`。
 
-- `ac_service_accounts`：`user_id`、`display_name`、`platform_default`。对应 `sys_users` 一行。平台默认账号状态 INACTIVE，不能登录，不授予 SYS_ADMIN。
+- `ac_service_accounts`：`user_id`、`display_name`、`platform_default`。对应 `sys_users` 里任意一行已存在的账号。不要求 INACTIVE，不要求不可登录，不看角色码，也不禁止 `SYS_ADMIN`。平台默认账号只是其中 `platform_default` 的那一行。
 - `ac_automation_runtime_connection`：`workspace_id` 主键，`service_account_user_id`。没有行表示用平台默认账号。
-- `ac_automation_flow_scope`：已发布 flow 的快照。`flow_id`、`workspace_id`、允许的 catalog id 列表、能力（read、query、write、subtable）。重新发布覆盖该 flow 的快照，不改历史已跑完的实例。
+- `ac_automation_flow_scope`：已发布 flow 的快照，按 flow 一份，不按工作区一份。`flow_id`、`workspace_id`、发布时选出的那一个 Function Unit 及其 catalog id、能力（read、query、write、subtable）。重新发布覆盖该 flow 的快照，不改历史已跑完的实例。
 
-工作区 ID 与 Activepieces 外部项目 ID 的对应沿用现有约定：Public 为 `hermes-main`，团队为 `hermes-dg-` 加开发组 ID。若产品把「项目」理解成 BU 而不是开发组，绑定粒度要改，本 Plan 默认开发组。
+工作区就是 DW 开发组，不是 BU。Public 为 `hermes-main`，团队为 `hermes-dg-` 加开发组 ID。Runtime Connection 绑在这个工作区上。BU 继续只管门户的人与可见范围，不作为运行身份的绑定键。
 
 ## 要提供的 API
 
@@ -128,15 +135,15 @@ sequenceDiagram
 
 ### Admin 管理面（登录用户）
 
-绑定规则：未登录 401。`__ALL__` 与空工作区拒绝。Public 工作区仅 `SYS_ADMIN`。其他工作区必须存在且为 ACTIVE；绑定人是 `SYS_ADMIN`，或是该组成员且角色为 `TECH_LEAD` 或 `TEAM_LEAD`。目标用户必须已经在 `ac_service_accounts`。响应只含 userId 与 displayName，不含密码或 token。
+绑定规则：未登录 401。`__ALL__` 与空工作区拒绝。绑定与发布同一道门：`ApWorkspaceResolver` 的 `canWrite`。Public 工作区仅 `SYS_ADMIN`。其他工作区必须存在且为 ACTIVE；绑定人是 `SYS_ADMIN`，或是该组成员且角色为 `DEVELOPER`、`TECH_LEAD` 或 `TEAM_LEAD`。登记新服务账号仍仅 `SYS_ADMIN`。目标用户必须已经在 `ac_service_accounts`。能绑定的人可以列出已登记账号。响应只含 userId 与 displayName，不含密码或 token。
 
-- `GET /automation-service-accounts`：可绑定的服务账号列表。仅 `SYS_ADMIN`。
-- `POST /automation-service-accounts`：把一个已存在、状态为 INACTIVE、且不能登录的用户登记为服务账号。仅 `SYS_ADMIN`。请求体 `userId`、`displayName`、可选 `platformDefault`。环境里最多一个 platform default。
+- `GET /automation-service-accounts`：可绑定的服务账号列表。请求头 `X-Dev-Group-Id`。与该工作区的发布权限相同：能发布才能列出。Public 仅 `SYS_ADMIN`。
+- `POST /automation-service-accounts`：把一个已存在于 `sys_users` 的账号登记为服务账号。请求头 `X-Dev-Group-Id`。与该工作区的发布权限相同。Public 仅 `SYS_ADMIN`。不校验该账号的角色、状态或能否登录。请求体 `userId`、`displayName`、可选 `platformDefault`。显式 `platformDefault=true` 仍仅 `SYS_ADMIN`。未传时再次登记只更新显示名，不改掉已有的平台默认。`userId` 在系统中不存在则拒绝。环境里最多一个 platform default。
 - `GET /automation-runtime-connections/{workspaceId}`：当前绑定。没有绑定行时 `data` 标明使用平台默认账号（含其 userId 与 displayName）。
 - `PUT /automation-runtime-connections/{workspaceId}`：绑定。请求体 `serviceAccountUserId`。
 - `DELETE /automation-runtime-connections/{workspaceId}`：解除绑定，之后运行身份回到平台默认账号。权限与 PUT 相同。
 - `GET /automation/flows/{flowId}/scope`：读取该 flow 已发布的 Scope（catalog 列表与能力）。
-- `PUT /automation/flows/{flowId}/scope`：发布或更新 Scope。请求体 `catalogIds`、`capabilities`（`read`、`query`、`write`、`subtable`）。调用者必须有权发布该 flow 所在工作区。Scope 只能收紧到该 flow 所属 Function Unit 的 catalog，不能在此接口改成任意 catalog。重新发布覆盖该 flow 的快照。
+- `PUT /automation/flows/{flowId}/scope`：发布或更新 Scope。请求体必须带选出的一个 `functionUnitId`，以及 `catalogIds`、`capabilities`（`read`、`query`、`write`、`subtable`）。调用者必须有权发布该 flow 所在工作区。`functionUnitId` 必须已分配给该开发组；未分配或属于其他开发组则拒绝。`catalogIds` 只能是该 Function Unit 的 catalog，不能改成任意 catalog，也不能一次写入多个 Function Unit。未选 Function Unit 则拒绝，不生成快照。重新发布覆盖该 flow 的快照。Query 留在本轮：运行时仍须 Scope 打开 `query`、至少一条主表白名单字段 filter、`size` 上限 50。同一 Function Unit 内不按人、不按 BU 再切行。
 
 ### Admin 内部（仅门户，X-Service-Token）
 
@@ -171,7 +178,7 @@ sequenceDiagram
 
 - Admin 管理面与内部接口放在 admin-center，与现有 `/automation/flows` 管理面分开，避免和 flow 导入导出耦在一个 Controller 里。
 - 门户记录 API 放在 user-portal 的独立 automation 包：Controller 只做校验与 `ApiResponse`，授权与读写在 Component。
-- Piece 在 [automation/packages/pieces/community/function-unit-data](automation/packages/pieces/community/function-unit-data)。没有 actor 输入。工作区来自 `ctx.project.externalId()`，flow 标识来自运行上下文。步骤上只显示「以工作区运行身份执行」。
+- Piece 在 [automation/packages/pieces/community/function-unit-data](../../automation/packages/pieces/community/function-unit-data)。没有 actor 输入。工作区来自 `ctx.project.externalId()`，flow 标识来自运行上下文。步骤上只显示「以工作区运行身份执行」。
 - DW：工作区绑定页调用上面的管理面 API。发布 Automation 时调用 Scope 的 PUT。文案三语。用户可见处加帮助 `?`（`help-guideline-link`）。
 - 文档：新增 `docs/ap-integration/CONNECTION_AND_SCOPE.md`，列出上述路径与错误码，并引用 DECISIONS C-3，不改写 C-3 的已决结论。
 
@@ -180,7 +187,7 @@ sequenceDiagram
 MVP：
 
 - 三张表、平台默认服务账号、绑定 API 与角色规则。
-- Flow 级 Scope，默认单个所属 Function Unit，读写分开。
+- Flow 级 Scope。发布时显式选择恰好一个 Function Unit，能力可在其内收紧。读写分开。
 - Portal authorize 全路径。Query 禁止无 filter。
 - Piece 与 metadata、seed、镜像预装对齐。
 - DW 绑定与发布确认（UI 可与 API 同迭代；若拆开，API 与 Portal 门禁必须先于「可测的写流程」）。
@@ -195,7 +202,7 @@ MVP：
 ## 风险与回滚
 
 - Scope 配错会导致步骤失败。设计器 Test 必须走同一套 authorize，避免「测试能过、发布后 403」。
-- 已有 flow 没有 Scope。默认策略：阻断正式运行，直到重新发布并生成 Scope。不在运行时静默当成「全库可写」。
+- 已有 flow 没有 Scope。数据请求一律 403，直到重新发布并选出 Function Unit。不从 BPMN 引用自动补快照，也不当成全库可写。
 - 通道密钥泄露时，Scope 把爆炸半径限制在已发布 catalog。网络层仍遵守现有 SSRF 允许列表。方案 B 再缩小密钥寿命。
 - 回滚：仅开发环境可用开关关掉 authorize。生产不允许关掉后门。可以删除某 flow 的 Scope 行使其停止写数据。
 
@@ -203,27 +210,34 @@ MVP：
 
 - 反例：Update 请求里带任意人名当 actor。拒绝，数据不变，历史不出现该人名。
 - 反例：Flow 只授权 Function Unit X，请求 Y 的流程实例。403，数据不变。
+- 反例：信函组发布 Scope 时选择未分配给该组的 Function Unit。写入拒绝，不生成快照。
 - 反例：Query 没有 filter，或超过页大小上限。400 或 403。
 - 反例：按 key 查环境变量，key 指向 VAULT 或 connection 密码。不返回 secret。
 - 反例：普通开发者绑定 Public 工作区的运行账号。403。
 - 正例：工作区未绑定。Timer 或 Test 写入的历史用户是平台默认服务账号。
 - 正例：绑定专用服务账号后，历史用户是该账号。
-- 正例：发布 Scope 等于当前 Function Unit 时，读写该 Function Unit 的实例成功。
+- 正例：发布时选出 Function Unit X 并写入 Scope 后，读写 X 的实例成功。同一 flow 被 Function Unit Y 的 BPMN 引用时，请求 Y 的实例仍 403。
 - 正例：邮件类步骤的流程 JSON 与接口响应里没有邮箱密码。
 
 正式验收用的 Function Unit、流程实例和 taskId 待指定。可用现有邮件类 Function Unit 做一条读写，不改无关业务数据。
 
 ## 验证
 
-- `mvn -pl backend/admin-center,backend/user-portal -am test`，覆盖工作区映射、绑定拒绝、跨 catalog 拒绝、Query 无 filter。
+- `mvn -pl backend/admin-center,backend/user-portal -am test`，覆盖工作区映射、绑定拒绝、跨 catalog 拒绝、跨开发组 Function Unit 拒绝、Query 无 filter。
 - Function Unit Data 的 node 单测，以及 metadata seed 中不再出现 actor 输入字段。
 - `frontend/developer-workstation` 构建。绑定页或发布确认有界面时截图到 `verification-screenshots/`。
 - 重建 admin-center、user-portal；piece 变更则重建 Activepieces 镜像。用容器日志确认启动，请求样例不打印 token 或密码。
 
-## 待确认（不阻塞文档，实现前需拍板）
+## 已确认
 
-- 工作区是否就是开发组加 Public，而不是 BU。本 Plan 默认开发组。
-- Scope 按已发布 flow，而不是整个工作区一份。本 Plan 默认 flow 级。
-- 平台服务账号的角色码名称。本 Plan 默认无 SYS_ADMIN、不可登录。
-- 无 Scope 的旧 flow：阻断运行，直到重发。本 Plan 默认阻断，不自动放开全库。
-- Query Records 是否留在 MVP。若留，至少一条白名单字段 filter。
+- Scope 归属用显式选择：发布时必须选出恰好一个 Function Unit。catalog 只含这一个。能力可以在其内收紧。BPMN 引用不扩大范围。多个 Function Unit 授权留到后续。
+- Scope 按已发布 flow 一份，不按整个工作区一份。
+- 运行时校验在门户内部记录 API，每次数据请求查已发布快照。发布写入接口另做「只能是选出的那一个 Function Unit」的写约束。Activepieces 触发时不查 Scope。
+- 没有 Scope 的旧 flow：设计器 Test、Timer、Webhook 的数据请求一律 403，直到重新发布并选出 Function Unit。不从 BPMN 引用自动补快照，也不当成全库可写。流程仍可能被触发，读写发生在数据接口上。
+- 运行身份按开发组工作区绑定，不按 BU。Public 为 `hermes-main`，团队为 `hermes-dg-<开发组 ID>`。一个开发组一个服务账号。
+- Query Records 留在 MVP。Scope 必须打开 `query`；至少一条主表白名单字段 filter；`size` 上限 50。发布时可选的 Function Unit 只能是该开发组已分配的。通道密钥只证明调用方是自动化引擎。同一 Function Unit 内不按人、不按 BU 再切行。
+- 服务账号不新造角色码，登记也不看角色、状态或能否登录。`sys_users` 中存在的账号即可。运行时该账号只提供变更历史里的 `userId`，其角色不参与数据放行。
+
+## 待确认
+
+无。本轮讨论项已全部拍板。

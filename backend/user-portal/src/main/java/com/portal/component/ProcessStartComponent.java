@@ -204,6 +204,14 @@ public class ProcessStartComponent {
         return startProcess(userId, processKey, request, true, true);
     }
 
+    /** Enabled catalog an internal start would pin, without the caller's portal access check. */
+    public String activeCatalogIdForInternalStart(String processKey) {
+        if (processKey == null || processKey.isEmpty()) {
+            throw new IllegalArgumentException("Process key cannot be empty");
+        }
+        return resolveActiveCatalogPin("internal", processKey, true).catalogId();
+    }
+
     /** CSV is a server producer, not an internal caller: ordinary FU/workspace authorization still applies. */
     public ProcessInstanceInfo startProcessFromServer(String userId, String processKey, ProcessStartRequest request) {
         return startProcess(userId, processKey, request, false, true);
@@ -288,22 +296,36 @@ public class ProcessStartComponent {
         // the meeting-path save auto-commits); autoCompleteFirstTask never throws (see
         // its catch).
         boolean leaveFirstTaskOpen = Boolean.TRUE.equals(request.getLeaveFirstTaskOpen());
-        FirstTaskOutcome outcome = autoCompleteFirstTask(
-                flowableProcessInstanceId, userId, variables, pin, leaveFirstTaskOpen);
-        // TX2 (short): change history + current-node update grouped atomically (the
-        // node update is a
-        // @Modifying query that requires a transaction). First task completed via
-        // engine API.
-        tx().executeWithoutResult(status -> {
-            recordInitialSubmitChangeHistory(
-                    flowableProcessInstanceId,
-                    outcome.initiatorTaskIdForHistory,
-                    outcome.initiatorTaskDefKeyForHistory,
-                    userId,
-                    userChanges,
-                    pin.catalogId());
-            updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
-        });
+        FirstTaskOutcome outcome;
+        try {
+            outcome = autoCompleteFirstTask(
+                    flowableProcessInstanceId, userId, variables, pin, leaveFirstTaskOpen);
+            // TX2 (short): change history + current-node update grouped atomically (the
+            // node update is a
+            // @Modifying query that requires a transaction). First task completed via
+            // engine API.
+            tx().executeWithoutResult(status -> {
+                recordInitialSubmitChangeHistory(
+                        flowableProcessInstanceId,
+                        outcome.initiatorTaskIdForHistory,
+                        outcome.initiatorTaskDefKeyForHistory,
+                        userId,
+                        userChanges,
+                        pin.catalogId());
+                updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
+            });
+        } catch (RuntimeException followUp) {
+            if (!Boolean.TRUE.equals(request.getRetainStartedInstance())) {
+                throw followUp;
+            }
+            ProcessInstanceInfo retained = ProcessInstanceInfo.builder()
+                    .id(flowableProcessInstanceId)
+                    .startUserId(userId)
+                    .status("RUNNING")
+                    .firstStepError(followUp.getMessage())
+                    .build();
+            return retained;
+        }
         if (outcome.calledWorkStatus != null) {
             // After the caller's row is final: the called instances' rows link back to it.
             calledProcessSync.recordCalledWork(flowableProcessInstanceId, outcome.calledWorkStatus);

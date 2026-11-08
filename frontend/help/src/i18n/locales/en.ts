@@ -333,6 +333,19 @@ export default {
     relationBody:
       'Admin Center Relation Tables are standalone. They have no MAIN/SUB parent lookup and no related-row functions such as SUM.',
   },
+  automationConnectionGuide: {
+    pageTitle: 'Automation data scope',
+    crumb: 'Developer Workstation · Automation',
+    intro: 'An automation with no signed-in user writes history as the workspace account, and can touch only the Function Unit chosen at publish.',
+    flowTitle: 'How to set it',
+    flow1: 'Open Runtime identity from the automation list and confirm which account this developer group runs as.',
+    flow2: 'When publishing, choose one Function Unit assigned to this group and tick read, query, write main table, and write sub-table.',
+    flow3: 'An existing flow with no published scope is refused until someone publishes it again.',
+    identityTitle: 'Runtime identity',
+    identityBody: 'The workspace runtime identity is the group default. Publishing a flow can choose a registered account for that flow only. The flow menu can change that account later without republishing. Otherwise the flow uses the group default, then the platform default. History already written stays as it was. Registering does not create a login. Only a system administrator can change Public. A step cannot pick a colleague.',
+    scopeTitle: 'Data scope',
+    scopeBody: 'Publish selects exactly one Function Unit. Another Function Unit referencing the same automation does not widen the scope. Query needs a filter and returns at most 50 rows. Starting a request is a separate capability. A flow published without it cannot open a new request.',
+  },
   emailSendGuide: {
     pageTitle: 'Send email',
     crumb: 'Developer Workstation · Function Units · Connections / Email Templates / Process Design',

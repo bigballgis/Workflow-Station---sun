@@ -50,6 +50,12 @@
       "@activepieces/piece-file-helper": [
         "packages/pieces/core/file-helper/src/index.ts"
       ],
+      "@activepieces/piece-function-unit-data": [
+        "packages/pieces/community/function-unit-data/src/index.ts"
+      ],
+      "@activepieces/piece-function-unit-start": [
+        "packages/pieces/community/function-unit-start/src/index.ts"
+      ],
       "@activepieces/piece-hash-helper": [
         "packages/pieces/community/hash-helper/src/index.ts"
       ],

@@ -1,0 +1,53 @@
+{
+  "name": "@activepieces/piece-function-unit-start",
+  "version": "1.0.0",
+  "displayName": "Function Unit Start",
+  "logoUrl": "/ap-cdn/pieces/hermes/function-unit-start.svg",
+  "description": "发起一条功能单元流程。以工作区运行身份执行，步骤里不能选择发起人或办理人。",
+  "minimumSupportedRelease": "0.82.0",
+  "auth": null,
+  "actions": {
+    "start_process": {
+      "name": "start_process",
+      "displayName": "Start Process",
+      "description": "为发布范围里的功能单元发起一条流程。以工作区运行身份执行，不能指定发起人。",
+      "props": {
+        "notice": {
+          "displayName": "Markdown",
+          "required": false,
+          "description": "以工作区运行身份发起。本步骤不能选择发起人或办理人。",
+          "type": "MARKDOWN",
+          "variant": "INFO"
+        },
+        "functionUnitCode": {
+          "displayName": "Function Unit Code",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "fieldsJson": {
+          "displayName": "Fields JSON",
+          "description": "主表字段对象，例如 {\"status\":\"OPEN\"}。不接受子表。",
+          "required": false,
+          "type": "LONG_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    }
+  },
+  "triggers": {},
+  "categories": [
+    "CORE"
+  ],
+  "authors": [
+    "workflow-station"
+  ],
+  "i18n": null
+}

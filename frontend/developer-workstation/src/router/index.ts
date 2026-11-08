@@ -55,6 +55,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'automation.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
+        path: 'automation/runtime',
+        name: 'AutomationRuntime',
+        component: () => import('@/views/automation/AutomationRuntimePage.vue'),
+        meta: { titleKey: 'automation.runtimeTitle', hidden: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+      },
+      {
         path: 'automation/:flowId',
         name: 'AutomationFlowEdit',
         component: () => import('@/views/automation/AutomationFlowEdit.vue'),

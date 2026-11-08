@@ -66,6 +66,13 @@
           v-else
           class="automation-page__workspace-name"
         >{{ workspaceName }}</span>
+        <el-button
+          link
+          type="primary"
+          @click="router.push('/automation/runtime')"
+        >
+          {{ t('automation.runtimeTitle') }}
+        </el-button>
         <el-tag
           v-if="!canWrite"
           type="info"
@@ -107,6 +114,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchServiceTaskSession, type ServiceTaskSession } from '@/api/automation'
 import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
@@ -119,6 +127,7 @@ import {
 import FlowsPanel from './components/FlowsPanel.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 // The built-in Public group is a real group id, so the select shows its label rather than the
 // "nothing selected" placeholder; the backend maps it to the shared/legacy workspace.

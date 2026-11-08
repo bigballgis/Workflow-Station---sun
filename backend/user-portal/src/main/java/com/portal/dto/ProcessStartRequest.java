@@ -71,6 +71,12 @@ public class ProcessStartRequest {
      */
     private Boolean leaveFirstTaskOpen;
 
+    /**
+     * After the engine instance id exists, later failures return that id instead of
+     * throwing. Automation retries then replay the same instance.
+     */
+    private Boolean retainStartedInstance;
+
     @Data
     @Builder
     @NoArgsConstructor

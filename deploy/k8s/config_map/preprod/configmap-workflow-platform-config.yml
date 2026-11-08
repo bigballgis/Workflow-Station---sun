@@ -136,7 +136,7 @@ data:
   # webhook 仍用对外地址,不受影响。
   ACTIVEPIECES_SELF_INTERNAL_URL: "http://activepieces-service:80"
   # content-organizer piece(OCR)出站:iB2B token translator + Content Organizer API。
-  ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__,cmb-ib2b-dsp-pprod-ap.hk.hsbc,ppd-api.gcp.cloud.hk.hsbc"
+  ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__,user-portal-service.__NAMESPACE__,cmb-ib2b-dsp-pprod-ap.hk.hsbc,ppd-api.gcp.cloud.hk.hsbc"
   # admin-center 已不读共享账号(身份一律 per-user managed)。保留这两项仅供空库引导
   # (ap-bootstrap-job.yaml 用 sign-up 建 AP 的第一个身份)与 deploy/scripts/ap-{export,import}.js。
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
